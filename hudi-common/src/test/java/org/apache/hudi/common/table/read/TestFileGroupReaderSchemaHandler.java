@@ -87,19 +87,6 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
   }
 
   @Test
-  public void testLsmBaseFileAddsRecordKeyToRequiredSchema() {
-    when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
-    when(hoodieTableConfig.isLSMTreeStorageLayout()).thenReturn(true);
-    HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, false, false, null);
-    HoodieSchema requestedSchema = generateProjectionSchema("begin_lat", "rider");
-
-    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, false);
-
-    assertEquals(generateProjectionSchema("begin_lat", "rider", HoodieRecord.RECORD_KEY_METADATA_FIELD),
-        schemaHandler.getRequiredSchema());
-  }
-
-  @Test
   public void testCowBootstrap() {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);

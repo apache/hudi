@@ -219,7 +219,9 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
   private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
     if (inputSplit.hasNoRecordsToMerge()) {
-      this.baseFileIterator = new CloseableMappingIterator<>(iter, rec -> readerContext.getRecordContext().seal(rec));
+      HoodieSchema requiredSchema = readerContext.getSchemaHandler().getRequiredSchema();
+      this.baseFileIterator = new CloseableMappingIterator<>(iter,
+          rec -> readerContext.getRecordContext().seal(requiredSchema, rec));
     } else {
       this.baseFileIterator = iter;
       Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult = recordBufferLoader.getRecordBuffer(

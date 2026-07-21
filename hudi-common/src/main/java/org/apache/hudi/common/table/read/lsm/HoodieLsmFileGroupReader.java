@@ -79,7 +79,7 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
   private final ReaderParameters readerParameters;
   private final Option<UnaryOperator<T>> outputConverter;
   private final Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback;
-  private ClosableIterator<BufferedRecord<T>> lsmRecordIterator;
+  private ClosableIterator<BufferedRecord<T>> bufferedRecordIterator;
   @Getter
   private final HoodieReadStats readStats;
 
@@ -185,11 +185,18 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
   private ClosableIterator<BufferedRecord<T>> getBufferedRecordIterator(IteratorMode iteratorMode,
                                                                         boolean includeBaseFile) throws IOException {
     this.readerContext.setIteratorMode(iteratorMode);
-    if (lsmRecordIterator != null) {
-      lsmRecordIterator.close();
+    if (bufferedRecordIterator != null) {
+      bufferedRecordIterator.close();
     }
-    this.lsmRecordIterator = new LsmFileGroupRecordIterator<>(
-        readerContext, storage, inputSplit, orderingFieldNames, metaClient, props, readerParameters, readStats, fileGroupUpdateCallback, includeBaseFile);
+    if (includeBaseFile && inputSplit.getBaseFileOption().isPresent() && inputSplit.hasNoRecordsToMerge()) {
+      this.bufferedRecordIterator = LsmFileGroupReaderUtils.createBaseFileIterator(
+          readerContext, storage, inputSplit.getBaseFileOption().get(),
+          inputSplit.getStart(), inputSplit.getLength(), orderingFieldNames, true);
+    } else {
+      this.bufferedRecordIterator = new LsmFileGroupRecordIterator<>(
+          readerContext, storage, inputSplit, orderingFieldNames, metaClient, props,
+          readerParameters, readStats, fileGroupUpdateCallback, includeBaseFile);
+    }
     return new HoodieLsmFileGroupReaderIterator<>(this);
   }
 
@@ -220,11 +227,11 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
   }
 
   boolean hasNext() {
-    return lsmRecordIterator.hasNext();
+    return bufferedRecordIterator.hasNext();
   }
 
   BufferedRecord<T> next() {
-    BufferedRecord<T> nextVal = lsmRecordIterator.next();
+    BufferedRecord<T> nextVal = bufferedRecordIterator.next();
     if (outputConverter.isPresent()) {
       return nextVal.project(outputConverter.get());
     }
@@ -238,8 +245,8 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
 
   @Override
   public void close() throws IOException {
-    if (lsmRecordIterator != null) {
-      lsmRecordIterator.close();
+    if (bufferedRecordIterator != null) {
+      bufferedRecordIterator.close();
     }
   }
 

@@ -364,7 +364,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public String seal(String record) {
+        public String seal(HoodieSchema schema, String record) {
           return "";
         }
 

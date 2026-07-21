@@ -177,9 +177,6 @@ class TestStreamerUtil {
     assertEquals(HoodieTableVersion.TEN, metaClient.getTableConfig().getTableVersion());
     assertTrue(metaClient.getTableConfig().isLSMTreeStorageLayout());
     assertFalse(metaClient.getTableConfig().contains(HoodieTableConfig.LOG_FILE_FORMAT));
-
-    conf.set(FlinkOptions.OPERATION, "insert");
-    assertThrows(IllegalArgumentException.class, () -> StreamerUtil.initTableIfNotExists(conf));
   }
 
   @Test
@@ -196,11 +193,6 @@ class TestStreamerUtil {
     metaClient = StreamerUtil.initTableIfNotExists(conf);
 
     assertFalse(metaClient.getTableConfig().isLSMTreeStorageLayout());
-
-    FileIOUtils.deleteDirectory(tempFile);
-    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
-        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
-    assertThrows(IllegalArgumentException.class, () -> StreamerUtil.initTableIfNotExists(conf));
   }
 
   @Test

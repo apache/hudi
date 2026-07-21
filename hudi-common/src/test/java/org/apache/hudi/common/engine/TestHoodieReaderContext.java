@@ -184,7 +184,7 @@ class TestHoodieReaderContext {
     }
 
     @Override
-    public String seal(String record) {
+    public String seal(HoodieSchema schema, String record) {
       return record;
     }
 

@@ -129,7 +129,8 @@ class TestUpdateProcessor {
   @Test
   void testHandleInsert() {
     when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(recordContext.seal(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
+    when(recordContext.getSchemaFromBufferRecord(any())).thenReturn(SCHEMA);
+    when(recordContext.seal(any(), any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(1));
     BufferedRecord<IndexedRecord> previous = null;
     BufferedRecord<IndexedRecord> merged = getRecord("value2", null);
     BufferedRecord<IndexedRecord> expected = getRecord("value2", HoodieOperation.INSERT);
@@ -146,7 +147,8 @@ class TestUpdateProcessor {
   @ValueSource(booleans = {true, false})
   void testHandleInsertWithPayload(boolean shouldIgnore) {
     when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(recordContext.seal(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
+    when(recordContext.getSchemaFromBufferRecord(any())).thenReturn(SCHEMA);
+    when(recordContext.seal(any(), any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(1));
     BufferedRecord<IndexedRecord> previous = null;
     BufferedRecord<IndexedRecord> merged = getRecord("value2", null);
     BufferedRecord<IndexedRecord> expected = getRecord("value2", HoodieOperation.INSERT);
@@ -184,7 +186,8 @@ class TestUpdateProcessor {
   @ValueSource(booleans = {true, false})
   void testHandleNoUpdate(boolean usePayload) {
     when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(recordContext.seal(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
+    when(recordContext.getSchemaFromBufferRecord(any())).thenReturn(SCHEMA);
+    when(recordContext.seal(any(), any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(1));
     BufferedRecord<IndexedRecord> previous = getRecord("value2", null);
     BufferedRecord<IndexedRecord> merged = previous;
     HoodieReadStats readStats = new HoodieReadStats();
@@ -206,7 +209,8 @@ class TestUpdateProcessor {
   @ValueSource(booleans = {true, false})
   void testHandleUpdate(boolean usePayload) {
     when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(recordContext.seal(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
+    when(recordContext.getSchemaFromBufferRecord(any())).thenReturn(SCHEMA);
+    when(recordContext.seal(any(), any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(1));
     BufferedRecord<IndexedRecord> previous = getRecord("value1", null);
     BufferedRecord<IndexedRecord> merged = getRecord("value2", null);
     BufferedRecord<IndexedRecord> expected = getRecord("value2", HoodieOperation.UPDATE_AFTER);

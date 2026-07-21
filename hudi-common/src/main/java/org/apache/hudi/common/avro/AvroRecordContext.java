@@ -181,7 +181,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord seal(IndexedRecord record) {
+  public IndexedRecord seal(HoodieSchema schema, IndexedRecord record) {
     return record;
   }
 

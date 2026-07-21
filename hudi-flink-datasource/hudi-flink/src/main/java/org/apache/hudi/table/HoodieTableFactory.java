@@ -178,11 +178,24 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     checkTableType(conf);
     checkBaseFileFormatForWrite(conf);
     checkIndexType(conf);
+    checkStorageLayout(conf);
 
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
     }
     StreamerUtil.checkOrderingFields(conf, schema.getColumnNames());
+  }
+
+  /**
+   * Validate the table storage layout.
+   */
+  private void checkStorageLayout(
+      Configuration conf) {
+    HoodieTableConfig.TableStorageLayout storageLayout = OptionsResolver.getTableStorageLayout(conf);
+    ValidationUtils.checkArgument(
+        !(OptionsResolver.isInsertOperation(conf) || OptionsResolver.isBulkInsertOperation(conf))
+            || storageLayout != HoodieTableConfig.TableStorageLayout.LSM_TREE,
+        "The LSM tree storage layout does not support insert or bulk insert operations because they allow duplicate record keys.");
   }
 
   /**

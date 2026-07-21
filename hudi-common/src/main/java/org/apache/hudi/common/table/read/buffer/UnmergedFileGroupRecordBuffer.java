@@ -46,6 +46,7 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   private final Deque<HoodieLogBlock> currentInstantLogBlocks;
   private final HoodieReadStats readStats;
   private ClosableIterator<T> recordIterator;
+  private HoodieSchema logRecordSchema;
 
   UnmergedFileGroupRecordBuffer(
       HoodieReaderContext<T> readerContext,
@@ -65,7 +66,7 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Output from base file first.
     if (baseFileIterator.hasNext()) {
-      nextRecord = bufferedRecordConverter.convert(readerContext.getRecordContext().seal(baseFileIterator.next()));
+      nextRecord = bufferedRecordConverter.convert(readerContext.getRecordContext().seal(readerSchema, baseFileIterator.next()));
       return true;
     }
 
@@ -78,12 +79,13 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
           recordIterator.close();
         }
         recordIterator = iteratorSchemaPair.getLeft();
+        logRecordSchema = iteratorSchemaPair.getRight();
       }
     }
     if (recordIterator == null || !recordIterator.hasNext()) {
       return false;
     }
-    nextRecord = bufferedRecordConverter.convert(readerContext.getRecordContext().seal(recordIterator.next()));
+    nextRecord = bufferedRecordConverter.convert(readerContext.getRecordContext().seal(logRecordSchema, recordIterator.next()));
     readStats.incrementNumInserts();
     return true;
   }

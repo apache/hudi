@@ -19,21 +19,19 @@
 
 package org.apache.hudi.common.table.read.lsm;
 
-import org.apache.hudi.common.avro.HoodieAvroReaderContext;
-import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemas;
+import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -45,9 +43,7 @@ import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -66,22 +62,103 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class TestLsmFileGroupRecordIterator {
 
   @TempDir
   Path tempDir;
+
+  @Test
+  void testUpdateProcessorOnlyRunsForRecordsFromLogs() throws Exception {
+    HoodieSchema schema = tableSchema();
+    StoragePath baseFilePath = new StoragePath("/tmp/file1_1-0-1_001.parquet");
+    HoodieBaseFile baseFile = mock(HoodieBaseFile.class);
+    when(baseFile.getBootstrapBaseFile()).thenReturn(Option.empty());
+    when(baseFile.getStoragePath()).thenReturn(baseFilePath);
+    when(baseFile.getFileSize()).thenReturn(10L);
+    HoodieLogFile logFile = logFile("file1_1-0-1_002_1.log.parquet", 10);
+
+    InputSplit inputSplit = InputSplit.builder()
+        .baseFileOption(Option.of(baseFile))
+        .logFileStream(Stream.of(logFile))
+        .partitionPath("")
+        .start(0)
+        .length(10)
+        .build();
+    HoodieReaderContext<String> readerContext = mock(HoodieReaderContext.class);
+    FileGroupReaderSchemaHandler<String> schemaHandler = mock(FileGroupReaderSchemaHandler.class);
+    RecordContext<String> recordContext = mock(RecordContext.class);
+    DeleteContext deleteContext = mock(DeleteContext.class);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    TypedProperties props = new TypedProperties();
+    List<String> orderingFields = Collections.emptyList();
+
+    when(readerContext.getSchemaHandler()).thenReturn(schemaHandler);
+    when(readerContext.getRecordContext()).thenReturn(recordContext);
+    when(readerContext.getInstantRange()).thenReturn(Option.empty());
+    when(readerContext.getMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
+    when(readerContext.getRecordMerger()).thenReturn(Option.empty());
+    when(readerContext.getPayloadClasses(props)).thenReturn(Option.empty());
+    when(readerContext.getFileRecordIterator(baseFilePath, 0, 10, schema, schema, storage))
+        .thenReturn(ClosableIterator.wrap(Arrays.asList("key1-base", "key3-base").iterator()));
+    when(readerContext.getFileRecordIterator(logFile.getPath(), 0, 10, schema, schema, storage))
+        .thenReturn(ClosableIterator.wrap(Arrays.asList("key2-log", "key3-log").iterator()));
+    when(schemaHandler.getRequiredSchema()).thenReturn(schema);
+    when(schemaHandler.getTableSchema()).thenReturn(schema);
+    when(schemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(schemaHandler.getDeleteContext()).thenReturn(deleteContext);
+    when(deleteContext.withReaderSchema(schema)).thenReturn(deleteContext);
+    when(recordContext.seal(eq(schema), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
+    when(recordContext.getRecordKey(anyString(), eq(schema)))
+        .thenAnswer(invocation -> ((String) invocation.getArgument(0)).substring(0, 4));
+    when(recordContext.getOrderingValue(anyString(), eq(schema), eq(orderingFields))).thenReturn(1);
+    when(recordContext.encodeSchema(schema)).thenReturn(1);
+    when(recordContext.isDeleteRecord(anyString(), eq(deleteContext))).thenReturn(false);
+    when(recordContext.getSchemaFromBufferRecord(any())).thenReturn(schema);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
+
+    HoodieReadStats readStats = new HoodieReadStats();
+    LsmFileGroupRecordIterator<String> iterator = new LsmFileGroupRecordIterator<>(
+        readerContext, storage, inputSplit, orderingFields, metaClient, props,
+        ReaderParameters.builder().build(), readStats, Option.empty());
+
+    List<BufferedRecord<String>> records = new ArrayList<>();
+    while (iterator.hasNext()) {
+      records.add(iterator.next());
+    }
+
+    assertEquals(Arrays.asList("key1-base", "key2-log", "key3-log"),
+        records.stream().map(BufferedRecord::getRecord).collect(Collectors.toList()));
+    assertNull(records.get(0).getHoodieOperation());
+    assertEquals(HoodieOperation.INSERT, records.get(1).getHoodieOperation());
+    assertEquals(HoodieOperation.UPDATE_AFTER, records.get(2).getHoodieOperation());
+    assertEquals(1, readStats.getNumInserts());
+    assertEquals(1, readStats.getNumUpdates());
+    verify(recordContext, times(1)).seal(schema, "key1-base");
+    verify(recordContext, times(2)).getSchemaFromBufferRecord(any());
+
+    iterator.close();
+  }
 
   @Test
   void testDeleteLogSchemaUsesRecordKeyAndOrderingFields() {

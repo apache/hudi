@@ -211,7 +211,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     }
 
     // Inserts
-    nextRecord = bufferedRecordConverter.convert(readerContext.getRecordContext().seal(baseRecord));
+    nextRecord = bufferedRecordConverter.convert(readerContext.getRecordContext().seal(readerSchema, baseRecord));
     return true;
   }
 

@@ -195,20 +195,11 @@ public class FileGroupReaderSchemaHandler<T> {
     boolean hasInstantRange = readerContext.getInstantRange().isPresent();
     //might need to change this if other queries than mor have mandatory fields
     if (!readerContext.getHasLogFiles()) {
-      List<HoodieSchemaField> addedFields = new ArrayList<>();
       if (hasInstantRange && !findNestedField(requestedSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
-        addedFields.add(getField(this.tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+        List<HoodieSchemaField> addedFields = Collections.singletonList(getField(this.tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+        return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
       }
-      // LSM readers merge sorted runs by key even when a file slice contains only a base file.
-      // Keep the physical has-log-files state intact and add only the key fields required by that merge.
-      if (hoodieTableConfig.isLSMTreeStorageLayout()) {
-        for (String field : getRecordKeyFields(hoodieTableConfig)) {
-          if (!findNestedField(requestedSchema, field).isPresent()) {
-            addedFields.add(getField(this.tableSchema, field));
-          }
-        }
-      }
-      return addedFields.isEmpty() ? requestedSchema : appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
+      return requestedSchema;
     }
 
     RecordMergeMode mergeMode = hoodieTableConfig.getRecordMergeMode();
@@ -262,7 +253,15 @@ public class FileGroupReaderSchemaHandler<T> {
       requiredFields.add(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     }
 
-    requiredFields.addAll(getRecordKeyFields(cfg));
+    // Add record key fields.
+    if (cfg.populateMetaFields()) {
+      requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    } else {
+      Option<String[]> fields = cfg.getRecordKeyFields();
+      if (fields.isPresent()) {
+        requiredFields.addAll(Arrays.asList(fields.get()));
+      }
+    }
     // Add precombine field for event time ordering merge mode.
     if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
       List<String> preCombineFields = cfg.getOrderingFields();
@@ -282,14 +281,6 @@ public class FileGroupReaderSchemaHandler<T> {
     }
 
     return requiredFields.toArray(new String[0]);
-  }
-
-  private static Set<String> getRecordKeyFields(HoodieTableConfig cfg) {
-    if (cfg.populateMetaFields()) {
-      return Collections.singleton(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    }
-    Option<String[]> fields = cfg.getRecordKeyFields();
-    return fields.isPresent() ? new HashSet<>(Arrays.asList(fields.get())) : Collections.emptySet();
   }
 
   protected HoodieSchema prepareRequiredSchema(DeleteContext deleteContext) {

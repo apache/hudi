@@ -201,7 +201,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
-  public InternalRow seal(InternalRow internalRow) {
+  public InternalRow seal(HoodieSchema schema, InternalRow internalRow) {
     return internalRow.copy();
   }
 
