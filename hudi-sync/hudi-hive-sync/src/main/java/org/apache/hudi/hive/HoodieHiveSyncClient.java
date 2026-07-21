@@ -598,6 +598,18 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     try {
       ddlExecutor.close();
       if (client != null) {
+        // Close the proxied IMetaStoreClient directly before Hive.closeCurrent().
+        // When RetryingMetaStoreClient rebuilds the underlying client on a transient
+        // TException, the fresh MSC is reachable only through this proxy, while the
+        // thread-local Hive singleton still references the older instance. So
+        // Hive.closeCurrent() alone closes the stale MSC and orphans the retry-created
+        // one, leaking a connection per sync cycle. client.close() releases the live
+        // MSC by identity; Hive.closeCurrent() remains a fallback for the singleton path.
+        try {
+          client.close();
+        } catch (Exception e) {
+          log.warn("Failed to close IMetaStoreClient directly; Hive.closeCurrent() will run anyway", e);
+        }
         Hive.closeCurrent();
         client = null;
       }
