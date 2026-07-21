@@ -21,6 +21,7 @@ package org.apache.hudi.source;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -75,7 +76,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSource.class);
 
   private final HoodieScanContext scanContext;
-  private final SplitReaderFunction<T> readerFunction;
+  private final SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier;
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
   private final HoodieTableMetaClient metaClient;
   private final HoodieRecordEmitter<T> recordEmitter;
@@ -83,18 +84,18 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
 
   public HoodieSource(
       HoodieScanContext scanContext,
-      SplitReaderFunction<T> readerFunction,
+      SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
       SerializableComparator<HoodieSourceSplit> splitComparator,
       HoodieTableMetaClient metaClient,
       HoodieRecordEmitter<T> recordEmitter) {
     ValidationUtils.checkArgument(scanContext != null, "scanContext can't be null.");
-    ValidationUtils.checkArgument(readerFunction != null, "readerFunction can't be null.");
+    ValidationUtils.checkArgument(readerFunctionSupplier != null, "readerFunctionSupplier can't be null.");
     ValidationUtils.checkArgument(splitComparator != null, "splitComparator can't be null.");
     ValidationUtils.checkArgument(metaClient != null, "metaClient can't be null.");
     ValidationUtils.checkArgument(recordEmitter != null, "recordEmitter can't be null.");
 
     this.scanContext = scanContext;
-    this.readerFunction = readerFunction;
+    this.readerFunctionSupplier = readerFunctionSupplier;
     this.splitComparator = splitComparator;
     this.metaClient = metaClient;
     this.recordEmitter = recordEmitter;
@@ -129,7 +130,8 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
 
   @Override
   public SourceReader<T, HoodieSourceSplit> createReader(SourceReaderContext readerContext) throws Exception {
-    return new HoodieSourceReader<T>(tableName, recordEmitter, scanContext, readerContext, readerFunction, splitComparator);
+    return new HoodieSourceReader<T>(
+        tableName, recordEmitter, scanContext, readerContext, readerFunctionSupplier, splitComparator);
   }
 
   private SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> createEnumerator(
