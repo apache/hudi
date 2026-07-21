@@ -59,7 +59,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -190,26 +189,6 @@ class TestLsmFileGroupRecordIterator {
         "key2:log1-key2",
         "key3:base-key3",
         "key3:log2-key3"), drain(loserTree));
-  }
-
-  @Test
-  void testNativeDeleteRecordPreservesOrderingValue() {
-    HoodieReaderContext<Map<String, Object>> readerContext = mock(HoodieReaderContext.class);
-    RecordContext<Map<String, Object>> recordContext = mock(RecordContext.class);
-    Map<String, Object> record = Collections.emptyMap();
-    List<String> orderingFields = Collections.singletonList("ts");
-    HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(tableSchema(), orderingFields);
-
-    when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(recordContext.getValue(record, deleteLogSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD)).thenReturn("key1");
-    when(recordContext.getOrderingValue(eq(record), eq(deleteLogSchema), eq(orderingFields))).thenReturn(42L);
-
-    BufferedRecord<Map<String, Object>> deleteRecord =
-        LsmFileGroupRecordIterator.createNativeDeleteRecord(readerContext, record, deleteLogSchema, orderingFields);
-
-    assertEquals("key1", deleteRecord.getRecordKey());
-    assertEquals(42L, deleteRecord.getOrderingValue());
-    assertTrue(deleteRecord.isDelete());
   }
 
   @Test

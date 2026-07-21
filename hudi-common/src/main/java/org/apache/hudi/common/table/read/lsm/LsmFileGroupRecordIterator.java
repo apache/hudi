@@ -27,9 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.schema.HoodieSchemas;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
@@ -43,12 +41,9 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -59,7 +54,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.function.Function;
 
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.config.HoodieReaderConfig.LSM_SORT_MERGE_SPILL_THRESHOLD;
@@ -177,7 +171,8 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     }
     Set<Integer> directLogMergeOrders = selectDirectLogMergeOrders(logReaderSpecs, readBaseFile);
     for (LogReaderSpec spec : logReaderSpecs) {
-      ClosableIterator<BufferedRecord<T>> iterator = createLogIterator(spec.logFile.getPathInfo(), spec.logFile.getPath(), spec.logFile.getFileSize());
+      ClosableIterator<BufferedRecord<T>> iterator = LsmFileIterators.createLogFileIterator(
+          readerContext, metaClient, storage, spec.logFile, orderingFieldNames);
       addReader(sortedRunReaders, spec.mergeOrder, maybeSpillIterator(directLogMergeOrders.contains(spec.mergeOrder), iterator));
     }
     return sortedRunReaders;
@@ -288,110 +283,6 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
       return HoodieSchema.parse(schemaStr);
     }
     return HoodieSchemaUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
-  }
-
-  /**
-   * Creates a sorted-run iterator for a native log file.
-   *
-   * <p>Native delete logs use a specialized schema and are routed through
-   * {@link #createNativeDeleteLogIterator(StoragePathInfo, StoragePath, long)}.
-   */
-  private ClosableIterator<BufferedRecord<T>> createLogIterator(StoragePathInfo pathInfo,
-                                                                StoragePath path,
-                                                                long fileSize) throws IOException {
-    StoragePath storagePath = pathInfo != null ? pathInfo.getPath() : path;
-    if (FSUtils.isNativeDeleteLogFile(storagePath.getName())) {
-      return createNativeDeleteLogIterator(pathInfo, storagePath, fileSize);
-    }
-    return createLogFileIterator(pathInfo, storagePath, fileSize);
-  }
-
-  /**
-   * Reads a native data log with the same schema flow as an inline log block.
-   *
-   * <p>With schema evolution enabled, records are decoded with the writer schema stored in the
-   * native log footer and then transformed once to the evolved schema for that instant. Without
-   * schema evolution, the file reader projects directly to the required reader schema.
-   */
-  private ClosableIterator<BufferedRecord<T>> createLogFileIterator(StoragePathInfo pathInfo,
-                                                                    StoragePath storagePath,
-                                                                    long fileSize) throws IOException {
-    if (readerContext.getSchemaHandler().getInternalSchema().isEmptySchema()) {
-      ClosableIterator<T> recordIterator = getFileRecordIterator(
-          pathInfo,
-          storagePath,
-          fileSize,
-          readerContext.getSchemaHandler().getTableSchema(),
-          readerSchema);
-      return LsmFileIterators.toBufferedRecordIterator(
-          readerContext, recordIterator, readerSchema, orderingFieldNames, false);
-    }
-
-    // Read the writer schema from the footer instead of using the table schema. For partial updates,
-    // the footer stores the partial schema written to this log file, which may differ from the table schema.
-    HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(metaClient, storagePath);
-    Pair<Function<T, T>, HoodieSchema> schemaEvolutionTransformer =
-        readerContext.getSchemaHandler().getSchemaEvolutionTransformer(
-            writerSchema, FSUtils.getCommitTime(storagePath.getName())).get();
-    ClosableIterator<T> recordIterator = getFileRecordIterator(
-        pathInfo, storagePath, fileSize, writerSchema, writerSchema);
-    recordIterator = new CloseableMappingIterator<>(recordIterator, schemaEvolutionTransformer.getLeft());
-    return LsmFileIterators.toBufferedRecordIterator(
-        readerContext, recordIterator, schemaEvolutionTransformer.getRight(), orderingFieldNames, false);
-  }
-
-  private ClosableIterator<T> getFileRecordIterator(StoragePathInfo pathInfo,
-                                                     StoragePath storagePath,
-                                                     long fileSize,
-                                                     HoodieSchema dataSchema,
-                                                     HoodieSchema requiredSchema) throws IOException {
-    if (pathInfo != null) {
-      return readerContext.getFileRecordIterator(
-          pathInfo, 0, pathInfo.getLength(), dataSchema, requiredSchema, storage);
-    } else {
-      long length = fileSize >= 0 ? fileSize : storage.getPathInfo(storagePath).getLength();
-      return readerContext.getFileRecordIterator(
-          storagePath, 0, length, dataSchema, requiredSchema, storage);
-    }
-  }
-
-  /**
-   * Creates delete records from an RFC-103 native delete log.
-   *
-   * <p>The delete log schema intentionally contains only the record key and ordering fields;
-   * partition path and full data columns are not read for delete-only logs.
-   */
-  private ClosableIterator<BufferedRecord<T>> createNativeDeleteLogIterator(StoragePathInfo pathInfo,
-                                                                            StoragePath storagePath,
-                                                                            long fileSize) throws IOException {
-    HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(
-        readerContext.getSchemaHandler().getTableSchema(), orderingFieldNames);
-    ClosableIterator<T> recordIterator;
-    if (pathInfo != null) {
-      recordIterator = readerContext.getFileRecordIterator(
-          pathInfo, 0, pathInfo.getLength(), deleteLogSchema, deleteLogSchema, storage);
-    } else {
-      long length = fileSize >= 0 ? fileSize : storage.getPathInfo(storagePath).getLength();
-      recordIterator = readerContext.getFileRecordIterator(
-          storagePath, 0, length, deleteLogSchema, deleteLogSchema, storage);
-    }
-    return new CloseableMappingIterator<>(recordIterator, record -> {
-      return createNativeDeleteRecord(readerContext, record, deleteLogSchema, orderingFieldNames);
-    });
-  }
-
-  @VisibleForTesting
-  static <T> BufferedRecord<T> createNativeDeleteRecord(HoodieReaderContext<T> readerContext,
-                                                        T record,
-                                                        HoodieSchema deleteLogSchema,
-                                                        List<String> orderingFieldNames) {
-    Object recordKey = readerContext.getRecordContext()
-        .getValue(record, deleteLogSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    // Preserve the delete log's ordering value so event-time/custom merge modes can compare
-    // deletes against data records instead of treating every native delete as commit-time ordered.
-    Comparable orderingValue =
-        readerContext.getRecordContext().getOrderingValue(record, deleteLogSchema, orderingFieldNames);
-    return BufferedRecords.createDelete(recordKey.toString(), orderingValue);
   }
 
   @Override
