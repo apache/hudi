@@ -1550,6 +1550,37 @@ public class ITTestHoodieDataSource {
   }
 
   @Test
+  void testLsmMergeWithNumericPrimaryKey() {
+    String hoodieTableDDL = sql("t1")
+        .field("id INT")
+        .field("name STRING")
+        .field("ts BIGINT")
+        .pkField("id")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, COPY_ON_WRITE)
+        .option(FlinkOptions.OPERATION, "upsert")
+        .option(FlinkOptions.ORDERING_FIELDS, "ts")
+        .option(FlinkOptions.WRITE_TASKS, 1)
+        .option(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+            HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue())
+        .end();
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    // Both commits must be written in encoded record-key order: "10" comes before "2".
+    execInsertSql(batchTableEnv, "insert into t1 values "
+        + "(10, 'old-10', 1), (2, 'old-2', 1)");
+
+    // Sorting the RowData by the INT primary key instead would put 2 before 10. That order is not
+    // compatible with the LSM reader's string comparator and separates versions of the same key.
+    execInsertSql(batchTableEnv, "insert into t1 values "
+        + "(10, 'new-10', 2), (2, 'new-2', 2)");
+
+    List<Row> result = execSelectSql(batchTableEnv, "select * from t1");
+    assertRowsEquals(result, "[+I[10, new-10, 2], +I[2, new-2, 2]]");
+  }
+
+  @Test
   void testUpdateWithDefaultHoodieRecordPayload() {
     TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
