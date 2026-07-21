@@ -43,6 +43,10 @@ It can also synchronize your data to half dozen data catalogs to keep table cons
 - [What is Upsert on a Data Lake?](https://hudi.apache.org/blog/2026/07/15/what-is-upsert-on-a-data-lake): Record-level updates and deletes on immutable cloud storage, and how Hudi makes them fast.
 - [What is Incremental ETL on a Data Lake?](https://hudi.apache.org/blog/2026/07/16/what-is-incremental-etl-on-a-data-lake): Processing only the data that changed instead of recomputing whole tables.
 - [What is ACID on a Data Lake?](https://hudi.apache.org/blog/2026/07/17/what-is-acid-on-a-data-lake): What atomicity, consistency, isolation and durability mean when your database is a bucket of files.
+- [What is a Streaming Data Lake?](https://hudi.apache.org/blog/2026/07/21/what-is-a-streaming-data-lake): Minute-level data freshness on the lake with incremental pipelines instead of batch reprocessing.
+- [What is CDC on a Data Lake?](https://hudi.apache.org/blog/2026/07/22/what-is-cdc-on-a-data-lake): Change data capture from operational databases into lakehouse tables, explained from first principles.
+- [Lakehouse vs Data Warehouse vs Data Lake](https://hudi.apache.org/blog/2026/07/23/lakehouse-vs-data-warehouse-vs-data-lake): The three architectures compared — strengths, costs and when to use each.
+- [Open Table Format vs Data Lakehouse](https://hudi.apache.org/blog/2026/07/24/open-table-format-vs-data-lakehouse): Untangling the table layer from the architecture, and where file formats, catalogs and engines fit.
 
 ## Blog — Migration guides
 
