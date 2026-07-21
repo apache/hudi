@@ -745,15 +745,18 @@
                       <shadedPattern>${flink.bundle.shade.prefix}jodd.</shadedPattern>
                     </relocation>
                   </relocations>
-                  <!-- Strip hive-exec's stale embedded Avro (no LogicalType) and ORC so the
-                       relocated org.apache.avro.* / org.apache.orc.* namespaces are populated
-                       only by the declared modern avro / orc-core artifacts. -->
+                  <!-- Strip hive-exec's stale embedded Avro / ORC / Parquet so the declared
+                       modern avro, orc-core and parquet-* artifacts are the only source for
+                       those namespaces (relocated for avro/orc/parquet.format, canonical for
+                       parquet core). Without this we rely on shade's artifact ordering to make
+                       the modern copy win; stripping makes it explicit and version-safe. -->
                   <filters combine.children="append">
                     <filter>
                       <artifact>org.apache.hive:hive-exec</artifact>
                       <excludes>
                         <exclude>org/apache/avro/**</exclude>
                         <exclude>org/apache/orc/**</exclude>
+                        <exclude>org/apache/parquet/**</exclude>
                       </excludes>
                     </filter>
                   </filters>
@@ -878,15 +881,18 @@
                       <shadedPattern>${flink.bundle.shade.prefix}jodd.</shadedPattern>
                     </relocation>
                   </relocations>
-                  <!-- Strip hive-exec's stale embedded Avro (no LogicalType) and ORC so the
-                       relocated org.apache.avro.* / org.apache.orc.* namespaces are populated
-                       only by the declared modern avro / orc-core artifacts. -->
+                  <!-- Strip hive-exec's stale embedded Avro / ORC / Parquet so the declared
+                       modern avro, orc-core and parquet-* artifacts are the only source for
+                       those namespaces (relocated for avro/orc/parquet.format, canonical for
+                       parquet core). Without this we rely on shade's artifact ordering to make
+                       the modern copy win; stripping makes it explicit and version-safe. -->
                   <filters combine.children="append">
                     <filter>
                       <artifact>org.apache.hive:hive-exec</artifact>
                       <excludes>
                         <exclude>org/apache/avro/**</exclude>
                         <exclude>org/apache/orc/**</exclude>
+                        <exclude>org/apache/parquet/**</exclude>
                       </excludes>
                     </filter>
                   </filters>
