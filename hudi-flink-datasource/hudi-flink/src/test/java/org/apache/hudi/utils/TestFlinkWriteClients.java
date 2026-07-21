@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex;
@@ -295,12 +296,12 @@ public class TestFlinkWriteClients {
   }
 
   @Test
-  void testCleanByTimeConfigsPropagateToWriteConfig() throws Exception {
+  void testCoreCleanAndArchivalConfigsPropagateToWriteConfig() throws Exception {
     conf.set(FlinkOptions.CLEAN_POLICY, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS.name());
     conf.set(FlinkOptions.CLEAN_RETAIN_HOURS, 48);
-    conf.set(FlinkOptions.CLEAN_MAX_COMMITS_TO_CLEAN, 7L);
-    conf.set(FlinkOptions.CLEAN_EMPTY_INTERVAL_HOURS, 2L);
-    conf.set(FlinkOptions.ARCHIVE_BLOCK_ON_CLEAN_ECTR, true);
+    conf.setString(HoodieCleanConfig.MAX_COMMITS_TO_CLEAN.key(), "7");
+    conf.setString(HoodieCleanConfig.INTERVAL_TO_CREATE_EMPTY_CLEAN_HOURS.key(), "2");
+    conf.setString(HoodieArchivalConfig.BLOCK_ARCHIVAL_ON_LATEST_CLEAN_ECTR.key(), "true");
     StreamerUtil.initTableIfNotExists(conf);
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
