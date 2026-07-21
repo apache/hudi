@@ -222,8 +222,8 @@ public class TestMergeHandle extends BaseTestHandle {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
 
     // These two keys sort in opposite order under UTF-16 (String#compareTo) vs UTF-8 bytes (HFile/MDT order).
-    String supplementaryKey = "\uD83D\uDE00_record";
-    String bmpHighKey = "\uFFFD_record";
+    String supplementaryKey = "😀_record";
+    String bmpHighKey = "�_record";
     assertTrue(supplementaryKey.compareTo(bmpHighKey) < 0);
     assertTrue(StringUtils.compareUtf8Bytes(bmpHighKey, supplementaryKey) < 0);
 
