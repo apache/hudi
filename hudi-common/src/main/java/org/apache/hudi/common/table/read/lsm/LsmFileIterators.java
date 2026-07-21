@@ -70,6 +70,9 @@ final class LsmFileIterators {
       boolean isBaseFileOnly) throws IOException {
     ClosableIterator<T> baseFileIterator = createBaseFileEngineIterator(
         readerContext, storage, baseFile, start, length);
+    if (readerContext.getInstantRange().isPresent()) {
+      baseFileIterator = readerContext.applyInstantRangeFilter(baseFileIterator);
+    }
     return toBufferedRecordIterator(
         readerContext, baseFileIterator, readerContext.getSchemaHandler().getRequiredSchema(),
         orderingFieldNames, isBaseFileOnly);
@@ -221,10 +224,6 @@ final class LsmFileIterators {
       HoodieSchema recordSchema,
       List<String> orderingFieldNames,
       boolean isBaseFileOnly) {
-    if (readerContext.getInstantRange().isPresent()) {
-      recordIterator = readerContext.applyInstantRangeFilter(recordIterator);
-    }
-
     if (isBaseFileOnly) {
       BufferedRecordConverter<T> converter = BufferedRecordConverter.createConverter(
           readerContext.getIteratorMode(), recordSchema, readerContext.getRecordContext(), orderingFieldNames);

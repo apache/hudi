@@ -27,6 +27,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemas;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
@@ -94,7 +95,8 @@ class TestLsmFileIterators {
     when(baseFile.getStoragePath()).thenReturn(baseFilePath);
     when(readerContext.getSchemaHandler()).thenReturn(schemaHandler);
     when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(readerContext.getInstantRange()).thenReturn(Option.empty());
+    when(readerContext.getInstantRange()).thenReturn(Option.of(mock(InstantRange.class)));
+    when(readerContext.applyInstantRangeFilter(fileIterator)).thenReturn(fileIterator);
     when(readerContext.getIteratorMode()).thenReturn(IteratorMode.ENGINE_RECORD);
     when(readerContext.getFileRecordIterator(baseFilePath, 0, 10, schema, schema, storage)).thenReturn(fileIterator);
     when(schemaHandler.getRequiredSchema()).thenReturn(schema);
@@ -108,6 +110,7 @@ class TestLsmFileIterators {
     BufferedRecord<String> record = iterator.next();
     assertEquals("record1", record.getRecord());
     assertNull(record.getRecordKey());
+    verify(readerContext).applyInstantRangeFilter(fileIterator);
     verify(recordContext, never()).getRecordKey("record1", schema);
 
     iterator.close();
