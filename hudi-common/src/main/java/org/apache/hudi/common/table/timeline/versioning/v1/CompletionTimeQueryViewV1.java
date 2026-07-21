@@ -32,14 +32,19 @@ import lombok.Getter;
 
 import java.io.Serializable;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.START_COMMIT_EARLIEST;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 
 public class CompletionTimeQueryViewV1 implements CompletionTimeQueryView, Serializable {
 
@@ -188,14 +193,20 @@ public class CompletionTimeQueryViewV1 implements CompletionTimeQueryView, Seria
   }
 
   /**
-   * Queries the instant start time with given completion time range.
+   * Queries the instant times within the given range.
    *
-   * @param timeline            The timeline.
-   * @param rangeStart              The query range start completion time.
-   * @param rangeEnd                The query range end completion time.
+   * <p>A LAYOUT_VERSION_1 timeline (table versions 5 ~ 7) does not persist a separate completion
+   * time; an instant's completion time is, backward-compatibly, its instant (request) time. The
+   * range bounds are therefore matched against the requested time, and the archived timeline is
+   * never consulted (it is intentionally not loaded for V1). This is the "completion time = instant
+   * time" specialization of the same range logic implemented in {@code CompletionTimeQueryViewV2}.
+   *
+   * @param timeline            The timeline (already filtered as per user configs by the caller).
+   * @param rangeStart              The query range start requested time.
+   * @param rangeEnd                The query range end requested time.
    * @param rangeType               The range type.
-   * @param earliestInstantTimeFunc The function to generate the earliest start time boundary
-   *                                with the minimum completion time.
+   * @param earliestInstantTimeFunc Unused for V1: it only serves the V2 archive lazy-load boundary,
+   *                                and V1 does not load the archive.
    *
    * @return The sorted instant time list.
    */
@@ -205,7 +216,39 @@ public class CompletionTimeQueryViewV1 implements CompletionTimeQueryView, Seria
       Option<String> rangeEnd,
       InstantRange.RangeType rangeType,
       Function<String, String> earliestInstantTimeFunc) {
-    throw new RuntimeException("Incremental query view for timeline version 1 not yet implemented");
+    final boolean startFromEarliest = START_COMMIT_EARLIEST.equalsIgnoreCase(rangeStart.orElse(null));
+    HoodieTimeline completedTimeline = timeline.filterCompletedInstants();
+
+    if (rangeStart.isEmpty() && rangeEnd.isPresent()) {
+      // (_, end]: returns the last instant whose requested time is at or before 'end'.
+      return completedTimeline.getInstantsAsStream()
+          .filter(instant -> InstantComparison.compareTimestamps(instant.requestedTime(), LESSER_THAN_OR_EQUALS, rangeEnd.get()))
+          .max(Comparator.comparing(HoodieInstant::requestedTime))
+          .map(instant -> Collections.singletonList(instant.requestedTime()))
+          .orElse(Collections.emptyList());
+    }
+
+    if (startFromEarliest) {
+      // ['earliest', _): clear the start so it degenerates to consuming from the earliest instant.
+      rangeStart = Option.empty();
+    }
+
+    if (rangeStart.isEmpty() && rangeEnd.isEmpty()) {
+      // (_, _): read the latest snapshot.
+      return completedTimeline.lastInstant().map(instant -> Collections.singletonList(instant.requestedTime())).orElse(Collections.emptyList());
+    }
+
+    final InstantRange instantRange = InstantRange.builder()
+        .rangeType(rangeType)
+        .startInstant(rangeStart.orElse(null))
+        .endInstant(rangeEnd.orElse(null))
+        .nullableBoundary(true)
+        .build();
+    return completedTimeline.getInstantsAsStream()
+        .map(HoodieInstant::requestedTime)
+        .filter(instantRange::isInRange)
+        .sorted()
+        .collect(Collectors.toList());
   }
 
   // -------------------------------------------------------------------------
