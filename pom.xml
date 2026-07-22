@@ -2370,6 +2370,25 @@
               </execution>
             </executions>
           </plugin>
+          <!-- Attach the JaCoCo agent so integration-tests profile runs, including Flink
+               datasource jobs, emit coverage from both integration-test (failsafe) and
+               integ-test unit (surefire) executions. The agent argument is appended to the
+               argLine property, which both plugins pick up. destFile matches the jacoco-agent
+               path that scripts/jacoco/generate_merged_coverage_report.sh globs for. -->
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+                <configuration>
+                  <destFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</destFile>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
         </plugins>
       </build>
     </profile>
