@@ -567,4 +567,64 @@ public class TestAvroSchemaEvolutionUtils {
     // the evolved schema should be the old table schema, since there is no type change at all.
     Assertions.assertEquals(oldInternalSchema, evolvedSchema);
   }
+
+  /**
+   * When the incoming schema relaxes an existing required column to nullable, reconcileSchema must evolve
+   * that column to nullable in the result, even when makeMissingFieldsNullable is true. Previously the
+   * result was rebuilt from the required table and the relaxation was silently dropped, so records with
+   * null in that column failed the write / were quarantined.
+   */
+  @Test
+  public void testReconcileSchemaRelaxesExistingColumnToNullable() {
+    // table: id (required int), flag (required boolean) -- same column set as the incoming schema
+    Types.RecordType oldRecord = Types.RecordType.get(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, false, "flag", Types.BooleanType.get())
+    );
+    InternalSchema oldSchema = new InternalSchema(oldRecord);
+    // incoming: identical columns, but the source relaxed "flag" to nullable
+    Types.RecordType incomingRecord = Types.RecordType.get(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, true, "flag", Types.BooleanType.get())
+    );
+    incomingRecord = (Types.RecordType) InternalSchemaBuilder.getBuilder().refreshNewId(incomingRecord, new AtomicInteger(0));
+    HoodieSchema incomingSchema = InternalSchemaConverter.convert(incomingRecord, "test1");
+
+    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldSchema, true);
+
+    Types.RecordType checkedRecord = Types.RecordType.get(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, true, "flag", Types.BooleanType.get())
+    );
+    Assertions.assertEquals(checkedRecord, result.getRecord());
+  }
+
+  /**
+   * reconcileSchema must only ever relax (widen) an existing column's nullability, never tighten it: if the
+   * incoming schema marks a column required but the table has it nullable, the table stays nullable.
+   */
+  @Test
+  public void testReconcileSchemaDoesNotTightenNullableToRequired() {
+    // table: id (required int), flag (nullable boolean)
+    Types.RecordType oldRecord = Types.RecordType.get(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, true, "flag", Types.BooleanType.get())
+    );
+    InternalSchema oldSchema = new InternalSchema(oldRecord);
+    // incoming: source tightened "flag" to required -- must NOT tighten the table
+    Types.RecordType incomingRecord = Types.RecordType.get(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, false, "flag", Types.BooleanType.get())
+    );
+    incomingRecord = (Types.RecordType) InternalSchemaBuilder.getBuilder().refreshNewId(incomingRecord, new AtomicInteger(0));
+    HoodieSchema incomingSchema = InternalSchemaConverter.convert(incomingRecord, "test1");
+
+    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldSchema, true);
+
+    Types.RecordType checkedRecord = Types.RecordType.get(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, true, "flag", Types.BooleanType.get())
+    );
+    Assertions.assertEquals(checkedRecord, result.getRecord());
+  }
 }

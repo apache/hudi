@@ -78,7 +78,19 @@ public class AvroSchemaEvolutionUtils {
         .stream()
         .filter(f -> colNamesFromOldSchema.contains(f) && !inComingInternalSchema.findType(f).equals(oldTableSchema.findType(f)))
         .collect(Collectors.toList());
-    if (colNamesFromIncoming.size() == colNamesFromOldSchema.size() && diffFromOldSchema.size() == 0 && typeChangeColumns.isEmpty()) {
+    // check columns the incoming schema relaxed from required to nullable. Since the result is built from
+    // oldTableSchema (to preserve column order/ids and to null-fill missing columns), an existing column
+    // whose incoming counterpart became nullable would otherwise silently keep the table's REQUIRED
+    // nullability, blocking a valid required -> nullable evolution. We only ever relax (never tighten).
+    List<String> nullabilityRelaxColumns = colNamesFromIncoming
+        .stream()
+        .filter(f -> colNamesFromOldSchema.contains(f)
+            && !META_FIELD_NAMES.contains(f)
+            && inComingInternalSchema.findField(f).isOptional()
+            && !oldTableSchema.findField(f).isOptional())
+        .collect(Collectors.toList());
+    if (colNamesFromIncoming.size() == colNamesFromOldSchema.size() && diffFromOldSchema.size() == 0
+        && typeChangeColumns.isEmpty() && nullabilityRelaxColumns.isEmpty()) {
       return oldTableSchema;
     }
 
@@ -121,6 +133,9 @@ public class AvroSchemaEvolutionUtils {
     typeChangeColumns.stream().filter(f -> !inComingInternalSchema.findType(f).isNestedType()).forEach(col -> {
       typeChange.updateColumnType(col, inComingInternalSchema.findType(col));
     });
+
+    // relax existing columns to nullable when the incoming schema made them nullable (valid widening)
+    nullabilityRelaxColumns.forEach(col -> typeChange.updateColumnNullability(col, true));
 
     if (makeMissingFieldsNullable) {
       // mark columns missing from incoming schema as nullable
