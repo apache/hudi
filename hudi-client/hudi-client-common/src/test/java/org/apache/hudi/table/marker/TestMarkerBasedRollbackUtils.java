@@ -52,9 +52,9 @@ import static org.mockito.Mockito.when;
  * <p>The tests mock the {@link HoodieStorage} seams the production code actually goes
  * through:
  * <ul>
- *   <li>{@code readMarkerType(...)} → {@code storage.exists(MARKERS.type)} = false
- *   <li>{@code DirectWriteMarkers.doesMarkerDirExist()} → {@code storage.exists(markerDir)} = true
- *   <li>{@code FSUtils.processFiles} → {@code storage.listDirectEntries(markerDir)} throws
+ *   <li>{@code readMarkerType(...)} -&gt; {@code storage.exists(MARKERS.type)} = false
+ *   <li>{@code DirectWriteMarkers.doesMarkerDirExist()} -&gt; {@code storage.exists(markerDir)} = true
+ *   <li>{@code FSUtils.processFiles} -&gt; {@code storage.listDirectEntries(markerDir)} throws
  * </ul>
  */
 public class TestMarkerBasedRollbackUtils {
@@ -87,7 +87,7 @@ public class TestMarkerBasedRollbackUtils {
 
     StoragePath markerDirPath = new StoragePath(MARKER_DIR);
     StoragePath markerTypeFilePath = new StoragePath(markerDirPath, MARKER_TYPE_FILENAME);
-    // MARKERS.type is absent — this drives execution into the fallback branch under test.
+    // MARKERS.type is absent, this drives execution into the fallback branch under test.
     when(mockStorage.exists(markerTypeFilePath)).thenReturn(false);
     // The marker directory itself exists so DirectWriteMarkers.allMarkerFilePaths()
     // proceeds to list entries (rather than early-returning an empty set).
@@ -113,7 +113,7 @@ public class TestMarkerBasedRollbackUtils {
 
   /**
    * IllegalArgumentException (e.g., marker path format mismatch) must retain the original
-   * fallback behavior — read markers via TIMELINE_SERVER_BASED path instead of failing.
+   * fallback behavior, read markers via TIMELINE_SERVER_BASED path instead of failing.
    *
    * <p>Both DirectWriteMarkers and the timeline-server-based reader end up calling
    * {@code storage.listDirectEntries(markerDir)}. We stub the first invocation to throw
@@ -126,7 +126,7 @@ public class TestMarkerBasedRollbackUtils {
         .thenThrow(new IllegalArgumentException("bad marker path"))
         .thenReturn(Collections.emptyList());
 
-    // No exception should surface — the IllegalArgumentException must be handled by the
+    // No exception should surface, the IllegalArgumentException must be handled by the
     // fallback rather than propagating to the caller.
     assertDoesNotThrow(
         () -> MarkerBasedRollbackUtils.getAllMarkerPaths(mockTable, mockContext, INSTANT, 1));
