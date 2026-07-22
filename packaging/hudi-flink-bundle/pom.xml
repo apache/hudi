@@ -678,10 +678,6 @@
                       <shadedPattern>${flink.bundle.shade.prefix}com.google.common.</shadedPattern>
                     </relocation>
                     <relocation>
-                      <pattern>com.google.protobuf.</pattern>
-                      <shadedPattern>${flink.bundle.shade.prefix}com.google.protobuf.</shadedPattern>
-                    </relocation>
-                    <relocation>
                       <pattern>org.apache.commons.lang3.</pattern>
                       <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang3.</shadedPattern>
                     </relocation>
@@ -702,20 +698,12 @@
                       <shadedPattern>${flink.bundle.shade.prefix}org.json.</shadedPattern>
                     </relocation>
                     <relocation>
-                      <pattern>io.airlift.compress.</pattern>
-                      <shadedPattern>${flink.bundle.shade.prefix}io.airlift.compress.</shadedPattern>
-                    </relocation>
-                    <relocation>
                       <pattern>org.codehaus.jackson.</pattern>
                       <shadedPattern>${flink.bundle.shade.prefix}org.codehaus.jackson.</shadedPattern>
                     </relocation>
                     <relocation>
                       <pattern>com.facebook.fb303.</pattern>
                       <shadedPattern>${flink.bundle.shade.prefix}com.facebook.fb303.</shadedPattern>
-                    </relocation>
-                    <relocation>
-                      <pattern>org.iq80.snappy.</pattern>
-                      <shadedPattern>${flink.bundle.shade.prefix}org.iq80.snappy.</shadedPattern>
                     </relocation>
                     <relocation>
                       <pattern>au.com.bytecode.opencsv.</pattern>
@@ -803,10 +791,6 @@
                       <shadedPattern>${flink.bundle.shade.prefix}com.google.common.</shadedPattern>
                     </relocation>
                     <relocation>
-                      <pattern>com.google.protobuf.</pattern>
-                      <shadedPattern>${flink.bundle.shade.prefix}com.google.protobuf.</shadedPattern>
-                    </relocation>
-                    <relocation>
                       <pattern>org.apache.commons.lang3.</pattern>
                       <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang3.</shadedPattern>
                     </relocation>
@@ -827,20 +811,12 @@
                       <shadedPattern>${flink.bundle.shade.prefix}org.json.</shadedPattern>
                     </relocation>
                     <relocation>
-                      <pattern>io.airlift.compress.</pattern>
-                      <shadedPattern>${flink.bundle.shade.prefix}io.airlift.compress.</shadedPattern>
-                    </relocation>
-                    <relocation>
                       <pattern>org.codehaus.jackson.</pattern>
                       <shadedPattern>${flink.bundle.shade.prefix}org.codehaus.jackson.</shadedPattern>
                     </relocation>
                     <relocation>
                       <pattern>com.facebook.fb303.</pattern>
                       <shadedPattern>${flink.bundle.shade.prefix}com.facebook.fb303.</shadedPattern>
-                    </relocation>
-                    <relocation>
-                      <pattern>org.iq80.snappy.</pattern>
-                      <shadedPattern>${flink.bundle.shade.prefix}org.iq80.snappy.</shadedPattern>
                     </relocation>
                     <relocation>
                       <pattern>au.com.bytecode.opencsv.</pattern>
