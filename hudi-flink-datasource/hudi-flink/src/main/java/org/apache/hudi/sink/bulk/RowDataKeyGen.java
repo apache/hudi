@@ -170,6 +170,26 @@ public class RowDataKeyGen implements Serializable {
     }
   }
 
+  /**
+   * Returns a compact key that preserves the ordering of the encoded Hudi record key.
+   *
+   * <p>The first {@code <field>:} prefix used by complex keys and the legacy simple-key encoding
+   * is identical for all records and is omitted. Subsequent {@code ,<field>:} separators in a
+   * complex key are retained because field values may contain the same delimiter characters;
+   * removing them could make distinct record keys compare equal.
+   */
+  public String getRecordKeyForComparison(RowData rowData) {
+    if (this.simpleRecordKeyFunc != null) {
+      return getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData),
+          this.recordKeyFields[0], consistentLogicalTimestampEnabled);
+    } else {
+      Object[] keyValues = this.recordKeyProjection.projectAsValues(rowData);
+      String recordKey = getRecordKey(keyValues, this.recordKeyFields, consistentLogicalTimestampEnabled);
+      return recordKey.substring(
+          this.recordKeyFields[0].length() + DEFAULT_COLUMN_VALUE_SEPARATOR.length());
+    }
+  }
+
   public String getPartitionPath(RowData rowData) {
     if (this.simplePartitionPath) {
       return getPartitionPath(partitionPathFieldGetter.getFieldOrNull(rowData),

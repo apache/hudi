@@ -24,7 +24,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.generated.RecordComparator;
 
 /**
- * Compares rows by their encoded Hudi record keys.
+ * Compares rows by compact keys that preserve encoded Hudi record-key ordering.
  *
  * <p>LSM sorted runs must use the same ordering as the common LSM reader, which compares the
  * encoded record-key strings. Comparing the typed primary-key fields directly is not equivalent;
@@ -39,6 +39,6 @@ public class RecordKeySortComparator implements RecordComparator {
 
   @Override
   public int compare(RowData record1, RowData record2) {
-    return keyGen.getRecordKey(record1).compareTo(keyGen.getRecordKey(record2));
+    return keyGen.getRecordKeyForComparison(record1).compareTo(keyGen.getRecordKeyForComparison(record2));
   }
 }

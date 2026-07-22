@@ -228,7 +228,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
       this.recordKeyComparator = sortOperatorGen
           .generateRecordComparator("LsmRecordKeyComparator").newInstance(classLoader);
     } else {
-      this.recordKeyComputer = new RecordKeySortKeyComputer();
+      this.recordKeyComputer = new RecordKeySortKeyComputer(keyGen, recordKeyFields.length);
       this.recordKeyComparator = new RecordKeySortComparator(keyGen);
     }
     log.info("LSM storage layout stream write will sort buffered RowData by encoded record keys: {}",
