@@ -19,6 +19,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -53,6 +56,10 @@ class TrinoClient:
 
     def __init__(self, settings: GatewaySettings) -> None:
         self._settings = settings
+        # Dedicated bounded pool: a stuck query must not eat the loop's shared
+        # default executor, and the bound caps how many can pile up at all.
+        self._executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="trino-query")
+        self._ping_cache: tuple[float, bool] | None = None
 
     def _connect(self) -> trino.dbapi.Connection:
         s = self._settings
@@ -65,9 +72,10 @@ class TrinoClient:
             http_scheme="http",
         )
 
-    def _execute_sync(self, sql: str, max_rows: int) -> QueryResult:
+    def _execute_sync(self, sql: str, max_rows: int, holder: dict[str, Any]) -> QueryResult:
         with self._connect() as conn:
             cursor = conn.cursor()
+            holder["cursor"] = cursor
             try:
                 cursor.execute(sql)
                 rows = cursor.fetchmany(max_rows)
@@ -77,20 +85,39 @@ class TrinoClient:
                 cursor.close()
 
     async def execute(self, sql: str, *, timeout: float, max_rows: int) -> QueryResult:
+        # `holder` hands the cursor back across the thread boundary so the
+        # timeout path can cancel the query server-side; wait_for alone only
+        # abandons the await while the worker thread stays blocked in Trino.
+        holder: dict[str, Any] = {}
+        loop = asyncio.get_running_loop()
+        future = loop.run_in_executor(self._executor, self._execute_sync, sql, max_rows, holder)
         try:
-            return await asyncio.wait_for(
-                asyncio.to_thread(self._execute_sync, sql, max_rows), timeout=timeout
-            )
+            return await asyncio.wait_for(future, timeout=timeout)
         except TimeoutError as e:
+            cursor = holder.get("cursor")
+            if cursor is not None:
+                # best-effort server-side cancel; the timeout error wins
+                with contextlib.suppress(Exception):
+                    cursor.cancel()
             raise TrinoTimeoutError(f"query exceeded the {timeout:.0f}s timeout") from e
         except trino.exceptions.TrinoUserError as e:
             raise TrinoQueryError(f"{e.error_name}: {e.message}") from e
         except trino.exceptions.Error as e:
             raise TrinoQueryError(str(e)) from e
 
-    async def ping(self, timeout: float = 5.0) -> bool:
+    async def ping(self, timeout: float = 5.0, cache_seconds: float = 10.0) -> bool:
+        """Cached reachability check feeding ``/ready``.
+
+        Cached like ``LLMReadiness`` so a 10s readinessProbe period does not
+        open a fresh connection and log a query in Trino on every probe.
+        """
+        now = time.monotonic()
+        if self._ping_cache is not None and now - self._ping_cache[0] < cache_seconds:
+            return self._ping_cache[1]
         try:
             await self.execute("SELECT 1", timeout=timeout, max_rows=1)
-            return True
+            ok = True
         except Exception:
-            return False
+            ok = False
+        self._ping_cache = (now, ok)
+        return ok

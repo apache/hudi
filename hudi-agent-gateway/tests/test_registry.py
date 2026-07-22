@@ -26,7 +26,7 @@ import pytest
 from fastmcp import Client, FastMCP
 from pydantic import Field
 
-from hudi_agent_gateway.tools.registry import ToolRegistry
+from hudi_agent_gateway.tools.registry import ToolRegistry, is_tool_error
 
 
 @pytest.fixture()
@@ -90,3 +90,11 @@ async def test_invocation_logged_once(
 def test_duplicate_registration_rejected(simple_registry: ToolRegistry) -> None:
     with pytest.raises(ValueError, match="already registered"):
         simple_registry.register("echo_tool", "dup")
+
+
+def test_is_tool_error_parses_not_substring_matches() -> None:
+    assert is_tool_error(json.dumps({"error": "boom", "hint": "fix it"}))
+    # a successful result whose DATA mentions "error" (e.g. a column named
+    # `error`) is not an error
+    assert not is_tool_error(json.dumps({"columns": ["error"], "rows": [[1]]}))
+    assert not is_tool_error("not json at all")

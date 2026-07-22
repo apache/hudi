@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.tools import BaseTool, StructuredTool
+from pydantic import BaseModel
 
 from hudi_agent_gateway.log import log_event
 
@@ -62,6 +63,19 @@ class GatewayTool:
     handler: ToolHandler
 
 
+def is_tool_error(content: str) -> bool:
+    """Whether a tool result string is an ``{"error": ...}`` payload.
+
+    Parses rather than substring-matches: a successful result whose data
+    merely mentions "error" (e.g. a column named ``error``) is not an error.
+    """
+    try:
+        parsed = json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    return isinstance(parsed, dict) and "error" in parsed
+
+
 def _with_invocation_logging(name: str, fn: ToolHandler) -> ToolHandler:
     @functools.wraps(fn)
     async def wrapped(*args: Any, **kwargs: Any) -> str:
@@ -69,12 +83,8 @@ def _with_invocation_logging(name: str, fn: ToolHandler) -> ToolHandler:
         outcome = "ok"
         try:
             result = await fn(*args, **kwargs)
-            try:
-                parsed = json.loads(result)
-                if isinstance(parsed, dict) and "error" in parsed:
-                    outcome = "tool_error"
-            except (json.JSONDecodeError, TypeError):
-                pass
+            if is_tool_error(result):
+                outcome = "tool_error"
             return result
         except Exception:
             outcome = "exception"
@@ -141,7 +151,7 @@ class ToolRegistry:
                     "name": lc_tool.name,
                     "description": lc_tool.description,
                     "input_schema": schema.model_json_schema()
-                    if inspect.isclass(schema)
+                    if inspect.isclass(schema) and issubclass(schema, BaseModel)
                     else schema,
                 }
             )

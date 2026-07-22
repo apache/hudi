@@ -33,27 +33,22 @@
 #                       is registered and ready to query from Trino
 #   --rebuild-jars      force the maven builds even if artifacts exist
 #   --rebuild-images    force the docker builds even if images exist
-#   --spark-version V   3.5 (default) or 4.1
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$HERE/.." && pwd)"
-RUN_EXAMPLE=0 REBUILD_JARS=0 REBUILD_IMAGES=0 SPARK_VERSION="3.5"
+RUN_EXAMPLE=0 REBUILD_JARS=0 REBUILD_IMAGES=0
+# One Spark line for the quickstart; the example manifest pins the same tag.
+SPARK_VERSION="3.5" SCALA_VERSION="2.12"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --run-example)    RUN_EXAMPLE=1; shift ;;
     --rebuild-jars)   REBUILD_JARS=1; shift ;;
     --rebuild-images) REBUILD_IMAGES=1; shift ;;
-    --spark-version)  SPARK_VERSION="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
-case "$SPARK_VERSION" in
-  3.5) SCALA_VERSION="2.12" ;;
-  4.1) SCALA_VERSION="2.13" ;;
-  *) echo "unsupported --spark-version $SPARK_VERSION (3.5|4.1)" >&2; exit 1 ;;
-esac
 
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
@@ -110,7 +105,7 @@ find_jdk23() {
 step "Maven artifacts"
 BUNDLE_JAR=$(ls "$REPO_ROOT"/packaging/hudi-spark-bundle/target/hudi-spark${SPARK_VERSION}-bundle_${SCALA_VERSION}-*.jar 2>/dev/null | grep -v sources | grep -v original | head -1 || true)
 if [[ -z "$BUNDLE_JAR" || "$REBUILD_JARS" == 1 ]]; then
-  "$HERE/scripts/build-jars.sh" --spark-version "$SPARK_VERSION" --skip-plugin
+  "$HERE/scripts/build-jars.sh" --skip-plugin
 else
   echo "spark bundle present: $(basename "$BUNDLE_JAR")"
 fi
@@ -132,7 +127,7 @@ docker image inspect hudi-lakehouse-trino:472 >/dev/null 2>&1 || NEED_IMAGES=1
 docker image inspect "hudi-lakehouse-spark:${SPARK_VERSION}" >/dev/null 2>&1 || NEED_IMAGES=1
 docker image inspect hudi-lakehouse-agent-gateway:0.1.0 >/dev/null 2>&1 || NEED_IMAGES=1
 if [[ "$NEED_IMAGES" == 1 || "$REBUILD_IMAGES" == 1 ]]; then
-  "$HERE/scripts/build-images.sh" --spark-version "$SPARK_VERSION"
+  "$HERE/scripts/build-images.sh"
 else
   echo "images present: hudi-lakehouse-trino:472, hudi-lakehouse-spark:${SPARK_VERSION}, hudi-lakehouse-agent-gateway:0.1.0"
 fi

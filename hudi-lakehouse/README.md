@@ -122,7 +122,7 @@ built jars into gitignored `images/*/target/` directories.
   `hoodie.write.auto.upgrade=false` (the local-dev example does this). This
   pin goes away once the plugin's Hudi dependency is upgraded to a release
   that reads the current table version.
-- The Spark image's Scala version must match the bundle:
-  `apache/spark:3.5.x`/Scala 2.12 ↔ `-Pspark3.5` (default);
-  `apache/spark:4.1.x`/Scala 2.13 ↔ `-Pspark4.1`
-  (`quickstart.sh --spark-version 4.1`, experimental).
+- **One Spark line**: the quickstart builds and runs Spark 3.5 / Scala 2.12
+  only (`apache/spark:3.5.x` ↔ `-Dspark3.5`), matching the pinned example
+  manifest. Everything runs dockerised, so there is no version matrix to
+  support here.

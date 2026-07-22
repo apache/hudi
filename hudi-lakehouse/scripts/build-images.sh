@@ -22,31 +22,27 @@
 # For minikube, run `eval "$(minikube docker-env)"` first so images land in
 # the cluster's Docker daemon.
 #
-# Usage: build-images.sh [--spark-version 3.5|4.1] [--registry <prefix>] [--push]
+# Usage: build-images.sh [--registry <prefix>] [--push]
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$HERE/.." && pwd)"
-SPARK_VERSION="3.5"
 REGISTRY=""
 PUSH=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --spark-version) SPARK_VERSION="$2"; shift 2 ;;
     --registry)      REGISTRY="${2%/}/"; shift 2 ;;
     --push)          PUSH=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
 
-case "$SPARK_VERSION" in
-  3.5) SCALA_VERSION="2.12"; SPARK_IMAGE_TAG="3.5.7-scala2.12-java17-python3-ubuntu"
-       HADOOP_AWS_VERSION="3.3.4"; AWS_SDK_VERSION="1.12.772" ;;
-  4.1) SCALA_VERSION="2.13"; SPARK_IMAGE_TAG="4.1.1-scala2.13-java21-python3-ubuntu"
-       HADOOP_AWS_VERSION="3.4.1"; AWS_SDK_VERSION="1.12.772" ;;
-  *) echo "unsupported --spark-version $SPARK_VERSION (3.5|4.1)" >&2; exit 1 ;;
-esac
+# One Spark line for the lakehouse images; local-dev/example/spark-app.yaml
+# pins the matching image tag and spark/scala versions.
+SPARK_VERSION="3.5" SCALA_VERSION="2.12"
+SPARK_IMAGE_TAG="3.5.7-scala2.12-java17-python3-ubuntu"
+HADOOP_AWS_VERSION="3.3.4" AWS_SDK_VERSION="1.12.772"
 
 BUNDLE_JAR=$(ls "$REPO_ROOT"/packaging/hudi-spark-bundle/target/hudi-spark${SPARK_VERSION}-bundle_${SCALA_VERSION}-*.jar 2>/dev/null | grep -v sources | grep -v original | head -1 || true)
 PLUGIN_DIR=$(ls -d "$REPO_ROOT"/hudi-trino-plugin/target/trino-hudi-*/ 2>/dev/null | head -1 || true)

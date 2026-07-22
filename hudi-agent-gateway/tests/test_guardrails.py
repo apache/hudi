@@ -73,6 +73,12 @@ def test_non_select_statements_are_rejected(sql: str) -> None:
         enforce_guardrails(sql, row_cap=CAP)
 
 
+def test_select_wrapping_dml_is_rejected() -> None:
+    # SELECT-rooted, so only the defense-in-depth tree walk can catch it.
+    with pytest.raises(ToolInputError, match="Insert"):
+        enforce_guardrails("WITH t AS (INSERT INTO x VALUES (1)) SELECT * FROM t", row_cap=CAP)
+
+
 def test_multiple_statements_are_rejected() -> None:
     with pytest.raises(ToolInputError, match="one statement"):
         enforce_guardrails("SELECT 1; SELECT 2", row_cap=CAP)

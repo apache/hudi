@@ -55,14 +55,23 @@ _DESCRIBE_DESC = (
 )
 
 
-def shape_result(result: QueryResult, *, max_bytes: int, sql: str) -> str:
+def shape_result(result: QueryResult, *, max_bytes: int, sql: str, row_cap: int) -> str:
+    # A result that filled the row cap was almost certainly cut off by it
+    # (LIMIT rewrite + fetchmany), so report it truncated -- the agent warns
+    # the user instead of presenting a capped answer as complete.
+    row_capped = result.row_count >= row_cap
     payload: dict[str, Any] = {
         "sql": sql,
         "columns": result.columns,
         "rows": result.rows,
         "row_count": result.row_count,
-        "truncated": False,
+        "truncated": row_capped,
     }
+    if row_capped:
+        payload["notice"] = (
+            f"Result hit the {row_cap}-row cap and may be incomplete. "
+            "Narrow the query (filters, aggregation) for an exact answer."
+        )
     text = json.dumps(payload, default=str)
     while len(text.encode()) > max_bytes and payload["rows"]:
         keep = max(1, len(payload["rows"]) // 2)
@@ -153,7 +162,12 @@ def register(registry: ToolRegistry, client: TrinoClient, settings: GatewaySetti
             )
         except TrinoQueryError as e:
             return _error(f"query failed: {e}", "Fix the SQL and try again.")
-        return shape_result(result, max_bytes=settings.tool_result_max_bytes, sql=safe_sql)
+        return shape_result(
+            result,
+            max_bytes=settings.tool_result_max_bytes,
+            sql=safe_sql,
+            row_cap=settings.sql_row_cap,
+        )
 
     @registry.register("list_tables", _LIST_TABLES_DESC)
     async def list_tables(
@@ -179,7 +193,9 @@ def register(registry: ToolRegistry, client: TrinoClient, settings: GatewaySetti
             )
         except TrinoQueryError as e:
             return _error(f"listing tables failed: {e}")
-        return shape_result(result, max_bytes=settings.tool_result_max_bytes, sql=sql)
+        return shape_result(
+            result, max_bytes=settings.tool_result_max_bytes, sql=sql, row_cap=settings.sql_row_cap
+        )
 
     @registry.register("describe_table", _DESCRIBE_DESC)
     async def describe_table(
@@ -210,4 +226,6 @@ def register(registry: ToolRegistry, client: TrinoClient, settings: GatewaySetti
                 f"table {cat}.{sch}.{tbl} not found",
                 "Call list_tables to see available tables.",
             )
-        return shape_result(result, max_bytes=settings.tool_result_max_bytes, sql=sql)
+        return shape_result(
+            result, max_bytes=settings.tool_result_max_bytes, sql=sql, row_cap=settings.sql_row_cap
+        )

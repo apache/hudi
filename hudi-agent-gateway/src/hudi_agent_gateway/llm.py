@@ -58,7 +58,13 @@ def build_chat_model(settings: GatewaySettings, model: str | None = None) -> Bas
     if provider == "ollama":
         from langchain_ollama import ChatOllama
 
-        return ChatOllama(model=model_name, base_url=settings.ollama_base_url)
+        # ChatOllama has no `timeout` field; the timeout must reach the
+        # underlying httpx client, or a stalled Ollama hangs /v1/chat forever.
+        return ChatOllama(
+            model=model_name,
+            base_url=settings.ollama_base_url,
+            client_kwargs={"timeout": settings.llm_timeout_seconds},
+        )
     if provider == "openai-compatible":
         from langchain_openai import ChatOpenAI
 

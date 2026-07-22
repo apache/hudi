@@ -109,6 +109,9 @@ spec:
               path: /ready
               port: http
             periodSeconds: 10
+            # /ready's own dependency checks budget up to ~8s (5s trino ping +
+            # 3s LLM probe) on a cache miss; the k8s default of 1s would flap.
+            timeoutSeconds: 9
             failureThreshold: 3
           livenessProbe:
             httpGet:

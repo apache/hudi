@@ -39,6 +39,7 @@ from hudi_agent_gateway.api.models import (
     ToolTraceEntry,
 )
 from hudi_agent_gateway.log import log_event, request_id_var, session_id_var
+from hudi_agent_gateway.tools.registry import is_tool_error
 
 logger = logging.getLogger("hudi_agent_gateway.chat")
 
@@ -80,7 +81,7 @@ def _tool_trace_from_messages(messages: list[Any]) -> list[ToolTraceEntry]:
             if matched is not None:
                 content = msg.content if isinstance(msg.content, str) else str(msg.content)
                 matched.result_preview = content[:_PREVIEW_CHARS]
-                matched.is_error = '"error"' in content[:200]
+                matched.is_error = is_tool_error(content)
     return trace
 
 
@@ -196,7 +197,7 @@ def _updates_to_events(update: dict[str, Any]) -> list[ServerSentEvent]:
                         id=msg.tool_call_id or "",
                         name=msg.name or "",
                         preview=content[:_PREVIEW_CHARS],
-                        is_error='"error"' in content[:200],
+                        is_error=is_tool_error(content),
                     ).model_dump_json(),
                 )
             )

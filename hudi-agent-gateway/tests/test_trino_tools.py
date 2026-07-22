@@ -72,6 +72,15 @@ async def test_truncation_notice(registry: ToolRegistry, fake_trino) -> None:
     assert len(out["rows"]) < 200
 
 
+async def test_row_capped_result_reports_truncated(registry: ToolRegistry, fake_trino) -> None:
+    """A result that filled the row cap is truncated even when it fits in bytes."""
+    fake_trino.result = QueryResult(columns=["c"], rows=[["v"] for _ in range(100)])
+    out = await _call(registry, "query_lakehouse", sql="SELECT c FROM big")
+    assert out["truncated"] is True
+    assert "row cap" in out["notice"]
+    assert len(out["rows"]) == 100  # the byte-size loop did not fire
+
+
 async def test_list_tables_defaults(registry: ToolRegistry, fake_trino) -> None:
     await _call(registry, "list_tables")
     sql = fake_trino.executed[0]
@@ -115,11 +124,11 @@ async def test_identifier_injection_rejected(registry: ToolRegistry, fake_trino)
 async def test_shape_result_failsafe_when_metadata_exceeds_cap() -> None:
     """Zero rows left but payload still too big -> bounded fallback payload."""
     result = QueryResult(columns=[f"col_{i}" for i in range(500)], rows=[["v"] * 500])
-    text = shape_result(result, max_bytes=400, sql="SELECT " + "x" * 5000)
+    text = shape_result(result, max_bytes=400, sql="SELECT " + "x" * 5000, row_cap=100)
     assert len(text.encode()) <= 400
     body = json.loads(text)
     assert body["truncated"] is True and body["rows"] == []
     assert body["column_count"] == 500
     # extreme cap: degrades to a bare bounded error payload
-    tiny = shape_result(result, max_bytes=80, sql="SELECT 1")
+    tiny = shape_result(result, max_bytes=80, sql="SELECT 1", row_cap=100)
     assert len(tiny.encode()) <= 80 and json.loads(tiny)["truncated"] is True

@@ -120,10 +120,15 @@ loop, the MCP server, `GET /v1/tools`, and the invocation log.
 
 ## Design notes & limits (v1)
 
+- **No authentication in v1**: `/v1/chat`, `/mcp` and the other endpoints are
+  open to anyone who can reach the pod (and `GATEWAY_HOST` defaults to
+  `0.0.0.0`). Deploy behind an authenticating proxy or on a trusted network.
 - **Single replica**: sessions live in an in-memory LangGraph checkpointer.
   The seam for horizontal scale is swapping in
   `langgraph-checkpoint-postgres` inside `sessions.py`.
 - **Read-only by construction**: non-SELECT statements are rejected at the
   AST level (sqlglot, fail-closed); `EXPLAIN` is also blocked in v1.
 - The chat UI is deliberately first-party and dependency-free (no CDN, no
-  npm) so the whole service works air-gapped and stays license-clean.
+  npm) so the whole service works air-gapped and stays license-clean. The
+  one remote reference is the Hudi logo image, hotlinked from
+  hudi.apache.org; offline it degrades to alt text.
