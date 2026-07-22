@@ -1371,14 +1371,20 @@ public class HoodieTableConfig extends HoodieConfig {
     return Option.empty();
   }
 
-  public Map<String, String> getTableMergeProperties() {
+  /**
+   * Returns the record-merge properties for this table, deriving the pre-v9 delete markers from the
+   * given effective payload class rather than the one persisted in this table config. Callers on the
+   * write path pass the write-config payload class ({@code hoodie.datasource.write.payload.class}),
+   * which for a pre-v9 table may be the only place the payload class is set.
+   */
+  public Map<String, String> getTableMergeProperties(String payloadClass) {
     Map<String, String> configs = ConfigUtils.extractWithPrefix(this.props, RECORD_MERGE_PROPERTY_PREFIX);
     if (getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
       // Convert legacy payload properties do delete key and delete marker properties
-      if (getPayloadClass().equals(AWSDmsAvroPayload.class.getName())) {
+      if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
         configs.put(DELETE_KEY, OP_FIELD);
         configs.put(DELETE_MARKER, DELETE_OPERATION_VALUE);
-      } else if (getPayloadClass().equals(MySqlDebeziumAvroPayload.class.getName()) || getPayloadClass().equals(PostgresDebeziumAvroPayload.class.getName())) {
+      } else if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName()) || payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
         configs.put(DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
         configs.put(DELETE_MARKER, DebeziumConstants.DELETE_OP);
       }
