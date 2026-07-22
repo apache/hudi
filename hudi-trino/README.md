@@ -43,7 +43,7 @@ To run the tests:
 mvn -Phudi-trino,hudi-trino-tests -pl hudi-trino test
 ```
 
-CI keeps `hudi-trino-tests` off so the build resolves cleanly against Maven Central.
+CI follows the same two steps: `.github/workflows/hudi_trino_ci.yml` installs the test-jars from a source checkout of the pinned Trino tag, then runs with both profiles enabled.
 
 ## IDE setup
 
