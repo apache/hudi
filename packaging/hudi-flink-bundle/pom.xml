@@ -661,12 +661,12 @@
               <execution>
                 <configuration>
                   <artifactSet>
-                    <!-- hive-exec needs the ANTLR runtime for Hive DDL parsing
-                         (Driver.compile) but does not embed it. -->
+                    <!-- hive-exec parses Hive DDL (Driver.compile) with the ANTLR 3 runtime
+                         and ST4, which it depends on transitively but does not embed. These
+                         are pulled into the bundle here. (Hive 2.x/3.x use ANTLR 3, not 4.) -->
                     <includes combine.children="append">
                       <include>org.antlr:antlr-runtime</include>
                       <include>org.antlr:ST4</include>
-                      <include>org.antlr:antlr4-runtime</include>
                     </includes>
                   </artifactSet>
                   <!-- hive-exec is a fat jar that embeds these deps un-relocated; under Flink
@@ -705,17 +705,6 @@
                       <pattern>io.airlift.compress.</pattern>
                       <shadedPattern>${flink.bundle.shade.prefix}io.airlift.compress.</shadedPattern>
                     </relocation>
-                    <!-- Relocate parquet-format-structures embedded in hive-exec, but keep
-                         org.apache.parquet.format.converter.** (provided by parquet-hadoop) at
-                         its original name: it is used with the un-relocated
-                         ParquetFileReader.readFooter, so relocating it causes a NoSuchMethodError. -->
-                    <relocation>
-                      <pattern>org.apache.parquet.format.</pattern>
-                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.parquet.format.</shadedPattern>
-                      <excludes>
-                        <exclude>org.apache.parquet.format.converter.**</exclude>
-                      </excludes>
-                    </relocation>
                     <relocation>
                       <pattern>org.codehaus.jackson.</pattern>
                       <shadedPattern>${flink.bundle.shade.prefix}org.codehaus.jackson.</shadedPattern>
@@ -745,11 +734,9 @@
                       <shadedPattern>${flink.bundle.shade.prefix}jodd.</shadedPattern>
                     </relocation>
                   </relocations>
-                  <!-- Strip hive-exec's stale embedded Avro / ORC / Parquet so the declared
-                       modern avro, orc-core and parquet-* artifacts are the only source for
-                       those namespaces (relocated for avro/orc/parquet.format, canonical for
-                       parquet core). Without this we rely on shade's artifact ordering to make
-                       the modern copy win; stripping makes it explicit and version-safe. -->
+                  <!-- Drop hive-exec's stale embedded copies so only the declared modern
+                       artifacts populate these namespaces; otherwise shade would pick the
+                       winner by artifact order. -->
                   <filters combine.children="append">
                     <filter>
                       <artifact>org.apache.hive:hive-exec</artifact>
@@ -757,6 +744,8 @@
                         <exclude>org/apache/avro/**</exclude>
                         <exclude>org/apache/orc/**</exclude>
                         <exclude>org/apache/parquet/**</exclude>
+                        <exclude>com/google/protobuf/**</exclude>
+                        <exclude>io/airlift/compress/**</exclude>
                       </excludes>
                     </filter>
                   </filters>
@@ -797,12 +786,12 @@
               <execution>
                 <configuration>
                   <artifactSet>
-                    <!-- hive-exec needs the ANTLR runtime for Hive DDL parsing
-                         (Driver.compile) but does not embed it. -->
+                    <!-- hive-exec parses Hive DDL (Driver.compile) with the ANTLR 3 runtime
+                         and ST4, which it depends on transitively but does not embed. These
+                         are pulled into the bundle here. (Hive 2.x/3.x use ANTLR 3, not 4.) -->
                     <includes combine.children="append">
                       <include>org.antlr:antlr-runtime</include>
                       <include>org.antlr:ST4</include>
-                      <include>org.antlr:antlr4-runtime</include>
                     </includes>
                   </artifactSet>
                   <!-- hive-exec is a fat jar that embeds these deps un-relocated; under Flink
@@ -841,17 +830,6 @@
                       <pattern>io.airlift.compress.</pattern>
                       <shadedPattern>${flink.bundle.shade.prefix}io.airlift.compress.</shadedPattern>
                     </relocation>
-                    <!-- Relocate parquet-format-structures embedded in hive-exec, but keep
-                         org.apache.parquet.format.converter.** (provided by parquet-hadoop) at
-                         its original name: it is used with the un-relocated
-                         ParquetFileReader.readFooter, so relocating it causes a NoSuchMethodError. -->
-                    <relocation>
-                      <pattern>org.apache.parquet.format.</pattern>
-                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.parquet.format.</shadedPattern>
-                      <excludes>
-                        <exclude>org.apache.parquet.format.converter.**</exclude>
-                      </excludes>
-                    </relocation>
                     <relocation>
                       <pattern>org.codehaus.jackson.</pattern>
                       <shadedPattern>${flink.bundle.shade.prefix}org.codehaus.jackson.</shadedPattern>
@@ -881,11 +859,9 @@
                       <shadedPattern>${flink.bundle.shade.prefix}jodd.</shadedPattern>
                     </relocation>
                   </relocations>
-                  <!-- Strip hive-exec's stale embedded Avro / ORC / Parquet so the declared
-                       modern avro, orc-core and parquet-* artifacts are the only source for
-                       those namespaces (relocated for avro/orc/parquet.format, canonical for
-                       parquet core). Without this we rely on shade's artifact ordering to make
-                       the modern copy win; stripping makes it explicit and version-safe. -->
+                  <!-- Drop hive-exec's stale embedded copies so only the declared modern
+                       artifacts populate these namespaces; otherwise shade would pick the
+                       winner by artifact order. -->
                   <filters combine.children="append">
                     <filter>
                       <artifact>org.apache.hive:hive-exec</artifact>
@@ -893,6 +869,8 @@
                         <exclude>org/apache/avro/**</exclude>
                         <exclude>org/apache/orc/**</exclude>
                         <exclude>org/apache/parquet/**</exclude>
+                        <exclude>com/google/protobuf/**</exclude>
+                        <exclude>io/airlift/compress/**</exclude>
                       </excludes>
                     </filter>
                   </filters>
