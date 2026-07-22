@@ -328,9 +328,7 @@ public class StreamerUtil {
       Configuration conf,
       org.apache.hadoop.conf.Configuration hadoopConf) throws IOException {
     final String basePath = conf.get(FlinkOptions.PATH);
-    final boolean tableExists = tableExists(basePath, hadoopConf);
-    if (!tableExists) {
-      HoodieTableConfig.TableStorageLayout storageLayout = OptionsResolver.getTableStorageLayout(conf);
+    if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient.newTableBuilder()
           .setTableCreateSchema(conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA))
           .setTableType(conf.get(FlinkOptions.TABLE_TYPE))
@@ -338,7 +336,7 @@ public class StreamerUtil {
           .setTableVersion(conf.get(FlinkOptions.WRITE_TABLE_VERSION))
           .setTableFormat(conf.get(FlinkOptions.WRITE_TABLE_FORMAT))
           .setBaseFileFormat(conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null))
-          .setTableStorageLayout(storageLayout.configValue())
+          .setTableStorageLayout(OptionsResolver.getTableStorageLayout(conf).configValue())
           .setRecordMergeMode(getMergeMode(conf))
           .setRecordMergeStrategyId(getMergeStrategyId(conf))
           .setPayloadClassName(getPayloadClass(conf))

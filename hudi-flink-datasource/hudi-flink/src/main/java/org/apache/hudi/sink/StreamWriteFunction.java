@@ -38,6 +38,7 @@ import org.apache.hudi.sink.buffer.RowDataBucket;
 import org.apache.hudi.sink.buffer.TotalSizeTracer;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.RowDataKeyGens;
+import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
@@ -219,8 +220,17 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     String[] recordKeyFields = OptionsResolver.getRecordKeys(config);
     ValidationUtils.checkArgument(recordKeyFields.length > 0,
         "Record key fields can't be empty for LSM storage layout stream write.");
-    this.recordKeyComputer = new RecordKeySortKeyComputer();
-    this.recordKeyComparator = new RecordKeySortComparator(keyGen);
+    if (BufferUtils.canUseCodegenSorting(rowType, recordKeyFields)) {
+      SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, recordKeyFields);
+      ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+      this.recordKeyComputer = sortOperatorGen
+          .generateNormalizedKeyComputer("LsmRecordKeyComputer").newInstance(classLoader);
+      this.recordKeyComparator = sortOperatorGen
+          .generateRecordComparator("LsmRecordKeyComparator").newInstance(classLoader);
+    } else {
+      this.recordKeyComputer = new RecordKeySortKeyComputer();
+      this.recordKeyComparator = new RecordKeySortComparator(keyGen);
+    }
     log.info("LSM storage layout stream write will sort buffered RowData by encoded record keys: {}",
         String.join(",", recordKeyFields));
   }
