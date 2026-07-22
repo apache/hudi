@@ -19,6 +19,7 @@ import io.trino.plugin.hudi.util.HudiAvroSerializer;
 import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
+import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.SourcePage;
 import io.trino.spi.metrics.Metrics;
@@ -32,6 +33,7 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.base.Throwables.getCausalChain;
 import static com.google.common.base.Throwables.throwIfUnchecked;
 
 public class HudiPageSource
@@ -63,6 +65,14 @@ public class HudiPageSource
             this.recordIterator = fileGroupReader.getClosableIterator();
         }
         catch (Throwable e) {
+            // Hudi's log scanning wraps failures in a generic HoodieException ("Exception when
+            // reading log file"), which buries connector errors; if the cause chain holds a
+            // TrinoException, throw that one instead so its error code and actionable message
+            // surface as the query failure.
+            Throwable toThrow = getCausalChain(e).stream()
+                    .filter(TrinoException.class::isInstance)
+                    .findFirst()
+                    .orElse(e);
             // getClosableIterator() can fail with checked (IOException) or unchecked
             // (HoodieIOException, NPE/IAE from schema/file validation) exceptions; clean up
             // in all cases so we don't leak the reader/page-source handles.
@@ -70,17 +80,17 @@ public class HudiPageSource
                 fileGroupReader.close();
             }
             catch (Exception closeException) {
-                e.addSuppressed(closeException);
+                toThrow.addSuppressed(closeException);
             }
             try {
                 pageSource.close();
             }
             catch (Exception closeException) {
-                e.addSuppressed(closeException);
+                toThrow.addSuppressed(closeException);
             }
             // Preserve the original exception type (RuntimeException/Error) instead of masking it.
-            throwIfUnchecked(e);
-            throw new RuntimeException("Failed to initialize file group reader!", e);
+            throwIfUnchecked(toThrow);
+            throw new RuntimeException("Failed to initialize file group reader!", toThrow);
         }
     }
 

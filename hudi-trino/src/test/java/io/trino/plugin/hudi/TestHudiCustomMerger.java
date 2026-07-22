@@ -94,10 +94,11 @@ public class TestHudiCustomMerger
         Session session = SessionBuilder.from(getSession())
                 .withRecordMergerImpls(NonProjectionCompatibleTestRecordMerger.class.getName())
                 .build();
-        // The guard throws inside the file-group reader, so Hudi wraps it in a HoodieException ("Exception when
-        // reading log file"); assert against the cause chain rather than the top-level message.
+        // The guard throws inside the file-group reader and Hudi wraps it in a generic HoodieException
+        // ("Exception when reading log file"), but HudiPageSource rethrows the TrinoException from the
+        // cause chain, so the actionable text must be the top-level query failure message.
         assertThatThrownBy(() -> computeScalar(session, "SELECT sum(value) FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME))
-                .hasStackTraceContaining("is required for merging but is not in the connector's read projection")
-                .hasStackTraceContaining("requires custom mergers to override isProjectionCompatible()");
+                .hasMessageContaining("is required for merging but is not in the connector's read projection")
+                .hasMessageContaining("requires custom mergers to override isProjectionCompatible()");
     }
 }
