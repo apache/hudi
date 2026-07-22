@@ -113,7 +113,7 @@ public class S3EventsSource extends RowSource implements Closeable {
 
   @Override
   public void onCommit(String lastCkptStr) {
-    LOG.info("S3EventsSource.onCommit: deleting {} processed messages from queue, checkpoint={}.",
+    LOG.info("Deleting {} processed messages from SQS queue, checkpoint={}.",
         processedMessages.size(), lastCkptStr);
     pathSelector.deleteProcessedMessages(sqs, pathSelector.queueUrl, processedMessages);
     processedMessages.clear();
