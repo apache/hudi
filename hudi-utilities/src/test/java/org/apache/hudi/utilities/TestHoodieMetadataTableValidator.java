@@ -57,6 +57,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -74,6 +75,7 @@ import lombok.Setter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -1668,6 +1670,106 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     // Verify error message contains file slice counts
     assertTrue(errorMsg.contains(String.format("Number of file slices based on the file system does not match that based on the metadata table. File system-based listing: %d & MDT-based listing: %d.",
         fsFileSlices.size(), mdtFileSlices.size())));
+  }
+
+  @Test
+  void testDoMetadataTableValidationThrowsHoodieExceptionOnSparkContextShutdown() throws Exception {
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
+
+    // Write with RLI enabled so checkMetadataTableIsAvailable() returns true and
+    // doMetadataTableValidation() proceeds to call validateRecordIndex.
+    // File-slice validation flags are intentionally NOT set so validateFilesInPartition
+    // is a no-op and cannot mask the SparkContext-shutdown exception we are testing.
+    makeInsertDf("000", 5).write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    // Do NOT enable validateLatestFileSlices / validateAllFileGroups: those call
+    // validateFilesInPartition inside a Spark map, and HoodieValidationException from
+    // that path would be re-thrown before validateRecordIndex is ever reached.
+
+    // NOTE: static nested class, not anonymous, so it does NOT capture
+    // TestHoodieMetadataTableValidator.this (which is not Serializable). An anonymous class
+    // would cause Spark's parallelize().map() to throw "Task not serializable", which the
+    // outer catch converts to HoodieValidationException instead of HoodieException.
+    HoodieMetadataTableValidator validator = new SparkContextShutdownValidator(jsc, config);
+    HoodieException ex = assertThrows(HoodieException.class, validator::doMetadataTableValidation);
+    assertFalse(ex instanceof HoodieValidationException,
+        "Expected HoodieException wrapping SparkContext shutdown, not HoodieValidationException.");
+  }
+
+  @Test
+  void testDoMetadataTableValidationThrowsHoodieValidationExceptionOnUnexpectedSparkFailure() throws Exception {
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
+
+    makeInsertDf("000", 5).write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+
+    // Covers the false branch of else if (ExceptionUtil.validateErrorMsg(...)):
+    // a SparkException with a non-cancellation message should still produce
+    // HoodieValidationException("Unexpected spark failure").
+    HoodieMetadataTableValidator validator = new UnexpectedSparkFailureValidator(jsc, config);
+    HoodieValidationException ex = assertThrows(HoodieValidationException.class, validator::doMetadataTableValidation);
+    assertTrue(ex.getMessage().contains("Unexpected spark failure"));
+  }
+
+  /** Static nested class; does NOT capture the enclosing test instance (not Serializable). */
+  private static final class SparkContextShutdownValidator extends HoodieMetadataTableValidator {
+    private static final long serialVersionUID = 1L;
+
+    SparkContextShutdownValidator(JavaSparkContext jsc, Config cfg) {
+      super(jsc, cfg);
+    }
+
+    @Override
+    void validateRecordIndex(HoodieSparkEngineContext sparkEngineContext, HoodieTableMetaClient metaClient) {
+      sneakyThrow(new SparkException("cancelled because SparkContext was shut down"));
+    }
+  }
+
+  /** Covers the false branch of the cancellation-message check. */
+  private static final class UnexpectedSparkFailureValidator extends HoodieMetadataTableValidator {
+    private static final long serialVersionUID = 1L;
+
+    UnexpectedSparkFailureValidator(JavaSparkContext jsc, Config cfg) {
+      super(jsc, cfg);
+    }
+
+    @Override
+    void validateRecordIndex(HoodieSparkEngineContext sparkEngineContext, HoodieTableMetaClient metaClient) {
+      sneakyThrow(new SparkException("some unexpected spark error"));
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static <T extends Throwable> void sneakyThrow(Throwable e) throws T {
+    throw (T) e;
   }
 
   private void mockPartitionWithFiles(List<String> partition1, HoodieStorage storage) throws IOException {
