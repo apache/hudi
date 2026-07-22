@@ -181,7 +181,7 @@ public class HudiTrinoReaderContext
                 }
                 // Synthesize a handle for a Hudi meta column absent from the connector projection. This is safe:
                 //   1. Every Hudi meta column is a UTF8 string on disk, so HIVE_STRING/VARCHAR is the correct
-                //      physical type -- the same handle HudiUtil.prependHudiMetaAndOrderingColumns builds for the
+                //      physical type -- the same handle HudiUtil.prependHudiMetaAndMergeRequiredColumns builds for the
                 //      HUDI_REQUIRED_META_COLUMNS.
                 //   2. hiveColumnIndex (0) is a throwaway placeholder: HudiPageSourceProvider.createPageSource
                 //      resolves parquet columns by NAME (directly when useColumnNames=true, otherwise

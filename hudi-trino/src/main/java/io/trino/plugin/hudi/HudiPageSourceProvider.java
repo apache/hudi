@@ -100,7 +100,7 @@ import static io.trino.plugin.hudi.HudiUtil.buildTableMetaClient;
 import static io.trino.plugin.hudi.HudiUtil.constructSchema;
 import static io.trino.plugin.hudi.HudiUtil.convertToFileSlice;
 import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
-import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaAndOrderingColumns;
+import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaAndMergeRequiredColumns;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -180,7 +180,7 @@ public class HudiPageSourceProvider
         // The `columns` list could be empty when count(*) is issued,
         // prepending hoodie meta columns for Hudi split with log files
         // to allow a non-empty dataPageSource to be returned
-        List<HiveColumnHandle> hudiMetaAndDataColumnHandles = prependHudiMetaAndOrderingColumns(hudiTableHandle, dataColumnHandles);
+        List<HiveColumnHandle> hudiMetaAndDataColumnHandles = prependHudiMetaAndMergeRequiredColumns(hudiTableHandle, dataColumnHandles);
 
         TrinoFileSystem fileSystem = fileSystemFactory.create(session);
         ParquetReaderOptions sessionOptions = ParquetReaderOptions.builder(options)

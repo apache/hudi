@@ -348,7 +348,7 @@ public final class HudiUtil
                 "Failed to get column " + columnName + " from table schema");
     }
 
-    public static List<HiveColumnHandle> prependHudiMetaAndOrderingColumns(HudiTableHandle tableHandle, List<HiveColumnHandle> dataColumns)
+    public static List<HiveColumnHandle> prependHudiMetaAndMergeRequiredColumns(HudiTableHandle tableHandle, List<HiveColumnHandle> dataColumns)
     {
         Set<String> existingColumns = dataColumns.stream()
                 .map(HiveColumnHandle::getName)
@@ -371,8 +371,8 @@ public final class HudiUtil
             }
         }
 
-        // Add missing ordering columns next
-        tableHandle.getOrderingColumns().stream()
+        // Add missing merge-required columns next (ordering columns, plus a custom merger's mandatory fields)
+        tableHandle.getMergeRequiredColumns().stream()
                 .filter(col -> existingColumns.add(col.getName()))
                 .forEach(columns::add);
 

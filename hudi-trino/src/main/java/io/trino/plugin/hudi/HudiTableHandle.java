@@ -50,7 +50,7 @@ public class HudiTableHandle
     private final String basePath;
     private final HoodieTableType tableType;
     private final List<HiveColumnHandle> partitionColumns;
-    private final Lazy<List<HiveColumnHandle>> lazyOrderingColumns;
+    private final Lazy<List<HiveColumnHandle>> lazyMergeRequiredColumns;
     // Used only for validation when config property hudi.query-partition-filter-required is enabled
     private final Set<HiveColumnHandle> constraintColumns;
     private final TupleDomain<HiveColumnHandle> partitionPredicates;
@@ -69,14 +69,14 @@ public class HudiTableHandle
             @JsonProperty("basePath") String basePath,
             @JsonProperty("tableType") HoodieTableType tableType,
             @JsonProperty("partitionColumns") List<HiveColumnHandle> partitionColumns,
-            @JsonProperty("orderingColumns") List<HiveColumnHandle> orderingColumns,
+            @JsonProperty("mergeRequiredColumns") List<HiveColumnHandle> mergeRequiredColumns,
             @JsonProperty("partitionPredicates") TupleDomain<HiveColumnHandle> partitionPredicates,
             @JsonProperty("regularPredicates") TupleDomain<HiveColumnHandle> regularPredicates,
             @JsonProperty("limit") OptionalLong limit,
             @JsonProperty("tableSchemaStr") String tableSchemaStr,
             @JsonProperty("latestCommitTime") String latestCommitTime)
     {
-        this(Optional.empty(), Optional.empty(), schemaName, tableName, basePath, tableType, partitionColumns, Lazy.eagerly(orderingColumns), ImmutableSet.of(),
+        this(Optional.empty(), Optional.empty(), schemaName, tableName, basePath, tableType, partitionColumns, Lazy.eagerly(mergeRequiredColumns), ImmutableSet.of(),
                 partitionPredicates, regularPredicates, limit, buildTableSchema(tableSchemaStr), () -> latestCommitTime);
     }
 
@@ -88,7 +88,7 @@ public class HudiTableHandle
             String basePath,
             HoodieTableType tableType,
             List<HiveColumnHandle> partitionColumns,
-            Lazy<List<HiveColumnHandle>> lazyOrderingColumns,
+            Lazy<List<HiveColumnHandle>> lazyMergeRequiredColumns,
             Set<HiveColumnHandle> constraintColumns,
             TupleDomain<HiveColumnHandle> partitionPredicates,
             TupleDomain<HiveColumnHandle> regularPredicates,
@@ -103,7 +103,7 @@ public class HudiTableHandle
                 basePath,
                 tableType,
                 partitionColumns,
-                lazyOrderingColumns,
+                lazyMergeRequiredColumns,
                 constraintColumns,
                 partitionPredicates,
                 regularPredicates,
@@ -129,7 +129,7 @@ public class HudiTableHandle
             String basePath,
             HoodieTableType tableType,
             List<HiveColumnHandle> partitionColumns,
-            Lazy<List<HiveColumnHandle>> lazyOrderingColumns,
+            Lazy<List<HiveColumnHandle>> lazyMergeRequiredColumns,
             Set<HiveColumnHandle> constraintColumns,
             TupleDomain<HiveColumnHandle> partitionPredicates,
             TupleDomain<HiveColumnHandle> regularPredicates,
@@ -144,7 +144,7 @@ public class HudiTableHandle
         this.basePath = requireNonNull(basePath, "basePath is null");
         this.tableType = requireNonNull(tableType, "tableType is null");
         this.partitionColumns = requireNonNull(partitionColumns, "partitionColumns is null");
-        this.lazyOrderingColumns = requireNonNull(lazyOrderingColumns, "lazyOrderingColumns is null");
+        this.lazyMergeRequiredColumns = requireNonNull(lazyMergeRequiredColumns, "lazyMergeRequiredColumns is null");
         this.constraintColumns = requireNonNull(constraintColumns, "constraintColumns is null");
         this.partitionPredicates = requireNonNull(partitionPredicates, "partitionPredicates is null");
         this.regularPredicates = requireNonNull(regularPredicates, "regularPredicates is null");
@@ -267,10 +267,15 @@ public class HudiTableHandle
         return limit;
     }
 
+    /**
+     * Columns that must be read for the file group reader to merge correctly: the ordering columns, plus any
+     * mandatory fields declared by a configured custom record merger. See
+     * {@link HudiUtil#getMergeRequiredColumnHandles}.
+     */
     @JsonProperty
-    public List<HiveColumnHandle> getOrderingColumns()
+    public List<HiveColumnHandle> getMergeRequiredColumns()
     {
-        return lazyOrderingColumns.get();
+        return lazyMergeRequiredColumns.get();
     }
 
     public SchemaTableName getSchemaTableName()
@@ -291,7 +296,7 @@ public class HudiTableHandle
                 basePath,
                 tableType,
                 partitionColumns,
-                lazyOrderingColumns,
+                lazyMergeRequiredColumns,
                 constraintColumns,
                 partitionPredicates.intersect(partitionTupleDomain),
                 regularPredicates.intersect(regularTupleDomain),
@@ -310,7 +315,7 @@ public class HudiTableHandle
                 basePath,
                 tableType,
                 partitionColumns,
-                lazyOrderingColumns,
+                lazyMergeRequiredColumns,
                 constraintColumns,
                 partitionPredicates,
                 regularPredicates,
