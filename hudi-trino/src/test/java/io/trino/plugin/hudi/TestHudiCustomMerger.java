@@ -14,13 +14,16 @@
 package io.trino.plugin.hudi;
 
 import com.google.common.collect.ImmutableMap;
+import io.trino.Session;
 import io.trino.plugin.hudi.testing.CustomMergerHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.KeyBasedTestRecordMerger;
+import io.trino.plugin.hudi.testing.NonProjectionCompatibleTestRecordMerger;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies that the Hudi Trino connector resolves and applies a user-supplied custom record merger
@@ -80,5 +83,21 @@ public class TestHudiCustomMerger
         // 199 uniquely identifies the custom merger: base-only would be 110, built-in newest-wins would be 104.
         assertThat(computeScalar("SELECT sum(value) FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME))
                 .isEqualTo(199L);
+    }
+
+    @Test
+    public void testNonProjectionCompatibleMergerIsRejected()
+    {
+        // A merger that is not projection compatible makes the file-group reader ask for the FULL table schema.
+        // The connector can only resolve columns in the read projection (plus Hudi meta columns), so a data
+        // column outside the projection must fail loudly rather than silently merge against a null value.
+        Session session = SessionBuilder.from(getSession())
+                .withRecordMergerImpls(NonProjectionCompatibleTestRecordMerger.class.getName())
+                .build();
+        // The guard throws inside the file-group reader, so Hudi wraps it in a HoodieException ("Exception when
+        // reading log file"); assert against the cause chain rather than the top-level message.
+        assertThatThrownBy(() -> computeScalar(session, "SELECT sum(value) FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME))
+                .hasStackTraceContaining("is required for merging but is not in the connector's read projection")
+                .hasStackTraceContaining("requires custom mergers to override isProjectionCompatible()");
     }
 }

@@ -44,7 +44,7 @@ public class HudiSessionProperties
         implements SessionPropertiesProvider
 {
     private static final String COLUMNS_TO_HIDE = "columns_to_hide";
-    private static final String RECORD_MERGER_IMPLS = "record_merger_impls";
+    static final String RECORD_MERGER_IMPLS = "record_merger_impls";
     static final String TABLE_STATISTICS_ENABLED = "table_statistics_enabled";
     static final String METADATA_TABLE_ENABLED = "metadata_enabled";
     private static final String USE_PARQUET_COLUMN_NAMES = "use_parquet_column_names";

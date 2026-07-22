@@ -15,6 +15,9 @@ package io.trino.plugin.hudi;
 
 import io.trino.Session;
 
+import java.util.Arrays;
+import java.util.stream.Collectors;
+
 import static io.trino.SystemSessionProperties.ENABLE_DYNAMIC_FILTERING;
 import static io.trino.SystemSessionProperties.JOIN_DISTRIBUTION_TYPE;
 import static io.trino.plugin.hudi.HudiSessionProperties.COLUMN_STATS_INDEX_ENABLED;
@@ -24,6 +27,7 @@ import static io.trino.plugin.hudi.HudiSessionProperties.METADATA_TABLE_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.PARTITION_STATS_INDEX_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.QUERY_PARTITION_FILTER_REQUIRED;
 import static io.trino.plugin.hudi.HudiSessionProperties.RECORD_INDEX_WAIT_TIMEOUT;
+import static io.trino.plugin.hudi.HudiSessionProperties.RECORD_MERGER_IMPLS;
 import static io.trino.plugin.hudi.HudiSessionProperties.RECORD_LEVEL_INDEX_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.RESOLVE_COLUMN_NAME_CASING_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.SECONDARY_INDEX_ENABLED;
@@ -140,6 +144,17 @@ public class SessionBuilder
     public SessionBuilder withRecordIndexTimeout(String durationProp)
     {
         return setCatalogProperty(RECORD_INDEX_WAIT_TIMEOUT, durationProp);
+    }
+
+    /**
+     * Sets {@code record_merger_impls}. The property is an array type, so the value is rendered as a JSON list.
+     */
+    public SessionBuilder withRecordMergerImpls(String... mergerClassNames)
+    {
+        String jsonList = Arrays.stream(mergerClassNames)
+                .map(name -> '"' + name + '"')
+                .collect(Collectors.joining(",", "[", "]"));
+        return setCatalogProperty(RECORD_MERGER_IMPLS, jsonList);
     }
 
     public SessionBuilder withResolveColumnNameCasingEnabled(boolean enabled)
