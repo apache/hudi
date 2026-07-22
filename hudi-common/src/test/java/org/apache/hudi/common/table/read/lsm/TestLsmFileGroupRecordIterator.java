@@ -19,21 +19,45 @@
 
 package org.apache.hudi.common.table.read.lsm;
 
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemas;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.table.read.DeleteContext;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.InputSplit;
+import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -44,12 +68,20 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestLsmFileGroupRecordIterator {
+
+  @TempDir
+  Path tempDir;
 
   @Test
   void testDeleteLogSchemaUsesRecordKeyAndOrderingFields() {
@@ -119,6 +151,95 @@ class TestLsmFileGroupRecordIterator {
     assertEquals(new HashSet<>(Arrays.asList(2, 3)), directReadersWithoutBase);
   }
 
+  @Test
+  void testSortedRunFixturesMergeAcrossBaseAndSpilledLogs() throws IOException {
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "id");
+    tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, "ts");
+    tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
+    tableConfig.setValue(HoodieTableConfig.BASE_FILE_FORMAT, HoodieFileFormat.PARQUET.name());
+    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+    StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
+    HoodieAvroReaderContext context = org.mockito.Mockito.spy(
+        new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty()));
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieReaderConfig.LSM_SORT_MERGE_SPILL_THRESHOLD.key(), "1");
+    props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), tempDir.toString());
+    context.initRecordMerger(props);
+
+    FileGroupReaderSchemaHandler<IndexedRecord> schemaHandler = mock(FileGroupReaderSchemaHandler.class);
+    when(schemaHandler.getRequiredSchema()).thenReturn(tableSchema());
+    when(schemaHandler.getRequestedSchema()).thenReturn(tableSchema());
+    when(schemaHandler.getTableSchema()).thenReturn(tableSchema());
+    when(schemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, tableSchema()));
+    when(schemaHandler.getRequiredSchemaForFileAndRenamedColumns(any(StoragePath.class)))
+        .thenReturn(Pair.of(tableSchema(), Collections.emptyMap()));
+    context.setSchemaHandler(schemaHandler);
+    context.setTablePath("/tmp/lsm-fixture");
+
+    doAnswer(invocation -> {
+      StoragePathInfo pathInfo = invocation.getArgument(0);
+      String name = pathInfo.getPath().getName();
+      if (name.endsWith("deletes.parquet")) {
+        HoodieSchema deleteSchema = invocation.getArgument(3);
+        return ClosableIterator.wrap(Collections.singletonList(deleteRecord(deleteSchema, "b", 2L)).iterator());
+      }
+      List<IndexedRecord> records;
+      if (name.endsWith(".parquet") && !name.contains(".log.")) {
+        records = Arrays.asList(indexedRecord("a", "base-a", 1), indexedRecord("c", "base-c", 5));
+      } else if (name.contains("_002_")) {
+        records = Arrays.asList(indexedRecord("a", "log2-a", 3), indexedRecord("c", "stale-c", 2));
+      } else {
+        records = Arrays.asList(indexedRecord("a", "log1-a", 2), indexedRecord("b", "log1-b", 1));
+      }
+      return ClosableIterator.wrap(records.iterator());
+    }).when(context).getFileRecordIterator(any(StoragePathInfo.class), anyLong(), anyLong(),
+        any(HoodieSchema.class), any(HoodieSchema.class), any(HoodieStorage.class));
+
+    HoodieBaseFile baseFile = new HoodieBaseFile(pathInfo("/tmp/file1_1-0-1_001.parquet", 100));
+    List<HoodieLogFile> logs = Arrays.asList(
+        new HoodieLogFile(pathInfo("/tmp/file1_1-0-1_001_1.log.parquet", 50)),
+        new HoodieLogFile(pathInfo("/tmp/file1_1-0-1_002_1.log.parquet", 60)),
+        new HoodieLogFile(pathInfo("/tmp/file1_1-0-1_003_1.deletes.parquet", 10)));
+    InputSplit split = InputSplit.builder()
+        .baseFileOption(Option.of(baseFile))
+        .logFileStream(logs.stream())
+        .partitionPath("")
+        .start(0)
+        .length(Long.MAX_VALUE)
+        .build();
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    ReaderParameters parameters = ReaderParameters.builder().emitDeletes(false).build();
+
+    List<String> actual = new ArrayList<>();
+    try (LsmFileGroupRecordIterator<IndexedRecord> iterator = new LsmFileGroupRecordIterator<>(
+        context, mock(HoodieStorage.class), split, Collections.singletonList("ts"), metaClient,
+        props, parameters, new HoodieReadStats(), Option.empty())) {
+      assertTrue(iterator.hasNext());
+      assertTrue(iterator.hasNext());
+      while (iterator.hasNext()) {
+        BufferedRecord<IndexedRecord> record = iterator.next();
+        actual.add(record.getRecordKey() + ":" + record.getRecord().get(1));
+      }
+      assertFalse(iterator.hasNext());
+      assertThrows(java.util.NoSuchElementException.class, iterator::next);
+    }
+
+    assertEquals(Arrays.asList("a:log2-a", "c:base-c"), actual);
+
+    List<String> logOnly = new ArrayList<>();
+    try (LsmFileGroupRecordIterator<IndexedRecord> iterator = new LsmFileGroupRecordIterator<>(
+        context, mock(HoodieStorage.class), split, Collections.singletonList("ts"), metaClient,
+        props, parameters, new HoodieReadStats(), Option.empty(), false)) {
+      while (iterator.hasNext()) {
+        BufferedRecord<IndexedRecord> record = iterator.next();
+        logOnly.add(record.getRecordKey() + ":" + record.getRecord().get(1));
+      }
+    }
+    assertEquals(Arrays.asList("a:log2-a", "c:stale-c"), logOnly);
+  }
+
   private static LsmFileGroupRecordIterator.SortedRunReader<String> sortedRunReader(int mergeOrder,
                                                                                     BufferedRecord<String>... records) {
     LsmFileGroupRecordIterator.SortedRunReader<String> reader = new LsmFileGroupRecordIterator.SortedRunReader<>(
@@ -134,7 +255,27 @@ class TestLsmFileGroupRecordIterator {
   private static HoodieSchema tableSchema() {
     return HoodieSchema.createRecord("test_record", null, null, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.STRING)),
         HoodieSchemaField.of("ts", HoodieSchema.create(HoodieSchemaType.LONG))));
+  }
+
+  private static IndexedRecord indexedRecord(String key, String value, long ts) {
+    GenericData.Record record = new GenericData.Record(tableSchema().toAvroSchema());
+    record.put("id", key);
+    record.put("value", value);
+    record.put("ts", ts);
+    return record;
+  }
+
+  private static IndexedRecord deleteRecord(HoodieSchema schema, String key, long ts) {
+    GenericData.Record record = new GenericData.Record(schema.toAvroSchema());
+    record.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, key);
+    record.put("ts", ts);
+    return record;
+  }
+
+  private static StoragePathInfo pathInfo(String path, long size) {
+    return new StoragePathInfo(new StoragePath(path), size, false, (short) 1, 1024, 0);
   }
 
   private static List<String> drain(LsmFileGroupRecordIterator.LoserTree<String> loserTree) {
