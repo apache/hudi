@@ -95,8 +95,8 @@ of the Copy-on-Write or Merge-on-Read table type.
 The LSM-tree layout requires table version 10 or later because it depends on native log files. Writers must reject
 `hoodie.table.storage.layout=lsm_tree` when `hoodie.write.table.version` is less than 10. Native log files do not,
 however, require the LSM-tree layout: a version-10 table using the default layout still writes and reads native logs.
-The current LSM file-group reader expects native Parquet logs. Write-operation semantics, record-merger semantics, and
-reader and writer indexes remain the same under both layouts.
+The current LSM file-group reader is restricted to tables whose configured log-file format is Parquet. Write-operation
+semantics, record-merger semantics, and reader and writer indexes remain the same under both layouts.
 
 ## Timeline
 
@@ -210,9 +210,11 @@ where,
 Note that a single file group can contain base files with different extensions when `hoodie.table.multiple.base.file.formats.enable` is set on the table.
 
 **Base file formats supported in table version 9 and later**: Apache Parquet (`.parquet`), Apache ORC (`.orc`), Hudi's own HFile (`.hfile`),
-and [Lance](https://lancedb.com/) (`.lance`). Lance is currently supported for base file reads and Copy-on-Write writes only;
-column stats and partition stats are not populated for Lance base files (readers should not rely on these indexes for Lance-backed
-file groups).
+and [Lance](https://lancedb.com/) (`.lance`). The Spark and Flink engine-specific paths support Lance base-file reads and
+writes for Copy-on-Write and Merge-on-Read tables, including compaction. Lance files are not split for parallel reads.
+Bloom filters are supported, but column-stats and partition-stats indexes are not populated for Lance base files; readers
+must not rely on those indexes for Lance-backed file groups. Lance stores `VECTOR` columns natively as fixed-size lists and
+supports `BLOB` columns, but does not currently support `VARIANT` columns.
 
 ### Types
 
@@ -251,11 +253,11 @@ Native logs use a visible, write-once file with this naming convention:
 
 **_\[file\_id\]\_\[write\_token\]\_\[requested\_instant\_time\]\_\[version\].\[log\_type\].\[native\_format\]_**
 
-| Log type | File-name component | Parquet example |
+| Log type | File-name component | Examples |
 | --- | --- | --- |
-| Data | `log` | `<file_id>_<write_token>_<instant>_<version>.log.parquet` |
-| Delete | `deletes` | `<file_id>_<write_token>_<instant>_<version>.deletes.parquet` |
-| Change data capture | `cdc` | `<file_id>_<write_token>_<instant>_<version>.cdc.parquet` |
+| Data | `log` | `<file_id>_<write_token>_<instant>_<version>.log.parquet`, `<file_id>_<write_token>_<instant>_<version>.log.lance` |
+| Delete | `deletes` | `<file_id>_<write_token>_<instant>_<version>.deletes.parquet`, `<file_id>_<write_token>_<instant>_<version>.deletes.lance` |
+| Change data capture | `cdc` | `<file_id>_<write_token>_<instant>_<version>.cdc.parquet`, `<file_id>_<write_token>_<instant>_<version>.cdc.lance` |
 
 The fields used by both conventions are:
 
@@ -265,11 +267,11 @@ The fields used by both conventions are:
   physical log-format version stored in the block envelope or native-file footer.
 * **write_token** - Token identifying the task and attempt that produced the file. It distinguishes retries and lets
   cleaning remove unsuccessful attempts.
-* **native_format** - Storage format of a native log file, such as `parquet`, `orc`, or `hfile`. The current writer uses
-  the effective base-file format; Lance is the exception described below.
+* **native_format** - Storage format of a native log file. The current writer uses the effective base-file format and
+  supports `parquet`, `orc`, `hfile`, and `lance`.
 
-Table versions below 10 write inline logs. Writers targeting table version 10 or later write native logs by default,
-except for Lance-backed tables, which continue to use inline logs until native Lance log support is available.
+Table versions below 10 write inline logs. Writers targeting table version 10 or later write native logs, including Lance
+native logs for Lance-backed tables and HFile native logs for the metadata table.
 
 ### Log Format
 
@@ -313,7 +315,12 @@ Parquet footer
       hudi.log.format.metadata = <JSON object>
 ```
 
-The `hudi.log.format.metadata` footer value is a JSON object keyed by the symbolic header names listed in
+ORC and HFile store the same key/value entry in their format-specific footer metadata. Lance stores it in the Arrow schema
+custom metadata returned by the Lance reader; the writer flushes that schema metadata into the Lance file footer when the
+file is closed. This is the implemented Lance contract, rather than the global-buffer approach proposed as one option in
+RFC-103.
+
+In every native format, the `hudi.log.format.metadata` value is a JSON object keyed by the symbolic header names listed in
 [Headers](#headers). The writer always adds `VERSION=2` and also persists the applicable values such as `INSTANT_TIME`,
 `SCHEMA`, `RECORD_POSITIONS`, `BLOCK_IDENTIFIER`, `IS_PARTIAL`, and
 `BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS`. Readers ignore unknown symbolic header names for forward compatibility but
@@ -321,7 +328,7 @@ reject a `VERSION` greater than the highest log format they support.
 
 Native block payloads have the following schemas and behavior:
 
-* **Data logs** use the table schema, including Hudi metadata columns. The schema is stored in the Parquet footer and in
+* **Data logs** use the table schema, including Hudi metadata columns. The schema is stored in native file metadata and in
   the synthetic block's `SCHEMA` metadata used by Hudi readers.
 * **Delete logs** store `_hoodie_record_key` followed by the table's configured ordering fields. Ordering fields are
   nullable in the delete-log schema so a tombstone without an ordering value remains distinguishable from a real value.
@@ -329,9 +336,10 @@ Native block payloads have the following schemas and behavior:
 * Command and corrupted blocks are inline-format concepts and are not written as native log files. Native log files are
   write-once and do not support reverse block traversal.
 
-For Parquet native logs, readers can use native column pruning, predicate pushdown, row-group statistics, vectorized
-decoding, and compression without first locating an embedded block or translating offsets through an inline-filesystem
-abstraction. Other native formats expose their corresponding format-level capabilities.
+Native readers can use the underlying format's column pruning, predicate pushdown, statistics, vectorized decoding, and
+compression capabilities without first locating an embedded block or translating offsets through an inline-filesystem
+abstraction. For Lance, the engine-specific reader also preserves native `VECTOR` and `BLOB` handling used by Lance base
+files.
 
 ### Versioning
 
@@ -339,8 +347,8 @@ The current log format is version `2`.
 
 | Log format version | Physical representation | Table versions that write it |
 | --- | --- | --- |
-| 0/1 | Appendable Hudi binary envelope containing one or more embedded blocks | Table versions below 10; Lance-backed version-10 tables |
-| 2 | Write-once native file with Hudi metadata in the native footer | Table version 10 and later by default |
+| 0/1 | Appendable Hudi binary envelope containing one or more embedded blocks | Table versions below 10 |
+| 2 | Write-once native file with Hudi metadata in the native footer | Table version 10 and later |
 
 Versions 0 and 1 use feature flags to determine how an inline reader decodes the block envelope. These flags do not
 describe the native v2 representation.
@@ -368,11 +376,16 @@ For inline logs, header keys are serialized as integer enum ordinals. Native log
 | SCHEMA                                           | 2           | Schema corresponding to data in the data block.                                                                                                                                                                                                          |
 | COMMAND\_BLOCK\_TYPE                             | 3           | Command block type for the command block. Currently, `ROLLBACK_BLOCK` is the only command block type.                                                                                                                                                    |
 | COMPACTED\_BLOCK\_TIMES                          | 4           | Instant times corresponding to log blocks compacted due to minor log compaction.                                                                                                                                                                         |
-| RECORD\_POSITIONS                                | 5           | Record positions of the records in the base file that were updated (data block) or deleted (delete block). Record position is a long type, however, the list of record positions is Base64-encoded bytes of a serialized `Roaring64NavigableMap` bitmap. |
+| RECORD\_POSITIONS                                | 5           | Record positions of the records in the base file that were updated (data block) or deleted (delete block). In inline logs this is a Base64-encoded serialized `Roaring64NavigableMap` bitmap. Native logs use the ordered encoding described below. |
 | BLOCK\_IDENTIFIER                                | 6           | Block sequence number used to detect duplicate log blocks (e.g. due to task retries).                                                                                                                                                                    |
 | IS\_PARTIAL                                      | 7           | Boolean indicating whether the data block encodes partial updates.                                                                                                                                                                                       |
 | BASE\_FILE\_INSTANT\_TIME\_OF\_RECORD\_POSITIONS | 8           | Begin (requested) instant time of the base file that the `RECORD_POSITIONS` bitmap is relative to. Used by the reader to validate that positions still refer to the same base file when reconstructing a file slice.                                     |
-| VERSION                                          | 9           | Physical log-format version. Native log writers always add this value to `hudi.log.format.metadata`.                                                                                                                                                    |
+
+Native footer metadata uses symbolic names rather than the inline encoding IDs. `VERSION` is added as a native-only
+symbolic entry by the current writer and has the value `2`. For native data and delete logs, `RECORD_POSITIONS` preserves
+file-read order: its Base64-decoded bytes contain a 4-byte count followed by that many unsigned varlong positions. If any
+position is invalid, the writer omits `RECORD_POSITIONS` and its associated
+`BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS` anchor.
 
 
 ### Block types
@@ -674,8 +687,9 @@ Writers generate a begin time for their actions, proceed to create new base and 
    Writer also records the latest completion time on the timeline (let's call this the **_snapshot write time_**).
 2. Writer produces new base and log files with updated, deleted, and inserted records, while ensuring updates/deletes reach the correct file group by looking up an index as
    of the snapshot write time (see appendix for an alternative encoding that treats updates as deletes to an existing file group plus inserts into a new file group, with the associated performance trade-offs).
-   A version-10 writer produces write-once native log files unless the base-file format is Lance. When the table uses the
-   LSM-tree layout, the writer must sort every base-file and log-file output by record key before publishing it.
+   A version-10 writer produces write-once native log files in the effective base-file format. This includes Lance native
+   logs for Lance-backed tables and HFile native logs for the metadata table. When the table uses the LSM-tree layout, the
+   writer must sort every base-file and log-file output by record key before publishing it.
 3. Writer then grabs the distributed lock and performs the following steps within the critical section to finalize the write or fail/abort:
    1. Obtain metadata about all actions that have completed with completion time greater than the snapshot write time. This defines the **_concurrent set_** of
       actions against which the writer must check for conflicting concurrent writes or table-service actions.
@@ -723,7 +737,9 @@ Readers need to determine the correct file slice (an optional base file plus an 
 3. Reader then eliminates replaced file groups, by removing any file groups that are part of any **_replacecommit_** actions completed on or before the snapshot read time.
 4. For each remaining file group, the reader determines the correct file slice as follows:
    1. Find the base file with the greatest requested instant time less than or equal to the snapshot read time.
-   2. Obtain all log files with completion time less than or equal to the snapshot read time, sorted by completion time.
+   2. Obtain the log files produced by writes completed on or before the snapshot read time. Sort them by requested instant,
+      log version, write token, and then log-type precedence (`log`, `deletes`, `cdc`). This makes a data log precede a
+      delete log emitted for the same instant, version, and write token.
 5. For each file slice obtained, the reader merges the base and log files:
    1. Detect each log's physical format from its file name and route it to the inline or native read path. A version-10
       reader must support inline-only, native-only, and mixed file slices.
@@ -869,8 +885,9 @@ Version 10 implements the storage-format portion of
   record key and uses sorted k-way merge for reads and compaction.
 * Version-10 readers accept mixed v1/v2 file slices, which permits a v9-to-v10 upgrade without first compacting every
   file group. A v10-to-v9 downgrade must fully compact native logs before older readers access the table.
-* Native log v2 is independent of LSM-tree layout: version-10 tables use it with the default layout as well. Lance-backed
-  tables remain on inline logs until native Lance log support is available.
+* Native log v2 is independent of LSM-tree layout: version-10 tables use it with the default layout as well. The native
+  writer supports Parquet, ORC, HFile, and Lance, with Lance storing `hudi.log.format.metadata` in Arrow schema custom
+  metadata in the file footer.
 
 ### version 9 (Hudi 1.1.0 → 1.2.0)
 
