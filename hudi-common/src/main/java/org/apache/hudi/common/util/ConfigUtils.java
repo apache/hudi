@@ -151,12 +151,12 @@ public class ConfigUtils {
    * Ensures that the prefixed merge properties are populated for mergers.
    */
   public static TypedProperties getMergeProps(TypedProperties props, HoodieTableConfig tableConfig) {
-    // Resolve the effective payload class from the reader/write props first -- it may be set only
-    // there (e.g. hoodie.datasource.write.payload.class for a pre-v9 table that never persisted the
-    // payload class into its table config), falling back to the table config. This ensures the
-    // pre-v9 delete-marker derivation in getTableMergeProperties fires for such tables.
-    String payloadClass = HoodieRecordPayload.getPayloadClassNameIfPresent(props)
-        .orElseGet(tableConfig::getPayloadClass);
+    // Prefer the payload class persisted in the table config, falling back to the reader/write props
+    // (e.g. hoodie.datasource.write.payload.class) when the table never persisted it. This keeps the
+    // persisted payload authoritative (no query-side shadowing) while pre-v9 delete markers still derive.
+    String payloadClass = tableConfig.getPayloadClassIfPresent()
+        .orElseGet(() -> HoodieRecordPayload.getPayloadClassNameIfPresent(props)
+            .orElseGet(tableConfig::getPayloadClass));
     Map<String, String> mergeProps = tableConfig.getTableMergeProperties(payloadClass);
     if (mergeProps.isEmpty()) {
       return props;

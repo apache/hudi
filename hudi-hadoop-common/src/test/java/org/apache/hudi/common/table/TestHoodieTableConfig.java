@@ -397,7 +397,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   void testTableMergeProperties() throws IOException {
     // for out of the box, there are no merge properties
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
-    assertTrue(config.getTableMergeProperties().isEmpty());
+    assertTrue(config.getTableMergeProperties(config.getPayloadClass()).isEmpty());
 
     // delete and re-create w/ merge properties
     storage.deleteFile(cfgPath);
@@ -416,7 +416,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     Map<String, String> expectedProps = new HashMap<>();
     expectedProps.put("key1","value1");
     expectedProps.put("key2","value2");
-    assertEquals(expectedProps, config.getTableMergeProperties());
+    assertEquals(expectedProps, config.getTableMergeProperties(config.getPayloadClass()));
   }
 
   private static Stream<Arguments> testInferMergingConfigsForPreV9Table() {

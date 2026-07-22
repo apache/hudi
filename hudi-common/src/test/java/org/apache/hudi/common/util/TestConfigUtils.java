@@ -24,8 +24,13 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.HoodiePayloadProps;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.debezium.DebeziumConstants;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -41,6 +46,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -477,5 +484,79 @@ public class TestConfigUtils {
     assertEquals("false", fileGroupReaderProps.getProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key()));
     assertEquals("200000", fileGroupReaderProps.getProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key()));
     assertEquals("7", fileGroupReaderProps.getProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key()));
+  }
+
+  @Test
+  void testGetMergePropsPrefersPersistedTableConfigPayloadClass() {
+    // A payload override in the write props must not shadow the class persisted in the table config:
+    // the persisted Debezium payload wins, so the pre-v9 delete markers are derived from it.
+    HoodieTableConfig tableConfig = preV9TableConfig(PostgresDebeziumAvroPayload.class.getName());
+    TypedProperties props = new TypedProperties();
+    props.put("hoodie.datasource.write.payload.class", OverwriteWithLatestAvroPayload.class.getName());
+
+    TypedProperties merged = ConfigUtils.getMergeProps(props, tableConfig);
+
+    assertEquals(DebeziumConstants.FLATTENED_OP_COL_NAME, merged.getString(DELETE_KEY));
+    assertEquals(DebeziumConstants.DELETE_OP, merged.getString(DELETE_MARKER));
+  }
+
+  @Test
+  void testGetMergePropsFallsBackToWritePropsPayloadClass() {
+    // Pre-v9 table that never persisted a payload class: resolve it from the write props so the
+    // delete-marker derivation still fires.
+    HoodieTableConfig tableConfig = preV9TableConfig(null);
+    TypedProperties props = new TypedProperties();
+    props.put("hoodie.datasource.write.payload.class", PostgresDebeziumAvroPayload.class.getName());
+
+    TypedProperties merged = ConfigUtils.getMergeProps(props, tableConfig);
+
+    assertEquals(DebeziumConstants.FLATTENED_OP_COL_NAME, merged.getString(DELETE_KEY));
+    assertEquals(DebeziumConstants.DELETE_OP, merged.getString(DELETE_MARKER));
+  }
+
+  @Test
+  void testGetMergePropsDerivesAwsDmsDeleteMarkers() {
+    HoodieTableConfig tableConfig = preV9TableConfig(AWSDmsAvroPayload.class.getName());
+
+    TypedProperties merged = ConfigUtils.getMergeProps(new TypedProperties(), tableConfig);
+
+    assertEquals(AWSDmsAvroPayload.OP_FIELD, merged.getString(DELETE_KEY));
+    assertEquals(AWSDmsAvroPayload.DELETE_OPERATION_VALUE, merged.getString(DELETE_MARKER));
+  }
+
+  @Test
+  void testGetMergePropsDerivesNoDeleteMarkersForVersionNine() {
+    // Version 9+ tables carry the merge configs directly, so the legacy delete markers are not
+    // derived even for a CDC payload.
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.getProps().put(HoodieTableConfig.VERSION.key(), String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    tableConfig.getProps().put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), PostgresDebeziumAvroPayload.class.getName());
+
+    TypedProperties merged = ConfigUtils.getMergeProps(new TypedProperties(), tableConfig);
+
+    assertFalse(merged.containsKey(DELETE_KEY));
+    assertFalse(merged.containsKey(DELETE_MARKER));
+  }
+
+  @Test
+  void testGetMergePropsDerivesNoDeleteMarkersForNonCdcPayload() {
+    // Pre-v9 table with a non-CDC payload and no override: no delete markers, props returned as-is.
+    HoodieTableConfig tableConfig = preV9TableConfig(OverwriteWithLatestAvroPayload.class.getName());
+    TypedProperties props = new TypedProperties();
+    props.put("normal.key", "val");
+
+    TypedProperties merged = ConfigUtils.getMergeProps(props, tableConfig);
+
+    assertFalse(merged.containsKey(DELETE_KEY));
+    assertEquals("val", merged.getString("normal.key"));
+  }
+
+  private static HoodieTableConfig preV9TableConfig(String payloadClass) {
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.getProps().put(HoodieTableConfig.VERSION.key(), String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
+    if (payloadClass != null) {
+      tableConfig.getProps().put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), payloadClass);
+    }
+    return tableConfig;
   }
 }

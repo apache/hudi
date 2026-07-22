@@ -504,32 +504,26 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
   }
 
   /**
-   * End-to-end reproduction for a Copy-on-Write, pre-v9 Postgres-Debezium table whose payload class
-   * is supplied ONLY via the write config (hoodie.datasource.write.payload.class) and is NOT
-   * persisted in the table properties. A Debezium delete (_change_operation_type='d') for a key that
-   * is absent from the base file it gets merged into goes down the FileGroupReader write path's
-   * previousRecord==null branch. Before the fix the reader cannot derive the Debezium delete markers
-   * (getTableMergeProperties resolves the payload class from the table config, which does not have
-   * it), so the delete is classified isDelete=false, routed into
-   * PayloadUpdateProcessor.handleNonDeletes, and .get()s the empty Option -> NoSuchElementException.
+   * COW pre-v9 Postgres-Debezium table whose payload class is set only via the write config
+   * (hoodie.datasource.write.payload.class), not the table properties. A Debezium delete
+   * (_change_operation_type='d') for a key absent from the base file must be classified as a delete
+   * and become a no-op, rather than failing when the reader derives the delete markers.
    *
-   * The parameter is the "similar test case": stripPayloadClass=false keeps the payload class in the
-   * table properties (delete detected, always works) and acts as the control; stripPayloadClass=true
-   * reproduces the incident (broken before the fix, correct after).
+   * stripPayloadClass=true removes the payload class from the table properties (the failing case
+   * before the fix); stripPayloadClass=false keeps it and acts as the control.
    */
   @ParameterizedTest
   @ValueSource(strings = Array("true", "false"))
   def testDebeziumDeleteForAbsentKeyWithPayloadClassNotInTableConfig(stripPayloadClassStr: String): Unit = {
-    val stripPayloadClass = stripPayloadClassStr.equals("true")
+    val stripPayloadClass = stripPayloadClassStr.toBoolean
     val payloadClazz = classOf[PostgresDebeziumAvroPayload].getName
-    // Payload class is only a write option, never a table property (mirrors gw-agent provisioning).
+    // Payload class supplied only as a write option, not as a table property.
     val opts: Map[String, String] = Map(
       HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz,
       HoodieMetadataConfig.ENABLE.key() -> "false")
-    // Single-bucket index so every record (including the new delete key) hashes to the one existing
-    // file group and is merged against its base file -- deterministically forcing the FileGroupReader
-    // write path's previousRecord==null branch rather than a fresh insert file group.
-    val serviceOpts: Map[String, String] = Map(
+    // Single-bucket index so the delete key hashes to the existing file group and is merged against
+    // its base file, rather than creating a fresh insert file group.
+    val indexOpts: Map[String, String] = Map(
       "hoodie.index.type" -> "BUCKET",
       "hoodie.index.bucket.engine" -> "SIMPLE",
       "hoodie.bucket.index.num.buckets" -> "1",
@@ -550,7 +544,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       .option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table")
       .option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8")
-      .options(serviceOpts)
+      .options(indexOpts)
       .options(opts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -559,8 +553,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
 
     if (stripPayloadClass) {
-      // Simulate the incident: strip any persisted payload-class keys so the table config no longer
-      // resolves to the Debezium payload (it lives only in the write config).
+      // Remove any persisted payload-class keys so the payload class lives only in the write config.
       val payloadKeys = metaClient.getTableConfig.getProps.asScala.keys
         .filter(k => k.toString.contains("payload.class")).map(_.toString).toSet
       HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath, payloadKeys.asJava)
@@ -571,10 +564,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     // 2. Upsert a Debezium delete ('d') for a key ABSENT from the base file (lsn 99).
     val deleteData = Seq(
       (12, 99L, "rider-Z", "driver-Z", 20.10, "D", "12.1", 12, 1, "d"))
-    performUpsert(deleteData, columns, serviceOpts, opts, basePath,
+    performUpsert(deleteData, columns, indexOpts, opts, basePath,
       tableVersion = Some("8"), orderingFields = Some("_event_lsn"))
 
-    // 3. No NoSuchElementException; base rows intact and the absent-key delete is a no-op.
+    // 3. Base rows intact and the absent-key delete is a no-op.
     val df = spark.read.format("hudi").load(basePath)
     assertEquals(3, df.count())
     assertEquals(0, df.filter("_event_lsn = 99").count())
