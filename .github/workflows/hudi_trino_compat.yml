@@ -65,13 +65,17 @@ jobs:
         # Maven Central would defeat the point of the drift check.
         run: mvn $MVN_ARGS install -pl :trino-hive,:trino-filesystem-manager,:trino-parquet,:trino-plugin-toolkit -am -DskipTests -Dair.check.skip-all=true
       - name: Compile hudi-trino against current Trino SPI (JDK 25)
+        id: compile
         working-directory: hudi
         run: |
           mvn $MVN_ARGS -Phudi-trino \
             -Dtrino.version=${{ steps.trino-version.outputs.trino_version }} \
             -pl hudi-trino compile
       - name: Open issue on failure
-        if: failure()
+        # Only a connector compile failure is SPI drift. A bare failure() would also file
+        # the issue for a failed checkout or a broken trinodb/trino master build, with an
+        # empty version in the title when the failure is before Read Trino version.
+        if: failure() && steps.compile.outcome == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
