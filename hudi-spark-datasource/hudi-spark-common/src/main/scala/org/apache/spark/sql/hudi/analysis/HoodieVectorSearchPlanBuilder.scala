@@ -782,26 +782,14 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
           1,
           math.min(refineK, math.max(1, spark.sparkContext.defaultParallelism * 4)))
         val groupedCandidates = serveCandidates.groupBy(_.getFileGroupId).toSeq.sortBy(_._1)
-        val prefetchEnabled = mergedOptions.get(ParquetRangePrefetch.ENABLED)
-          .map(_.toBoolean)
-          .getOrElse(storageConf.unwrap().getBoolean(ParquetRangePrefetch.ENABLED, false))
         val targetBatchesPerGroup = math.max(1, exactFetchParallelism / math.max(1, groupedCandidates.size))
-        val fetchBatches = if (prefetchEnabled) {
-          // One logical task per file group. The task can consume the shared range pool up to its
-          // planned-range count; small groups therefore cannot reserve idle workers.
-          groupedCandidates.map { case (fgId, candidates) =>
-            (fgId, candidates.sortBy(candidate => candidate.getLocation.getPosition))
-          }
-        } else {
-          groupedCandidates.flatMap { case (fgId, candidates) =>
-            val sorted = candidates.sortBy(candidate => candidate.getLocation.getPosition)
-            val batchSize = math.max(1, math.ceil(sorted.size.toDouble / targetBatchesPerGroup).toInt)
-            sorted.grouped(batchSize).map(batch => (fgId, batch)).toSeq
-          }
+        val fetchBatches = groupedCandidates.flatMap { case (fgId, candidates) =>
+          val sorted = candidates.sortBy(candidate => candidate.getLocation.getPosition)
+          val batchSize = math.max(1, math.ceil(sorted.size.toDouble / targetBatchesPerGroup).toInt)
+          sorted.grouped(batchSize).map(batch => (fgId, batch)).toSeq
         }
-        val fetchPartitions = if (prefetchEnabled) fetchBatches.size else math.min(exactFetchParallelism, fetchBatches.size)
         val byFetchBatch: RDD[(String, Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch])] =
-          spark.sparkContext.parallelize(fetchBatches, fetchPartitions)
+          spark.sparkContext.parallelize(fetchBatches, math.min(exactFetchParallelism, fetchBatches.size))
         LOG.info(
           s"[vector_search][stage][exact_read_plan] rerankCandidates=${serveCandidates.size} " +
             s"candidateGroups=${groupedCandidates.size} resolvedSlices=${fileSliceMap.size} " +
@@ -812,7 +800,6 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
           .exists(_.equalsIgnoreCase("true"))
         val staleFallbacksAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_stale_fallbacks")
         val rowsMaterializedAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_rows_materialized")
-        val activeTasksPerExecutor = spark.sparkContext.getConf.getInt("spark.executor.cores", 1).toString
         val exactRows: RDD[InternalRow] = byFetchBatch.mapPartitions { batches =>
           val startNs = System.nanoTime()
           val rows = ArrayBuffer.empty[InternalRow]
@@ -825,17 +812,8 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
           var totalSliceBytes = 0L
           var staleCandidates = 0L
           var metrics = PositionalParquetFetcher.FetchMetrics()
-          val fetchConf = storageConf.newInstance().unwrap()
-          mergedOptions.foreach { case (key, value) =>
-            if (key.startsWith("hoodie.vector.exact.fetch.")) {
-              fetchConf.set(key, value)
-            }
-          }
-          fetchConf.setIfUnset(
-            ParquetRangePrefetch.ACTIVE_TASKS_PER_EXECUTOR,
-            activeTasksPerExecutor)
           val fetcher = new PositionalParquetFetcher(
-            fetchConf,
+            storageConf.newInstance().unwrap(),
             embeddingCol,
             vectorSchema,
             exactQueryVector,
@@ -907,15 +885,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
               s"staleFallbacks=$staleCandidates staleCandidates=$staleCandidates " +
               s"baseFiles=$baseFiles logFiles=$logFiles " +
               s"sliceBytes=$totalSliceBytes footerMs=${metrics.footerMs} offsetIndexMs=${metrics.offsetIndexMs} " +
-              s"fetchWaitMs=${metrics.fetchWaitMs} rangeOpenMs=${metrics.rangeOpenMs} rangeReadMs=${metrics.rangeReadMs} " +
-              s"rangeRetries=${metrics.rangeRetries} rangesInFlightMax=${metrics.rangesInFlightMax} " +
-              s"plannedRanges=${metrics.plannedRanges} plannedRangeBytes=${metrics.plannedRangeBytes} " +
-              s"prefetchReaderOpenMs=${metrics.prefetchReaderOpenMs} prefetchElapsedMs=${metrics.prefetchElapsedMs} " +
-              s"prefetchHitBytes=${metrics.prefetchHitBytes} prefetchPartialOverlapBytes=${metrics.prefetchPartialOverlapBytes} " +
-              s"prefetchMetadataMissBytes=${metrics.prefetchMetadataMissBytes} " +
-              s"prefetchDictionaryMissBytes=${metrics.prefetchDictionaryMissBytes} " +
-              s"prefetchUncoveredPageMissBytes=${metrics.prefetchUncoveredPageMissBytes} " +
-              s"decodeMs=${metrics.decodeMs} scoreMs=${metrics.scoreMs} elapsedMs=${elapsedMs(startNs)}")
+              s"fetchWaitMs=${metrics.fetchWaitMs} decodeMs=${metrics.decodeMs} scoreMs=${metrics.scoreMs} elapsedMs=${elapsedMs(startNs)}")
           rows.iterator
         }
         LOG.info(s"[vector_search][plan] exact candidate DF planned in ${elapsedMs(planStartNs)} ms")

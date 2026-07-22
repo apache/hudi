@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi.analysis
 import org.apache.hudi.common.index.vector.VectorIndexMdtSearchUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.io.storage.HoodiePrefetchedParquetInputFile.RegionKind
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
@@ -120,22 +119,7 @@ private[analysis] final class PositionalParquetFetcher(
     var decodeMs = 0L
     scoreMs = 0L
 
-    val planningReader = new ParquetFileReader(conf, path, metadata)
-    var prefetchSession: Option[ParquetRangePrefetch.Session] = None
-    val reader = if (ParquetRangePrefetch.enabled(conf)) {
-      try {
-        val plannedRanges = planPrefetchRanges(
-          planningReader, fileCacheKey, rowGroups, rowGroupStarts, byRowGroup, requestedParquetSchema)
-        val session = ParquetRangePrefetch.prefetch(
-          conf, path, fileLen, metadata, plannedRanges, candidates.size, requestedParquetSchema.getFieldCount)
-        prefetchSession = Some(session)
-        session.reader
-      } finally {
-        planningReader.close()
-      }
-    } else {
-      planningReader
-    }
+    val reader = new ParquetFileReader(conf, path, metadata)
     try {
       reader.setRequestedSchema(requestedParquetSchema)
       byRowGroup.toSeq.sortBy(_._1).foreach { case (rgOrdinal, rgCandidates) =>
@@ -241,69 +225,11 @@ private[analysis] final class PositionalParquetFetcher(
       footerCacheHits = if (footerResult.cacheHit) 1 else 0,
       footerMs = footerMs,
       offsetIndexMs = offsetIndexMs,
-      fetchWaitMs = prefetchSession.map(session => nanosToMs(session.rangeMetrics.getWaitNanos)).getOrElse(0L),
-      rangeOpenMs = prefetchSession.map(session => nanosToMs(session.rangeMetrics.getOpenNanos)).getOrElse(0L),
-      rangeReadMs = prefetchSession.map(session => nanosToMs(session.rangeMetrics.getReadNanos)).getOrElse(0L),
-      rangeRetries = prefetchSession.map(_.rangeMetrics.getRetryCount).getOrElse(0L),
-      rangesInFlightMax = prefetchSession.map(_.rangeMetrics.getMaxRangesInFlight.toLong).getOrElse(0L),
-      plannedRanges = prefetchSession.map(_.plannedRanges.toLong).getOrElse(0L),
-      plannedRangeBytes = prefetchSession.map(_.plannedBytes).getOrElse(0L),
-      prefetchReaderOpenMs = prefetchSession.map(_.readerOpenMs).getOrElse(0L),
-      prefetchElapsedMs = prefetchSession.map(_.elapsedMs).getOrElse(0L),
-      prefetchHitBytes = prefetchSession.map(_.inputFile.getMetrics.getPrefetchHitBytes).getOrElse(0L),
-      prefetchPartialOverlapBytes = prefetchSession.map(_.inputFile.getMetrics.getPartialOverlapBytes).getOrElse(0L),
-      prefetchMetadataMissBytes = prefetchSession.map(_.inputFile.getMetrics.getMetadataMissBytes).getOrElse(0L),
-      prefetchDictionaryMissBytes = prefetchSession.map(_.inputFile.getMetrics.getDictionaryMissBytes).getOrElse(0L),
-      prefetchUncoveredPageMissBytes = prefetchSession.map(_.inputFile.getMetrics.getUncoveredPageMissBytes).getOrElse(0L),
+      fetchWaitMs = 0L,
       decodeMs = decodeMs,
       scoreMs = scoreMs,
       elapsedMs = elapsedMs(startNs))
     FetchResult(rows.iterator, metrics)
-  }
-
-  private def planPrefetchRanges(
-      reader: ParquetFileReader,
-      fileCacheKey: String,
-      rowGroups: IndexedSeq[BlockMetaData],
-      rowGroupStarts: IndexedSeq[Long],
-      byRowGroup: Map[Int, Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch]],
-      requestedParquetSchema: MessageType): Seq[ParquetRangePrefetch.PlannedRange] = {
-    byRowGroup.toSeq.sortBy(_._1).flatMap { case (rgOrdinal, rgCandidates) =>
-      val block = rowGroups(rgOrdinal)
-      val relativeRows = rgCandidates
-        .map(candidate => rowPosition(candidate) - rowGroupStarts(rgOrdinal))
-        .sorted
-      requestedParquetSchema.getFields.asScala.flatMap { field =>
-        findColumn(block, field.getName).toSeq.flatMap { chunk =>
-          val chunkOffsetIndex = offsetIndex(reader, fileCacheKey, rgOrdinal, chunk)
-          if (chunkOffsetIndex == null) {
-            Seq(ParquetRangePrefetch.PlannedRange(
-              chunk.getStartingPos,
-              chunk.getStartingPos + chunk.getTotalSize,
-              RegionKind.PAGE))
-          } else {
-            val dictionaryRange = if (chunk.hasDictionaryPage &&
-                chunk.getDictionaryPageOffset >= 0L &&
-                chunk.getFirstDataPageOffset > chunk.getDictionaryPageOffset) {
-              Seq(ParquetRangePrefetch.PlannedRange(
-                chunk.getDictionaryPageOffset,
-                chunk.getFirstDataPageOffset,
-                RegionKind.DICTIONARY))
-            } else {
-              Seq.empty
-            }
-            val pageRanges = selectedPages(chunkOffsetIndex, block.getRowCount, relativeRows).map { pageOrdinal =>
-              val start = chunkOffsetIndex.getOffset(pageOrdinal)
-              ParquetRangePrefetch.PlannedRange(
-                start,
-                start + chunkOffsetIndex.getCompressedPageSize(pageOrdinal),
-                RegionKind.PAGE)
-            }
-            dictionaryRange ++ pageRanges
-          }
-        }
-      }
-    }
   }
 
   private def parquetRecordReader(
@@ -523,19 +449,6 @@ private[analysis] object PositionalParquetFetcher {
       footerMs: Long = 0L,
       offsetIndexMs: Long = 0L,
       fetchWaitMs: Long = 0L,
-      rangeOpenMs: Long = 0L,
-      rangeReadMs: Long = 0L,
-      rangeRetries: Long = 0L,
-      rangesInFlightMax: Long = 0L,
-      plannedRanges: Long = 0L,
-      plannedRangeBytes: Long = 0L,
-      prefetchReaderOpenMs: Long = 0L,
-      prefetchElapsedMs: Long = 0L,
-      prefetchHitBytes: Long = 0L,
-      prefetchPartialOverlapBytes: Long = 0L,
-      prefetchMetadataMissBytes: Long = 0L,
-      prefetchDictionaryMissBytes: Long = 0L,
-      prefetchUncoveredPageMissBytes: Long = 0L,
       decodeMs: Long = 0L,
       scoreMs: Long = 0L,
       elapsedMs: Long = 0L) {
@@ -558,19 +471,6 @@ private[analysis] object PositionalParquetFetcher {
       footerMs + other.footerMs,
       offsetIndexMs + other.offsetIndexMs,
       fetchWaitMs + other.fetchWaitMs,
-      rangeOpenMs + other.rangeOpenMs,
-      rangeReadMs + other.rangeReadMs,
-      rangeRetries + other.rangeRetries,
-      math.max(rangesInFlightMax, other.rangesInFlightMax),
-      plannedRanges + other.plannedRanges,
-      plannedRangeBytes + other.plannedRangeBytes,
-      prefetchReaderOpenMs + other.prefetchReaderOpenMs,
-      prefetchElapsedMs + other.prefetchElapsedMs,
-      prefetchHitBytes + other.prefetchHitBytes,
-      prefetchPartialOverlapBytes + other.prefetchPartialOverlapBytes,
-      prefetchMetadataMissBytes + other.prefetchMetadataMissBytes,
-      prefetchDictionaryMissBytes + other.prefetchDictionaryMissBytes,
-      prefetchUncoveredPageMissBytes + other.prefetchUncoveredPageMissBytes,
       decodeMs + other.decodeMs,
       scoreMs + other.scoreMs,
       math.max(elapsedMs, other.elapsedMs))
@@ -612,8 +512,6 @@ private[analysis] object PositionalParquetFetcher {
   }
 
   private def elapsedMs(startNs: Long): Long = (System.nanoTime() - startNs) / 1000000L
-
-  private def nanosToMs(nanos: Long): Long = nanos / 1000000L
 
   private def cumulativeRowGroupStarts(rowGroups: IndexedSeq[BlockMetaData]): IndexedSeq[Long] = {
     var nextStart = 0L
