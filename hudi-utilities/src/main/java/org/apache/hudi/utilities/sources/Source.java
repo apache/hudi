@@ -28,13 +28,14 @@ import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.callback.SourceCommitCallback;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
-import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
@@ -72,7 +73,6 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   @Getter
   private final SourceType sourceType;
   private final StorageLevel storageLevel;
-  @Getter(AccessLevel.PROTECTED)
   protected final boolean allowSourcePersistRdd;
   private Either<Dataset<Row>, JavaRDD<?>> cachedSourceRdd = null;
 
@@ -168,6 +168,34 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
         javaRDD.persist(storageLevel);
       }
     }
+  }
+
+  /**
+   * Whether the source RDD/DataFrame should be persisted via {@link #persist(Object)}.
+   *
+   * <p>Returns {@code false} when the writer's index type is a metadata-table-backed record
+   * index ({@code RECORD_INDEX} or {@code PARTITIONED_RECORD_INDEX}), even if
+   * {@code hoodie.errortable.source.rdd.persist=true}. The RLI tagging path already persists
+   * the records RDD inside {@code SparkMetadataTableRecordIndex#tagLocation}, and the
+   * downstream commit executor persists the tagged records again. Caching the upstream
+   * Dataset on top of those two triples the on-heap serialized footprint and contends with
+   * the MDT {@code HoodieAppendHandle} buffer, which has caused executor OOMKills on
+   * RLI-indexed tables.
+   */
+  protected boolean isAllowSourcePersistRdd() {
+    if (!allowSourcePersistRdd) {
+      return false;
+    }
+    return !usesRecordIndex();
+  }
+
+  private boolean usesRecordIndex() {
+    String indexType = props.getString(HoodieIndexConfig.INDEX_TYPE.key(), "");
+    if (indexType.isEmpty()) {
+      return false;
+    }
+    return HoodieIndex.IndexType.RECORD_INDEX.name().equalsIgnoreCase(indexType)
+        || HoodieIndex.IndexType.PARTITIONED_RECORD_INDEX.name().equalsIgnoreCase(indexType);
   }
 
   @Override
