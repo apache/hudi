@@ -8,6 +8,21 @@ on:
     paths:
       - 'hudi-trino/**'
       - '.github/workflows/hudi_trino_ci.yml'
+      # Upstream modules the connector build installs (the -am closure of the JDK 17
+      # install step) plus the poms that own trino.version and the dependency pins.
+      # Keep in sync with the case patterns in detect-trino-changes below.
+      - 'pom.xml'
+      - 'hudi-tests-common/**'
+      - 'hudi-io/**'
+      - 'hudi-common/**'
+      - 'hudi-hadoop-common/**'
+      - 'hudi-timeline-service/**'
+      - 'hudi-hadoop-mr/**'
+      - 'hudi-client/pom.xml'
+      - 'hudi-client/hudi-client-common/**'
+      - 'hudi-client/hudi-java-client/**'
+      - 'hudi-sync/hudi-sync-common/**'
+      - 'hudi-sync/hudi-hive-sync/**'
   # No `paths:` filter here on purpose. test-hudi-trino-plugin is a required status check
   # in .asf.yaml, and a path-filtered workflow is never instantiated on PRs that miss the
   # filter, leaving the required context permanently pending. Run on every PR instead and
@@ -60,6 +75,21 @@ jobs:
             case "$f" in
               hudi-trino/*) TRINO=true ;;
               .github/workflows/hudi_trino_ci.yml) TRINO=true ;;
+              # Upstream modules the connector build installs (the -am closure of the JDK 17
+              # install step) plus the poms that own trino.version and the dependency pins.
+              # Keep in sync with the push paths above.
+              pom.xml) TRINO=true ;;
+              hudi-tests-common/*) TRINO=true ;;
+              hudi-io/*) TRINO=true ;;
+              hudi-common/*) TRINO=true ;;
+              hudi-hadoop-common/*) TRINO=true ;;
+              hudi-timeline-service/*) TRINO=true ;;
+              hudi-hadoop-mr/*) TRINO=true ;;
+              hudi-client/pom.xml) TRINO=true ;;
+              hudi-client/hudi-client-common/*) TRINO=true ;;
+              hudi-client/hudi-java-client/*) TRINO=true ;;
+              hudi-sync/hudi-sync-common/*) TRINO=true ;;
+              hudi-sync/hudi-hive-sync/*) TRINO=true ;;
             esac
           done <<< "$FILES"
           echo "trino=$TRINO"
