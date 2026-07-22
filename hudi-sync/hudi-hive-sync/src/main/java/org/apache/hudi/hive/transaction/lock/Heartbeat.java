@@ -19,10 +19,10 @@
 
 package org.apache.hudi.hive.transaction.lock;
 
-import org.apache.hudi.exception.HoodieLockException;
-
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 
+@Slf4j
 class Heartbeat implements Runnable {
   private final IMetaStoreClient client;
   private final long lockId;
@@ -37,7 +37,11 @@ class Heartbeat implements Runnable {
     try {
       client.heartbeat(0, lockId);
     } catch (Exception e) {
-      throw new HoodieLockException(String.format("Failed to heartbeat for lock: %d", lockId));
+      // Do not rethrow. This task is scheduled via ScheduledExecutorService.scheduleAtFixedRate,
+      // where a thrown exception permanently cancels all subsequent executions and is only
+      // observable through the (unread) ScheduledFuture. Swallowing a transient failure here keeps
+      // the lock heartbeated on the next tick instead of silently stopping renewal altogether.
+      log.warn("Failed to heartbeat for lock: {}", lockId, e);
     }
   }
 }

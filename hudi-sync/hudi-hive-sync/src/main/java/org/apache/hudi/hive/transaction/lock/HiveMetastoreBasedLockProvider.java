@@ -167,9 +167,12 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
         future.cancel(false);
       }
       Hive.closeCurrent();
-      executor.shutdown();
     } catch (Exception e) {
-      log.error(generateLogStatement(org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
+      log.error(generateLogStatement(org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE, generateLogSuffixString()), e);
+    } finally {
+      // Always release the heartbeat thread pool, even if unlock/closeCurrent above threw,
+      // otherwise its scheduled threads leak for the lifetime of the JVM.
+      executor.shutdown();
     }
   }
 
@@ -192,17 +195,15 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       final LockRequest lockRequestFinal = lockRequest;
       this.lock = executor.submit(() -> hiveClient.lock(lockRequestFinal))
           .get(time, unit);
-
-      // refresh lock in case that certain commit takes a long time.
-      Heartbeat heartbeat = new Heartbeat(hiveClient, lock.getLockid());
-      long heartbeatIntervalMs = lockConfiguration.getConfig()
-          .getLong(LOCK_HEARTBEAT_INTERVAL_MS_KEY, DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS);
-      future = executor.scheduleAtFixedRate(heartbeat, heartbeatIntervalMs / 2, heartbeatIntervalMs, TimeUnit.MILLISECONDS);
+      scheduleHeartbeat();
     } catch (InterruptedException | TimeoutException e) {
       if (this.lock == null || this.lock.getState() != LockState.ACQUIRED) {
         LockResponse lockResponse = this.hiveClient.checkLock(lockRequest.getTxnid());
         if (lockResponse.getState() == LockState.ACQUIRED) {
           this.lock = lockResponse;
+          // The lock was granted server-side even though the client timed out waiting on the
+          // future; it still needs a heartbeat, otherwise a long-running commit lets HMS expire it.
+          scheduleHeartbeat();
         } else {
           throw e;
         }
@@ -217,6 +218,17 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
         }
       }
     }
+  }
+
+  /**
+   * Schedules a periodic {@link Heartbeat} to refresh the currently held lock in case a commit
+   * takes a long time. Must be called only after {@link #lock} has been set.
+   */
+  private void scheduleHeartbeat() {
+    Heartbeat heartbeat = new Heartbeat(hiveClient, lock.getLockid());
+    long heartbeatIntervalMs = lockConfiguration.getConfig()
+        .getLong(LOCK_HEARTBEAT_INTERVAL_MS_KEY, DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS);
+    future = executor.scheduleAtFixedRate(heartbeat, heartbeatIntervalMs / 2, heartbeatIntervalMs, TimeUnit.MILLISECONDS);
   }
 
   private void checkRequiredProps(final LockConfiguration lockConfiguration) {
