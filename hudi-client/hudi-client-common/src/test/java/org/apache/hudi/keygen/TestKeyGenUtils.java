@@ -290,4 +290,30 @@ public class TestKeyGenUtils {
     tableConfig.setValue(RECORDKEY_FIELDS, "");
     assertFalse(KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig));
   }
+
+  @Test
+  void testGetPartitionPathRejectsPathTraversal() {
+    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    Schema schema = Schema.createRecord("TestRecord", "doc", "test", false,
+        Arrays.asList(
+            new Schema.Field("part1", stringSchema),
+            new Schema.Field("part2", stringSchema)
+        ));
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("part1", "../../../../tmp/hudi_poc_escaped_evidence");
+    avroRecord.put("part2", "safe");
+
+    // Single-field (SimpleKeyGenerator) path, with url-encoding disabled (the vulnerable default).
+    assertThrows(HoodieKeyException.class,
+        () -> KeyGenUtils.getPartitionPath(avroRecord, "part1", false, false, false, false));
+    // Multi-field (ComplexKeyGenerator) path.
+    assertThrows(HoodieKeyException.class,
+        () -> KeyGenUtils.getRecordPartitionPath(
+            avroRecord, Arrays.asList("part1", "part2"), false, false, false, false));
+
+    // A legitimate value (dots that are not a full ".." segment) must still be accepted.
+    avroRecord.put("part1", "2024-01-01");
+    assertEquals("2024-01-01",
+        KeyGenUtils.getPartitionPath(avroRecord, "part1", false, false, false, false));
+  }
 }

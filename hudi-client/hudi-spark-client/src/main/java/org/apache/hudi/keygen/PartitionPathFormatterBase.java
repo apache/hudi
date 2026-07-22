@@ -17,6 +17,8 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
+
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.List;
@@ -63,9 +65,9 @@ public abstract class PartitionPathFormatterBase<S> {
     // and Hive-style of partitioning is not required
     if (!useHiveStylePartitioning && partitionPathParts.length == 1) {
       if (slashSeparatedDatePartitioning) {
-        return ((S) ((String) toString(partitionPathParts[0])).replace('-', '/'));
+        return validateNoPathTraversal((S) ((String) toString(partitionPathParts[0])).replace('-', '/'));
       } else {
-        return tryEncode(handleEmpty(toString(partitionPathParts[0])));
+        return validateNoPathTraversal(tryEncode(handleEmpty(toString(partitionPathParts[0]))));
       }
     }
 
@@ -89,7 +91,12 @@ public abstract class PartitionPathFormatterBase<S> {
       }
     }
 
-    return sb.build();
+    return validateNoPathTraversal(sb.build());
+  }
+
+  private S validateNoPathTraversal(S partitionPath) {
+    PartitionPathEncodeUtils.validateNoPathTraversal(partitionPath == null ? null : partitionPath.toString());
+    return partitionPath;
   }
 
   private S tryEncode(S partitionPathPart) {

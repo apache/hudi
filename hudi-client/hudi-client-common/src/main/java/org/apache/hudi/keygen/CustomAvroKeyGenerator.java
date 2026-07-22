@@ -21,6 +21,7 @@ package org.apache.hudi.keygen;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
@@ -161,7 +162,7 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
         partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
       }
     }
-    return partitionPath.toString();
+    return PartitionPathEncodeUtils.validateNoPathTraversal(partitionPath.toString());
   }
 
   @Override

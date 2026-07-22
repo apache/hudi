@@ -266,7 +266,7 @@ public class KeyGenUtils {
         partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
       }
     }
-    return partitionPath.toString();
+    return PartitionPathEncodeUtils.validateNoPathTraversal(partitionPath.toString());
   }
 
   public static String getRecordKey(GenericRecord record, String recordKeyField, boolean consistentLogicalTimestampEnabled) {
@@ -294,7 +294,7 @@ public class KeyGenUtils {
     if (slashSeparatedDatePartitioning) {
       partitionPath = partitionPath.replace('-', '/');
     }
-    return partitionPath;
+    return PartitionPathEncodeUtils.validateNoPathTraversal(partitionPath);
   }
 
   /**
