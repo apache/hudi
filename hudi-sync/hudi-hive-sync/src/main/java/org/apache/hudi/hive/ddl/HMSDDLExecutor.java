@@ -122,7 +122,9 @@ public class HMSDDLExecutor implements DDLExecutor {
       newTb.setDbName(databaseName);
       newTb.setTableName(tableName);
       newTb.setOwner(UserGroupInformation.getCurrentUser().getShortUserName());
-      newTb.setCreateTime((int) System.currentTimeMillis());
+      // Hive stores createTime as seconds since the epoch in an i32 field; passing raw
+      // milliseconds both uses the wrong unit and overflows the int cast.
+      newTb.setCreateTime((int) (System.currentTimeMillis() / 1000));
       StorageDescriptor storageDescriptor = new StorageDescriptor();
       storageDescriptor.setCols(fieldSchema);
       storageDescriptor.setInputFormat(inputFormatClass);
