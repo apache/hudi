@@ -199,9 +199,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".skip.zero.size.files.on.initialize")
       .defaultValue(false)
       .markAdvanced()
-      .sinceVersion("1.2.0")
+      .sinceVersion("1.3.0")
       .withDocumentation("When enabled, zero-size data files encountered while listing the data table during "
-          + "metadata table initialization are skipped instead of being recorded in the metadata table.");
+          + "metadata table initialization and restore sync are skipped instead of being recorded in the metadata "
+          + "table. Skipped files remain on storage and are not tracked by the metadata table or the cleaner; "
+          + "remove them manually. The metadata validator will report them as inconsistencies.");
 
   public static final ConfigProperty<Integer> FILE_LISTING_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.file.listing.parallelism")

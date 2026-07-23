@@ -67,6 +67,7 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String INITIALIZE_STR = "initialize";
   public static final String REBOOTSTRAP_STR = "rebootstrap_count";
   public static final String BOOTSTRAP_ERR_STR = "bootstrap_error";
+  public static final String SKIPPED_ZERO_SIZE_FILES_ON_INITIALIZE_STR = "skipped_zero_size_files_on_initialize";
 
   // Stats names
   public static final String STAT_TOTAL_BASE_FILE_SIZE = "totalBaseFileSizeInBytes";
