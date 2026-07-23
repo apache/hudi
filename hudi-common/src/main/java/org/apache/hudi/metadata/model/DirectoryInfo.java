@@ -100,11 +100,15 @@ public class DirectoryInfo implements Serializable {
           if (pathInfo.getLength() > 0 || !skipZeroSizeFiles) {
             filenameToSizeMap.put(pathInfo.getPath().getName(), pathInfo.getLength());
           } else {
-            log.warn("Skipping zero-size data file during MDT bootstrap: {}", pathInfo.getPath());
+            log.debug("Skipping zero-size data file: {}", pathInfo.getPath());
             zeroSizeFileCount++;
           }
         }
       }
+    }
+    if (zeroSizeFileCount > 0) {
+      log.warn("Skipped {} zero-size data files while listing partition {}; they remain on storage and are not tracked in the metadata table",
+          zeroSizeFileCount, relativePath);
     }
   }
 

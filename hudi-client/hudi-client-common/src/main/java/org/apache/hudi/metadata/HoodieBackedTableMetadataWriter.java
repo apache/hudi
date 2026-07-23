@@ -579,9 +579,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    *
    * @param initializationTime  Files which have a timestamp after this are neglected
    * @param pendingDataInstants Pending instants on data set
-   * @param skipZeroSizeFiles   Whether zero-size data files should be skipped during listing. This should only be
-   *                            enabled on the initialize path; other callers (e.g. restore) must pass false so that
-   *                            files already tracked in the metadata table are not spuriously deleted.
+   * @param skipZeroSizeFiles   Whether zero-size data files should be skipped during listing, per
+   *                            hoodie.metadata.skip.zero.size.files.on.initialize. Both the initialize path and the
+   *                            restore-sync relisting pass the config so zero-size files are treated consistently;
+   *                            otherwise restore would re-add to the metadata table the files skipped at initialization.
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
   private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime, Set<String> pendingDataInstants, boolean skipZeroSizeFiles) {
@@ -635,8 +636,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     }
 
-    final long zeroSizeCount = totalZeroSizeFiles;
-    metrics.ifPresent(m -> m.incrementMetric("skipped_zero_size_files_on_initialize", zeroSizeCount));
+    if (totalZeroSizeFiles > 0) {
+      final long zeroSizeCount = totalZeroSizeFiles;
+      metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.SKIPPED_ZERO_SIZE_FILES_ON_INITIALIZE_STR, zeroSizeCount));
+    }
     return partitionsToBootstrap;
   }
 
@@ -1181,7 +1184,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     // Restore requires the existing pipelines to be shutdown. So we can safely scan the dataset to find the current
     // list of files in the filesystem.
-    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime, Collections.emptySet(), false);
+    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime, Collections.emptySet(),
+        dataWriteConfig.getMetadataConfig().shouldSkipZeroSizeFilesOnInitialize());
     Map<String, DirectoryInfo> dirInfoMap = dirInfoList.stream().collect(Collectors.toMap(DirectoryInfo::getRelativePath, Function.identity()));
     dirInfoList.clear();
 
