@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.junit.jupiter.api.Test;
@@ -280,7 +281,7 @@ public class TestHoodieFlinkRecord {
   }
 
   @Test
-  public void testRecordContractAndLogicalTypeConversions() {
+  public void testRecordContract() {
     HoodieKey key = new HoodieKey("id-001", "partition-1");
     GenericRowData row = GenericRowData.of(StringData.fromString("id-001"));
     HoodieFlinkRecord record = new HoodieFlinkRecord(
@@ -296,21 +297,57 @@ public class TestHoodieFlinkRecord {
     assertSame(record, record.copy());
     assertTrue(record.getMetadata().isEmpty());
 
+    HoodieFlinkRecord empty = new HoodieFlinkRecord(
+        key, HoodieOperation.INSERT, (RowData) null);
+    assertTrue(empty.checkIsDelete(null, new Properties()));
+  }
+
+  @Test
+  public void testConvertColumnValueForLogicalType() {
+    TimestampData timestamp = TimestampData.fromInstant(
+        Instant.parse("2025-02-03T04:05:06.123456Z"));
+    HoodieFlinkRecord record = new HoodieFlinkRecord(GenericRowData.of(timestamp));
+
     assertNull(record.convertColumnValueForLogicalType(
         HoodieSchema.create(HoodieSchemaType.STRING), null, true));
     assertEquals(LocalDate.ofEpochDay(2), record.convertColumnValueForLogicalType(
         HoodieSchema.createDate(), 2, true));
-    TimestampData timestamp = TimestampData.fromInstant(Instant.parse("2025-02-03T04:05:06.123456Z"));
+
+    HoodieSchema millisSchema = HoodieSchema.createTimestampMillis();
+    HoodieSchema millisRecordSchema = HoodieSchema.createRecord(
+        "millis_record", null, null,
+        Arrays.asList(HoodieSchemaField.of("event_time", millisSchema)));
+    Object millisValue = record.getColumnValueAsJava(
+        millisRecordSchema, "event_time", new Properties());
+    assertEquals(timestamp.getMillisecond(), millisValue);
     assertEquals(timestamp.getMillisecond(), record.convertColumnValueForLogicalType(
-        HoodieSchema.createTimestampMillis(), timestamp, true));
-    assertEquals(timestamp.getMillisecond() / 1000, record.convertColumnValueForLogicalType(
-        HoodieSchema.createTimestampMicros(), timestamp, true));
+        millisSchema, millisValue, true));
+
+    HoodieSchema microsSchema = HoodieSchema.createTimestampMicros();
+    HoodieSchema microsRecordSchema = HoodieSchema.createRecord(
+        "micros_record", null, null,
+        Arrays.asList(HoodieSchemaField.of("event_time", microsSchema)));
+    Object microsValue = record.getColumnValueAsJava(
+        microsRecordSchema, "event_time", new Properties());
+    long expectedMicros = timestamp.toInstant().getEpochSecond() * 1_000_000
+        + timestamp.toInstant().getNano() / 1_000;
+    assertEquals(expectedMicros, microsValue);
+    assertEquals(timestamp.getMillisecond(), record.convertColumnValueForLogicalType(
+        microsSchema, microsValue, true));
+
     assertEquals(new BigDecimal("12.34"), record.convertColumnValueForLogicalType(
         HoodieSchema.createDecimal("decimal", null, null, 10, 2, 5),
         DecimalData.fromBigDecimal(new BigDecimal("12.34"), 10, 2), true));
-    assertSame(timestamp, record.convertColumnValueForLogicalType(
-        HoodieSchema.createTimestampMillis(), timestamp, false));
+    assertSame(millisValue, record.convertColumnValueForLogicalType(
+        millisSchema, millisValue, false));
+  }
 
+  @Test
+  public void testUnsupportedOperations() {
+    HoodieKey key = new HoodieKey("id-001", "partition-1");
+    GenericRowData row = GenericRowData.of(StringData.fromString("id-001"));
+    HoodieFlinkRecord record = new HoodieFlinkRecord(
+        key, HoodieOperation.INSERT, 100L, row, true);
     assertThrows(UnsupportedOperationException.class,
         () -> record.writeRecordPayload(row, null, null));
     assertThrows(UnsupportedOperationException.class,
@@ -326,10 +363,6 @@ public class TestHoodieFlinkRecord {
         () -> record.wrapIntoHoodieRecordPayloadWithKeyGen(null, null, Option.empty()));
     assertThrows(UnsupportedOperationException.class,
         () -> record.truncateRecordKey(null, null, null));
-
-    HoodieFlinkRecord empty = new HoodieFlinkRecord(
-        key, HoodieOperation.INSERT, (org.apache.flink.table.data.RowData) null);
-    assertTrue(empty.checkIsDelete(null, new Properties()));
   }
 
   @Test
@@ -341,8 +374,8 @@ public class TestHoodieFlinkRecord {
         StringData.fromString("id-001"), 42));
 
     assertEquals("id-001", record.getRecordKey(schema, "id"));
+    // The second lookup exercises the cached record-key path.
     assertEquals("id-001", record.getRecordKey(schema, "id"));
-    assertTrue(record.toIndexedRecord(schema, new Properties()).isPresent());
     assertEquals("id-001", record.toIndexedRecord(schema, new Properties())
         .get().getData().get(0).toString());
     assertTrue(record.getAvroBytes(schema, new Properties()).size() > 0);

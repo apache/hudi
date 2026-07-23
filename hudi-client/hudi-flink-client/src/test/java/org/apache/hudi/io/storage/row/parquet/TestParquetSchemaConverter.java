@@ -327,8 +327,12 @@ public class TestParquetSchemaConverter {
         DataTypes.FIELD("local_millis", DataTypes.TIMESTAMP_LTZ(3)),
         DataTypes.FIELD("local_micros", DataTypes.TIMESTAMP_LTZ(6))).notNull().getLogicalType();
     MessageType parquet = ParquetSchemaConverter.convertToParquetMessageType("local", rowType);
-    assertTrue(parquet.toString().contains("TIMESTAMP(MILLIS,false)"));
-    assertTrue(parquet.toString().contains("TIMESTAMP(MICROS,false)"));
+    assertEquals(LogicalTypeAnnotation.timestampType(
+            false, LogicalTypeAnnotation.TimeUnit.MILLIS),
+        parquet.getType("local_millis").getLogicalTypeAnnotation());
+    assertEquals(LogicalTypeAnnotation.timestampType(
+            false, LogicalTypeAnnotation.TimeUnit.MICROS),
+        parquet.getType("local_micros").getLogicalTypeAnnotation());
   }
 
   @Test

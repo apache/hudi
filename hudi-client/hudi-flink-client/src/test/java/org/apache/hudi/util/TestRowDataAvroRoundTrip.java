@@ -48,10 +48,11 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TestRowDataAvroRoundTrip {
+public class TestRowDataAvroRoundTrip {
 
   private static final RowType ROW_TYPE = (RowType) DataTypes.ROW(
       DataTypes.FIELD("tiny", DataTypes.TINYINT().notNull()),
@@ -79,7 +80,7 @@ class TestRowDataAvroRoundTrip {
       .notNull().getLogicalType();
 
   @Test
-  void testAllSupportedTypesRoundTripValueByValue() {
+  public void testAllSupportedTypesRoundTripValueByValue() {
     Instant instant = Instant.parse("2025-02-03T04:05:06.123456Z");
     Map<Object, Object> attributes = new LinkedHashMap<>();
     attributes.put(StringData.fromString("one"), 1);
@@ -100,9 +101,12 @@ class TestRowDataAvroRoundTrip {
         .convert(schema, input);
     RowData output = (RowData) AvroToRowDataConverters
         .createRowConverter(schema, ROW_TYPE, true).convert(avro);
-    AvroToRowDataConverters.createRowConverter(ROW_TYPE).convert(avro);
-    AvroToRowDataConverters.createRowConverter(ROW_TYPE, false).convert(avro);
-    AvroToRowDataConverters.createRowConverter(schema).convert(avro);
+    RowData defaultOutput = (RowData) AvroToRowDataConverters
+        .createRowConverter(ROW_TYPE).convert(avro);
+    RowData nonUtcOutput = (RowData) AvroToRowDataConverters
+        .createRowConverter(ROW_TYPE, false).convert(avro);
+    RowData schemaOutput = (RowData) AvroToRowDataConverters
+        .createRowConverter(schema).convert(avro);
 
     assertEquals((byte) 1, output.getByte(0));
     assertEquals((short) 2, output.getShort(1));
@@ -127,10 +131,13 @@ class TestRowDataAvroRoundTrip {
     assertEquals(99L, output.getRow(18, 2).getLong(0));
     assertEquals("nested", output.getRow(18, 2).getString(1).toString());
     assertTrue(output.isNullAt(19));
+    assertEquals("alice", defaultOutput.getString(9).toString());
+    assertEquals("alice", nonUtcOutput.getString(9).toString());
+    assertEquals("alice", schemaOutput.getString(9).toString());
   }
 
   @Test
-  void testConvertersAcceptAvroLogicalRuntimeRepresentations() {
+  public void testPrimitiveRuntimeRepresentations() {
     HoodieSchema intSchema = HoodieSchemaConverter.convertToSchema(DataTypes.INT().getLogicalType());
     assertNull(AvroToRowDataConverters.createConverter(DataTypes.NULL().getLogicalType(), true)
         .convert("ignored"));
@@ -151,23 +158,6 @@ class TestRowDataAvroRoundTrip {
         DataTypes.DECIMAL(8, 2).getLogicalType(), true).convert(ByteBuffer.wrap(unscaled))).toBigDecimal());
     assertEquals(new BigDecimal("12.34"), ((DecimalData) AvroToRowDataConverters.createConverter(
         DataTypes.DECIMAL(8, 2).getLogicalType(), true).convert(unscaled)).toBigDecimal());
-
-    Instant instant = Instant.parse("2025-02-03T04:05:06.123Z");
-    assertEquals(instant, ((TimestampData) AvroToRowDataConverters.createConverter(
-        DataTypes.TIMESTAMP(3).getLogicalType(), true).convert(instant)).toInstant());
-    assertEquals(instant.toEpochMilli(), ((TimestampData) AvroToRowDataConverters.createConverter(
-        DataTypes.TIMESTAMP(3).getLogicalType(), true).convert(new DateTime(instant.toEpochMilli())))
-        .getMillisecond());
-    AvroToRowDataConverters.createConverter(
-        DataTypes.TIMESTAMP(3).getLogicalType(), false).convert(instant.toEpochMilli());
-    AvroToRowDataConverters.createConverter(DataTypes.DATE().getLogicalType(), true)
-        .convert(new org.joda.time.LocalDate(2025, 2, 3));
-    AvroToRowDataConverters.createConverter(DataTypes.TIME(3).getLogicalType(), true)
-        .convert(new org.joda.time.LocalTime(4, 5, 6, 123));
-    AvroToRowDataConverters.JodaConverter.getConverter();
-    AvroToRowDataConverters.JodaConverter.getConverter();
-    assertThrows(IllegalArgumentException.class,
-        () -> AvroToRowDataConverters.createConverter(DataTypes.TIMESTAMP(9).getLogicalType(), true));
     assertEquals(7, RowDataToAvroConverters.createConverter(DataTypes.TINYINT().getLogicalType())
         .convert(intSchema, (byte) 7));
     assertEquals(8, RowDataToAvroConverters.createConverter(DataTypes.SMALLINT().getLogicalType())
@@ -182,6 +172,29 @@ class TestRowDataAvroRoundTrip {
         DataTypes.ARRAY(DataTypes.FLOAT()).getLogicalType()).convert(
         vectorSchema, new GenericArrayData(new float[] {1.0f, 2.0f}));
     assertTrue(vector instanceof org.apache.avro.generic.GenericData.Fixed);
+  }
+
+  @Test
+  public void testTimestampAndJodaRuntimeRepresentations() {
+    Instant instant = Instant.parse("2025-02-03T04:05:06.123Z");
+    assertEquals(instant, ((TimestampData) AvroToRowDataConverters.createConverter(
+        DataTypes.TIMESTAMP(3).getLogicalType(), true).convert(instant)).toInstant());
+    assertEquals(instant.toEpochMilli(), ((TimestampData) AvroToRowDataConverters.createConverter(
+        DataTypes.TIMESTAMP(3).getLogicalType(), true).convert(new DateTime(instant.toEpochMilli())))
+        .getMillisecond());
+    TimestampData nonUtcTimestamp = (TimestampData) AvroToRowDataConverters.createConverter(
+        DataTypes.TIMESTAMP(3).getLogicalType(), false).convert(instant.toEpochMilli());
+    assertEquals(instant.toEpochMilli(), nonUtcTimestamp.toTimestamp().getTime());
+    assertEquals((int) LocalDate.of(2025, 2, 3).toEpochDay(),
+        AvroToRowDataConverters.createConverter(DataTypes.DATE().getLogicalType(), true)
+            .convert(new org.joda.time.LocalDate(2025, 2, 3)));
+    assertEquals(14_706_123,
+        AvroToRowDataConverters.createConverter(DataTypes.TIME(3).getLogicalType(), true)
+            .convert(new org.joda.time.LocalTime(4, 5, 6, 123)));
+    assertSame(AvroToRowDataConverters.JodaConverter.getConverter(),
+        AvroToRowDataConverters.JodaConverter.getConverter());
+    assertThrows(IllegalArgumentException.class,
+        () -> AvroToRowDataConverters.createConverter(DataTypes.TIMESTAMP(9).getLogicalType(), true));
   }
 
   private static void assertMap(MapData map) {
