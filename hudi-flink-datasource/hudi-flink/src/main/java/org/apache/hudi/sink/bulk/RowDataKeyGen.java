@@ -184,9 +184,7 @@ public class RowDataKeyGen implements Serializable {
           this.recordKeyFields[0], consistentLogicalTimestampEnabled);
     } else {
       Object[] keyValues = this.recordKeyProjection.projectAsValues(rowData);
-      String recordKey = getRecordKey(keyValues, this.recordKeyFields, consistentLogicalTimestampEnabled);
-      return recordKey.substring(
-          this.recordKeyFields[0].length() + DEFAULT_COLUMN_VALUE_SEPARATOR.length());
+      return getRecordKeyForComparison(keyValues, this.recordKeyFields, consistentLogicalTimestampEnabled);
     }
   }
 
@@ -204,6 +202,11 @@ public class RowDataKeyGen implements Serializable {
 
   private static String getRecordKey(Object[] keyValues, String[] keyFields, boolean consistentLogicalTimestampEnabled) {
     return KeyGenerator.constructRecordKey(keyFields,
+        (key, index) -> StringUtils.objToString(getTimestampValue(consistentLogicalTimestampEnabled, keyValues[index])));
+  }
+
+  private static String getRecordKeyForComparison(Object[] keyValues, String[] keyFields, boolean consistentLogicalTimestampEnabled) {
+    return KeyGenerator.constructRecordKeyForComparison(keyFields,
         (key, index) -> StringUtils.objToString(getTimestampValue(consistentLogicalTimestampEnabled, keyValues[index])));
   }
 
