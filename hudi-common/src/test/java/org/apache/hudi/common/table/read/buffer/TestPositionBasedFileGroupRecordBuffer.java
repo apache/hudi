@@ -59,6 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -141,6 +142,7 @@ class TestPositionBasedFileGroupRecordBuffer {
     when(schemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
     when(schemaHandler.getSchemaForUpdates()).thenReturn(SCHEMA);
     when(schemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(schemaHandler.getSchemaEvolutionTransformer(any(), any())).thenReturn(Option.empty());
     when(schemaHandler.getDeleteContext()).thenReturn(new DeleteContext(new TypedProperties(), SCHEMA));
     context.setSchemaHandler(schemaHandler);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
