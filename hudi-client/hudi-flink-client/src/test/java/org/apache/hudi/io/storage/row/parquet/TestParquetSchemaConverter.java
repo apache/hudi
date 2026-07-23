@@ -230,6 +230,69 @@ public class TestParquetSchemaConverter {
     assertThat(messageType.toString(), is(expected));
   }
 
+  @Test
+  void testConvertAnnotatedPrimitiveParquetTypes() {
+    MessageType parquet = new MessageType("annotated",
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.REQUIRED)
+            .as(LogicalTypeAnnotation.decimalType(2, 8)).named("decimal32"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.intType(8, true)).named("tiny"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.intType(16, true)).named("small"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.intType(32, true)).named("number"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.dateType()).named("day"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.timeType(true, LogicalTypeAnnotation.TimeUnit.MILLIS)).named("time"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.decimalType(3, 12)).named("decimal64"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT96, Type.Repetition.OPTIONAL)
+            .named("timestamp96"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, Type.Repetition.OPTIONAL)
+            .length(8).as(LogicalTypeAnnotation.decimalType(4, 16)).named("decimal_fixed"));
+
+    RowType converted = ParquetSchemaConverter.convertToRowType(parquet);
+    assertEquals("DECIMAL(8, 2) NOT NULL", converted.getTypeAt(0).asSummaryString());
+    assertEquals("TINYINT", converted.getTypeAt(1).asSummaryString());
+    assertEquals("SMALLINT", converted.getTypeAt(2).asSummaryString());
+    assertEquals("INT", converted.getTypeAt(3).asSummaryString());
+    assertEquals("DATE", converted.getTypeAt(4).asSummaryString());
+    assertEquals("TIME(0)", converted.getTypeAt(5).asSummaryString());
+    assertEquals("DECIMAL(12, 3)", converted.getTypeAt(6).asSummaryString());
+    assertEquals("TIMESTAMP(9)", converted.getTypeAt(7).asSummaryString());
+    assertEquals("DECIMAL(16, 4)", converted.getTypeAt(8).asSummaryString());
+  }
+
+  @Test
+  void testConvertLocalZonedTimestampToParquet() {
+    RowType rowType = (RowType) DataTypes.ROW(
+        DataTypes.FIELD("local_millis", DataTypes.TIMESTAMP_LTZ(3)),
+        DataTypes.FIELD("local_micros", DataTypes.TIMESTAMP_LTZ(6))).notNull().getLogicalType();
+    MessageType parquet = ParquetSchemaConverter.convertToParquetMessageType("local", rowType);
+    assertEquals(LogicalTypeAnnotation.timestampType(
+            false, LogicalTypeAnnotation.TimeUnit.MILLIS),
+        parquet.getType("local_millis").getLogicalTypeAnnotation());
+    assertEquals(LogicalTypeAnnotation.timestampType(
+            false, LogicalTypeAnnotation.TimeUnit.MICROS),
+        parquet.getType("local_micros").getLogicalTypeAnnotation());
+  }
+
+  @Test
+  void testConvertBinaryDateAndTimeToParquet() {
+    RowType rowType = (RowType) DataTypes.ROW(
+        DataTypes.FIELD("payload", DataTypes.BYTES()),
+        DataTypes.FIELD("day", DataTypes.DATE()),
+        DataTypes.FIELD("time", DataTypes.TIME(3))).notNull().getLogicalType();
+    MessageType parquet = ParquetSchemaConverter.convertToParquetMessageType("primitives", rowType);
+    assertEquals(PrimitiveType.PrimitiveTypeName.BINARY,
+        parquet.getType("payload").asPrimitiveType().getPrimitiveTypeName());
+    assertEquals(LogicalTypeAnnotation.dateType(),
+        parquet.getType("day").getLogicalTypeAnnotation());
+    assertEquals(LogicalTypeAnnotation.timeType(true, LogicalTypeAnnotation.TimeUnit.MILLIS),
+        parquet.getType("time").getLogicalTypeAnnotation());
+  }
+
   /**
    * A Parquet group with metadata + value binary fields but NO VARIANT annotation must be
    * treated as a plain ROW. Only the Parquet {@code VARIANT} annotation triggers variant
