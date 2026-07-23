@@ -53,6 +53,7 @@ import org.apache.kafka.common.utils.CopyOnWriteMap;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -327,7 +328,13 @@ public class ProtoConversionUtil {
         case SFIXED64:
           return 0;
         case UINT64:
-          return DECIMAL_CONVERSION.toFixed(new BigDecimal(BigInteger.ZERO), fieldSchema.toAvroSchema(), fieldSchema.toAvroSchema().getLogicalType()).bytes();
+          // Avro 1.12 rejects a raw byte[] FIXED default; render the bytes as an ISO-8859-1 String
+          // (1:1 byte-to-char) so the default is textual and passes validateDefault.
+          return new String(
+              DECIMAL_CONVERSION
+                  .toFixed(new BigDecimal(BigInteger.ZERO), fieldSchema.toAvroSchema(), fieldSchema.toAvroSchema().getLogicalType())
+                  .bytes(),
+              StandardCharsets.ISO_8859_1);
         case STRING:
         case BYTES:
           return "";

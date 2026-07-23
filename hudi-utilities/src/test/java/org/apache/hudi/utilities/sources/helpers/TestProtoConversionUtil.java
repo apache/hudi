@@ -126,6 +126,24 @@ public class TestProtoConversionUtil {
   }
 
   @Test
+  public void generatedSchemaHasAvroValidFixedDefaults() {
+    // A uint64 field maps to a FIXED "unsigned_long" (size 9); its synthesized default must be a
+    // valid FIXED default, so re-parsing the generated schema with default validation must not throw.
+    for (boolean wrappedPrimitivesAsRecords : new boolean[] {true, false}) {
+      ProtoConversionUtil.SchemaConfig schemaConfig =
+          new ProtoConversionUtil.SchemaConfig(wrappedPrimitivesAsRecords, 2, true);
+      String generatedSchema =
+          ProtoConversionUtil.getSchemaForMessageDescriptor(Sample.getDescriptor(), schemaConfig).toString();
+      Schema reparsed =
+          Assertions.assertDoesNotThrow(
+              () -> new Schema.Parser().setValidateDefaults(true).parse(generatedSchema));
+      Schema unsignedLongSchema = reparsed.getField(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME).schema();
+      Assertions.assertEquals(Schema.Type.FIXED, unsignedLongSchema.getType());
+      Assertions.assertEquals(9, unsignedLongSchema.getFixedSize());
+    }
+  }
+
+  @Test
   public void recursiveSchema_noOverflow() {
     HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
     Pair<Parent, GenericRecord> inputAndOutput = createInputOutputForRecursiveSchemaNoOverflow(convertedSchema.toAvroSchema());
