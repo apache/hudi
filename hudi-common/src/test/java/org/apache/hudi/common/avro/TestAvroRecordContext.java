@@ -40,6 +40,23 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TestAvroRecordContext {
 
+  private static final Schema RECORD_SCHEMA = new Schema.Parser().parse(
+      "{\"type\":\"record\",\"name\":\"top\",\"fields\":["
+          + "{\"name\":\"id\",\"type\":\"int\"},"
+          + "{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null},"
+          + "{\"name\":\"address\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"address\",\"fields\":["
+          + "{\"name\":\"city\",\"type\":\"string\"},"
+          + "{\"name\":\"zip\",\"type\":[\"null\",\"int\"],\"default\":null}]}],\"default\":null},"
+          + "{\"name\":\"multi\",\"type\":[\"null\",\"string\",\"int\"],\"default\":null}]}");
+
+  private static final Schema MAP_AND_ARRAY_SCHEMA = new Schema.Parser().parse(
+      "{\"type\":\"record\",\"name\":\"complex\",\"fields\":["
+          + "{\"name\":\"id\",\"type\":\"int\"},"
+          + "{\"name\":\"str_map\",\"type\":[\"null\",{\"type\":\"map\",\"values\":\"string\"}],\"default\":null},"
+          + "{\"name\":\"int_array\",\"type\":[\"null\",{\"type\":\"array\",\"items\":\"int\"}],\"default\":null},"
+          + "{\"name\":\"rec_map\",\"type\":[\"null\",{\"type\":\"map\",\"values\":{\"type\":\"record\","
+          + "\"name\":\"inner\",\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}}],\"default\":null}]}");
+
   private static Stream<Arguments> testConvertValueToEngineType() {
     return Stream.of(
         Arguments.of(1L, 1L),
@@ -54,15 +71,6 @@ class TestAvroRecordContext {
     Comparable actual = AvroRecordContext.getFieldAccessorInstance().convertValueToEngineType(input);
     assertEquals(expected, actual);
   }
-
-  private static final Schema RECORD_SCHEMA = new Schema.Parser().parse(
-      "{\"type\":\"record\",\"name\":\"top\",\"fields\":["
-          + "{\"name\":\"id\",\"type\":\"int\"},"
-          + "{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null},"
-          + "{\"name\":\"address\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"address\",\"fields\":["
-          + "{\"name\":\"city\",\"type\":\"string\"},"
-          + "{\"name\":\"zip\",\"type\":[\"null\",\"int\"],\"default\":null}]}],\"default\":null},"
-          + "{\"name\":\"multi\",\"type\":[\"null\",\"string\",\"int\"],\"default\":null}]}");
 
   private static GenericRecord buildRecord() {
     GenericRecord address = new GenericData.Record(RECORD_SCHEMA.getField("address").schema().getTypes().get(1));
@@ -104,14 +112,6 @@ class TestAvroRecordContext {
     // an empty field name is still rejected up front
     assertThrows(IllegalArgumentException.class, () -> getFieldValueFromIndexedRecord(record, ""));
   }
-
-  private static final Schema MAP_AND_ARRAY_SCHEMA = new Schema.Parser().parse(
-      "{\"type\":\"record\",\"name\":\"complex\",\"fields\":["
-          + "{\"name\":\"id\",\"type\":\"int\"},"
-          + "{\"name\":\"str_map\",\"type\":[\"null\",{\"type\":\"map\",\"values\":\"string\"}],\"default\":null},"
-          + "{\"name\":\"int_array\",\"type\":[\"null\",{\"type\":\"array\",\"items\":\"int\"}],\"default\":null},"
-          + "{\"name\":\"rec_map\",\"type\":[\"null\",{\"type\":\"map\",\"values\":{\"type\":\"record\","
-          + "\"name\":\"inner\",\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}}],\"default\":null}]}");
 
   @Test
   void testGetFieldValueMapAndArrayLeavesReturnNull() {
