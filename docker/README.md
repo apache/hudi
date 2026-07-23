@@ -59,9 +59,12 @@ To build all docker images locally, you can run the script:
 ./build_local_docker_images.sh
 ```
 
-To build the Docker demo images directly with the script, run it from under `<HUDI_REPO_DIR>/docker`:
+To build the Docker demo images with `docker` directly, rather than through the Maven build like
+`build_local_docker_images.sh` above, run the script from under `<HUDI_REPO_DIR>/docker`:
 
 ```shell
+# With no flags, builds Hadoop 2.8.4 / Spark 3.5.3 / Hive 2.3.10, matching
+# docker-compose_hadoop284_hive2310_spark353_{amd64,arm64}.yml
 ./build_docker_images.sh
 ```
 
@@ -81,7 +84,8 @@ combinations under `docker/compose`.
 
 `setup_demo.sh` currently defaults to `docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml`. If you build a
 different image set for the demo flow, update `COMPOSE_FILE_NAME` in `setup_demo.sh` to point to the matching compose
-file before running the script.
+file before running the script. Run `./setup_demo.sh dev` to use your locally built images; a plain run pulls the
+Docker Hub images over them.
 
 By default, the script builds images for the current machine architecture and derives the version tag from the root
 `pom.xml`. Use `--version-tag` to set an explicit tag if needed.
@@ -150,7 +154,7 @@ Please refer to the [Docker Demo Docs page](https://hudi.apache.org/docs/docker_
 The `build_docker_images.sh` script supports multi-arch image builds through Docker `buildx`. First ensure a `buildx`
 builder is set up locally:
 
-```
+```shell
 # List builders 
 ~ ❯❯❯ docker buildx ls
 NAME/NODE DRIVER/ENDPOINT STATUS  PLATFORMS
