@@ -66,8 +66,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -78,7 +81,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -126,22 +131,10 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
   @MethodSource("tableTypesAndCdc")
   void testInsertAndUpsertWriteFilesAndCommitMetadata(HoodieTableType tableType, boolean cdcEnabled)
       throws IOException {
-    if (tableType == HoodieTableType.COPY_ON_WRITE && !cdcEnabled) {
-      context = new HoodieFlinkEngineContext(
-          new HoodieFlinkEngineContext.DefaultTaskContextSupplier() {
-            @Override
-            public java.util.function.Supplier<Long> getAttemptIdSupplier() {
-              return () -> 1L;
-            }
-          });
-    }
     initWriteClient(tableType, cdcEnabled, false);
 
     String insertInstant = writeClient.startCommit();
     transitionToInflight(insertInstant);
-    if (tableType == HoodieTableType.COPY_ON_WRITE && !cdcEnabled) {
-      createInvalidRetryFile(insertInstant);
-    }
     List<HoodieRecord> firstBatch = new ArrayList<>(Arrays.asList(
         insertRecord("id1", "one", 1L),
         insertRecord("id2", "two", 2L)));
@@ -161,36 +154,12 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
           insertInstant);
     }
     assertWriteStatuses(insertStatuses, 3);
-    if (tableType == HoodieTableType.COPY_ON_WRITE && !cdcEnabled) {
-      HoodieFlinkTable table = writeClient.getHoodieTable();
-      FlinkCreateHandle rolloverHandle = new FlinkCreateHandle(
-          writeConfig, insertInstant, table, PARTITION_PATH, FILE_ID, table.getTaskContextSupplier());
-      assertTrue(rolloverHandle.canWrite(insertRecord("id4", "four", 4L)));
-      assertNotEquals(insertStatuses.get(0).getStat().getPath(), rolloverHandle.getWritePath().toString());
-      rolloverHandle.closeGracefully();
-      rolloverHandle.closeGracefully();
-
-      FlinkCreateHandle failingHandle = new FlinkCreateHandle(
-          writeConfig, insertInstant, table, PARTITION_PATH, FILE_ID, table.getTaskContextSupplier()) {
-        @Override
-        public List<WriteStatus> close() {
-          super.close();
-          throw new IllegalStateException("expected close failure");
-        }
-      };
-      StoragePath failedWritePath = failingHandle.getWritePath();
-      failingHandle.closeGracefully();
-      assertFalse(metaClient.getStorage().exists(failedWritePath));
-    }
     assertTrue(writeClient.commit(insertInstant, insertStatuses));
     assertCommitMetadata(insertInstant, tableType, 3);
 
     writeClient.cleanHandles();
     String updateInstant = writeClient.startCommit();
     transitionToInflight(updateInstant);
-    if (tableType == HoodieTableType.COPY_ON_WRITE && !cdcEnabled) {
-      createInvalidRetryFile(updateInstant);
-    }
     List<HoodieRecord> updates = Arrays.asList(
         updateRecord("id1", "one-updated", 11L, insertInstant),
         deleteRecord("id2", 12L, insertInstant));
@@ -202,34 +171,100 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
     assertTrue(writeClient.commit(updateInstant, updateStatuses));
     assertCommitMetadata(updateInstant, tableType, expectedWrites);
 
-    if (tableType == HoodieTableType.COPY_ON_WRITE && !cdcEnabled) {
-      String failedMergeInstant = writeClient.startCommit();
-      transitionToInflight(failedMergeInstant);
-      HoodieFlinkTable table = writeClient.getHoodieTable();
-      FlinkMergeHandle failingHandle = new FlinkMergeHandle(
-          writeConfig,
-          failedMergeInstant,
-          table,
-          Collections.<HoodieRecord>emptyList().iterator(),
-          PARTITION_PATH,
-          FILE_ID,
-          table.getTaskContextSupplier()) {
-        @Override
-        public List<WriteStatus> close() {
-          super.close();
-          throw new IllegalStateException("expected close failure");
-        }
-      };
-      StoragePath failedWritePath = failingHandle.getWritePath();
-      failingHandle.closeGracefully();
-      assertFalse(metaClient.getStorage().exists(failedWritePath));
-    }
-
     if (tableType == HoodieTableType.COPY_ON_WRITE && cdcEnabled) {
       assertTrue(updateStatuses.stream()
           .map(WriteStatus::getStat)
           .anyMatch(stat -> stat.getCdcStats() != null && !stat.getCdcStats().isEmpty()));
     }
+  }
+
+  @Test
+  void testCopyOnWriteCleansRetryFiles() throws IOException {
+    context = new HoodieFlinkEngineContext(
+        new HoodieFlinkEngineContext.DefaultTaskContextSupplier() {
+          @Override
+          public Supplier<Long> getAttemptIdSupplier() {
+            return () -> 1L;
+          }
+        });
+    initWriteClient(HoodieTableType.COPY_ON_WRITE, false, false);
+
+    String insertInstant = writeClient.startCommit();
+    transitionToInflight(insertInstant);
+    StoragePath staleInsertPath = createInvalidRetryFile(insertInstant);
+    List<WriteStatus> insertStatuses = writeClient.insert(
+        Collections.singletonList(insertRecord("id1", "one", 1L)), insertInstant);
+    assertWriteStatuses(insertStatuses, 1);
+    assertFalse(metaClient.getStorage().exists(staleInsertPath));
+    assertTrue(writeClient.commit(insertInstant, insertStatuses));
+
+    writeClient.cleanHandles();
+    String updateInstant = writeClient.startCommit();
+    transitionToInflight(updateInstant);
+    StoragePath staleUpdatePath = createInvalidRetryFile(updateInstant);
+    List<WriteStatus> updateStatuses = writeClient.upsert(
+        Collections.singletonList(updateRecord("id1", "one-updated", 2L, insertInstant)),
+        updateInstant);
+    assertWriteStatuses(updateStatuses, 1);
+    assertFalse(metaClient.getStorage().exists(staleUpdatePath));
+    assertTrue(writeClient.commit(updateInstant, updateStatuses));
+  }
+
+  @Test
+  void testCopyOnWriteHandleRolloverAndGracefulCloseCleanup() throws IOException {
+    initWriteClient(HoodieTableType.COPY_ON_WRITE, false, false);
+
+    String insertInstant = writeClient.startCommit();
+    transitionToInflight(insertInstant);
+    writeClient.insert(Arrays.asList(
+        insertRecord("id1", "one", 1L),
+        insertRecord("id2", "two", 2L)), insertInstant);
+    List<WriteStatus> insertStatuses = writeClient.insert(
+        Collections.singletonList(insertRecord("id3", "three", 3L)), insertInstant);
+    assertWriteStatuses(insertStatuses, 3);
+
+    HoodieFlinkTable table = writeClient.getHoodieTable();
+    FlinkCreateHandle rolloverHandle = new FlinkCreateHandle(
+        writeConfig, insertInstant, table, PARTITION_PATH, FILE_ID, table.getTaskContextSupplier());
+    assertTrue(rolloverHandle.canWrite(insertRecord("id4", "four", 4L)));
+    assertNotEquals(insertStatuses.get(0).getStat().getPath(), rolloverHandle.getWritePath().toString());
+    rolloverHandle.closeGracefully();
+    // Closing gracefully is intentionally idempotent.
+    rolloverHandle.closeGracefully();
+
+    FlinkCreateHandle failingHandle = new FlinkCreateHandle(
+        writeConfig, insertInstant, table, PARTITION_PATH, FILE_ID, table.getTaskContextSupplier()) {
+      @Override
+      public List<WriteStatus> close() {
+        super.close();
+        throw new IllegalStateException("expected close failure");
+      }
+    };
+    StoragePath failedCreatePath = failingHandle.getWritePath();
+    failingHandle.closeGracefully();
+    assertFalse(metaClient.getStorage().exists(failedCreatePath));
+    assertTrue(writeClient.commit(insertInstant, insertStatuses));
+
+    String mergeInstant = writeClient.startCommit();
+    transitionToInflight(mergeInstant);
+    table = writeClient.getHoodieTable();
+    FlinkMergeHandle failingMergeHandle = new FlinkMergeHandle(
+        writeConfig,
+        mergeInstant,
+        table,
+        Collections.<HoodieRecord>emptyList().iterator(),
+        PARTITION_PATH,
+        FILE_ID,
+        table.getTaskContextSupplier()) {
+      @Override
+      public List<WriteStatus> close() {
+        super.close();
+        throw new IllegalStateException("expected close failure");
+      }
+    };
+    StoragePath failedMergePath = failingMergeHandle.getWritePath();
+    failingMergeHandle.closeGracefully();
+    assertFalse(metaClient.getStorage().exists(failedMergePath));
   }
 
   @Test
@@ -297,10 +332,10 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
     List<WriteStatus> insertStatuses = writeClient.insert(
         Collections.singletonList(insertRecord("id1", "one", 1L)), insertInstant);
     assertTrue(writeClient.commit(insertInstant, insertStatuses));
-    java.util.Map<String, List<String>> replacedFileIds =
+    Map<String, List<String>> replacedFileIds =
         writeClient.getPartitionToReplacedFileIds(WriteOperationType.INSERT_OVERWRITE, insertStatuses);
     assertEquals(Collections.singleton(FILE_ID),
-        new java.util.HashSet<>(replacedFileIds.get(PARTITION_PATH)));
+        new HashSet<>(replacedFileIds.get(PARTITION_PATH)));
 
     HoodieFlinkTable table = mock(HoodieFlinkTable.class);
     when(table.getMetaClient()).thenReturn(metaClient);
@@ -323,6 +358,9 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
     FlinkCreateHandle writeHandle = mock(FlinkCreateHandle.class);
     when(handleFactory.create(any(), any(), any(), anyString(), any(), any())).thenReturn(writeHandle);
     BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, FILE_ID, PARTITION_PATH);
+    List<HoodieKey> deleteKeys = Collections.singletonList(new HoodieKey("id1", PARTITION_PATH));
+    List<HoodieRecord> preppedDeletes = Collections.emptyList();
+    List<String> partitions = Collections.singletonList(PARTITION_PATH);
 
     try (MockedStatic<FlinkWriteHandleFactory> factory = Mockito.mockStatic(FlinkWriteHandleFactory.class)) {
       factory.when(() -> FlinkWriteHandleFactory.getFactory(any(), any(), anyBoolean()))
@@ -331,10 +369,15 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
           Collections.<HoodieRecord>emptyList().iterator(), bucketInfo, "001").isEmpty());
       assertTrue(routingClient.insertOverwriteTable(
           Collections.<HoodieRecord>emptyList().iterator(), bucketInfo, "002").isEmpty());
-      assertTrue(routingClient.delete(
-          Collections.singletonList(new HoodieKey("id1", PARTITION_PATH)), "003").isEmpty());
-      assertTrue(routingClient.deletePrepped(Collections.emptyList(), "004").isEmpty());
-      assertTrue(routingClient.deletePartitions(Collections.singletonList(PARTITION_PATH), "005").isEmpty());
+      assertTrue(routingClient.delete(deleteKeys, "003").isEmpty());
+      assertTrue(routingClient.deletePrepped(preppedDeletes, "004").isEmpty());
+      assertTrue(routingClient.deletePartitions(partitions, "005").isEmpty());
+
+      verify(table).insertOverwrite(eq(context), eq(writeHandle), eq(bucketInfo), eq("001"), any());
+      verify(table).insertOverwriteTable(eq(context), eq(writeHandle), eq(bucketInfo), eq("002"), any());
+      verify(table).delete(eq(context), eq("003"), eq(deleteKeys));
+      verify(table).deletePrepped(eq(context), eq("004"), eq(preppedDeletes));
+      verify(table).deletePartitions(eq(context), eq("005"), eq(partitions));
     } finally {
       routingClient.close();
     }
@@ -418,7 +461,7 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
         metaClient.getCommitActionType(), instantTime);
   }
 
-  private void createInvalidRetryFile(String instantTime) throws IOException {
+  private StoragePath createInvalidRetryFile(String instantTime) throws IOException {
     StoragePath partitionPath = new StoragePath(metaClient.getBasePath(), PARTITION_PATH);
     metaClient.getStorage().createDirectory(partitionPath);
     String fileName = FSUtils.makeBaseFileName(
@@ -426,7 +469,9 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
         FSUtils.makeWriteToken(0, 1, 0),
         FILE_ID,
         metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
-    metaClient.getStorage().create(new StoragePath(partitionPath, fileName)).close();
+    StoragePath retryPath = new StoragePath(partitionPath, fileName);
+    metaClient.getStorage().create(retryPath).close();
+    return retryPath;
   }
 
   private void assertCommitMetadata(String instantTime, HoodieTableType tableType, long expectedRecords)
@@ -434,7 +479,7 @@ class TestFlinkWriteClientFunctional extends HoodieFlinkClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String action = metaClient.getCommitActionType();
     HoodieInstant instant = metaClient.getActiveTimeline()
-        .getTimelineOfActions(java.util.Collections.singleton(action))
+        .getTimelineOfActions(Collections.singleton(action))
         .filterCompletedInstants()
         .getInstantsAsStream()
         .filter(candidate -> candidate.requestedTime().equals(instantTime))

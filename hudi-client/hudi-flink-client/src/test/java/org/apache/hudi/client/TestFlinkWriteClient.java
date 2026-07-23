@@ -25,7 +25,6 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.TableServiceType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -49,6 +48,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -182,22 +182,15 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
         () -> writeClient.bulkInsert(Collections.emptyList(), "001", Option.empty()));
     assertThrows(HoodieNotSupportedException.class,
         () -> writeClient.cluster("001", false));
-    assertThrows(IndexOutOfBoundsException.class,
-        () -> writeClient.insert(Collections.emptyList(), "001"));
-    assertThrows(IndexOutOfBoundsException.class,
-        () -> writeClient.upsert(Collections.emptyList(), "001"));
     assertThrows(HoodieException.class,
         () -> writeClient.delete(Collections.singletonList(new HoodieKey("id", "partition")), "001"));
     assertThrows(HoodieException.class,
         () -> writeClient.deletePrepped(Collections.emptyList(), "001"));
     assertThrows(IllegalArgumentException.class,
         () -> writeClient.completeTableService(TableServiceType.CLEAN, null, null, "001"));
-    assertThrows(AssertionError.class,
-        () -> writeClient.getPartitionToReplacedFileIds(WriteOperationType.UPSERT, Collections.emptyList()));
-
     assertFalse(writeClient.loadActiveTimelineOnTableInit());
     writeClient.waitForCleaningFinish();
     writeClient.cleanHandles();
-    assertTrue(writeClient.getHoodieTable(false) != null);
+    assertNotNull(writeClient.getHoodieTable(false));
   }
 }

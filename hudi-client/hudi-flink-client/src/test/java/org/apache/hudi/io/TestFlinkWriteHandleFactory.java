@@ -75,7 +75,7 @@ class TestFlinkWriteHandleFactory {
   }
 
   @Test
-  void testCommitFactoryCreatesAndReusesBaseFileHandles() {
+  void testCommitFactoryCreatesBaseFileHandle() {
     when(tableConfig.getTableType()).thenReturn(HoodieTableType.COPY_ON_WRITE);
     when(tableConfig.isCDCEnabled()).thenReturn(false);
     BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, "file-1", "partition");

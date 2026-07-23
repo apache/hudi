@@ -181,6 +181,7 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
       client.callTriggerWritesAndFetchWriteStats(metadata);
       assertSame(metadata, client.callConvertToOutputMetadata(metadata));
       client.callHandleWriteErrors(Collections.singletonList(status.getStat()));
+      // cluster() is intentionally unimplemented for Flink.
       assertNull(client.cluster("001", false));
       assertNotNull(client.createRealTable());
     } finally {

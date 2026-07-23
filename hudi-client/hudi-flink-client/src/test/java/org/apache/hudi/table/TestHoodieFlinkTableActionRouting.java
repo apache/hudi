@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
@@ -34,6 +35,7 @@ import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieInlineLogAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
+import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
@@ -62,11 +64,12 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -132,13 +135,14 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
     try (MockedConstruction<FlinkPartitionTTLActionExecutor> ignored = Mockito.mockConstruction(
         FlinkPartitionTTLActionExecutor.class,
         (executor, constructionContext) -> {
-          HoodieWriteMetadata<java.util.List<WriteStatus>> metadata = new HoodieWriteMetadata<>();
+          HoodieWriteMetadata<List<WriteStatus>> metadata = new HoodieWriteMetadata<>();
           metadata.setWriteStatuses(Collections.emptyList());
           when(executor.execute()).thenReturn(metadata);
         })) {
       assertEquals(Collections.emptyList(), table.managePartitionTTL(context, "002").getWriteStatuses());
     }
-    assertConstructed(BaseRollbackPlanActionExecutor.class,
+    Option<HoodieRollbackPlan> rollbackPlan = Option.of(mock(HoodieRollbackPlan.class));
+    assertResultPropagated(BaseRollbackPlanActionExecutor.class, rollbackPlan,
         () -> table.scheduleRollback(
             context, "003", mock(HoodieInstant.class), false, false, false));
   }
@@ -150,19 +154,19 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
     HoodieWriteHandle writeHandle = mock(HoodieWriteHandle.class);
     BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, "file-1", "partition");
 
-    assertConstructed(FlinkUpsertCommitActionExecutor.class,
+    assertWriteMetadataPropagated(FlinkUpsertCommitActionExecutor.class,
         () -> table.upsert(context, writeHandle, bucketInfo, "001", Collections.emptyIterator()));
-    assertConstructed(FlinkInsertCommitActionExecutor.class,
+    assertWriteMetadataPropagated(FlinkInsertCommitActionExecutor.class,
         () -> table.insert(context, writeHandle, bucketInfo, "001", Collections.emptyIterator()));
-    assertConstructed(FlinkDeletePreppedCommitActionExecutor.class,
+    assertWriteMetadataPropagated(FlinkDeletePreppedCommitActionExecutor.class,
         () -> table.deletePrepped(context, writeHandle, bucketInfo, "001", Collections.emptyList()));
-    assertConstructed(FlinkUpsertPreppedCommitActionExecutor.class,
+    assertWriteMetadataPropagated(FlinkUpsertPreppedCommitActionExecutor.class,
         () -> table.upsertPrepped(context, writeHandle, bucketInfo, "001", Collections.emptyList()));
-    assertConstructed(FlinkInsertPreppedCommitActionExecutor.class,
+    assertWriteMetadataPropagated(FlinkInsertPreppedCommitActionExecutor.class,
         () -> table.insertPrepped(context, writeHandle, bucketInfo, "001", Collections.emptyList()));
-    assertConstructed(FlinkInsertOverwriteCommitActionExecutor.class,
+    assertWriteMetadataPropagated(FlinkInsertOverwriteCommitActionExecutor.class,
         () -> table.insertOverwrite(context, writeHandle, bucketInfo, "001", Collections.emptyIterator()));
-    assertConstructed(FlinkInsertOverwriteTableCommitActionExecutor.class,
+    assertWriteMetadataPropagated(FlinkInsertOverwriteTableCommitActionExecutor.class,
         () -> table.insertOverwriteTable(context, writeHandle, bucketInfo, "001", Collections.emptyIterator()));
 
     try (MockedConstruction<HoodieCreateHandle> ignored = Mockito.mockConstruction(HoodieCreateHandle.class)) {
@@ -199,11 +203,11 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
     HoodieAppendHandle appendHandle = mock(HoodieAppendHandle.class);
     BucketInfo bucketInfo = new BucketInfo(BucketType.UPDATE, "file-1", "partition");
 
-    assertConstructed(FlinkUpsertDeltaCommitActionExecutor.class,
+    assertWriteMetadataPropagated(FlinkUpsertDeltaCommitActionExecutor.class,
         () -> table.upsert(context, appendHandle, bucketInfo, "001", Collections.emptyIterator()));
-    assertConstructed(FlinkUpsertPreppedDeltaCommitActionExecutor.class,
+    assertWriteMetadataPropagated(FlinkUpsertPreppedDeltaCommitActionExecutor.class,
         () -> table.upsertPrepped(context, appendHandle, bucketInfo, "001", Collections.emptyList()));
-    assertConstructed(FlinkUpsertDeltaCommitActionExecutor.class,
+    assertWriteMetadataPropagated(FlinkUpsertDeltaCommitActionExecutor.class,
         () -> table.insert(context, appendHandle, bucketInfo, "001", Collections.emptyIterator()));
 
     HoodieWriteMetadata compactionMetadata = new HoodieWriteMetadata();
@@ -224,9 +228,19 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
     }
   }
 
-  private <E> void assertConstructed(Class<E> executorClass, Supplier<Object> invocation) {
-    try (MockedConstruction<E> mocked = Mockito.mockConstruction(executorClass)) {
-      assertNull(invocation.get());
+  private <E extends BaseActionExecutor> void assertWriteMetadataPropagated(
+      Class<E> executorClass, Supplier<Object> invocation) {
+    HoodieWriteMetadata<List<WriteStatus>> metadata = new HoodieWriteMetadata<>();
+    metadata.setWriteStatuses(Collections.emptyList());
+    assertResultPropagated(executorClass, metadata, invocation);
+  }
+
+  private <E extends BaseActionExecutor> void assertResultPropagated(
+      Class<E> executorClass, Object expected, Supplier<Object> invocation) {
+    try (MockedConstruction<E> mocked = Mockito.mockConstruction(
+        executorClass,
+        (executor, constructionContext) -> when(executor.execute()).thenReturn(expected))) {
+      assertSame(expected, invocation.get());
       assertEquals(1, mocked.constructed().size());
     }
   }
