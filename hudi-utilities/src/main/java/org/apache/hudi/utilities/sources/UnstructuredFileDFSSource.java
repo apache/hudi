@@ -23,6 +23,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.LazyIterableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -43,10 +44,10 @@ import org.apache.spark.sql.types.MetadataBuilder;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
-import java.util.ArrayList;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -145,18 +146,25 @@ public class UnstructuredFileDFSSource extends RowSource {
     int parallelism = Math.max(1, Math.min(paths.size(), listingParallelism));
     HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(sparkContext.hadoopConfiguration());
     UnstructuredFileRecordBuilder builder = this.recordBuilder;
-    JavaRDD<Row> rows = sparkContext.parallelize(paths, parallelism).mapPartitions(pathIterator -> {
-      List<Row> result = new ArrayList<>();
-      FileSystem fs = null;
-      while (pathIterator.hasNext()) {
-        String path = pathIterator.next();
-        if (fs == null) {
-          fs = HadoopFSUtils.getFs(new Path(path), storageConf);
-        }
-        result.add(builder.buildRow(fs, path));
-      }
-      return (Iterator<Row>) result.iterator();
-    });
+    // one file -> one row, lazily: inline bytes and extracted text of a partition must
+    // never be resident all at once, or partition memory scales with total corpus size
+    JavaRDD<Row> rows = sparkContext.parallelize(paths, parallelism).mapPartitions(pathIterator ->
+        new LazyIterableIterator<String, Row>(pathIterator) {
+          private FileSystem fs;
+
+          @Override
+          protected Row computeNext() {
+            String path = inputItr.next();
+            try {
+              if (fs == null) {
+                fs = HadoopFSUtils.getFs(new Path(path), storageConf);
+              }
+              return builder.buildRow(fs, path);
+            } catch (IOException e) {
+              throw new UncheckedIOException("Failed to build record for " + path, e);
+            }
+          }
+        });
     return sparkSession.createDataFrame(rows, SOURCE_SCHEMA);
   }
 }

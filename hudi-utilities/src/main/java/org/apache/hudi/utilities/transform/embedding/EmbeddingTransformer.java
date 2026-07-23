@@ -23,6 +23,7 @@ import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.LazyIterableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -54,10 +55,11 @@ import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.TARGET
 /**
  * Appends a VECTOR(dimension) embedding column by calling an embedding API for the text
  * in {@code source.column}. Batching happens at the record level within each partition:
- * up to {@code batch.size} records' texts go into one API request, then the next buffer —
- * executors stay busy and large request batches keep the request rate low, with retry and
- * backoff (in the provider) as the only flow control. Rows with no text (e.g. images,
- * videos, failed parses) receive a null vector and are never sent to the API.
+ * up to {@code batch.size} records' texts go into one API request, and the batch is
+ * streamed back out row by row before the next one is pulled, so {@code batch.size}
+ * bounds the rows resident per partition. Retry and backoff (in the provider) are the
+ * only flow control. Rows with no text (e.g. images, videos, failed parses) receive a
+ * null vector and are never sent to the API.
  *
  * <p>Because the streamer only feeds new or changed records through the transformer chain
  * each sync, embeddings stay current with the ingested data at no extra cost.
@@ -100,12 +102,14 @@ public class EmbeddingTransformer implements Transformer {
   }
 
   /**
-   * Pulls up to {@code batchSize} input rows, embeds the texts in one API call, then
-   * streams the augmented rows out before pulling the next buffer.
+   * Pulls up to {@code batch.size} input rows, embeds their texts in one API call, then
+   * streams the augmented rows out one at a time (releasing each buffered row as it is
+   * emitted) before pulling the next batch. The batch buffer is the only partition data
+   * ever resident: {@code batch.size} bounds transformer memory to
+   * batch.size x average row size per partition.
    */
-  private static class EmbeddingIterator implements Iterator<Row> {
+  private static class EmbeddingIterator extends LazyIterableIterator<Row, Row> {
 
-    private final Iterator<Row> input;
     private final String providerClass;
     private final TypedProperties props;
     private final int sourceIndex;
@@ -114,11 +118,14 @@ public class EmbeddingTransformer implements Transformer {
     private final int inputMaxChars;
 
     private EmbeddingProvider provider;
-    private Iterator<Row> pendingOutput = java.util.Collections.emptyIterator();
+    private Row[] batch;
+    private List<Float>[] batchVectors;
+    private int batchCount;
+    private int emitIndex;
 
     EmbeddingIterator(Iterator<Row> input, String providerClass, TypedProperties props,
         int sourceIndex, int dimension, int batchSize, int inputMaxChars) {
-      this.input = input;
+      super(input);
       this.providerClass = providerClass;
       this.props = props;
       this.sourceIndex = sourceIndex;
@@ -129,33 +136,52 @@ public class EmbeddingTransformer implements Transformer {
 
     @Override
     public boolean hasNext() {
-      return pendingOutput.hasNext() || input.hasNext();
+      // buffered rows of the final batch must drain even after the input is exhausted;
+      // short-circuit keeps super.hasNext() (and its end() hook) from firing early
+      return emitIndex < batchCount || super.hasNext();
     }
 
     @Override
-    public Row next() {
-      if (!pendingOutput.hasNext()) {
-        fillNextBuffer();
+    protected Row computeNext() {
+      if (emitIndex >= batchCount) {
+        fillNextBatch();
       }
-      return pendingOutput.next();
+      Row row = batch[emitIndex];
+      List<Float> vector = batchVectors[emitIndex];
+      batch[emitIndex] = null;
+      batchVectors[emitIndex] = null;
+      emitIndex++;
+
+      Object[] values = new Object[row.length() + 1];
+      for (int f = 0; f < row.length(); f++) {
+        values[f] = row.get(f);
+      }
+      // the Row encoder expects a scala Seq as the external type for array columns
+      values[row.length()] = vector == null
+          ? null : scala.collection.JavaConverters.asScalaBuffer(vector);
+      return RowFactory.create(values);
     }
 
-    private void fillNextBuffer() {
-      List<Row> buffered = new ArrayList<>(batchSize);
+    @SuppressWarnings("unchecked")
+    private void fillNextBatch() {
+      batch = new Row[batchSize];
+      batchVectors = new List[batchSize];
+      batchCount = 0;
+      emitIndex = 0;
       List<String> texts = new ArrayList<>(batchSize);
       List<Integer> textRowIndexes = new ArrayList<>(batchSize);
-      while (input.hasNext() && buffered.size() < batchSize) {
-        Row row = input.next();
-        buffered.add(row);
+      while (inputItr.hasNext() && batchCount < batchSize) {
+        Row row = inputItr.next();
+        batch[batchCount] = row;
         String text = row.isNullAt(sourceIndex) ? null : row.getString(sourceIndex);
         if (text != null && !text.trim().isEmpty()) {
           texts.add(text.length() > inputMaxChars ? text.substring(0, inputMaxChars) : text);
-          textRowIndexes.add(buffered.size() - 1);
+          textRowIndexes.add(batchCount);
         }
+        batchCount++;
       }
 
       List<float[]> vectors = texts.isEmpty() ? java.util.Collections.emptyList() : embed(texts);
-      List<Float>[] vectorPerRow = new List[buffered.size()];
       for (int i = 0; i < vectors.size(); i++) {
         float[] vector = vectors.get(i);
         if (vector.length != dimension) {
@@ -166,22 +192,8 @@ public class EmbeddingTransformer implements Transformer {
         for (float v : vector) {
           boxed.add(v);
         }
-        vectorPerRow[textRowIndexes.get(i)] = boxed;
+        batchVectors[textRowIndexes.get(i)] = boxed;
       }
-
-      List<Row> output = new ArrayList<>(buffered.size());
-      for (int i = 0; i < buffered.size(); i++) {
-        Row row = buffered.get(i);
-        Object[] values = new Object[row.length() + 1];
-        for (int f = 0; f < row.length(); f++) {
-          values[f] = row.get(f);
-        }
-        // the Row encoder expects a scala Seq as the external type for array columns
-        values[row.length()] = vectorPerRow[i] == null
-            ? null : scala.collection.JavaConverters.asScalaBuffer(vectorPerRow[i]);
-        output.add(RowFactory.create(values));
-      }
-      pendingOutput = output.iterator();
     }
 
     private List<float[]> embed(List<String> texts) {

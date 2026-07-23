@@ -81,12 +81,15 @@ public class EmbeddingTransformerConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> BATCH_SIZE = ConfigProperty
       .key(PREFIX + "batch.size")
-      .defaultValue(1024)
+      .defaultValue(128)
       .markAdvanced()
       .sinceVersion("1.2.0")
       .withDocumentation("Number of records embedded per API request. Batching happens at the "
-          + "record level within each Spark partition; large request batches keep the request "
-          + "rate low without extra tuning knobs.");
+          + "record level within each Spark partition, and the batch of rows awaiting the API "
+          + "response is the transformer's only resident state, so this also bounds memory to "
+          + "batch.size x average row size (including inline blobs) per partition. Raise for "
+          + "high-throughput remote APIs; lower toward 32 for single-node local endpoints "
+          + "(Ollama, TEI) so individual requests stay well inside the request timeout.");
 
   public static final ConfigProperty<String> SOURCE_COLUMN = ConfigProperty
       .key(PREFIX + "source.column")
