@@ -652,6 +652,106 @@
           <scope>${flink.bundle.hive.scope}</scope>
         </dependency>
       </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>${maven-shade-plugin.version}</version>
+            <executions>
+              <execution>
+                <configuration>
+                  <artifactSet>
+                    <!-- hive-exec parses Hive DDL (Driver.compile) with the ANTLR 3 runtime
+                         and ST4, which it depends on transitively but does not embed. These
+                         are pulled into the bundle here. (Hive 2.x/3.x use ANTLR 3, not 4.) -->
+                    <includes combine.children="append">
+                      <include>org.antlr:antlr-runtime</include>
+                      <include>org.antlr:ST4</include>
+                    </includes>
+                  </artifactSet>
+                  <!-- hive-exec is a fat jar that embeds these deps un-relocated; under Flink
+                       child-first classloading they would shadow the versions Hudi/Flink need.
+                       Scoped to this profile so the default (no-Hive) bundle's ABI is unchanged. -->
+                  <relocations combine.children="append">
+                    <relocation>
+                      <pattern>com.google.common.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.google.common.</shadedPattern>
+                    </relocation>
+                    <!-- hudi-io ships protobuf pre-shaded at org.apache.hudi.com.google.protobuf.
+                         hive-exec's classes were compiled against com.google.protobuf; this relocation
+                         rewrites those references onto hudi-io's shaded copy. The filter below strips
+                         hive-exec's stale embedded protobuf so nothing collides at the original names. -->
+                    <relocation>
+                      <pattern>com.google.protobuf.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.google.protobuf.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.commons.lang3.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang3.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.commons.lang.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.thrift.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.thrift.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.orc.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.orc.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.json.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.json.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.codehaus.jackson.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.codehaus.jackson.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>com.facebook.fb303.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.facebook.fb303.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>au.com.bytecode.opencsv.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}au.com.bytecode.opencsv.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>javaewah.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}javaewah.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>javolution.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}javolution.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>jodd.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}jodd.</shadedPattern>
+                    </relocation>
+                  </relocations>
+                  <!-- Drop hive-exec's stale embedded copies so only the declared modern
+                       artifacts populate these namespaces; otherwise shade would pick the
+                       winner by artifact order. -->
+                  <filters combine.children="append">
+                    <filter>
+                      <artifact>org.apache.hive:hive-exec</artifact>
+                      <excludes>
+                        <exclude>org/apache/avro/**</exclude>
+                        <exclude>org/apache/orc/**</exclude>
+                        <exclude>org/apache/parquet/**</exclude>
+                        <exclude>com/google/protobuf/**</exclude>
+                        <exclude>io/airlift/compress/**</exclude>
+                      </excludes>
+                    </filter>
+                  </filters>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
     <profile>
       <id>flink-bundle-shade-hive3</id>
@@ -673,6 +773,106 @@
           <scope>${flink.bundle.hive.scope}</scope>
         </dependency>
       </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>${maven-shade-plugin.version}</version>
+            <executions>
+              <execution>
+                <configuration>
+                  <artifactSet>
+                    <!-- hive-exec parses Hive DDL (Driver.compile) with the ANTLR 3 runtime
+                         and ST4, which it depends on transitively but does not embed. These
+                         are pulled into the bundle here. (Hive 2.x/3.x use ANTLR 3, not 4.) -->
+                    <includes combine.children="append">
+                      <include>org.antlr:antlr-runtime</include>
+                      <include>org.antlr:ST4</include>
+                    </includes>
+                  </artifactSet>
+                  <!-- hive-exec is a fat jar that embeds these deps un-relocated; under Flink
+                       child-first classloading they would shadow the versions Hudi/Flink need.
+                       Scoped to this profile so the default (no-Hive) bundle's ABI is unchanged. -->
+                  <relocations combine.children="append">
+                    <relocation>
+                      <pattern>com.google.common.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.google.common.</shadedPattern>
+                    </relocation>
+                    <!-- hudi-io ships protobuf pre-shaded at org.apache.hudi.com.google.protobuf.
+                         hive-exec's classes were compiled against com.google.protobuf; this relocation
+                         rewrites those references onto hudi-io's shaded copy. The filter below strips
+                         hive-exec's stale embedded protobuf so nothing collides at the original names. -->
+                    <relocation>
+                      <pattern>com.google.protobuf.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.google.protobuf.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.commons.lang3.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang3.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.commons.lang.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.lang.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.thrift.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.thrift.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.apache.orc.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.apache.orc.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.json.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.json.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>org.codehaus.jackson.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}org.codehaus.jackson.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>com.facebook.fb303.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}com.facebook.fb303.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>au.com.bytecode.opencsv.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}au.com.bytecode.opencsv.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>javaewah.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}javaewah.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>javolution.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}javolution.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>jodd.</pattern>
+                      <shadedPattern>${flink.bundle.shade.prefix}jodd.</shadedPattern>
+                    </relocation>
+                  </relocations>
+                  <!-- Drop hive-exec's stale embedded copies so only the declared modern
+                       artifacts populate these namespaces; otherwise shade would pick the
+                       winner by artifact order. -->
+                  <filters combine.children="append">
+                    <filter>
+                      <artifact>org.apache.hive:hive-exec</artifact>
+                      <excludes>
+                        <exclude>org/apache/avro/**</exclude>
+                        <exclude>org/apache/orc/**</exclude>
+                        <exclude>org/apache/parquet/**</exclude>
+                        <exclude>com/google/protobuf/**</exclude>
+                        <exclude>io/airlift/compress/**</exclude>
+                      </excludes>
+                    </filter>
+                  </filters>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
     <profile>
       <id>hudi-platform-service</id>
