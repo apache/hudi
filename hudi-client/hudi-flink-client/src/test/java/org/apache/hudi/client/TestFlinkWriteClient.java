@@ -23,11 +23,15 @@ import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
@@ -39,10 +43,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -156,5 +162,35 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
         metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime));
     assertFalse(HoodieHeartbeatClient.heartbeatExists(
         metaClient.getStorage(), metadataTableBasePath, instantTime));
+  }
+
+  @Test
+  void testUnsupportedWriteEntryPointsAndInvalidTableServiceFailFast() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withEngineType(EngineType.FLINK)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+    writeClient = new HoodieFlinkWriteClient(context, writeConfig);
+
+    assertThrows(HoodieNotSupportedException.class, () -> writeClient.bootstrap(Option.empty()));
+    assertThrows(HoodieNotSupportedException.class,
+        () -> writeClient.insertPreppedRecords(Collections.emptyList(), "001"));
+    assertThrows(HoodieNotSupportedException.class,
+        () -> writeClient.bulkInsert(Collections.emptyList(), "001"));
+    assertThrows(HoodieNotSupportedException.class,
+        () -> writeClient.bulkInsert(Collections.emptyList(), "001", Option.empty()));
+    assertThrows(HoodieNotSupportedException.class,
+        () -> writeClient.cluster("001", false));
+    assertThrows(HoodieException.class,
+        () -> writeClient.delete(Collections.singletonList(new HoodieKey("id", "partition")), "001"));
+    assertThrows(HoodieException.class,
+        () -> writeClient.deletePrepped(Collections.emptyList(), "001"));
+    assertThrows(IllegalArgumentException.class,
+        () -> writeClient.completeTableService(TableServiceType.CLEAN, null, null, "001"));
+    assertFalse(writeClient.loadActiveTimelineOnTableInit());
+    writeClient.waitForCleaningFinish();
+    writeClient.cleanHandles();
+    assertNotNull(writeClient.getHoodieTable(false));
   }
 }
