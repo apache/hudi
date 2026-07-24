@@ -61,6 +61,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -274,5 +276,123 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     assert Objects.requireNonNull(basePathDir.list()).length > 0;
     records.close();
     assertEquals(Objects.requireNonNull(basePathDir.list()).length, 0);
+  }
+
+  /**
+   * Re-insertion order: when a key is put twice, iteration order must place it last (i.e. the
+   * second put's higher disk offset is at the LinkedHashMap tail), and reads must return the
+   * latest value. Locks down the invariant that {@code BitCaskDiskMap.put} removes-before-puts
+   * to keep {@code LinkedHashMap} insertion-order == disk-offset-order (ENG-43078).
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testReInsertionPreservesOffsetOrder(boolean isCompressionEnabled) throws IOException, URISyntaxException {
+    try (BitCaskDiskMap<String, HoodieRecord> records = new BitCaskDiskMap<>(basePath, new DefaultSerializer<>(), isCompressionEnabled)) {
+      SchemaTestUtil testUtil = new SchemaTestUtil();
+      List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 5);
+      List<String> orderedKeys = new ArrayList<>();
+      for (IndexedRecord r : iRecords) {
+        String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+        String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+        HoodieRecord value = new HoodieAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
+        records.put(key, value);
+        orderedKeys.add(key);
+      }
+      // Re-insert the first key; it must move to the iteration tail.
+      String firstKey = orderedKeys.get(0);
+      List<IndexedRecord> updatedRec = testUtil.generateHoodieTestRecords(100, 1);
+      GenericRecord updatedGeneric = (GenericRecord) updatedRec.get(0);
+      HoodieRecord updatedValue = new HoodieAvroRecord<>(
+          new HoodieKey(firstKey, updatedGeneric.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString()),
+          new HoodieAvroPayload(Option.of(updatedGeneric)));
+      records.put(firstKey, updatedValue);
+
+      // size must remain 5 (re-insertion replaces the existing entry).
+      List<HoodieRecord> iteratedFromEntrySet = new ArrayList<>();
+      Iterator<HoodieRecord> iter = records.iterator();
+      while (iter.hasNext()) {
+        iteratedFromEntrySet.add(iter.next());
+      }
+      assertEquals(5, iteratedFromEntrySet.size());
+      // Use the stable HoodieRecord.getRecordKey() accessor rather than dereffing payload avro
+      // (whose schema may not be metadata-augmented in this test setup).
+      assertEquals(firstKey,
+          iteratedFromEntrySet.get(4).getRecordKey(),
+          "Re-inserted key must appear last in iteration order");
+
+      // Read-back of the re-inserted key must return the latest value.
+      HoodieRecord readBack = records.get(firstKey);
+      assertNotNull(readBack);
+    }
+  }
+
+  /**
+   * Concurrent reader + writer: while a writer thread does put/remove under {@code mapWriteLock},
+   * a reader thread doing {@code get}/{@code containsKey} under {@code mapReadLock} must not throw
+   * {@link java.util.ConcurrentModificationException} and must observe values eventually.
+   * Locks down the RW-lock semantics introduced in ENG-43078.
+   */
+  @Test
+  public void testConcurrentReadersAndWriter() throws Exception {
+    try (BitCaskDiskMap<String, HoodieRecord> records = new BitCaskDiskMap<>(basePath, new DefaultSerializer<>(), false)) {
+      SchemaTestUtil testUtil = new SchemaTestUtil();
+      List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 200);
+      List<String> allKeys = new ArrayList<>();
+      List<HoodieRecord> allValues = new ArrayList<>();
+      for (IndexedRecord r : iRecords) {
+        String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+        String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+        HoodieRecord value = new HoodieAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
+        allKeys.add(key);
+        allValues.add(value);
+      }
+
+      java.util.concurrent.atomic.AtomicBoolean writerDone = new java.util.concurrent.atomic.AtomicBoolean(false);
+      java.util.concurrent.atomic.AtomicReference<Throwable> failure = new java.util.concurrent.atomic.AtomicReference<>();
+
+      Thread writer = new Thread(() -> {
+        try {
+          for (int i = 0; i < allKeys.size(); i++) {
+            records.put(allKeys.get(i), allValues.get(i));
+          }
+        } catch (Throwable t) {
+          failure.compareAndSet(null, t);
+        } finally {
+          writerDone.set(true);
+        }
+      }, "bitcask-writer");
+
+      Thread reader = new Thread(() -> {
+        try {
+          while (!writerDone.get()) {
+            for (String key : allKeys) {
+              records.containsKey(key); // must not throw
+              HoodieRecord r = records.get(key);
+              if (r != null) {
+                assertNotNull(r.getData());
+              }
+            }
+            records.iterator();
+            records.size();
+          }
+        } catch (Throwable t) {
+          failure.compareAndSet(null, t);
+        }
+      }, "bitcask-reader");
+
+      writer.start();
+      reader.start();
+      writer.join(30_000);
+      reader.join(30_000);
+      assertFalse(writer.isAlive(), "writer should have finished");
+      assertFalse(reader.isAlive(), "reader should have finished");
+      if (failure.get() != null) {
+        throw new AssertionError("concurrent access threw", failure.get());
+      }
+      assertEquals(allKeys.size(), records.size());
+      for (String key : allKeys) {
+        assertNotNull(records.get(key));
+      }
+    }
   }
 }

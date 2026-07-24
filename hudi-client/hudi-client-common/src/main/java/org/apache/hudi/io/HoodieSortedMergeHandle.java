@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -32,11 +33,13 @@ import org.apache.hudi.table.HoodieTable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
+import java.util.stream.Collectors;
 
 /**
  * Hoodie merge handle which writes records (new inserts or updates) sorted by their key.
@@ -47,13 +50,13 @@ import java.util.Queue;
 @NotThreadSafe
 public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
 
-  private final Queue<String> newRecordKeysSorted = new PriorityQueue<>();
+  private final Queue<String> newRecordKeysSorted;
 
   public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                  Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
                                  Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
-    newRecordKeysSorted.addAll(keyToNewRecords.keySet());
+    this.newRecordKeysSorted = buildSortedKeys(keyToNewRecords);
   }
 
   /**
@@ -63,8 +66,31 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<
                                  Map<String, HoodieRecord<T>> keyToNewRecordsOrig, String partitionPath, String fileId,
                                  HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, keyToNewRecordsOrig, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+    this.newRecordKeysSorted = buildSortedKeys(keyToNewRecords);
+  }
 
-    newRecordKeysSorted.addAll(keyToNewRecords.keySet());
+  /**
+   * Builds the sorted-keys {@link PriorityQueue} from the given map.
+   *
+   * <p>Two memory/CPU considerations:
+   * <ul>
+   *   <li>When the map is a spilled {@link ExternalSpillableMap}, {@link java.util.Map#keySet()}
+   *       allocates a full {@link java.util.HashSet} copy of all keys (in-memory + disk) before
+   *       returning, creating a large transient heap spike (ENG-43078).
+   *       {@link ExternalSpillableMap#keyStream()} streams keys lazily without that copy.</li>
+   *   <li>The {@link PriorityQueue#PriorityQueue(java.util.Collection) Collection constructor}
+   *       runs a single O(N) heapify, whereas individual {@code add()} calls are O(log N) each
+   *       (total O(N log N)). We collect to an {@link ArrayList} first to get the heapify path.</li>
+   * </ul>
+   */
+  private Queue<String> buildSortedKeys(Map<String, HoodieRecord<T>> map) {
+    List<String> keys;
+    if (map instanceof ExternalSpillableMap) {
+      keys = ((ExternalSpillableMap<String, HoodieRecord<T>>) map).keyStream().collect(Collectors.toList());
+    } else {
+      keys = new ArrayList<>(map.keySet());
+    }
+    return new PriorityQueue<>(keys);
   }
 
   /**

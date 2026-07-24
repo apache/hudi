@@ -315,6 +315,22 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
     return Stream.concat(inMemoryMap.values().stream(), diskBasedMap.valueStream());
   }
 
+  /**
+   * Returns a lazy stream over all keys in this map (in-memory + spilled).
+   *
+   * Unlike {@link #keySet()}, this method does NOT allocate a new {@link java.util.HashSet} copying
+   * all keys. When the map has spilled ({@code diskBasedMap != null}), {@link #keySet()} must
+   * materialise a full copy to combine both key sets into a single {@link java.util.Set}. Callers
+   * that only need to iterate keys once (e.g. to seed a {@link java.util.PriorityQueue}) should
+   * prefer this method to avoid the transient per-task heap spike (ENG-43078).
+   */
+  public Stream<T> keyStream() {
+    if (diskBasedMap == null) {
+      return inMemoryMap.keySet().stream();
+    }
+    return Stream.concat(inMemoryMap.keySet().stream(), diskBasedMap.keySet().stream());
+  }
+
   @Override
   public Set<Entry<T, R>> entrySet() {
     if (diskBasedMap == null) {
