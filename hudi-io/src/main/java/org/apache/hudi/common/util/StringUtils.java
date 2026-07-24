@@ -137,6 +137,9 @@ public class StringUtils {
    * <p>Neither argument may be {@code null}; like {@link String#compareTo(String)}, a {@code null}
    * argument throws {@link NullPointerException}.
    *
+   * <p>Assumes well-formed UTF-16 input: {@code String#getBytes(UTF_8)} replaces unpaired surrogates
+   * with {@code '?'}, so strings differing only in unpaired surrogates compare equal.
+   *
    * <p>Note: encodes both strings to UTF-8 on every call; for very large sorts consider
    * pre-encoding keys to byte arrays once and comparing those.
    */
