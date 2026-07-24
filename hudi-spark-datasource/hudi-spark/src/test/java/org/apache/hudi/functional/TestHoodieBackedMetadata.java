@@ -1948,11 +1948,23 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   /**
    * Record index bootstrap over binary / non-ASCII record keys must succeed. The RI HFile orders
    * keys by their raw UTF-8 bytes, so the bulk-insert partitioner must sort by UTF-8 bytes too;
-   * sorting by {@link String#compareTo(String)} (UTF-16) fails with
-   * "Added a key not lexically larger than previous".
+   * sorting by {@link String#compareTo(String)} (UTF-16) lays the HFile entries out of order
+   * relative to their UTF-8 bytes.
+   *
+   * <p>The failure is read-side, not write-side: the native {@code HFileWriterImpl.append} does no
+   * key-order validation, so a mis-sorted HFile is still written successfully. The forward-only
+   * HFile reader ({@code HFileReaderImpl.seekTo}) then either throws {@code IllegalStateException}
+   * on a backward seek or silently misses keys, which the read-back count assertion at the end of
+   * this test catches.
+   *
+   * <p>{@code riFileGroupCount == 1} covers the single-slice lookup path; {@code riFileGroupCount == 4}
+   * covers the multi-slice {@code mapGroupsByKey} lookup path in
+   * {@code HoodieBackedTableMetadata#lookupIndexRecords}, which repartitions keys in String/UTF-16
+   * order before doing a forward-only HFile seek in UTF-8 order.
    */
-  @Test
-  public void testRecordIndexBootstrapWithBinaryRecordKeys() throws Exception {
+  @ParameterizedTest
+  @ValueSource(ints = {1, 4})
+  public void testRecordIndexBootstrapWithBinaryRecordKeys(int riFileGroupCount) throws Exception {
     init(COPY_ON_WRITE, true);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
@@ -1970,12 +1982,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
 
     // Enable the record index. The next commit triggers the bootstrap, reading the binary keys from
-    // the base files above. Pinning to 1 file group puts all keys in one HFile, sorted together.
+    // the base files above. One file group puts all keys in a single HFile; more than one file group
+    // exercises the multi-slice lookup path on read-back.
     HoodieWriteConfig riConfig = getWriteConfigBuilder(false, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withEnableGlobalRecordLevelIndex(true)
-            .withRecordIndexFileGroupCount(1, 1)
+            .withRecordIndexFileGroupCount(riFileGroupCount, riFileGroupCount)
             .build())
         .build();
 
@@ -1984,11 +1997,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<HoodieRecord> secondBatch = generateRecordsWithBinaryKeys(secondCommitTime, 1000, 20);
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, riConfig)) {
       WriteClientTestUtils.startCommitWithTime(client, secondCommitTime);
-      // Without the fix, the record-index HFile write throws "Added a key not lexically larger than previous".
-      assertDoesNotThrow(() -> {
-        JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime);
-        client.commit(secondCommitTime, writeStatuses);
-      });
+      // Without the fix the mis-sorted record-index HFile is still written; the failure surfaces on
+      // read-back below, so the write itself is expected to succeed here.
+      JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime);
+      client.commit(secondCommitTime, writeStatuses);
     }
 
     // The record index partition should exist and resolve every bootstrapped binary key.
@@ -1997,6 +2009,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
         context, storage, riConfig.getMetadataConfig(), riConfig.getBasePath());
     List<String> bootstrappedKeys = records.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+    // With more than one file group, readRecordIndexLocationsWithKeys triggers the mapGroupsByKey
+    // multi-slice path.
     HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData = metadataReader
         .readRecordIndexLocationsWithKeys(HoodieListData.eager(bootstrappedKeys));
     try {
@@ -2028,66 +2042,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   /**
-   * Same as {@link #testRecordIndexBootstrapWithBinaryRecordKeys()} but with more than one record-index
-   * file group, exercising the multi-slice lookup path in
-   * {@code HoodieBackedTableMetadata#lookupIndexRecords}, which repartitions keys via Spark's
-   * {@code mapGroupsByKey} (String/UTF-16 order) before doing a forward-only HFile seek (UTF-8 order).
-   */
-  @Test
-  public void testRecordIndexBootstrapWithBinaryRecordKeysMultipleFileGroups() throws Exception {
-    init(COPY_ON_WRITE, true);
-    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-
-    List<HoodieRecord> records = generateRecordsWithBinaryKeys(WriteClientTestUtils.createNewInstantTime(), 0, 200);
-    HoodieWriteConfig firstConfig = getWriteConfigBuilder(true, true, false).build();
-    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, firstConfig)) {
-      WriteClientTestUtils.startCommitWithTime(client, firstCommitTime);
-      List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), firstCommitTime).collect();
-      assertNoWriteErrors(writeStatuses);
-      client.commit(firstCommitTime, jsc.parallelize(writeStatuses));
-    }
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
-
-    // Pin multiple file groups so the bootstrap and later lookups hit the multi-slice code path.
-    HoodieWriteConfig riConfig = getWriteConfigBuilder(false, true, false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .withEnableGlobalRecordLevelIndex(true)
-            .withRecordIndexFileGroupCount(4, 4)
-            .build())
-        .build();
-
-    String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
-    List<HoodieRecord> secondBatch = generateRecordsWithBinaryKeys(secondCommitTime, 1000, 20);
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, riConfig)) {
-      WriteClientTestUtils.startCommitWithTime(client, secondCommitTime);
-      assertDoesNotThrow(() -> {
-        JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime);
-        client.commit(secondCommitTime, writeStatuses);
-      });
-    }
-
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
-    HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
-        context, storage, riConfig.getMetadataConfig(), riConfig.getBasePath());
-    List<String> bootstrappedKeys = records.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
-    // readRecordIndexLocationsWithKeys with >1 file group triggers the mapGroupsByKey multi-slice path.
-    HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData = metadataReader
-        .readRecordIndexLocationsWithKeys(HoodieListData.eager(bootstrappedKeys));
-    try {
-      Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData);
-      assertEquals(bootstrappedKeys.size(), result.size(),
-          "Record index should resolve every binary key bootstrapped from the base files across multiple RI file groups.");
-    } finally {
-      recordIndexData.unpersistWithDependencies();
-    }
-  }
-
-  /**
-   * Same as {@link #testRecordIndexBootstrapWithBinaryRecordKeys()} but forces an MDT compaction after
+   * Same as {@link #testRecordIndexBootstrapWithBinaryRecordKeys(int)} but forces an MDT compaction after
    * bootstrap, exercising the {@code BaseCreateHandle} / {@code SortedKeyBasedFileGroupRecordBuffer}
    * sort-order paths hit when the record-index base HFile is rewritten.
    */
@@ -2124,10 +2079,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
       List<HoodieRecord> secondBatch = generateRecordsWithBinaryKeys(secondCommitTime, 1000, 20);
       WriteClientTestUtils.startCommitWithTime(client, secondCommitTime);
-      assertDoesNotThrow(() -> {
-        JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime);
-        client.commit(secondCommitTime, writeStatuses);
-      });
+      // The mis-sorted bootstrap write succeeds; key ordering is validated by the read-back below.
+      JavaRDD<WriteStatus> secondWriteStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime);
+      client.commit(secondCommitTime, secondWriteStatuses);
       allKeys.addAll(secondBatch);
 
       // The next delta commit on the record index partition triggers compaction, rewriting the base
@@ -2135,10 +2089,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       String thirdCommitTime = WriteClientTestUtils.createNewInstantTime();
       List<HoodieRecord> thirdBatch = generateRecordsWithBinaryKeys(thirdCommitTime, 2000, 20);
       WriteClientTestUtils.startCommitWithTime(client, thirdCommitTime);
-      assertDoesNotThrow(() -> {
-        JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(thirdBatch, 1), thirdCommitTime);
-        client.commit(thirdCommitTime, writeStatuses);
-      });
+      // The compaction rewrite of the base HFile also succeeds; ordering is validated on read-back.
+      JavaRDD<WriteStatus> thirdWriteStatuses = client.insert(jsc.parallelize(thirdBatch, 1), thirdCommitTime);
+      client.commit(thirdCommitTime, thirdWriteStatuses);
       allKeys.addAll(thirdBatch);
     }
 
