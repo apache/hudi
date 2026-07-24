@@ -19,25 +19,13 @@
 
 package org.apache.hudi.hive.transaction.lock;
 
-import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.config.TypedProperties;
-
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
-import org.apache.hadoop.hive.metastore.api.LockComponent;
-import org.apache.hadoop.hive.metastore.api.LockLevel;
-import org.apache.hadoop.hive.metastore.api.LockResponse;
-import org.apache.hadoop.hive.metastore.api.LockState;
-import org.apache.hadoop.hive.metastore.api.LockType;
 import org.apache.thrift.TException;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.common.config.LockConfiguration.HIVE_DATABASE_NAME_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.HIVE_TABLE_NAME_PROP_KEY;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -51,23 +39,7 @@ import static org.mockito.Mockito.when;
  * Unit tests for {@link HiveMetastoreBasedLockProvider#close()} that exercise the thread-pool
  * shutdown path with a mocked {@link IMetaStoreClient}, without a live metastore or ZooKeeper.
  */
-class TestHiveMetastoreBasedLockProviderClose {
-
-  private static final String DB = "testdb";
-  private static final String TABLE = "testtable";
-
-  private LockConfiguration lockConfiguration;
-  private LockComponent lockComponent;
-
-  @BeforeEach
-  void setUp() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty(HIVE_DATABASE_NAME_PROP_KEY, DB);
-    props.setProperty(HIVE_TABLE_NAME_PROP_KEY, TABLE);
-    lockConfiguration = new LockConfiguration(props);
-    lockComponent = new LockComponent(LockType.EXCLUSIVE, LockLevel.TABLE, DB);
-    lockComponent.setTablename(TABLE);
-  }
+class TestHiveMetastoreBasedLockProviderClose extends HiveMetastoreBasedLockProviderTestBase {
 
   @Test
   void closeShutsDownExecutorEvenWhenUnlockThrows() throws Exception {
@@ -80,8 +52,8 @@ class TestHiveMetastoreBasedLockProviderClose {
 
     // A failing unlock() must not prevent the heartbeat thread pool from being shut down.
     assertDoesNotThrow(provider::close);
-    assertTrue(executorOf(provider).isShutdown(),
-        "executor must be shut down even when unlock() throws");
+    ScheduledExecutorService executor = readField(provider, "executor");
+    assertTrue(executor.isShutdown(), "executor must be shut down even when unlock() throws");
   }
 
   @Test
@@ -95,19 +67,7 @@ class TestHiveMetastoreBasedLockProviderClose {
     provider.close();
 
     verify(client).unlock(1L);
-    assertTrue(executorOf(provider).isShutdown());
-  }
-
-  private static LockResponse acquiredLock(long lockId) {
-    LockResponse response = new LockResponse();
-    response.setLockid(lockId);
-    response.setState(LockState.ACQUIRED);
-    return response;
-  }
-
-  private static ScheduledExecutorService executorOf(HiveMetastoreBasedLockProvider provider) throws Exception {
-    Field field = HiveMetastoreBasedLockProvider.class.getDeclaredField("executor");
-    field.setAccessible(true);
-    return (ScheduledExecutorService) field.get(provider);
+    ScheduledExecutorService executor = readField(provider, "executor");
+    assertTrue(executor.isShutdown());
   }
 }
