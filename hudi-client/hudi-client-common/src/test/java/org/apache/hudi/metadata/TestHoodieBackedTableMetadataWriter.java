@@ -45,6 +45,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.index.Indexer;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -54,6 +55,7 @@ import org.mockito.MockedStatic;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -357,7 +359,7 @@ class TestHoodieBackedTableMetadataWriter {
   }
 
   @Test
-  void detectsEmptyMetadataTimelineAndHandlesMissingMetadataTable() throws Exception {
+  void detectsEmptyMetadataTimelineAndHandlesMissingMetadataTable(@TempDir Path tempDir) throws Exception {
     // Missing MDT state requires bootstrap without trusting stale table config.
     HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer =
         mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
@@ -371,9 +373,11 @@ class TestHoodieBackedTableMetadataWriter {
     when(dataMetaClient.getTableConfig()).thenReturn(tableConfig);
     when(tableConfig.isMetadataTableAvailable()).thenReturn(true);
     writer.storageConf = org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf();
-    writer.dataWriteConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/data-table").build();
+    writer.dataWriteConfig = HoodieWriteConfig.newBuilder()
+        .withPath(tempDir.resolve("data-table").toString())
+        .build();
     writer.metadataWriteConfig = HoodieWriteConfig.newBuilder()
-        .withPath("/tmp/nonexistent-metadata-table")
+        .withPath(tempDir.resolve("missing-metadata-table").toString())
         .build();
     Method metadataTableExists = HoodieBackedTableMetadataWriter.class
         .getDeclaredMethod("metadataTableExists", HoodieTableMetaClient.class);
