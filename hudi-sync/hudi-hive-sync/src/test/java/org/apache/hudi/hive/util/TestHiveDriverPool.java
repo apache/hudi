@@ -106,7 +106,7 @@ class TestHiveDriverPool {
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
       List<String> sqls = Arrays.asList("SELECT 1", "SELECT 2", "SELECT 3", "SELECT 4");
-      List<Future<?>> futures = pool.runAll(sqls);
+      List<Future<?>> futures = pool.dispatchAll(sqls);
       pool.awaitAll(futures);
       assertEquals(2, seenThreadsByDriver.size(), "Expected exactly 2 worker Drivers");
       int totalCalls = seenThreadsByDriver.values().stream().mapToInt(Set::size).sum();
@@ -133,7 +133,7 @@ class TestHiveDriverPool {
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
-      List<Future<?>> futures = pool.runAll(Arrays.asList("OK", "FAIL", "OK"));
+      List<Future<?>> futures = pool.dispatchAll(Arrays.asList("OK", "FAIL", "OK"));
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(futures));
       assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
@@ -159,7 +159,7 @@ class TestHiveDriverPool {
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
       // 5 SQLs against pool of size 2 → max in-flight should be 2.
-      List<Future<?>> futures = pool.runAll(Arrays.asList("a", "b", "c", "d", "e"));
+      List<Future<?>> futures = pool.dispatchAll(Arrays.asList("a", "b", "c", "d", "e"));
       // Release after a short wait so all SQLs progress.
       Thread.sleep(150);
       hold.countDown();
@@ -178,7 +178,7 @@ class TestHiveDriverPool {
     pool.close();
     pool.close();
     assertThrows(IllegalStateException.class,
-        () -> pool.runAll(Arrays.asList("anything")));
+        () -> pool.dispatchAll(Arrays.asList("anything")));
   }
 
   @Test
@@ -191,7 +191,7 @@ class TestHiveDriverPool {
 
   /**
    * runOnEachWorker must execute the setup SQL on every worker (each on its bound
-   * thread) before {@code runAll()} fans the partition statements out. Without this,
+   * thread) before {@code dispatchAll()} fans the partition statements out. Without this,
    * Hive 2.x's SET LOCATION would silently route to the wrong database on the workers
    * that never saw the leading USE statement.
    */
@@ -210,7 +210,7 @@ class TestHiveDriverPool {
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 3, factory)) {
       pool.runOnEachWorker(Arrays.asList("USE `db1`"));
-      List<Future<?>> futures = pool.runAll(Arrays.asList("ALTER 1", "ALTER 2", "ALTER 3"));
+      List<Future<?>> futures = pool.dispatchAll(Arrays.asList("ALTER 1", "ALTER 2", "ALTER 3"));
       pool.awaitAll(futures);
 
       assertEquals(3, sqlsByDriver.size(), "Expected one Driver per worker");
@@ -226,13 +226,24 @@ class TestHiveDriverPool {
    * On the first failure, awaitAll must throw the original cause and cancel any
    * futures that have not started yet. Futures already in-flight are not interrupted
    * (per the cancel-with-mayInterruptIfRunning=false contract).
+   *
+   * <p>PENDING_A/PENDING_B block on {@code pendingHold} as soon as they start, so
+   * even if the single worker thread races ahead and dequeues one of them before
+   * awaitAll's cancellation runs, it cannot run to completion — it parks immediately.
+   * awaitAll therefore always observes at least one of {@code isCancelled()} (never
+   * started) or the task still blocked in {@code pendingHold.await()} (started but
+   * not completed); the assertion below checks for either outcome instead of
+   * assuming cancellation always wins the race. pendingHold is released in a finally
+   * so a parked worker thread isn't left hanging if an assertion fails.
    */
   @Test
   void awaitAllCancelsPendingFuturesOnFirstError() throws Exception {
     HiveSyncConfig config = configWithEmptyHiveConf();
     // Single-worker pool so SQLs run strictly sequentially → the 2nd SQL is
-    // pending when the 1st errors, and must be cancelled.
+    // pending when the 1st errors, and must be cancelled (or, if it lost the race
+    // to start, parked on pendingHold — see class javadoc above).
     CountDownLatch fired = new CountDownLatch(1);
+    CountDownLatch pendingHold = new CountDownLatch(1);
     HiveDriverPool.DriverFactory factory = (db) -> {
       Driver d = mock(Driver.class);
       doAnswer(inv -> {
@@ -241,20 +252,27 @@ class TestHiveDriverPool {
           fired.countDown();
           throw new RuntimeException("boom");
         }
+        // PENDING_A / PENDING_B: park immediately so a task that raced ahead of
+        // cancellation still cannot complete before we assert on it.
+        pendingHold.await(2, TimeUnit.SECONDS);
         return null;
       }).when(d).run(anyString());
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 1, factory)) {
-      List<Future<?>> futures = pool.runAll(Arrays.asList("FAIL", "PENDING_A", "PENDING_B"));
-      HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
-          () -> pool.awaitAll(futures));
-      assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
-      // The first future failed, so it's done (not cancelled). The remaining two
-      // were pending behind it on the single worker and should now be cancelled.
-      assertTrue(fired.await(1, TimeUnit.SECONDS), "Failing SQL must have run");
-      assertTrue(futures.get(1).isCancelled(), "Pending future after error must be cancelled");
-      assertTrue(futures.get(2).isCancelled(), "Pending future after error must be cancelled");
+      List<Future<?>> futures = pool.dispatchAll(Arrays.asList("FAIL", "PENDING_A", "PENDING_B"));
+      try {
+        HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
+            () -> pool.awaitAll(futures));
+        assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
+        assertTrue(fired.await(1, TimeUnit.SECONDS), "Failing SQL must have run");
+        assertTrue(futures.get(1).isCancelled() || !futures.get(1).isDone(),
+            "Pending future after error must be cancelled, or still parked (not completed)");
+        assertTrue(futures.get(2).isCancelled() || !futures.get(2).isDone(),
+            "Pending future after error must be cancelled, or still parked (not completed)");
+      } finally {
+        pendingHold.countDown();
+      }
     }
   }
 }

@@ -423,10 +423,15 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
     assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
 
-    // Touch existing partitions (no new data) — should hit the batched TOUCH path
-    // without changing the partition count.
-    reInitHiveSyncClient();
-    reSyncHiveTable();
+    // Drive the TOUCH path directly by calling touchPartitionsToTable with existing
+    // partition paths. Partitions are batched into groups of HIVE_BATCH_SYNC_PARTITION_NUM
+    // and each batch's ALTER ... TOUCH statement is fanned out across the 2 workers in
+    // the pool.
+    List<String> existingPartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).stream()
+        .map(p -> getRelativePartitionPath(new Path(basePath), new Path(p.getStorageLocation())))
+        .collect(Collectors.toList());
+    hiveClient.touchPartitionsToTable(HiveTestUtil.TABLE_NAME, existingPartitions);
+
     assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "TOUCH batching must not change the partition set");
   }

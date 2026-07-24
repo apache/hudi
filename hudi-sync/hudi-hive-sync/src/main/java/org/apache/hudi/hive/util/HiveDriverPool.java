@@ -87,21 +87,19 @@ public class HiveDriverPool implements AutoCloseable {
     this.workers = new ArrayList<>(size);
     String databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     PoolThreadFactory threadFactory = new PoolThreadFactory();
-    List<Future<Void>> bootstrapFutures = new ArrayList<>(size);
     try {
+      // Bootstrap workers one at a time (not concurrently): each worker builds its
+      // own exclusively-owned SessionState, and constructing several SessionStates
+      // in parallel risks racing on shared scratch-dir creation. This only affects
+      // one-time pool startup cost, not per-statement dispatch latency.
       for (int i = 0; i < size; i++) {
         Worker worker = new Worker(threadFactory);
         workers.add(worker);
-        bootstrapFutures.add(worker.executor.submit(() -> {
+        worker.executor.submit(() -> {
           worker.driver = factory.newDriver(databaseName);
+          worker.sessionState = SessionState.get();
           return null;
-        }));
-      }
-      // Block until all bootstraps complete so we surface construction errors
-      // before any caller hands us SQL. Bounded by BOOTSTRAP_TIMEOUT_SECONDS so a
-      // hung Hive init doesn't deadlock the sync driver thread.
-      for (Future<Void> f : bootstrapFutures) {
-        f.get(BOOTSTRAP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        }).get(BOOTSTRAP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       }
     } catch (Exception e) {
       tearDown();
@@ -137,12 +135,13 @@ public class HiveDriverPool implements AutoCloseable {
 
   /**
    * Dispatches each SQL string to a worker (round-robin) and returns the list of
-   * futures. The caller is responsible for awaiting and collecting errors. SQL text
+   * in-flight futures — this method does not block. The caller is responsible for
+   * awaiting completion via {@link #awaitAll(List)} and collecting errors. SQL text
    * is intentionally not logged per-statement here: batched TOUCH/ADD statements can
    * be many kilobytes, and N parallel workers would multiply the log volume. See
    * {@link #awaitAll(List)} for the per-call summary log.
    */
-  public List<Future<?>> runAll(List<String> sqls) {
+  public List<Future<?>> dispatchAll(List<String> sqls) {
     if (closed) {
       throw new IllegalStateException("Cannot dispatch to a closed HiveDriverPool");
     }
@@ -234,9 +233,10 @@ public class HiveDriverPool implements AutoCloseable {
   }
 
   private void tearDown() {
-    // Close each worker's Driver/SessionState on its own thread, then shut the
-    // executor down. Running close() on the bound thread keeps SessionState's
-    // thread-local cleanup correct.
+    // Close each worker's own Driver and SessionState on its own thread, then shut
+    // the executor down. Each worker owns an exclusive SessionState (see
+    // DefaultDriverFactory), so there is no cross-worker close ordering to worry
+    // about here — closing worker i never affects worker j.
     for (Worker worker : workers) {
       try {
         worker.executor.submit(() -> {
@@ -247,10 +247,9 @@ public class HiveDriverPool implements AutoCloseable {
               LOG.warn("Error closing pooled Driver", e);
             }
           }
-          SessionState ss = SessionState.get();
-          if (ss != null) {
+          if (worker.sessionState != null) {
             try {
-              ss.close();
+              worker.sessionState.close();
             } catch (Exception e) {
               LOG.warn("Error closing pooled SessionState", e);
             }
@@ -274,13 +273,14 @@ public class HiveDriverPool implements AutoCloseable {
   }
 
   /**
-   * Per-slot state: a single-thread executor and the Driver bound to its thread.
-   * Driver is volatile because it is written by the bootstrap task and read by
-   * subsequent dispatch tasks on the same executor.
+   * Per-slot state: a single-thread executor and the Driver + SessionState bound to
+   * its thread. Both are volatile because they are written by the bootstrap task and
+   * read by subsequent dispatch/teardown tasks on the same executor.
    */
   private static final class Worker {
     final ExecutorService executor;
     volatile Driver driver;
+    volatile SessionState sessionState;
 
     Worker(ThreadFactory threadFactory) {
       this.executor = Executors.newSingleThreadExecutor(threadFactory);
@@ -293,34 +293,28 @@ public class HiveDriverPool implements AutoCloseable {
   }
 
   /**
-   * Builds a real Hive {@link Driver} on the calling thread. The SessionState is
-   * constructed lazily (once, on the first worker thread that builds a Driver) and
-   * shared across all worker threads — Hive uses ThreadLocal attachment, not
-   * exclusive ownership, so multiple workers calling
-   * {@code SessionState.start(sharedState)} all see the same config and scratch dir
-   * without each spending the cost of building their own SessionState (and risking
-   * resource-dir creation races during the constructor).
+   * Builds a real Hive {@link Driver} on the calling thread, backed by a
+   * {@link SessionState} that is exclusively owned by that thread (not shared with
+   * any other worker). Hive's session-scoped state (current database, scratch
+   * directories, and the transaction/lock manager under {@code DbTxnManager}) is
+   * mutated by {@code Driver.run()} and is not safe for concurrent use from multiple
+   * threads, so each worker must have its own instance. Bootstrap of all workers is
+   * done sequentially by the pool constructor specifically so these constructions
+   * don't race each other (e.g. on scratch-dir creation).
    */
   private static final class DefaultDriverFactory implements DriverFactory {
     private final HiveConf hiveConf;
-    private volatile SessionState sharedSessionState;
 
     DefaultDriverFactory(HiveSyncConfig config) {
       this.hiveConf = config.getHiveConf();
     }
 
     @Override
-    public synchronized Driver newDriver(String databaseName) throws Exception {
-      // SessionState is shared across workers; build it once on the first call (with
-      // currentDatabase already set) and attach it to each worker's thread-local on
-      // subsequent calls. The database is a pool-wide property and never changes
-      // across workers, so setting it once at construction time is sufficient.
-      if (sharedSessionState == null) {
-        sharedSessionState = new SessionState(hiveConf,
-            UserGroupInformation.getCurrentUser().getShortUserName());
-        sharedSessionState.setCurrentDatabase(databaseName);
-      }
-      SessionState.start(sharedSessionState);
+    public Driver newDriver(String databaseName) throws Exception {
+      SessionState sessionState = new SessionState(hiveConf,
+          UserGroupInformation.getCurrentUser().getShortUserName());
+      sessionState.setCurrentDatabase(databaseName);
+      SessionState.start(sessionState);
       return new Driver(hiveConf);
     }
   }

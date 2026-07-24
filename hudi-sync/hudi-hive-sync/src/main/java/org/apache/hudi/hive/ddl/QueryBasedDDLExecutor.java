@@ -41,6 +41,7 @@ import java.util.Map;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BATCHING_ENABLED;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
@@ -235,8 +236,10 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
    * database), so the {@code USE} is load-bearing. Parallel execution paths must
    * run this statement on every worker before fanning out the rest.
    *
-   * <p>TOUCH: one {@code ALTER TABLE ... TOUCH PARTITION (p1) ...} per batch of
-   * {@code HIVE_BATCH_SYNC_PARTITION_NUM} partitions.
+   * <p>TOUCH: when {@code HIVE_SYNC_BATCHING_ENABLED} is set, one
+   * {@code ALTER TABLE ... TOUCH PARTITION (p1) ...} per batch of
+   * {@code HIVE_BATCH_SYNC_PARTITION_NUM} partitions. Otherwise a single statement
+   * covering all partitions, matching pre-batching behavior.
    *
    * <p>SET_LOCATION: one {@code ALTER TABLE ... PARTITION (p) SET LOCATION '...'}
    * per partition (Hive SQL does not support multi-partition SET LOCATION in one
@@ -247,7 +250,8 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + databaseName + HIVE_ESCAPE_CHARACTER;
     result.add(useDatabase);
     String alterTablePrefix = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
-    int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+    int batchSyncPartitionNum = config.getBooleanOrDefault(HIVE_SYNC_BATCHING_ENABLED)
+        ? config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) : partitions.size();
     switch (alterType) {
       case TOUCH:
         for (List<String> batch : CollectionUtils.batches(partitions, batchSyncPartitionNum)) {

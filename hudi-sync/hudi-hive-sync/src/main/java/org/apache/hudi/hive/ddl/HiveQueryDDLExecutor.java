@@ -86,6 +86,15 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       if (this.hiveDriver != null) {
         this.hiveDriver.close();
       }
+      // driverPool (if present) was already constructed by the caller before this
+      // ctor ran; since we're about to throw, no one else will call close() on it.
+      driverPool.ifPresent(pool -> {
+        try {
+          pool.close();
+        } catch (Exception poolCloseException) {
+          log.error("Error while closing HiveDriverPool", poolCloseException);
+        }
+      });
       throw new HoodieHiveSyncException("Failed to create HiveQueryDDL object", e);
     }
   }
@@ -114,19 +123,19 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       return;
     }
     HiveDriverPool pool = driverPool.get();
-    int firstNonUse = 0;
-    while (firstNonUse < sqls.size() && isUseStatement(sqls.get(firstNonUse))) {
-      firstNonUse++;
+    int useStatementCount = 0;
+    while (useStatementCount < sqls.size() && isUseStatement(sqls.get(useStatementCount))) {
+      useStatementCount++;
     }
-    if (firstNonUse > 0) {
-      List<String> setupStatements = sqls.subList(0, firstNonUse);
+    if (useStatementCount > 0) {
+      List<String> setupStatements = sqls.subList(0, useStatementCount);
       pool.runOnEachWorker(setupStatements);
     }
-    List<String> partitionStatements = sqls.subList(firstNonUse, sqls.size());
+    List<String> partitionStatements = sqls.subList(useStatementCount, sqls.size());
     if (partitionStatements.isEmpty()) {
       return;
     }
-    List<Future<?>> futures = pool.runAll(partitionStatements);
+    List<Future<?>> futures = pool.dispatchAll(partitionStatements);
     pool.awaitAll(futures);
   }
 
