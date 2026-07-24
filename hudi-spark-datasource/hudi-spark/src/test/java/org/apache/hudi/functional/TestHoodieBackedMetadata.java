@@ -163,6 +163,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -1999,24 +2000,28 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       WriteClientTestUtils.startCommitWithTime(client, secondCommitTime);
       // Without the fix the mis-sorted record-index HFile is still written; the failure surfaces on
       // read-back below, so the write itself is expected to succeed here.
-      JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime);
-      client.commit(secondCommitTime, writeStatuses);
+      List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      client.commit(secondCommitTime, jsc.parallelize(writeStatuses));
     }
 
-    // The record index partition should exist and resolve every bootstrapped binary key.
+    // The record index partition should exist and resolve every key: the bootstrapped keys live in
+    // the record-index base HFiles, while the second-batch keys still sit in un-compacted metadata
+    // log files at this point, so the lookup covers the log-side seek path with binary keys too.
     metaClient = HoodieTableMetaClient.reload(metaClient);
     assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
     HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
         context, storage, riConfig.getMetadataConfig(), riConfig.getBasePath());
-    List<String> bootstrappedKeys = records.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+    List<String> allKeys = Stream.concat(records.stream(), secondBatch.stream())
+        .map(HoodieRecord::getRecordKey).collect(Collectors.toList());
     // With more than one file group, readRecordIndexLocationsWithKeys triggers the mapGroupsByKey
     // multi-slice path.
     HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData = metadataReader
-        .readRecordIndexLocationsWithKeys(HoodieListData.eager(bootstrappedKeys));
+        .readRecordIndexLocationsWithKeys(HoodieListData.eager(allKeys));
     try {
       Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData);
-      assertEquals(bootstrappedKeys.size(), result.size(),
-          "Record index should resolve every binary key bootstrapped from the base files.");
+      assertEquals(allKeys.size(), result.size(),
+          "Record index should resolve every binary key, bootstrapped or still in a metadata log file.");
     } finally {
       recordIndexData.unpersistWithDependencies();
     }
@@ -2080,8 +2085,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       List<HoodieRecord> secondBatch = generateRecordsWithBinaryKeys(secondCommitTime, 1000, 20);
       WriteClientTestUtils.startCommitWithTime(client, secondCommitTime);
       // The mis-sorted bootstrap write succeeds; key ordering is validated by the read-back below.
-      JavaRDD<WriteStatus> secondWriteStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime);
-      client.commit(secondCommitTime, secondWriteStatuses);
+      List<WriteStatus> secondWriteStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime).collect();
+      assertNoWriteErrors(secondWriteStatuses);
+      client.commit(secondCommitTime, jsc.parallelize(secondWriteStatuses));
       allKeys.addAll(secondBatch);
 
       // The next delta commit on the record index partition triggers compaction, rewriting the base
@@ -2090,8 +2096,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       List<HoodieRecord> thirdBatch = generateRecordsWithBinaryKeys(thirdCommitTime, 2000, 20);
       WriteClientTestUtils.startCommitWithTime(client, thirdCommitTime);
       // The compaction rewrite of the base HFile also succeeds; ordering is validated on read-back.
-      JavaRDD<WriteStatus> thirdWriteStatuses = client.insert(jsc.parallelize(thirdBatch, 1), thirdCommitTime);
-      client.commit(thirdCommitTime, thirdWriteStatuses);
+      List<WriteStatus> thirdWriteStatuses = client.insert(jsc.parallelize(thirdBatch, 1), thirdCommitTime).collect();
+      assertNoWriteErrors(thirdWriteStatuses);
+      client.commit(thirdCommitTime, jsc.parallelize(thirdWriteStatuses));
       allKeys.addAll(thirdBatch);
     }
 

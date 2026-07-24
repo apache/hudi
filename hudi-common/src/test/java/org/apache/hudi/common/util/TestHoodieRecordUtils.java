@@ -71,9 +71,16 @@ class TestHoodieRecordUtils {
 
   @Test
   void sortRecordsByRecordKey() {
+    // U+E000 (UTF-8 lead byte 0xEE) sorts BEFORE U+20000 (UTF-8 lead byte 0xF0) in raw UTF-8 byte
+    // order, but AFTER it under String.compareTo (UTF-16). The sort feeds HFile-backed writers, so
+    // it must produce UTF-8 byte order.
+    String bmpPrivateUseKey = new String(Character.toChars(0xE000)) + "key";
+    String supplementaryKey = new String(Character.toChars(0x20000)) + "key";
     List<HoodieRecord<DefaultHoodieRecordPayload>> records = Arrays.asList(
         record("key3"),
+        record(supplementaryKey),
         record("key1"),
+        record(bmpPrivateUseKey),
         record("key2"));
 
     Iterator<HoodieRecord<DefaultHoodieRecordPayload>> sortedRecords =
@@ -81,7 +88,7 @@ class TestHoodieRecordUtils {
 
     List<String> sortedKeys = new ArrayList<>();
     sortedRecords.forEachRemaining(record -> sortedKeys.add(record.getRecordKey()));
-    assertEquals(Arrays.asList("key1", "key2", "key3"), sortedKeys);
+    assertEquals(Arrays.asList("key1", "key2", "key3", bmpPrivateUseKey, supplementaryKey), sortedKeys);
   }
 
   @Test
