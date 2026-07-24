@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.RecordContext;
@@ -40,11 +41,14 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.mockito.MockedConstruction;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -52,9 +56,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -113,31 +119,45 @@ public class TestHoodieNativeLogAppendHandle {
     try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
         HoodieNativeLogFormatWriter.class, (writer, context) -> {
           when(writer.canWriteDataFile()).thenReturn(false);
-          when(writer.hasPendingWrites()).thenReturn(false);
+          when(writer.hasPendingWrites()).thenReturn(true);
+          when(writer.getLastAppendResults()).thenReturn(
+              Arrays.asList(appendResult(1, "log", 13L), appendResult(1, "deletes", 7L)),
+              Collections.singletonList(appendResult(2, "log", 11L)));
+          when(writer.getLastDataFileFormatMetadata()).thenReturn(Option.empty());
         })) {
       TestableNativeLogAppendHandle handle = new TestableNativeLogAppendHandle(config, table);
       handle.createWriter();
       HoodieNativeLogFormatWriter writer = writers.constructed().get(0);
-      handle.writeData(inputRecord, false);
-      verify(writer, never()).flushAppend(any());
-      verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class), any());
 
       handle.setCounts(5, 2, 3, 4);
-      HoodieDeltaWriteStat dataStat = new HoodieDeltaWriteStat();
-      AppendResult dataResult = appendResult("log", 13L);
-      handle.applyWriteCounts(dataStat, dataResult);
-      assertEquals(5, dataStat.getNumWrites());
-      assertEquals(2, dataStat.getNumUpdateWrites());
-      assertEquals(3, dataStat.getNumInserts());
-      assertEquals(13L, dataStat.getTotalWriteBytes());
+      handle.writeData(inputRecord, false);
+      InOrder rolloverOrder = inOrder(writer);
+      rolloverOrder.verify(writer).flushAppend(any());
+      rolloverOrder.verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class), any());
 
-      HoodieDeltaWriteStat deleteStat = new HoodieDeltaWriteStat();
-      AppendResult deleteResult = appendResult("deletes", 7L);
-      handle.applyWriteCounts(deleteStat, deleteResult);
+      handle.flushWriter();
+      verify(writer, times(2)).flushAppend(any());
+
+      List<WriteStatus> statuses = handle.getWriteStatuses();
+      assertEquals(3, statuses.size());
+      HoodieDeltaWriteStat firstDataStat = (HoodieDeltaWriteStat) statuses.get(0).getStat();
+      assertEquals(5, firstDataStat.getNumWrites());
+      assertEquals(2, firstDataStat.getNumUpdateWrites());
+      assertEquals(3, firstDataStat.getNumInserts());
+      assertEquals(13L, firstDataStat.getTotalWriteBytes());
+
+      HoodieDeltaWriteStat deleteStat = (HoodieDeltaWriteStat) statuses.get(1).getStat();
       assertEquals(4, deleteStat.getNumDeletes());
       assertEquals(7L, deleteStat.getTotalWriteBytes());
+
+      HoodieDeltaWriteStat secondDataStat = (HoodieDeltaWriteStat) statuses.get(2).getStat();
+      assertEquals(1, secondDataStat.getNumWrites());
+      assertEquals(0, secondDataStat.getNumUpdateWrites());
+      assertEquals(1, secondDataStat.getNumInserts());
+      assertEquals(11L, secondDataStat.getTotalWriteBytes());
+
       assertThrows(HoodieAppendException.class,
-          () -> handle.accumulateWriteCounts(dataStat, dataResult));
+          () -> handle.accumulateWriteCounts(firstDataStat, appendResult(1, "log", 13L)));
     }
   }
 
@@ -225,9 +245,9 @@ public class TestHoodieNativeLogAppendHandle {
     return table;
   }
 
-  private static AppendResult appendResult(String extension, long size) throws IOException {
+  private static AppendResult appendResult(int version, String extension, long size) throws IOException {
     StoragePath path = new StoragePath("/tmp", FSUtils.makeNativeLogFileName(
-        "file-1", "1-0-1", "100", 1, extension, HoodieFileFormat.PARQUET));
+        "file-1", "1-0-1", "100", version, extension, HoodieFileFormat.PARQUET));
     return new AppendResult(new HoodieLogFile(path), 0L, size);
   }
 
@@ -245,6 +265,12 @@ public class TestHoodieNativeLogAppendHandle {
     }
 
     private void createWriter() {
+      HoodieDeltaWriteStat stat = new HoodieDeltaWriteStat();
+      stat.setPartitionPath(partitionPath);
+      stat.setFileId(fileId);
+      writeStatus.setStat(stat);
+      writeStatus.setFileId(fileId);
+      writeStatus.setPartitionPath(partitionPath);
       createLogWriterForAppend("100", Option.empty());
     }
 
@@ -277,10 +303,6 @@ public class TestHoodieNativeLogAppendHandle {
       updatedRecordsWritten = updates;
       insertRecordsWritten = inserts;
       recordsDeleted = deletes;
-    }
-
-    private void applyWriteCounts(HoodieDeltaWriteStat stat, AppendResult result) {
-      updateWriteCounts(stat, result);
     }
   }
 }

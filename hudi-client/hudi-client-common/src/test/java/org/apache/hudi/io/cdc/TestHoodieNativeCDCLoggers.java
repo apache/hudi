@@ -54,6 +54,7 @@ import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.CDC_OPERATION_TYPE
 import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.CDC_RECORD_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
@@ -89,9 +90,10 @@ public class TestHoodieNativeCDCLoggers {
 
       GenericRecord oldRecord = record("id-1", "old");
       GenericRecord newRecord = record("id-1", "new");
+      GenericRecord insertRecord = record("id-2", "insert");
       logger.put("id-1", oldRecord, Option.of(newRecord));
       verify(writer, never()).write(anyString(), any());
-      logger.put("id-2", null, Option.of(record("id-2", "insert")));
+      logger.put("id-2", null, Option.of(insertRecord));
       logger.put("id-3", oldRecord, Option.empty());
       logger.put("id-4", null, Option.of(record("id-4", "retracted")));
       logger.remove("different-key");
@@ -105,9 +107,12 @@ public class TestHoodieNativeCDCLoggers {
       ArgumentCaptor<IndexedRecord> recordCaptor = ArgumentCaptor.forClass(IndexedRecord.class);
       verify(writer, times(3)).write(anyString(), recordCaptor.capture());
       List<IndexedRecord> cdcRecords = recordCaptor.getAllValues();
-      assertCDCRecord((GenericRecord) cdcRecords.get(0), mode, HoodieCDCOperation.UPDATE, "id-1");
-      assertCDCRecord((GenericRecord) cdcRecords.get(1), mode, HoodieCDCOperation.INSERT, "id-2");
-      assertCDCRecord((GenericRecord) cdcRecords.get(2), mode, HoodieCDCOperation.DELETE, "id-3");
+      assertCDCRecord((GenericRecord) cdcRecords.get(0), mode, HoodieCDCOperation.UPDATE, "id-1",
+          oldRecord, newRecord);
+      assertCDCRecord((GenericRecord) cdcRecords.get(1), mode, HoodieCDCOperation.INSERT, "id-2",
+          null, insertRecord);
+      assertCDCRecord((GenericRecord) cdcRecords.get(2), mode, HoodieCDCOperation.DELETE, "id-3",
+          oldRecord, null);
     }
   }
 
@@ -124,21 +129,28 @@ public class TestHoodieNativeCDCLoggers {
           }, mock(TaskContextSupplier.class), recordContext, HoodieRecord.HoodieRecordType.AVRO);
       HoodieNativeCDCFileWriter<IndexedRecord> writer = mockedWriters.constructed().get(0);
 
-      BufferedRecord<IndexedRecord> oldRecord = bufferedRecord("id-1", "old");
-      BufferedRecord<IndexedRecord> newRecord = bufferedRecord("id-1", "new");
-      logger.put("id-1", oldRecord, Option.of(newRecord));
-      logger.put("id-2", null, Option.of(bufferedRecord("id-2", "insert")));
-      logger.put("id-3", oldRecord, Option.empty());
-      logger.put("id-4", null, Option.of(bufferedRecord("id-4", "retracted")));
+      GenericRecord oldRecord = record("id-1", "old");
+      GenericRecord newRecord = record("id-1", "new");
+      GenericRecord insertRecord = record("id-2", "insert");
+      BufferedRecord<IndexedRecord> oldBufferedRecord = bufferedRecord(oldRecord);
+      BufferedRecord<IndexedRecord> newBufferedRecord = bufferedRecord(newRecord);
+      BufferedRecord<IndexedRecord> insertBufferedRecord = bufferedRecord(insertRecord);
+      logger.put("id-1", oldBufferedRecord, Option.of(newBufferedRecord));
+      logger.put("id-2", null, Option.of(insertBufferedRecord));
+      logger.put("id-3", oldBufferedRecord, Option.empty());
+      logger.put("id-4", null, Option.of(bufferedRecord(record("id-4", "retracted"))));
       logger.remove("id-4");
       logger.close();
 
       ArgumentCaptor<IndexedRecord> recordCaptor = ArgumentCaptor.forClass(IndexedRecord.class);
       verify(writer, times(3)).write(anyString(), recordCaptor.capture());
       List<IndexedRecord> cdcRecords = recordCaptor.getAllValues();
-      assertCDCRecord((GenericRecord) cdcRecords.get(0), mode, HoodieCDCOperation.UPDATE, "id-1");
-      assertCDCRecord((GenericRecord) cdcRecords.get(1), mode, HoodieCDCOperation.INSERT, "id-2");
-      assertCDCRecord((GenericRecord) cdcRecords.get(2), mode, HoodieCDCOperation.DELETE, "id-3");
+      assertCDCRecord((GenericRecord) cdcRecords.get(0), mode, HoodieCDCOperation.UPDATE, "id-1",
+          oldRecord, newRecord);
+      assertCDCRecord((GenericRecord) cdcRecords.get(1), mode, HoodieCDCOperation.INSERT, "id-2",
+          null, insertRecord);
+      assertCDCRecord((GenericRecord) cdcRecords.get(2), mode, HoodieCDCOperation.DELETE, "id-3",
+          oldRecord, null);
       verify(writer).close();
     }
   }
@@ -162,36 +174,46 @@ public class TestHoodieNativeCDCLoggers {
     return record;
   }
 
-  private static BufferedRecord<IndexedRecord> bufferedRecord(String id, String name) {
-    return new BufferedRecord<>(id, null, record(id, name), 0, null);
+  private static BufferedRecord<IndexedRecord> bufferedRecord(GenericRecord record) {
+    return new BufferedRecord<>(
+        record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(), null, record, 0, null);
   }
 
   private static void assertCDCRecord(
-      GenericRecord record, HoodieCDCSupplementalLoggingMode mode, HoodieCDCOperation operation, String recordKey) {
+      GenericRecord record,
+      HoodieCDCSupplementalLoggingMode mode,
+      HoodieCDCOperation operation,
+      String recordKey,
+      GenericRecord expectedBefore,
+      GenericRecord expectedAfter) {
     assertEquals(operation.getValue(), record.get(CDC_OPERATION_TYPE).toString());
     if (mode == HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER) {
       assertEquals(COMMIT_TIME, record.get(CDC_COMMIT_TIMESTAMP).toString());
-      assertImagesExcludeMetadata(record);
+      assertImage(record, CDC_BEFORE_IMAGE, expectedBefore);
+      assertImage(record, CDC_AFTER_IMAGE, expectedAfter);
     } else {
       assertEquals(recordKey, record.get(CDC_RECORD_KEY).toString());
       if (mode == HoodieCDCSupplementalLoggingMode.DATA_BEFORE) {
-        assertImagesExcludeMetadata(record);
+        assertImage(record, CDC_BEFORE_IMAGE, expectedBefore);
+        assertNull(record.getSchema().getField(CDC_AFTER_IMAGE));
+      } else {
+        assertNull(record.getSchema().getField(CDC_BEFORE_IMAGE));
+        assertNull(record.getSchema().getField(CDC_AFTER_IMAGE));
       }
     }
   }
 
-  private static void assertImagesExcludeMetadata(GenericRecord cdcRecord) {
-    for (String imageField : new String[] {CDC_BEFORE_IMAGE, CDC_AFTER_IMAGE}) {
-      if (cdcRecord.getSchema().getField(imageField) == null) {
-        continue;
-      }
-      GenericRecord image = (GenericRecord) cdcRecord.get(imageField);
-      if (image == null) {
-        assertNull(image);
-      } else {
-        assertFalse(image.getSchema().getFields().stream()
-            .anyMatch(field -> HoodieRecord.HOODIE_META_COLUMNS.contains(field.name())));
-      }
+  private static void assertImage(GenericRecord cdcRecord, String imageField, GenericRecord expectedImage) {
+    assertNotNull(cdcRecord.getSchema().getField(imageField));
+    GenericRecord actualImage = (GenericRecord) cdcRecord.get(imageField);
+    if (expectedImage == null) {
+      assertNull(actualImage);
+    } else {
+      assertNotNull(actualImage);
+      assertEquals(expectedImage.get("id").toString(), actualImage.get("id").toString());
+      assertEquals(expectedImage.get("name").toString(), actualImage.get("name").toString());
+      assertFalse(actualImage.getSchema().getFields().stream()
+          .anyMatch(field -> HoodieRecord.HOODIE_META_COLUMNS.contains(field.name())));
     }
   }
 }
