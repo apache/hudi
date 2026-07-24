@@ -24,12 +24,14 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -67,7 +69,9 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -85,6 +89,18 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class TestHoodieBackedTableMetadataWriter {
+  @Test
+  void tableStorageLayoutForMetadataTable() {
+    assertEquals("lsm_tree", HoodieBackedTableMetadataWriter.getMetadataTableStorageLayout(
+        EngineType.FLINK, HoodieTableVersion.TEN));
+    assertNull(HoodieBackedTableMetadataWriter.getMetadataTableStorageLayout(
+        EngineType.FLINK, HoodieTableVersion.NINE));
+    assertNull(HoodieBackedTableMetadataWriter.getMetadataTableStorageLayout(
+        EngineType.SPARK, HoodieTableVersion.TEN));
+    assertNull(HoodieBackedTableMetadataWriter.getMetadataTableStorageLayout(
+        EngineType.JAVA, HoodieTableVersion.TEN));
+  }
+
   @Test
   void completeStreamingCommitSkipsAlreadyCompletedMetadataInstant() {
     String instantTime = "20260709120000000";
