@@ -40,7 +40,14 @@ import java.util.List;
  */
 @Internal
 public class HoodieEnumeratorStateSerializer implements SimpleVersionedSerializer<HoodieSplitEnumeratorState> {
-  private static final int VERSION = 1;
+  private static final int VERSION = 2;
+  /**
+   * Version of {@link HoodieSourceSplitSerializer} that produced the nested split payloads of a
+   * VERSION 1 state, which did not record it. VERSION 2 onwards writes the actual version, so the
+   * two formats can evolve independently.
+   */
+  private static final int LEGACY_SPLIT_SERIALIZER_VERSION = 1;
+
   private final HoodieSourceSplitSerializer splitSerializer = new HoodieSourceSplitSerializer();
 
   @Override
@@ -52,6 +59,11 @@ public class HoodieEnumeratorStateSerializer implements SimpleVersionedSerialize
   public byte[] serialize(HoodieSplitEnumeratorState obj) throws IOException {
     try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
          DataOutputStream out = new DataOutputStream(baos)) {
+
+      // Serialize the version of the nested split serializer (added in VERSION 2) so the split
+      // payloads below are decoded with the version that wrote them rather than with this
+      // serializer's own version.
+      out.writeInt(splitSerializer.getVersion());
 
       // Serialize pending split states
       Collection<HoodieSourceSplitState> splitStates = obj.getPendingSplitStates();
@@ -75,6 +87,18 @@ public class HoodieEnumeratorStateSerializer implements SimpleVersionedSerialize
         out.writeUTF(obj.getLastEnumeratedInstantOffset().get());
       }
 
+      // Serialize readStartCommit (added in VERSION 2)
+      out.writeBoolean(obj.getReadStartCommit().isPresent());
+      if (obj.getReadStartCommit().isPresent()) {
+        out.writeUTF(obj.getReadStartCommit().get());
+      }
+
+      // Serialize readEndCommit (added in VERSION 2)
+      out.writeBoolean(obj.getReadEndCommit().isPresent());
+      if (obj.getReadEndCommit().isPresent()) {
+        out.writeUTF(obj.getReadEndCommit().get());
+      }
+
       out.flush();
       return baos.toByteArray();
     }
@@ -82,8 +106,17 @@ public class HoodieEnumeratorStateSerializer implements SimpleVersionedSerialize
 
   @Override
   public HoodieSplitEnumeratorState deserialize(int version, byte[] serialized) throws IOException {
+    if (version > VERSION) {
+      throw new IOException(
+          "Cannot deserialize Hoodie enumerator state written by a newer serializer version "
+              + version + "; this serializer supports up to version " + VERSION);
+    }
     try (ByteArrayInputStream bais = new ByteArrayInputStream(serialized);
          DataInputStream in = new DataInputStream(bais)) {
+
+      // The nested split serializer version is recorded from VERSION 2 onwards; VERSION 1 payloads
+      // were always written by split serializer version 1.
+      int splitVersion = version >= 2 ? in.readInt() : LEGACY_SPLIT_SERIALIZER_VERSION;
 
       // Deserialize pending split states
       int splitCount = in.readInt();
@@ -94,7 +127,7 @@ public class HoodieEnumeratorStateSerializer implements SimpleVersionedSerialize
         in.readFully(splitBytes);
         String statusName = in.readUTF();
         splitStates.add(new HoodieSourceSplitState(
-            splitSerializer.deserialize(version, splitBytes),
+            splitSerializer.deserialize(splitVersion, splitBytes),
             HoodieSourceSplitStatus.valueOf(statusName)));
       }
 
@@ -114,7 +147,21 @@ public class HoodieEnumeratorStateSerializer implements SimpleVersionedSerialize
         lastEnumeratedInstantOffset = Option.empty();
       }
 
-      return new HoodieSplitEnumeratorState(splitStates, lastEnumeratedInstant, lastEnumeratedInstantOffset);
+      // Deserialize the commit range (added in VERSION 2). VERSION 1 checkpoints do not carry it, so
+      // both bounds stay empty and the restore-time range check is skipped for them.
+      Option<String> readStartCommit = Option.empty();
+      Option<String> readEndCommit = Option.empty();
+      if (version >= 2) {
+        if (in.readBoolean()) {
+          readStartCommit = Option.of(in.readUTF());
+        }
+        if (in.readBoolean()) {
+          readEndCommit = Option.of(in.readUTF());
+        }
+      }
+
+      return new HoodieSplitEnumeratorState(
+          splitStates, lastEnumeratedInstant, lastEnumeratedInstantOffset, readStartCommit, readEndCommit);
     }
   }
 }

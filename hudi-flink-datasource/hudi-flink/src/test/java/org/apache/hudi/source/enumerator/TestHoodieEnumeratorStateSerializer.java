@@ -20,11 +20,16 @@ package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.source.split.HoodieSourceSplitSerializer;
 import org.apache.hudi.source.split.HoodieSourceSplitState;
 import org.apache.hudi.source.split.HoodieSourceSplitStatus;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,6 +40,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -248,7 +254,7 @@ public class TestHoodieEnumeratorStateSerializer {
 
   @Test
   public void testGetVersion() {
-    assertEquals(1, serializer.getVersion());
+    assertEquals(2, serializer.getVersion());
   }
 
   @Test
@@ -477,6 +483,143 @@ public class TestHoodieEnumeratorStateSerializer {
     assertEquals(1L, deserializedStates.get(0).getSplit().getConsumed());
     assertFalse(deserializedStates.get(1).getSplit().getBasePath().isPresent());
     assertEquals(Integer.MAX_VALUE, deserializedStates.get(2).getSplit().getFileOffset());
+  }
+
+  @Test
+  public void testSerializeAndDeserializeCommitRange() throws IOException {
+    HoodieSplitEnumeratorState original = new HoodieSplitEnumeratorState(
+        Collections.emptyList(),
+        Option.empty(),
+        Option.empty(),
+        Option.of("20260226000000"),
+        Option.of("20260227000000")
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSplitEnumeratorState deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertEquals(Option.of("20260226000000"), deserialized.getReadStartCommit());
+    assertEquals(Option.of("20260227000000"), deserialized.getReadEndCommit());
+  }
+
+  @Test
+  public void testRecordedButUnsetCommitRangeRoundTrips() throws IOException {
+    // A bounded read with neither option configured records the empty string rather than an absent
+    // Option, so a restore can tell "recorded but unset" apart from "not recorded at all".
+    HoodieSplitEnumeratorState original = new HoodieSplitEnumeratorState(
+        Collections.emptyList(),
+        Option.empty(),
+        Option.empty(),
+        Option.of(""),
+        Option.of("")
+    );
+
+    HoodieSplitEnumeratorState deserialized =
+        serializer.deserialize(serializer.getVersion(), serializer.serialize(original));
+
+    assertEquals(Option.of(""), deserialized.getReadStartCommit());
+    assertEquals(Option.of(""), deserialized.getReadEndCommit());
+  }
+
+  @Test
+  public void testCommitRangeDefaultsEmptyViaLegacyConstructor() throws IOException {
+    // The 3-arg constructor (streaming enumerator + pre-existing call sites) records no range; it
+    // must round-trip as absent so the restore-time range check is skipped.
+    HoodieSplitEnumeratorState original = new HoodieSplitEnumeratorState(
+        Collections.emptyList(),
+        Option.of("20240122120000"),
+        Option.empty()
+    );
+
+    HoodieSplitEnumeratorState deserialized =
+        serializer.deserialize(serializer.getVersion(), serializer.serialize(original));
+
+    assertFalse(deserialized.getReadStartCommit().isPresent());
+    assertFalse(deserialized.getReadEndCommit().isPresent());
+  }
+
+  @Test
+  public void testDeserializeVersion1Payload() throws IOException {
+    // A VERSION 1 checkpoint: no nested split-serializer version at the head, no commit range at the
+    // tail. It must still restore, with its splits intact and the range absent.
+    HoodieSourceSplit split = createTestSplit(7, "file7", "/partition7");
+    byte[] v1Bytes = serializeAsVersion1(
+        Collections.singletonList(new HoodieSourceSplitState(split, HoodieSourceSplitStatus.ASSIGNED)),
+        Option.of("20240122120000"));
+
+    HoodieSplitEnumeratorState deserialized = serializer.deserialize(1, v1Bytes);
+
+    assertEquals(1, deserialized.getPendingSplitStates().size());
+    HoodieSourceSplitState restored = deserialized.getPendingSplitStates().iterator().next();
+    assertEquals(7, restored.getSplit().getSplitNum());
+    assertEquals("file7", restored.getSplit().getFileId());
+    assertEquals(HoodieSourceSplitStatus.ASSIGNED, restored.getStatus());
+    assertEquals(Option.of("20240122120000"), deserialized.getLastEnumeratedInstant());
+    assertFalse(deserialized.getReadStartCommit().isPresent());
+    assertFalse(deserialized.getReadEndCommit().isPresent());
+  }
+
+  @Test
+  public void testNestedSplitVersionIsRecordedNotInheritedFromOuterVersion() throws IOException {
+    // The outer state format and the nested split format version independently. VERSION 2 records
+    // the split serializer's own version in the payload so the splits are decoded with the version
+    // that wrote them, rather than with whatever the outer version happens to be.
+    HoodieSourceSplit split = createTestSplit(3, "file3", "/partition3");
+    HoodieSplitEnumeratorState original = new HoodieSplitEnumeratorState(
+        Collections.singletonList(new HoodieSourceSplitState(split, HoodieSourceSplitStatus.UNASSIGNED)),
+        Option.empty(),
+        Option.empty(),
+        Option.of("20260226000000"),
+        Option.of("")
+    );
+
+    byte[] serialized = serializer.serialize(original);
+
+    try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(serialized))) {
+      assertEquals(new HoodieSourceSplitSerializer().getVersion(), in.readInt(),
+          "VERSION 2 payloads must lead with the nested split serializer version");
+    }
+    // And the payload still round-trips end to end with that leading int in place.
+    HoodieSplitEnumeratorState deserialized = serializer.deserialize(2, serialized);
+    assertEquals(1, deserialized.getPendingSplitStates().size());
+    assertEquals("file3", deserialized.getPendingSplitStates().iterator().next().getSplit().getFileId());
+    assertEquals(Option.of("20260226000000"), deserialized.getReadStartCommit());
+  }
+
+  @Test
+  public void testDeserializeRejectsNewerVersion() throws IOException {
+    byte[] serialized = serializer.serialize(new HoodieSplitEnumeratorState(
+        Collections.emptyList(), Option.empty(), Option.empty()));
+
+    IOException ex = assertThrows(IOException.class,
+        () -> serializer.deserialize(serializer.getVersion() + 1, serialized));
+    assertTrue(ex.getMessage().contains("newer serializer version"));
+  }
+
+  /**
+   * Writes the VERSION 1 payload layout: split states, then lastEnumeratedInstant and
+   * lastEnumeratedInstantOffset. No nested split-serializer version, no commit range.
+   */
+  private byte[] serializeAsVersion1(
+      List<HoodieSourceSplitState> splitStates, Option<String> lastEnumeratedInstant) throws IOException {
+    HoodieSourceSplitSerializer splitSerializer = new HoodieSourceSplitSerializer();
+    try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+         DataOutputStream out = new DataOutputStream(baos)) {
+      out.writeInt(splitStates.size());
+      for (HoodieSourceSplitState splitState : splitStates) {
+        byte[] splitBytes = splitSerializer.serialize(splitState.getSplit());
+        out.writeInt(splitBytes.length);
+        out.write(splitBytes);
+        out.writeUTF(splitState.getStatus().name());
+      }
+      out.writeBoolean(lastEnumeratedInstant.isPresent());
+      if (lastEnumeratedInstant.isPresent()) {
+        out.writeUTF(lastEnumeratedInstant.get());
+      }
+      out.writeBoolean(false);
+      out.flush();
+      return baos.toByteArray();
+    }
   }
 
   /**

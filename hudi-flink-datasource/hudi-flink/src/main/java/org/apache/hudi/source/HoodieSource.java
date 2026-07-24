@@ -73,6 +73,9 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public class HoodieSource<T> extends FileIndexReader implements Source<T, HoodieSourceSplit, HoodieSplitEnumeratorState> {
+  /** Recorded in place of a {@code read.*-commit} bound that is not configured. */
+  private static final String UNSET = "";
+
   private final HoodieScanContext scanContext;
   private final SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier;
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
@@ -135,13 +138,30 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
   private SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> createEnumerator(
       SplitEnumeratorContext<HoodieSourceSplit> enumContext,
       @Nullable HoodieSplitEnumeratorState enumeratorState) {
+    boolean streaming = scanContext.isStreaming();
+
+    // read.start-commit / read.end-commit as configured for this run. They are recorded in the
+    // checkpoint of a bounded read and re-checked on the next restore. UNSET stands in for an option
+    // that is not configured, so that "recorded but unset" stays distinguishable from "not recorded
+    // at all" (a streaming read, or a checkpoint written before this field existed).
+    Configuration conf = scanContext.getConf();
+    Option<String> readStartCommit = Option.of(conf.getOptional(FlinkOptions.READ_START_COMMIT).orElse(UNSET));
+    Option<String> readEndCommit = Option.of(conf.getOptional(FlinkOptions.READ_END_COMMIT).orElse(UNSET));
+    // Deferred commit-range failure, raised from the enumerator's start() rather than here. See
+    // checkBoundedCommitRangeUnchanged for why the restore path cannot fail the job itself.
+    Option<String> rangeFailure = Option.empty();
+
     HoodieSplitProvider splitProvider;
     HoodieSplitAssigner splitAssigner = HoodieSplitAssigners.createHoodieSplitAssigner(
-            scanContext.getConf(), enumContext.currentParallelism());
+            conf, enumContext.currentParallelism());
 
     if (enumeratorState == null) {
       splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
     } else {
+      if (!streaming) {
+        rangeFailure = checkBoundedCommitRangeUnchanged(
+            tableName, enumeratorState, readStartCommit, readEndCommit);
+      }
       log.info(
           "Hoodie source restored {} splits from state for table {}",
           enumeratorState.getPendingSplitStates().size(), tableName);
@@ -151,7 +171,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
       splitProvider.onDiscoveredSplits(pendingSplits);
     }
 
-    if (scanContext.isStreaming()) {
+    if (streaming) {
       HoodieContinuousSplitDiscover discover = new DefaultHoodieSplitDiscover(
           scanContext);
 
@@ -163,8 +183,88 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
         List<HoodieSourceSplit> splits = createBatchHoodieSplits();
         splitProvider.onDiscoveredSplits(splits);
       }
-      return new HoodieStaticSplitEnumerator(tableName, enumContext, splitProvider);
+      return new HoodieStaticSplitEnumerator(
+          tableName, enumContext, splitProvider, readStartCommit, readEndCommit, rangeFailure);
     }
+  }
+
+  /**
+   * Returns the failure message for a bounded read being restored from a checkpoint taken under a
+   * different {@code read.start-commit} / {@code read.end-commit} range, or {@link Option#empty()}
+   * when the range is unchanged or cannot be verified.
+   *
+   * <p>A bounded read enumerates its splits once, at job start, and a restore reuses that persisted
+   * split set without re-enumerating. Resuming after the range was edited would therefore read the
+   * checkpoint's old range and silently ignore the configured one.
+   *
+   * <p>The message is returned rather than thrown, and is raised by {@link
+   * HoodieStaticSplitEnumerator#start()} instead. Throwing from here does not fail the job on the
+   * case that matters — the initial restore from a savepoint or retained checkpoint. As
+   * {@code OperatorCoordinatorHolder#resetToCheckpoint} documents, that first call happens during
+   * ExecutionGraph construction, before {@code lazyInitialize} has supplied the scheduler executor.
+   * {@code RecreateOnResetOperatorCoordinator$DeferrableCoordinator#resetAndStart} does catch the
+   * throw and call {@code cleanAndFailJob}, but the {@code failJob} underneath it begins with
+   * {@code checkInitialized()}, which at that point throws {@code IllegalStateException} from inside
+   * the unobserved {@code closingFuture.whenComplete(...)} callback. The job then comes up RUNNING
+   * with a coordinator that never started: no splits, no throughput, and checkpoints that never
+   * complete. By {@code start()} the context is initialized —
+   * {@code OperatorCoordinatorHolder#start()} asserts it — so the failure reaches
+   * {@code context.failJob} and terminates the job.
+   *
+   * <p>A state carrying no range at all cannot be verified and is allowed through with a warning, so
+   * that checkpoints written by serializer VERSION 1 stay restorable. Note that a VERSION 2 state
+   * written by the streaming enumerator also carries no range, so a streaming-to-bounded
+   * reconfiguration takes the same unverified path.
+   */
+  @VisibleForTesting
+  static Option<String> checkBoundedCommitRangeUnchanged(
+      String tableName,
+      HoodieSplitEnumeratorState state,
+      Option<String> configuredStart,
+      Option<String> configuredEnd) {
+    Option<String> checkpointedStart = state.getReadStartCommit();
+    Option<String> checkpointedEnd = state.getReadEndCommit();
+    if (!checkpointedStart.isPresent() && !checkpointedEnd.isPresent()) {
+      log.warn(
+          "Restoring bounded read for table {} from a checkpoint that records no commit range "
+              + "(written by serializer VERSION 1, or by a streaming read). Cannot verify it was "
+              + "taken with the configured range [{}, {}]; resuming anyway.",
+          tableName, configuredStart.orElse(UNSET), configuredEnd.orElse(UNSET));
+      return Option.empty();
+    }
+    if (boundsMatch(checkpointedStart, configuredStart) && boundsMatch(checkpointedEnd, configuredEnd)) {
+      return Option.empty();
+    }
+    return Option.of(String.format(
+        "Refusing to resume bounded read for table %s: read.start-commit/read.end-commit changed "
+            + "since the checkpoint was taken.%n  checkpoint range: [%s, %s]%n"
+            + "  configured range: [%s, %s]%n"
+            + "A bounded read enumerates its splits once at job start and reuses them on restore, so "
+            + "resuming would read the checkpoint's range and ignore the configured one. To read the "
+            + "new range, start the job fresh instead of resuming: submit without a savepoint or "
+            + "retained checkpoint, or use a new checkpoint directory.",
+        tableName,
+        checkpointedStart.orElse(UNSET), checkpointedEnd.orElse(UNSET),
+        configuredStart.orElse(UNSET), configuredEnd.orElse(UNSET)));
+  }
+
+  /**
+   * Whether two recorded bounds select the same data. Compared after normalization so that a purely
+   * cosmetic edit does not fail the job: the {@code earliest} sentinel is matched case-insensitively,
+   * the way {@link org.apache.hudi.configuration.OptionsResolver} matches it everywhere else, and
+   * surrounding whitespace is ignored.
+   */
+  private static boolean boundsMatch(Option<String> checkpointed, Option<String> configured) {
+    return normalizeBound(checkpointed).equals(normalizeBound(configured));
+  }
+
+  private static Option<String> normalizeBound(Option<String> bound) {
+    return bound.map(value -> {
+      String trimmed = value.trim();
+      return trimmed.equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST)
+          ? FlinkOptions.START_COMMIT_EARLIEST
+          : trimmed;
+    });
   }
 
   @VisibleForTesting

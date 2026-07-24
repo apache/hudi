@@ -19,6 +19,7 @@
 package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SplitRequestEvent;
@@ -31,6 +32,7 @@ import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.metrics.groups.SplitEnumeratorMetricGroup;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
+import org.apache.flink.runtime.execution.SuppressRestartsException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,6 +47,7 @@ import java.util.function.BiConsumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -64,7 +67,7 @@ public class TestHoodieStaticSplitEnumerator {
   public void setUp() {
     context = new MockSplitEnumeratorContext();
     splitProvider = new DefaultHoodieSplitProvider(new HoodieSplitNumberAssigner(2));
-    enumerator = new HoodieStaticSplitEnumerator("test-table", context, splitProvider);
+    enumerator = new HoodieStaticSplitEnumerator("test-table", context, splitProvider, Option.of(""), Option.of(""), Option.empty());
 
     split1 = createTestSplit(1, "file1");
     split2 = createTestSplit(2, "file2");
@@ -75,6 +78,41 @@ public class TestHoodieStaticSplitEnumerator {
   public void testStartEnumerator() {
     enumerator.start();
     // Verify start doesn't throw exception
+  }
+
+  @Test
+  public void testSnapshotStateCarriesCommitRange() throws Exception {
+    // A bounded (static) enumerator must persist the commit range it was enumerated with, so a later
+    // restore can detect that the range changed. See HoodieSource#checkBoundedCommitRangeUnchanged.
+    HoodieStaticSplitEnumerator scoped = new HoodieStaticSplitEnumerator(
+        "test-table", context, splitProvider, Option.of("20260226000000"), Option.of(""), Option.empty());
+
+    HoodieSplitEnumeratorState state = scoped.snapshotState(1L);
+
+    assertEquals(Option.of("20260226000000"), state.getReadStartCommit());
+    assertEquals(Option.of(""), state.getReadEndCommit());
+  }
+
+  @Test
+  public void testStartFailsJobWhenCommitRangeChanged() {
+    // A bounded read restored from a checkpoint whose commit range changed must fail the job from
+    // start(), not from the restore path. On the initial restore from a savepoint, the coordinator
+    // context is not yet initialized (OperatorCoordinatorHolder#resetToCheckpoint runs during
+    // ExecutionGraph construction, before lazyInitialize), so failJob's checkInitialized() throws
+    // inside an unobserved whenComplete callback and the job comes up RUNNING with no enumerator.
+    // By start(), OperatorCoordinatorHolder#start() has asserted the context is initialized.
+    // SuppressRestartsException stops the restart strategy looping: the mismatch would recur on
+    // every restore from the same checkpoint.
+    String message = "Refusing to resume bounded read for table test-table: "
+        + "read.start-commit/read.end-commit changed since the checkpoint was taken. "
+        + "Start the job fresh instead of resuming (use a new checkpoint directory).";
+    HoodieStaticSplitEnumerator poisoned = new HoodieStaticSplitEnumerator(
+        "test-table", context, splitProvider, Option.of(""), Option.of(""), Option.of(message));
+
+    SuppressRestartsException ex = assertThrows(SuppressRestartsException.class, poisoned::start);
+    assertInstanceOf(HoodieException.class, ex.getCause(), "Cause should carry the actionable details");
+    assertTrue(ex.getCause().getMessage().contains("checkpoint directory"),
+        "The operator-facing message must survive on the cause");
   }
 
   @Test
@@ -226,7 +264,7 @@ public class TestHoodieStaticSplitEnumerator {
   public void testConstructorWithNullMetricGroup() {
     MockSplitEnumeratorContext nullMetricContext = new MockSplitEnumeratorContext(true);
     HoodieStaticSplitEnumerator enumeratorWithNullMetrics =
-        new HoodieStaticSplitEnumerator("test-table", nullMetricContext, splitProvider);
+        new HoodieStaticSplitEnumerator("test-table", nullMetricContext, splitProvider, Option.of(""), Option.of(""), Option.empty());
 
     assertNotNull(enumeratorWithNullMetrics, "Enumerator should initialize without NPE when metricGroup is null");
 

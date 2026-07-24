@@ -23,11 +23,14 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.source.enumerator.HoodieContinuousSplitEnumerator;
+import org.apache.hudi.source.enumerator.HoodieSplitEnumeratorState;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.reader.HoodieRecordEmitter;
@@ -43,7 +46,15 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.api.connector.source.Boundedness;
+import org.apache.flink.api.connector.source.ReaderInfo;
+import org.apache.flink.api.connector.source.SourceEvent;
+import org.apache.flink.api.connector.source.SplitEnumerator;
+import org.apache.flink.api.connector.source.SplitEnumeratorContext;
+import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.groups.SplitEnumeratorMetricGroup;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
+import org.apache.flink.runtime.execution.SuppressRestartsException;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.CallExpression;
@@ -62,11 +73,15 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -480,5 +495,132 @@ public class TestHoodieSource {
         new HoodieSourceSplitComparator(),
         metaClient,
         new HoodieRecordEmitter<>());
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Bounded commit-range guard: end-to-end wiring through restoreEnumerator. The detection logic
+  // itself is unit-tested in TestHoodieSourceCommitRangeGuard; these verify it is actually hooked up.
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  public void testRestoreBoundedEnumeratorFailsWhenCommitRangeChanged() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.READ_AS_STREAMING, false);
+    conf.set(FlinkOptions.READ_START_COMMIT, "20260226000000");
+
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    // Checkpoint taken under a different start commit.
+    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
+        source.restoreEnumerator(new StubEnumeratorContext(), stateWithRange("20260225000000", ""));
+
+    SuppressRestartsException ex = assertThrows(SuppressRestartsException.class, enumerator::start);
+    assertTrue(ex.getCause().getMessage().contains("20260225000000"),
+        "The failure raised from start() should name the checkpoint range");
+  }
+
+  @Test
+  public void testRestoreBoundedEnumeratorResumesWhenCommitRangeUnchanged() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.READ_AS_STREAMING, false);
+    conf.set(FlinkOptions.READ_START_COMMIT, "20260226000000");
+
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
+        source.restoreEnumerator(new StubEnumeratorContext(), stateWithRange("20260226000000", ""));
+
+    enumerator.start();
+    // And the range is carried forward into the next checkpoint, so the guard keeps working.
+    assertEquals(Option.of("20260226000000"), enumerator.snapshotState(1L).getReadStartCommit());
+  }
+
+  @Test
+  public void testFreshBoundedEnumeratorRecordsConfiguredCommitRange() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.READ_AS_STREAMING, false);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
+        source.createEnumerator(new StubEnumeratorContext());
+
+    // Neither bound is configured, so both are recorded as the empty string rather than left absent
+    // -- that is what lets a later restore tell "recorded but unset" from "not recorded at all".
+    HoodieSplitEnumeratorState state = enumerator.snapshotState(1L);
+    assertEquals(Option.of(""), state.getReadStartCommit());
+    assertEquals(Option.of(""), state.getReadEndCommit());
+  }
+
+  @Test
+  public void testRestoreStreamingEnumeratorIgnoresCommitRangeChange() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, "20260226000000");
+
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    // A streaming read resumes from its checkpointed offset, which deliberately supersedes
+    // read.start-commit, so a changed start commit must NOT fail the job.
+    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
+        source.restoreEnumerator(new StubEnumeratorContext(), stateWithRange("20260225000000", ""));
+
+    assertNotNull(enumerator, "Streaming restore should not be range-checked");
+    assertEquals(HoodieContinuousSplitEnumerator.class, enumerator.getClass());
+  }
+
+  private static HoodieSplitEnumeratorState stateWithRange(String start, String end) {
+    return new HoodieSplitEnumeratorState(
+        Collections.emptyList(), Option.empty(), Option.empty(), Option.of(start), Option.of(end));
+  }
+
+  /**
+   * Minimal {@link SplitEnumeratorContext} for constructing an enumerator. Only the members the
+   * enumerator touches at construction and start time are implemented.
+   */
+  private static class StubEnumeratorContext implements SplitEnumeratorContext<HoodieSourceSplit> {
+
+    @Override
+    public SplitEnumeratorMetricGroup metricGroup() {
+      return UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup();
+    }
+
+    @Override
+    public void sendEventToSourceReader(int subtaskId, SourceEvent event) {
+    }
+
+    @Override
+    public int currentParallelism() {
+      return 1;
+    }
+
+    @Override
+    public Map<Integer, ReaderInfo> registeredReaders() {
+      return Collections.emptyMap();
+    }
+
+    @Override
+    public void assignSplits(SplitsAssignment<HoodieSourceSplit> newSplitAssignments) {
+    }
+
+    @Override
+    public void signalNoMoreSplits(int subtask) {
+    }
+
+    @Override
+    public <T> void callAsync(Callable<T> callable, BiConsumer<T, Throwable> handler) {
+    }
+
+    @Override
+    public <T> void callAsync(
+        Callable<T> callable, BiConsumer<T, Throwable> handler, long initialDelay, long period) {
+    }
+
+    @Override
+    public void runInCoordinatorThread(Runnable runnable) {
+      runnable.run();
+    }
   }
 }
