@@ -54,6 +54,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
@@ -727,7 +728,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       case HFILE_DATA_BLOCK:
         // Not supporting positions in HFile data blocks
         header.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
-        records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
+        // HFile orders keys by their raw UTF-8 bytes, so sort by UTF-8 bytes rather than
+        // String (UTF-16) order to keep non-ASCII / binary keys consistent with the writer.
+        records.sort(Comparator.comparing(HoodieRecord::getRecordKey, StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR));
         return new HoodieHFileDataBlock(
             records, header, writeConfig.getHFileCompressionAlgorithm(), new StoragePath(writeConfig.getBasePath()));
       case PARQUET_DATA_BLOCK:
