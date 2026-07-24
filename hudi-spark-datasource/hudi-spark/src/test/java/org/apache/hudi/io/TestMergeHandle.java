@@ -207,6 +207,9 @@ public class TestMergeHandle extends BaseTestHandle {
 
   @Test
   public void testSortedMergeHandleWritesBinaryKeysInUtf8Order() throws Exception {
+    // Drives HoodieSortedMergeHandle directly against a Parquet base file (requireSortedRecords() is
+    // false), validating comparator ordering only; does not cover the HoodieMergeHandleFactory
+    // selection path for HFILE base-format tables.
     // delete and recreate
     metaClient.getStorage().deleteDirectory(metaClient.getBasePath());
     Properties properties = new Properties();
@@ -223,7 +226,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     // These two keys sort in opposite order under UTF-16 (String#compareTo) vs UTF-8 bytes (HFile/MDT order).
     String supplementaryKey = "😀_record";
-    String bmpHighKey = "�_record";
+    String bmpHighKey = new String(Character.toChars(0xFFFD)) + "_record";
     assertTrue(supplementaryKey.compareTo(bmpHighKey) < 0);
     assertTrue(StringUtils.compareUtf8Bytes(bmpHighKey, supplementaryKey) < 0);
 
