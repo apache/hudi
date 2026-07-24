@@ -301,6 +301,13 @@ public class HiveDriverPool implements AutoCloseable {
    * threads, so each worker must have its own instance. Bootstrap of all workers is
    * done sequentially by the pool constructor specifically so these constructions
    * don't race each other (e.g. on scratch-dir creation).
+   *
+   * <p>Each worker also gets its own {@link HiveConf} copy. {@code SessionState}
+   * retains whatever {@code HiveConf} it's given, and {@code QueryState}/{@code Driver}
+   * mutate per-query keys on that conf during {@code run()} (e.g. {@code HIVEQUERYID}).
+   * Sharing one {@code HiveConf} instance across workers would let concurrent
+   * {@code Driver.run()} calls overwrite each other's query-scoped configuration even
+   * though each worker has its own {@code SessionState} object.
    */
   private static final class DefaultDriverFactory implements DriverFactory {
     private final HiveConf hiveConf;
@@ -311,11 +318,12 @@ public class HiveDriverPool implements AutoCloseable {
 
     @Override
     public Driver newDriver(String databaseName) throws Exception {
-      SessionState sessionState = new SessionState(hiveConf,
+      HiveConf workerConf = new HiveConf(hiveConf);
+      SessionState sessionState = new SessionState(workerConf,
           UserGroupInformation.getCurrentUser().getShortUserName());
       sessionState.setCurrentDatabase(databaseName);
       SessionState.start(sessionState);
-      return new Driver(hiveConf);
+      return new Driver(workerConf);
     }
   }
 
