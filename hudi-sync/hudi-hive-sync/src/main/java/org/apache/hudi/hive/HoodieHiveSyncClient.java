@@ -90,11 +90,11 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   private final Map<String, Table> initialTableByName = new HashMap<>();
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
-  // Non-null only when HIVE_SYNC_BATCHING_ENABLED and sync mode is HIVEQL. Owned by
+  // Present only when HIVE_SYNC_BATCHING_ENABLED and sync mode is HIVEQL. Owned by
   // this class; closed in close() before Hive.closeCurrent(). HiveQueryDDLExecutor
   // uses it only for DROP (Hive Thrift, not Hive Driver) — see IMetaStoreClientPool
   // javadoc.
-  private IMetaStoreClientPool partitionClientPool;
+  private Option<IMetaStoreClientPool> partitionClientPool = Option.empty();
   // Present only when HIVE_SYNC_BATCHING_ENABLED and sync mode is HIVEQL (explicit
   // or legacy default). Owned by HiveQueryDDLExecutor; this field is kept for
   // reference only — close() is delegated through ddlExecutor.close().
@@ -137,10 +137,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
             ddlExecutor = new HMSDDLExecutor(config, this.client);
             break;
           case HIVEQL:
-            this.partitionDriverPool = maybeBuildHiveDriverPool(config);
-            this.partitionClientPool = maybeBuildPartitionClientPool(config);
-            ddlExecutor = new HiveQueryDDLExecutor(config, this.client, this.partitionDriverPool,
-                Option.ofNullable(this.partitionClientPool));
+            ddlExecutor = buildHiveQueryDDLExecutor(config);
             break;
           case JDBC:
             JDBCExecutor jdbcExecutor = new JDBCExecutor(config);
@@ -158,10 +155,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
           jdbcMetadataOperator = new JDBCBasedMetadataOperator(
               jdbcExecutor.getConnection(), databaseName);
         } else {
-          this.partitionDriverPool = maybeBuildHiveDriverPool(config);
-          this.partitionClientPool = maybeBuildPartitionClientPool(config);
-          ddlExecutor = new HiveQueryDDLExecutor(config, this.client, this.partitionDriverPool,
-              Option.ofNullable(this.partitionClientPool));
+          ddlExecutor = buildHiveQueryDDLExecutor(config);
         }
       }
     } catch (Exception e) {
@@ -237,9 +231,9 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
   }
 
-  private IMetaStoreClientPool maybeBuildPartitionClientPool(HiveSyncConfig config) {
+  private Option<IMetaStoreClientPool> maybeBuildPartitionClientPool(HiveSyncConfig config) {
     if (!config.getBooleanOrDefault(HIVE_SYNC_BATCHING_ENABLED)) {
-      return null;
+      return Option.empty();
     }
     if (config.getBooleanOrDefault(HIVE_SYNC_USE_SPARK_CATALOG)) {
       // The Spark catalog client is constructed via reflection against a Spark-side
@@ -247,10 +241,10 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       // Fall back to single-client sequential behavior rather than failing the sync.
       log.warn("hive_sync.batching.enabled=true is not supported with use_spark_catalog=true; "
           + "falling back to sequential partition sync.");
-      return null;
+      return Option.empty();
     }
     int size = config.getIntOrDefault(HIVE_SYNC_BATCHING_THREADS);
-    return new IMetaStoreClientPool(config, size);
+    return Option.of(new IMetaStoreClientPool(config, size));
   }
 
   private Option<HiveDriverPool> maybeBuildHiveDriverPool(HiveSyncConfig config) {
@@ -259,6 +253,40 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
     int size = config.getIntOrDefault(HIVE_SYNC_BATCHING_THREADS);
     return Option.of(new HiveDriverPool(config, size));
+  }
+
+  /**
+   * Builds the (optional) partition-phase pools and the {@link HiveQueryDDLExecutor}
+   * that uses them, rolling back whichever pool(s) already got built if a later step
+   * in this sequence throws. Without this, a failure in {@code maybeBuildPartitionClientPool}
+   * (after {@code partitionDriverPool} was already built) or in the executor's own
+   * constructor would leak the already-built pool's worker threads and Thrift/Driver
+   * connections, since this constructor's outer catch just rethrows.
+   */
+  private HiveQueryDDLExecutor buildHiveQueryDDLExecutor(HiveSyncConfig config) {
+    try {
+      this.partitionDriverPool = maybeBuildHiveDriverPool(config);
+      this.partitionClientPool = maybeBuildPartitionClientPool(config);
+      return new HiveQueryDDLExecutor(config, this.client, this.partitionDriverPool, this.partitionClientPool);
+    } catch (Exception e) {
+      partitionDriverPool.ifPresent(pool -> {
+        try {
+          pool.close();
+        } catch (Exception closeException) {
+          log.warn("Error closing HiveDriverPool during construction rollback", closeException);
+        }
+      });
+      partitionDriverPool = Option.empty();
+      partitionClientPool.ifPresent(pool -> {
+        try {
+          pool.close();
+        } catch (Exception closeException) {
+          log.warn("Error closing IMetaStoreClient pool during construction rollback", closeException);
+        }
+      });
+      partitionClientPool = Option.empty();
+      throw e;
+    }
   }
 
   private Table getInitialTable(String table) {
@@ -656,33 +684,38 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   @Override
   public void close() {
     try {
-      ddlExecutor.close();
-      // Close the partition client pool before Hive.closeCurrent() so the
-      // RetryingMetaStoreClient instances held by the pool release their Thrift
-      // sockets without racing the ThreadLocal Hive cleanup.
-      if (partitionClientPool != null) {
-        try {
-          partitionClientPool.close();
-        } catch (Exception e) {
-          log.warn("Error closing IMetaStoreClient pool", e);
+      try {
+        ddlExecutor.close();
+      } finally {
+        // Close the partition client pool before Hive.closeCurrent() so the
+        // RetryingMetaStoreClient instances held by the pool release their Thrift
+        // sockets without racing the ThreadLocal Hive cleanup. Runs even if
+        // ddlExecutor.close() above threw, so the pool's Thrift sockets and
+        // worker threads aren't leaked.
+        if (partitionClientPool.isPresent()) {
+          try {
+            partitionClientPool.get().close();
+          } catch (Exception e) {
+            log.warn("Error closing IMetaStoreClient pool", e);
+          }
+          partitionClientPool = Option.empty();
         }
-        partitionClientPool = null;
-      }
-      if (client != null) {
-        // Close the proxied IMetaStoreClient directly before Hive.closeCurrent().
-        // When RetryingMetaStoreClient rebuilds the underlying client on a transient
-        // TException, the fresh MSC is reachable only through this proxy, while the
-        // thread-local Hive singleton still references the older instance. So
-        // Hive.closeCurrent() alone closes the stale MSC and orphans the retry-created
-        // one, leaking a connection per sync cycle. client.close() releases the live
-        // MSC by identity; Hive.closeCurrent() remains a fallback for the singleton path.
-        try {
-          client.close();
-        } catch (Exception e) {
-          log.warn("Failed to close IMetaStoreClient directly; Hive.closeCurrent() will run anyway", e);
+        if (client != null) {
+          // Close the proxied IMetaStoreClient directly before Hive.closeCurrent().
+          // When RetryingMetaStoreClient rebuilds the underlying client on a transient
+          // TException, the fresh MSC is reachable only through this proxy, while the
+          // thread-local Hive singleton still references the older instance. So
+          // Hive.closeCurrent() alone closes the stale MSC and orphans the retry-created
+          // one, leaking a connection per sync cycle. client.close() releases the live
+          // MSC by identity; Hive.closeCurrent() remains a fallback for the singleton path.
+          try {
+            client.close();
+          } catch (Exception e) {
+            log.warn("Failed to close IMetaStoreClient directly; Hive.closeCurrent() will run anyway", e);
+          }
+          Hive.closeCurrent();
+          client = null;
         }
-        Hive.closeCurrent();
-        client = null;
       }
     } catch (Exception e) {
       log.error("Could not close connection ", e);
