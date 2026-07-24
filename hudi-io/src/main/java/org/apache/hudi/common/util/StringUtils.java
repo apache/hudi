@@ -136,6 +136,9 @@ public class StringUtils {
    *
    * <p>Neither argument may be {@code null}; like {@link String#compareTo(String)}, a {@code null}
    * argument throws {@link NullPointerException}.
+   *
+   * <p>Note: encodes both strings to UTF-8 on every call; for very large sorts consider
+   * pre-encoding keys to byte arrays once and comparing those.
    */
   public static int compareUtf8Bytes(String s1, String s2) {
     byte[] b1 = getUTF8Bytes(s1);
