@@ -164,6 +164,17 @@ public class HoodieCleanConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation(HoodieFailedWritesCleaningPolicy.class);
 
+  public static final ConfigProperty<Integer> CLEANER_PLAN_PARTITIONS_BATCH_SIZE = ConfigProperty
+      .key("hoodie.clean.plan.partitions.batch.size")
+      .defaultValue(-1)
+      .markAdvanced()
+      .sinceVersion("0.15.0-heap-fork")
+      .withDocumentation("When set to a positive value, paginates a single cleaner invocation "
+          + "into multiple internally-batched clean instants, each covering at most this many "
+          + "partitions, to avoid building an oversized single HoodieCleanerPlan. Each batch "
+          + "shares the same earliestCommitToRetain boundary. Default (-1) preserves legacy "
+          + "single-plan behavior.");
+
   public static final ConfigProperty<String> CLEANER_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.cleaner.parallelism")
       .defaultValue("200")
@@ -347,6 +358,11 @@ public class HoodieCleanConfig extends HoodieConfig {
 
     public HoodieCleanConfig.Builder withCleanerParallelism(int cleanerParallelism) {
       cleanConfig.setValue(CLEANER_PARALLELISM_VALUE, String.valueOf(cleanerParallelism));
+      return this;
+    }
+
+    public HoodieCleanConfig.Builder withCleanerPlanPartitionsBatchSize(int batchSize) {
+      cleanConfig.setValue(CLEANER_PLAN_PARTITIONS_BATCH_SIZE, String.valueOf(batchSize));
       return this;
     }
 

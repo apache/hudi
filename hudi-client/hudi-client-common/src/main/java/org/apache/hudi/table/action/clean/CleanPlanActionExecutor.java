@@ -56,14 +56,44 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
 
   private static final Logger LOG = LoggerFactory.getLogger(CleanPlanActionExecutor.class);
   private final Option<Map<String, String>> extraMetadata;
+  private final Option<BatchOverride> batchOverride;
+
+  /**
+   * Overrides used by the paginated-clean orchestrator to pin the retention
+   * boundary and the partition scope for a single batch. Both must move
+   * together: {@link CleanPlanner#getDeletePaths(String, Option)} takes
+   * {@code earliestInstant} per partition, so letting the executor recompute
+   * the boundary while the orchestrator supplies a fixed partition slice
+   * would silently break the "same earliestCommitToRetain across all
+   * batches" invariant.
+   */
+  public static final class BatchOverride {
+    final List<String> partitions;
+    final Option<HoodieInstant> earliestInstant;
+
+    public BatchOverride(List<String> partitions, Option<HoodieInstant> earliestInstant) {
+      this.partitions = partitions;
+      this.earliestInstant = earliestInstant;
+    }
+  }
 
   public CleanPlanActionExecutor(HoodieEngineContext context,
                                  HoodieWriteConfig config,
                                  HoodieTable<T, I, K, O> table,
                                  String instantTime,
                                  Option<Map<String, String>> extraMetadata) {
+    this(context, config, table, instantTime, extraMetadata, Option.empty());
+  }
+
+  public CleanPlanActionExecutor(HoodieEngineContext context,
+                                 HoodieWriteConfig config,
+                                 HoodieTable<T, I, K, O> table,
+                                 String instantTime,
+                                 Option<Map<String, String>> extraMetadata,
+                                 Option<BatchOverride> batchOverride) {
     super(context, config, table, instantTime);
     this.extraMetadata = extraMetadata;
+    this.batchOverride = batchOverride;
   }
 
   private int getCommitsSinceLastCleaning() {
@@ -106,9 +136,16 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
   HoodieCleanerPlan requestClean(HoodieEngineContext context) {
     try {
       CleanPlanner<T, I, K, O> planner = new CleanPlanner<>(context, table, config);
-      Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
+      // When batchOverride is present, the orchestrator pins earliestInstant and the
+      // partition slice so every batch in a paginated run stays anchored to the same
+      // retention boundary (see BatchOverride javadoc).
+      Option<HoodieInstant> earliestInstant = batchOverride.isPresent()
+          ? batchOverride.get().earliestInstant
+          : planner.getEarliestCommitToRetain();
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining list of partitions to be cleaned: " + config.getTableName());
-      List<String> partitionsToClean = planner.getPartitionPathsToClean(earliestInstant);
+      List<String> partitionsToClean = batchOverride.isPresent()
+          ? batchOverride.get().partitions
+          : planner.getPartitionPathsToClean(earliestInstant);
 
       if (partitionsToClean.isEmpty()) {
         LOG.info("Nothing to clean here. It is already clean");
@@ -149,28 +186,36 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
           planner.getLastCompletedCommitTimestamp(),
           config.getCleanerPolicy().name(), Collections.emptyMap(),
-          CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete, prepareExtraMetadata(planner.getSavepointedTimestamps()));
+          CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete,
+          prepareExtraMetadata(planner.getSavepointedTimestamps(), extraMetadata));
     } catch (IOException e) {
       throw new HoodieIOException("Failed to schedule clean operation", e);
     }
   }
 
-  private Map<String, String> prepareExtraMetadata(List<String> savepointedTimestamps) {
-    if (savepointedTimestamps.isEmpty()) {
-      return Collections.emptyMap();
-    } else {
-      return Collections.singletonMap(SAVEPOINTED_TIMESTAMPS, savepointedTimestamps.stream().collect(Collectors.joining(",")));
+  private Map<String, String> prepareExtraMetadata(List<String> savepointedTimestamps,
+                                                   Option<Map<String, String>> callerExtras) {
+    Map<String, String> merged = new HashMap<>();
+    if (!savepointedTimestamps.isEmpty()) {
+      merged.put(SAVEPOINTED_TIMESTAMPS, savepointedTimestamps.stream().collect(Collectors.joining(",")));
     }
+    callerExtras.ifPresent(merged::putAll);
+    return merged.isEmpty() ? Collections.emptyMap() : merged;
   }
 
   /**
    * Creates a Cleaner plan if there are files to be cleaned and stores them in instant file.
    * Cleaner Plan contains absolute file paths.
    *
+   * <p>Callable directly by orchestrators (e.g. the paginated-clean loop in
+   * {@code BaseHoodieTableServiceClient.cleanInBatches}) that manage their
+   * own instant lifecycle and bypass the {@link #execute()}
+   * {@code needsCleaning} trigger check per-batch.
+   *
    * @param startCleanTime Cleaner Instant Time
    * @return Cleaner Plan if generated
    */
-  protected Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
+  public Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
     final HoodieCleanerPlan cleanerPlan = requestClean(context);
     Option<HoodieCleanerPlan> option = Option.empty();
     if (nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())
