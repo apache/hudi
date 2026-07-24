@@ -31,6 +31,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -136,8 +137,11 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
     try (HFileReader reader = readerFactory.createHFileReader()) {
       reader.seekTo();
-      // candidateRowKeys must be sorted
-      return (candidateRowKeys instanceof TreeSet ? candidateRowKeys : new TreeSet<>(candidateRowKeys))
+      // candidateRowKeys must be sorted by UTF-8 bytes to match HFile ordering because the reader
+      // only seeks forward.
+      TreeSet<String> sortedRowKeys = new TreeSet<>(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
+      sortedRowKeys.addAll(candidateRowKeys);
+      return sortedRowKeys
           .stream()
           .filter(k -> {
             try {
