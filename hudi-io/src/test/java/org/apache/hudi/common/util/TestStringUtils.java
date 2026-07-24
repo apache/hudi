@@ -21,12 +21,17 @@ package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -319,11 +324,27 @@ public class TestStringUtils {
   }
 
   @Test
-  public void testUtf8LexicographicComparatorMatchesCompareUtf8Bytes() {
+  @SuppressWarnings("unchecked")
+  public void testUtf8LexicographicComparatorSerializableAndRejectsNull() throws Exception {
+    // Like String.compareTo, a null argument is rejected.
+    assertThrows(NullPointerException.class, () -> StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR.compare(null, "a"));
+
+    // The comparator is declared as (Comparator<String> & Serializable) so Spark can capture it inside
+    // serialized closures. Round-trip it through Java serialization and confirm the deserialized
+    // instance still orders keys by UTF-8 bytes for the divergent U+E000 vs U+20000 pair (U+E000's
+    // UTF-8 lead byte 0xEE sorts before U+20000's 0xF0, the reverse of String.compareTo / UTF-16).
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    try (ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+      oos.writeObject(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
+    }
+    Comparator<String> deserialized;
+    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(baos.toByteArray()))) {
+      deserialized = (Comparator<String>) ois.readObject();
+    }
+
     String bmpPrivateUse = new String(Character.toChars(0xE000));
     String supplementary = new String(Character.toChars(0x20000));
-    assertEquals(StringUtils.compareUtf8Bytes(bmpPrivateUse, supplementary),
-        StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR.compare(bmpPrivateUse, supplementary));
-    assertThrows(NullPointerException.class, () -> StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR.compare(null, "a"));
+    assertTrue(deserialized.compare(bmpPrivateUse, supplementary) < 0,
+        "Deserialized comparator should order U+E000 before U+20000 (UTF-8 byte order)");
   }
 }

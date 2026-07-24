@@ -56,6 +56,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -186,6 +187,40 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     assertEquals(5, readStats.getNumInserts());
     assertEquals(0, readStats.getNumUpdates());
     assertEquals(1, readStats.getNumDeletes());
+  }
+
+  @Test
+  void readBaseFileAndLogFileWithBinaryKeys() throws IOException {
+    // U+E000 (UTF-8 lead byte 0xEE) sorts BEFORE U+20000 (UTF-8 lead byte 0xF0) in raw UTF-8 byte
+    // order, but AFTER it under String.compareTo (UTF-16). The base-file record carries the
+    // U+E000-prefixed (UTF-8-smaller, UTF-16-larger) key and the log carries the U+20000-prefixed
+    // (UTF-8-larger, UTF-16-smaller) key, so a correct merge must emit them in UTF-8 byte order.
+    String bmpPrivateUse = new String(Character.toChars(0xE000));
+    String supplementary = new String(Character.toChars(0x20000));
+    TestRecord asciiA = new TestRecord("a", 0);
+    TestRecord asciiB = new TestRecord("b", 0);
+    TestRecord bmpRecord = new TestRecord(bmpPrivateUse + "-base", 0);
+    TestRecord supplementaryRecord = new TestRecord(supplementary + "-log", 0);
+
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieReaderContext<TestRecord> mockReaderContext = mock(HoodieReaderContext.class, RETURNS_DEEP_STUBS);
+    SortedKeyBasedFileGroupRecordBuffer<TestRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(mockReaderContext, readStats);
+
+    // Base-file records must already be in UTF-8 byte order: "a" (0x61) then the U+E000 key (0xEE...).
+    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(asciiA, bmpRecord).iterator()));
+
+    // Log records are supplied shuffled; the buffer sorts them by UTF-8 bytes before merging.
+    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+    when(dataBlock.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
+    when(dataBlock.getEngineRecordIterator(mockReaderContext)).thenReturn(
+        ClosableIterator.wrap(Arrays.asList(supplementaryRecord, asciiB).iterator()));
+    fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
+
+    List<TestRecord> actualRecords = getActualRecordsForSortedKeyBased(fileGroupRecordBuffer);
+    // Expected UTF-8 byte order: "a", "b", U+E000 key, U+20000 key; nothing is dropped.
+    assertEquals(Arrays.asList(asciiA, asciiB, bmpRecord, supplementaryRecord), actualRecords);
+    // The U+E000-prefixed base record precedes the U+20000-prefixed log record (reverse of UTF-16).
+    assertTrue(actualRecords.indexOf(bmpRecord) < actualRecords.indexOf(supplementaryRecord));
   }
 
   private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<TestRecord> mockReaderContext, HoodieReadStats readStats) {
