@@ -842,15 +842,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       return null;
     }
 
-    // Deterministic order so batchIndex is stable across resume attempts that
-    // recompute the partition list.
-    Collections.sort(fullPartitionList);
-
     int batchSize = config.getCleanerPlanPartitionsBatchSize();
-    List<List<String>> chunks = new ArrayList<>();
-    for (int i = 0; i < fullPartitionList.size(); i += batchSize) {
-      chunks.add(fullPartitionList.subList(i, Math.min(i + batchSize, fullPartitionList.size())));
-    }
+    List<List<String>> chunks = chunkForBatchedClean(fullPartitionList, batchSize);
     int totalBatches = chunks.size();
     String targetEarliestCommit = earliestInstant.map(HoodieInstant::getTimestamp).orElse("");
 
@@ -933,28 +926,72 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           continue;
         }
         HoodieCleanMetadata meta = TimelineMetadataUtils.deserializeHoodieCleanMetadata(details.get());
-        Map<String, String> extra = meta.getExtraMetadata();
-        if (extra == null) {
-          continue;
+        Option<Integer> idx = parseCompletedBatchIndex(meta.getExtraMetadata(), targetEarliestCommit, totalBatches);
+        if (idx.isPresent()) {
+          done.add(idx.get());
         }
-        String tgt = extra.get(BATCH_TARGET_EARLIEST_COMMIT_KEY);
-        String tot = extra.get(BATCH_TOTAL_BATCHES_KEY);
-        String idx = extra.get(BATCH_INDEX_KEY);
-        if (tgt == null || tot == null || idx == null) {
-          continue;
-        }
-        if (!tgt.equals(targetEarliestCommit)) {
-          continue;
-        }
-        if (Integer.parseInt(tot) != totalBatches) {
-          continue;
-        }
-        done.add(Integer.parseInt(idx));
       } catch (Exception e) {
         LOG.warn("Batched clean: failed to inspect completed clean instant {} for resume; ignoring.", instant, e);
       }
     }
     return done;
+  }
+
+  /**
+   * Deterministically chunk the partition list into batches of at most
+   * {@code batchSize}. Sorts by natural string order so a re-invoked
+   * (post-crash) job produces the same chunks and can align on
+   * {@code batchIndex} against earlier completions.
+   *
+   * <p>Package-private for unit testing.
+   *
+   * @throws IllegalArgumentException if batchSize is not positive.
+   */
+  static List<List<String>> chunkForBatchedClean(List<String> partitions, int batchSize) {
+    if (batchSize <= 0) {
+      throw new IllegalArgumentException("batchSize must be positive, got " + batchSize);
+    }
+    List<String> sorted = new ArrayList<>(partitions);
+    Collections.sort(sorted);
+    List<List<String>> chunks = new ArrayList<>();
+    for (int i = 0; i < sorted.size(); i += batchSize) {
+      chunks.add(new ArrayList<>(sorted.subList(i, Math.min(i + batchSize, sorted.size()))));
+    }
+    return chunks;
+  }
+
+  /**
+   * Parse a completed clean instant's extraMetadata to determine whether it
+   * belongs to a paginated run identified by {@code targetEarliestCommit} +
+   * {@code totalBatches}, and if so return its {@code batchIndex}. Returns
+   * empty for legacy (non-batched) instants, instants from other runs, and
+   * instants whose bookkeeping keys don't parse.
+   *
+   * <p>Package-private for unit testing.
+   */
+  static Option<Integer> parseCompletedBatchIndex(Map<String, String> extra,
+                                                  String targetEarliestCommit,
+                                                  int totalBatches) {
+    if (extra == null) {
+      return Option.empty();
+    }
+    String tgt = extra.get(BATCH_TARGET_EARLIEST_COMMIT_KEY);
+    String tot = extra.get(BATCH_TOTAL_BATCHES_KEY);
+    String idx = extra.get(BATCH_INDEX_KEY);
+    if (tgt == null || tot == null || idx == null) {
+      return Option.empty();
+    }
+    if (!tgt.equals(targetEarliestCommit)) {
+      return Option.empty();
+    }
+    try {
+      if (Integer.parseInt(tot) != totalBatches) {
+        return Option.empty();
+      }
+      return Option.of(Integer.parseInt(idx));
+    } catch (NumberFormatException e) {
+      return Option.empty();
+    }
   }
 
   /**
