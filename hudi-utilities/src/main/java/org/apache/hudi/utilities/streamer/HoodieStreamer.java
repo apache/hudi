@@ -38,7 +38,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -67,7 +66,6 @@ import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
-import org.apache.hudi.utilities.config.DebeziumTransformerConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionService;
@@ -157,15 +155,6 @@ public class HoodieStreamer implements Serializable {
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
-    // The Hudi Streamer is the only write path that knows both the Debezium payload and whether the
-    // transformer nests the CDC metadata, so it resolves the ordering field here and threads it
-    // through both the write properties and the config that table creation persists.
-    String resolvedDebeziumOrderingFields = DebeziumConstants.resolveOrderingFields(cfg.payloadClassName,
-        ConfigUtils.getBooleanWithAltKeys(this.properties, DebeziumTransformerConfig.ENABLE_NESTED_FIELDS));
-    if (resolvedDebeziumOrderingFields != null) {
-      cfg.sourceOrderingFields = resolvedDebeziumOrderingFields;
-      this.properties.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), cfg.sourceOrderingFields);
-    }
     Triple<RecordMergeMode, String, String> mergingConfigs =
         HoodieTableConfig.inferMergingConfigsForWrites(
             cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingFields,

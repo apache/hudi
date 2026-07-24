@@ -894,7 +894,7 @@ public class HoodieTableConfig extends HoodieConfig {
         // Additional custom merge properties.
         // Certain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
         // merge to function as expected. Handing such special cases here.
-        handlePayloadAdhocConfigs(payloadClassName, reconciledConfigs, orderingFieldName);
+        handlePayloadAdhocConfigs(payloadClassName, reconciledConfigs);
       }
     }
     return reconciledConfigs;
@@ -922,39 +922,22 @@ public class HoodieTableConfig extends HoodieConfig {
     }
   }
 
-  private static void handlePayloadAdhocConfigs(String payloadClassName, Map<String, String> reconciledConfigs,
-                                                String orderingFieldName) {
+  private static void handlePayloadAdhocConfigs(String payloadClassName, Map<String, String> reconciledConfigs) {
     // Certain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
     // merge to function as expected. Handing such special cases here.
     if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE, DEBEZIUM_UNAVAILABLE_VALUE);
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
-      reconciledConfigs.put(ORDERING_FIELDS.key(), reconcileDebeziumOrderingFields(payloadClassName, orderingFieldName));
+      reconciledConfigs.put(ORDERING_FIELDS.key(), DebeziumConstants.FLATTENED_LSN_COL_NAME);
     } else if (payloadClassName.equals(MySqlDebeziumAvroPayload.class.getName())) {
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
-      reconciledConfigs.put(ORDERING_FIELDS.key(), reconcileDebeziumOrderingFields(payloadClassName, orderingFieldName));
+      reconciledConfigs.put(ORDERING_FIELDS.key(), DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME);
     } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
       reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DELETE_OPERATION_VALUE);
     }
-  }
-
-  /**
-   * Forces a Debezium payload's ordering field to the canonical column(s) the payload merges on.
-   * The flat form ({@code _event_lsn}, or {@code _event_bin_file,_event_pos}) is used unless the
-   * caller already resolved the nested form — which only the Hudi Streamer does when its transformer
-   * groups the CDC metadata under the {@link DebeziumConstants#DEBEZIUM_METADATA_FIELD} struct — in
-   * which case the nested form is preserved so the payload orders against the nested columns.
-   * Keeping this here (rather than trusting {@code orderingFieldName} verbatim) preserves the
-   * long-standing auto-correction for every create path (Spark, Flink, Streamer).
-   */
-  private static String reconcileDebeziumOrderingFields(String payloadClassName, String orderingFieldName) {
-    String nestedOrderingFields = DebeziumConstants.resolveOrderingFields(payloadClassName, true);
-    return nestedOrderingFields.equals(orderingFieldName)
-        ? nestedOrderingFields
-        : DebeziumConstants.resolveOrderingFields(payloadClassName, false);
   }
 
   /**
