@@ -135,7 +135,7 @@ public class HudiAvroSerializer
 
     public Object getValue(Page sourcePage, int channel, int position)
     {
-        return columnTypes.get(channel).getObjectValue(null, sourcePage.getBlock(channel), position);
+        return columnTypes.get(channel).getObjectValue(sourcePage.getBlock(channel), position);
     }
 
     public void buildRecordInPage(PageBuilder pageBuilder, IndexedRecord record)

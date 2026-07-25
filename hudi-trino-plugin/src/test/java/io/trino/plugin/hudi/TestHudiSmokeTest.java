@@ -1302,7 +1302,7 @@ public class TestHudiSmokeTest
                 hudiSplit,
                 new LocalInputFile(parquetFile),
                 new FileFormatDataSourceStats(),
-                new ParquetReaderOptions(),
+                ParquetReaderOptions.builder().build(),
                 DateTimeZone.UTC, DynamicFilter.EMPTY, true)) {
             MaterializedResult result = materializeSourceDataStream(session, pageSource, List.of(columnType)).toTestTypes();
             assertThat(result.getMaterializedRows())
