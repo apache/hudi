@@ -643,10 +643,12 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           // computed expiration, so both callers agree on where the deadline comes from.
           StorageLockFile renewedLock = currentLock.getRight().get();
           this.setLock(renewedLock);
-          hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
-              (int) (renewedLock.getValidUntilMs() - getCurrentEpochMs())));
+          // Read the clock once so the metric and the log line below report the same deadline.
+          long renewalCompletionMs = getCurrentEpochMs();
+          long remainingLeaseMs = renewedLock.getValidUntilMs() - renewalCompletionMs;
+          hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric((int) remainingLeaseMs));
           logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before old expiration. The lock will expire in {} ms for lock {}.",
-              ownerId, oldExpirationMs - getCurrentEpochMs(), renewedLock.getValidUntilMs() - getCurrentEpochMs(), lockFilePath);
+              ownerId, oldExpirationMs - renewalCompletionMs, remainingLeaseMs, lockFilePath);
           recordAuditOperation(AuditOperationState.RENEW, acquisitionTimestamp);
           // Let heartbeat continue to renew lock lease again later.
           return true;
