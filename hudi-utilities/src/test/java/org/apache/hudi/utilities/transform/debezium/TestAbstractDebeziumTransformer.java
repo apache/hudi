@@ -116,10 +116,10 @@ class TestAbstractDebeziumTransformer extends DebeziumTransformerTestBase {
 
   @Test
   void testNestedModeGroupsMetadataButKeepsOpAndLsnAtRoot() {
-    // Supply an LSN-named metadata column so the LSN-to-root branch is exercised.
+    // Supply a root-level ordering column (LSN-named) so the ordering-columns-stay-at-root branch is exercised.
     Column lsnColumn = new Column(DebeziumConstants.INCOMING_SOURCE_NAME_FIELD).alias(DebeziumConstants.FLATTENED_LSN_COL_NAME);
     TestableDebeziumTransformer transformer =
-        new TestableDebeziumTransformer(Collections.singletonList(lsnColumn), Option.empty(), false);
+        new TestableDebeziumTransformer(Collections.emptyList(), Collections.singletonList(lsnColumn), Option.empty(), false);
 
     TypedProperties props = new TypedProperties();
     props.setProperty(DebeziumTransformerConfig.ENABLE_NESTED_FIELDS.key(), "true");
@@ -280,13 +280,20 @@ class TestAbstractDebeziumTransformer extends DebeziumTransformerTestBase {
   /** Minimal concrete subclass to exercise the otherwise database-agnostic base. */
   private static class TestableDebeziumTransformer extends AbstractDebeziumTransformer {
     TestableDebeziumTransformer() {
-      super(Collections.emptyList(), Option.empty());
+      super(Collections.emptyList(), Collections.emptyList(), Option.empty());
     }
 
     TestableDebeziumTransformer(List<Column> typeSpecificMetadataColumns,
                                 Option<Function<Dataset<Row>, Dataset<Row>>> postProcessingOption,
                                 boolean nestedFieldsEnabledByDefault) {
-      super(typeSpecificMetadataColumns, postProcessingOption, nestedFieldsEnabledByDefault);
+      super(typeSpecificMetadataColumns, Collections.emptyList(), postProcessingOption, nestedFieldsEnabledByDefault);
+    }
+
+    TestableDebeziumTransformer(List<Column> typeSpecificMetadataColumns,
+                                List<Column> rootLevelOrderingColumns,
+                                Option<Function<Dataset<Row>, Dataset<Row>>> postProcessingOption,
+                                boolean nestedFieldsEnabledByDefault) {
+      super(typeSpecificMetadataColumns, rootLevelOrderingColumns, postProcessingOption, nestedFieldsEnabledByDefault);
     }
   }
 }

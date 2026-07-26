@@ -95,7 +95,7 @@ class TestMysqlDebeziumTransformer extends DebeziumTransformerTestBase {
   }
 
   @Test
-  void testNestedModeGroupsMetadataButSeqStaysCorrect() {
+  void testNestedModeGroupsMetadataButKeepsOrderingColumnsAtRoot() {
     TypedProperties props = new TypedProperties();
     props.setProperty(DebeziumTransformerConfig.ENABLE_NESTED_FIELDS.key(), "true");
 
@@ -103,18 +103,21 @@ class TestMysqlDebeziumTransformer extends DebeziumTransformerTestBase {
         .apply(jsc, spark, jsonToDataset(mysqlEvent("c", 1, "mysql-bin.000001", 100)), props);
 
     List<String> columns = Arrays.asList(result.columns());
-    assertTrue(columns.contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD), "metadata nested");
+    assertTrue(columns.contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD), "non-ordering metadata nested");
     assertTrue(columns.contains(DebeziumConstants.FLATTENED_OP_COL_NAME), "op at root");
     assertTrue(columns.contains(DebeziumConstants.ADDED_SEQ_COL_NAME), "_event_seq at root");
-    assertFalse(columns.contains(DebeziumConstants.FLATTENED_FILE_COL_NAME), "binlog file is nested, not root");
+    // The binlog coordinates are the payload's ordering fields, so they stay at the root level even
+    // when nested is enabled (mirroring how Postgres keeps the LSN at the root).
+    assertTrue(columns.contains(DebeziumConstants.FLATTENED_FILE_COL_NAME), "binlog file kept at root");
+    assertTrue(columns.contains(DebeziumConstants.FLATTENED_POS_COL_NAME), "binlog pos kept at root");
 
     Row metadata = result.first().getAs(DebeziumConstants.DEBEZIUM_METADATA_FIELD);
     List<String> nested = Arrays.asList(metadata.schema().fieldNames());
-    assertTrue(nested.contains(DebeziumConstants.FLATTENED_FILE_COL_NAME));
-    assertTrue(nested.contains(DebeziumConstants.FLATTENED_POS_COL_NAME));
-    assertTrue(nested.contains(DebeziumConstants.FLATTENED_ROW_COL_NAME));
+    assertTrue(nested.contains(DebeziumConstants.FLATTENED_ROW_COL_NAME), "non-ordering row column is nested");
+    assertFalse(nested.contains(DebeziumConstants.FLATTENED_FILE_COL_NAME), "binlog file is at root, not nested");
+    assertFalse(nested.contains(DebeziumConstants.FLATTENED_POS_COL_NAME), "binlog pos is at root, not nested");
 
-    // _event_seq must still be computed correctly from the nested file/pos
+    // _event_seq must still be computed correctly from the root-level file/pos
     String seq = result.first().getAs(DebeziumConstants.ADDED_SEQ_COL_NAME);
     assertEquals("000001.100", seq);
   }

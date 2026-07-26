@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.config.DebeziumTransformerConfig;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import org.apache.spark.sql.Dataset;
@@ -40,6 +41,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * End-to-end functional tests for the Debezium transformers: raw change-event envelopes are run
@@ -58,8 +60,14 @@ class TestDebeziumTransformerMerge extends SparkClientFunctionalTestHarness {
   /** Transform the raw envelopes (flat layout) and upsert them into the Debezium table at {@code path}. */
   private void upsert(Transformer transformer, String[] envelopes, String orderingFields,
                       String payloadClass, String path, SaveMode mode) {
+    upsert(transformer, new TypedProperties(), envelopes, orderingFields, payloadClass, path, mode);
+  }
+
+  /** Transform the raw envelopes with the given transformer props (e.g. nested layout) and upsert them. */
+  private void upsert(Transformer transformer, TypedProperties transformerProps, String[] envelopes,
+                      String orderingFields, String payloadClass, String path, SaveMode mode) {
     Dataset<Row> transformed =
-        transformer.apply(jsc(), spark(), jsonToDataset(envelopes), new TypedProperties());
+        transformer.apply(jsc(), spark(), jsonToDataset(envelopes), transformerProps);
     transformed.write().format("hudi")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "id")
         .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), orderingFields)
@@ -156,6 +164,37 @@ class TestDebeziumTransformerMerge extends SparkClientFunctionalTestHarness {
 
     Map<Long, String> afterDelete = readIdToValue(path, "title");
     assertEquals(1, afterDelete.size(), "delete removed id=2");
+    assertEquals("t1_v2", afterDelete.get(1L));
+    assertFalse(afterDelete.containsKey(2L), "id=2 should be deleted");
+  }
+
+  @Test
+  void mysqlNestedMetadataMergeKeepsOrderingCorrect() {
+    // With nested metadata enabled, the non-ordering columns move under _debezium_metadata but the
+    // binlog file/pos ordering columns stay at root, so ordering + delete must still merge correctly.
+    String path = basePath() + "/mysql_nested";
+    String ordering = DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME;
+    String payload = MySqlDebeziumAvroPayload.class.getName();
+    MysqlDebeziumTransformer transformer = new MysqlDebeziumTransformer();
+    TypedProperties nested = new TypedProperties();
+    nested.setProperty(DebeziumTransformerConfig.ENABLE_NESTED_FIELDS.key(), "true");
+
+    upsert(transformer, nested, new String[] {mysql("c", 1, "t1", 100), mysql("c", 2, "t2", 100)},
+        ordering, payload, path, SaveMode.Overwrite);
+    upsert(transformer, nested, new String[] {mysql("u", 1, "t1_v2", 200)}, ordering, payload, path, SaveMode.Append);
+    upsert(transformer, nested, new String[] {mysql("u", 1, "stale", 50)}, ordering, payload, path, SaveMode.Append);
+
+    // The nested layout is actually persisted (proving nesting was in effect), yet ordering held.
+    assertTrue(Arrays.asList(spark().read().format("hudi").load(path).columns())
+        .contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD), "_debezium_metadata struct persisted");
+    Map<Long, String> afterUpdates = readIdToValue(path, "title");
+    assertEquals(2, afterUpdates.size());
+    assertEquals("t1_v2", afterUpdates.get(1L), "higher-position update wins under nested layout; stale ignored");
+    assertEquals("t2", afterUpdates.get(2L));
+
+    upsert(transformer, nested, new String[] {mysql("d", 2, "t2", 300)}, ordering, payload, path, SaveMode.Append);
+    Map<Long, String> afterDelete = readIdToValue(path, "title");
+    assertEquals(1, afterDelete.size(), "delete removed id=2 under nested layout");
     assertEquals("t1_v2", afterDelete.get(1L));
     assertFalse(afterDelete.containsKey(2L), "id=2 should be deleted");
   }

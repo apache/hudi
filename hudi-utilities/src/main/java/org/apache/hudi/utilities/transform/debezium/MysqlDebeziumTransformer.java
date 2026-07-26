@@ -45,38 +45,33 @@ import java.util.List;
  */
 public class MysqlDebeziumTransformer extends AbstractDebeziumTransformer {
 
+  // Nestable MySQL metadata (grouped under _debezium_metadata when nesting is enabled).
   private static final List<Column> MYSQL_METADATA = Arrays.asList(
-      new Column(DebeziumConstants.INCOMING_SOURCE_FILE_FIELD).alias(DebeziumConstants.FLATTENED_FILE_COL_NAME),
-      new Column(DebeziumConstants.INCOMING_SOURCE_POS_FIELD).alias(DebeziumConstants.FLATTENED_POS_COL_NAME),
       new Column(DebeziumConstants.INCOMING_SOURCE_ROW_FIELD).alias(DebeziumConstants.FLATTENED_ROW_COL_NAME));
 
+  // The binlog coordinates are the payload's ordering fields, so they are kept at the root level in
+  // every layout (flat or nested), matching how the Postgres transformer keeps the LSN at the root.
+  private static final List<Column> MYSQL_ORDERING_COLUMNS = Arrays.asList(
+      new Column(DebeziumConstants.INCOMING_SOURCE_FILE_FIELD).alias(DebeziumConstants.FLATTENED_FILE_COL_NAME),
+      new Column(DebeziumConstants.INCOMING_SOURCE_POS_FIELD).alias(DebeziumConstants.FLATTENED_POS_COL_NAME));
+
   public MysqlDebeziumTransformer() {
-    super(MYSQL_METADATA, Option.of(MysqlDebeziumTransformer::applySeqNo));
+    super(MYSQL_METADATA, MYSQL_ORDERING_COLUMNS, Option.of(MysqlDebeziumTransformer::applySeqNo));
   }
 
   /**
    * Builds the {@code _event_seq} ordering column from the binlog file and position. The file column
    * holds a name like {@code "mysql-bin.000001"}; only the numeric suffix after the last dot is used,
-   * yielding a sequence such as {@code "000001.100"}. Handles both the flat and nested metadata
-   * layouts (reading {@code file}/{@code pos} from the {@code _debezium_metadata} struct when nested).
+   * yielding a sequence such as {@code "000001.100"}. The binlog file and position are kept at the root
+   * level in both the flat and nested layouts, so they are read directly.
    *
    * @param dataset flattened MySQL Debezium dataset.
    * @return dataset with the {@code _event_seq} column added.
    */
   private static Dataset<Row> applySeqNo(Dataset<Row> dataset) {
-    boolean isNested = Arrays.asList(dataset.columns()).contains(DebeziumConstants.DEBEZIUM_METADATA_FIELD);
-
-    Column fileCol = isNested
-        ? dataset.col(DebeziumConstants.DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_FILE_COL_NAME)
-        : dataset.col(DebeziumConstants.FLATTENED_FILE_COL_NAME);
-
-    Column posCol = isNested
-        ? dataset.col(DebeziumConstants.DEBEZIUM_METADATA_FIELD + "." + DebeziumConstants.FLATTENED_POS_COL_NAME)
-        : dataset.col(DebeziumConstants.FLATTENED_POS_COL_NAME);
-
     return dataset.withColumn(DebeziumConstants.ADDED_SEQ_COL_NAME, functions.concat(
-        functions.substring_index(fileCol, ".", -1),
+        functions.substring_index(dataset.col(DebeziumConstants.FLATTENED_FILE_COL_NAME), ".", -1),
         functions.lit("."),
-        posCol));
+        dataset.col(DebeziumConstants.FLATTENED_POS_COL_NAME)));
   }
 }

@@ -91,18 +91,26 @@ public class AbstractDebeziumTransformer implements Transformer {
       new Column(DebeziumConstants.INCOMING_SOURCE_TS_MS_FIELD).alias(DebeziumConstants.FLATTENED_TS_COL_NAME));
 
   private final List<Column> typeSpecificMetadataColumns;
+  private final List<Column> rootLevelOrderingColumns;
   private final Option<Function<Dataset<Row>, Dataset<Row>>> postProcessingOption;
   private final boolean nestedFieldsEnabledByDefault;
 
   protected AbstractDebeziumTransformer(
       List<Column> typeSpecificMetadataColumns,
+      List<Column> rootLevelOrderingColumns,
       Option<Function<Dataset<Row>, Dataset<Row>>> postProcessingOption) {
-    this(typeSpecificMetadataColumns, postProcessingOption, false);
+    this(typeSpecificMetadataColumns, rootLevelOrderingColumns, postProcessingOption, false);
   }
 
   /**
    * @param typeSpecificMetadataColumns database-specific metadata columns (already aliased to their
-   *                                    flattened output names).
+   *                                    flattened output names) that are grouped under the
+   *                                    {@code _debezium_metadata} struct when nesting is enabled.
+   * @param rootLevelOrderingColumns    database-specific ordering / log-position columns (e.g. the
+   *                                    Postgres LSN, or the MySQL binlog file and position) that stay
+   *                                    at the root level in every layout, so the payload's ordering
+   *                                    field is always a root-level column and needs no nested-path
+   *                                    handling.
    * @param postProcessingOption        optional post-flatten transformation applied to the result.
    * @param nestedFieldsEnabledByDefault the subclass default for the metadata layout. Resolution
    *                                     order at runtime: an explicitly set
@@ -113,9 +121,11 @@ public class AbstractDebeziumTransformer implements Transformer {
    */
   protected AbstractDebeziumTransformer(
       List<Column> typeSpecificMetadataColumns,
+      List<Column> rootLevelOrderingColumns,
       Option<Function<Dataset<Row>, Dataset<Row>>> postProcessingOption,
       boolean nestedFieldsEnabledByDefault) {
     this.typeSpecificMetadataColumns = typeSpecificMetadataColumns;
+    this.rootLevelOrderingColumns = rootLevelOrderingColumns;
     this.postProcessingOption = postProcessingOption;
     this.nestedFieldsEnabledByDefault = nestedFieldsEnabledByDefault;
   }
@@ -160,6 +170,7 @@ public class AbstractDebeziumTransformer implements Transformer {
       outputColumns.addAll(DEFAULT_ROOT_LEVEL_METADATA_COLUMNS);
       outputColumns.addAll(DEFAULT_NESTED_METADATA_COLUMNS);
       outputColumns.addAll(typeSpecificMetadataColumns);
+      outputColumns.addAll(rootLevelOrderingColumns);
     }
     // Explode the selected before/after image to the row's top level.
     outputColumns.add(new Column(String.format("%s.*", DATA_FIELD)));
@@ -168,20 +179,13 @@ public class AbstractDebeziumTransformer implements Transformer {
 
   /**
    * Assembles the metadata columns for the nested layout: the operation-type column and the
-   * log-position column (e.g. the Postgres LSN) stay at the root level so payload ordering keeps
-   * working, while every other metadata column is grouped under the {@code _debezium_metadata} struct.
+   * database-specific ordering / log-position columns (e.g. the Postgres LSN, or the MySQL binlog
+   * file and position) stay at the root level so payload ordering keeps working against root-level
+   * columns, while every other metadata column is grouped under the {@code _debezium_metadata} struct.
    */
   private List<Column> buildNestedMetadataColumns(Dataset<Row> withDataField) {
-    Column lsnColumn = null;
     List<Column> nestedMetadataFields = new ArrayList<>(DEFAULT_NESTED_METADATA_COLUMNS);
-    // Keep the log-position (LSN) column at the root level; nest the rest of the type-specific metadata.
-    for (Column col : typeSpecificMetadataColumns) {
-      if (col.toString().contains(DebeziumConstants.FLATTENED_LSN_COL_NAME)) {
-        lsnColumn = col;
-      } else {
-        nestedMetadataFields.add(col);
-      }
-    }
+    nestedMetadataFields.addAll(typeSpecificMetadataColumns);
     // Only add the schema field if it exists in the source struct (not all databases have this field).
     if (hasSchemaField(withDataField)) {
       nestedMetadataFields.add(new Column(DebeziumConstants.INCOMING_SOURCE_SCHEMA_FIELD).alias(DebeziumConstants.FLATTENED_SCHEMA_NAME));
@@ -190,10 +194,9 @@ public class AbstractDebeziumTransformer implements Transformer {
     List<Column> outputColumns = new ArrayList<>();
     outputColumns.add(functions.struct(nestedMetadataFields.toArray(new Column[]{}))
         .alias(DebeziumConstants.DEBEZIUM_METADATA_FIELD));
+    // The operation-type column and the ordering / log-position columns stay at the root level.
     outputColumns.addAll(DEFAULT_ROOT_LEVEL_METADATA_COLUMNS);
-    if (lsnColumn != null) {
-      outputColumns.add(lsnColumn);
-    }
+    outputColumns.addAll(rootLevelOrderingColumns);
     return outputColumns;
   }
 

@@ -50,13 +50,17 @@ import static org.apache.spark.sql.functions.when;
  */
 public class PostgresDebeziumTransformer extends AbstractDebeziumTransformer {
 
+  // Nestable Postgres metadata (grouped under _debezium_metadata when nesting is enabled).
   private static final List<Column> POSTGRES_METADATA = Arrays.asList(
       new Column(DebeziumConstants.INCOMING_SOURCE_TXID_FIELD).alias(DebeziumConstants.FLATTENED_TX_ID_COL_NAME),
-      new Column(DebeziumConstants.INCOMING_SOURCE_LSN_FIELD).alias(DebeziumConstants.FLATTENED_LSN_COL_NAME),
       new Column(DebeziumConstants.INCOMING_SOURCE_XMIN_FIELD).alias(DebeziumConstants.FLATTENED_XMIN_COL_NAME));
 
+  // The LSN is the payload's ordering field, so it is kept at the root level in every layout.
+  private static final List<Column> POSTGRES_ORDERING_COLUMNS = Arrays.asList(
+      new Column(DebeziumConstants.INCOMING_SOURCE_LSN_FIELD).alias(DebeziumConstants.FLATTENED_LSN_COL_NAME));
+
   public PostgresDebeziumTransformer() {
-    super(POSTGRES_METADATA, Option.of(PostgresDebeziumTransformer::useDefaultValuesForLsnIfNull));
+    super(POSTGRES_METADATA, POSTGRES_ORDERING_COLUMNS, Option.of(PostgresDebeziumTransformer::useDefaultValuesForLsnIfNull));
   }
 
   /**
