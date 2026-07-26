@@ -108,12 +108,19 @@ class TestHoodieMetaFieldsMode {
   }
 
   @Test
-  void modeIsIgnoredWhenPopulateMetaFieldsIsTrue() {
-    // populate.meta.fields=true always resolves to ALL — the raw mode on disk is not consulted.
-    // Writer-side validate() rejects this combination up-front, but the accessor must still report
-    // ALL semantics defensively.
+  void modeWinsOverLegacyPopulateMetaFields() {
+    // hoodie.meta.fields.mode is the source of truth: when it is set, the deprecated
+    // populate.meta.fields boolean is not consulted, whichever way it points.
     HoodieTableConfig cfg = configOf(true, MetaFieldsMode.COMMIT_TIME_ONLY.name());
-    assertEquals(MetaFieldsMode.ALL, cfg.getMetaFieldsMode());
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, cfg.getMetaFieldsMode());
+    assertTrue(cfg.isCommitTimePopulated());
+    assertFalse(cfg.isFileNamePopulated());
+    // ...and populateMetaFields() is derived from the mode, so legacy call sites agree.
+    assertFalse(cfg.populateMetaFields());
+
+    HoodieTableConfig allWithLegacyFalse = configOf(false, MetaFieldsMode.ALL.name());
+    assertEquals(MetaFieldsMode.ALL, allWithLegacyFalse.getMetaFieldsMode());
+    assertTrue(allWithLegacyFalse.populateMetaFields());
   }
 
   @Test

@@ -37,16 +37,18 @@ import org.apache.hudi.common.util.StringUtils;
  * or none of them beyond the two selectable ones. If you need any of the remaining columns, set
  * {@code hoodie.populate.meta.fields=true}.
  *
- * <p>Mapping to the legacy {@code hoodie.populate.meta.fields} boolean:
+ * <p>This enum is the single source of truth for meta-column population. The legacy boolean
+ * {@code hoodie.populate.meta.fields} is deprecated and consulted only when
+ * {@code hoodie.meta.fields.mode} is absent, so that tables written before the mode property
+ * existed keep their behavior:
  *
  * <ul>
- *   <li>{@link #ALL} corresponds to {@code populate.meta.fields=true} — today's default.</li>
- *   <li>Every other value corresponds to {@code populate.meta.fields=false} plus a selective opt-in.</li>
+ *   <li>{@code populate.meta.fields=true} (or absent) → {@link #ALL} — today's default.</li>
+ *   <li>{@code populate.meta.fields=false} → {@link #NONE}.</li>
  * </ul>
  *
  * <p>On-disk representation: the enum {@link #name()} is persisted in {@code hoodie.properties}
- * under the property {@code hoodie.meta.fields.mode}. For backward compatibility, older tables that
- * predate this property fall back to {@link #ALL} or {@link #NONE} based on the legacy boolean.
+ * under the property {@code hoodie.meta.fields.mode}.
  */
 public enum MetaFieldsMode {
   /**
@@ -103,32 +105,48 @@ public enum MetaFieldsMode {
   }
 
   /**
-   * Auto-derive a mode from the legacy {@code hoodie.populate.meta.fields} boolean and the raw
-   * {@code hoodie.meta.fields.mode} property value. Precedence:
+   * Resolve the effective mode. {@code hoodie.meta.fields.mode} is the source of truth; the
+   * deprecated {@code hoodie.populate.meta.fields} boolean is a fallback for tables written before
+   * the mode property existed. Precedence:
    *
    * <ul>
-   *   <li>{@code populateMetaFields=true} → {@link #ALL} (the mode property is ignored).</li>
-   *   <li>{@code populateMetaFields=false} + null/empty mode → {@link #NONE}.</li>
-   *   <li>{@code populateMetaFields=false} + non-empty mode → the parsed enum value.</li>
+   *   <li>non-empty mode → the parsed enum value (the legacy boolean is not consulted).</li>
+   *   <li>null/empty mode + {@code populateMetaFields=false} → {@link #NONE}.</li>
+   *   <li>null/empty mode + {@code populateMetaFields=true} → {@link #ALL}.</li>
    * </ul>
    *
-   * <p>Throws {@link IllegalArgumentException} when the raw mode value does not match any enum
-   * value. This includes the pre-enum comma-separated format — callers that upgrade an old table
-   * must migrate the value through the hudi-cli.
+   * @param rawMode             raw {@code hoodie.meta.fields.mode} value; may be null or empty.
+   * @param legacyPopulateMetaFields value of the deprecated {@code hoodie.populate.meta.fields}.
+   * @throws IllegalArgumentException when the raw mode value does not match any enum value. This
+   *         includes the pre-enum comma-separated format — callers that upgrade an old table must
+   *         migrate the value through the hudi-cli.
    */
-  public static MetaFieldsMode fromConfig(boolean populateMetaFields, String rawMode) {
-    if (populateMetaFields) {
-      return ALL;
-    }
+  public static MetaFieldsMode resolve(String rawMode, boolean legacyPopulateMetaFields) {
     if (StringUtils.isNullOrEmpty(rawMode)) {
-      return NONE;
+      return legacyPopulateMetaFields ? ALL : NONE;
     }
+    return parse(rawMode);
+  }
+
+  /**
+   * Parse a raw {@code hoodie.meta.fields.mode} value into an enum constant, with a message that
+   * lists the allowed values. Prefer this over {@link #valueOf(String)} for user-supplied input.
+   */
+  public static MetaFieldsMode parse(String rawMode) {
     try {
       return MetaFieldsMode.valueOf(rawMode.trim());
     } catch (IllegalArgumentException e) {
       throw new IllegalArgumentException(String.format(
-          "Unsupported value '%s' for hoodie.meta.fields.mode. Allowed values: %s, %s, %s, %s.",
-          rawMode, COMMIT_TIME_ONLY, FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME, NONE), e);
+          "Unsupported value '%s' for hoodie.meta.fields.mode. Allowed values: %s, %s, %s, %s, %s.",
+          rawMode, ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME), e);
     }
+  }
+
+  /**
+   * @return the equivalent value of the deprecated {@code hoodie.populate.meta.fields} boolean, so
+   * that call sites not yet migrated to this enum keep observing consistent behavior.
+   */
+  public boolean toLegacyPopulateMetaFields() {
+    return this == ALL;
   }
 }

@@ -328,18 +328,28 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Base path of the dataset that needs to be bootstrapped as a Hudi table");
 
+  /**
+   * @deprecated since 1.3.0, use {@link #META_FIELDS_MODE} instead. {@code true} maps to
+   * {@link MetaFieldsMode#ALL} and {@code false} maps to {@link MetaFieldsMode#NONE}. This property
+   * is still honored for tables written before {@code hoodie.meta.fields.mode} existed, but it is
+   * consulted only when the mode property is absent.
+   */
+  @Deprecated
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key("hoodie.populate.meta.fields")
       .defaultValue(true)
-      .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
+      .deprecatedAfter("1.2.0")
+      .withDocumentation("Deprecated — use hoodie.meta.fields.mode instead (true maps to ALL, false maps to NONE). "
+          + "When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
 
   public static final ConfigProperty<String> META_FIELDS_MODE = ConfigProperty
       .key("hoodie.meta.fields.mode")
       .defaultValue("")
       .withDocumentation("Which Hudi meta columns are physically populated on disk. Allowed values are "
-          + "COMMIT_TIME_ONLY, FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME (or NONE / ALL, though those are "
-          + "derived automatically from hoodie.populate.meta.fields when unset). Set only at table creation, "
+          + "ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY and COMMIT_TIME_AND_FILE_NAME. This supersedes the "
+          + "deprecated hoodie.populate.meta.fields boolean, which is consulted only when this property is unset "
+          + "(true maps to ALL, false maps to NONE). Set only at table creation, "
           + "via the hudi-cli, or during table upgrade — the property is immutable at runtime because it is a "
           + "physical-storage decision baked into files at write time.");
 
@@ -1240,18 +1250,33 @@ public class HoodieTableConfig extends HoodieConfig {
 
   /**
    * @returns true is meta fields need to be populated. else returns false.
+   *
+   * <p>Derived from {@link #getMetaFieldsMode()} so that call sites still written against the
+   * deprecated boolean observe the same answer as the enum: only {@link MetaFieldsMode#ALL}
+   * populates every meta column. Selective modes report {@code false} here, which keeps
+   * key-dependent machinery (bloom filters, record-level index) correctly disabled.
    */
   public boolean populateMetaFields() {
+    return getMetaFieldsMode().toLegacyPopulateMetaFields();
+  }
+
+  /**
+   * @return the raw, deprecated {@code hoodie.populate.meta.fields} value, used only as the
+   * fallback when {@link #META_FIELDS_MODE} is absent. Callers should use
+   * {@link #getMetaFieldsMode()} instead.
+   */
+  private boolean legacyPopulateMetaFields() {
     return Boolean.parseBoolean(getStringOrDefault(POPULATE_META_FIELDS));
   }
 
   /**
-   * @return the {@link MetaFieldsMode} resolved from the on-disk properties. Older tables without
-   * the mode property fall back to {@link MetaFieldsMode#ALL} or {@link MetaFieldsMode#NONE} based
-   * on the legacy {@link #POPULATE_META_FIELDS} boolean.
+   * @return the {@link MetaFieldsMode} resolved from the on-disk properties. {@link #META_FIELDS_MODE}
+   * is the source of truth; tables written before that property existed fall back to
+   * {@link MetaFieldsMode#ALL} or {@link MetaFieldsMode#NONE} based on the deprecated
+   * {@link #POPULATE_META_FIELDS} boolean.
    */
   public MetaFieldsMode getMetaFieldsMode() {
-    return MetaFieldsMode.fromConfig(populateMetaFields(), getStringOrDefault(META_FIELDS_MODE));
+    return MetaFieldsMode.resolve(getStringOrDefault(META_FIELDS_MODE), legacyPopulateMetaFields());
   }
 
   /**

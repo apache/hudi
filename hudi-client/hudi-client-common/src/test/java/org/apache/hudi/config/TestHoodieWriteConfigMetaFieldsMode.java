@@ -18,10 +18,13 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 
 import org.junit.jupiter.api.Test;
+
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -38,6 +41,12 @@ class TestHoodieWriteConfigMetaFieldsMode {
 
   private static HoodieWriteConfig.Builder baseBuilder() {
     return HoodieWriteConfig.newBuilder().withPath("file:///tmp/test_hudi_meta_fields_mode");
+  }
+
+  private static Properties mergeOnReadProps() {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    return props;
   }
 
   @Test
@@ -92,28 +101,28 @@ class TestHoodieWriteConfigMetaFieldsMode {
   }
 
   @Test
-  void rejectsIncompatibleCombination() {
-    // populate.meta.fields=true together with a selective mode is ambiguous — reject.
-    HoodieWriteConfig.Builder builder = baseBuilder()
+  void modeWinsOverLegacyPopulateMetaFields() {
+    // The two properties no longer compose: an explicit mode is the answer regardless of the
+    // deprecated boolean, so this combination is accepted rather than rejected.
+    HoodieWriteConfig cfg = baseBuilder()
         .withPopulateMetaFields(true)
-        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY);
-    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, builder::build);
-    assertTrue(ex.getMessage().contains("hoodie.meta.fields.mode"),
-        "exception must name the mode property: " + ex.getMessage());
-    assertTrue(ex.getMessage().contains("hoodie.populate.meta.fields"),
-        "exception must name the legacy property too: " + ex.getMessage());
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .build();
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, cfg.getMetaFieldsMode());
+    assertTrue(cfg.isCommitTimePopulated());
+    assertFalse(cfg.isFileNamePopulated());
+    // populateMetaFields() is derived from the mode — only ALL reports true.
+    assertFalse(cfg.populateMetaFields());
   }
 
   @Test
-  void allModeWithPopulateFalseIsAlsoRejectedByBuilder() {
-    // Explicitly setting ALL is a no-op — the builder normalizes it to empty. Passing ALL directly
-    // is fine; ensuring populateMetaFields agrees is the caller's responsibility (validate() runs
-    // the cross-check at build time).
+  void explicitAllModeOverridesLegacyFalse() {
     HoodieWriteConfig cfg = baseBuilder()
-        .withPopulateMetaFields(true)
+        .withPopulateMetaFields(false)
         .withMetaFieldsMode(MetaFieldsMode.ALL)
         .build();
     assertEquals(MetaFieldsMode.ALL, cfg.getMetaFieldsMode());
+    assertTrue(cfg.populateMetaFields());
   }
 
   @Test
@@ -122,9 +131,44 @@ class TestHoodieWriteConfigMetaFieldsMode {
         .withPopulateMetaFields(false)
         .withMetaFieldsMode(MetaFieldsMode.NONE)
         .build();
-    // NONE is normalized to empty on-disk (implicit from populate=false).
     assertEquals(MetaFieldsMode.NONE, cfg.getMetaFieldsMode());
     assertFalse(cfg.isCommitTimePopulated());
     assertFalse(cfg.isFileNamePopulated());
+  }
+
+  @Test
+  void legacyBooleanIsUsedWhenModeIsAbsent() {
+    // Backward compat: tables written before hoodie.meta.fields.mode existed keep their behavior.
+    HoodieWriteConfig allCfg = baseBuilder().withPopulateMetaFields(true).build();
+    assertEquals(MetaFieldsMode.ALL, allCfg.getMetaFieldsMode());
+
+    HoodieWriteConfig noneCfg = baseBuilder().withPopulateMetaFields(false).build();
+    assertEquals(MetaFieldsMode.NONE, noneCfg.getMetaFieldsMode());
+  }
+
+  @Test
+  void rejectsSelectiveModeOnMergeOnRead() {
+    // Selective modes are CoW-only until the MoR log-write path honors them.
+    HoodieWriteConfig.Builder builder = baseBuilder()
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .withProps(mergeOnReadProps());
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, builder::build);
+    assertTrue(ex.getMessage().contains("hoodie.meta.fields.mode"),
+        "exception must name the mode property: " + ex.getMessage());
+    assertTrue(ex.getMessage().contains("COPY_ON_WRITE"),
+        "exception must explain the CoW-only restriction: " + ex.getMessage());
+  }
+
+  @Test
+  void allowsAllAndNoneOnMergeOnRead() {
+    // Only the selective modes are restricted — the two legacy-equivalent modes stay available.
+    assertEquals(MetaFieldsMode.ALL, baseBuilder()
+        .withMetaFieldsMode(MetaFieldsMode.ALL)
+        .withProps(mergeOnReadProps())
+        .build().getMetaFieldsMode());
+    assertEquals(MetaFieldsMode.NONE, baseBuilder()
+        .withMetaFieldsMode(MetaFieldsMode.NONE)
+        .withProps(mergeOnReadProps())
+        .build().getMetaFieldsMode());
   }
 }
