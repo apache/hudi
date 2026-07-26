@@ -1774,18 +1774,26 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT);
   }
 
+  /**
+   * @return true when every meta column is populated.
+   *
+   * <p>Derived from {@link #getMetaFieldsMode()} so that call sites still written against the
+   * deprecated {@code hoodie.populate.meta.fields} boolean observe the same answer as the enum:
+   * only {@link MetaFieldsMode#ALL} populates every meta column.
+   */
   public boolean populateMetaFields() {
-    return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    return getMetaFieldsMode().toLegacyPopulateMetaFields();
   }
 
   /**
-   * @return the {@link MetaFieldsMode} resolved from the write config. Older tables without the
-   * mode property fall back to {@link MetaFieldsMode#ALL} or {@link MetaFieldsMode#NONE} based on
-   * the legacy {@code hoodie.populate.meta.fields} boolean.
+   * @return the {@link MetaFieldsMode} resolved from the write config.
+   * {@code hoodie.meta.fields.mode} is the source of truth; configs written before that property
+   * existed fall back to {@link MetaFieldsMode#ALL} or {@link MetaFieldsMode#NONE} based on the
+   * deprecated {@code hoodie.populate.meta.fields} boolean.
    */
   public MetaFieldsMode getMetaFieldsMode() {
-    return MetaFieldsMode.fromConfig(populateMetaFields(),
-        getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE));
+    return MetaFieldsMode.resolve(getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
+        getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
   }
 
   /**
@@ -3612,15 +3620,20 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    /**
+     * @deprecated since 1.3.0, use {@link #withMetaFieldsMode(MetaFieldsMode)} instead
+     * ({@code true} maps to {@link MetaFieldsMode#ALL}, {@code false} to {@link MetaFieldsMode#NONE}).
+     */
+    @Deprecated
     public Builder withPopulateMetaFields(boolean populateMetaFields) {
       writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       return this;
     }
 
     public Builder withMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
-      // ALL is the default (implicit) mode — persist the enum name only for selective modes to
-      // keep hoodie.properties clean for tables that don't opt in.
-      if (metaFieldsMode == null || metaFieldsMode == MetaFieldsMode.ALL) {
+      // Leaving the mode unset defers to the deprecated populate.meta.fields boolean; any explicit
+      // mode (including ALL / NONE) is persisted so it wins over that fallback.
+      if (metaFieldsMode == null) {
         writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, "");
       } else {
         writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
@@ -3926,32 +3939,26 @@ public class HoodieWriteConfig extends HoodieConfig {
           String.format("%s must be positive, but was %d",
               HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), ttlStatsMaxParallelism));
 
-      // hoodie.meta.fields.mode is an additive opt-in on top of populate.meta.fields=false. Setting
-      // populate.meta.fields=true together with a non-ALL mode is ambiguous (the mode has no effect
-      // when all meta fields are already populated) so reject it explicitly rather than silently
-      // ignore. MetaFieldsMode.fromConfig also throws on unrecognized on-disk values.
+      // hoodie.meta.fields.mode is the source of truth for meta-column population; the deprecated
+      // populate.meta.fields boolean is consulted only when the mode is absent. There is therefore
+      // no ambiguous combination to reject here — MetaFieldsMode.resolve throws on unrecognized
+      // values.
       MetaFieldsMode metaFieldsMode = writeConfig.getMetaFieldsMode();
-      boolean populateMetaFields = writeConfig.populateMetaFields();
-      String rawMode = writeConfig.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE);
-      checkArgument(!(populateMetaFields && rawMode != null && !rawMode.isEmpty()),
-          String.format("%s must be empty when %s=true. Disable populate.meta.fields or clear the mode.",
-              HoodieTableConfig.META_FIELDS_MODE.key(),
-              HoodieTableConfig.POPULATE_META_FIELDS.key()));
       // Selective meta-field modes are CoW-only in this release. MoR log-write path does not yet
       // respect the mode, which would silently produce log records with null meta columns.
       boolean isSelective = metaFieldsMode != MetaFieldsMode.ALL && metaFieldsMode != MetaFieldsMode.NONE;
       checkArgument(!(writeConfig.getTableType() == HoodieTableType.MERGE_ON_READ && isSelective),
           String.format("%s=%s is currently supported for COPY_ON_WRITE tables only. MoR support is a follow-up. "
-                  + "For MoR either keep %s=true or use NONE mode.",
+                  + "For MoR use %s=ALL or %s=NONE.",
               HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
-              HoodieTableConfig.POPULATE_META_FIELDS.key()));
+              HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.key()));
       // Selective meta-field modes are wired only for the Spark writer path in this release. Flink
       // RowData / Java-client writers ignore the mode and would silently produce NONE-mode output.
       checkArgument(!(engineType != EngineType.SPARK && isSelective),
           String.format("%s=%s is currently supported for the Spark writer only. Support for engine=%s is a follow-up. "
-                  + "Either keep %s=true or use NONE mode.",
+                  + "Use %s=ALL or %s=NONE.",
               HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode, engineType,
-              HoodieTableConfig.POPULATE_META_FIELDS.key()));
+              HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.key()));
     }
 
     public HoodieWriteConfig build() {

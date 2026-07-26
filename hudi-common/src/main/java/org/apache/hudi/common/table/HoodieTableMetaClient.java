@@ -1173,6 +1173,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    /**
+     * @deprecated since 1.3.0, use {@link #setMetaFieldsMode(MetaFieldsMode)} instead
+     * ({@code true} maps to {@link MetaFieldsMode#ALL}, {@code false} to {@link MetaFieldsMode#NONE}).
+     */
+    @Deprecated
     public TableBuilder setPopulateMetaFields(boolean populateMetaFields) {
       this.populateMetaFields = populateMetaFields;
       return this;
@@ -1185,15 +1190,15 @@ public class HoodieTableMetaClient implements Serializable {
 
     /**
      * Convenience overload that accepts the raw on-disk string (e.g. from properties files).
-     * Empty or null values leave the mode unset — the caller-provided populateMetaFields boolean
-     * determines whether the table is ALL or NONE.
+     * Empty or null values leave the mode unset — the table then resolves to ALL or NONE from the
+     * deprecated populate.meta.fields boolean.
      */
     public TableBuilder setMetaFieldsModeFromString(String rawMode) {
       if (rawMode == null || rawMode.trim().isEmpty()) {
         this.metaFieldsMode = null;
         return this;
       }
-      this.metaFieldsMode = MetaFieldsMode.valueOf(rawMode.trim());
+      this.metaFieldsMode = MetaFieldsMode.parse(rawMode);
       return this;
     }
 
@@ -1562,27 +1567,12 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != populateMetaFields) {
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       }
-      // Persist the mode in one place. Rules:
-      //  - Explicit selective mode wins → validate compatibility with populateMetaFields and write.
-      //  - populateMetaFields=false + no explicit mode → NONE (leave property empty for backward compat).
-      //  - populateMetaFields=true + no explicit mode → ALL (implicit; leave property empty).
+      // hoodie.meta.fields.mode is the source of truth. Persist it verbatim when supplied — it then
+      // wins over the deprecated populate.meta.fields boolean at read time, so no cross-validation
+      // between the two is needed. When no mode is supplied the property stays absent and the table
+      // resolves to ALL / NONE from the legacy boolean, preserving pre-1.3.0 behavior on disk.
       if (null != metaFieldsMode) {
-        if (Boolean.TRUE.equals(populateMetaFields) && metaFieldsMode != MetaFieldsMode.ALL) {
-          throw new IllegalArgumentException(String.format(
-              "%s=%s is incompatible with %s=true. Set populate.meta.fields=false or use MetaFieldsMode.ALL.",
-              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
-              HoodieTableConfig.POPULATE_META_FIELDS.key()));
-        }
-        if (Boolean.FALSE.equals(populateMetaFields) && metaFieldsMode == MetaFieldsMode.ALL) {
-          throw new IllegalArgumentException(String.format(
-              "%s=ALL is incompatible with %s=false. Set populate.meta.fields=true or pick a selective mode.",
-              HoodieTableConfig.META_FIELDS_MODE.key(),
-              HoodieTableConfig.POPULATE_META_FIELDS.key()));
-        }
-        // Persist only the selective modes; ALL/NONE are implicit from populate.meta.fields.
-        if (metaFieldsMode != MetaFieldsMode.ALL && metaFieldsMode != MetaFieldsMode.NONE) {
-          tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
-        }
+        tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
       }
       if (null != keyGeneratorClassProp) {
         KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);

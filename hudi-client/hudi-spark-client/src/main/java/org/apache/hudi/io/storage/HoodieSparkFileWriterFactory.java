@@ -56,10 +56,11 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
     org.apache.hudi.common.model.MetaFieldsMode metaFieldsMode =
-        org.apache.hudi.common.model.MetaFieldsMode.fromConfig(populateMetaFields,
-            config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE));
+        org.apache.hudi.common.model.MetaFieldsMode.resolve(
+            config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
+            config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
+    boolean populateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(path, storage.getConf(), config);
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
