@@ -232,6 +232,12 @@
                             <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                 <mainClass>org.apache.hudi.timeline.service.TimelineService</mainClass>
                             </transformer>
+                            <!-- Consumes streamed-in META-INF/LICENSE entries so the IncludeResourceTransformer below can add its own without a duplicate-entry failure -->
+                            <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer" />
+                            <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                                <resource>META-INF/LICENSE</resource>
+                                <file>${basedir}/../../LICENSE</file>
+                            </transformer>
                         </transformers>
                     </configuration>
                 </execution>

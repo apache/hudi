@@ -26,11 +26,13 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.timeline.service.ui.UiHandler;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
 import io.javalin.core.util.JavalinBindException;
+import io.javalin.http.staticfiles.Location;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -60,6 +62,7 @@ public class TimelineService {
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
   private transient RequestHandler requestHandler;
+  private transient UiHandler uiHandler;
 
   public TimelineService(StorageConfiguration<?> storageConf, Config timelineServerConf,
                          FileSystemViewManager globalFileSystemViewManager) {
@@ -121,6 +124,11 @@ public class TimelineService {
     @Builder.Default
     @Parameter(names = {"--enable-marker-requests", "-em"}, description = "Enable handling of marker-related requests")
     public boolean enableMarkerRequests = false;
+
+    @Builder.Default
+    @Parameter(names = {"--enable-ui"}, description = "Enable the Timeline UI: the /ui page, /ui/static assets, and /ui/api endpoints."
+        + " The timeline service has no authentication; enable the UI only on trusted networks.")
+    public boolean enableUi = false;
 
     @Builder.Default
     @Parameter(names = {"--enable-remote-partitioner"}, description = "Enable remote partitioner")
@@ -189,6 +197,13 @@ public class TimelineService {
       throw new IllegalArgumentException(String.format("startPort should be between 1024 and 65535 (inclusive), "
           + "or 0 for a random free port. but now is %s.", port));
     }
+    if (timelineServerConf.enableUi && TimelineService.class.getResource("/public/index.html") == null) {
+      // Javalin.create resolves classpath static dirs eagerly, and the retry loop below swallows the
+      // resulting error on every attempt; check ahead of the loop so the actionable message fails fast
+      // instead of surfacing as a generic port-retry failure.
+      throw new IllegalStateException("UI assets not bundled in this jar. The Timeline UI requires the public/ "
+          + "resources (shipped in hudi-timeline-server-bundle); rebuild with UI assets or start without --enable-ui.");
+    }
     for (int attempt = 0; attempt < START_SERVICE_MAX_RETRIES; attempt++) {
       // Returns port to try when trying to bind a service. Handles wrapping and skipping privileged ports.
       int tryPort = port == 0 ? port : (port + attempt - 1024) % (65536 - 1024) + 1024;
@@ -235,12 +250,23 @@ public class TimelineService {
         c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
       }
       c.server(() -> server);
+      if (timelineServerConf.enableUi) {
+        c.addStaticFiles(staticFiles -> {
+          staticFiles.hostedPath = "/ui/static";
+          staticFiles.directory = "/public";
+          staticFiles.location = Location.CLASSPATH;
+        });
+      }
     });
 
     requestHandler = new RequestHandler(
         app, storageConf, timelineServerConf, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
+    if (timelineServerConf.enableUi) {
+      uiHandler = new UiHandler(app);
+      uiHandler.register();
+    }
   }
 
   public void run() throws IOException {
@@ -310,5 +336,8 @@ public class TimelineService {
         cfg,
         viewManager);
     service.run();
+    // Block the main thread to keep the server alive (Javalin uses daemon threads).
+    Runtime.getRuntime().addShutdownHook(new Thread(service::close));
+    Thread.currentThread().join();
   }
 }

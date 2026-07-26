@@ -49,8 +49,12 @@ echo "Performing custom Licensing Check "
 # ---
 # Exclude the 'hudi-trino-plugin' directory. Its license checks are handled by airlift:
 # https://github.com/airlift/airbase/blob/823101482dbc60600d7862f0f5c93aded6190996/airbase/pom.xml#L1239
+#
+# Exclude the bundled UI libraries under hudi-timeline-service. Bootstrap, renderjson,
+# and vis-timeline ship with their own permissive licenses (preserved in their files).
 # ---
-numfilesWithNoLicense=$(find . -path './hudi-trino-plugin' -prune -o -type f -iname '*' | grep -v './hudi-trino-plugin' | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.zip' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v emptyFile | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'banner.txt' | grep -v '.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)")
+bundledUiLibs='./hudi-timeline-service/src/main/resources/public/lib'
+numfilesWithNoLicense=$(find . -path './hudi-trino-plugin' -prune -o -path "$bundledUiLibs" -prune -o -type f -iname '*' | grep -v './hudi-trino-plugin' | grep -v "$bundledUiLibs" | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.zip' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v emptyFile | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'banner.txt' | grep -v '.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)")
 # Check if the variable holding the list of files is non-empty
 if [ -n "$numfilesWithNoLicense" ]; then
   # If the list isn't empty, count the files and report the error

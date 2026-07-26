@@ -43,6 +43,7 @@ import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 import org.apache.hudi.timeline.service.handlers.RemotePartitionerHandler;
 import org.apache.hudi.timeline.service.handlers.TimelineHandler;
+import org.apache.hudi.timeline.service.ui.UiTimelineDTO;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -76,6 +77,21 @@ public class RequestHandler {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
   private static final TypeReference<List<String>> LIST_TYPE_REFERENCE = new TypeReference<List<String>>() {
   };
+
+  // Timeline UI API routes, gated behind --enable-ui.
+  private static final String UI_API_BASE = "/ui/api";
+  private static final String UI_TIMELINE_URL = String.format("%s/%s", UI_API_BASE, "timeline/instants/all");
+  private static final String UI_INSTANT_DETAILS_URL = String.format("%s/%s", UI_API_BASE, "timeline/instant");
+  private static final String UI_TABLE_CONFIG_URL = String.format("%s/%s", UI_API_BASE, "table/config");
+  private static final String UI_SCHEMA_HISTORY_URL = String.format("%s/%s", UI_API_BASE, "table/schema/history");
+
+  // Query-param names used only by the Timeline UI API.
+  private static final String INSTANT_ACTION_PARAM = "instantaction";
+  private static final String INSTANT_STATE_PARAM = "instantstate";
+  private static final String LIMIT_PARAM = "limit";
+
+  private static final int DEFAULT_SCHEMA_HISTORY_LIMIT = 200;
+  private static final int MAX_SCHEMA_HISTORY_LIMIT = 1000;
 
   private final TimelineService.Config timelineServiceConfig;
   private final FileSystemViewManager viewManager;
@@ -171,6 +187,33 @@ public class RequestHandler {
     return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MIN_INSTANT_PARAM, String.class).getOrDefault("");
   }
 
+  private static String getInstantParam(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_PARAM, String.class).getOrThrow(e -> new BadRequestResponse("INSTANT_PARAM is required"));
+  }
+
+  private static String getInstantActionParam(Context ctx) {
+    return ctx.queryParamAsClass(INSTANT_ACTION_PARAM, String.class).getOrThrow(e -> new BadRequestResponse("INSTANT_ACTION_PARAM is required"));
+  }
+
+  private static String getInstantStateParam(Context ctx) {
+    return ctx.queryParamAsClass(INSTANT_STATE_PARAM, String.class).getOrThrow(e -> new BadRequestResponse("INSTANT_STATE_PARAM is required"));
+  }
+
+  // Rejects non-numeric and non-positive limits with a 400; values above the cap are clamped, not rejected.
+  private static int getLimitParam(Context ctx) {
+    int limit;
+    try {
+      limit = Integer.parseInt(
+          ctx.queryParamAsClass(LIMIT_PARAM, String.class).getOrDefault(String.valueOf(DEFAULT_SCHEMA_HISTORY_LIMIT)));
+    } catch (NumberFormatException e) {
+      throw new BadRequestResponse("limit must be an integer");
+    }
+    if (limit <= 0) {
+      throw new BadRequestResponse("limit must be positive");
+    }
+    return Math.min(limit, MAX_SCHEMA_HISTORY_LIMIT);
+  }
+
   private static String getMarkerDirParam(Context ctx) {
     return ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault("");
   }
@@ -185,6 +228,9 @@ public class RequestHandler {
     registerDataFilesAPI();
     registerFileSlicesAPI();
     registerTimelineAPI();
+    if (timelineServiceConfig.enableUi) {
+      registerUiApi();
+    }
     if (markerHandler != null) {
       registerMarkerAPI();
     }
@@ -239,6 +285,34 @@ public class RequestHandler {
       metricsRegistry.add("TIMELINE", 1);
       TimelineDTO dto = instantHandler.getTimeline(getBasePathParam(ctx));
       writeValueAsString(ctx, dto);
+    }, false));
+  }
+
+  /**
+   * Register the Timeline UI API calls (under /ui/api). Gated behind --enable-ui.
+   */
+  private void registerUiApi() {
+    app.get(UI_TIMELINE_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("UI_TIMELINE", 1);
+      UiTimelineDTO dto = instantHandler.getUiTimeline(getBasePathParam(ctx));
+      writeValueAsString(ctx, dto);
+    }, false));
+
+    app.get(UI_INSTANT_DETAILS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("UI_INSTANT_DETAILS", 1);
+      Object instantDetails = instantHandler.getInstantDetails(getBasePathParam(ctx),
+          getInstantParam(ctx), getInstantActionParam(ctx), getInstantStateParam(ctx));
+      writeValueAsString(ctx, instantDetails);
+    }, false));
+
+    app.get(UI_TABLE_CONFIG_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("UI_TABLE_CONFIG", 1);
+      writeValueAsString(ctx, instantHandler.getTableConfig(getBasePathParam(ctx)));
+    }, false));
+
+    app.get(UI_SCHEMA_HISTORY_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("UI_SCHEMA_HISTORY", 1);
+      writeValueAsString(ctx, instantHandler.getSchemaHistory(getBasePathParam(ctx), getLimitParam(ctx)));
     }, false));
   }
 

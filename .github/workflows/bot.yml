@@ -1260,6 +1260,9 @@ jobs:
             sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
             mvn package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
           fi
+      - name: Validate Bundle UI Assets
+        if: needs.changes.outputs.relevant == 'true'
+        run: ./scripts/release/validate_bundle_ui_assets.sh
       - name: IT - Bundle Validation - OpenJDK 11
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -1325,6 +1328,9 @@ jobs:
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run: |
           mvn clean package -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true -Dmaven.javadoc.skip=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
+      - name: Validate Bundle UI Assets
+        if: needs.changes.outputs.relevant == 'true'
+        run: ./scripts/release/validate_bundle_ui_assets.sh
       - name: IT - Spark4 Bundle Validation - OpenJDK 17
         if: needs.changes.outputs.relevant == 'true'
         env:
@@ -1377,6 +1383,9 @@ jobs:
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run: |
           mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
+      - name: Validate Bundle UI Assets
+        if: needs.changes.outputs.relevant == 'true'
+        run: ./scripts/release/validate_bundle_ui_assets.sh
       - name: IT - Bundle Validation - OpenJDK 11
         if: needs.changes.outputs.relevant == 'true'
         env:
