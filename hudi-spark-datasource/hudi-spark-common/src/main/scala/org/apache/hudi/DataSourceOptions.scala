@@ -21,7 +21,7 @@ import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMI
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
-import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieTableType, MetaFieldsMode, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.{DELTA_STREAMER_CONFIG_PREFIX, IS_QUERY_AS_RO_TABLE, STREAMER_CONFIG_PREFIX}
@@ -548,8 +548,12 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .withInferFunction(
       JFunction.toJavaFunction((config: HoodieConfig) => {
+        // Resolve the meta-fields mode rather than reading the deprecated boolean: a selective mode
+        // leaves _hoodie_record_key unpopulated just as populate.meta.fields=false does, and must
+        // disable the row writer for the same reason.
         if (config.getString(OPERATION) == WriteOperationType.BULK_INSERT.value
-          && !config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
+          && !MetaFieldsMode.resolve(config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
+            config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)).isRecordKeyPopulated
           && config.getBooleanOrDefault(HoodieWriteConfig.COMBINE_BEFORE_INSERT)) {
           // need to turn off row writing for BULK_INSERT without meta fields with turned on COMBINE_BEFORE_INSERT to prevent shortcutting and ignoring COMBINE_BEFORE_INSERT setting
           Option.of("false")

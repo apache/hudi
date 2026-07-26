@@ -30,7 +30,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -114,7 +113,10 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
       throw new HoodieException("Dropping duplicates with bulk_insert in row writer path is not supported yet");
     }
 
-    boolean populateMetaFields = writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS);
+    // Resolve through the mode rather than reading the deprecated boolean directly: the sort /
+    // bucket partitioners below key off _hoodie_record_key and _hoodie_partition_path, which are
+    // null under every selective mode.
+    boolean populateMetaFields = writeConfig.getMetaFieldsMode().isRecordKeyPopulated();
     preExecute();
 
     BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows = getPartitioner(populateMetaFields, isTablePartitioned);

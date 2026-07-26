@@ -42,6 +42,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -391,7 +392,10 @@ public class SparkMetadataWriterUtils {
                       ? Option.empty()
                       : Option.of(HoodieSchema.parse(writerSchemaStr)));
       HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
-      HoodieSchema tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? HoodieSchemaUtils.addMetadataFields(schema) : schema)
+      // Selective meta-fields modes write the meta columns as physical nullable columns, so they
+      // belong in the table schema whenever the mode populates any of them.
+      HoodieSchema tableSchema = writerSchema.map(schema ->
+              tableConfig.getMetaFieldsMode() != MetaFieldsMode.NONE ? HoodieSchemaUtils.addMetadataFields(schema) : schema)
           .orElseThrow(() -> new IllegalStateException(String.format("Expected writer schema in commit metadata %s", commitMetadata)));
       List<Pair<String, HoodieSchema>> columnsToIndexSchemaMap = columnsToIndex.stream()
           .map(columnToIndex -> HoodieSchemaUtils.getNestedField(tableSchema, columnToIndex))

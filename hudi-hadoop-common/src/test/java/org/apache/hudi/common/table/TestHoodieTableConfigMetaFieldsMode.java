@@ -144,6 +144,35 @@ class TestHoodieTableConfigMetaFieldsMode {
   }
 
   @Test
+  void isWiderThanRejectsEveryColumnAddingTransition() {
+    // Widening is what the write-client irreversibility guard must reject: any transition that
+    // adds a populated meta column, not just the all-or-nothing NONE -> ALL case.
+    assertTrue(MetaFieldsMode.COMMIT_TIME_ONLY.isWiderThan(MetaFieldsMode.NONE));
+    assertTrue(MetaFieldsMode.FILE_NAME_ONLY.isWiderThan(MetaFieldsMode.NONE));
+    assertTrue(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME.isWiderThan(MetaFieldsMode.COMMIT_TIME_ONLY));
+    assertTrue(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME.isWiderThan(MetaFieldsMode.FILE_NAME_ONLY));
+    assertTrue(MetaFieldsMode.ALL.isWiderThan(MetaFieldsMode.NONE));
+    assertTrue(MetaFieldsMode.ALL.isWiderThan(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME));
+
+    // The two selective single-column modes each add a column the other lacks.
+    assertTrue(MetaFieldsMode.COMMIT_TIME_ONLY.isWiderThan(MetaFieldsMode.FILE_NAME_ONLY));
+    assertTrue(MetaFieldsMode.FILE_NAME_ONLY.isWiderThan(MetaFieldsMode.COMMIT_TIME_ONLY));
+  }
+
+  @Test
+  void isWiderThanAllowsSameModeAndNarrowing() {
+    for (MetaFieldsMode mode : MetaFieldsMode.values()) {
+      assertFalse(mode.isWiderThan(mode), mode + " must not be wider than itself");
+    }
+    // Narrowing drops columns from later commits, which is tolerated.
+    assertFalse(MetaFieldsMode.NONE.isWiderThan(MetaFieldsMode.ALL));
+    assertFalse(MetaFieldsMode.COMMIT_TIME_ONLY.isWiderThan(MetaFieldsMode.ALL));
+    assertFalse(MetaFieldsMode.COMMIT_TIME_ONLY.isWiderThan(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME));
+    // A null on-disk mode carries no information, so nothing is "wider" than it.
+    assertFalse(MetaFieldsMode.ALL.isWiderThan(null));
+  }
+
+  @Test
   void modeStringIsCaseInsensitiveAndTrimmed() {
     // Whitespace around the value is tolerated, and casing does not have to match the enum.
     assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, configOf(false, "  COMMIT_TIME_ONLY  ").getMetaFieldsMode());

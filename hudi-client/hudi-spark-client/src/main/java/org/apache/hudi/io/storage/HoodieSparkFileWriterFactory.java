@@ -121,7 +121,12 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newLanceFileWriter(String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
                                                 TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieSparkLanceWriter.validateNoVariantColumns(schema);
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    // Resolve through hoodie.meta.fields.mode rather than the deprecated boolean — see the parquet
+    // path above. Lance does not yet populate meta columns selectively, so a selective mode is
+    // treated as "record key not populated" (no bloom filter, no meta stamping).
+    boolean populateMetaFields = org.apache.hudi.common.model.MetaFieldsMode.resolve(
+        config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
+        config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)).isRecordKeyPopulated();
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
     boolean enableBloomFilter = enableBloomFilter(populateMetaFields, config);
     Option<BloomFilter> bloomFilter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
@@ -146,7 +151,12 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   @Override
   protected HoodieFileWriter newVortexFileWriter(String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
                                                  TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    // Resolve through hoodie.meta.fields.mode rather than the deprecated boolean — see the parquet
+    // path above. Vortex does not yet populate meta columns selectively, so a selective mode is
+    // treated as "record key not populated" (no bloom filter, no meta stamping).
+    boolean populateMetaFields = org.apache.hudi.common.model.MetaFieldsMode.resolve(
+        config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
+        config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)).isRecordKeyPopulated();
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
     boolean enableBloomFilter = enableBloomFilter(populateMetaFields, config);
     Option<BloomFilter> bloomFilter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
