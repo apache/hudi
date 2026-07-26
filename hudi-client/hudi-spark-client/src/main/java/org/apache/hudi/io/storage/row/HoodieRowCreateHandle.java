@@ -187,8 +187,11 @@ public class HoodieRowCreateHandle implements Serializable {
             ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD) : commitTime;
       }
       if (metaFieldsMode.isFileNamePopulated()) {
-        metaFields[HoodieRecord.FILENAME_META_FIELD_ORD] = shouldPreserveHoodieMetadata
-            ? row.getUTF8String(HoodieRecord.FILENAME_META_FIELD_ORD) : fileName;
+        // Always the file being written, never the source row's value — even when
+        // shouldPreserveHoodieMetadata is set. Preserving it during clustering would leave
+        // _hoodie_file_name pointing at a file that clustering just replaced. This matches the
+        // ALL path in writeRow below.
+        metaFields[HoodieRecord.FILENAME_META_FIELD_ORD] = fileName;
       }
       // The remaining meta columns stay null — Parquet stores nulls as definition-level flags
       // (zero data bytes).
