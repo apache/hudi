@@ -625,8 +625,49 @@ class TestStorageBasedLockProvider {
     assertTrue(lockProvider.renewLock());
 
     verify(mockLogger).info(
-        eq("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}."),
-        eq(this.ownerId), anyLong(), eq("gs://bucket/lake/db/tbl-default/.hoodie/.locks/table_lock.json"));
+        eq("Owner {}: Lock renewal successful. The renewal completes {} ms before old expiration. The lock will expire in {} ms for lock {}."),
+        eq(this.ownerId), anyLong(), anyLong(), eq("gs://bucket/lake/db/tbl-default/.hoodie/.locks/table_lock.json"));
+  }
+
+  @Test
+  void testRenewLockMetricUsesNewLeaseExpiration() {
+    // Regression test for https://github.com/apache/hudi/issues/18493: after a successful
+    // renewal the lock.expiration.deadline metric must reflect the remaining time on the newly
+    // renewed lease, not on the previous (about-to-expire) lease.
+    TypedProperties props = new TypedProperties();
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
+    props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
+
+    HoodieLockMetrics mockMetrics = mock(HoodieLockMetrics.class);
+    try (StorageBasedLockProvider providerWithMetrics = spy(new StorageBasedLockProvider(
+        ownerId,
+        props,
+        (a, b, c) -> mockHeartbeatManager,
+        (a, b, c) -> mockLockService,
+        mockLogger,
+        mockMetrics))) {
+
+      long t0 = 100_000L;
+      when(providerWithMetrics.getCurrentEpochMs()).thenReturn(t0);
+
+      // The currently held lease is about to expire (only 100 ms left) -- this is what makes the
+      // old vs new distinction observable: the old lease would have reported ~100 ms.
+      StorageLockData oldData = new StorageLockData(false, t0 + 100, ownerId);
+      StorageLockFile oldLockFile = new StorageLockFile(oldData, "v1");
+      doReturn(oldLockFile).when(providerWithMetrics).getLock();
+
+      StorageLockData renewedLockData = new StorageLockData(false, t0 + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+      StorageLockFile renewedLockFile = new StorageLockFile(renewedLockData, "v2");
+      when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(oldLockFile))))
+          .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(renewedLockFile)));
+
+      assertTrue(providerWithMetrics.renewLock());
+
+      // New lease = t0 + 10000ms validity, evaluated at t0 -> 10000 ms remaining (the fix),
+      // not the ~100 ms remaining on the old lease (the bug).
+      verify(mockMetrics).updateLockExpirationDeadlineMetric(DEFAULT_LOCK_VALIDITY_MS);
+    }
   }
 
   @Test
