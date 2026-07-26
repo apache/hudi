@@ -21,6 +21,7 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
+import org.apache.hudi.hive.util.HiveDriverPool;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
@@ -52,10 +54,20 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private final IMetaStoreClient metaStoreClient;
   private SessionState sessionState;
   private Driver hiveDriver;
+  // Optional. When non-null, partition-phase SQL lists fan out across this pool;
+  // table-level SQL (createTable, schema evolution, single-statement runSQL callers)
+  // always uses the session `hiveDriver` above. See HiveDriverPool javadoc.
+  private final HiveDriverPool driverPool;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
+    this(config, metaStoreClient, null);
+  }
+
+  public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient,
+                              HiveDriverPool driverPool) {
     super(config);
     this.metaStoreClient = metaStoreClient;
+    this.driverPool = driverPool;
     try {
       this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());
@@ -80,6 +92,41 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   @Override
   public void runSQL(String sql) {
     updateHiveSQLs(Collections.singletonList(sql));
+  }
+
+  /**
+   * Partition-phase SQL fan-out. When the driver pool is present, any leading
+   * {@code USE database} statements are run on every worker (Hive 2.x's
+   * ALTER PARTITION SET LOCATION ignores db.table qualifiers and uses the
+   * connection's current database, so each worker needs to USE the right db
+   * before any partition ALTER). The remaining statements are then dispatched
+   * round-robin across the pool. Falls through to the sequential path on the
+   * session Driver when no pool is configured.
+   */
+  @Override
+  protected void runSQLs(List<String> sqls) {
+    if (driverPool == null || sqls.isEmpty()) {
+      updateHiveSQLs(sqls);
+      return;
+    }
+    int firstNonUse = 0;
+    while (firstNonUse < sqls.size() && isUseStatement(sqls.get(firstNonUse))) {
+      firstNonUse++;
+    }
+    if (firstNonUse > 0) {
+      List<String> setupStatements = sqls.subList(0, firstNonUse);
+      driverPool.runOnEachWorker(setupStatements);
+    }
+    List<String> partitionStatements = sqls.subList(firstNonUse, sqls.size());
+    if (partitionStatements.isEmpty()) {
+      return;
+    }
+    List<Future<?>> futures = driverPool.runAll(partitionStatements);
+    driverPool.awaitAll(futures);
+  }
+
+  private static boolean isUseStatement(String sql) {
+    return sql != null && sql.regionMatches(true, 0, "USE ", 0, 4);
   }
 
   private List<CommandProcessorResponse> updateHiveSQLs(List<String> sqls) {
@@ -149,6 +196,16 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
   @Override
   public void close() {
+    // Close the pool first so the worker threads stop dispatching against their
+    // Drivers before we tear down anything else. The pool's close() runs
+    // Driver/SessionState cleanup on each worker's own thread.
+    if (driverPool != null) {
+      try {
+        driverPool.close();
+      } catch (Exception e) {
+        log.warn("Error closing HiveDriverPool", e);
+      }
+    }
     if (metaStoreClient != null) {
       Hive.closeCurrent();
     }
