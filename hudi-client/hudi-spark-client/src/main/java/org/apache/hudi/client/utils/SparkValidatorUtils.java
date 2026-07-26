@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.ExecutorServiceBasedEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -197,10 +198,13 @@ public class SparkValidatorUtils {
       HoodieTable table) {
     final HoodieSchema readerSchema;
     String schemaStr = table.getConfig().getWriteSchema();
-    boolean isPopulateMetaFieldsEnabled = table.getConfig().populateMetaFields();
+    // Selective modes write the meta columns as physical nullable columns, so the reader schema
+    // must include them whenever the mode populates any of them — populateMetaFields() is false
+    // for selective modes and would yield a schema that does not match the file on disk.
+    boolean hasMetaFieldColumns = table.getConfig().getMetaFieldsMode() != MetaFieldsMode.NONE;
     if (!StringUtils.isNullOrEmpty(schemaStr)) {
       HoodieSchema schema = HoodieSchema.parse(table.getConfig().getWriteSchema());
-      readerSchema = isPopulateMetaFieldsEnabled ? HoodieSchemaUtils.addMetadataFields(schema) : schema;
+      readerSchema = hasMetaFieldColumns ? HoodieSchemaUtils.addMetadataFields(schema) : schema;
     } else {
       LOG.warn("Schema not found from write config, defaulting to parsing schema from latest commit.");
       try {

@@ -21,6 +21,7 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.INSERT_DROP_DUPS
 import org.apache.hudi.common.config.HoodieConfig
+import org.apache.hudi.common.model.MetaFieldsMode
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -43,9 +44,20 @@ object AutoRecordKeyGenerationUtils {
       if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
         throw new HoodieKeyGeneratorException("Enabling " + INSERT_DROP_DUPS.key() + " is not supported with auto generation of record keys ")
       }
-      // virtual keys are not supported with auto generation of record keys.
-      if (!parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString).toBoolean) {
-        throw new HoodieKeyGeneratorException("Disabling " + HoodieTableConfig.POPULATE_META_FIELDS.key() + " is not supported with auto generation of record keys")
+      // virtual keys are not supported with auto generation of record keys. Resolve the mode rather
+      // than the deprecated boolean alone — a selective mode also leaves _hoodie_record_key
+      // unpopulated, so auto-generated keys would be computed and then discarded.
+      val metaFieldsMode = MetaFieldsMode.resolve(
+        parameters.getOrElse(HoodieTableConfig.META_FIELDS_MODE.key(), null),
+        parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+          HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString).toBoolean)
+      if (!metaFieldsMode.isRecordKeyPopulated) {
+        // Name whichever property the user actually set, so the error points at the config to change.
+        val offendingKey =
+          if (parameters.contains(HoodieTableConfig.META_FIELDS_MODE.key())) HoodieTableConfig.META_FIELDS_MODE.key()
+          else HoodieTableConfig.POPULATE_META_FIELDS.key()
+        throw new HoodieKeyGeneratorException(offendingKey + " is not supported with auto generation of record keys"
+          + " (resolved meta fields mode " + metaFieldsMode + " does not populate _hoodie_record_key)")
       }
       val orderingFieldsStr = ConfigUtils.getOrderingFieldsStrDuringWrite(hoodieConfig.getProps)
       if (StringUtils.nonEmpty(orderingFieldsStr)) {

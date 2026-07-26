@@ -125,7 +125,13 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME,
         filter,
         config.getBoolean(HFILE_WRITER_TO_ALLOW_DUPLICATES));
-    return new HoodieAvroHFileWriter(instantTime, path, hfileConfig, schema, taskContextSupplier, config.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
+    // Resolve through the mode like the parquet path above. HFile does not populate meta columns
+    // selectively, so a selective mode is treated as "record key not populated". Note getBoolean
+    // (unlike getBooleanOrDefault) returns null when neither property is set, which would NPE here.
+    boolean populateMetaFields = org.apache.hudi.common.model.MetaFieldsMode.resolve(
+        config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
+        config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)).isRecordKeyPopulated();
+    return new HoodieAvroHFileWriter(instantTime, path, hfileConfig, schema, taskContextSupplier, populateMetaFields);
   }
 
   protected HoodieFileWriter newOrcFileWriter(
