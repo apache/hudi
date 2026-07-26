@@ -59,7 +59,6 @@
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-utilities-slim-bundle</module>
     <module>packaging/hudi-timeline-server-bundle</module>
-    <module>packaging/hudi-trino-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink-datasource</module>
     <module>hudi-kafka-connect</module>
@@ -686,7 +685,6 @@
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
               <exclude>.mvn/**</exclude>
-              <exclude>hudi-trino-plugin/**</exclude>
             </excludes>
           </configuration>
           <executions>
@@ -2309,6 +2307,13 @@
       <modules>
         <module>hudi-platform-service</module>
         <module>packaging/hudi-metaserver-server-bundle</module>
+      </modules>
+    </profile>
+    <profile>
+      <!-- RFC-105: non-shaded Trino connector. JDK 25 + Trino SPI; off by default. -->
+      <id>hudi-trino</id>
+      <modules>
+        <module>hudi-trino</module>
       </modules>
     </profile>
     <profile>

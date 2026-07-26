@@ -1,0 +1,147 @@
+name: Hudi Trino Connector CI
+
+on:
+  push:
+    branches:
+      - master
+      - 'release-*'
+    paths:
+      - 'hudi-trino/**'
+      - '.github/workflows/hudi_trino_ci.yml'
+      # Upstream modules the connector build installs (the -am closure of the JDK 17
+      # install step) plus the poms that own trino.version and the dependency pins.
+      # Keep in sync with the case patterns in detect-trino-changes below.
+      - 'pom.xml'
+      - 'hudi-tests-common/**'
+      - 'hudi-io/**'
+      - 'hudi-common/**'
+      - 'hudi-hadoop-common/**'
+      - 'hudi-timeline-service/**'
+      - 'hudi-hadoop-mr/**'
+      - 'hudi-client/pom.xml'
+      - 'hudi-client/hudi-client-common/**'
+      - 'hudi-client/hudi-java-client/**'
+      - 'hudi-sync/hudi-sync-common/**'
+      - 'hudi-sync/hudi-hive-sync/**'
+  # No `paths:` filter here on purpose. test-hudi-trino-plugin is a required status check
+  # in .asf.yaml, and a path-filtered workflow is never instantiated on PRs that miss the
+  # filter, leaving the required context permanently pending. Run on every PR instead and
+  # skip the expensive steps via the detect-trino-changes job below.
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+  workflow_dispatch:
+
+concurrency:
+  group: hudi-trino-ci-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'release-') }}
+
+env:
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log
+
+jobs:
+  changes:
+    name: detect-trino-changes
+    runs-on: ubuntu-latest
+    outputs:
+      trino: ${{ steps.filter.outputs.trino }}
+    steps:
+      - name: Detect hudi-trino changes
+        id: filter
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          TRINO=false
+          if [ "$EVENT" = "pull_request" ]; then
+            FILES=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[].filename')
+          elif [ "$EVENT" = "push" ]; then
+            FILES=$(gh api "repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA" --jq '.files[].filename')
+          else
+            # workflow_dispatch and anything else: always run the full build.
+            FILES=""
+            TRINO=true
+          fi
+          echo "Changed files:"
+          printf '%s\n' "$FILES"
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              hudi-trino/*) TRINO=true ;;
+              .github/workflows/hudi_trino_ci.yml) TRINO=true ;;
+              # Upstream modules the connector build installs (the -am closure of the JDK 17
+              # install step) plus the poms that own trino.version and the dependency pins.
+              # Keep in sync with the push paths above.
+              pom.xml) TRINO=true ;;
+              hudi-tests-common/*) TRINO=true ;;
+              hudi-io/*) TRINO=true ;;
+              hudi-common/*) TRINO=true ;;
+              hudi-hadoop-common/*) TRINO=true ;;
+              hudi-timeline-service/*) TRINO=true ;;
+              hudi-hadoop-mr/*) TRINO=true ;;
+              hudi-client/pom.xml) TRINO=true ;;
+              hudi-client/hudi-client-common/*) TRINO=true ;;
+              hudi-client/hudi-java-client/*) TRINO=true ;;
+              hudi-sync/hudi-sync-common/*) TRINO=true ;;
+              hudi-sync/hudi-hive-sync/*) TRINO=true ;;
+            esac
+          done <<< "$FILES"
+          echo "trino=$TRINO"
+          echo "trino=$TRINO" >> "$GITHUB_OUTPUT"
+
+  build-and-test:
+    name: test-hudi-trino-plugin
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - name: Checkout repository
+        if: needs.changes.outputs.trino == 'true'
+        uses: actions/checkout@v5
+      # Hudi targets Java 11 and uses Lombok 1.18.36, which does not run on JDK 25.
+      # Build the upstream modules hudi-trino depends on under JDK 17 first,
+      # install them into the local m2, then build the connector itself under JDK 25.
+      - name: Set up JDK 17
+        if: needs.changes.outputs.trino == 'true'
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+      - name: Install upstream Hudi modules (JDK 17)
+        if: needs.changes.outputs.trino == 'true'
+        # hudi-client-common and hudi-java-client are pulled in here for the test stage;
+        # they live behind the hudi-trino-tests profile but the test step needs them.
+        run: mvn $MVN_ARGS install -pl :hudi-common,:hudi-hive-sync,:hudi-io,:hudi-sync-common,:hudi-client-common,:hudi-java-client -am -Dmaven.test.skip=true -Drat.skip -Dcheckstyle.skip
+      - name: Set up JDK 25
+        if: needs.changes.outputs.trino == 'true'
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+      # Trino does not publish trino-spi / trino-filesystem / trino-hive test-jars to
+      # Maven Central. Check out the matching release tag and install just the modules
+      # whose test classifiers we need into the local m2.
+      - name: Checkout trinodb/trino at 481
+        if: needs.changes.outputs.trino == 'true'
+        uses: actions/checkout@v5
+        with:
+          repository: trinodb/trino
+          ref: '481'
+          path: trino-src
+      - name: Install Trino test-jars (JDK 25)
+        if: needs.changes.outputs.trino == 'true'
+        working-directory: trino-src
+        run: mvn $MVN_ARGS install -pl :trino-spi,:trino-filesystem,:trino-hive,:trino-main -am -DskipTests -Dair.check.skip-all=true
+      - name: Build connector (JDK 25)
+        if: needs.changes.outputs.trino == 'true'
+        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
+      - name: Test connector (JDK 25)
+        if: needs.changes.outputs.trino == 'true'
+        run: mvn $MVN_ARGS -Phudi-trino,hudi-trino-tests -pl hudi-trino test

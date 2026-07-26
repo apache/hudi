@@ -1,0 +1,2 @@
+[console_scripts]
+hudi-agent-gateway = hudi_agent_gateway.cli:main
