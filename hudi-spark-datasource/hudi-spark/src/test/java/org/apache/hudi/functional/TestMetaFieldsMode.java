@@ -212,6 +212,41 @@ class TestMetaFieldsMode extends SparkClientFunctionalTestHarness {
 
     assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, tc.getMetaFieldsMode());
     assertMetaColumnPopulation(basePath(), MetaFieldsMode.COMMIT_TIME_ONLY);
+    // ...and hoodie.properties must not contradict the mode. A pre-1.3.0 reader ignores the mode
+    // property entirely, so leaving populate.meta.fields=true here would make it treat a
+    // selectively-written table as ALL.
+    assertFalse(tc.populateMetaFields(),
+        "legacy populate.meta.fields must be derived from the mode, not carried through verbatim");
+  }
+
+  @Test
+  void noneModePersistsLegacyBooleanAsFalse() {
+    // The unsafe case: an old incremental reader that sees populate.meta.fields=true on a NONE
+    // table would run against all-null commit times and silently return zero rows.
+    Map<String, String> options = baseOptions();
+    options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+
+    HoodieTableConfig tc = writeSampleAndGetTableConfig(options, basePath());
+
+    assertEquals(MetaFieldsMode.NONE, tc.getMetaFieldsMode());
+    assertFalse(tc.populateMetaFields(),
+        "NONE must persist populate.meta.fields=false so pre-1.3.0 readers do not treat it as ALL");
+  }
+
+  @Test
+  void allModePersistsLegacyBooleanAsTrue() {
+    Map<String, String> options = baseOptions();
+    options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.ALL.name());
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+
+    HoodieTableConfig tc = writeSampleAndGetTableConfig(options, basePath());
+
+    assertEquals(MetaFieldsMode.ALL, tc.getMetaFieldsMode());
+    assertTrue(tc.populateMetaFields(),
+        "ALL must persist populate.meta.fields=true for pre-1.3.0 readers");
   }
 
   @Test

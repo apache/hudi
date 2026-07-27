@@ -3631,12 +3631,16 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
-      // Leaving the mode unset defers to the deprecated populate.meta.fields boolean; any explicit
-      // mode (including ALL / NONE) is persisted so it wins over that fallback.
+      // Leaving the mode unset defers to the deprecated populate.meta.fields boolean. Setting it
+      // also rewrites that boolean from the mode, so the two can never disagree — a config carrying
+      // a selective mode alongside populate.meta.fields=true would otherwise create a table whose
+      // hoodie.properties misleads pre-1.3.0 readers into treating it as ALL.
       if (metaFieldsMode == null) {
         writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, "");
       } else {
         writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
+        writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+            Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
       }
       return this;
     }

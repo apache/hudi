@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -143,6 +144,54 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     assertEquals(metaClient1.toString(), metaClient2.toString());
     assertNotEquals(metaClient1.toString(), new Object().toString());
+  }
+
+  @Test
+  void testMetaFieldsModeRewritesLegacyPopulateMetaFields() throws IOException {
+    // hoodie.properties must never record a legacy boolean that contradicts the mode: a pre-1.3.0
+    // reader ignores hoodie.meta.fields.mode entirely and would otherwise treat a selectively
+    // written table as ALL. For NONE that is unsafe — an old incremental reader would run against
+    // all-null commit times and silently return no rows.
+    final String selectivePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-selective";
+    HoodieTableMetaClient selective = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("mfm-selective")
+        .setPopulateMetaFields(true)
+        .setMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .initTable(this.metaClient.getStorageConf(), selectivePath);
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, selective.getTableConfig().getMetaFieldsMode());
+    assertFalse(selective.getTableConfig().populateMetaFields(),
+        "caller-supplied populate.meta.fields=true must be overridden by the mode");
+
+    final String nonePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-none";
+    HoodieTableMetaClient none = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("mfm-none")
+        .setPopulateMetaFields(true)
+        .setMetaFieldsMode(MetaFieldsMode.NONE)
+        .initTable(this.metaClient.getStorageConf(), nonePath);
+    assertEquals(MetaFieldsMode.NONE, none.getTableConfig().getMetaFieldsMode());
+    assertFalse(none.getTableConfig().populateMetaFields());
+
+    final String allPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-all";
+    HoodieTableMetaClient all = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("mfm-all")
+        .setPopulateMetaFields(false)
+        .setMetaFieldsMode(MetaFieldsMode.ALL)
+        .initTable(this.metaClient.getStorageConf(), allPath);
+    assertEquals(MetaFieldsMode.ALL, all.getTableConfig().getMetaFieldsMode());
+    assertTrue(all.getTableConfig().populateMetaFields());
+
+    // No explicit mode: pre-1.3.0 behavior preserved, only the legacy boolean is recorded.
+    final String legacyPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-legacy";
+    HoodieTableMetaClient legacy = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("mfm-legacy")
+        .setPopulateMetaFields(false)
+        .initTable(this.metaClient.getStorageConf(), legacyPath);
+    assertEquals(MetaFieldsMode.NONE, legacy.getTableConfig().getMetaFieldsMode());
+    assertFalse(legacy.getTableConfig().populateMetaFields());
   }
 
   @Test

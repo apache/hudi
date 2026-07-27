@@ -1564,15 +1564,21 @@ public class HoodieTableMetaClient implements Serializable {
           tableConfig.setValue(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE, cdcSupplementalLoggingMode);
         }
       }
-      if (null != populateMetaFields) {
-        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
-      }
-      // hoodie.meta.fields.mode is the source of truth. Persist it verbatim when supplied — it then
-      // wins over the deprecated populate.meta.fields boolean at read time, so no cross-validation
-      // between the two is needed. When no mode is supplied the property stays absent and the table
-      // resolves to ALL / NONE from the legacy boolean, preserving pre-1.3.0 behavior on disk.
+      // hoodie.meta.fields.mode is the source of truth. When it is supplied, hoodie.properties must
+      // never contradict it: the legacy boolean is written from the mode (ALL -> true, every other
+      // mode -> false) rather than from whatever the caller passed. Otherwise a table written
+      // selectively could still record populate.meta.fields=true, and a pre-1.3.0 reader — which
+      // ignores the mode property entirely — would treat it as ALL. For NONE that is actively
+      // unsafe: an older incremental reader would be allowed to run against all-null commit times
+      // and silently return no rows.
       if (null != metaFieldsMode) {
         tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
+        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+            Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
+      } else if (null != populateMetaFields) {
+        // No explicit mode: preserve pre-1.3.0 behavior and record only the legacy boolean, which
+        // resolves to ALL / NONE on read.
+        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       }
       if (null != keyGeneratorClassProp) {
         KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);
