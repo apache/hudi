@@ -45,6 +45,7 @@ import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -1548,9 +1549,19 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
-    // Once meta fields are disabled, it cant be re-enabled for a given table.
-    if (!tableConfig.populateMetaFields() && writeConfig.populateMetaFields()) {
-      throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
+    // Meta-field population is physical: the columns are written into the base files, so a writer
+    // must agree with what the table already records. Compare the full enum rather than the legacy
+    // booleans — those collapse every selective mode to false, so a writer resolving to NONE would
+    // pass this check against a COMMIT_TIME_ONLY table and then write null commit times while the
+    // table still advertises COMMIT_TIME_ONLY, making incremental queries silently miss those rows.
+    MetaFieldsMode tableMetaFieldsMode = tableConfig.getMetaFieldsMode();
+    MetaFieldsMode writeMetaFieldsMode = writeConfig.getMetaFieldsMode();
+    if (tableMetaFieldsMode != writeMetaFieldsMode) {
+      throw new HoodieException(String.format(
+          "%s mismatch: table is %s but the writer resolved to %s. Meta columns are physical, so the "
+              + "writer must match the table. Set %s=%s on the writer, or recreate the table to change it.",
+          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode, writeMetaFieldsMode,
+          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode));
     }
 
     // Meta fields can be disabled only when either {@code SimpleKeyGenerator}, {@code ComplexKeyGenerator},
