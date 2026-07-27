@@ -19,8 +19,10 @@
 package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
+import org.apache.hudi.hive.util.HiveDriverPool;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
@@ -52,10 +55,20 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private final IMetaStoreClient metaStoreClient;
   private SessionState sessionState;
   private Driver hiveDriver;
+  // When present, partition-phase SQL lists fan out across this pool; table-level SQL
+  // (createTable, schema evolution, single-statement runSQL callers) always uses the
+  // session `hiveDriver` above. See HiveDriverPool javadoc.
+  private final Option<HiveDriverPool> driverPool;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
+    this(config, metaStoreClient, Option.empty());
+  }
+
+  public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient,
+                              Option<HiveDriverPool> driverPool) {
     super(config);
     this.metaStoreClient = metaStoreClient;
+    this.driverPool = driverPool;
     try {
       this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());
@@ -73,6 +86,15 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       if (this.hiveDriver != null) {
         this.hiveDriver.close();
       }
+      // driverPool (if present) was already constructed by the caller before this
+      // ctor ran; since we're about to throw, no one else will call close() on it.
+      driverPool.ifPresent(pool -> {
+        try {
+          pool.close();
+        } catch (Exception poolCloseException) {
+          log.error("Error while closing HiveDriverPool", poolCloseException);
+        }
+      });
       throw new HoodieHiveSyncException("Failed to create HiveQueryDDL object", e);
     }
   }
@@ -82,19 +104,74 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     updateHiveSQLs(Collections.singletonList(sql));
   }
 
+  /**
+   * Partition-phase SQL fan-out. When the driver pool is present, any leading
+   * {@code USE database} statements are run on every worker (Hive 2.x's
+   * ALTER PARTITION SET LOCATION ignores db.table qualifiers and uses the
+   * connection's current database, so each worker needs to USE the right db
+   * before any partition ALTER). The remaining statements are then dispatched
+   * round-robin across the pool. Falls through to the sequential path on the
+   * session Driver when no pool is configured.
+   */
+  @Override
+  protected void runSQLs(List<String> sqls) {
+    if (sqls.isEmpty()) {
+      return;
+    }
+    if (!driverPool.isPresent()) {
+      updateHiveSQLs(sqls);
+      return;
+    }
+    HiveDriverPool pool = driverPool.get();
+    int useStatementCount = 0;
+    while (useStatementCount < sqls.size() && isUseStatement(sqls.get(useStatementCount))) {
+      useStatementCount++;
+    }
+    if (useStatementCount > 0) {
+      List<String> setupStatements = sqls.subList(0, useStatementCount);
+      pool.runOnEachWorker(setupStatements);
+    }
+    List<String> partitionStatements = sqls.subList(useStatementCount, sqls.size());
+    if (partitionStatements.isEmpty()) {
+      return;
+    }
+    pool.awaitAll(pool.dispatchAll(partitionStatements));
+  }
+
+  /**
+   * Splits TOUCH into batches of {@code HIVE_BATCH_SYNC_PARTITION_NUM} only when a
+   * driver pool is actually present — i.e. only when {@link #runSQLs(List)} will
+   * dispatch those batches in parallel. Keyed on pool presence rather than on the
+   * {@code batching.enabled} config so the split can never take effect on a path
+   * that would just execute the batches serially (the base class, and therefore
+   * {@code JDBCExecutor}, always emits one statement).
+   */
+  @Override
+  protected int getTouchBatchSize(int partitionCount) {
+    return driverPool.isPresent()
+        ? config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) : partitionCount;
+  }
+
+  // Strict 4-char prefix match on "USE ". Internal callers (constructPartitionAlterStatements)
+  // always emit the USE statement without leading whitespace; do not call with externally
+  // supplied SQL that might be padded.
+  private static boolean isUseStatement(String sql) {
+    return sql != null && sql.regionMatches(true, 0, "USE ", 0, 4);
+  }
+
   private List<CommandProcessorResponse> updateHiveSQLs(List<String> sqls) {
     List<CommandProcessorResponse> responses = new ArrayList<>();
+    HoodieTimer timer = HoodieTimer.start();
     try {
       for (String sql : sqls) {
         if (hiveDriver != null) {
-          HoodieTimer timer = HoodieTimer.start();
           responses.add(hiveDriver.run(sql));
-          log.info("Time taken to execute [{}]: {} ms", sql, timer.endTimer());
         }
       }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);
     }
+    log.info("Executed {} SQL statements sequentially in {} ms", sqls.size(), timer.endTimer());
     return responses;
   }
 
@@ -149,6 +226,16 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
   @Override
   public void close() {
+    // Close the pool first so the worker threads stop dispatching against their
+    // Drivers before we tear down anything else. The pool's close() runs
+    // Driver/SessionState cleanup on each worker's own thread.
+    driverPool.ifPresent(pool -> {
+      try {
+        pool.close();
+      } catch (Exception e) {
+        log.warn("Error closing HiveDriverPool", e);
+      }
+    });
     if (metaStoreClient != null) {
       Hive.closeCurrent();
     }
