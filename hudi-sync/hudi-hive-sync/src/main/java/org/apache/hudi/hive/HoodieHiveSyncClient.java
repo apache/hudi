@@ -155,8 +155,25 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         }
       }
     } catch (Exception e) {
+      // The pool owns live daemon threads and Hive Drivers, and is built before the
+      // executor that would otherwise own its lifecycle. Any throw between those two
+      // points would leak it -- notably QueryBasedDDLExecutor's super(config), which
+      // runs the PartitionValueExtractor reflection before HiveQueryDDLExecutor's own
+      // try block is even entered. Closing here covers every such window; the pool's
+      // close() is idempotent, so overlapping with the executor's cleanup is harmless.
+      closePartitionDriverPoolQuietly();
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
+  }
+
+  private void closePartitionDriverPoolQuietly() {
+    partitionDriverPool.ifPresent(pool -> {
+      try {
+        pool.close();
+      } catch (Exception e) {
+        log.warn("Error closing HiveDriverPool during failed sync client construction", e);
+      }
+    });
   }
 
   /**
