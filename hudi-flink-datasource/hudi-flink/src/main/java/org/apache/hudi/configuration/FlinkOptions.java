@@ -1037,6 +1037,14 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(HoodieSyncTableStrategy.ALL.name())
       .withDescription("Hive table synchronization strategy. Available option: RO, RT, ALL.");
 
+  @AdvancedConfig
+  public static final ConfigOption<String> HADOOP_CONF_DIR = ConfigOptions
+          .key("hadoop.conf.dir")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("The hadoop configuration directory, where the core-site.xml, "
+                  + "hdfs-site.xml etc. lie in. Used to connect to a different HDFS cluster "
+                  + "for cross-cluster writes.");
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

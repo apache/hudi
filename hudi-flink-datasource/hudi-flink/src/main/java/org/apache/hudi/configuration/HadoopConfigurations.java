@@ -49,7 +49,14 @@ public class HadoopConfigurations {
    */
   public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
     org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
+    // If hadoop.conf.dir is explicitly configured, load from that directory.
+    // This enables cross-cluster writes by pointing to a different cluster's Hadoop conf.
+    String hadoopConfDir = conf.getString(FlinkOptions.HADOOP_CONF_DIR.key(), null);
+    if (hadoopConfDir != null && !hadoopConfDir.isEmpty()) {
+      hadoopConf = FlinkClientUtil.getHadoopConf(hadoopConfDir);
+    }
     Map<String, String> options = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
+    options.remove("conf.dir");
     options.forEach(hadoopConf::set);
     return hadoopConf;
   }
