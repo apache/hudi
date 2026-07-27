@@ -200,20 +200,18 @@ class TestMetaFieldsMode extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  void populateTrueWithSelectiveModeIsRejected() {
+  void selectiveModeWinsOverLegacyPopulateTrue() {
+    // hoodie.meta.fields.mode is the source of truth: an explicit mode is honored regardless of
+    // the deprecated boolean, so this combination is no longer ambiguous and is not rejected.
     Map<String, String> options = baseOptions();
     options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
     options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.COMMIT_TIME_ONLY.name());
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
 
-    Throwable thrown = assertThrows(Throwable.class, () ->
-        writeRows(Collections.singletonList(RowFactory.create("k1", "p1", "v1")),
-            simpleSchema(), options, basePath(), SaveMode.Overwrite));
+    HoodieTableConfig tc = writeSampleAndGetTableConfig(options, basePath());
 
-    String rootMessage = rootMessageOf(thrown);
-    assertTrue(rootMessage.contains(HoodieTableConfig.META_FIELDS_MODE.key())
-            || rootMessage.contains(HoodieTableConfig.POPULATE_META_FIELDS.key()),
-        "Expected validation error to name one of the conflicting properties, got: " + rootMessage);
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, tc.getMetaFieldsMode());
+    assertMetaColumnPopulation(basePath(), MetaFieldsMode.COMMIT_TIME_ONLY);
   }
 
   @Test
