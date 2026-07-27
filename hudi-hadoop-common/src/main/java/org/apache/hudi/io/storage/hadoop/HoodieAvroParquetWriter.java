@@ -54,6 +54,12 @@ public class HoodieAvroParquetWriter
   private final MetaFieldsMode metaFieldsMode;
   private final HoodieAvroWriteSupport writeSupport;
 
+  /**
+   * @deprecated since 1.3.0, use the {@link MetaFieldsMode} overload. Retained for existing callers
+   * that only distinguish all-or-nothing meta fields ({@code true} maps to {@link MetaFieldsMode#ALL},
+   * {@code false} to {@link MetaFieldsMode#NONE}); it cannot express the selective modes.
+   */
+  @Deprecated
   @SuppressWarnings({"unchecked", "rawtypes"})
   public HoodieAvroParquetWriter(StoragePath file,
                                  HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig,

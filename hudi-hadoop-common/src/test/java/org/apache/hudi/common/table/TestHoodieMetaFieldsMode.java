@@ -134,9 +134,12 @@ class TestHoodieMetaFieldsMode {
   }
 
   @Test
-  void modeStringIsCaseSensitiveAndTrimmed() {
-    // Enum-name form is uppercase-only; whitespace around the value is tolerated.
-    HoodieTableConfig cfg = configOf(false, "  COMMIT_TIME_ONLY  ");
+  void modeStringIsCaseInsensitiveAndTrimmed() {
+    // Whitespace around the value is tolerated, and casing does not have to match the enum.
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, configOf(false, "  COMMIT_TIME_ONLY  ").getMetaFieldsMode());
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, configOf(false, "commit_time_only").getMetaFieldsMode());
+    assertEquals(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME, configOf(false, " Commit_Time_And_File_Name ").getMetaFieldsMode());
+    HoodieTableConfig cfg = configOf(false, "CoMmIt_TiMe_OnLy");
     assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, cfg.getMetaFieldsMode());
   }
 }

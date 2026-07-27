@@ -20,6 +20,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.StringUtils;
 
+import java.util.Locale;
+
 /**
  * Which of Hudi's meta columns are physically populated on disk.
  *
@@ -134,7 +136,9 @@ public enum MetaFieldsMode {
    */
   public static MetaFieldsMode parse(String rawMode) {
     try {
-      return MetaFieldsMode.valueOf(rawMode.trim());
+      // Case-insensitive: users hand-editing hoodie.properties or passing write options should not
+      // have to match the enum's casing exactly.
+      return MetaFieldsMode.valueOf(rawMode.trim().toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException e) {
       throw new IllegalArgumentException(String.format(
           "Unsupported value '%s' for hoodie.meta.fields.mode. Allowed values: %s, %s, %s, %s, %s.",
