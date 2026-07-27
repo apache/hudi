@@ -215,29 +215,15 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
 
   private void acquireLockInternal(long time, TimeUnit unit, LockComponent lockComponent)
       throws InterruptedException, ExecutionException, TimeoutException, TException {
-    LockRequest lockRequest = null;
     lockLostRemotely = false;
     try {
       // TODO : FIX:Using the parameterized constructor throws MethodNotFound
       final LockRequestBuilder builder = new LockRequestBuilder();
-      lockRequest = builder.addLockComponent(lockComponent).setUser(System.getProperty("user.name")).build();
+      final LockRequest lockRequest = builder.addLockComponent(lockComponent).setUser(System.getProperty("user.name")).build();
       lockRequest.setUserIsSet(true);
-      final LockRequest lockRequestFinal = lockRequest;
-      this.lock = executor.submit(() -> hiveClient.lock(lockRequestFinal))
+      this.lock = executor.submit(() -> hiveClient.lock(lockRequest))
           .get(time, unit);
       scheduleHeartbeat();
-    } catch (InterruptedException | TimeoutException e) {
-      if (this.lock == null || this.lock.getState() != LockState.ACQUIRED) {
-        LockResponse lockResponse = this.hiveClient.checkLock(lockRequest.getTxnid());
-        if (lockResponse.getState() == LockState.ACQUIRED) {
-          this.lock = lockResponse;
-          // The lock was granted server-side even though the client timed out waiting on the
-          // future; it still needs a heartbeat, otherwise a long-running commit lets HMS expire it.
-          scheduleHeartbeat();
-        } else {
-          throw e;
-        }
-      }
     } finally {
       // it is better to release WAITING lock, otherwise hive lock will hang forever
       // Snapshot the lock: the heartbeat thread clears it as soon as the metastore reports it gone.
