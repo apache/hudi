@@ -24,18 +24,25 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestTenToNineDowngradeHandler {
 
   @Test
-  void testDowngradeRemovesStorageLayoutOnly() {
+  void testDowngradeRemovesStorageLayoutAndMetaFieldsMode() {
     UpgradeDowngrade.TableConfigChangeSet changeSet =
         new TenToNineDowngradeHandler().downgrade(null, null, null, null);
 
     assertTrue(changeSet.propertiesToUpdate().isEmpty());
-    assertEquals(1, changeSet.propertiesToDelete().size());
+    assertEquals(2, changeSet.propertiesToDelete().size());
     assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
+    // Version 9 does not understand hoodie.meta.fields.mode, so it is dropped...
+    assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.META_FIELDS_MODE));
+    // ...while hoodie.populate.meta.fields is deliberately left in place, so ALL and NONE tables
+    // round-trip unchanged — those are exactly the two states the legacy boolean can express.
+    assertFalse(changeSet.propertiesToDelete().contains(HoodieTableConfig.POPULATE_META_FIELDS));
+    assertFalse(changeSet.propertiesToUpdate().containsKey(HoodieTableConfig.POPULATE_META_FIELDS));
   }
 
   @Test
@@ -44,7 +51,8 @@ class TestTenToNineDowngradeHandler {
         new UpgradeDowngrade(null, null, null, null)
             .downgrade(HoodieTableVersion.TEN, HoodieTableVersion.NINE, "001");
 
-    assertEquals(1, changeSet.propertiesToDelete().size());
+    assertEquals(2, changeSet.propertiesToDelete().size());
     assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
+    assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.META_FIELDS_MODE));
   }
 }
