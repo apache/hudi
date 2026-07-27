@@ -22,6 +22,7 @@ package org.apache.hudi.hive.transaction.lock;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.NoSuchLockException;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CountDownLatch;
@@ -31,6 +32,7 @@ import java.util.concurrent.TimeoutException;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -52,10 +54,16 @@ class TestHiveMetastoreBasedLockProviderAcquireTimeout extends HiveMetastoreBase
   void acquireTimeoutIsReportedAsATimeout() throws Exception {
     IMetaStoreClient client = mock(IMetaStoreClient.class);
     CountDownLatch metastoreAnswers = new CountDownLatch(1);
+    CountDownLatch lockReturned = new CountDownLatch(1);
     when(client.lock(any())).thenAnswer(invocation -> {
       metastoreAnswers.await();
+      lockReturned.countDown();
       return acquiredLock(LOCK_ID);
     });
+    // What a real metastore answers for the txn id 0 that the timed-out request carried. Never
+    // reached now, it is here so that restoring the removed lookup fails this test on the cause of
+    // the exception rather than on a bare NPE from an unstubbed call.
+    when(client.checkLock(anyLong())).thenThrow(new NoSuchLockException("No such lock 0"));
 
     HiveMetastoreBasedLockProvider provider = new HiveMetastoreBasedLockProvider(lockConfiguration, client);
     try {
@@ -71,5 +79,12 @@ class TestHiveMetastoreBasedLockProviderAcquireTimeout extends HiveMetastoreBase
       metastoreAnswers.countDown();
       provider.close();
     }
+
+    // A lock granted after the client gave up is abandoned, not released: the timed-out get() never
+    // assigned it, so neither the acquire path nor close() knows of a lock to unlock or heartbeat.
+    // It stays held at the metastore until hive.txn.timeout reaps it.
+    assertTrue(lockReturned.await(30, TimeUnit.SECONDS));
+    verify(client, never()).unlock(anyLong());
+    verify(client, never()).heartbeat(anyLong(), anyLong());
   }
 }
