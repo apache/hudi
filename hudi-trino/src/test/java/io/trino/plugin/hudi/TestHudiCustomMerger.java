@@ -88,10 +88,9 @@ public class TestHudiCustomMerger
     public void testNonProjectionCompatibleMergerMergesWithFullTableSchema()
     {
         // A merger that is not projection compatible makes the file-group reader ask for the FULL table
-        // schema, so base and log reads must resolve data columns outside the query projection
-        // (apache/hudi#19249; this used to be rejected with NOT_SUPPORTED). sum(value) projects neither
-        // key nor name, yet 199 proves the key-based merge still ran: base-only would be 110 and the
-        // built-in newest-wins 104.
+        // schema, so base and log reads must resolve data columns outside the query projection.
+        // sum(value) projects neither key nor name, yet 199 proves the key-based merge still ran:
+        // base-only would be 110 and the built-in newest-wins 104.
         Session session = SessionBuilder.from(getSession())
                 .withRecordMergerImpls(NonProjectionCompatibleTestRecordMerger.class.getName())
                 .build();
