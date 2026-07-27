@@ -117,6 +117,7 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
         offsetGen.getEndpointUrl().orElse(null),
         getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ACCESS_KEY, null),
         getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_SECRET_KEY, null),
+        getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ROLE_ARN, null),
         offsetGen.getStartingPositionStrategy(),
         shouldAddMetaFields,
         getBooleanWithAltKeys(props, KinesisSourceConfig.KINESIS_ENABLE_DEAGGREGATION),
@@ -134,7 +135,8 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
           List<ShardFetchResult> results = new ArrayList<>();
           try (KinesisClient client = KinesisOffsetGen.createKinesisClient(
               readConfig.getRegion(), readConfig.getEndpointUrl(),
-              readConfig.getAccessKey(), readConfig.getSecretKey())) {
+              readConfig.getAccessKey(), readConfig.getSecretKey(),
+              readConfig.getRoleArn())) {
             while (shardRangeIt.hasNext()) {
               KinesisOffsetGen.KinesisShardRange range = shardRangeIt.next();
               // Lazy iterator: fetches one GetRecords page at a time, keeping only one page in

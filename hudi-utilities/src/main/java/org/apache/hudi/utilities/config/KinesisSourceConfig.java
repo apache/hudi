@@ -76,6 +76,17 @@ public class KinesisSourceConfig extends HoodieConfig {
       .withDocumentation("AWS secret key for Kinesis. Used when connecting to custom endpoints (e.g., LocalStack). "
           + "If not set with endpoint, uses the default AWS credential chain.");
 
+  public static final ConfigProperty<String> KINESIS_ROLE_ARN = ConfigProperty
+      .key(PREFIX + "role.arn")
+      .noDefaultValue()
+      .sinceVersion("1.2.0")
+      .markAdvanced()
+      .withDocumentation("IAM role ARN to assume (via STS) when the Kinesis stream lives in a different "
+          + "AWS account than the application. When set, the Kinesis client uses an auto-refreshing "
+          + "StsAssumeRoleCredentialsProvider whose base credentials come from the default credential chain. "
+          + "When empty/absent, the stream is read from the application's own AWS account using the default "
+          + "credential chain (legacy behavior). No external ID is used.");
+
   public static final ConfigProperty<Long> MAX_EVENTS_FROM_KINESIS_SOURCE = ConfigProperty
       .key(PREFIX + "max.events")
       .defaultValue(5000000L)
