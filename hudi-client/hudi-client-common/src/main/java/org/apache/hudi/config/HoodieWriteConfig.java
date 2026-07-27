@@ -1791,8 +1791,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * deprecated {@code hoodie.populate.meta.fields} boolean.
    */
   public MetaFieldsMode getMetaFieldsMode() {
-    return MetaFieldsMode.resolve(getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
-        getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
+    return MetaFieldsMode.resolve(this);
   }
 
   /**

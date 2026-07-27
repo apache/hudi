@@ -1276,6 +1276,8 @@ public class HoodieTableConfig extends HoodieConfig {
    * {@link #POPULATE_META_FIELDS} boolean.
    */
   public MetaFieldsMode getMetaFieldsMode() {
+    // Deliberately the two-argument form rather than resolve(this): the fallback must be the *raw*
+    // property, and populateMetaFields() on this class is itself derived from the mode.
     return MetaFieldsMode.resolve(getStringOrDefault(META_FIELDS_MODE), legacyPopulateMetaFields());
   }
 

@@ -70,9 +70,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     org.apache.hudi.common.model.MetaFieldsMode metaFieldsMode =
-        org.apache.hudi.common.model.MetaFieldsMode.resolve(
-            config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
-            config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
+        org.apache.hudi.common.model.MetaFieldsMode.resolve(config);
     boolean populateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(path, storage.getConf(), config);
