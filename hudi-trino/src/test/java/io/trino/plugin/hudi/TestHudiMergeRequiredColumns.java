@@ -13,11 +13,23 @@
  */
 package io.trino.plugin.hudi;
 
+import io.trino.metastore.HiveType;
+import io.trino.plugin.hive.HiveColumnHandle;
+import org.apache.avro.SchemaBuilder;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Optional;
+
+import static io.trino.plugin.hive.HiveColumnHandle.ColumnType.REGULAR;
+import static io.trino.plugin.hive.HiveColumnHandle.createBaseColumn;
+import static io.trino.plugin.hudi.HudiUtil.appendMissingMergeRequiredColumns;
 import static io.trino.plugin.hudi.HudiUtil.mergeRequiredColumnNames;
+import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
@@ -28,7 +40,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Tests {@link HudiUtil#mergeRequiredColumnNames}, which mirrors the non-CUSTOM branch of the file-group
  * reader's {@code FileGroupReaderSchemaHandler.getMandatoryFieldsForMerging} so the base-file read
  * projection carries every column the merge may consult (ordering fields, delete markers, the operation
- * field, record-key data columns) even when the query does not project them.
+ * field, record-key data columns) even when the query does not project them, plus the merge-path recovery
+ * of names the metastore could not resolve ({@link HudiUtil#appendMissingMergeRequiredColumns}).
  */
 class TestHudiMergeRequiredColumns
 {
@@ -50,8 +63,8 @@ class TestHudiMergeRequiredColumns
     @Test
     public void testDeleteAndOperationColumnsAlwaysRequested()
     {
-        // Requested unconditionally: buildColumnHandles drops names that are not data columns of the
-        // table, so tables without these fields read nothing extra
+        // Requested unconditionally: getMergeRequiredColumnHandles drops names that are in neither the
+        // metastore nor the Avro table schema, so tables without these fields read nothing extra
         assertThat(mergeRequiredColumnNames(new HoodieTableConfig(), RecordMergeMode.COMMIT_TIME_ORDERING))
                 .contains(HOODIE_IS_DELETED_FIELD, OPERATION_METADATA_FIELD);
     }
@@ -86,5 +99,56 @@ class TestHudiMergeRequiredColumns
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
         assertThat(mergeRequiredColumnNames(tableConfig, RecordMergeMode.EVENT_TIME_ORDERING))
                 .contains("id1", "id2");
+    }
+
+    @Test
+    public void testMergeRequiredColumnMissingFromProjectionResolvesFromTableSchema()
+    {
+        // The metastore never resolved _hoodie_operation (hive sync with omit_metadata_fields=true), so the
+        // projection arrives on the merge path without it; it must be recovered from the resolved table
+        // schema -- the gate the file-group reader itself applies -- along with the ordering field, while
+        // _hoodie_is_deleted, in neither the projection nor the schema, stays dropped
+        HoodieSchema dataSchema = HoodieSchema.fromAvroSchema(SchemaBuilder.record("rec").fields()
+                .requiredString("id")
+                .requiredLong("ts")
+                .requiredString(OPERATION_METADATA_FIELD)
+                .endRecord());
+        List<HiveColumnHandle> projection = List.of(
+                createBaseColumn("id", 0, HiveType.HIVE_STRING, VARCHAR, REGULAR, Optional.empty()));
+
+        List<HiveColumnHandle> extended = appendMissingMergeRequiredColumns(dataSchema, projection, eventTimeOrderedOn("ts"));
+
+        assertThat(extended).extracting(HiveColumnHandle::getName)
+                .containsExactly("id", "ts", OPERATION_METADATA_FIELD);
+        // The recovered handles are typed from their Avro fields
+        assertThat(extended.get(1).getType()).isEqualTo(BIGINT);
+        assertThat(extended.getLast().getType()).isEqualTo(VARCHAR);
+    }
+
+    @Test
+    public void testMergeRequiredColumnAlreadyProjectedIsNotDuplicated()
+    {
+        HoodieSchema dataSchema = HoodieSchema.fromAvroSchema(SchemaBuilder.record("rec").fields()
+                .requiredString("id")
+                .requiredLong("ts")
+                .endRecord());
+        // The projection carries the ordering field under a different case; the append must match
+        // case-insensitively and leave the projection handle untouched
+        List<HiveColumnHandle> projection = List.of(
+                createBaseColumn("TS", 1, HiveType.HIVE_LONG, BIGINT, REGULAR, Optional.empty()));
+
+        assertThat(appendMissingMergeRequiredColumns(dataSchema, projection, eventTimeOrderedOn("ts")))
+                .extracting(HiveColumnHandle::getName)
+                .containsExactly("TS");
+    }
+
+    private static HoodieTableConfig eventTimeOrderedOn(String orderingField)
+    {
+        // Pin the version so the names under test are not at the mercy of the pre-v9 merge-config inference
+        HoodieTableConfig tableConfig = new HoodieTableConfig();
+        tableConfig.setValue(HoodieTableConfig.VERSION, "9");
+        tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
+        tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, orderingField);
+        return tableConfig;
     }
 }

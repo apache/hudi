@@ -253,6 +253,9 @@ public class HudiTrinoReaderContext
                 return Option.of(new OverwriteWithLatestMerger());
             case CUSTOM:
             default:
+                // createValidRecordMerger dereferences the strategy id on its first line, so a table that
+                // resolved to CUSTOM without persisting one must be rejected before it reaches hudi-common.
+                HudiUtil.validateCustomMergeStrategyId(mergeStrategyId);
                 Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
                 if (recordMerger.isEmpty()) {
                     throw new IllegalArgumentException("No valid merger implementation set for `" + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");

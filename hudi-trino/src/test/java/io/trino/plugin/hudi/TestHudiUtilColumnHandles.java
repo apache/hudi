@@ -37,6 +37,7 @@ import java.util.Optional;
 import static io.trino.plugin.hudi.HudiUtil.appendMissingSchemaColumns;
 import static io.trino.plugin.hudi.HudiUtil.resolveMergeModeAndStrategyId;
 import static io.trino.plugin.hudi.HudiUtil.usesNonProjectionCompatibleMerger;
+import static io.trino.plugin.hudi.HudiUtil.validateCustomMergeStrategyId;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DateType.DATE;
@@ -45,14 +46,15 @@ import static io.trino.spi.type.TimestampType.TIMESTAMP_MICROS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests {@link HudiUtil#toColumnHandle}, which types a {@link HiveColumnHandle} from a table-schema
- * field's Avro type, plus the full-schema-read helpers built on it ({@link
- * HudiUtil#appendMissingSchemaColumns} and {@link HudiUtil#usesNonProjectionCompatibleMerger}). Used by
- * the reader context and page-source provider to resolve merge-required columns that are absent from
- * the query projection (see apache/hudi#19249).
+ * field's Avro type, plus the merge-resolution helpers around it ({@link
+ * HudiUtil#appendMissingSchemaColumns}, {@link HudiUtil#usesNonProjectionCompatibleMerger} and {@link
+ * HudiUtil#validateCustomMergeStrategyId}). Used by the reader context and page-source provider to
+ * resolve merge-required columns that are absent from the query projection (see apache/hudi#19249).
  */
 class TestHudiUtilColumnHandles
 {
@@ -209,6 +211,22 @@ class TestHudiUtilColumnHandles
         assertThat(usesNonProjectionCompatibleMerger(
                 RecordMergeMode.CUSTOM, "", NonProjectionCompatibleRankMerger.class.getName()))
                 .isFalse();
+    }
+
+    @Test
+    public void testValidateCustomMergeStrategyId()
+    {
+        // A version 8 table can resolve to CUSTOM merge mode with no persisted strategy id; the read must be
+        // rejected with an actionable error rather than NPE inside createValidRecordMerger
+        assertThatThrownBy(() -> validateCustomMergeStrategyId(null))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key());
+        assertThatThrownBy(() -> validateCustomMergeStrategyId(""))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key());
+
+        assertThatCode(() -> validateCustomMergeStrategyId(NonProjectionCompatibleRankMerger.MERGE_STRATEGY_ID))
+                .doesNotThrowAnyException();
     }
 
     @Test

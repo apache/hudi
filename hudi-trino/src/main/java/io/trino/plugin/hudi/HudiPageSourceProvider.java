@@ -90,7 +90,6 @@ import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.getParquetTu
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CANNOT_OPEN_SPLIT;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CURSOR_ERROR;
-import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
 import static io.trino.plugin.hudi.HudiSessionProperties.getParquetMaxReadBlockRowCount;
 import static io.trino.plugin.hudi.HudiSessionProperties.getParquetMaxReadBlockSize;
 import static io.trino.plugin.hudi.HudiSessionProperties.getParquetSmallFileThreshold;
@@ -100,6 +99,7 @@ import static io.trino.plugin.hudi.HudiSessionProperties.isParquetUseColumnIndex
 import static io.trino.plugin.hudi.HudiSessionProperties.isParquetVectorizedDecodingEnabled;
 import static io.trino.plugin.hudi.HudiSessionProperties.shouldUseParquetColumnNames;
 import static io.trino.plugin.hudi.HudiSessionProperties.useParquetBloomFilter;
+import static io.trino.plugin.hudi.HudiUtil.appendMissingMergeRequiredColumns;
 import static io.trino.plugin.hudi.HudiUtil.appendMissingSchemaColumns;
 import static io.trino.plugin.hudi.HudiUtil.buildTableMetaClient;
 import static io.trino.plugin.hudi.HudiUtil.constructSchema;
@@ -239,7 +239,10 @@ public class HudiPageSourceProvider
             readColumnHandles = appendMissingSchemaColumns(dataSchema, hudiMetaAndDataColumnHandles);
         }
         else {
-            readColumnHandles = hudiMetaAndDataColumnHandles;
+            // The metastore may lack merge-required columns the table schema carries (e.g. hive sync with
+            // omit_metadata_fields=true drops _hoodie_operation); recover them from the already-resolved
+            // schema so the base read is not starved of them.
+            readColumnHandles = appendMissingMergeRequiredColumns(dataSchema, hudiMetaAndDataColumnHandles, metaClient.getTableConfig());
         }
 
         ConnectorPageSource dataPageSource =
@@ -322,11 +325,12 @@ public class HudiPageSourceProvider
     }
 
     /**
-     * Mirrors {@code FileGroupReaderSchemaHandler.generateRequiredSchema}'s decision for CUSTOM merge
-     * mode: resolves the merge mode and strategy id with the version-gated inference the file-group
-     * reader applies ({@link HudiUtil#resolveMergeModeAndStrategyId}) and asks the same resolved merger
-     * whether it is projection compatible, so the connector's read projection and the file-group
-     * reader's required schema cannot disagree.
+     * Mirrors {@code FileGroupReaderSchemaHandler.generateRequiredSchema}'s full-schema decision for
+     * CUSTOM merge mode: resolves the merge mode and strategy id with the version-gated inference the
+     * file-group reader applies ({@link HudiUtil#resolveMergeModeAndStrategyId}) and asks the same
+     * resolved merger whether it is projection compatible. Only this decision is mirrored exactly; the
+     * mandatory-fields side ({@link HudiUtil#getMergeRequiredColumnHandles}) is a superset prediction,
+     * and the {@code HudiTrinoReaderContext.getFileRecordIterator} guard catches any residual drift.
      */
     private static boolean requiresFullSchemaRead(HoodieTableConfig tableConfig, TypedProperties readerProps)
     {
@@ -460,6 +464,11 @@ public class HudiPageSourceProvider
      * Creates a new list of ColumnHandles where the index associated with each handle corresponds to its physical position within the provided fileSchema (MessageType).
      * This is necessary when a downstream component relies on the handle's index for physical data access, and the logical schema order (potentially reflected in the
      * original handles) differs from the physical file layout.
+     * <p>
+     * A requested column the file schema does not carry is mapped one past the last physical field instead of failing: base files written before the column was added
+     * legitimately lack it (schema evolution), and so do old records for a merge-required column. {@code ParquetPageSourceFactory} reads an index-based column through
+     * {@code getBaseColumnParquetType}, which reports any index at or beyond the file's field count as absent, so the parquet reader skips it and the page source emits
+     * a null block -- the same result the name-based path ({@code hudi.parquet.use-column-names=true}) produces.
      *
      * @param fileSchema The MessageType representing the physical schema of the Parquet file.
      * @param requestedColumns The original list of Trino ColumnHandles as received from the engine.
@@ -490,16 +499,13 @@ public class HudiPageSourceProvider
             // Determine the key to use for looking up the physical index
             String lookupKey = caseSensitive ? requestedName : requestedName.toLowerCase(Locale.ROOT);
 
-            // Find the physical index from the file schema map constructed from fileSchema
+            // Find the physical index from the file schema map constructed from fileSchema. A column the file
+            // does not carry keeps an index one past the last field, which the parquet reader null-fills.
             Integer physicalIndex = physicalIndexMap.get(lookupKey);
-            if (physicalIndex == null) {
-                throw new TrinoException(HUDI_SCHEMA_ERROR, format(
-                        "Column '%s' not found in parquet file schema %s", requestedName, fileSchema.getName()));
-            }
 
             HiveColumnHandle remappedHandle = new HiveColumnHandle(
                     requestedName,
-                    physicalIndex,
+                    physicalIndex == null ? fileFields.size() : physicalIndex,
                     originalHandle.getBaseHiveType(),
                     originalHandle.getType(),
                     originalHandle.getHiveColumnProjectionInfo(),

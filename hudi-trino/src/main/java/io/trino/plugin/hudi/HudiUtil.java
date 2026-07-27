@@ -436,8 +436,10 @@ public final class HudiUtil
      * <p>
      * Callers must pass the merge mode and strategy id resolved by {@link #resolveMergeModeAndStrategyId}
      * so the {@link HoodieRecordUtils#createValidRecordMerger} call here sees the same inputs as the
-     * file-group reader's own resolution. A CUSTOM mode without a strategy id returns false: no merger
-     * can be resolved from it, and the file-group reader itself then fails loudly.
+     * file-group reader's own resolution. A CUSTOM mode without a strategy id returns false: no projection
+     * expansion is possible without a merger to ask, and {@code HudiTrinoReaderContext.getRecordMerger}
+     * rejects the read with an actionable error when the merger is actually needed -- hudi-common's
+     * {@link HoodieRecordUtils#createValidRecordMerger} would otherwise NPE on the null id.
      * <p>
      * Note the payload-based strategy id resolves {@code HoodieAvroRecordMerger}, which keeps the
      * interface default {@code isProjectionCompatible() == false} -- so EVERY custom-payload table takes
@@ -451,6 +453,24 @@ public final class HudiUtil
         }
         Option<HoodieRecordMerger> merger = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
         return merger.isPresent() && !merger.get().isProjectionCompatible();
+    }
+
+    /**
+     * Rejects a CUSTOM-mode read that has no merge strategy id to resolve a record merger with. The
+     * strategy id is only inferred below table version 8 ({@link #resolveMergeModeAndStrategyId}), so a
+     * version 8 table written without a persisted id reaches merger resolution with a null id, which
+     * {@link HoodieRecordUtils#createValidRecordMerger} dereferences straight away.
+     */
+    public static void validateCustomMergeStrategyId(String mergeStrategyId)
+    {
+        if (StringUtils.isNullOrEmpty(mergeStrategyId)) {
+            String strategyIdKey = HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key();
+            throw new TrinoException(HUDI_BAD_DATA,
+                    ("Table resolved to %s merge mode but persists no `%s`, so no record merger can be resolved for merging log files. "
+                            + "Table version 8 tables written without a persisted strategy id resolve this way; set `%s` on the table to the "
+                            + "strategy id declared by one of the configured record merger implementations.")
+                            .formatted(RecordMergeMode.CUSTOM, strategyIdKey, strategyIdKey));
+        }
     }
 
     /**
@@ -608,8 +628,10 @@ public final class HudiUtil
     /**
      * The merge-mandatory column names that do not depend on a custom merger, mirroring the non-CUSTOM
      * branch of {@code FileGroupReaderSchemaHandler.getMandatoryFieldsForMerging}. The delete-marker and
-     * operation fields are added unconditionally: {@code buildColumnHandles} drops any name that is not a
-     * data column of the table, so tables without them read nothing extra.
+     * operation fields are added unconditionally: {@code buildColumnHandles} keeps only metastore data
+     * columns, and the merge read path recovers any name the metastore does not carry from the resolved
+     * table schema ({@link #appendMissingMergeRequiredColumns}) -- the gate the file-group reader itself
+     * applies -- so tables whose schema has neither field read nothing extra.
      */
     @VisibleForTesting
     static LinkedHashSet<String> mergeRequiredColumnNames(HoodieTableConfig tableConfig, RecordMergeMode recordMergeMode)
@@ -632,6 +654,39 @@ public final class HudiUtil
             requiredColumnNames.add(deleteKey);
         }
         return requiredColumnNames;
+    }
+
+    /**
+     * Returns {@code projection} extended with handles for the merge-required column names it does not
+     * already carry (matched case-insensitively), typed from {@code dataSchema} via {@link #toColumnHandle};
+     * names absent from the schema as well are dropped. The Avro table schema is the gate the file-group
+     * reader applies to these names ({@code getMandatoryFieldsForMerging}, {@code DeleteContext}), so a
+     * metastore that omits a field the table schema carries -- hive sync with
+     * {@code omit_metadata_fields=true} drops {@code _hoodie_operation}, hand-written external DDL can drop
+     * {@code _hoodie_is_deleted} -- must not starve the base-file read of it; the
+     * {@code HudiTrinoReaderContext.getFileRecordIterator} guard would otherwise fail the read. Called on
+     * the merge read path only, where the table schema is already resolved, so the recovery costs no I/O.
+     */
+    public static List<HiveColumnHandle> appendMissingMergeRequiredColumns(
+            HoodieSchema dataSchema,
+            List<HiveColumnHandle> projection,
+            HoodieTableConfig tableConfig)
+    {
+        LinkedHashSet<String> requiredNames = mergeRequiredColumnNames(tableConfig, resolveMergeModeAndStrategyId(tableConfig).getLeft());
+        Set<String> existingColumns = projection.stream()
+                .map(handle -> handle.getName().toLowerCase(Locale.ROOT))
+                .collect(Collectors.toCollection(HashSet::new));
+        Map<String, HoodieSchemaField> schemaFields = dataSchema.getFields().stream()
+                .collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT), field -> field, (first, second) -> first));
+
+        List<HiveColumnHandle> columns = new ArrayList<>(projection);
+        for (String name : requiredNames) {
+            HoodieSchemaField field = schemaFields.get(name.toLowerCase(Locale.ROOT));
+            if (field != null && existingColumns.add(field.name().toLowerCase(Locale.ROOT))) {
+                columns.add(toColumnHandle(field));
+            }
+        }
+        return columns;
     }
 
     /**

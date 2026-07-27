@@ -14,8 +14,11 @@
 package io.trino.plugin.hudi;
 
 import com.google.common.collect.ImmutableMap;
+import io.trino.Session;
+import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.NonProjectionCompatibleMergerHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.NonProjectionCompatibleRankMerger;
+import io.trino.plugin.hudi.testing.PayloadOnlyMergerHudiTablesInitializer;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
@@ -36,6 +39,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code k2}'s winning rank is on the BASE record (base wins, value 100). A correct result therefore
  * requires the un-projected rank column to be read on BOTH sides of the merge. {@code sum(value)} is a
  * three-way discriminator: merged = 199, base-only = 110, built-in newest-wins = 103.
+ * <p>
+ * The same full-schema read path is reached without any configured merger at all by a pre-1.0 table that
+ * persists only a {@link org.apache.hudi.common.model.HoodieRecordPayload} class
+ * ({@link PayloadOnlyMergerHudiTablesInitializer}), covered by the {@code payloadOnly} tests below.
  */
 public class TestHudiNonProjectionCompatibleMerger
         extends AbstractTestQueryFramework
@@ -45,7 +52,9 @@ public class TestHudiNonProjectionCompatibleMerger
             throws Exception
     {
         return HudiQueryRunner.builder()
-                .setDataLoader(new NonProjectionCompatibleMergerHudiTablesInitializer())
+                .setDataLoader(new CompositeHudiTablesInitializer(
+                        new NonProjectionCompatibleMergerHudiTablesInitializer(),
+                        new PayloadOnlyMergerHudiTablesInitializer()))
                 .addConnectorProperties(ImmutableMap.of(
                         "hudi.record-merger-impls", NonProjectionCompatibleRankMerger.class.getName()))
                 .build();
@@ -85,5 +94,48 @@ public class TestHudiNonProjectionCompatibleMerger
                 "VALUES"
                         + " ('k1', 'k1_updated', CAST(99 AS BIGINT), CAST(7 AS BIGINT), CAST(2 AS BIGINT)),"
                         + " ('k2', 'k2_base', CAST(100 AS BIGINT), CAST(9 AS BIGINT), CAST(1 AS BIGINT))");
+    }
+
+    @Test
+    public void testPayloadOnlyReadOptimizedTableReturnsBaseFileValues()
+    {
+        assertQuery(
+                noRecordMergerImplsSession(),
+                "SELECT key, name, value FROM " + PayloadOnlyMergerHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
+                "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
+    }
+
+    @Test
+    public void testPayloadOnlyRealtimeTableAppliesPayloadMerge()
+    {
+        // Table version 6 with nothing but a payload class in hoodie.properties: the reader infers CUSTOM
+        // merge mode with the payload-based strategy, which resolves HoodieAvroRecordMerger and runs
+        // RankBasedTestPayload. Both merge directions are exercised, as for the custom merger above.
+        assertQuery(
+                noRecordMergerImplsSession(),
+                "SELECT key, name, value FROM " + PayloadOnlyMergerHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
+                "VALUES ('k1', 'k1_updated', CAST(99 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
+    }
+
+    @Test
+    public void testPayloadOnlyNarrowProjectionMergesViaFullSchemaRead()
+    {
+        // Projects neither key, name nor merge_rank, so 199 proves the full-schema read fed merge_rank to the
+        // payload on both sides: base-only would be 110, built-in newest-wins would be 103.
+        assertThat(computeScalar(
+                noRecordMergerImplsSession(),
+                "SELECT sum(value) FROM " + PayloadOnlyMergerHudiTablesInitializer.RT_TABLE_NAME))
+                .isEqualTo(199L);
+    }
+
+    /**
+     * The payload-only table must resolve its merger purely from hoodie.properties, so the merger impls the
+     * connector is configured with for {@link NonProjectionCompatibleRankMerger} are cleared for its queries.
+     */
+    private Session noRecordMergerImplsSession()
+    {
+        return SessionBuilder.from(getSession())
+                .withRecordMergerImpls()
+                .build();
     }
 }

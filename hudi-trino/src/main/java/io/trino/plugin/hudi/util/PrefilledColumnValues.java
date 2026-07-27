@@ -40,6 +40,8 @@ import static io.trino.spi.type.TypeUtils.writeNativeValue;
  * {@code $file_modified_time}, {@code $partition}). Value computation delegates to
  * {@link io.trino.plugin.hive.util.HiveUtil#getPrefilledColumnValue}, the same implementation the Hive
  * connector uses for these columns (including the {@code "\N"} hive-null partition-value convention).
+ * Note {@code $file_modified_time} is packed with the JVM default zone, as in the Hive connector; the
+ * replaced Hudi-specific code pinned UTC (same instant, different rendered zone).
  */
 public class PrefilledColumnValues
 {
