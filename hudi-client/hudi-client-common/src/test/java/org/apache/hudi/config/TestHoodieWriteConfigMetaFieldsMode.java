@@ -113,6 +113,21 @@ class TestHoodieWriteConfigMetaFieldsMode {
     assertFalse(cfg.isFileNamePopulated());
     // populateMetaFields() is derived from the mode — only ALL reports true.
     assertFalse(cfg.populateMetaFields());
+    // The raw legacy property is rewritten too, so a config handed to table creation cannot carry
+    // a boolean that contradicts the mode.
+    assertEquals("false", cfg.getStringOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
+  }
+
+  @Test
+  void legacyBooleanSetAfterModeStillResolvesFromMode() {
+    // Builder call order must not change the outcome: getMetaFieldsMode() reads the mode property
+    // first, so a later withPopulateMetaFields(...) cannot silently widen a selective table.
+    HoodieWriteConfig cfg = baseBuilder()
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .withPopulateMetaFields(true)
+        .build();
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, cfg.getMetaFieldsMode());
+    assertFalse(cfg.populateMetaFields());
   }
 
   @Test
