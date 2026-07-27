@@ -27,17 +27,19 @@ import org.apache.hadoop.hive.ql.Driver;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -106,7 +108,7 @@ class TestHiveDriverPool {
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
       List<String> sqls = Arrays.asList("SELECT 1", "SELECT 2", "SELECT 3", "SELECT 4");
-      List<Future<?>> futures = pool.dispatchAll(sqls);
+      HiveDriverPool.Dispatch futures = pool.dispatchAll(sqls);
       pool.awaitAll(futures);
       assertEquals(2, seenThreadsByDriver.size(), "Expected exactly 2 worker Drivers");
       int totalCalls = seenThreadsByDriver.values().stream().mapToInt(Set::size).sum();
@@ -133,7 +135,7 @@ class TestHiveDriverPool {
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
-      List<Future<?>> futures = pool.dispatchAll(Arrays.asList("OK", "FAIL", "OK"));
+      HiveDriverPool.Dispatch futures = pool.dispatchAll(Arrays.asList("OK", "FAIL", "OK"));
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(futures));
       assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
@@ -159,7 +161,7 @@ class TestHiveDriverPool {
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
       // 5 SQLs against pool of size 2 → max in-flight should be 2.
-      List<Future<?>> futures = pool.dispatchAll(Arrays.asList("a", "b", "c", "d", "e"));
+      HiveDriverPool.Dispatch futures = pool.dispatchAll(Arrays.asList("a", "b", "c", "d", "e"));
       // Release after a short wait so all SQLs progress.
       Thread.sleep(150);
       hold.countDown();
@@ -210,7 +212,7 @@ class TestHiveDriverPool {
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 3, factory)) {
       pool.runOnEachWorker(Arrays.asList("USE `db1`"));
-      List<Future<?>> futures = pool.dispatchAll(Arrays.asList("ALTER 1", "ALTER 2", "ALTER 3"));
+      HiveDriverPool.Dispatch futures = pool.dispatchAll(Arrays.asList("ALTER 1", "ALTER 2", "ALTER 3"));
       pool.awaitAll(futures);
 
       assertEquals(3, sqlsByDriver.size(), "Expected one Driver per worker");
@@ -223,56 +225,92 @@ class TestHiveDriverPool {
   }
 
   /**
-   * On the first failure, awaitAll must throw the original cause and cancel any
-   * futures that have not started yet. Futures already in-flight are not interrupted
-   * (per the cancel-with-mayInterruptIfRunning=false contract).
+   * Given a single-worker pool where the first statement fails, when awaitAll runs,
+   * then it throws the original cause and neither queued statement is ever executed.
    *
-   * <p>PENDING_A/PENDING_B block on {@code pendingHold} as soon as they start, so
-   * even if the single worker thread races ahead and dequeues one of them before
-   * awaitAll's cancellation runs, it cannot run to completion — it parks immediately.
-   * awaitAll therefore always observes at least one of {@code isCancelled()} (never
-   * started) or the task still blocked in {@code pendingHold.await()} (started but
-   * not completed); the assertion below checks for either outcome instead of
-   * assuming cancellation always wins the race. pendingHold is released in a finally
-   * so a parked worker thread isn't left hanging if an assertion fails.
+   * <p>Deterministic: statements queued behind the failure observe the batch's abort
+   * flag on entry and bail out without touching the Driver, so it does not matter
+   * whether the worker dequeues them before or after awaitAll's cancel() sweep.
    */
   @Test
   void awaitAllCancelsPendingFuturesOnFirstError() throws Exception {
     HiveSyncConfig config = configWithEmptyHiveConf();
-    // Single-worker pool so SQLs run strictly sequentially → the 2nd SQL is
-    // pending when the 1st errors, and must be cancelled (or, if it lost the race
-    // to start, parked on pendingHold — see class javadoc above).
-    CountDownLatch fired = new CountDownLatch(1);
-    CountDownLatch pendingHold = new CountDownLatch(1);
+    List<String> executed = Collections.synchronizedList(new ArrayList<>());
     HiveDriverPool.DriverFactory factory = (db) -> {
       Driver d = mock(Driver.class);
       doAnswer(inv -> {
         String sql = inv.getArgument(0);
+        executed.add(sql);
         if (sql.equals("FAIL")) {
-          fired.countDown();
           throw new RuntimeException("boom");
         }
-        // PENDING_A / PENDING_B: park immediately so a task that raced ahead of
-        // cancellation still cannot complete before we assert on it.
-        pendingHold.await(2, TimeUnit.SECONDS);
         return null;
       }).when(d).run(anyString());
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 1, factory)) {
-      List<Future<?>> futures = pool.dispatchAll(Arrays.asList("FAIL", "PENDING_A", "PENDING_B"));
-      try {
-        HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
-            () -> pool.awaitAll(futures));
-        assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
-        assertTrue(fired.await(1, TimeUnit.SECONDS), "Failing SQL must have run");
-        assertTrue(futures.get(1).isCancelled() || !futures.get(1).isDone(),
-            "Pending future after error must be cancelled, or still parked (not completed)");
-        assertTrue(futures.get(2).isCancelled() || !futures.get(2).isDone(),
-            "Pending future after error must be cancelled, or still parked (not completed)");
-      } finally {
-        pendingHold.countDown();
-      }
+      HiveDriverPool.Dispatch dispatch = pool.dispatchAll(Arrays.asList("FAIL", "PENDING_A", "PENDING_B"));
+
+      HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
+          () -> pool.awaitAll(dispatch));
+
+      assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
+      assertEquals(Collections.singletonList("FAIL"), executed,
+          "Statements queued behind the failure must never reach the Driver");
+    }
+  }
+
+  /**
+   * Regression for the in-order-await bug: a slow statement on worker 0 must not let
+   * worker 1 keep applying partition DDL after worker 1 has already failed.
+   *
+   * <p>Given two workers, statements are dispatched round-robin — worker 0 gets
+   * {@code SLOW} and worker 1 gets {@code FAIL} then {@code AFTER_FAIL}. When awaitAll
+   * blocks in submission order, it parks on SLOW's future while worker 1 races ahead
+   * and runs AFTER_FAIL. Then AFTER_FAIL must never execute: the abort flag is set by
+   * FAIL before worker 1 can dequeue its next statement.
+   *
+   * <p>SLOW is released only after the batch has aborted, which pins the interleaving
+   * the bug needs — without that, SLOW could finish first and mask the race.
+   */
+  @Test
+  void awaitAllStopsLaterWorkerWhenEarlierFutureIsSlow() throws Exception {
+    HiveSyncConfig config = configWithEmptyHiveConf();
+    List<String> executed = Collections.synchronizedList(new ArrayList<>());
+    CountDownLatch failed = new CountDownLatch(1);
+    CountDownLatch releaseSlow = new CountDownLatch(1);
+    HiveDriverPool.DriverFactory factory = (db) -> {
+      Driver d = mock(Driver.class);
+      doAnswer(inv -> {
+        String sql = inv.getArgument(0);
+        executed.add(sql);
+        if (sql.equals("FAIL")) {
+          failed.countDown();
+          throw new RuntimeException("boom");
+        }
+        if (sql.equals("SLOW")) {
+          // Hold worker 0 until worker 1 has failed, so awaitAll is definitely still
+          // parked on future 0 at the moment worker 1 would pick up AFTER_FAIL.
+          releaseSlow.await(5, TimeUnit.SECONDS);
+        }
+        return null;
+      }).when(d).run(anyString());
+      return d;
+    };
+    try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
+      // Round-robin over 2 workers: index 0 -> worker 0, indices 1 and 2 -> worker 1.
+      HiveDriverPool.Dispatch dispatch =
+          pool.dispatchAll(Arrays.asList("SLOW", "FAIL", "AFTER_FAIL"));
+      assertTrue(failed.await(5, TimeUnit.SECONDS), "FAIL must have run");
+      releaseSlow.countDown();
+
+      HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
+          () -> pool.awaitAll(dispatch));
+
+      assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
+      assertFalse(executed.contains("AFTER_FAIL"),
+          "Statement queued behind a failure on the same worker must not be applied, "
+              + "even while an earlier future on another worker is still running");
     }
   }
 }

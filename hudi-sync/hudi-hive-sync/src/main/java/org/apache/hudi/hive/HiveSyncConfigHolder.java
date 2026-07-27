@@ -127,14 +127,15 @@ public class HiveSyncConfigHolder {
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.3.0")
-      .withDocumentation("Only applies to HiveQL sync mode. When true, ADD, TOUCH, and SET_LOCATION "
-          + "partition statements are dispatched in parallel across a pool of Hive Driver workers, with "
-          + "ADD and TOUCH additionally split into batches of `hoodie.datasource.hive_sync.batch_num` "
-          + "partitions per statement (ADD was already batched before this flag existed; only its dispatch "
-          + "becomes parallel here). DROP remains serial. Table-level statements (create/alter table, last "
-          + "commit time, writer version) continue to run on the single session Driver. HMS and JDBC sync "
-          + "modes are not affected. Default off; the default HiveQL path is unchanged unless explicitly "
-          + "opted in.");
+      .withDocumentation("Only applies to HiveQL sync mode; has no effect in HMS or JDBC mode. When true, "
+          + "ADD, TOUCH, and SET_LOCATION partition statements are dispatched in parallel across a pool of "
+          + "Hive Driver workers, with ADD and TOUCH additionally split into batches of "
+          + "`hoodie.datasource.hive_sync.batch_num` partitions per statement (ADD was already batched "
+          + "before this flag existed; only its dispatch becomes parallel here). SET_LOCATION remains one "
+          + "statement per partition, as Hive SQL has no multi-partition form. DROP remains serial. "
+          + "Table-level statements (create/alter table, last commit time, writer version) continue to run "
+          + "on the single session Driver. Default off; the default HiveQL path is unchanged unless "
+          + "explicitly opted in.");
   public static final ConfigProperty<Integer> HIVE_SYNC_BATCHING_THREADS = ConfigProperty
       .key("hoodie.datasource.hive_sync.batching.threads")
       .defaultValue(4)

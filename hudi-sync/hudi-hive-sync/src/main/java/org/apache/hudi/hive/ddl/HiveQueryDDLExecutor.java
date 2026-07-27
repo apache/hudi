@@ -41,9 +41,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
@@ -135,8 +135,21 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     if (partitionStatements.isEmpty()) {
       return;
     }
-    List<Future<?>> futures = pool.dispatchAll(partitionStatements);
-    pool.awaitAll(futures);
+    pool.awaitAll(pool.dispatchAll(partitionStatements));
+  }
+
+  /**
+   * Splits TOUCH into batches of {@code HIVE_BATCH_SYNC_PARTITION_NUM} only when a
+   * driver pool is actually present — i.e. only when {@link #runSQLs(List)} will
+   * dispatch those batches in parallel. Keyed on pool presence rather than on the
+   * {@code batching.enabled} config so the split can never take effect on a path
+   * that would just execute the batches serially (the base class, and therefore
+   * {@code JDBCExecutor}, always emits one statement).
+   */
+  @Override
+  protected int getTouchBatchSize(int partitionCount) {
+    return driverPool.isPresent()
+        ? config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) : partitionCount;
   }
 
   // Strict 4-char prefix match on "USE ". Internal callers (constructPartitionAlterStatements)
