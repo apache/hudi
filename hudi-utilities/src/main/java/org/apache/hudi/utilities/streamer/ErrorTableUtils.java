@@ -129,7 +129,12 @@ public final class ErrorTableUtils {
           });
       StructType schema = transformed.schema()
           .add(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, DataTypes.StringType, true);
-      return sparkSession.createDataFrame(zipped, schema);
+      Dataset<Row> result = sparkSession.createDataFrame(zipped, schema);
+      // Force eager evaluation so zip failures (partition/element count mismatches)
+      // are caught here instead of surfacing downstream. Without this, the entire
+      // zip/map/createDataFrame chain is lazy and the catch block never triggers.
+      result.count();
+      return result;
     } catch (Exception e) {
       LOG.warn("Failed to restore {} column after transformer dropped it "
           + "(row count or partitioning changed): {}",
