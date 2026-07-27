@@ -1548,17 +1548,38 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
-    // Meta-field population is physical: the columns are written into the base files, so a writer
-    // must agree with what the table already records. Compare the full enum rather than the legacy
-    // booleans — those collapse every selective mode to false, so a writer resolving to NONE would
-    // pass this check against a COMMIT_TIME_ONLY table and then write null commit times while the
-    // table still advertises COMMIT_TIME_ONLY, making incremental queries silently miss those rows.
+    // Meta-field population is physical, so a writer must not claim columns the table does not
+    // have. Compare the full enum rather than the legacy booleans: those collapse every selective
+    // mode to false, so a writer claiming COMMIT_TIME_ONLY against a NONE table would slip through
+    // and advertise commit times that were never written.
+    //
+    // Two distinct cases, because writers routinely omit meta-field settings entirely:
+    //
+    //  - Widening is always rejected. Enabling a column now would leave earlier commits without it,
+    //    and readers cannot tell the two apart.
+    //  - Any disagreement is rejected when the writer *explicitly* sets hoodie.meta.fields.mode.
+    //    That covers narrowing too, e.g. an explicit NONE against a COMMIT_TIME_ONLY table, which
+    //    would write null commit times while the table still advertises COMMIT_TIME_ONLY and make
+    //    incremental queries silently miss those rows.
+    //
+    // A writer that never mentions the mode is left alone: resolving to NONE against an ALL table
+    // is long-standing behavior for callers that build a write config without restating the table's
+    // settings, and writing fewer meta columns cannot make a reader believe in absent data.
     MetaFieldsMode tableMetaFieldsMode = tableConfig.getMetaFieldsMode();
     MetaFieldsMode writeMetaFieldsMode = writeConfig.getMetaFieldsMode();
-    if (tableMetaFieldsMode != writeMetaFieldsMode) {
+    boolean writerStatedMode = writeConfig.contains(HoodieTableConfig.META_FIELDS_MODE)
+        && !StringUtils.isNullOrEmpty(writeConfig.getString(HoodieTableConfig.META_FIELDS_MODE));
+    if (writeMetaFieldsMode.isWiderThan(tableMetaFieldsMode)) {
       throw new HoodieException(String.format(
-          "%s mismatch: table is %s but the writer resolved to %s. Meta columns are physical, so the "
-              + "writer must match the table. Set %s=%s on the writer, or recreate the table to change it.",
+          "%s cannot be widened for an existing table: table is %s but the writer requests %s. Meta "
+              + "columns are physical, so enabling one now would leave earlier commits without it. "
+              + "Set %s=%s on the writer, or recreate the table to change it.",
+          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode, writeMetaFieldsMode,
+          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode));
+    } else if (writerStatedMode && writeMetaFieldsMode != tableMetaFieldsMode) {
+      throw new HoodieException(String.format(
+          "%s mismatch: table is %s but the writer explicitly requests %s. Meta columns are physical, "
+              + "so the writer must match the table. Set %s=%s on the writer, or recreate the table.",
           HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode, writeMetaFieldsMode,
           HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode));
     }

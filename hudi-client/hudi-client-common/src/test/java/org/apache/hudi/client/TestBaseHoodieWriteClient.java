@@ -104,12 +104,12 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
   @Test
   void validateAgainstTablePropertiesRejectsMetaFieldsModeMismatch() throws IOException {
     initMetaClient();
-    // A writer that resolves to NONE against a COMMIT_TIME_ONLY table: both legacy booleans are
-    // false, so a boolean-only check passes and the writer goes on to produce null commit times
+    // A writer that explicitly asks for NONE against a COMMIT_TIME_ONLY table: both legacy booleans
+    // are false, so a boolean-only check passes and the writer goes on to produce null commit times
     // while the table still advertises COMMIT_TIME_ONLY.
     HoodieWriteConfig noneWriteConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withPopulateMetaFields(false)
+        .withMetaFieldsMode(MetaFieldsMode.NONE)
         .build();
     assertEquals(MetaFieldsMode.NONE, noneWriteConfig.getMetaFieldsMode());
 
@@ -123,6 +123,35 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         "error must name the mode property: " + ex.getMessage());
     assertTrue(ex.getMessage().contains("COMMIT_TIME_ONLY") && ex.getMessage().contains("NONE"),
         "error must name both modes: " + ex.getMessage());
+  }
+
+  @Test
+  void validateAgainstTablePropertiesAllowsUnstatedWriterToNarrow() throws IOException {
+    initMetaClient();
+    // Long-standing behavior: a writer that sets only populate.meta.fields=false (never naming a
+    // mode) resolves to NONE, and must still be able to write to an ALL table. Many callers build
+    // a write config without restating the table's meta-field settings.
+    HoodieWriteConfig unstated = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withPopulateMetaFields(false)
+        .build();
+    assertEquals(MetaFieldsMode.NONE, unstated.getMetaFieldsMode());
+    validatorClient(unstated)
+        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.ALL), unstated);
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsWideningEvenWhenUnstated() throws IOException {
+    initMetaClient();
+    // Widening is rejected regardless of whether the writer named a mode: a default writer resolves
+    // to ALL, which would claim meta columns a NONE table never wrote.
+    HoodieWriteConfig defaultWriteConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    assertEquals(MetaFieldsMode.ALL, defaultWriteConfig.getMetaFieldsMode());
+
+    HoodieException ex = assertThrows(HoodieException.class, () ->
+        validatorClient(defaultWriteConfig)
+            .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.NONE), defaultWriteConfig));
+    assertTrue(ex.getMessage().contains("cannot be widened"), ex.getMessage());
   }
 
   @Test

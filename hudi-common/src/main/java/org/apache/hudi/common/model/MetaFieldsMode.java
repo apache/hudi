@@ -166,4 +166,26 @@ public enum MetaFieldsMode {
   public boolean toLegacyPopulateMetaFields() {
     return this == ALL;
   }
+
+  /**
+   * @return true when this mode populates at least one meta column that {@code other} does not.
+   *
+   * <p>Meta-field population is a physical-storage decision baked into files at write time, so it
+   * can never be widened for an existing table: earlier commits would be missing columns that later
+   * commits have, and readers cannot tell the two apart. Every transition that adds a column is
+   * therefore rejected — {@code NONE -> COMMIT_TIME_ONLY} and
+   * {@code FILE_NAME_ONLY -> COMMIT_TIME_AND_FILE_NAME} just as much as {@code NONE -> ALL}.
+   *
+   * <p>Narrowing is not flagged here: writing fewer meta columns than the table advertises cannot
+   * make a reader believe in data that is absent, and it is long-standing behavior for a writer to
+   * resolve to {@link #NONE} against an {@link #ALL} table without restating its settings.
+   */
+  public boolean isWiderThan(MetaFieldsMode other) {
+    if (other == null) {
+      return false;
+    }
+    return (commitTimePopulated && !other.commitTimePopulated)
+        || (fileNamePopulated && !other.fileNamePopulated)
+        || (isRecordKeyPopulated() && !other.isRecordKeyPopulated());
+  }
 }
