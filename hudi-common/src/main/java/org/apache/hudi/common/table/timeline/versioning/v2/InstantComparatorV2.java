@@ -70,4 +70,14 @@ public class InstantComparatorV2 implements Serializable, InstantComparator {
   public Comparator<HoodieInstant> completionTimeOrderedComparator() {
     return COMPLETION_TIME_BASED_COMPARATOR;
   }
+
+  @Override
+  public Comparator<HoodieInstant> orderingComparator() {
+    return COMPLETION_TIME_BASED_COMPARATOR;
+  }
+
+  @Override
+  public String getOrderingTime(HoodieInstant instant) {
+    return instant.getCompletionTime();
+  }
 }

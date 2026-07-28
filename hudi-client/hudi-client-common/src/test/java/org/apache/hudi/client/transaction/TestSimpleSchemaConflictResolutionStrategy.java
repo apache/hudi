@@ -60,6 +60,7 @@ import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.incTimest
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -93,7 +94,14 @@ public class TestSimpleSchemaConflictResolutionStrategy {
 
   private void setupInstants(String tableSchemaAtTxnStart, String tableSchemaAtTxnValidation,
                              String writerSchemaOfTxn, Boolean enableResolution, boolean setupLegacyClustering) throws Exception {
-    metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(), "")
+    setupInstants(tableSchemaAtTxnStart, tableSchemaAtTxnValidation, writerSchemaOfTxn,
+        enableResolution, setupLegacyClustering, new Properties());
+  }
+
+  private void setupInstants(String tableSchemaAtTxnStart, String tableSchemaAtTxnValidation,
+                             String writerSchemaOfTxn, Boolean enableResolution, boolean setupLegacyClustering,
+                             Properties tableProperties) throws Exception {
+    metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, tableProperties, "")
         .setTableCreateSchema(SCHEMA1)
         .initTable(getDefaultStorageConf(), basePath.toString());
     dummyInstantGenerator = HoodieTestTable.of(metaClient);
@@ -154,6 +162,66 @@ public class TestSimpleSchemaConflictResolutionStrategy {
     HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
     assertEquals(HoodieSchema.parse(SCHEMA1), result);
+  }
+
+  @Test
+  void testNullTypeWriterSchemaCurrTxnInstantWithoutCompletionTime() throws Exception {
+    setupInstants(SCHEMA1, SCHEMA2, NULL_SCHEMA, true, false);
+    // At pre-commit time the curr txn owner instant is inflight and has no completion time;
+    // on table version 8 and above the resolution falls back to the latest table schema.
+    Option<HoodieInstant> currTxnOwnerInstant = Option.of(
+        metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMMIT_ACTION, "0040"));
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, currTxnOwnerInstant).get();
+    assertEquals(HoodieSchema.parse(SCHEMA2), result);
+  }
+
+  @Test
+  void testNullTypeWriterSchemaTableVersionSixBoundedByRequestedTime() throws Exception {
+    setupInstants(SCHEMA1, SCHEMA2, NULL_SCHEMA, true, false, tableVersionSixProperties());
+    // Table version 6 orders the schema evolution timeline by requested time: a curr txn owner
+    // instant requested between the two commits adopts the table schema of the earlier commit.
+    Option<HoodieInstant> currTxnOwnerInstant = Option.of(
+        metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMMIT_ACTION, "0015"));
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, currTxnOwnerInstant).get();
+    assertEquals(HoodieSchema.parse(SCHEMA1), result);
+  }
+
+  @Test
+  void testNullTypeWriterSchemaTableVersionSixAfterAllCommits() throws Exception {
+    setupInstants(SCHEMA1, SCHEMA2, NULL_SCHEMA, true, false, tableVersionSixProperties());
+    Option<HoodieInstant> currTxnOwnerInstant = Option.of(
+        metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMMIT_ACTION, "0040"));
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, currTxnOwnerInstant).get();
+    assertEquals(HoodieSchema.parse(SCHEMA2), result);
+  }
+
+  @Test
+  void testNullTypeWriterSchemaTableVersionSixBeforeAllCommits() throws Exception {
+    setupInstants(SCHEMA1, SCHEMA2, NULL_SCHEMA, true, false, tableVersionSixProperties());
+    // No commit is requested at or before the curr txn owner instant, so the lookup falls back
+    // to the table create schema.
+    Option<HoodieInstant> currTxnOwnerInstant = Option.of(
+        metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMMIT_ACTION, "0005"));
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, currTxnOwnerInstant).get();
+    assertEquals(HoodieSchema.parse(SCHEMA1), result);
+  }
+
+  @Test
+  void testNoConflictBackwardsCompatible1TableVersionSix() throws Exception {
+    setupInstants(SCHEMA1, SCHEMA2, SCHEMA1, true, false, tableVersionSixProperties());
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
+    assertEquals(HoodieSchema.parse(SCHEMA2), result);
+  }
+
+  private static Properties tableVersionSixProperties() {
+    Properties properties = new Properties();
+    properties.setProperty(WRITE_TABLE_VERSION.key(), "6");
+    return properties;
   }
 
   @Test
