@@ -23,9 +23,9 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 /**
  * Column add / rename / drop / position / comment coverage for
  * [[org.apache.spark.sql.hudi.command.AlterTableCommand]] driven through the schema-on-read
- * (schema evolution) path. Uses an unpartitioned table so the {@code commitWithSchema} data-schema
+ * (schema evolution) path. Uses an unpartitioned table so the `commitWithSchema` data-schema
  * derivation takes the no-partition-column branch, complementing the partitioned coverage in
- * {@code TestSpark3DDL}.
+ * [[TestSpark3DDL]].
  */
 class TestAlterTableColumnCoverage extends HoodieSparkSqlTestBase {
 
