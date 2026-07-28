@@ -94,7 +94,13 @@ public class HoodieCommonConfig extends HoodieConfig {
           + "entry is pinned to that logical type: an incoming value of a different precision is coerced to it, and "
           + "the change from the table's current type is permitted. A timestamp precision change with no entry for "
           + "the field is rejected with an error, so an unverified micros/millis flip can never happen silently. "
-          + "Derive the correct value with the timestamp inspection tool.");
+          + "Derive the value from the stored longs, never from the incoming schema: for instants after 1990 an "
+          + "epoch-millis value is around 1e12 while epoch-micros is around 1e15, so the two ranges do not "
+          + "overlap. TimestampLogicalTypeClassifier implements that verdict for inspection tooling to reuse. "
+          + "NOTE: this corrects the table schema only. Existing base files keep the old logical type; Hudi "
+          + "readers compensate for it, but external engines (Trino, Athena, BigQuery external, Spark-native "
+          + "parquet) keep misreading those files until they are rewritten under the corrected schema via "
+          + "clustering or compaction. Treat this as a one-time migration: set the override, then rewrite.");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")

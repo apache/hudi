@@ -262,10 +262,14 @@ public class AvroSchemaEvolutionUtils {
     return new SchemaCompatibilityException(String.format(
         "Refusing to change the timestamp logical type of column '%s' from '%s' to '%s' without an explicit "
             + "verdict. This precision change is not applied automatically because the correct target depends "
-            + "on the stored values, not the incoming schema. Set '%s' (for example '%s:timestamp-micros' to "
-            + "keep the current precision and coerce the incoming values, or '%s:timestamp-millis' to evolve "
-            + "the column), using the timestamp inspection tool to derive the correct value.",
-        col, from, to, HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(), col, col));
+            + "on the stored values, not the incoming schema. Inspect the raw long values of '%s' in the existing "
+            + "base files: for instants after 1990 epoch-millis is around 1e12 and epoch-micros is around 1e15, "
+            + "so the ranges do not overlap (TimestampLogicalTypeClassifier implements this verdict). Then set "
+            + "'%s' to the precision the values actually are, for example '%s:timestamp-micros' to keep the "
+            + "current precision and coerce the incoming values, or '%s:timestamp-millis' to evolve the column. "
+            + "Existing base files are not rewritten by this change; rewrite them via clustering or compaction "
+            + "so that non-Hudi readers also see the corrected type.",
+        col, from, to, col, HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(), col, col));
   }
 
   /**
