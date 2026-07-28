@@ -242,6 +242,7 @@ public class TestHoodieNativeLogAppendHandle {
     when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.TEN);
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
     return table;
   }
 

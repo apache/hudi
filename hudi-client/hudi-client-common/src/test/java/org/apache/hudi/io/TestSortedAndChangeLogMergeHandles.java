@@ -199,6 +199,7 @@ public class TestSortedAndChangeLogMergeHandles {
       when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
       when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.TEN);
       when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
+      when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
       when(tableConfig.getPartitionMetafileFormat()).thenReturn(Option.empty());
       when(storage.getPathInfo(any(StoragePath.class))).thenAnswer(invocation ->
           new StoragePathInfo(invocation.getArgument(0), 23L, false, (short) 1, 1L, 1L));
