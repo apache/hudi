@@ -61,7 +61,9 @@ import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
@@ -463,6 +465,12 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     Files.setLastModifiedTime(timelinePath.resolve("001.commit"), FileTime.fromMillis(2_000_000_000_000L));
     Files.setLastModifiedTime(timelinePath.resolve("009.commit"), FileTime.fromMillis(1_000_000_000_000L));
     metaClient.reloadActiveTimeline();
+
+    // The mtime inversion must stick, otherwise the assertions below also hold under completion-time
+    // ordering and the test would pass against unfixed code.
+    Map<String, String> completionTimeByRequestedTime = metaClient.getActiveTimeline().getInstantsAsStream()
+        .collect(Collectors.toMap(HoodieInstant::requestedTime, HoodieInstant::getCompletionTime));
+    assertTrue(completionTimeByRequestedTime.get("001").compareTo(completionTimeByRequestedTime.get("009")) > 0);
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
     // The latest table schema follows requested time (schema 1 of requested 009), not the

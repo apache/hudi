@@ -76,6 +76,10 @@ public class InstantComparatorV2 implements Serializable, InstantComparator {
     return COMPLETION_TIME_BASED_COMPARATOR;
   }
 
+  // On tables upgraded from version 6, completion times of instants before the upgrade boundary are
+  // backfilled from the meta file modification time and are not guaranteed durable ordering keys.
+  // This is safe: the upgrade runs a full compaction with no concurrent writers, so those pre-upgrade
+  // completion times no longer affect concurrency or file-slicing decisions.
   @Override
   public String getOrderingTime(HoodieInstant instant) {
     return instant.getCompletionTime();
