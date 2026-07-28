@@ -18,6 +18,7 @@ import io.trino.Session;
 import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.NonProjectionCompatibleMergerHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.NonProjectionCompatibleRankMerger;
+import io.trino.plugin.hudi.testing.OmittedOrderingFieldHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.PayloadOnlyMergerHudiTablesInitializer;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
@@ -43,6 +44,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The same full-schema read path is reached without any configured merger at all by a pre-1.0 table that
  * persists only a {@link org.apache.hudi.common.model.HoodieRecordPayload} class
  * ({@link PayloadOnlyMergerHudiTablesInitializer}), covered by the {@code payloadOnly} tests below.
+ * <p>
+ * A third fixture ({@link OmittedOrderingFieldHudiTablesInitializer}) pins the projection-compatible side
+ * end to end: its metastore omits the ordering field its Avro schema carries, so correct event-time results
+ * prove the merge path recovers metastore-unknown merge columns from the resolved table schema.
  */
 public class TestHudiNonProjectionCompatibleMerger
         extends AbstractTestQueryFramework
@@ -54,7 +59,8 @@ public class TestHudiNonProjectionCompatibleMerger
         return HudiQueryRunner.builder()
                 .setDataLoader(new CompositeHudiTablesInitializer(
                         new NonProjectionCompatibleMergerHudiTablesInitializer(),
-                        new PayloadOnlyMergerHudiTablesInitializer()))
+                        new PayloadOnlyMergerHudiTablesInitializer(),
+                        new OmittedOrderingFieldHudiTablesInitializer()))
                 .addConnectorProperties(ImmutableMap.of(
                         "hudi.record-merger-impls", NonProjectionCompatibleRankMerger.class.getName()))
                 .build();
@@ -125,6 +131,25 @@ public class TestHudiNonProjectionCompatibleMerger
         assertThat(computeScalar(
                 noRecordMergerImplsSession(),
                 "SELECT sum(value) FROM " + PayloadOnlyMergerHudiTablesInitializer.RT_TABLE_NAME))
+                .isEqualTo(199L);
+    }
+
+    @Test
+    public void testMetastoreOmittedOrderingFieldRealtimeTableMerges()
+    {
+        // This fixture's metastore does not carry the ordering field ts its Avro schema has (the hive-sync
+        // omission shape); event-time merging still needs ts on both sides, so these results only come out
+        // when the merge path recovers the column from the resolved table schema.
+        assertQuery(
+                "SELECT key, name, value FROM " + OmittedOrderingFieldHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
+                "VALUES ('k1', 'k1_updated', CAST(99 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
+    }
+
+    @Test
+    public void testMetastoreOmittedOrderingFieldNarrowProjectionSum()
+    {
+        // 199 discriminates event-time merging from base-only (110) and commit-time newest-wins (103).
+        assertThat(computeScalar("SELECT sum(value) FROM " + OmittedOrderingFieldHudiTablesInitializer.RT_TABLE_NAME))
                 .isEqualTo(199L);
     }
 
