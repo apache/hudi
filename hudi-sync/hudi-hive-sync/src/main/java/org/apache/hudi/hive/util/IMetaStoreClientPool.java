@@ -54,7 +54,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * risk lost updates on table parameters such as the last-commit-time-synced marker.
  *
  * <p>The pool is gated behind {@code hoodie.datasource.hive_sync.batching.enabled} and
- * is constructed only for sync mode HMS.
+ * is constructed for sync mode HIVEQL, where it backs the DROP path only. DROP goes
+ * through {@code IMetaStoreClient.dropPartition} (Thrift), whereas ADD/UPDATE/TOUCH go
+ * through the thread-bound Hive {@code Driver} and use {@code HiveDriverPool} instead.
  */
 public class IMetaStoreClientPool implements AutoCloseable {
 

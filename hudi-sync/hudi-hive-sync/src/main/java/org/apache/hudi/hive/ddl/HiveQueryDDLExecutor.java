@@ -293,15 +293,20 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   }
 
   private void applyDropBatch(IMetaStoreClient poolClient, String tableName, List<String> batch) throws Exception {
+    int dropped = 0;
     for (String dropPartition : batch) {
       if (HivePartitionUtil.partitionExists(poolClient, tableName, dropPartition,
           partitionValueExtractor, config)) {
         String partitionClause =
             HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
         poolClient.dropPartition(databaseName, tableName, partitionClause, false);
+        dropped++;
       }
-      log.info("Drop partition {} on {}", dropPartition, tableName);
+      // Per-partition detail stays at debug: a batch can hold thousands of partitions
+      // and N workers log concurrently, so INFO carries the per-batch summary instead.
+      log.debug("Dropped partition {} on {}", dropPartition, tableName);
     }
+    log.info("Dropped {} of {} partitions in batch on {}", dropped, batch.size(), tableName);
   }
 
   @Override
