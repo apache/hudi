@@ -242,7 +242,7 @@ public class HudiPageSourceProvider
             // The metastore may lack merge-required columns the table schema carries (e.g. hive sync with
             // omit_metadata_fields=true drops _hoodie_operation); recover them from the already-resolved
             // schema so the base read is not starved of them.
-            readColumnHandles = appendMissingMergeRequiredColumns(dataSchema, hudiMetaAndDataColumnHandles, metaClient.getTableConfig());
+            readColumnHandles = appendMissingMergeRequiredColumns(dataSchema, hudiMetaAndDataColumnHandles, metaClient.getTableConfig(), readerProps);
         }
 
         ConnectorPageSource dataPageSource =

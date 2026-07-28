@@ -116,7 +116,7 @@ public class PayloadOnlyMergerHudiTablesInitializer
     protected void afterTableInit()
             throws IOException
     {
-        stripInferredMergeConfigs();
+        stripInferredMergeStrategyId();
     }
 
     @Override
@@ -142,23 +142,24 @@ public class PayloadOnlyMergerHudiTablesInitializer
         client.commit(secondCommit, secondStatuses);
 
         // The commits go through the table config; re-check that the writer left the fixture payload-only.
-        stripInferredMergeConfigs();
+        stripInferredMergeStrategyId();
     }
 
     /**
-     * Removes the merge mode and merge strategy id that table creation infers and persists for every pre-v9
-     * table, then verifies what is left. The fixture has to mimic a genuine pre-1.0 table, which persists its
-     * payload class and nothing else about merging; leaving the inferred keys in would hand the reader the
-     * answer this fixture exists to make it derive.
+     * Removes the merge strategy id that table creation infers and persists even for a version 6 table,
+     * then verifies what is left. The merge MODE never reaches disk here: its config is since-version
+     * 1.0.0, so creation itself drops it for a version 6 table ({@code HoodieTableConfig.dropInvalidConfigs});
+     * the {@code checkAbsent} below just pins that. The fixture has to mimic a genuine pre-1.0 table, which
+     * persists its payload class and nothing else about merging; leaving the inferred id in would hand the
+     * reader the answer this fixture exists to make it derive.
      */
-    private void stripInferredMergeConfigs()
+    private void stripInferredMergeStrategyId()
             throws IOException
     {
         Path metaDirectory = stagingTableDirectory().resolve(".hoodie");
         Path propertiesFile = metaDirectory.resolve("hoodie.properties");
         List<String> retainedLines = Files.readAllLines(propertiesFile, UTF_8).stream()
-                .filter(line -> !isEntryFor(line, HoodieTableConfig.RECORD_MERGE_MODE.key())
-                        && !isEntryFor(line, HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()))
+                .filter(line -> !isEntryFor(line, HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()))
                 .toList();
         Files.write(propertiesFile, retainedLines, UTF_8);
         // The Hadoop local filesystem verifies this sidecar when the write client reopens the file, and an

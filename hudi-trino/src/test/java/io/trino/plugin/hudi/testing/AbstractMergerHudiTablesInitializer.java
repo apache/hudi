@@ -250,6 +250,8 @@ public abstract class AbstractMergerHudiTablesInitializer
                 .withParallelism(2, 2)
                 .withDeleteParallelism(2)
                 .forTable(tableName)
+                // No withPreCombineField here: the ordering field is carried by the table config
+                // (setOrderingFields), and the deprecated builder method fails the -Werror compile gate.
                 .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
                 // Keep log files around so merging runs at read time.
                 .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -260,8 +262,6 @@ public abstract class AbstractMergerHudiTablesInitializer
                 .withMarkersType(MarkerType.DIRECT.name())
                 // MDT writes require hbase deps not present in the Trino runtime.
                 .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
-        // The ordering field is carried by the table config (setOrderingFields); the deprecated
-        // withPreCombineField builder method fails the -Werror compile gate.
         configureWriteConfig(writeConfigBuilder);
         return new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(new HadoopStorageConfiguration(conf)), writeConfigBuilder.build());
     }

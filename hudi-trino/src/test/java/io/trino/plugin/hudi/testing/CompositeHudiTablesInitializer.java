@@ -21,7 +21,10 @@ import java.util.List;
 
 /**
  * Runs several {@link HudiTablesInitializer}s against one query runner, in order, so a single test class can
- * load more than one table fixture. Each delegate must create its own tables under a distinct name.
+ * load more than one table fixture. Each delegate must create its own tables under a distinct name, and must
+ * finish its writes within {@code initializeTables}: a fixture that keeps its write client open (see
+ * {@code AbstractMergerHudiTablesInitializer.keepsWriterOpen}) cannot be composed here, because
+ * {@link HudiTablesInitializer} declares no close for this class to forward.
  */
 public class CompositeHudiTablesInitializer
         implements HudiTablesInitializer

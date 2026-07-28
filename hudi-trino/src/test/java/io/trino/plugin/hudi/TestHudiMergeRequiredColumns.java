@@ -15,8 +15,10 @@ package io.trino.plugin.hudi;
 
 import io.trino.metastore.HiveType;
 import io.trino.plugin.hive.HiveColumnHandle;
+import io.trino.plugin.hudi.testing.MaxRankRecordMerger;
 import org.apache.avro.SchemaBuilder;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,7 @@ import static io.trino.plugin.hudi.HudiUtil.appendMissingMergeRequiredColumns;
 import static io.trino.plugin.hudi.HudiUtil.mergeRequiredColumnNames;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
@@ -63,8 +66,9 @@ class TestHudiMergeRequiredColumns
     @Test
     public void testDeleteAndOperationColumnsAlwaysRequested()
     {
-        // Requested unconditionally: getMergeRequiredColumnHandles drops names that are in neither the
-        // metastore nor the Avro table schema, so tables without these fields read nothing extra
+        // Requested unconditionally: getMergeRequiredColumnHandles keeps only metastore data columns, and
+        // the merge path's appendMissingMergeRequiredColumns recovers schema-carried names, so a table
+        // with these fields in neither reads nothing extra
         assertThat(mergeRequiredColumnNames(new HoodieTableConfig(), RecordMergeMode.COMMIT_TIME_ORDERING))
                 .contains(HOODIE_IS_DELETED_FIELD, OPERATION_METADATA_FIELD);
     }
@@ -116,13 +120,39 @@ class TestHudiMergeRequiredColumns
         List<HiveColumnHandle> projection = List.of(
                 createBaseColumn("id", 0, HiveType.HIVE_STRING, VARCHAR, REGULAR, Optional.empty()));
 
-        List<HiveColumnHandle> extended = appendMissingMergeRequiredColumns(dataSchema, projection, eventTimeOrderedOn("ts"));
+        List<HiveColumnHandle> extended = appendMissingMergeRequiredColumns(dataSchema, projection, eventTimeOrderedOn("ts"), new TypedProperties());
 
         assertThat(extended).extracting(HiveColumnHandle::getName)
                 .containsExactly("id", "ts", OPERATION_METADATA_FIELD);
         // The recovered handles are typed from their Avro fields
         assertThat(extended.get(1).getType()).isEqualTo(BIGINT);
         assertThat(extended.getLast().getType()).isEqualTo(VARCHAR);
+    }
+
+    @Test
+    public void testCustomMergerMandatoryFieldMissingFromProjectionResolvesFromTableSchema()
+    {
+        // MaxRankRecordMerger declares merge_rank mandatory; a metastore that does not carry the column
+        // leaves it out of the projection, and the merge path must recover it by asking the same resolved
+        // merger the file-group reader will use
+        HoodieSchema dataSchema = HoodieSchema.fromAvroSchema(SchemaBuilder.record("rec").fields()
+                .requiredString("id")
+                .requiredLong("ts")
+                .requiredLong(MaxRankRecordMerger.RANK_COLUMN)
+                .endRecord());
+        HoodieTableConfig tableConfig = new HoodieTableConfig();
+        tableConfig.setValue(HoodieTableConfig.VERSION, "9");
+        tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
+        tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID, MaxRankRecordMerger.MERGE_STRATEGY_ID);
+        tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, "ts");
+        TypedProperties readerProps = new TypedProperties();
+        readerProps.setProperty(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY, MaxRankRecordMerger.class.getName());
+        List<HiveColumnHandle> projection = List.of(
+                createBaseColumn("id", 0, HiveType.HIVE_STRING, VARCHAR, REGULAR, Optional.empty()));
+
+        assertThat(appendMissingMergeRequiredColumns(dataSchema, projection, tableConfig, readerProps))
+                .extracting(HiveColumnHandle::getName)
+                .containsExactly("id", "ts", MaxRankRecordMerger.RANK_COLUMN);
     }
 
     @Test
@@ -137,7 +167,7 @@ class TestHudiMergeRequiredColumns
         List<HiveColumnHandle> projection = List.of(
                 createBaseColumn("TS", 1, HiveType.HIVE_LONG, BIGINT, REGULAR, Optional.empty()));
 
-        assertThat(appendMissingMergeRequiredColumns(dataSchema, projection, eventTimeOrderedOn("ts")))
+        assertThat(appendMissingMergeRequiredColumns(dataSchema, projection, eventTimeOrderedOn("ts"), new TypedProperties()))
                 .extracting(HiveColumnHandle::getName)
                 .containsExactly("TS");
     }
