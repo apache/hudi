@@ -46,7 +46,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -562,6 +564,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         .setArchiveLogFolder(getTimelineHistoryPath())
         .setPayloadClassName(HoodieMetadataPayload.class.getName())
         .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
+        .setTableStorageLayout(getMetadataTableStorageLayout(getEngineType(), dataWriteConfig.getWriteVersion()))
         .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
         .setPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS)
         .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
@@ -572,6 +575,15 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         .setBasePath(metadataWriteConfig.getBasePath()).setConf(storageConf.newInstance())
         .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig())
         .build();
+  }
+
+  static String getMetadataTableStorageLayout(EngineType engineType, HoodieTableVersion tableVersion) {
+    // Return null for all other cases so TableBuilder does not persist the property. The table config
+    // still resolves the absent property to the default layout, while preserving the existing on-disk
+    // configuration for other engines and older table versions.
+    return engineType == EngineType.FLINK && tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN)
+        ? HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue()
+        : null;
   }
 
   /**
