@@ -167,7 +167,8 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
       throw new IllegalArgumentException("LSM file group reader is doing log file merge but not reading from the start of the base file");
     }
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    this.props = ConfigUtils.getMergeProps(props, tableConfig);
+    props = ConfigUtils.getMergeProps(props, tableConfig);
+    this.props = props;
     readerContext.initRecordMerger(props);
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
