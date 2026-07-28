@@ -161,15 +161,18 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
       throw new IllegalArgumentException("LSM file group reader is doing log file merge but not reading from the start of the base file");
     }
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    this.props = ConfigUtils.getMergeProps(props, tableConfig);
-    readerContext.initRecordMerger(props);
+    // The table's record merge properties are only readable once un-prefixed, and read-path callers pass their
+    // properties through untouched. Everything downstream must therefore use the merged set, not the parameter.
+    TypedProperties mergedProps = ConfigUtils.getMergeProps(props, tableConfig);
+    this.props = mergedProps;
+    readerContext.initRecordMerger(mergedProps);
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
     readerContext.setShouldMergeUseRecordPosition(false);
     readerContext.setHasBootstrapBaseFile(inputSplit.getBaseFileOption().flatMap(HoodieBaseFile::getBootstrapBaseFile).isPresent());
     readerContext.setSchemaHandler(readerContext.getRecordContext().supportsParquetRowIndex()
-        ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, props, metaClient)
-        : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, props, metaClient));
+        ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, mergedProps, metaClient)
+        : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, mergedProps, metaClient));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), hoodieTableMetaClient);
     this.readStats = new HoodieReadStats();
