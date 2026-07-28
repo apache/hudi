@@ -192,7 +192,7 @@ class TestStreamerUtil {
     conf.set(FlinkOptions.OPERATION, WriteOperationType.BULK_INSERT.value());
     metaClient = StreamerUtil.initTableIfNotExists(conf);
 
-    assertFalse(metaClient.getTableConfig().isLSMTreeStorageLayout());
+    assertTrue(metaClient.getTableConfig().isLSMTreeStorageLayout());
   }
 
   @Test

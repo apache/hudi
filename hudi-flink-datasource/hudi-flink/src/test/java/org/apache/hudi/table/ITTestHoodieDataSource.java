@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -55,6 +56,7 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.core.execution.JobClient;
@@ -70,6 +72,8 @@ import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
+import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.hadoop.ParquetReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -83,6 +87,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -2004,6 +2010,10 @@ public class ITTestHoodieDataSource {
     expected.add("partition=par4" + "00000000");
 
     assertEquals(expected.stream().sorted().collect(Collectors.toList()), actual.stream().sorted().collect(Collectors.toList()));
+    if ("bulk_insert".equals(operationType)) {
+      assertEquals(TestData.DATA_SET_SOURCE_INSERT.size(),
+          assertBaseFilesAreSortedAndCountRecords(new File(basePath)));
+    }
   }
 
   @Test
@@ -2074,6 +2084,70 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result, "["
         + "+I[id1, Julian, 53, 1970-01-01T00:00:03, par1], "
         + "+I[id2, Stephen, 33, 1970-01-01T00:00:02, par1]]", 4);
+  }
+
+  @ParameterizedTest
+  @MethodSource("lsmBulkInsertParams")
+  void testLsmBulkInsertSortsEncodedRecordKeysAndSupportsUpdates(
+      HoodieTableType tableType, boolean partitioned) throws IOException {
+    TestConfigurations.Sql bulkInsertTable = sql("t1")
+        .field("id INT NOT NULL")
+        .field("name STRING")
+        .field("ts BIGINT")
+        .field("pt STRING")
+        .pkField("id")
+        .partitionField("pt")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.OPERATION, "bulk_insert")
+        .option(FlinkOptions.ORDERING_FIELDS, "ts")
+        .option(FlinkOptions.WRITE_TASKS, 1)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, false);
+    batchTableEnv.executeSql(partitioned
+        ? bulkInsertTable.end()
+        : bulkInsertTable.noPartition().end());
+
+    execInsertSql(batchTableEnv, "insert into t1 values "
+        + "(2, 'old-2', 1, 'p1'), "
+        + "(10, 'old-10', 1, 'p1'), "
+        + "(3, 'old-3', 1, 'p2'), "
+        + "(11, 'old-11', 1, 'p2')");
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
+    assertEquals(HoodieTableConfig.TableStorageLayout.LSM_TREE,
+        metaClient.getTableConfig().getTableStorageLayout());
+    assertEquals(4, assertBaseFilesAreSortedAndCountRecords(tempFile));
+
+    batchTableEnv.executeSql("drop table t1");
+    TestConfigurations.Sql upsertTable = sql("t1")
+        .field("id INT NOT NULL")
+        .field("name STRING")
+        .field("ts BIGINT")
+        .field("pt STRING")
+        .pkField("id")
+        .partitionField("pt")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.OPERATION, "upsert")
+        .option(FlinkOptions.ORDERING_FIELDS, "ts")
+        .option(FlinkOptions.WRITE_TASKS, 1);
+    batchTableEnv.executeSql(partitioned
+        ? upsertTable.end()
+        : upsertTable.noPartition().end());
+
+    execInsertSql(batchTableEnv, "insert into t1 values "
+        + "(2, 'new-2', 2, 'p1'), "
+        + "(10, 'new-10', 2, 'p1'), "
+        + "(3, 'new-3', 2, 'p2'), "
+        + "(11, 'new-11', 2, 'p2')");
+
+    List<Row> result = execSelectSql(batchTableEnv, "select * from t1");
+    assertRowsEquals(result, "["
+        + "+I[10, new-10, 2, p1], "
+        + "+I[11, new-11, 2, p2], "
+        + "+I[2, new-2, 2, p1], "
+        + "+I[3, new-3, 2, p2]]");
   }
 
   @Test
@@ -3951,6 +4025,38 @@ public class ITTestHoodieDataSource {
     return conf.toMap();
   }
 
+  private int assertBaseFilesAreSortedAndCountRecords(File tableBasePath) throws IOException {
+    List<Path> baseFiles;
+    try (Stream<Path> paths = Files.walk(tableBasePath.toPath())) {
+      baseFiles = paths
+          .filter(Files::isRegularFile)
+          .filter(path -> path.getFileName().toString().endsWith(".parquet"))
+          .filter(path -> !path.toString().contains(
+              File.separator + HoodieTableMetaClient.METAFOLDER_NAME + File.separator))
+          .collect(Collectors.toList());
+    }
+    assertFalse(baseFiles.isEmpty());
+
+    int totalRecords = 0;
+    for (Path baseFile : baseFiles) {
+      try (ParquetReader<GenericRecord> reader = AvroParquetReader
+          .<GenericRecord>builder(new org.apache.hadoop.fs.Path(baseFile.toUri()))
+          .build()) {
+        String previousKey = null;
+        GenericRecord record;
+        while ((record = reader.read()) != null) {
+          String currentKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          String lastKey = previousKey;
+          assertTrue(previousKey == null || previousKey.compareTo(currentKey) <= 0,
+              () -> "Base file " + baseFile + " is not sorted: " + lastKey + " > " + currentKey);
+          previousKey = currentKey;
+          totalRecords++;
+        }
+      }
+    }
+    return totalRecords;
+  }
+
   /**
    * Return test params => (execution mode, table type).
    */
@@ -3976,6 +4082,16 @@ public class ITTestHoodieDataSource {
             {ExecMode.BATCH, HoodieTableType.COPY_ON_WRITE},
             {ExecMode.STREAM, HoodieTableType.MERGE_ON_READ},
             {ExecMode.STREAM, HoodieTableType.COPY_ON_WRITE}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  private static Stream<Arguments> lsmBulkInsertParams() {
+    Object[][] data =
+        new Object[][] {
+            {HoodieTableType.COPY_ON_WRITE, false},
+            {HoodieTableType.COPY_ON_WRITE, true},
+            {HoodieTableType.MERGE_ON_READ, false},
+            {HoodieTableType.MERGE_ON_READ, true}};
     return Stream.of(data).map(Arguments::of);
   }
 

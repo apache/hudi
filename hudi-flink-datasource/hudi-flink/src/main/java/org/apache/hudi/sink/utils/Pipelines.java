@@ -39,10 +39,13 @@ import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
 import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
+import org.apache.hudi.sink.bucket.LsmBucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.buffer.BufferType;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
+import org.apache.hudi.sink.bulk.LsmBulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.RowDataKeyGens;
+import org.apache.hudi.sink.bulk.sort.LsmBulkInsertSortUtils;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;
@@ -129,6 +132,7 @@ public class Pipelines {
     // which is equal to write tasks number, to avoid shuffles
     final int PARALLELISM_VALUE = conf.get(FlinkOptions.WRITE_TASKS);
     final boolean isBucketIndexType = OptionsResolver.isBucketIndexType(conf);
+    final boolean isLsmTreeStorageLayout = OptionsResolver.isLsmTreeStorageLayout(conf);
 
     if (OptionsResolver.isRecordLevelIndex(conf)) {
       throw new HoodieException(
@@ -147,35 +151,80 @@ public class Pipelines {
           conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
       Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.create(conf, indexKeyFieldList);
       RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
-      RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
-      InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
       boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
 
       Map<String, String> bucketIdToFileId = new HashMap<>();
-      dataStream = dataStream.partitionCustom(partitioner, keyGen::getHoodieKey)
-          .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, record, indexKeyFieldList, numBucketsFunction, needFixedFileIdSuffix), typeInfo)
-          .setParallelism(PARALLELISM_VALUE);
-      if (conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
-        SortOperatorGen sortOperatorGen = BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
-        dataStream = dataStream.transform("file_sorter", typeInfo, sortOperatorGen.createSortOperator(conf))
+      dataStream = dataStream.partitionCustom(partitioner, keyGen::getHoodieKey);
+      if (isLsmTreeStorageLayout) {
+        RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(rowType);
+        InternalTypeInfo<RowData> sortTypeInfo = InternalTypeInfo.of(sortRowType);
+        dataStream = dataStream
+            .map(record -> LsmBucketBulkInsertWriterHelper.rowWithFileIdAndRecordKey(
+                bucketIdToFileId,
+                keyGen,
+                record,
+                indexKeyFieldList,
+                numBucketsFunction,
+                needFixedFileIdSuffix), sortTypeInfo)
+            .name("lsm_bulk_insert_sort_keys")
+            .setParallelism(PARALLELISM_VALUE);
+        SortOperatorGen sortOperatorGen = LsmBulkInsertSortUtils.getLsmSorterGen(sortRowType);
+        dataStream = dataStream
+            .transform("lsm_sorter:(file_group, record_key)", sortTypeInfo,
+                sortOperatorGen.createSortOperator(conf))
             .setParallelism(PARALLELISM_VALUE);
         FlinkTransformationUtils.setManagedMemoryWeight(dataStream.getTransformation(),
             conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+      } else {
+        RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
+        InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
+        dataStream = dataStream
+            .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(
+                bucketIdToFileId,
+                keyGen,
+                record,
+                indexKeyFieldList,
+                numBucketsFunction,
+                needFixedFileIdSuffix), typeInfo)
+            .setParallelism(PARALLELISM_VALUE);
+        if (conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
+          SortOperatorGen sortOperatorGen = BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
+          dataStream = dataStream.transform("file_sorter", typeInfo, sortOperatorGen.createSortOperator(conf))
+              .setParallelism(PARALLELISM_VALUE);
+          FlinkTransformationUtils.setManagedMemoryWeight(dataStream.getTransformation(),
+              conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+        }
       }
-    } else if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PARTITION_PATH_FIELD)) {
-      // if table is not partitioned then we don't need any shuffles,
-      // and could add main write operator only
-      if (conf.get(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_INPUT)) {
+    } else {
+      final boolean isPartitioned = !FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PARTITION_PATH_FIELD);
+      final boolean shouldShuffle = isPartitioned && conf.get(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_INPUT);
+      final RowDataKeyGen rowDataKeyGen = RowDataKeyGens.instance(conf, rowType);
+
+      if (shouldShuffle) {
         // shuffle by partition keys
         // use #partitionCustom instead of #keyBy to avoid duplicate sort operations,
         // see BatchExecutionUtils#applyBatchExecutionSettings for details.
         Partitioner<String> partitioner = (key, channels) -> KeyGroupRangeAssignment.assignKeyToParallelOperator(key,
             KeyGroupRangeAssignment.computeDefaultMaxParallelism(PARALLELISM_VALUE), channels);
-        RowDataKeyGen rowDataKeyGen = RowDataKeyGens.instance(conf, rowType);
         dataStream = dataStream.partitionCustom(partitioner, rowDataKeyGen::getPartitionPath);
       }
 
-      if (conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
+      if (isLsmTreeStorageLayout) {
+        RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(rowType);
+        InternalTypeInfo<RowData> sortTypeInfo = InternalTypeInfo.of(sortRowType);
+        dataStream = dataStream
+            .map(record -> LsmBulkInsertWriterHelper.rowWithPartitionAndKey(
+                rowDataKeyGen.getPartitionPath(record), record, rowDataKeyGen), sortTypeInfo)
+            .name("lsm_bulk_insert_sort_keys")
+            .setParallelism(PARALLELISM_VALUE);
+        SortOperatorGen sortOperatorGen = LsmBulkInsertSortUtils.getLsmSorterGen(sortRowType);
+        dataStream = dataStream
+            .transform("lsm_sorter:(partition_path, record_key)", sortTypeInfo,
+                sortOperatorGen.createSortOperator(conf))
+            .setParallelism(PARALLELISM_VALUE);
+        FlinkTransformationUtils.setManagedMemoryWeight(dataStream.getTransformation(),
+            conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+      } else if (isPartitioned && conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
         final boolean isNeededSortInput = conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY);
         final String[] partitionFields = FilePathUtils.extractPartitionKeys(conf);
         final String[] recordKeyFields = OptionsResolver.getRecordKeys(conf);

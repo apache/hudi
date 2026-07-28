@@ -21,6 +21,7 @@ package org.apache.hudi.sink.bulk;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
+import org.apache.hudi.sink.bucket.LsmBucketBulkInsertWriterHelper;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.flink.configuration.Configuration;
@@ -32,8 +33,18 @@ import org.apache.flink.table.types.logical.RowType;
 public class WriterHelpers {
   public static BulkInsertWriterHelper getWriterHelper(Configuration conf, HoodieTable<?, ?, ?, ?> hoodieTable, HoodieWriteConfig writeConfig,
                                                        String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType) {
-    return OptionsResolver.isBucketIndexType(conf)
-        ? new BucketBulkInsertWriterHelper(conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType)
-        : new BulkInsertWriterHelper(conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType);
+    if (OptionsResolver.isLsmTreeStorageLayout(conf)) {
+      return OptionsResolver.isBucketIndexType(conf)
+          ? new LsmBucketBulkInsertWriterHelper(
+              conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType)
+          : new LsmBulkInsertWriterHelper(
+              conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType);
+    } else {
+      return OptionsResolver.isBucketIndexType(conf)
+          ? new BucketBulkInsertWriterHelper(
+          conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType)
+          : new BulkInsertWriterHelper(
+              conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType);
+    }
   }
 }
