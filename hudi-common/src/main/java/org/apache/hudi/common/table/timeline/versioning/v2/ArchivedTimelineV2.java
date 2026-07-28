@@ -164,7 +164,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
 
   @Override
   public void loadCompletedInstantDetailsInMemory(String startTs, String endTs) {
-    List<HoodieInstant> loadedInstants = loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.METADATA);
+    List<HoodieInstant> loadedInstants = loadInstants(new HoodieArchivedTimeline.ClosedClosedTimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.METADATA);
     appendLoadedInstants(loadedInstants);
   }
 

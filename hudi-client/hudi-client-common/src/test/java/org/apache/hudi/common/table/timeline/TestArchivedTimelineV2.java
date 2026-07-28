@@ -112,6 +112,25 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testLoadCompletedDetailsForSingleInstant() {
+    String instantTime = "10000001";
+    byte[] commitMetadata = {1, 2, 3};
+    HoodieInstant completed = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime, "10000002");
+    createTimelineWriter().write(
+        Collections.singletonList(new DummyActiveAction(completed, commitMetadata)),
+        Option.empty(), Option.empty());
+
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+    HoodieInstant archivedInstant = archivedTimeline.firstInstant().get();
+    assertFalse(archivedTimeline.getInstantDetails(archivedInstant).isPresent());
+
+    archivedTimeline.loadCompletedInstantDetailsInMemory(instantTime, instantTime);
+
+    assertArrayEquals(commitMetadata, archivedTimeline.getInstantDetails(archivedInstant).get());
+  }
+
+  @Test
   void getInstantReaderReferencesSelf() {
     HoodieArchivedTimeline timeline = TIMELINE_FACTORY.createArchivedTimeline(metaClient);
     assertSame(timeline, timeline.getInstantReader());
