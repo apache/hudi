@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hive.util;
 
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
@@ -32,17 +31,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 
@@ -125,24 +118,14 @@ public class HiveDriverPool implements AutoCloseable {
     if (setupSqls.isEmpty()) {
       return;
     }
-    Dispatch dispatch = new Dispatch(workers.size());
+    ParallelDispatch dispatch = new ParallelDispatch(workers.size());
     for (Worker worker : workers) {
-      dispatch.add(worker.executor.submit(() -> {
-        if (dispatch.aborted()) {
-          throw new CancellationException("Skipped after an earlier setup statement failed");
-        }
-        try {
-          for (String sql : setupSqls) {
-            worker.driver.run(sql);
-          }
-        } catch (Throwable t) {
-          dispatch.recordFailure(t);
-          throw t;
-        } finally {
-          dispatch.taskSettled();
+      dispatch.add(worker.executor.submit(dispatch.guard(() -> {
+        for (String sql : setupSqls) {
+          worker.driver.run(sql);
         }
         return null;
-      }));
+      }, "Skipped after an earlier setup statement failed")));
     }
     dispatch.sealed();
     awaitAll(dispatch);
@@ -151,42 +134,28 @@ public class HiveDriverPool implements AutoCloseable {
   /**
    * Dispatches each SQL string to a worker (round-robin) and returns a handle to the
    * in-flight batch — this method does not block. The caller is responsible for
-   * awaiting completion via {@link #awaitAll(Dispatch)} and collecting errors. SQL text
+   * awaiting completion via {@link #awaitAll(ParallelDispatch)} and collecting errors. SQL text
    * is intentionally not logged per-statement here: batched TOUCH/ADD statements can
    * be many kilobytes, and N parallel workers would multiply the log volume. See
-   * {@link #awaitAll(Dispatch)} for the per-call summary log.
+   * {@link #awaitAll(ParallelDispatch)} for the per-call summary log.
    *
    * <p>Statements are spread round-robin across workers, so worker <i>w</i> owns
    * indices {@code w, w + N, w + 2N, ...}. Each worker drains its own queue
    * independently, which is why abort has to be observed by the tasks themselves
-   * rather than by the awaiting thread — see {@link Dispatch}.
+   * rather than by the awaiting thread — see {@link ParallelDispatch}.
    */
-  public Dispatch dispatchAll(List<String> sqls) {
+  public ParallelDispatch dispatchAll(List<String> sqls) {
     if (closed) {
       throw new IllegalStateException("Cannot dispatch to a closed HiveDriverPool");
     }
-    Dispatch dispatch = new Dispatch(sqls.size());
+    ParallelDispatch dispatch = new ParallelDispatch(sqls.size());
     for (int i = 0; i < sqls.size(); i++) {
       String sql = sqls.get(i);
       Worker worker = workers.get(i % workers.size());
-      dispatch.add(worker.executor.submit(() -> {
-        // Abort check inside the task: a worker can dequeue this statement while the
-        // awaiting thread is still parked on some other worker's slower statement, so
-        // Future.cancel() alone cannot stop it in time. Checking here means no
-        // statement starts after a sibling has already failed.
-        if (dispatch.aborted()) {
-          throw new CancellationException("Skipped after an earlier statement failed");
-        }
-        try {
-          worker.driver.run(sql);
-        } catch (Throwable t) {
-          dispatch.recordFailure(t);
-          throw t;
-        } finally {
-          dispatch.taskSettled();
-        }
+      dispatch.add(worker.executor.submit(dispatch.guard(() -> {
+        worker.driver.run(sql);
         return null;
-      }));
+      }, "Skipped after an earlier statement failed")));
     }
     dispatch.sealed();
     return dispatch;
@@ -201,167 +170,17 @@ public class HiveDriverPool implements AutoCloseable {
    * Callers do not need per-statement results (Hive's Driver.run side-effects the
    * metastore), so this method is void.
    */
-  public void awaitAll(Dispatch dispatch) {
+  public void awaitAll(ParallelDispatch dispatch) {
     long start = System.currentTimeMillis();
-    // Block until either every task settled or one of them aborted the batch. Only
-    // then walk the futures — by that point no un-started task can still begin, so
-    // the walk order no longer affects how much extra DDL gets applied.
-    dispatch.awaitSettledOrAborted();
-    int cancelled = dispatch.cancelPending();
+    ParallelDispatch.Outcome outcome = dispatch.awaitOutcome();
+    outcome.suppressed().forEach(e ->
+        LOG.warn("Additional SQL batch failed (suppressed in favor of first error)", e));
 
-    // Seeded from the batch's own record rather than discovered by walking the futures:
-    // cancelPending() above may have erased the failing task's exception. See
-    // Dispatch#recordFailure. The walk below still runs, to count outcomes and to catch
-    // a failure that somehow never made it into the record.
-    Throwable firstError = dispatch.firstFailure();
-    int completed = 0;
-    for (Future<?> f : dispatch.futures()) {
-      try {
-        f.get();
-        completed++;
-      } catch (CancellationException ce) {
-        // Either we cancelled it before it started, or the task itself observed the
-        // abort flag and bailed. Not a new failure; just note it for the summary.
-        cancelled++;
-      } catch (InterruptedException ie) {
-        Thread.currentThread().interrupt();
-        if (firstError == null) {
-          firstError = ie;
-        }
-      } catch (ExecutionException ee) {
-        Exception cause = unwrap(ee);
-        if (cause instanceof CancellationException) {
-          cancelled++;
-        } else if (firstError == null) {
-          firstError = cause;
-        } else if (ee.getCause() != firstError) {
-          // Identity check against the raw cause, not the unwrapped one: when the failing
-          // task wins the race against cancelPending(), its future reports the very
-          // Throwable already held in firstError, and re-logging it here would duplicate
-          // the exception this method is about to throw.
-          LOG.warn("Additional SQL batch failed (suppressed in favor of first error)", cause);
-        }
-      }
-    }
-    if (firstError != null) {
-      throw new HoodieHiveSyncException("Failed in executing SQL", firstError);
+    if (outcome.failed()) {
+      throw new HoodieHiveSyncException("Failed in executing SQL", outcome.firstError());
     }
     LOG.info("Completed {} SQL statements ({} cancelled) in {} ms across {} workers",
-        completed, cancelled, System.currentTimeMillis() - start, size);
-  }
-
-  /**
-   * Handle to one {@link #dispatchAll(List)} batch: the submitted futures plus the
-   * shared abort flag the tasks consult before running.
-   *
-   * <p>The flag exists because the futures belong to N independent single-thread
-   * executors. Cancelling from the awaiting thread is inherently late — a worker can
-   * pull its next statement off its own queue at any moment — so each task also
-   * re-checks {@link #aborted()} on entry. That is what actually bounds how much extra
-   * partition DDL a failed sync can apply.
-   */
-  public static final class Dispatch {
-    private final List<Future<?>> futures;
-    private final int total;
-    private final AtomicInteger settled = new AtomicInteger(0);
-    private final AtomicBoolean aborted = new AtomicBoolean(false);
-    private final AtomicReference<Throwable> firstFailureRef = new AtomicReference<>();
-    private final CountDownLatch done = new CountDownLatch(1);
-    private volatile boolean sealed;
-
-    private Dispatch(int total) {
-      this.total = total;
-      this.futures = new ArrayList<>(total);
-    }
-
-    private void add(Future<?> future) {
-      futures.add(future);
-    }
-
-    // Called once submission finishes. A task that settles before the last submit
-    // would otherwise see settled < total and never trip the latch, so re-check here.
-    private void sealed() {
-      sealed = true;
-      signalIfComplete();
-    }
-
-    private boolean aborted() {
-      return aborted.get();
-    }
-
-    /**
-     * Records a task's failure and aborts the batch. The Throwable is kept here rather
-     * than being left for {@link Future#get()} to report, because the failing task is
-     * racing the awaiting thread: this call releases {@link #awaitSettledOrAborted()},
-     * but the task's exception only reaches its {@code FutureTask} after {@code call()}
-     * returns. {@link #cancelPending()} in between wins the {@code FutureTask} state CAS
-     * (cancel succeeds on any task still NEW, which includes one mid-unwind), turning the
-     * later {@code setException} into a no-op and the error into a CancellationException.
-     */
-    private void recordFailure(Throwable t) {
-      firstFailureRef.compareAndSet(null, t);
-      aborted.set(true);
-      done.countDown();
-    }
-
-    private Throwable firstFailure() {
-      return firstFailureRef.get();
-    }
-
-    private void taskSettled() {
-      settled.incrementAndGet();
-      signalIfComplete();
-    }
-
-    private void signalIfComplete() {
-      if (sealed && settled.get() >= total) {
-        done.countDown();
-      }
-    }
-
-    private void awaitSettledOrAborted() {
-      if (total == 0) {
-        return;
-      }
-      try {
-        done.await();
-      } catch (InterruptedException ie) {
-        Thread.currentThread().interrupt();
-        aborted.set(true);
-      }
-    }
-
-    // mayInterruptIfRunning=false: the worker thread is bound to a Hive Driver whose
-    // state we don't want to corrupt mid-statement. Cancel only tasks that haven't
-    // started; in-flight statements run to completion.
-    private int cancelPending() {
-      int cancelled = 0;
-      for (Future<?> f : futures) {
-        if (f.cancel(false)) {
-          cancelled++;
-        }
-      }
-      return cancelled;
-    }
-
-    private List<Future<?>> futures() {
-      return futures;
-    }
-
-    @VisibleForTesting
-    public int size() {
-      return futures.size();
-    }
-
-    @VisibleForTesting
-    public Future<?> futureAt(int index) {
-      return futures.get(index);
-    }
-  }
-
-  private static Exception unwrap(ExecutionException ee) {
-    Throwable cause = ee.getCause();
-    return (cause instanceof Exception) ? (Exception) cause : ee;
+        outcome.completed(), outcome.cancelled(), System.currentTimeMillis() - start, size);
   }
 
   public int size() {

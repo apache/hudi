@@ -147,6 +147,53 @@ public class IMetaStoreClientPool implements AutoCloseable {
   }
 
   /**
+   * Submits one task per item, each borrowing a pooled client for the duration of its
+   * call, and returns a handle to the in-flight batch — this method does not block. The
+   * caller awaits completion via {@link #awaitAll(ParallelDispatch, String)}.
+   *
+   * <p>Tasks observe a shared abort flag, so a failure on any item stops items that have
+   * not started yet even while a slower sibling is still mid-call. See
+   * {@link ParallelDispatch} for why waiting on futures alone does not achieve that.
+   */
+  public <T> ParallelDispatch dispatchAll(List<T> items, ClientConsumer<T> action) {
+    if (closed) {
+      throw new IllegalStateException("Cannot dispatch to a closed IMetaStoreClient pool");
+    }
+    ParallelDispatch dispatch = new ParallelDispatch(items.size());
+    for (T item : items) {
+      dispatch.add(executor.submit(dispatch.guard(() -> {
+        run(client -> {
+          action.accept(client, item);
+          return null;
+        });
+        return null;
+      }, "Skipped after an earlier batch failed")));
+    }
+    dispatch.sealed();
+    return dispatch;
+  }
+
+  /**
+   * Awaits a batch from {@link #dispatchAll(List, ClientConsumer)}, cancels whatever had
+   * not started, and rethrows the first real failure. Later failures are logged at WARN.
+   */
+  public void awaitAll(ParallelDispatch dispatch, String description) throws Exception {
+    long start = System.currentTimeMillis();
+    ParallelDispatch.Outcome outcome = dispatch.awaitOutcome();
+    outcome.suppressed().forEach(e ->
+        LOG.warn("Additional {} batch failed (suppressed in favor of first error)", description, e));
+
+    if (outcome.failed()) {
+      LOG.error("{} dispatch aborted after first failure ({} batches cancelled)",
+          description, outcome.cancelled());
+      throw outcome.firstError();
+    }
+    LOG.info("Completed {} {} batches ({} cancelled) in {} ms across {} clients",
+        outcome.completed(), description, outcome.cancelled(),
+        System.currentTimeMillis() - start, size);
+  }
+
+  /**
    * Worker thread pool sized to match the client pool. Use this to fan out
    * batches so the number of in-flight Thrift calls cannot exceed the
    * number of pooled clients.
@@ -192,6 +239,12 @@ public class IMetaStoreClientPool implements AutoCloseable {
   @FunctionalInterface
   public interface ClientAction<T> {
     T apply(IMetaStoreClient client) throws Exception;
+  }
+
+  /** Work applied to one fanned-out item using a borrowed client. */
+  @FunctionalInterface
+  public interface ClientConsumer<T> {
+    void accept(IMetaStoreClient client, T item) throws Exception;
   }
 
   private static final class PoolThreadFactory implements ThreadFactory {

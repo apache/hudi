@@ -43,8 +43,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
@@ -236,8 +234,9 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    * semantics, so each worker still iterates its chunk one partition at a time — the
    * win is fanning chunks across independent Thrift clients.
    *
-   * <p>First-error semantics match {@code HiveDriverPool.awaitAll}: the first failure is
-   * rethrown, not-yet-started batches are cancelled, and later failures are logged at WARN.
+   * <p>First-error semantics come from {@link ParallelDispatch}, shared with
+   * {@code HiveDriverPool}: the first failure is rethrown, batches that have not started
+   * are stopped via the task-side abort flag, and later failures are logged at WARN.
    */
   private void runDropBatches(String tableName, List<List<String>> batches) throws Exception {
     if (!metaStoreClientPool.isPresent()) {
@@ -247,59 +246,19 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       return;
     }
     IMetaStoreClientPool pool = metaStoreClientPool.get();
-    List<Future<Void>> futures = new ArrayList<>(batches.size());
-    for (List<String> batch : batches) {
-      futures.add(pool.executor().submit(() ->
-          pool.run(poolClient -> {
-            applyDropBatch(poolClient, tableName, batch);
-            return null;
-          })
-      ));
-    }
-
-    Exception firstError = null;
-    int cancelled = 0;
-    for (Future<Void> f : futures) {
-      // Once a batch has failed the sync is going to abort anyway, so stop handing
-      // more DROPs to the metastore. mayInterruptIfRunning=false mirrors
-      // HiveDriverPool.awaitAll: a batch already mid-flight runs to completion rather
-      // than leaving the partition list half-dropped at an arbitrary point.
-      if (firstError != null && f.cancel(false)) {
-        cancelled++;
-        continue;
-      }
-      try {
-        f.get();
-      } catch (CancellationException ce) {
-        cancelled++;
-      } catch (InterruptedException ie) {
-        Thread.currentThread().interrupt();
-        if (firstError == null) {
-          firstError = ie;
-        }
-      } catch (Exception e) {
-        if (firstError == null) {
-          firstError = e;
-        } else {
-          log.warn("Additional drop batch failed on {} (suppressed in favor of first error)", tableName, e);
-        }
-      }
-    }
-    if (firstError != null) {
-      log.error("Drop partition dispatch on {} aborted after first failure ({} batches cancelled)",
-          tableName, cancelled);
-      throw firstError;
-    }
+    pool.awaitAll(
+        pool.dispatchAll(batches, (client, batch) -> applyDropBatch(client, tableName, batch)),
+        "drop partition");
   }
 
-  private void applyDropBatch(IMetaStoreClient poolClient, String tableName, List<String> batch) throws Exception {
+  private void applyDropBatch(IMetaStoreClient client, String tableName, List<String> batch) throws Exception {
     int dropped = 0;
     for (String dropPartition : batch) {
-      if (HivePartitionUtil.partitionExists(poolClient, tableName, dropPartition,
+      if (HivePartitionUtil.partitionExists(client, tableName, dropPartition,
           partitionValueExtractor, config)) {
         String partitionClause =
             HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
-        poolClient.dropPartition(databaseName, tableName, partitionClause, false);
+        client.dropPartition(databaseName, tableName, partitionClause, false);
         dropped++;
       }
       // Per-partition detail stays at debug: a batch can hold thousands of partitions
