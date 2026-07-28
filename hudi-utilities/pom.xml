@@ -117,6 +117,15 @@
       <version>${tika.version}</version>
       <scope>test</scope>
     </dependency>
+    <!-- POI (Office formats via tika-parsers) needs commons-compress >= 1.24; the
+         hadoop/spark-provided 1.23 would otherwise shadow it on the test classpath.
+         Spark 4.x distributions already ship a new enough version at runtime. -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-compress</artifactId>
+      <version>1.27.1</version>
+      <scope>test</scope>
+    </dependency>
 
     <!-- Jetty -->
     <dependency>
