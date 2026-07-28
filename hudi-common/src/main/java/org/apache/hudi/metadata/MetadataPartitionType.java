@@ -510,7 +510,7 @@ public enum MetadataPartitionType {
       return false;
     }
     // check the index definition already exists or not for this column
-    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(secondaryIndexColumn, PARTITION_NAME_SECONDARY_INDEX, dataMetaClient);
+    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(PARTITION_NAME_SECONDARY_INDEX, secondaryIndexColumn, dataMetaClient);
     return indexDefinitions.isEmpty();
   }
 
@@ -531,7 +531,7 @@ public enum MetadataPartitionType {
 
     // get all index definitions for this column and index type
     // check if none of the index definitions has index function matching the expression
-    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(expressionIndexColumn, PARTITION_NAME_EXPRESSION_INDEX, dataMetaClient);
+    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(PARTITION_NAME_EXPRESSION_INDEX, expressionIndexColumn, dataMetaClient);
     return indexDefinitions.isEmpty()
         || indexDefinitions.stream().noneMatch(indexDefinition -> indexDefinition.getIndexFunction().equals(expressionIndexOptions.get(HoodieExpressionIndex.EXPRESSION_OPTION)));
   }
@@ -547,11 +547,6 @@ public enum MetadataPartitionType {
           .forEach(indexDefinitions::add);
     }
     return indexDefinitions;
-  }
-
-  private static boolean isIndexDefinitionPresentForColumn(String indexedColumn, String indexType, HoodieTableMetaClient dataMetaClient) {
-    return dataMetaClient.getIndexMetadata().isPresent() && dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
-        .anyMatch(indexDefinition -> indexDefinition.getSourceFields().contains(indexedColumn) && indexDefinition.getIndexType().equals(indexType));
   }
 
   @Override
