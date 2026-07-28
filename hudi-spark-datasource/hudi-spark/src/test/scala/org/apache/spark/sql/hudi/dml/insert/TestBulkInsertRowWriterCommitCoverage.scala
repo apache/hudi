@@ -26,10 +26,10 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 /**
  * Focused coverage for the row-writer bulk-insert commit executors in
- * {@code org.apache.hudi.commit}: [[org.apache.hudi.commit.BaseDatasetBulkInsertCommitActionExecutor]]
+ * `org.apache.hudi.commit`: [[org.apache.hudi.commit.BaseDatasetBulkInsertCommitActionExecutor]]
  * and [[org.apache.hudi.commit.DatasetBulkInsertOverwriteCommitActionExecutor]].
  *
- * All tests set {@code hoodie.spark.sql.insert.into.operation = bulk_insert} and keep the default
+ * All tests set `hoodie.spark.sql.insert.into.operation = bulk_insert` and keep the default
  * row-writer path enabled, so INSERT / INSERT OVERWRITE flow through the Dataset-based executors.
  */
 class TestBulkInsertRowWriterCommitCoverage extends HoodieSparkSqlTestBase {
@@ -194,12 +194,10 @@ class TestBulkInsertRowWriterCommitCoverage extends HoodieSparkSqlTestBase {
 
         // An insert overwrite that targets the partition under pending clustering must be
         // rejected by the default SparkRejectUpdateStrategy before any write materializes.
-        checkExceptionContain(new Runnable {
-          override def run(): Unit = spark.sql(
-            s"""insert overwrite table $tableName partition (dt)
-               | select 1 as id, 'a1_new' as name, '2024-01-01' as dt
-             """.stripMargin)
-        })("Not allowed to update the clustering file group")
+        checkExceptionContain(() => spark.sql(
+          s"""insert overwrite table $tableName partition (dt)
+             | select 1 as id, 'a1_new' as name, '2024-01-01' as dt
+           """.stripMargin))("Not allowed to update the clustering file group")
 
         // The rejection happens before commit, so the original data is intact.
         checkAnswer(s"select id, name, dt from $tableName order by id")(

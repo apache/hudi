@@ -25,8 +25,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 /**
  * Focused coverage for the MERGE INTO write path implemented by
- * [[org.apache.spark.sql.hudi.command.payload.ExpressionPayload]] and
- * [[org.apache.spark.sql.hudi.command.MergeIntoKeyGenerator]].
+ * [[org.apache.spark.sql.hudi.command.payload.ExpressionPayload]].
  *
  * The scenarios below intentionally combine, within a single statement, all of:
  *   - conditional matched UPDATE clauses (the update-condition evaluation loop),
@@ -34,11 +33,13 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
  *   - conditional NOT-MATCHED INSERT clauses (including a not-matched row that
  *     matches no insert condition and is therefore filtered),
  * so both the matched and not-matched evaluators, the delete-marker branch, and the
- * record-merge branch are exercised. Running against partitioned COW and MOR tables
- * with the row-writer path both enabled and disabled additionally drives the
- * record-key / partition-path extraction overloads of MergeIntoKeyGenerator (the
- * meta-field-populated branch for matched rows and the key-generator fallback for
- * freshly inserted rows).
+ * record-merge branch are exercised, against partitioned COW and MOR tables with the
+ * row-writer path both enabled and disabled.
+ *
+ * Every table here declares a primary key, so `buildMergeIntoConfig` selects
+ * [[org.apache.spark.sql.hudi.command.SqlKeyGenerator]].
+ * [[org.apache.spark.sql.hudi.command.MergeIntoKeyGenerator]] is the primary-keyless
+ * path and is covered by [[TestMergeIntoTableWithNonRecordKeyField]].
  */
 class TestMergeIntoWriteCoverage extends HoodieSparkSqlTestBase {
 
@@ -87,7 +88,7 @@ class TestMergeIntoWriteCoverage extends HoodieSparkSqlTestBase {
                |   select 2 as id, 'a2_d' as name, 22.0 as price, 2 as ts, 'p1' as pt, 'd' as flag union all
                |   select 3 as id, 'a3_x' as name, 33.0 as price, 2 as ts, 'p2' as pt, 'x' as flag union all
                |   select 4 as id, 'a4_i' as name, 40.0 as price, 2 as ts, 'p3' as pt, 'i' as flag union all
-               |   select 5 as id, 'a5_i' as name, 50.0 as price, 2 as ts, 'p3' as pt, 'n' as flag
+               |   select 5 as id, 'a5_n' as name, 50.0 as price, 2 as ts, 'p3' as pt, 'n' as flag
                | ) s
                | on t.id = s.id
                | when matched and s.flag = 'u' then update set
