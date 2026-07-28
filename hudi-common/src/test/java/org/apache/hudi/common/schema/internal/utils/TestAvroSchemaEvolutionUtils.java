@@ -783,4 +783,61 @@ public class TestAvroSchemaEvolutionUtils {
     Assertions.assertEquals(millisValue, rewrittenMillis.get("ts"),
         "micros source value must be rescaled to millis when the writer schema is pinned to millis");
   }
+
+  /**
+   * A UTC/local zone change is not a precision repair. The stored long means a different instant
+   * under each interpretation and no rescale can fix that, so a zone change must be rejected on
+   * every path and no per-field override may authorize it.
+   *
+   * <p>Both entry points have to enforce it. reconcileSchema rejects via isTypeUpdateAllow, but
+   * reconcileTimestampLogicalType is the only guard on the default non-reconcile path, and the
+   * Avro reader/writer compatibility check that runs after it is logical-type-blind for two
+   * long-backed fields -- so if the guard skips a zone change, nothing else catches it.
+   */
+  @Test
+  public void testCrossZoneTimestampChangeIsRejected() {
+    HoodieSchema tableMicros = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
+    HoodieSchema localMicros = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
+    HoodieSchema tableMillis = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))));
+    HoodieSchema localMillis = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG))));
+
+    // No override: rejected by both entry points, in both zone directions.
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(localMicros, InternalSchemaConverter.convert(tableMicros), false,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(tableMicros, InternalSchemaConverter.convert(localMicros), false,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+    Throwable guarded = assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMicros, tableMicros,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+    assertTrue(guarded.getMessage().contains("'ts'"), "Unexpected message: " + guarded.getMessage());
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(tableMicros, localMicros,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+
+    // An override must NOT unlock a zone change, whichever zone it names.
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMicros, tableMicros,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-micros")));
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMicros, tableMicros,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-micros")));
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(localMicros, InternalSchemaConverter.convert(tableMicros), false,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-micros")));
+
+    // A zone change that also crosses precision is still a zone change.
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMillis, tableMicros,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-millis")));
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMicros, tableMillis,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+
+    // Same-zone precision changes are unaffected: still gated by the override, not by the zone check.
+    Schema stillWorks = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMillis, localMicros,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-millis")).toAvroSchema();
+    Assertions.assertEquals("local-timestamp-millis", stillWorks.getField("ts").schema().getLogicalType().getName());
+  }
 }

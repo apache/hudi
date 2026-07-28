@@ -103,17 +103,31 @@ public class SchemaChangeUtils {
     if (src.equals(dst)) {
       return false;
     }
-    boolean srcTs = src.typeId() == Type.TypeID.TIMESTAMP || src.typeId() == Type.TypeID.TIMESTAMP_MILLIS;
-    boolean dstTs = dst.typeId() == Type.TypeID.TIMESTAMP || dst.typeId() == Type.TypeID.TIMESTAMP_MILLIS;
-    if (srcTs && dstTs) {
+    if (isUtcTimestamp(src) && isUtcTimestamp(dst)) {
       return true;
     }
-    boolean srcLocalTs = src.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MILLIS || src.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MICROS;
-    boolean dstLocalTs = dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MILLIS || dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MICROS;
-    if (srcLocalTs && dstLocalTs) {
+    if (isLocalTimestamp(src) && isLocalTimestamp(dst)) {
       return true;
     }
-    return src.typeId() == Type.TypeID.LONG && dstLocalTs;
+    return src.typeId() == Type.TypeID.LONG && isLocalTimestamp(dst);
+  }
+
+  /**
+   * Whether a column type change crosses the UTC/local timestamp boundary. Unlike a precision
+   * change this has no value-level repair: the same long denotes a different instant under each
+   * interpretation, so rescaling cannot express the conversion. A zone change is therefore always
+   * rejected and no per-field override authorizes it.
+   */
+  public static boolean isCrossZoneTimestampChange(Type src, Type dst) {
+    return (isUtcTimestamp(src) && isLocalTimestamp(dst)) || (isLocalTimestamp(src) && isUtcTimestamp(dst));
+  }
+
+  private static boolean isUtcTimestamp(Type type) {
+    return type.typeId() == Type.TypeID.TIMESTAMP || type.typeId() == Type.TypeID.TIMESTAMP_MILLIS;
+  }
+
+  private static boolean isLocalTimestamp(Type type) {
+    return type.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MILLIS || type.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MICROS;
   }
 
   /**

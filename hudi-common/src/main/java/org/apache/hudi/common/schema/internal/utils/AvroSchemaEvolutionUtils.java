@@ -195,7 +195,8 @@ public class AvroSchemaEvolutionUtils {
    *
    * <p>For each field whose precision differs from the table: an override pins it (equal to the
    * table type coerces the incoming values, a different type applies the authorized evolution), and
-   * a change with no override throws. Non-timestamp changes are left untouched here.
+   * a change with no override throws. A UTC/local zone change throws unconditionally, since no
+   * override authorizes one. Non-timestamp changes are left untouched here.
    */
   public static HoodieSchema reconcileTimestampLogicalType(HoodieSchema writerSchema, HoodieSchema tableSchema,
                                                            Map<String, Type> timestampLogicalTypeOverrides) {
@@ -214,7 +215,16 @@ public class AvroSchemaEvolutionUtils {
       }
       Type writerType = writerInternal.findType(col);
       Type tableType = tableInternal.findType(col);
-      if (writerType.isNestedType() || !SchemaChangeUtils.isGatedTimestampChange(tableType, writerType)) {
+      if (writerType.isNestedType()) {
+        continue;
+      }
+      // A zone change is never authorizable, and this is the only guard on the default
+      // non-reconcile path -- the Avro reader/writer check that follows is logical-type-blind for
+      // two long-backed fields, so skipping here would let the flip through silently.
+      if (SchemaChangeUtils.isCrossZoneTimestampChange(tableType, writerType)) {
+        throw crossZoneTimestampChangeError(col, tableType, writerType);
+      }
+      if (!SchemaChangeUtils.isGatedTimestampChange(tableType, writerType)) {
         continue;
       }
       // Skip-if equals the *writer* type: this method returns a modified writerSchema. When the
@@ -256,6 +266,15 @@ public class AvroSchemaEvolutionUtils {
     }
     typeChange.updateColumnType(col, overrideType);
     return true;
+  }
+
+  private static SchemaCompatibilityException crossZoneTimestampChangeError(String col, Type from, Type to) {
+    return new SchemaCompatibilityException(String.format(
+        "Refusing to change the timestamp logical type of column '%s' from '%s' to '%s': this crosses the "
+            + "UTC/local boundary, which changes the instant the stored value denotes and cannot be repaired by "
+            + "rescaling. '%s' authorizes precision changes only, never a zone change. Keep writing the column "
+            + "with its existing zone, or add a new column and backfill it with an explicit conversion.",
+        col, from, to, HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key()));
   }
 
   private static SchemaCompatibilityException timestampPrecisionChangeError(String col, Type from, Type to) {

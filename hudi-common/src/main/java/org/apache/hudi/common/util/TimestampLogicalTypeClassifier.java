@@ -23,9 +23,9 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
 /**
- * Shared classifier for the timestamp logical-type drift introduced by Hudi 0.14.1 / 0.15.0 / 1.0.x
- * (see ENG-43554 / ENG-44698). It decides, from three signals about a long-backed column, what the
- * correct target timestamp logical type is, so a caller can suggest a value for
+ * Shared classifier for the timestamp logical-type drift introduced by Hudi 0.14.1 / 0.15.0 / 1.0.x.
+ * It decides, from three signals about a long-backed column, what the correct target timestamp
+ * logical type is, so a caller can suggest a value for
  * {@code hoodie.write.timestamp.logical.type.overrides}.
  *
  * <p>The three signals are: (1) the table schema logical type, (2) the base-file schema logical
@@ -35,15 +35,12 @@ import org.apache.avro.Schema;
  * (the OSS scanner reads through the storage abstraction, the data-plane tool reads parquet
  * directly), but both must share this logic so their verdicts cannot drift apart.
  *
- * <p><b>Intended consumers</b> (external to this repo, so an in-repo grep finds only tests today):
- * <ul>
- *   <li>An upstream OSS timestamp-inspection scanner that reads via the Hudi storage abstraction —
- *       to be added once the design lands upstream.</li>
- *   <li>The onehouse-dataplane {@code TableTimestampInspectionTool} (onehouseinc/onehouse-dataplane#2810),
- *       which reads parquet directly and emits the ready-to-paste config value. It wraps this
- *       classifier so the two consumers' verdicts cannot drift.</li>
- * </ul>
- * Do not rely on the enums or method signatures here as stable public API — this is internal to
+ * <p><b>Status:</b> this is the verdict logic only. The inspection scanner that samples base files
+ * and emits a ready-to-paste config value is not part of this repo yet, so an in-repo grep finds
+ * only tests today. It lives here rather than in the tool so that every consumer shares one
+ * definition of the verdict and they cannot drift apart.
+ *
+ * <p>Do not rely on the enums or method signatures here as stable public API: this is internal to
  * the timestamp-repair workflow.
  */
 public class TimestampLogicalTypeClassifier {
