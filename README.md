@@ -101,7 +101,7 @@ Prerequisites for building Apache Hudi:
 ```
 # Checkout code and build
 git clone https://github.com/apache/hudi.git && cd hudi
-mvn clean package -DskipTests -Dspark3.5 -Dflink1.20
+mvn clean package -DskipTests -Dspark3.5 -Dflink2.1
 
 # Start command
 spark-3.5.0-bin-hadoop3/bin/spark-shell \
@@ -151,10 +151,10 @@ mvn clean package -DskipTests -Dspark3.5 -Dscala-2.13 -pl packaging/hudi-spark-b
 For example,
 ```
 # Build against Spark 3.5.x
-mvn clean package -DskipTests -Dspark3.5 -Dflink1.20
+mvn clean package -DskipTests -Dspark3.5 -Dflink2.1
 
 # Build against Spark 3.4.x
-mvn clean package -DskipTests -Dspark3.4 -Dflink1.20
+mvn clean package -DskipTests -Dspark3.4 -Dflink2.1
 ```
 
 #### What about "spark-avro" module?
@@ -163,18 +163,18 @@ Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specifie
 
 ### Build with different Flink versions
 
-The default Flink version supported is 1.20. The default Flink 1.20.x version, corresponding to `flink1.20` profile is 1.20.1.
+The default Flink version supported is 2.1. The default Flink 2.1.x version, corresponding to the `flink2.1` profile, is 2.1.1.
 Flink is Scala-free since 1.15.x, there is no need to specify the Scala version for Flink 1.15.x and above versions.
 Refer to the table below for building with different Flink and Scala versions.
 
 | Maven build options | Expected Flink bundle jar name | Notes                            |
-|:--------------------|:-------------------------------|:---------------------------------|
-| (empty)             | hudi-flink1.20-bundle          | For Flink 1.20 (default options) |
-| `-Dflink2.1`        | hudi-flink2.1-bundle           | For Flink 2.1                    |
-| `-Dflink2.0`        | hudi-flink2.0-bundle           | For Flink 2.0                    |
-| `-Dflink1.20`       | hudi-flink1.20-bundle          | For Flink 1.20 (same as default) |
-| `-Dflink1.19`       | hudi-flink1.19-bundle          | For Flink 1.19                   |
-| `-Dflink1.18`       | hudi-flink1.18-bundle          | For Flink 1.18                   |
+|:--------------------|:--------------------------------|:---------------------------------|
+| (empty)             | hudi-flink2.1-bundle            | For Flink 2.1 (default options)  |
+| `-Dflink2.1`        | hudi-flink2.1-bundle            | For Flink 2.1 (same as default)  |
+| `-Dflink2.0`        | hudi-flink2.0-bundle            | For Flink 2.0                    |
+| `-Dflink1.20`       | hudi-flink1.20-bundle           | For Flink 1.20                   |
+| `-Dflink1.19`       | hudi-flink1.19-bundle           | For Flink 1.19                   |
+| `-Dflink1.18`       | hudi-flink1.18-bundle           | For Flink 1.18                   |
 
 For example,
 ```
