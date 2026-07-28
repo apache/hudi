@@ -135,24 +135,34 @@ class TestHudiMergeRequiredColumns
         // MaxRankRecordMerger declares merge_rank mandatory; a metastore that does not carry the column
         // leaves it out of the projection, and the merge path must recover it by asking the same resolved
         // merger the file-group reader will use
-        HoodieSchema dataSchema = HoodieSchema.fromAvroSchema(SchemaBuilder.record("rec").fields()
-                .requiredString("id")
-                .requiredLong("ts")
-                .requiredLong(MaxRankRecordMerger.RANK_COLUMN)
-                .endRecord());
-        HoodieTableConfig tableConfig = new HoodieTableConfig();
-        tableConfig.setValue(HoodieTableConfig.VERSION, "9");
-        tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
-        tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID, MaxRankRecordMerger.MERGE_STRATEGY_ID);
-        tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, "ts");
-        TypedProperties readerProps = new TypedProperties();
-        readerProps.setProperty(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY, MaxRankRecordMerger.class.getName());
-        List<HiveColumnHandle> projection = List.of(
-                createBaseColumn("id", 0, HiveType.HIVE_STRING, VARCHAR, REGULAR, Optional.empty()));
-
-        assertThat(appendMissingMergeRequiredColumns(dataSchema, projection, tableConfig, readerProps))
+        assertThat(appendMissingMergeRequiredColumns(
+                rankTableSchema(), idOnlyProjection(), customMergeOrderedOn("ts", MaxRankRecordMerger.MERGE_STRATEGY_ID), maxRankMergerProps()))
                 .extracting(HiveColumnHandle::getName)
                 .containsExactly("id", "ts", MaxRankRecordMerger.RANK_COLUMN);
+    }
+
+    @Test
+    public void testCustomMergeModeWithoutStrategyIdSkipsMergerResolution()
+    {
+        // A CUSTOM table without a persisted strategy id cannot resolve a merger; the append must fall
+        // back to the table-config-derived names without dereferencing the null id -- the read then fails
+        // actionably in getRecordMerger, not with an NPE here
+        assertThat(appendMissingMergeRequiredColumns(
+                rankTableSchema(), idOnlyProjection(), customMergeOrderedOn("ts", null), maxRankMergerProps()))
+                .extracting(HiveColumnHandle::getName)
+                .containsExactly("id", "ts");
+    }
+
+    @Test
+    public void testCustomMergeModeWithUnresolvableMergerSkipsMandatoryFields()
+    {
+        // A strategy id no configured merger implementation declares resolves nothing; the append keeps
+        // the table-config-derived names and must not dereference the empty resolution. (The all-zeros
+        // uuid would NOT do here: it is PAYLOAD_BASED_MERGE_STRATEGY_UUID, which always resolves.)
+        assertThat(appendMissingMergeRequiredColumns(
+                rankTableSchema(), idOnlyProjection(), customMergeOrderedOn("ts", "e2a5b7c9-1d3f-4a68-9c0b-5e7d9f1a3b6c"), maxRankMergerProps()))
+                .extracting(HiveColumnHandle::getName)
+                .containsExactly("id", "ts");
     }
 
     @Test
@@ -170,6 +180,39 @@ class TestHudiMergeRequiredColumns
         assertThat(appendMissingMergeRequiredColumns(dataSchema, projection, eventTimeOrderedOn("ts"), new TypedProperties()))
                 .extracting(HiveColumnHandle::getName)
                 .containsExactly("TS");
+    }
+
+    private static HoodieSchema rankTableSchema()
+    {
+        return HoodieSchema.fromAvroSchema(SchemaBuilder.record("rec").fields()
+                .requiredString("id")
+                .requiredLong("ts")
+                .requiredLong(MaxRankRecordMerger.RANK_COLUMN)
+                .endRecord());
+    }
+
+    private static List<HiveColumnHandle> idOnlyProjection()
+    {
+        return List.of(createBaseColumn("id", 0, HiveType.HIVE_STRING, VARCHAR, REGULAR, Optional.empty()));
+    }
+
+    private static HoodieTableConfig customMergeOrderedOn(String orderingField, String mergeStrategyId)
+    {
+        HoodieTableConfig tableConfig = new HoodieTableConfig();
+        tableConfig.setValue(HoodieTableConfig.VERSION, "9");
+        tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
+        if (mergeStrategyId != null) {
+            tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID, mergeStrategyId);
+        }
+        tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, orderingField);
+        return tableConfig;
+    }
+
+    private static TypedProperties maxRankMergerProps()
+    {
+        TypedProperties readerProps = new TypedProperties();
+        readerProps.setProperty(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY, MaxRankRecordMerger.class.getName());
+        return readerProps;
     }
 
     private static HoodieTableConfig eventTimeOrderedOn(String orderingField)
