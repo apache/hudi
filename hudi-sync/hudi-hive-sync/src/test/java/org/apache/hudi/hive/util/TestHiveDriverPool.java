@@ -40,6 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -138,7 +139,8 @@ class TestHiveDriverPool {
       HiveDriverPool.Dispatch futures = pool.dispatchAll(Arrays.asList("OK", "FAIL", "OK"));
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(futures));
-      assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
+      assertNotNull(ex.getCause());
+      assertTrue(ex.getCause().getMessage().contains("boom"));
     }
   }
 
@@ -254,7 +256,8 @@ class TestHiveDriverPool {
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(dispatch));
 
-      assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
+      assertNotNull(ex.getCause());
+      assertTrue(ex.getCause().getMessage().contains("boom"));
       assertEquals(Collections.singletonList("FAIL"), executed,
           "Statements queued behind the failure must never reach the Driver");
     }
@@ -307,7 +310,8 @@ class TestHiveDriverPool {
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(dispatch));
 
-      assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
+      assertNotNull(ex.getCause());
+      assertTrue(ex.getCause().getMessage().contains("boom"));
       assertFalse(executed.contains("AFTER_FAIL"),
           "Statement queued behind a failure on the same worker must not be applied, "
               + "even while an earlier future on another worker is still running");
@@ -353,7 +357,8 @@ class TestHiveDriverPool {
 
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(dispatch));
-      assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
+      assertNotNull(ex.getCause());
+      assertTrue(ex.getCause().getMessage().contains("boom"));
     }
   }
 }

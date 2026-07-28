@@ -265,7 +265,7 @@ public class HiveDriverPool implements AutoCloseable {
     private final int total;
     private final AtomicInteger settled = new AtomicInteger(0);
     private final AtomicBoolean aborted = new AtomicBoolean(false);
-    private final AtomicReference<Throwable> firstFailure = new AtomicReference<>();
+    private final AtomicReference<Throwable> firstFailureRef = new AtomicReference<>();
     private final CountDownLatch done = new CountDownLatch(1);
     private volatile boolean sealed;
 
@@ -299,13 +299,13 @@ public class HiveDriverPool implements AutoCloseable {
      * later {@code setException} into a no-op and the error into a CancellationException.
      */
     private void recordFailure(Throwable t) {
-      firstFailure.compareAndSet(null, t);
+      firstFailureRef.compareAndSet(null, t);
       aborted.set(true);
       done.countDown();
     }
 
     private Throwable firstFailure() {
-      return firstFailure.get();
+      return firstFailureRef.get();
     }
 
     private void taskSettled() {
