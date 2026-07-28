@@ -40,11 +40,9 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.BLOB_INLINE_MAX_BYTES;
 import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.CHUNK_OVERLAP_CHARS;
 import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.CHUNK_SIZE_CHARS;
-import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.PARSER_CLASS;
 import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.PARSE_ENABLED;
 import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.PARSE_MAX_BYTES;
 import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.PARSE_MAX_TEXT_CHARS;
@@ -75,7 +73,7 @@ public class UnstructuredFileRecordBuilder implements Serializable {
     this.parseEnabled = getBooleanWithAltKeys(props, PARSE_ENABLED);
     this.parseMaxBytes = getLongWithAltKeys(props, PARSE_MAX_BYTES);
     this.parseMaxTextChars = getIntWithAltKeys(props, PARSE_MAX_TEXT_CHARS);
-    this.parserClass = getStringWithAltKeys(props, PARSER_CLASS, true);
+    this.parserClass = DocumentParserType.resolveParserClass(props);
     this.chunker = new TextChunker(getIntWithAltKeys(props, CHUNK_SIZE_CHARS),
         getIntWithAltKeys(props, CHUNK_OVERLAP_CHARS));
   }
@@ -136,6 +134,10 @@ public class UnstructuredFileRecordBuilder implements Serializable {
   }
 
   private static byte[] readFully(FileSystem fs, Path path, int size) throws IOException {
+    // On-heap by design: Spark's BinaryType external type is byte[], so an off-heap read
+    // would still copy onto the heap to build the row. Peak per-task allocation is bounded
+    // by BLOB_INLINE_MAX_BYTES (rows stream one at a time); raising that threshold raises
+    // task memory accordingly.
     byte[] bytes = new byte[size];
     try (FSDataInputStream in = fs.open(path)) {
       in.readFully(0, bytes);

@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.utilities.sources.helpers.unstructured.DocumentParserType;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -50,13 +51,21 @@ public class UnstructuredFileSourceConfig extends HoodieConfig {
           + "larger files are stored OUT_OF_LINE as a reference to the original file in place. "
           + "This bounds per-row memory: blob bytes above the threshold never enter Spark rows.");
 
+  public static final ConfigProperty<String> DOCUMENT_PARSER = ConfigProperty
+      .key(PREFIX + "document.parser")
+      .defaultValue("TIKA")
+      .sinceVersion("1.2.0")
+      .withDocumentation(DocumentParserType.class, "Parser used to extract text and metadata "
+          + "from ingested files. TIKA uses Apache Tika with automatic format detection; CUSTOM "
+          + "loads the DocumentParser implementation named by " + PREFIX + "parser.class.");
+
   public static final ConfigProperty<String> PARSER_CLASS = ConfigProperty
       .key(PREFIX + "parser.class")
-      .defaultValue("org.apache.hudi.utilities.sources.helpers.unstructured.TikaDocumentParser")
+      .defaultValue("")
       .markAdvanced()
       .sinceVersion("1.2.0")
-      .withDocumentation("Implementation of DocumentParser used to extract text and metadata "
-          + "from ingested files. The default uses Apache Tika with automatic format detection.");
+      .withDocumentation("Fully qualified class name of a custom DocumentParser implementation; "
+          + "only read when " + PREFIX + "document.parser is CUSTOM.");
 
   public static final ConfigProperty<Boolean> PARSE_ENABLED = ConfigProperty
       .key(PREFIX + "parse.enabled")
@@ -88,7 +97,18 @@ public class UnstructuredFileSourceConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.2.0")
       .withDocumentation("Optional comma-separated allowlist of file extensions to ingest "
-          + "(e.g. 'pdf,docx,html'). Empty ingests every file under the source root.");
+          + "(e.g. 'pdf,docx,html'). Empty ingests every file under the source root except "
+          + "those matching " + PREFIX + "file.extensions.ignore. When set, the allowlist "
+          + "alone decides.");
+
+  public static final ConfigProperty<String> FILE_EXTENSIONS_IGNORE = ConfigProperty
+      .key(PREFIX + "file.extensions.ignore")
+      .defaultValue("parquet,orc,avro,hfile")
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Comma-separated denylist of file extensions skipped when no allowlist "
+          + "is configured. Defaults to columnar/data file formats, which belong to structured "
+          + "sources: directories mixing data files and documents ingest only the documents.");
 
   public static final ConfigProperty<Integer> CHUNK_SIZE_CHARS = ConfigProperty
       .key(PREFIX + "chunk.size.chars")
@@ -104,9 +124,11 @@ public class UnstructuredFileSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> LISTING_PARALLELISM = ConfigProperty
       .key(PREFIX + "listing.parallelism")
-      .defaultValue(20)
+      .defaultValue(0)
       .markAdvanced()
       .sinceVersion("1.2.0")
-      .withDocumentation("Upper bound on the number of Spark partitions used to stat, fetch and "
-          + "parse the files selected in one batch.");
+      .withDocumentation("Number of Spark partitions used to stat, fetch and parse the files "
+          + "selected in one batch. The default 0 sizes to the cluster "
+          + "(spark default parallelism, i.e. total executor cores); set explicitly to cap "
+          + "parse/embedding concurrency.");
 }

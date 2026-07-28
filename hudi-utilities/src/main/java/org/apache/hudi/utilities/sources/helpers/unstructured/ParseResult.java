@@ -19,6 +19,8 @@
 
 package org.apache.hudi.utilities.sources.helpers.unstructured;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.Map;
@@ -26,6 +28,7 @@ import java.util.Map;
 /**
  * Outcome of parsing one file with a {@link DocumentParser}.
  */
+@Getter
 public class ParseResult implements Serializable {
 
   private static final long serialVersionUID = 1L;
@@ -72,21 +75,5 @@ public class ParseResult implements Serializable {
 
   public static ParseResult failed(String error) {
     return new ParseResult(ParseStatus.FAILED, "", Collections.emptyMap(), error);
-  }
-
-  public ParseStatus getStatus() {
-    return status;
-  }
-
-  public String getText() {
-    return text;
-  }
-
-  public Map<String, String> getMetadata() {
-    return metadata;
-  }
-
-  public String getError() {
-    return error;
   }
 }

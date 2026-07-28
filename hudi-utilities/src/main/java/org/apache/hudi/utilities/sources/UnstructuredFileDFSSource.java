@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.FILE_EXTENSIONS;
+import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.FILE_EXTENSIONS_IGNORE;
 import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.LISTING_PARALLELISM;
 
 /**
@@ -114,6 +115,7 @@ public class UnstructuredFileDFSSource extends RowSource {
   private final DFSPathSelector pathSelector;
   private final UnstructuredFileRecordBuilder recordBuilder;
   private final Set<String> allowedExtensions;
+  private final Set<String> ignoredExtensions;
   private final int listingParallelism;
 
   public UnstructuredFileDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -121,12 +123,25 @@ public class UnstructuredFileDFSSource extends RowSource {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.pathSelector = DFSPathSelector.createSourceSelector(props, sparkContext.hadoopConfiguration());
     this.recordBuilder = new UnstructuredFileRecordBuilder(props);
-    String extensions = getStringWithAltKeys(props, FILE_EXTENSIONS, true);
-    this.allowedExtensions = extensions == null || extensions.trim().isEmpty()
+    this.allowedExtensions = parseExtensions(getStringWithAltKeys(props, FILE_EXTENSIONS, true));
+    this.ignoredExtensions = parseExtensions(getStringWithAltKeys(props, FILE_EXTENSIONS_IGNORE, true));
+    int configuredParallelism = getIntWithAltKeys(props, LISTING_PARALLELISM);
+    this.listingParallelism = configuredParallelism > 0
+        ? configuredParallelism : sparkContext.defaultParallelism();
+  }
+
+  private static Set<String> parseExtensions(String csv) {
+    return csv == null || csv.trim().isEmpty()
         ? new HashSet<>()
-        : Arrays.stream(extensions.toLowerCase(Locale.ROOT).split(","))
+        : Arrays.stream(csv.toLowerCase(Locale.ROOT).split(","))
             .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
-    this.listingParallelism = getIntWithAltKeys(props, LISTING_PARALLELISM);
+  }
+
+  private boolean isEligible(String fileName) {
+    String extension = UnstructuredFileRecordBuilder.extensionOf(fileName);
+    // an explicit allowlist decides alone; otherwise everything except the denylist
+    return allowedExtensions.isEmpty()
+        ? !ignoredExtensions.contains(extension) : allowedExtensions.contains(extension);
   }
 
   @Override
@@ -140,8 +155,7 @@ public class UnstructuredFileDFSSource extends RowSource {
 
   private Dataset<Row> fromFiles(String pathStr) {
     List<String> paths = Arrays.stream(pathStr.split(","))
-        .filter(p -> allowedExtensions.isEmpty()
-            || allowedExtensions.contains(UnstructuredFileRecordBuilder.extensionOf(new Path(p).getName())))
+        .filter(p -> isEligible(new Path(p).getName()))
         .collect(Collectors.toList());
     int parallelism = Math.max(1, Math.min(paths.size(), listingParallelism));
     HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(sparkContext.hadoopConfiguration());

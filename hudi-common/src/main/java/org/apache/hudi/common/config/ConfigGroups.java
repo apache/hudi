@@ -77,6 +77,10 @@ public class ConfigGroups {
     DELTA_STREAMER_SOURCE(
         "Hudi Streamer Source Configs",
         "Configurations controlling the behavior of reading source data."),
+    DELTA_STREAMER_TRANSFORMER(
+        "Hudi Streamer Transformer Configs",
+        "Configurations controlling the behavior of transformers applied to source data "
+            + "before writing."),
     NONE(
         "None",
         "No subgroup. This description should be hidden.");
