@@ -27,12 +27,20 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Splits extracted text into fixed-size, overlapping character chunks for
- * retrieval-oriented consumers.
+ * Splits extracted text into overlapping chunks for retrieval-oriented consumers,
+ * breaking at natural boundaries where possible: each chunk is at most
+ * {@code chunk.size.chars} long and ends at the last paragraph break, line break,
+ * sentence end or word boundary inside its window (in that order of preference,
+ * the recursive-splitting norm of retrieval pipelines), falling back to a hard cut
+ * for unbroken text. Chunks are verbatim substrings so {@code char_start} offsets
+ * always index into the original text.
  */
 public class TextChunker implements Serializable {
 
   private static final long serialVersionUID = 1L;
+
+  // in order of preference; a break lands just after the matched separator
+  private static final String[] BOUNDARIES = {"\n\n", "\n", ". ", "! ", "? ", " "};
 
   private final int chunkSizeChars;
   private final int overlapChars;
@@ -67,14 +75,33 @@ public class TextChunker implements Serializable {
       return Collections.emptyList();
     }
     List<Chunk> chunks = new ArrayList<>();
-    int step = chunkSizeChars - overlapChars;
-    for (int start = 0, id = 0; start < text.length(); start += step, id++) {
-      int end = Math.min(start + chunkSizeChars, text.length());
+    int start = 0;
+    for (int id = 0; start < text.length(); id++) {
+      int windowEnd = Math.min(start + chunkSizeChars, text.length());
+      int end = windowEnd == text.length() ? windowEnd : findBreak(text, start, windowEnd);
       chunks.add(new Chunk(id, text.substring(start, end), start));
       if (end == text.length()) {
         break;
       }
+      start = end - overlapChars;
     }
     return chunks;
+  }
+
+  /**
+   * Best break position in {@code (minBreak, windowEnd]}, preferring the strongest
+   * boundary. The floor guarantees forward progress after overlap is subtracted and
+   * keeps boundary chunks from degenerating below half the window.
+   */
+  private int findBreak(String text, int start, int windowEnd) {
+    int minBreak = start + Math.max(overlapChars + 1, chunkSizeChars / 2);
+    for (String boundary : BOUNDARIES) {
+      int idx = text.lastIndexOf(boundary, windowEnd - boundary.length());
+      int breakEnd = idx + boundary.length();
+      if (idx >= 0 && breakEnd > minBreak && breakEnd <= windowEnd) {
+        return breakEnd;
+      }
+    }
+    return windowEnd;
   }
 }
