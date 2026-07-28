@@ -197,20 +197,18 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
     }
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    // The table's record merge properties are only readable once un-prefixed, and read-path callers pass their
-    // properties through untouched. Everything downstream must therefore use the merged set, not the parameter.
-    TypedProperties mergedProps = ConfigUtils.getMergeProps(props, tableConfig);
-    this.props = mergedProps;
+    props = ConfigUtils.getMergeProps(props, tableConfig);
+    this.props = props;
     this.partitionPathFields = tableConfig.getPartitionFields();
-    readerContext.initRecordMerger(mergedProps);
+    readerContext.initRecordMerger(props);
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
-    boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(mergedProps, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
+    boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     readerContext.setShouldMergeUseRecordPosition(readerParameters.shouldUseRecordPosition() && !isSkipMerge && readerContext.getHasLogFiles() && inputSplit.isParquetBaseFile());
     readerContext.setHasBootstrapBaseFile(inputSplit.getBaseFileOption().flatMap(HoodieBaseFile::getBootstrapBaseFile).isPresent());
     readerContext.setSchemaHandler(readerContext.getRecordContext().supportsParquetRowIndex()
-        ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, mergedProps, metaClient)
-        : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, mergedProps, metaClient));
+        ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, props, metaClient)
+        : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, props, metaClient));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), hoodieTableMetaClient);
     this.readStats = new HoodieReadStats();
