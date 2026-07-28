@@ -19,12 +19,14 @@
 package org.apache.hudi.internal.schema.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.schema.HoodieJsonProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Type;
@@ -486,7 +488,8 @@ public class TestAvroSchemaEvolutionUtils {
     );
     evolvedRecord = (Types.RecordType)InternalSchemaBuilder.getBuilder().refreshNewId(evolvedRecord, new AtomicInteger(0));
     HoodieSchema evolvedSchema = InternalSchemaConverter.convert(evolvedRecord, "test1");
-    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedSchema, oldSchema, false);
+    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedSchema, oldSchema, false,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides(""));
     Types.RecordType checkedRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
@@ -541,7 +544,8 @@ public class TestAvroSchemaEvolutionUtils {
         + "{\"name\":\"d2\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}");
 
     HoodieSchema simpleReconcileSchema = InternalSchemaConverter.convert(AvroSchemaEvolutionUtils
-        .reconcileSchema(incomingSchema, InternalSchemaConverter.convert(schema), false), "schemaNameFallback");
+        .reconcileSchema(incomingSchema, InternalSchemaConverter.convert(schema), false,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")), "schemaNameFallback");
     Assertions.assertEquals(simpleCheckSchema, simpleReconcileSchema);
   }
 
@@ -563,7 +567,8 @@ public class TestAvroSchemaEvolutionUtils {
     InternalSchema oldInternalSchema = InternalSchemaConverter.convert(oldSchema);
     // set a non-default schema id for old table schema, e.g., 2.
     oldInternalSchema.setSchemaId(2);
-    InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldInternalSchema, false);
+    InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldInternalSchema, false,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides(""));
     // the evolved schema should be the old table schema, since there is no type change at all.
     Assertions.assertEquals(oldInternalSchema, evolvedSchema);
   }
@@ -590,7 +595,8 @@ public class TestAvroSchemaEvolutionUtils {
     incomingRecord = (Types.RecordType) InternalSchemaBuilder.getBuilder().refreshNewId(incomingRecord, new AtomicInteger(0));
     HoodieSchema incomingSchema = InternalSchemaConverter.convert(incomingRecord, "test1");
 
-    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldSchema, true);
+    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldSchema, true,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides(""));
 
     Types.RecordType checkedRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
@@ -619,12 +625,219 @@ public class TestAvroSchemaEvolutionUtils {
     incomingRecord = (Types.RecordType) InternalSchemaBuilder.getBuilder().refreshNewId(incomingRecord, new AtomicInteger(0));
     HoodieSchema incomingSchema = InternalSchemaConverter.convert(incomingRecord, "test1");
 
-    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldSchema, true);
+    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldSchema, true,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides(""));
 
     Types.RecordType checkedRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "flag", Types.BooleanType.get())
     );
     Assertions.assertEquals(checkedRecord, result.getRecord());
+  }
+
+  private static Schema tripAvro(Schema tsType) {
+    return Schema.createRecord("trip", null, null, false, Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
+        new Schema.Field("ts", tsType, null, null)));
+  }
+
+  @Test
+  public void testReconcileSchemaTimestampPrecisionEvolution() {
+    // A timestamp precision change is rejected unless the field has an explicit override in
+    // hoodie.write.timestamp.logical.type.overrides. The override pins the field: an entry equal to
+    // the table type coerces the incoming values and keeps the table precision, while a different
+    // entry evolves the column. No entry throws, so an unverified micros/millis flip cannot happen.
+    HoodieSchema tableSchemaMicros = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
+    HoodieSchema incomingSchemaMillis = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))));
+
+    // Guard: with no override, the precision change is rejected in either direction with an
+    // actionable error that names the column and the config to set.
+    Throwable rejectedMicrosToMillis = assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(incomingSchemaMillis, tableSchemaMicros, false,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+    assertTrue(rejectedMicrosToMillis.getMessage().contains("without an explicit"));
+    assertTrue(rejectedMicrosToMillis.getMessage().contains(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key()));
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(tableSchemaMicros, incomingSchemaMillis, false,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+
+    // Override to millis: the micros table evolves to millis (the genuine-repair case).
+    Schema evolvedToMillis = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchemaMillis, tableSchemaMicros, false,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-millis")).toAvroSchema();
+    Assertions.assertEquals("timestamp-millis", evolvedToMillis.getField("ts").schema().getLogicalType().getName());
+
+    // Override to micros with a millis source (the Apna case): the table stays micros, no flip; the
+    // incoming millis values are coerced to micros on write.
+    Schema pinnedToMicros = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchemaMillis, tableSchemaMicros, false,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-micros")).toAvroSchema();
+    Assertions.assertEquals("timestamp-micros", pinnedToMicros.getField("ts").schema().getLogicalType().getName());
+
+    // Override to micros against a millis table: the reverse evolution is permitted.
+    Schema evolvedToMicros = AvroSchemaEvolutionUtils.reconcileSchema(tableSchemaMicros, incomingSchemaMillis, false,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-micros")).toAvroSchema();
+    Assertions.assertEquals("timestamp-micros", evolvedToMicros.getField("ts").schema().getLogicalType().getName());
+
+    // The same override applies to the local-timestamp variants.
+    HoodieSchema tableLocalMicros = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
+    HoodieSchema incomingLocalMillis = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG))));
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(incomingLocalMillis, tableLocalMicros, false,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+    Schema reconciledLocal = AvroSchemaEvolutionUtils.reconcileSchema(incomingLocalMillis, tableLocalMicros, false,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-millis")).toAvroSchema();
+    Assertions.assertEquals("local-timestamp-millis", reconciledLocal.getField("ts").schema().getLogicalType().getName());
+
+    // 0.x did not recognize the local-timestamp logical types, so affected tables persisted those
+    // columns as bare long. The override must also allow attaching the logical type on forward-fix.
+    HoodieSchema tableBareLong = HoodieSchema.fromAvroSchema(tripAvro(Schema.create(Schema.Type.LONG)));
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(incomingLocalMillis, tableBareLong, false,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+    Schema repairedToLocalMillis = AvroSchemaEvolutionUtils.reconcileSchema(incomingLocalMillis, tableBareLong, false,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-millis")).toAvroSchema();
+    Assertions.assertEquals("local-timestamp-millis", repairedToLocalMillis.getField("ts").schema().getLogicalType().getName());
+
+    HoodieSchema incomingLocalMicros = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
+    Schema repairedToLocalMicros = AvroSchemaEvolutionUtils.reconcileSchema(incomingLocalMicros, tableBareLong, false,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-micros")).toAvroSchema();
+    Assertions.assertEquals("local-timestamp-micros", repairedToLocalMicros.getField("ts").schema().getLogicalType().getName());
+  }
+
+  @Test
+  public void testReconcileTimestampLogicalTypeGuardsNonReconcilePath() {
+    // reconcileTimestampLogicalType is the guard applied to the deduced writer schema on every path,
+    // including the default set.null=false path whose Avro compatibility check is logical-type-blind.
+    HoodieSchema tableMicros = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
+    HoodieSchema writerMillis = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))));
+
+    // Guard: no override and the precision differs, so the flip is rejected instead of silently applied.
+    Throwable rejected = assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(writerMillis, tableMicros,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+    assertTrue(rejected.getMessage().contains("without an explicit"));
+    assertTrue(rejected.getMessage().contains("'ts'"));
+
+    // Override to micros coerces the millis writer back to micros (no flip, the Apna case).
+    Schema coerced = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(writerMillis, tableMicros,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-micros")).toAvroSchema();
+    Assertions.assertEquals("timestamp-micros", coerced.getField("ts").schema().getLogicalType().getName());
+
+    // Override to millis keeps the writer at millis (authorized evolution).
+    Schema evolved = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(writerMillis, tableMicros,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-millis")).toAvroSchema();
+    Assertions.assertEquals("timestamp-millis", evolved.getField("ts").schema().getLogicalType().getName());
+
+    // No precision difference: returned unchanged, no override required and no throw.
+    Schema unchanged = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(tableMicros, tableMicros,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")).toAvroSchema();
+    Assertions.assertEquals("timestamp-micros", unchanged.getField("ts").schema().getLogicalType().getName());
+  }
+
+  /**
+   * End-to-end value assertion on the coerce/pin path — the Apna case. Source declares
+   * timestamp-millis, table is timestamp-micros, override pins the field to the table's micros
+   * type. The reconcile flips the writer schema back to micros. When a record whose source Avro
+   * schema declared millis is rewritten to the (now-micros) writer schema, the long must still be
+   * rescaled by 1000 — not left as-is because writer == table.
+   *
+   * <p>The prior boolean flag would have flipped the table to millis without touching values,
+   * causing the "reads as year 58466" failure. This test guards that value-level behavior directly.
+   */
+  @Test
+  public void testReconcileTimestampLogicalTypeCoercesValuesOnPin() {
+    HoodieSchema tableMicrosSchema = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
+    Schema sourceMillisSchema = tripAvro(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG)));
+
+    // Driver-plan step: apply the guard with the coerce override. The writer schema for `ts`
+    // should be pinned back to timestamp-micros (matching the table), not left as millis.
+    Schema writerSchema = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(
+        HoodieSchema.fromAvroSchema(sourceMillisSchema), tableMicrosSchema,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-micros")).toAvroSchema();
+    Assertions.assertEquals("timestamp-micros", writerSchema.getField("ts").schema().getLogicalType().getName());
+
+    // Executor step: an incoming record carrying the SOURCE schema (millis) is rewritten to the
+    // deduced WRITER schema (micros). rewriteRecordWithNewSchema must invoke the x1000 rescale so
+    // 2024-01-01T00:00:00Z millis (1704067200000L) becomes the equivalent micros
+    // (1704067200000000L) — not the same long reinterpreted, which would read as year 55965.
+    long millisValue = 1704067200000L; // 2024-01-01T00:00:00Z as epoch millis
+    long expectedMicros = 1704067200000000L; // same instant as epoch micros
+    GenericRecord sourceRecord = new GenericData.Record(sourceMillisSchema);
+    sourceRecord.put("id", "row-1");
+    sourceRecord.put("ts", millisValue);
+    GenericRecord rewritten = HoodieAvroUtils.rewriteRecordWithNewSchema(sourceRecord, writerSchema);
+    Assertions.assertEquals(expectedMicros, rewritten.get("ts"),
+        "millis source value must be rescaled to micros when the writer schema is pinned to micros");
+
+    // Symmetric coverage: source declares micros, table is millis, override pins to millis.
+    // Rewrite must divide by 1000 (integer division). Pick a value that is exact.
+    HoodieSchema tableMillisSchema = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))));
+    Schema sourceMicrosSchema = tripAvro(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)));
+    Schema writerSchemaMillis = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(
+        HoodieSchema.fromAvroSchema(sourceMicrosSchema), tableMillisSchema,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-millis")).toAvroSchema();
+    Assertions.assertEquals("timestamp-millis", writerSchemaMillis.getField("ts").schema().getLogicalType().getName());
+    GenericRecord sourceMicros = new GenericData.Record(sourceMicrosSchema);
+    sourceMicros.put("id", "row-2");
+    sourceMicros.put("ts", expectedMicros);
+    GenericRecord rewrittenMillis = HoodieAvroUtils.rewriteRecordWithNewSchema(sourceMicros, writerSchemaMillis);
+    Assertions.assertEquals(millisValue, rewrittenMillis.get("ts"),
+        "micros source value must be rescaled to millis when the writer schema is pinned to millis");
+  }
+
+  /**
+   * A UTC/local zone change is not a precision repair. The stored long means a different instant
+   * under each interpretation and no rescale can fix that, so a zone change must be rejected on
+   * every path and no per-field override may authorize it.
+   *
+   * <p>Both entry points have to enforce it. reconcileSchema rejects via isTypeUpdateAllow, but
+   * reconcileTimestampLogicalType is the only guard on the default non-reconcile path, and the
+   * Avro reader/writer compatibility check that runs after it is logical-type-blind for two
+   * long-backed fields -- so if the guard skips a zone change, nothing else catches it.
+   */
+  @Test
+  public void testCrossZoneTimestampChangeIsRejected() {
+    HoodieSchema tableMicros = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
+    HoodieSchema localMicros = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
+    HoodieSchema tableMillis = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))));
+    HoodieSchema localMillis = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG))));
+
+    // No override: rejected by both entry points, in both zone directions.
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(localMicros, InternalSchemaConverter.convert(tableMicros), false,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(tableMicros, InternalSchemaConverter.convert(localMicros), false,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+    Throwable guarded = assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMicros, tableMicros,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+    assertTrue(guarded.getMessage().contains("'ts'"), "Unexpected message: " + guarded.getMessage());
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(tableMicros, localMicros,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+
+    // An override must NOT unlock a zone change, whichever zone it names.
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMicros, tableMicros,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-micros")));
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMicros, tableMicros,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-micros")));
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(localMicros, InternalSchemaConverter.convert(tableMicros), false,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-micros")));
+
+    // A zone change that also crosses precision is still a zone change.
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMillis, tableMicros,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-millis")));
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMicros, tableMillis,
+            SchemaChangeUtils.parseTimestampLogicalTypeOverrides("")));
+
+    // Same-zone precision changes are unaffected: still gated by the override, not by the zone check.
+    Schema stillWorks = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMillis, localMicros,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-millis")).toAvroSchema();
+    Assertions.assertEquals("local-timestamp-millis", stillWorks.getField("ts").schema().getLogicalType().getName());
   }
 }

@@ -28,13 +28,107 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * Helper methods for schema Change.
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class SchemaChangeUtils {
+
+  /**
+   * Parses the {@code hoodie.write.timestamp.logical.type.overrides} value into a per-field map of
+   * the target timestamp {@link Type}. The value is a comma-separated list of {@code field:type}
+   * pairs, where type is one of timestamp-micros, timestamp-millis, local-timestamp-micros,
+   * local-timestamp-millis (case-insensitive). The tokens are a Hudi-owned vocabulary decoupled
+   * from any serialization format.
+   *
+   * <p>Splits on the last {@code ':'} so dotted nested field names ({@code parent.child}) work
+   * unchanged. Field names containing a literal {@code ':'} are not supported.
+   *
+   * @param value the raw config value (may be null or empty)
+   * @return an unmodifiable map from field name to the pinned timestamp type; empty if unset
+   */
+  public static Map<String, Type> parseTimestampLogicalTypeOverrides(String value) {
+    if (value == null || value.trim().isEmpty()) {
+      return Collections.emptyMap();
+    }
+    Map<String, Type> result = new LinkedHashMap<>();
+    for (String pair : value.split(",")) {
+      String trimmed = pair.trim();
+      if (trimmed.isEmpty()) {
+        continue;
+      }
+      int sep = trimmed.lastIndexOf(':');
+      if (sep <= 0 || sep == trimmed.length() - 1) {
+        throw new IllegalArgumentException("Invalid timestamp logical type override entry '" + trimmed
+            + "'. Expected 'field:type' where type is one of timestamp-micros, timestamp-millis, "
+            + "local-timestamp-micros, local-timestamp-millis.");
+      }
+      String field = trimmed.substring(0, sep).trim();
+      Type type = timestampTypeFromToken(trimmed.substring(sep + 1).trim());
+      result.put(field, type);
+    }
+    return Collections.unmodifiableMap(result);
+  }
+
+  private static Type timestampTypeFromToken(String token) {
+    switch (token.toLowerCase(Locale.ROOT)) {
+      case "timestamp-micros":
+        return Types.TimestampType.get();
+      case "timestamp-millis":
+        return Types.TimestampMillisType.get();
+      case "local-timestamp-micros":
+        return Types.LocalTimestampMicrosType.get();
+      case "local-timestamp-millis":
+        return Types.LocalTimestampMillisType.get();
+      default:
+        throw new IllegalArgumentException("Unknown timestamp logical type token '" + token
+            + "'. Expected one of timestamp-micros, timestamp-millis, local-timestamp-micros, "
+            + "local-timestamp-millis.");
+    }
+  }
+
+  /**
+   * Whether a column type change is a timestamp precision change that must be authorized by an
+   * explicit per-field override (see {@code hoodie.write.timestamp.logical.type.overrides}). This
+   * covers timestamp-micros/millis flips, local-timestamp-micros/millis flips, and the forward-fix
+   * from a bare {@code long} to a local-timestamp logical type that 0.x dropped.
+   */
+  public static boolean isGatedTimestampChange(Type src, Type dst) {
+    if (src.equals(dst)) {
+      return false;
+    }
+    if (isUtcTimestamp(src) && isUtcTimestamp(dst)) {
+      return true;
+    }
+    if (isLocalTimestamp(src) && isLocalTimestamp(dst)) {
+      return true;
+    }
+    return src.typeId() == Type.TypeID.LONG && isLocalTimestamp(dst);
+  }
+
+  /**
+   * Whether a column type change crosses the UTC/local timestamp boundary. Unlike a precision
+   * change this has no value-level repair: the same long denotes a different instant under each
+   * interpretation, so rescaling cannot express the conversion. A zone change is therefore always
+   * rejected and no per-field override authorizes it.
+   */
+  public static boolean isCrossZoneTimestampChange(Type src, Type dst) {
+    return (isUtcTimestamp(src) && isLocalTimestamp(dst)) || (isLocalTimestamp(src) && isUtcTimestamp(dst));
+  }
+
+  private static boolean isUtcTimestamp(Type type) {
+    return type.typeId() == Type.TypeID.TIMESTAMP || type.typeId() == Type.TypeID.TIMESTAMP_MILLIS;
+  }
+
+  private static boolean isLocalTimestamp(Type type) {
+    return type.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MILLIS || type.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MICROS;
+  }
 
   /**
    * Whether to allow the column type to be updated.
@@ -52,29 +146,35 @@ public class SchemaChangeUtils {
    * @param dst new column type.
    * @return whether to allow the column type to be updated.
    */
-  public static boolean isTypeUpdateAllow(Type src, Type dst) {
+  public static boolean isTypeUpdateAllow(Type src, Type dst, boolean allowTimestampPrecisionEvolution) {
     if (src.isNestedType() || dst.isNestedType()) {
       throw new IllegalArgumentException("only support update primitive type");
     }
     if (src.equals(dst)) {
       return true;
     }
-    return isTypeUpdateAllowInternal(src, dst);
+    return isTypeUpdateAllowInternal(src, dst, allowTimestampPrecisionEvolution);
   }
 
   public static boolean shouldPromoteType(Type src, Type dst) {
     if (src.equals(dst) || src.isNestedType() || dst.isNestedType()) {
       return false;
     }
-    return isTypeUpdateAllowInternal(src, dst);
+    return isTypeUpdateAllowInternal(src, dst, false);
   }
 
-  private static boolean isTypeUpdateAllowInternal(Type src, Type dst) {
+  private static boolean isTypeUpdateAllowInternal(Type src, Type dst, boolean allowTimestampPrecisionEvolution) {
     switch (src.typeId()) {
       case INT:
         return dst == Types.LongType.get() || dst == Types.FloatType.get()
             || dst == Types.DoubleType.get() || dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;
       case LONG:
+        if (allowTimestampPrecisionEvolution
+            && (dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MILLIS || dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MICROS)) {
+          // Forward-fix path: 0.x stored local-timestamp columns as bare long because its converter
+          // did not recognize the logical type. Allow attaching the logical type when the gate is open.
+          return true;
+        }
         return dst == Types.FloatType.get() || dst == Types.DoubleType.get() || dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;
       case FLOAT:
         return dst == Types.DoubleType.get() || dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;
@@ -90,6 +190,18 @@ public class SchemaChangeUtils {
         return isDecimalFixedUpdateAllowInternal(src, dst);
       case STRING:
         return dst == Types.DateType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED || dst == Types.BinaryType.get();
+      case TIMESTAMP:
+      case TIMESTAMP_MILLIS:
+        if (!allowTimestampPrecisionEvolution) {
+          return false;
+        }
+        return dst.typeId() == Type.TypeID.TIMESTAMP || dst.typeId() == Type.TypeID.TIMESTAMP_MILLIS;
+      case LOCAL_TIMESTAMP_MILLIS:
+      case LOCAL_TIMESTAMP_MICROS:
+        if (!allowTimestampPrecisionEvolution) {
+          return false;
+        }
+        return dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MILLIS || dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MICROS;
       default:
         return false;
     }

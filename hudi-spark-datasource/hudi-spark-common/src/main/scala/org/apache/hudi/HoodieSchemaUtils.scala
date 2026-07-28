@@ -28,9 +28,11 @@ import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.Type
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
+import org.apache.hudi.internal.schema.utils.SchemaChangeUtils
 
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.sql.types.StructType
@@ -141,10 +143,26 @@ object HoodieSchemaUtils {
           InternalSchemaConverter.fixNullOrdering(sourceSchema)
         }
 
+        // Parse the per-field timestamp overrides once and thread the parsed map through the
+        // upfront guard and every downstream branch — reduces cognitive load and matches the
+        // "single source of truth" theme of the config.
+        val timestampLogicalTypeOverrides = SchemaChangeUtils.parseTimestampLogicalTypeOverrides(
+          opts.getOrElse(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key,
+            HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.defaultValue))
+
+        // Reconcile timestamp precision up front so every downstream branch (including the
+        // non-reconcile default path, whose Avro compatibility check is logical-type-blind) is
+        // guarded: an unverified micros/millis change throws here rather than silently flipping the
+        // table on the next commit.
+        val precisionReconciledSourceSchema = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(
+          canonicalizedSourceSchema, latestTableSchema, timestampLogicalTypeOverrides)
+
         if (shouldReconcileSchema) {
-          deduceWriterSchemaWithReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, internalSchemaOpt, opts)
+          deduceWriterSchemaWithReconcile(sourceSchema, precisionReconciledSourceSchema, latestTableSchema,
+            internalSchemaOpt, opts, timestampLogicalTypeOverrides)
         } else {
-          deduceWriterSchemaWithoutReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, opts)
+          deduceWriterSchemaWithoutReconcile(sourceSchema, precisionReconciledSourceSchema, latestTableSchema,
+            opts, timestampLogicalTypeOverrides)
         }
     }
   }
@@ -157,7 +175,8 @@ object HoodieSchemaUtils {
   private def deduceWriterSchemaWithoutReconcile(sourceSchema: HoodieSchema,
                                                  canonicalizedSourceSchema: HoodieSchema,
                                                  latestTableSchema: HoodieSchema,
-                                                 opts: Map[String, String]): HoodieSchema = {
+                                                 opts: Map[String, String],
+                                                 timestampLogicalTypeOverrides: java.util.Map[String, Type]): HoodieSchema = {
     // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
     //       w/ the table's one and allow schemas to diverge. This is required in cases where
     //       partial updates will be performed (for ex, `MERGE INTO` Spark SQL statement) and as such
@@ -173,7 +192,8 @@ object HoodieSchemaUtils {
     if (!mergeIntoWrites && !shouldValidateSchemasCompatibility && !allowAutoEvolutionColumnDrop) {
       // Default behaviour
       val reconciledSchema = if (setNullForMissingColumns) {
-        AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, latestTableSchema, setNullForMissingColumns)
+        AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, latestTableSchema,
+          setNullForMissingColumns, timestampLogicalTypeOverrides)
       } else {
         canonicalizedSourceSchema
       }
@@ -199,13 +219,15 @@ object HoodieSchemaUtils {
                                               canonicalizedSourceSchema: HoodieSchema,
                                               latestTableSchema: HoodieSchema,
                                               internalSchemaOpt: Option[InternalSchema],
-                                              opts: Map[String, String]): HoodieSchema = {
+                                              opts: Map[String, String],
+                                              timestampLogicalTypeOverrides: java.util.Map[String, Type]): HoodieSchema = {
     internalSchemaOpt match {
       case Some(internalSchema) =>
         // Apply schema evolution, by auto-merging write schema and read schema
         val setNullForMissingColumns = opts.getOrElse(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
           HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.defaultValue()).toBoolean
-        val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema, setNullForMissingColumns)
+        val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema,
+          setNullForMissingColumns, timestampLogicalTypeOverrides)
         val evolvedSchema = InternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
         val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields.asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
         if (shouldRemoveMetaDataFromInternalSchema) HoodieCommonSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema

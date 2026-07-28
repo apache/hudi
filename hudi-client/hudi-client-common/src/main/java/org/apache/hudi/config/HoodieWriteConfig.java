@@ -74,6 +74,7 @@ import org.apache.hudi.estimator.AverageRecordSizeEstimator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -3863,6 +3864,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       checkArgument(!(inlineCompact && inlineCompactSchedule), String.format("Either of inline compaction (%s) or "
               + "schedule inline compaction (%s) can be enabled. Both can't be set to true at the same time. %s, %s", HoodieCompactionConfig.INLINE_COMPACT.key(),
           HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key(), inlineCompact, inlineCompactSchedule));
+
+      // Parse-and-discard so a malformed 'field:type' entry fails at client build time rather
+      // than deep inside deduceWriterSchema on the first commit. Empty (default) is a no-op.
+      SchemaChangeUtils.parseTimestampLogicalTypeOverrides(
+          writeConfig.getStringOrDefault(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES));
 
       int lookbackCommits = writeConfig.getInt(ROLLING_METADATA_TIMELINE_LOOKBACK_COMMITS);
       checkArgument(lookbackCommits >= 0,
