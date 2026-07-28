@@ -159,18 +159,19 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         }
       }
     } catch (Exception e) {
-      // The pool owns live daemon threads and Hive Drivers, and is built before the
-      // executor that would otherwise own its lifecycle. Any throw between those two
-      // points would leak it -- notably QueryBasedDDLExecutor's super(config), which
-      // runs the PartitionValueExtractor reflection before HiveQueryDDLExecutor's own
-      // try block is even entered. Closing here covers every such window; the pool's
-      // close() is idempotent, so overlapping with the executor's cleanup is harmless.
-      closePartitionDriverPoolQuietly();
+      // The pools own live daemon threads, Hive Drivers, and Thrift sockets, and are
+      // built before the executor that would otherwise own their lifecycle. Any throw
+      // between those two points would leak them -- notably QueryBasedDDLExecutor's
+      // super(config), which runs the PartitionValueExtractor reflection before
+      // HiveQueryDDLExecutor's own try block is even entered. Closing here covers every
+      // such window; both close() methods are idempotent, so overlapping with the
+      // executor's cleanup (or buildHiveQueryDDLExecutor's rollback) is harmless.
+      closePartitionPoolsQuietly();
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
   }
 
-  private void closePartitionDriverPoolQuietly() {
+  private void closePartitionPoolsQuietly() {
     partitionDriverPool.ifPresent(pool -> {
       try {
         pool.close();
@@ -178,6 +179,15 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         log.warn("Error closing HiveDriverPool during failed sync client construction", e);
       }
     });
+    partitionDriverPool = Option.empty();
+    partitionClientPool.ifPresent(pool -> {
+      try {
+        pool.close();
+      } catch (Exception e) {
+        log.warn("Error closing IMetaStoreClient pool during failed sync client construction", e);
+      }
+    });
+    partitionClientPool = Option.empty();
   }
 
   /**
@@ -269,22 +279,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       this.partitionClientPool = maybeBuildPartitionClientPool(config);
       return new HiveQueryDDLExecutor(config, this.client, this.partitionDriverPool, this.partitionClientPool);
     } catch (Exception e) {
-      partitionDriverPool.ifPresent(pool -> {
-        try {
-          pool.close();
-        } catch (Exception closeException) {
-          log.warn("Error closing HiveDriverPool during construction rollback", closeException);
-        }
-      });
-      partitionDriverPool = Option.empty();
-      partitionClientPool.ifPresent(pool -> {
-        try {
-          pool.close();
-        } catch (Exception closeException) {
-          log.warn("Error closing IMetaStoreClient pool during construction rollback", closeException);
-        }
-      });
-      partitionClientPool = Option.empty();
+      closePartitionPoolsQuietly();
       throw e;
     }
   }

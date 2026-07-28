@@ -43,6 +43,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
@@ -233,6 +235,9 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    * session client. Hive has no batch-drop primitive that matches dropPartition's
    * semantics, so each worker still iterates its chunk one partition at a time — the
    * win is fanning chunks across independent Thrift clients.
+   *
+   * <p>First-error semantics match {@code HiveDriverPool.awaitAll}: the first failure is
+   * rethrown, not-yet-started batches are cancelled, and later failures are logged at WARN.
    */
   private void runDropBatches(String tableName, List<List<String>> batches) throws Exception {
     if (!metaStoreClientPool.isPresent()) {
@@ -251,10 +256,27 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
           })
       ));
     }
+
     Exception firstError = null;
+    int cancelled = 0;
     for (Future<Void> f : futures) {
+      // Once a batch has failed the sync is going to abort anyway, so stop handing
+      // more DROPs to the metastore. mayInterruptIfRunning=false mirrors
+      // HiveDriverPool.awaitAll: a batch already mid-flight runs to completion rather
+      // than leaving the partition list half-dropped at an arbitrary point.
+      if (firstError != null && f.cancel(false)) {
+        cancelled++;
+        continue;
+      }
       try {
         f.get();
+      } catch (CancellationException ce) {
+        cancelled++;
+      } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt();
+        if (firstError == null) {
+          firstError = ie;
+        }
       } catch (Exception e) {
         if (firstError == null) {
           firstError = e;
@@ -264,6 +286,8 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       }
     }
     if (firstError != null) {
+      log.error("Drop partition dispatch on {} aborted after first failure ({} batches cancelled)",
+          tableName, cancelled);
       throw firstError;
     }
   }
