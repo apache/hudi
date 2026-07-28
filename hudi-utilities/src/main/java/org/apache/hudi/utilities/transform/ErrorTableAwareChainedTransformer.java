@@ -65,6 +65,11 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
       if (ErrorTableUtils.isErrorTableCorruptRecordColumnPresent(dataset)) {
         corruptRecordStash = dataset.select(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
         corruptRecordStash.cache();
+        // Force materialization so the stash is computed and stored before the transformer
+        // runs. Without this, both stash and transformed dataset recompute the shared
+        // upstream lineage independently at zip time — if that lineage has non-deterministic
+        // row ordering (e.g. shuffle/repartition), the zip silently misaligns values.
+        corruptRecordStash.count();
       }
 
       dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
