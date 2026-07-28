@@ -20,10 +20,10 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.callback.HoodieClientInitCallback;
+import org.apache.hudi.callback.HoodieCommitCallbackFactory;
 import org.apache.hudi.callback.HoodieWriteCommitCallback;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage.PrevFilePaths;
-import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
@@ -523,9 +523,9 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    */
   protected static Map<String, PrevFilePaths> resolvePrevFilePaths(List<HoodieWriteStat> stats,
                                                                    BaseFileOnlyView fsView) {
-    Map<String, PrevFilePaths> out = new HashMap<>();
+    Map<String, PrevFilePaths> pathsByFileId = new HashMap<>();
     if (stats == null || fsView == null) {
-      return out;
+      return pathsByFileId;
     }
     for (HoodieWriteStat stat : stats) {
       String prevCommit = stat.getPrevCommit();
@@ -549,8 +549,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       Option<BaseFile> bootstrapBaseFile = prevBaseFile.getBootstrapBaseFile();
       String prevPath = prevBaseFile.getPath();
       String bootstrapPath = bootstrapBaseFile.isPresent() ? bootstrapBaseFile.get().getPath() : null;
-      out.put(stat.getFileId(), new PrevFilePaths(prevPath, bootstrapPath));
+      pathsByFileId.put(stat.getFileId(), new PrevFilePaths(prevPath, bootstrapPath));
     }
-    return out;
+    return pathsByFileId;
   }
 }

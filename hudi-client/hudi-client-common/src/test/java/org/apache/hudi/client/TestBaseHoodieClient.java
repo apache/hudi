@@ -101,7 +101,7 @@ public class TestBaseHoodieClient {
         Collections.singletonList(stat("f0", PARTITION, PREV_COMMIT)), view);
 
     assertEquals(1, resolved.size());
-    assertEquals(prevBase.getPath(), resolved.get("f0").getPrevBaseFilePath());
+    assertEquals(prevBase.getPath(), resolved.get("f0").getBaseFilePath());
     assertNull(resolved.get("f0").getBootstrapBaseFilePath(), "non-bootstrap update has no bootstrap path");
   }
 
@@ -115,7 +115,7 @@ public class TestBaseHoodieClient {
     Map<String, PrevFilePaths> resolved = BaseHoodieClient.resolvePrevFilePaths(
         Collections.singletonList(stat("f0", PARTITION, PREV_COMMIT)), view);
 
-    assertEquals(prevBase.getPath(), resolved.get("f0").getPrevBaseFilePath());
+    assertEquals(prevBase.getPath(), resolved.get("f0").getBaseFilePath());
     assertEquals(bootstrap.getPath(), resolved.get("f0").getBootstrapBaseFilePath(),
         "bootstrap source path must be carried through for bootstrapped file groups");
   }
@@ -144,7 +144,7 @@ public class TestBaseHoodieClient {
 
     // The failing file group is dropped; resolution continues for the rest (must not fail the commit).
     assertFalse(resolved.containsKey("boom"));
-    assertEquals(prevBase.getPath(), resolved.get("ok").getPrevBaseFilePath());
+    assertEquals(prevBase.getPath(), resolved.get("ok").getBaseFilePath());
   }
 
   @Test

@@ -159,18 +159,18 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
 
   /**
    * Container for previously-existing file paths associated with a single fileId in a
-   * commit. {@link #prevBaseFilePath} is the base file the new write replaces, and
+   * commit. {@link #baseFilePath} is the base file the new write replaces, and
    * {@link #bootstrapBaseFilePath} is the bootstrap-source file the previous
    * base file referenced (null for non-bootstrap tables).
    */
   @Getter
   public static class PrevFilePaths implements Serializable {
     private static final long serialVersionUID = 1L;
-    private final String prevBaseFilePath;
+    private final String baseFilePath;
     private final String bootstrapBaseFilePath;
 
-    public PrevFilePaths(String prevBaseFilePath, String bootstrapBaseFilePath) {
-      this.prevBaseFilePath = prevBaseFilePath;
+    public PrevFilePaths(String baseFilePath, String bootstrapBaseFilePath) {
+      this.baseFilePath = baseFilePath;
       this.bootstrapBaseFilePath = bootstrapBaseFilePath;
     }
   }
