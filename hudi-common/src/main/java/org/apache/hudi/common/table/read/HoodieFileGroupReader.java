@@ -198,7 +198,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
     }
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    this.props = ConfigUtils.getMergeProps(props, tableConfig);
+    props = ConfigUtils.getMergeProps(props, tableConfig);
+    this.props = props;
     this.partitionPathFields = tableConfig.getPartitionFields();
     readerContext.initRecordMerger(props);
     readerContext.setTablePath(tablePath);
