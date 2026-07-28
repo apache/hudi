@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.adapter.HiveCatalogConstants.AlterHiveDatabaseOp;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -47,17 +48,24 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
+import org.apache.flink.table.catalog.CatalogDatabase;
+import org.apache.flink.table.catalog.CatalogDatabaseImpl;
 import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.ObjectPath;
+import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
+import org.apache.flink.table.catalog.exceptions.DatabaseNotEmptyException;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
 import org.apache.flink.table.catalog.exceptions.PartitionNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
+import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
+import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.metastore.api.PrincipalType;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.junit.jupiter.api.AfterAll;
@@ -78,6 +86,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
+import static org.apache.hudi.adapter.HiveCatalogConstants.ALTER_DATABASE_OP;
+import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_LOCATION_URI;
+import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_OWNER_NAME;
+import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_OWNER_TYPE;
+import static org.apache.hudi.adapter.HiveCatalogConstants.ROLE_OWNER;
+import static org.apache.hudi.adapter.HiveCatalogConstants.USER_OWNER;
 import static org.apache.hudi.configuration.FlinkOptions.ORDERING_FIELDS;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
 import static org.apache.hudi.table.catalog.HoodieCatalogTestUtils.createStorageConf;
@@ -89,6 +103,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -147,6 +162,259 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
     if (hoodieCatalog != null) {
       hoodieCatalog.close();
     }
+  }
+
+  @Test
+  void testDatabaseAndTableApiAgainstMetastore() throws Exception {
+    String databaseName = "catalog_api_db";
+    ObjectPath databaseTablePath = new ObjectPath(databaseName, "catalog_api_table");
+    hoodieCatalog.dropDatabase(databaseName, true, true);
+
+    try {
+      CatalogDatabase database =
+          new CatalogDatabaseImpl(new HashMap<>(), "catalog api database");
+      hoodieCatalog.createDatabase(databaseName, database, false);
+
+      assertTrue(hoodieCatalog.databaseExists(databaseName));
+      assertTrue(hoodieCatalog.listDatabases().contains(databaseName));
+      CatalogDatabase storedDatabase = hoodieCatalog.getDatabase(databaseName);
+      assertEquals("catalog api database", storedDatabase.getComment());
+      assertNotNull(storedDatabase.getProperties().get(DATABASE_LOCATION_URI));
+      assertThrows(
+          DatabaseAlreadyExistException.class,
+          () -> hoodieCatalog.createDatabase(databaseName, database, false));
+      hoodieCatalog.createDatabase(databaseName, database, true);
+
+      Map<String, String> changedProperties = new HashMap<>();
+      changedProperties.put("purpose", "coverage");
+      changedProperties.put("is_generic", "true");
+      hoodieCatalog.alterDatabase(
+          databaseName,
+          new CatalogDatabaseImpl(changedProperties, null),
+          false);
+      assertEquals(
+          "coverage",
+          hoodieCatalog.getDatabase(databaseName).getProperties().get("purpose"));
+      assertFalse(
+          hoodieCatalog.getDatabase(databaseName).getProperties().containsKey("is_generic"));
+
+      String newLocation = new Path(
+          hoodieCatalog.getHiveConf().getVar(
+              org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREWAREHOUSE),
+          databaseName + "_relocated").toString();
+      Map<String, String> locationProperties = new HashMap<>();
+      locationProperties.put(ALTER_DATABASE_OP, AlterHiveDatabaseOp.CHANGE_LOCATION.name());
+      locationProperties.put(DATABASE_LOCATION_URI, newLocation);
+      hoodieCatalog.alterDatabase(
+          databaseName,
+          new CatalogDatabaseImpl(locationProperties, null),
+          false);
+      assertNotNull(
+          hoodieCatalog.getDatabase(databaseName).getProperties().get(DATABASE_LOCATION_URI));
+
+      Map<String, String> userOwner = new HashMap<>();
+      userOwner.put(ALTER_DATABASE_OP, AlterHiveDatabaseOp.CHANGE_OWNER.name());
+      userOwner.put(DATABASE_OWNER_NAME, "catalog-user");
+      userOwner.put(DATABASE_OWNER_TYPE, USER_OWNER);
+      hoodieCatalog.alterDatabase(
+          databaseName,
+          new CatalogDatabaseImpl(userOwner, null),
+          false);
+      assertEquals(
+          PrincipalType.USER,
+          hoodieCatalog.getClient().getDatabase(databaseName).getOwnerType());
+
+      Map<String, String> roleOwner = new HashMap<>();
+      roleOwner.put(ALTER_DATABASE_OP, AlterHiveDatabaseOp.CHANGE_OWNER.name());
+      roleOwner.put(DATABASE_OWNER_NAME, "catalog-role");
+      roleOwner.put(DATABASE_OWNER_TYPE, ROLE_OWNER);
+      hoodieCatalog.alterDatabase(
+          databaseName,
+          new CatalogDatabaseImpl(roleOwner, null),
+          false);
+      assertEquals(
+          PrincipalType.ROLE,
+          hoodieCatalog.getClient().getDatabase(databaseName).getOwnerType());
+
+      Map<String, String> invalidOwner = new HashMap<>();
+      invalidOwner.put(ALTER_DATABASE_OP, AlterHiveDatabaseOp.CHANGE_OWNER.name());
+      invalidOwner.put(DATABASE_OWNER_NAME, "catalog-group");
+      invalidOwner.put(DATABASE_OWNER_TYPE, "GROUP");
+      assertThrows(
+          org.apache.flink.table.catalog.exceptions.CatalogException.class,
+          () -> hoodieCatalog.alterDatabase(
+              databaseName,
+              new CatalogDatabaseImpl(invalidOwner, null),
+              false));
+
+      hoodieCatalog.alterDatabase(
+          "missing_catalog_api_db",
+          new CatalogDatabaseImpl(Collections.emptyMap(), null),
+          true);
+      assertThrows(
+          DatabaseNotExistException.class,
+          () -> hoodieCatalog.alterDatabase(
+              "missing_catalog_api_db",
+              new CatalogDatabaseImpl(Collections.emptyMap(), null),
+              false));
+
+      Map<String, String> tableOptions = new HashMap<>();
+      tableOptions.put(CONNECTOR.key(), "hudi");
+      CatalogTable catalogTable =
+          CatalogUtils.createCatalogTable(schema, partitions, tableOptions, "stored in hms");
+      hoodieCatalog.createTable(databaseTablePath, catalogTable, false);
+      assertThrows(
+          TableAlreadyExistException.class,
+          () -> hoodieCatalog.createTable(databaseTablePath, catalogTable, false));
+      hoodieCatalog.createTable(databaseTablePath, catalogTable, true);
+
+      assertTrue(hoodieCatalog.listTables(databaseName).contains(databaseTablePath.getObjectName()));
+      assertTrue(hoodieCatalog.tableExists(databaseTablePath));
+      Table hiveTable = hoodieCatalog.getHiveTable(databaseTablePath);
+      assertEquals("hudi", hiveTable.getParameters().get(CONNECTOR.key()));
+      assertEquals("stored in hms", hiveTable.getParameters().get(TableOptionProperties.COMMENT));
+      assertEquals(
+          "uuid:int,name:string,age:int,infos:array<string>,ts_3:timestamp,ts_6:timestamp",
+          hiveTable.getSd().getCols().stream()
+              .filter(field -> !field.getName().startsWith("_hoodie_"))
+              .map(field -> field.getName() + ":" + field.getType())
+              .collect(Collectors.joining(",")));
+      assertEquals(
+          schema.getColumns().stream()
+              .map(Schema.UnresolvedColumn::getName)
+              .collect(Collectors.toList()),
+          hoodieCatalog.getTable(databaseTablePath).getUnresolvedSchema().getColumns().stream()
+              .map(Schema.UnresolvedColumn::getName)
+              .collect(Collectors.toList()));
+
+      String metastoreUris = hoodieCatalog.getHiveConf().getVar(
+          org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREURIS);
+      try {
+        hoodieCatalog.getHiveConf().setVar(
+            org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREURIS,
+            "thrift://localhost:9083");
+        Map<String, String> supplementedOptions =
+            hoodieCatalog.getTable(databaseTablePath).getOptions();
+        assertEquals("true", supplementedOptions.get(FlinkOptions.HIVE_SYNC_ENABLED.key()));
+        assertEquals("hms", supplementedOptions.get(FlinkOptions.HIVE_SYNC_MODE.key()));
+        assertEquals(databaseName, supplementedOptions.get(FlinkOptions.HIVE_SYNC_DB.key()));
+        assertEquals(
+            databaseTablePath.getObjectName(),
+            supplementedOptions.get(FlinkOptions.HIVE_SYNC_TABLE.key()));
+      } finally {
+        hoodieCatalog.getHiveConf().setVar(
+            org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREURIS,
+            metastoreUris);
+      }
+
+      assertThrows(
+          DatabaseNotEmptyException.class,
+          () -> hoodieCatalog.dropDatabase(databaseName, false, false));
+      hoodieCatalog.dropTable(databaseTablePath, false);
+      assertFalse(hoodieCatalog.tableExists(databaseTablePath));
+      assertThrows(
+          TableNotExistException.class,
+          () -> hoodieCatalog.dropTable(databaseTablePath, false));
+
+      hoodieCatalog.dropDatabase(databaseName, false, false);
+      assertFalse(hoodieCatalog.databaseExists(databaseName));
+      assertThrows(
+          DatabaseNotExistException.class,
+          () -> hoodieCatalog.dropDatabase(databaseName, false, false));
+      hoodieCatalog.dropDatabase(databaseName, true, false);
+    } finally {
+      if (hoodieCatalog.tableExists(databaseTablePath)) {
+        hoodieCatalog.dropTable(databaseTablePath, true);
+      }
+      hoodieCatalog.dropDatabase(databaseName, true, true);
+    }
+  }
+
+  @Test
+  void testUnsupportedCatalogOperationsAndDefaults() throws Exception {
+    CatalogPartitionSpec partitionSpec =
+        new CatalogPartitionSpec(Collections.singletonMap("par1", "20260728"));
+    ObjectPath functionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "function");
+    ObjectPath missingTablePath = new ObjectPath("missing_database", "missing_table");
+
+    assertThrows(HoodieCatalogException.class, () -> hoodieCatalog.listViews(TEST_DEFAULT_DATABASE));
+    assertEquals(
+        Collections.emptyList(),
+        hoodieCatalog.listTables(missingTablePath.getDatabaseName()));
+    assertFalse(hoodieCatalog.tableExists(missingTablePath));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.renameTable(missingTablePath, "renamed", false));
+    assertEquals(Collections.emptyList(), hoodieCatalog.listPartitions(tablePath));
+    assertEquals(Collections.emptyList(), hoodieCatalog.listPartitions(tablePath, partitionSpec));
+    assertEquals(
+        Collections.emptyList(),
+        hoodieCatalog.listPartitionsByFilter(tablePath, Collections.emptyList()));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.getPartition(tablePath, partitionSpec));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.partitionExists(tablePath, partitionSpec));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.createPartition(tablePath, partitionSpec, null, false));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.alterPartition(tablePath, partitionSpec, null, false));
+    assertThrows(
+        PartitionNotExistException.class,
+        () -> hoodieCatalog.dropPartition(missingTablePath, partitionSpec, false));
+    hoodieCatalog.dropPartition(missingTablePath, partitionSpec, true);
+
+    Map<String, String> tableOptions = Collections.singletonMap(CONNECTOR.key(), "hudi");
+    CatalogTable table =
+        CatalogUtils.createCatalogTable(schema, partitions, tableOptions, "missing database");
+    assertThrows(
+        DatabaseNotExistException.class,
+        () -> hoodieCatalog.createTable(missingTablePath, table, false));
+
+    assertEquals(Collections.emptyList(), hoodieCatalog.listFunctions(TEST_DEFAULT_DATABASE));
+    assertThrows(
+        org.apache.flink.table.catalog.exceptions.FunctionNotExistException.class,
+        () -> hoodieCatalog.getFunction(functionPath));
+    assertFalse(hoodieCatalog.functionExists(functionPath));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.createFunction(functionPath, null, false));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.alterFunction(functionPath, null, false));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.dropFunction(functionPath, false));
+
+    assertSame(CatalogTableStatistics.UNKNOWN, hoodieCatalog.getTableStatistics(tablePath));
+    assertSame(
+        CatalogColumnStatistics.UNKNOWN,
+        hoodieCatalog.getTableColumnStatistics(tablePath));
+    assertSame(
+        CatalogTableStatistics.UNKNOWN,
+        hoodieCatalog.getPartitionStatistics(tablePath, partitionSpec));
+    assertSame(
+        CatalogColumnStatistics.UNKNOWN,
+        hoodieCatalog.getPartitionColumnStatistics(tablePath, partitionSpec));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.alterTableStatistics(
+            tablePath, CatalogTableStatistics.UNKNOWN, false));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.alterTableColumnStatistics(
+            tablePath, CatalogColumnStatistics.UNKNOWN, false));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.alterPartitionStatistics(
+            tablePath, partitionSpec, CatalogTableStatistics.UNKNOWN, false));
+    assertThrows(
+        HoodieCatalogException.class,
+        () -> hoodieCatalog.alterPartitionColumnStatistics(
+            tablePath, partitionSpec, CatalogColumnStatistics.UNKNOWN, false));
   }
 
   @ParameterizedTest
