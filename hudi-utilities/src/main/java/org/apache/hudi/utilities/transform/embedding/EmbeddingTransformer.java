@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.transform.embedding;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.LazyIterableIterator;
 import org.apache.hudi.exception.HoodieException;
@@ -39,15 +40,22 @@ import org.apache.spark.sql.types.MetadataBuilder;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.BATCH_SIZE;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.DIMENSION;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.INPUT_MAX_CHARS;
+import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.MAX_INFLIGHT_REQUESTS;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.PROVIDER_CLASS;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.SOURCE_COLUMN;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.TARGET_COLUMN;
@@ -74,6 +82,7 @@ public class EmbeddingTransformer implements Transformer {
     int dimension = getIntWithAltKeys(properties, DIMENSION);
     int batchSize = getIntWithAltKeys(properties, BATCH_SIZE);
     int inputMaxChars = getIntWithAltKeys(properties, INPUT_MAX_CHARS);
+    int maxInflight = getIntWithAltKeys(properties, MAX_INFLIGHT_REQUESTS);
     String providerClass = getStringWithAltKeys(properties, PROVIDER_CLASS, true);
 
     StructType inputSchema = rowDataset.schema();
@@ -84,7 +93,7 @@ public class EmbeddingTransformer implements Transformer {
     Dataset<Row> withVectors = rowDataset.mapPartitions(
         (org.apache.spark.api.java.function.MapPartitionsFunction<Row, Row>) partition ->
             new EmbeddingIterator(partition, providerClass, properties, sourceIndex,
-                dimension, batchSize, inputMaxChars),
+                dimension, batchSize, inputMaxChars, maxInflight),
         SparkAdapterSupport$.MODULE$.sparkAdapter().getCatalystExpressionUtils().getEncoder(outputSchema));
     // the row encoder drops StructField metadata; re-attach VECTOR(dim) so the
     // writer detects the column (and StreamSync deduces the right target schema)
@@ -102,11 +111,11 @@ public class EmbeddingTransformer implements Transformer {
   }
 
   /**
-   * Pulls up to {@code batch.size} input rows, embeds their texts in one API call, then
-   * streams the augmented rows out one at a time (releasing each buffered row as it is
-   * emitted) before pulling the next batch. The batch buffer is the only partition data
-   * ever resident: {@code batch.size} bounds transformer memory to
-   * batch.size x average row size per partition.
+   * Pulls up to {@code batch.size} input rows per batch, keeps up to
+   * {@code max.inflight.requests} batches' API calls in flight on a small worker pool,
+   * and streams each completed batch out row by row (releasing every buffered row as it
+   * is emitted) in input order. Rows resident per partition are bounded by
+   * batch.size x max.inflight.requests.
    */
   private static class EmbeddingIterator extends LazyIterableIterator<Row, Row> {
 
@@ -116,15 +125,18 @@ public class EmbeddingTransformer implements Transformer {
     private final int dimension;
     private final int batchSize;
     private final int inputMaxChars;
+    private final int maxInflight;
 
     private EmbeddingProvider provider;
+    private ExecutorService executor;
+    private final ArrayDeque<PendingBatch> inflight = new ArrayDeque<>();
     private Row[] batch;
     private List<Float>[] batchVectors;
     private int batchCount;
     private int emitIndex;
 
     EmbeddingIterator(Iterator<Row> input, String providerClass, TypedProperties props,
-        int sourceIndex, int dimension, int batchSize, int inputMaxChars) {
+        int sourceIndex, int dimension, int batchSize, int inputMaxChars, int maxInflight) {
       super(input);
       this.providerClass = providerClass;
       this.props = props;
@@ -132,19 +144,37 @@ public class EmbeddingTransformer implements Transformer {
       this.dimension = dimension;
       this.batchSize = batchSize;
       this.inputMaxChars = inputMaxChars;
+      this.maxInflight = maxInflight;
+    }
+
+    /**
+     * One batch of buffered rows whose embedding request is submitted but not yet drained.
+     */
+    private static class PendingBatch {
+      final Row[] rows;
+      final int count;
+      final List<Integer> textRowIndexes;
+      final Future<List<float[]>> vectors;
+
+      PendingBatch(Row[] rows, int count, List<Integer> textRowIndexes, Future<List<float[]>> vectors) {
+        this.rows = rows;
+        this.count = count;
+        this.textRowIndexes = textRowIndexes;
+        this.vectors = vectors;
+      }
     }
 
     @Override
     public boolean hasNext() {
-      // buffered rows of the final batch must drain even after the input is exhausted;
+      // drain buffered and in-flight batches before consulting the input; the
       // short-circuit keeps super.hasNext() (and its end() hook) from firing early
-      return emitIndex < batchCount || super.hasNext();
+      return emitIndex < batchCount || !inflight.isEmpty() || super.hasNext();
     }
 
     @Override
     protected Row computeNext() {
       if (emitIndex >= batchCount) {
-        fillNextBatch();
+        promoteNextBatch();
       }
       Row row = batch[emitIndex];
       List<Float> vector = batchVectors[emitIndex];
@@ -162,26 +192,39 @@ public class EmbeddingTransformer implements Transformer {
       return RowFactory.create(values);
     }
 
+    @Override
+    protected void end() {
+      if (executor != null) {
+        executor.shutdownNow();
+      }
+    }
+
+    /**
+     * Tops the in-flight window up, then blocks on the oldest batch's response and makes
+     * it the draining batch. Batch order equals input order.
+     */
     @SuppressWarnings("unchecked")
-    private void fillNextBatch() {
-      batch = new Row[batchSize];
-      batchVectors = new List[batchSize];
-      batchCount = 0;
-      emitIndex = 0;
-      List<String> texts = new ArrayList<>(batchSize);
-      List<Integer> textRowIndexes = new ArrayList<>(batchSize);
-      while (inputItr.hasNext() && batchCount < batchSize) {
-        Row row = inputItr.next();
-        batch[batchCount] = row;
-        String text = row.isNullAt(sourceIndex) ? null : row.getString(sourceIndex);
-        if (text != null && !text.trim().isEmpty()) {
-          texts.add(text.length() > inputMaxChars ? text.substring(0, inputMaxChars) : text);
-          textRowIndexes.add(batchCount);
-        }
-        batchCount++;
+    private void promoteNextBatch() {
+      submitUpToWindow();
+      PendingBatch pending = inflight.poll();
+      submitUpToWindow();
+
+      List<float[]> vectors;
+      try {
+        vectors = pending.vectors.get();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new HoodieException("Interrupted waiting for embeddings response", e);
+      } catch (ExecutionException e) {
+        throw e.getCause() instanceof HoodieException
+            ? (HoodieException) e.getCause()
+            : new HoodieException("Embedding request failed", e.getCause());
       }
 
-      List<float[]> vectors = texts.isEmpty() ? java.util.Collections.emptyList() : embed(texts);
+      batch = pending.rows;
+      batchCount = pending.count;
+      batchVectors = new List[batchCount];
+      emitIndex = 0;
       for (int i = 0; i < vectors.size(); i++) {
         float[] vector = vectors.get(i);
         if (vector.length != dimension) {
@@ -192,16 +235,53 @@ public class EmbeddingTransformer implements Transformer {
         for (float v : vector) {
           boxed.add(v);
         }
-        batchVectors[textRowIndexes.get(i)] = boxed;
+        batchVectors[pending.textRowIndexes.get(i)] = boxed;
       }
     }
 
-    private List<float[]> embed(List<String> texts) {
-      if (provider == null) {
-        provider = (EmbeddingProvider) ReflectionUtils.loadClass(providerClass);
-        provider.init(props);
+    private void submitUpToWindow() {
+      while (inflight.size() < maxInflight && inputItr.hasNext()) {
+        Row[] rows = new Row[batchSize];
+        int count = 0;
+        List<String> texts = new ArrayList<>(batchSize);
+        List<Integer> textRowIndexes = new ArrayList<>(batchSize);
+        while (inputItr.hasNext() && count < batchSize) {
+          Row row = inputItr.next();
+          rows[count] = row;
+          String text = row.isNullAt(sourceIndex) ? null : row.getString(sourceIndex);
+          if (text != null && !text.trim().isEmpty()) {
+            texts.add(text.length() > inputMaxChars ? text.substring(0, inputMaxChars) : text);
+            textRowIndexes.add(count);
+          }
+          count++;
+        }
+        Future<List<float[]>> vectors = texts.isEmpty()
+            ? CompletableFuture.completedFuture(java.util.Collections.<float[]>emptyList())
+            : executor().submit(() -> embed(texts));
+        inflight.add(new PendingBatch(rows, count, textRowIndexes, vectors));
       }
-      return provider.embed(texts);
+    }
+
+    private ExecutorService executor() {
+      if (executor == null) {
+        executor = Executors.newFixedThreadPool(maxInflight,
+            new CustomizedThreadFactory("embedding-transformer", true));
+      }
+      return executor;
+    }
+
+    private List<float[]> embed(List<String> texts) {
+      return providerInstance().embed(texts);
+    }
+
+    // called from the worker pool threads; synchronized so exactly one provider is built
+    private synchronized EmbeddingProvider providerInstance() {
+      if (provider == null) {
+        EmbeddingProvider loaded = (EmbeddingProvider) ReflectionUtils.loadClass(providerClass);
+        loaded.init(props);
+        provider = loaded;
+      }
+      return provider;
     }
   }
 }

@@ -98,7 +98,9 @@ public class OpenAICompatibleEmbeddingProvider implements EmbeddingProvider {
     }
   }
 
-  private HttpClient client() {
+  // one client per provider instance, shared by concurrent batch requests: HttpClient is
+  // thread-safe and keep-alives/pools connections internally, so requests reuse sockets
+  private synchronized HttpClient client() {
     if (client == null) {
       client = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(timeoutMs)).build();
     }

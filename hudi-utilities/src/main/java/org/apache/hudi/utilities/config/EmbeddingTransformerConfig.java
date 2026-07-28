@@ -34,7 +34,7 @@ import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 @Immutable
 @ConfigClassProperty(name = "Embedding Transformer Configs",
     groupName = ConfigGroups.Names.HUDI_STREAMER,
-    subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
+    subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_TRANSFORMER,
     description = "Configurations for the embedding transformer, which populates a VECTOR "
         + "column by calling an embedding API for each batch of ingested records.")
 public class EmbeddingTransformerConfig extends HoodieConfig {
@@ -103,6 +103,16 @@ public class EmbeddingTransformerConfig extends HoodieConfig {
       .defaultValue("embedding")
       .sinceVersion("1.2.0")
       .withDocumentation("Name of the VECTOR column appended by the transformer.");
+
+  public static final ConfigProperty<Integer> MAX_INFLIGHT_REQUESTS = ConfigProperty
+      .key(PREFIX + "max.inflight.requests")
+      .defaultValue(2)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Number of embedding API requests kept in flight per Spark partition: "
+          + "the next batches are prefetched and sent while earlier ones stream out, hiding API "
+          + "latency. Rows resident per partition = batch.size x this value, so raise it only "
+          + "with the memory headroom to match.");
 
   public static final ConfigProperty<Integer> INPUT_MAX_CHARS = ConfigProperty
       .key(PREFIX + "input.max.chars")
