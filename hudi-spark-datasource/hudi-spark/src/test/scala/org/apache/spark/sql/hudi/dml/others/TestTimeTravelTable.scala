@@ -399,11 +399,14 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
       checkExceptionContain(s"select * from $tableName VERSION AS OF 1")(
         "Version expression is not supported for time travel")
 
-      // A timestamp expression containing a subquery is rejected by Spark's native time-travel
-      // parser (time travel needs a constant instant), before it reaches the Hudi analysis rule.
+      // A timestamp expression containing a subquery is rejected because time travel needs a
+      // constant instant. Which layer rejects it is version-dependent: Spark 3.3's native parser
+      // fails at parse time ("Invalid time travel spec: timestamp expression cannot contain
+      // subqueries"), while Spark 3.4+ defer to the Hudi analysis rule ("timestamp expression
+      // cannot refer to any columns or contain subqueries"). Assert on the shared substring.
       checkExceptionContain(
         s"select * from $tableName TIMESTAMP AS OF (select max(ts) from $tableName)")(
-        "cannot contain subqueries")
+        "contain subqueries")
     }
   }
 }
