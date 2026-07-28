@@ -249,8 +249,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       // The Spark catalog client is constructed via reflection against a Spark-side
       // class and isn't compatible with the direct RetryingMetaStoreClient pool path.
       // Fall back to single-client sequential behavior rather than failing the sync.
-      log.warn("hive_sync.batching.enabled=true is not supported with use_spark_catalog=true; "
-          + "falling back to sequential partition sync.");
+      log.warn("{}=true is not supported with {}=true; falling back to sequential partition drop.",
+          HIVE_SYNC_BATCHING_ENABLED.key(), HIVE_SYNC_USE_SPARK_CATALOG.key());
       return Option.empty();
     }
     int size = config.getIntOrDefault(HIVE_SYNC_BATCHING_THREADS);
