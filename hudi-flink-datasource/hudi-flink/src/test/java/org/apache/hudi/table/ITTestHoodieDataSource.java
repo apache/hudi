@@ -2087,7 +2087,7 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("lsmBulkInsertParams")
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
   void testLsmBulkInsertSortsEncodedRecordKeysAndSupportsUpdates(
       HoodieTableType tableType, boolean partitioned) throws IOException {
     TestConfigurations.Sql bulkInsertTable = sql("t1")
@@ -2102,23 +2102,32 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.OPERATION, "bulk_insert")
         .option(FlinkOptions.ORDERING_FIELDS, "ts")
         .option(FlinkOptions.WRITE_TASKS, 1)
+        // LSM bulk insert must enforce record-key sorting even when the user explicitly disables
+        // the legacy bulk-insert sorting options.
         .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false)
         .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, false);
     batchTableEnv.executeSql(partitioned
         ? bulkInsertTable.end()
         : bulkInsertTable.noPartition().end());
 
+    // The encoded record keys use String ordering, where "10" < "2" and "11" < "3".
+    // Keeping the input in numeric order verifies that sorting uses the encoded Hudi record key
+    // instead of the INT field ordering.
     execInsertSql(batchTableEnv, "insert into t1 values "
         + "(2, 'old-2', 1, 'p1'), "
         + "(10, 'old-10', 1, 'p1'), "
         + "(3, 'old-3', 1, 'p2'), "
         + "(11, 'old-11', 1, 'p2')");
 
+    // Validate both the persisted default layout and the physical record-key ordering in every
+    // base file, rather than relying on query output that may be reordered during the read.
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
     assertEquals(HoodieTableConfig.TableStorageLayout.LSM_TREE,
         metaClient.getTableConfig().getTableStorageLayout());
     assertEquals(4, assertBaseFilesAreSortedAndCountRecords(tempFile));
 
+    // Reopen the LSM table with upsert to verify that files created by bulk insert remain usable
+    // by the update path for both COW and MOR tables.
     batchTableEnv.executeSql("drop table t1");
     TestConfigurations.Sql upsertTable = sql("t1")
         .field("id INT NOT NULL")
@@ -2142,6 +2151,7 @@ public class ITTestHoodieDataSource {
         + "(3, 'new-3', 2, 'p2'), "
         + "(11, 'new-11', 2, 'p2')");
 
+    // The snapshot must expose the newer payload for every key after the update.
     List<Row> result = execSelectSql(batchTableEnv, "select * from t1");
     assertRowsEquals(result, "["
         + "+I[10, new-10, 2, p1], "
@@ -4082,16 +4092,6 @@ public class ITTestHoodieDataSource {
             {ExecMode.BATCH, HoodieTableType.COPY_ON_WRITE},
             {ExecMode.STREAM, HoodieTableType.MERGE_ON_READ},
             {ExecMode.STREAM, HoodieTableType.COPY_ON_WRITE}};
-    return Stream.of(data).map(Arguments::of);
-  }
-
-  private static Stream<Arguments> lsmBulkInsertParams() {
-    Object[][] data =
-        new Object[][] {
-            {HoodieTableType.COPY_ON_WRITE, false},
-            {HoodieTableType.COPY_ON_WRITE, true},
-            {HoodieTableType.MERGE_ON_READ, false},
-            {HoodieTableType.MERGE_ON_READ, true}};
     return Stream.of(data).map(Arguments::of);
   }
 
