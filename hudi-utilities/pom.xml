@@ -103,6 +103,30 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- Apache Tika: embedded document parsing for UnstructuredFileDFSSource.
+         Only tika-core ships in the bundles; parser modules (PDF, Office, ...) are
+         supplied at runtime via spark-submit packages (org.apache.tika:tika-parsers-standard-package) -->
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-core</artifactId>
+      <version>${tika.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-parsers-standard-package</artifactId>
+      <version>${tika.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- POI (Office formats via tika-parsers) needs commons-compress >= 1.24; the
+         hadoop/spark-provided 1.23 would otherwise shadow it on the test classpath.
+         Spark 4.x distributions already ship a new enough version at runtime. -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-compress</artifactId>
+      <version>1.27.1</version>
+      <scope>test</scope>
+    </dependency>
+
     <!-- Jetty -->
     <dependency>
       <!-- Needs to be at the top to ensure we get the correct dependency versions for jetty-server -->
