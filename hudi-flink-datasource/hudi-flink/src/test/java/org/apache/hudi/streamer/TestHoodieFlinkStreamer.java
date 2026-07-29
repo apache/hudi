@@ -105,6 +105,35 @@ class TestHoodieFlinkStreamer {
   }
 
   @Test
+  void testAppendPipelineFallbackWiring() throws Exception {
+    StreamExecutionEnvironment env = mockEnvironment();
+    DataStream<RowData> source = mock(DataStream.class);
+    DataStream<RowData> pipeline = mock(DataStream.class);
+
+    try (MockedStatic<StreamExecutionEnvironment> environments = mockStatic(StreamExecutionEnvironment.class);
+         MockedStatic<StreamerUtils> streamerUtils = mockStatic(StreamerUtils.class);
+         MockedStatic<OptionsInference> inference = mockStatic(OptionsInference.class);
+         MockedStatic<OptionsResolver> resolver = mockStatic(OptionsResolver.class);
+         MockedStatic<Pipelines> pipelines = mockStatic(Pipelines.class)) {
+      environments.when(() -> StreamExecutionEnvironment.getExecutionEnvironment(any(Configuration.class)))
+          .thenReturn(env);
+      streamerUtils.when(() -> StreamerUtils.createKafkaStream(
+          same(env), any(RowType.class), eq("orders"), any())).thenReturn(source);
+      resolver.when(() -> OptionsResolver.isAppendMode(any())).thenReturn(true);
+      resolver.when(() -> OptionsResolver.needsAsyncClustering(any())).thenReturn(false);
+      pipelines.when(() -> Pipelines.append(any(), any(RowType.class), same(source))).thenReturn(pipeline);
+
+      resolver.when(() -> OptionsResolver.isLazyFailedWritesCleaning(any())).thenReturn(true);
+      HoodieFlinkStreamer.main(args("--table-type", "COPY_ON_WRITE", "--op", "INSERT"));
+      pipelines.verify(() -> Pipelines.clean(any(), same(pipeline)));
+
+      resolver.when(() -> OptionsResolver.isLazyFailedWritesCleaning(any())).thenReturn(false);
+      HoodieFlinkStreamer.main(args("--table-type", "COPY_ON_WRITE", "--op", "INSERT"));
+      pipelines.verify(() -> Pipelines.dummySink(same(pipeline)));
+    }
+  }
+
+  @Test
   void testUpsertPipelineWiringWithCompaction() throws Exception {
     StreamExecutionEnvironment env = mockEnvironment();
     DataStream<RowData> source = mock(DataStream.class);
@@ -132,6 +161,39 @@ class TestHoodieFlinkStreamer {
 
       pipelines.verify(() -> Pipelines.compact(any(), same(pipeline)));
       verify(env).execute("orders_hudi");
+    }
+  }
+
+  @Test
+  void testUpsertPipelineFallbackWiring() throws Exception {
+    StreamExecutionEnvironment env = mockEnvironment();
+    DataStream<RowData> source = mock(DataStream.class);
+    DataStream<HoodieFlinkInternalRow> bootstrapped = mock(DataStream.class);
+    DataStream<RowData> pipeline = mock(DataStream.class);
+
+    try (MockedStatic<StreamExecutionEnvironment> environments = mockStatic(StreamExecutionEnvironment.class);
+         MockedStatic<StreamerUtils> streamerUtils = mockStatic(StreamerUtils.class);
+         MockedStatic<OptionsInference> inference = mockStatic(OptionsInference.class);
+         MockedStatic<OptionsResolver> resolver = mockStatic(OptionsResolver.class);
+         MockedStatic<Pipelines> pipelines = mockStatic(Pipelines.class)) {
+      environments.when(() -> StreamExecutionEnvironment.getExecutionEnvironment(any(Configuration.class)))
+          .thenReturn(env);
+      streamerUtils.when(() -> StreamerUtils.createKafkaStream(
+          same(env), any(RowType.class), eq("orders"), any())).thenReturn(source);
+      resolver.when(() -> OptionsResolver.isAppendMode(any())).thenReturn(false);
+      resolver.when(() -> OptionsResolver.needsAsyncCompaction(any())).thenReturn(false);
+      pipelines.when(() -> Pipelines.bootstrap(any(), any(RowType.class), same(source)))
+          .thenReturn(bootstrapped);
+      pipelines.when(() -> Pipelines.hoodieStreamWrite(any(), any(RowType.class), same(bootstrapped)))
+          .thenReturn(pipeline);
+
+      resolver.when(() -> OptionsResolver.needsAsyncCleaning(any())).thenReturn(true);
+      HoodieFlinkStreamer.main(args("--table-type", "MERGE_ON_READ", "--op", "UPSERT"));
+      pipelines.verify(() -> Pipelines.clean(any(), same(pipeline)));
+
+      resolver.when(() -> OptionsResolver.needsAsyncCleaning(any())).thenReturn(false);
+      HoodieFlinkStreamer.main(args("--table-type", "MERGE_ON_READ", "--op", "UPSERT"));
+      pipelines.verify(() -> Pipelines.dummySink(same(pipeline)));
     }
   }
 
