@@ -319,7 +319,6 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
          |  c_float FLOAT,
          |  c_double DOUBLE,
          |  c_date DATE,
-         |  c_ts TIMESTAMP,
          |  c_str STRING,
          |  c_char CHAR(5),
          |  c_varchar VARCHAR(10),
@@ -341,7 +340,6 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
     assertResult(FloatType)(schema("c_float").dataType)
     assertResult(DoubleType)(schema("c_double").dataType)
     assertResult(DateType)(schema("c_date").dataType)
-    assertResult(TimestampType)(schema("c_ts").dataType)
     assertResult(StringType)(schema("c_str").dataType)
     // CHAR/VARCHAR may be preserved or replaced with STRING depending on the Spark version.
     assert(Seq[DataType](CharType(5), StringType).contains(schema("c_char").dataType))
@@ -421,7 +419,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
       s"""
          |CREATE TABLE blob_tf_tbl (
          |  id BIGINT,
-         |  ts TIMESTAMP,
+         |  ts DATE,
          |  region STRING,
          |  data BLOB
          |) USING hudi
@@ -450,11 +448,12 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
 
   test("Test parse CREATE TABLE with BLOB column and typed transform-argument literals") {
     // Constant transform arguments exercise the literal visitors: string, integer, big-integer and
-    // exponent numerics (the private numeric-literal helper), the typed timestamp constructor, and
-    // both interval forms (multi-unit and unit-to-unit). Note: a bare true/false/null in this
-    // position is parsed as a column reference (qualifiedName takes precedence over a constant in
-    // the grammar under the default non-ANSI config), so the boolean and null literal visitors are
-    // not reachable from a CREATE TABLE statement and are intentionally not asserted here.
+    // exponent numerics (the private numeric-literal helper), the typed date constructor, and both
+    // interval forms (multi-unit and unit-to-unit). A typed timestamp constructor is not used
+    // because the Spark 4.x extended parser rejects a bare TIMESTAMP token. Note: a bare
+    // true/false/null in this position is parsed as a column reference (qualifiedName takes
+    // precedence over a constant in the grammar under the default non-ANSI config), so the boolean
+    // and null literal visitors are not reachable from a CREATE TABLE statement.
     val plan = parse(
       s"""
          |CREATE TABLE blob_lit_tbl (
@@ -466,7 +465,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
          |  int_t(7, id),
          |  long_t(9000000000L, id),
          |  exp_t(1E3, id),
-         |  ts_t(TIMESTAMP '2020-01-01 00:00:00', id),
+         |  date_t(DATE '2020-01-01', id),
          |  mu_ivl_t(INTERVAL '1' DAY, id),
          |  uu_ivl_t(INTERVAL '1-2' YEAR TO MONTH, id)
          |)
@@ -476,7 +475,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
     assertResult(IntegerType)(firstLiteralArg(transformByName(plan, "int_t")).dataType)
     assertResult(LongType)(firstLiteralArg(transformByName(plan, "long_t")).dataType)
     assertResult(DoubleType)(firstLiteralArg(transformByName(plan, "exp_t")).dataType)
-    assertResult(TimestampType)(firstLiteralArg(transformByName(plan, "ts_t")).dataType)
+    assertResult(DateType)(firstLiteralArg(transformByName(plan, "date_t")).dataType)
     assertResult(DayTimeIntervalType(DayTimeIntervalType.DAY, DayTimeIntervalType.DAY))(
       firstLiteralArg(transformByName(plan, "mu_ivl_t")).dataType)
     assertResult(YearMonthIntervalType(YearMonthIntervalType.YEAR, YearMonthIntervalType.MONTH))(
@@ -494,7 +493,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
       "Expected a column reference")
     // A single-field transform given more than one argument.
     checkExceptionContain(
-      "CREATE TABLE blob_e3 (id BIGINT, ts TIMESTAMP, data BLOB) USING hudi " +
+      "CREATE TABLE blob_e3 (id BIGINT, ts DATE, data BLOB) USING hudi " +
         "PARTITIONED BY (years(id, ts))")(
       "Too many arguments")
   }

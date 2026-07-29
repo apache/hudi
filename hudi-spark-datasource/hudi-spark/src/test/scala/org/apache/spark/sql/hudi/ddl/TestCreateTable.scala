@@ -2368,7 +2368,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       s"""
          |CREATE TABLE vec_parse_tbl (
          |  id BIGINT,
-         |  ts TIMESTAMP,
+         |  ts DATE,
          |  region STRING,
          |  name STRING,
          |  embedding VECTOR(8)
@@ -2392,11 +2392,12 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
   test("test create VECTOR table with typed transform-argument literals parses (parser coverage)") {
     // Each transform carries a differently-typed constant argument to exercise the literal
-    // visitors: string, integer, long, exponent/double, the typed timestamp constructor, and both
-    // interval forms (multi-units and unit-to-unit). A bare true/false/null in this position is
-    // parsed as a column reference (qualifiedName takes precedence over a constant in the grammar
-    // under the default non-ANSI config), so the boolean and null literal visitors are not
-    // reachable from a CREATE TABLE statement.
+    // visitors: string, integer, long, exponent/double, the typed date constructor, and both
+    // interval forms (multi-units and unit-to-unit). A typed timestamp constructor is not used
+    // because the Spark 4.x extended parser rejects a bare TIMESTAMP token. A bare true/false/null
+    // in this position is parsed as a column reference (qualifiedName takes precedence over a
+    // constant in the grammar under the default non-ANSI config), so the boolean and null literal
+    // visitors are not reachable from a CREATE TABLE statement.
     val plan = parseCreateTable(
       s"""
          |CREATE TABLE vec_lit_tbl (
@@ -2408,7 +2409,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          |  int_t(4, id),
          |  long_t(9000000000L, id),
          |  exp_t(1E3, id),
-         |  ts_t(TIMESTAMP '2020-01-01 00:00:00', id),
+         |  date_t(DATE '2020-01-01', id),
          |  mu_ivl_t(INTERVAL '1' DAY, id),
          |  uu_ivl_t(INTERVAL '1-2' YEAR TO MONTH, id)
          |)
@@ -2419,7 +2420,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertEquals(IntegerType, firstLiteralArg(transformByName(plan, "int_t")).dataType)
     assertEquals(LongType, firstLiteralArg(transformByName(plan, "long_t")).dataType)
     assertEquals(DoubleType, firstLiteralArg(transformByName(plan, "exp_t")).dataType)
-    assertEquals(TimestampType, firstLiteralArg(transformByName(plan, "ts_t")).dataType)
+    assertEquals(DateType, firstLiteralArg(transformByName(plan, "date_t")).dataType)
     assertEquals(
       DayTimeIntervalType(DayTimeIntervalType.DAY, DayTimeIntervalType.DAY),
       firstLiteralArg(transformByName(plan, "mu_ivl_t")).dataType)
