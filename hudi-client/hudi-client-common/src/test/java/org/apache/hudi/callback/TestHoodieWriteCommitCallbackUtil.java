@@ -16,9 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client;
+package org.apache.hudi.callback;
 
-import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage.PrevFilePaths;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -32,8 +31,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -45,14 +42,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for the post-commit write-callback plumbing added to {@link BaseHoodieClient}:
- * {@link BaseHoodieClient#resolvePrevFilePaths(List, BaseFileOnlyView)} and the
- * {@link HoodieWriteCommitCallbackMessage} contract it feeds. {@code resolvePrevFilePaths}
+ * Unit tests for
+ * {@link HoodieWriteCommitCallbackUtil#resolvePrevFilePaths(List, BaseFileOnlyView)}, which
  * pre-resolves the previous base file (and bootstrap source, if any) for each updated file
  * group from a cached {@link BaseFileOnlyView}, so callback implementations receive the
  * read/write file pairing without rebuilding a file-system view.
  */
-public class TestBaseHoodieClient {
+public class TestHoodieWriteCommitCallbackUtil {
 
   private static final String PARTITION = "2024/01/01";
   private static final String PREV_COMMIT = "001";
@@ -68,9 +64,9 @@ public class TestBaseHoodieClient {
   @Test
   public void resolvePrevFilePathsReturnsEmptyForNullInputs() {
     BaseFileOnlyView view = mock(BaseFileOnlyView.class);
-    assertTrue(BaseHoodieClient.resolvePrevFilePaths(null, view).isEmpty(),
+    assertTrue(HoodieWriteCommitCallbackUtil.resolvePrevFilePaths(null, view).isEmpty(),
         "null stats must yield an empty map");
-    assertTrue(BaseHoodieClient.resolvePrevFilePaths(
+    assertTrue(HoodieWriteCommitCallbackUtil.resolvePrevFilePaths(
         Collections.singletonList(stat("f0", PARTITION, PREV_COMMIT)), null).isEmpty(),
         "null file-system view must yield an empty map");
   }
@@ -83,7 +79,8 @@ public class TestBaseHoodieClient {
         stat("f-empty", PARTITION, ""),
         stat("f-nullcommit", PARTITION, HoodieWriteStat.NULL_COMMIT));
 
-    Map<String, PrevFilePaths> resolved = BaseHoodieClient.resolvePrevFilePaths(inserts, view);
+    Map<String, PrevFilePaths> resolved =
+        HoodieWriteCommitCallbackUtil.resolvePrevFilePaths(inserts, view);
 
     assertTrue(resolved.isEmpty(), "inserts (no prevCommit) must not resolve a prev base file");
     // The view must not even be consulted for inserts.
@@ -97,7 +94,7 @@ public class TestBaseHoodieClient {
     HoodieBaseFile prevBase = new HoodieBaseFile("/tbl/" + PARTITION + "/f0_0-1-1_" + PREV_COMMIT + ".parquet");
     when(view.getBaseFileOn(PARTITION, PREV_COMMIT, "f0")).thenReturn(Option.of(prevBase));
 
-    Map<String, PrevFilePaths> resolved = BaseHoodieClient.resolvePrevFilePaths(
+    Map<String, PrevFilePaths> resolved = HoodieWriteCommitCallbackUtil.resolvePrevFilePaths(
         Collections.singletonList(stat("f0", PARTITION, PREV_COMMIT)), view);
 
     assertEquals(1, resolved.size());
@@ -112,7 +109,7 @@ public class TestBaseHoodieClient {
     HoodieBaseFile prevBase = new HoodieBaseFile("/tbl/" + PARTITION + "/f0_0-1-1_" + PREV_COMMIT + ".parquet", bootstrap);
     when(view.getBaseFileOn(PARTITION, PREV_COMMIT, "f0")).thenReturn(Option.of(prevBase));
 
-    Map<String, PrevFilePaths> resolved = BaseHoodieClient.resolvePrevFilePaths(
+    Map<String, PrevFilePaths> resolved = HoodieWriteCommitCallbackUtil.resolvePrevFilePaths(
         Collections.singletonList(stat("f0", PARTITION, PREV_COMMIT)), view);
 
     assertEquals(prevBase.getPath(), resolved.get("f0").getBaseFilePath());
@@ -125,7 +122,7 @@ public class TestBaseHoodieClient {
     BaseFileOnlyView view = mock(BaseFileOnlyView.class);
     when(view.getBaseFileOn(PARTITION, PREV_COMMIT, "f0")).thenReturn(Option.empty());
 
-    Map<String, PrevFilePaths> resolved = BaseHoodieClient.resolvePrevFilePaths(
+    Map<String, PrevFilePaths> resolved = HoodieWriteCommitCallbackUtil.resolvePrevFilePaths(
         Collections.singletonList(stat("f0", PARTITION, PREV_COMMIT)), view);
 
     assertTrue(resolved.isEmpty(), "a missing prev base file must be skipped, not mapped to null");
@@ -139,61 +136,11 @@ public class TestBaseHoodieClient {
     HoodieBaseFile prevBase = new HoodieBaseFile("/tbl/" + PARTITION + "/ok_0-1-1_" + PREV_COMMIT + ".parquet");
     when(view.getBaseFileOn(PARTITION, PREV_COMMIT, "ok")).thenReturn(Option.of(prevBase));
 
-    Map<String, PrevFilePaths> resolved = BaseHoodieClient.resolvePrevFilePaths(
+    Map<String, PrevFilePaths> resolved = HoodieWriteCommitCallbackUtil.resolvePrevFilePaths(
         Arrays.asList(stat("boom", PARTITION, PREV_COMMIT), stat("ok", PARTITION, PREV_COMMIT)), view);
 
     // The failing file group is dropped; resolution continues for the rest (must not fail the commit).
     assertFalse(resolved.containsKey("boom"));
     assertEquals(prevBase.getPath(), resolved.get("ok").getBaseFilePath());
-  }
-
-  @Test
-  public void callbackMessageDefaultsCollectionsToEmpty() {
-    HoodieWriteCommitCallbackMessage message = new HoodieWriteCommitCallbackMessage(
-        PREV_COMMIT, "table", "/base", Collections.emptyList());
-
-    assertFalse(message.getCommitActionType().isPresent());
-    assertFalse(message.getExtraMetadata().isPresent());
-    assertTrue(message.getPrevFilePaths().isEmpty(), "prevFilePaths must default to an empty map, never null");
-    assertTrue(message.getExtraContext().isEmpty(), "extraContext must default to an empty map, never null");
-  }
-
-  @Test
-  public void callbackMessageRetainsPrevFilePathsAndContext() {
-    Map<String, PrevFilePaths> prevFilePaths =
-        Collections.singletonMap("f0", new PrevFilePaths("/tbl/prev.parquet", null));
-    Map<String, String> extraContext = Collections.singletonMap("file_id", "f0");
-
-    HoodieWriteCommitCallbackMessage message = new HoodieWriteCommitCallbackMessage(
-        PREV_COMMIT, "table", "/base", Collections.emptyList(),
-        Option.of("commit"), Option.empty(), () -> prevFilePaths, extraContext);
-
-    assertEquals("commit", message.getCommitActionType().get());
-    assertEquals(prevFilePaths, message.getPrevFilePaths());
-    assertEquals(extraContext, message.getExtraContext());
-  }
-
-  @Test
-  public void prevFilePathsAreResolvedLazilyAndMemoized() {
-    AtomicInteger resolveCalls = new AtomicInteger();
-    Map<String, PrevFilePaths> resolved =
-        Collections.singletonMap("f0", new PrevFilePaths("/tbl/prev.parquet", null));
-    Supplier<Map<String, PrevFilePaths>> supplier = () -> {
-      resolveCalls.incrementAndGet();
-      return resolved;
-    };
-
-    HoodieWriteCommitCallbackMessage message = new HoodieWriteCommitCallbackMessage(
-        PREV_COMMIT, "table", "/base", Collections.emptyList(),
-        Option.empty(), Option.empty(), supplier, Collections.emptyMap());
-
-    // Constructing the message must not resolve prev file paths (no FileSystemView access).
-    assertEquals(0, resolveCalls.get(),
-        "prevFilePaths must not be resolved until a consumer reads them");
-
-    assertEquals(resolved, message.getPrevFilePaths());
-    // A second read must reuse the memoized result rather than resolve again.
-    assertEquals(resolved, message.getPrevFilePaths());
-    assertEquals(1, resolveCalls.get(), "prevFilePaths must be resolved at most once and memoized");
   }
 }

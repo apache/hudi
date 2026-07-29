@@ -22,16 +22,14 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.callback.HoodieClientInitCallback;
 import org.apache.hudi.callback.HoodieCommitCallbackFactory;
 import org.apache.hudi.callback.HoodieWriteCommitCallback;
+import org.apache.hudi.callback.HoodieWriteCommitCallbackUtil;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
-import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage.PrevFilePaths;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.BaseFile;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -503,54 +501,11 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       commitCallback.call(new HoodieWriteCommitCallbackMessage(
           commitTime, config.getTableName(), config.getBasePath(),
           stats, Option.of(commitActionType), extraMetadata,
-          () -> resolvePrevFilePaths(stats, fsViewSupplier.get()),
+          () -> HoodieWriteCommitCallbackUtil.resolvePrevFilePaths(stats, fsViewSupplier.get()),
           Collections.emptyMap()));
     } catch (Exception e) {
       log.warn("HoodieWriteCommitCallback failed for commit {} ({}); ignoring",
           commitTime, commitActionType, e);
     }
-  }
-
-  /**
-   * Pre-resolve the previous base file (and bootstrap base file, if any) for every
-   * {@link HoodieWriteStat} that represents an update, using a populated
-   * {@link BaseFileOnlyView}. The lookup is O(1) per stat against the cached view, so
-   * this adds no I/O on top of what the writer already paid.
-   *
-   * <p>Used by {@link #fireCommitCallbackIfNecessary} call sites so the callback message ships
-   * actual file paths rather than forcing each callback impl to rebuild a
-   * {@code FileSystemView}.
-   */
-  protected static Map<String, PrevFilePaths> resolvePrevFilePaths(List<HoodieWriteStat> stats,
-                                                                   BaseFileOnlyView fsView) {
-    Map<String, PrevFilePaths> pathsByFileId = new HashMap<>();
-    if (stats == null || fsView == null) {
-      return pathsByFileId;
-    }
-    for (HoodieWriteStat stat : stats) {
-      String prevCommit = stat.getPrevCommit();
-      if (StringUtils.isNullOrEmpty(prevCommit) || HoodieWriteStat.NULL_COMMIT.equals(prevCommit)) {
-        continue;
-      }
-      Option<HoodieBaseFile> prev;
-      try {
-        prev = fsView.getBaseFileOn(stat.getPartitionPath(), prevCommit, stat.getFileId());
-      } catch (Exception e) {
-        // Best-effort: a remote view 4xx/5xx, a stale view, or a replaced file group must not
-        // fail the commit. Drop the prev path for this stat and keep going.
-        log.warn("Could not resolve prev base file for fileId={} prevCommit={}; skipping",
-            stat.getFileId(), prevCommit, e);
-        continue;
-      }
-      if (!prev.isPresent()) {
-        continue;
-      }
-      HoodieBaseFile prevBaseFile = prev.get();
-      Option<BaseFile> bootstrapBaseFile = prevBaseFile.getBootstrapBaseFile();
-      String prevPath = prevBaseFile.getPath();
-      String bootstrapPath = bootstrapBaseFile.isPresent() ? bootstrapBaseFile.get().getPath() : null;
-      pathsByFileId.put(stat.getFileId(), new PrevFilePaths(prevPath, bootstrapPath));
-    }
-    return pathsByFileId;
   }
 }
