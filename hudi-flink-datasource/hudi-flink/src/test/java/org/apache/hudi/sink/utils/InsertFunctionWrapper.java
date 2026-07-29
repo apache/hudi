@@ -67,6 +67,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final MockOperatorEventGateway gateway;
   private final MockSubtaskGateway subtaskGateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
+  private final IOManager ioManager;
   @Getter
   private StreamWriteOperatorCoordinator coordinator;
   private final MockStateInitializationContext stateInitializationContext;
@@ -85,11 +86,11 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public InsertFunctionWrapper(String tablePath, Configuration conf, ExecutionConfig executionConfig) throws Exception {
-    IOManager ioManager = new IOManagerAsync();
+    this.ioManager = new IOManagerAsync();
     MockEnvironment environment = new MockEnvironmentBuilder()
         .setTaskName("mockTask")
         .setManagedMemorySize(4 * MemoryManager.DEFAULT_PAGE_SIZE)
-        .setIOManager(ioManager)
+        .setIOManager(this.ioManager)
         .setExecutionConfig(executionConfig)
         .build();
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment, executionConfig);
@@ -215,9 +216,16 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
         writeFunction.close();
       }
     } finally {
-      this.coordinator.close();
-      if (clusteringFunctionWrapper != null) {
-        clusteringFunctionWrapper.close();
+      try {
+        this.coordinator.close();
+      } finally {
+        try {
+          this.ioManager.close();
+        } finally {
+          if (clusteringFunctionWrapper != null) {
+            clusteringFunctionWrapper.close();
+          }
+        }
       }
     }
   }

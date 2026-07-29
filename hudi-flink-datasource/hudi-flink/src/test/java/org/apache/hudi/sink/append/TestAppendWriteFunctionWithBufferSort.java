@@ -26,8 +26,11 @@ import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +46,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -151,6 +156,53 @@ public class TestAppendWriteFunctionWithBufferSort {
           .checkpoint(1)
           .assertNextEvent(4, "par1,par2,par3,par4")
           .checkpointComplete(1);
+    } finally {
+      harness.end();
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = BufferType.class, names = {"CONTINUOUS_SORT", "DISRUPTOR", "BOUNDED_IN_MEMORY"})
+  public void testBufferedAppendFunctionsPersistRowsInSortOrder(BufferType bufferType) throws Exception {
+    Configuration writeConf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    writeConf.set(FlinkOptions.OPERATION, "insert");
+    writeConf.set(FlinkOptions.METADATA_ENABLED, false);
+    writeConf.set(FlinkOptions.WRITE_BUFFER_TYPE, bufferType.name());
+    writeConf.set(FlinkOptions.WRITE_BUFFER_SORT_KEYS, "name,age");
+    writeConf.set(FlinkOptions.WRITE_BUFFER_SIZE, 3L);
+    if (bufferType == BufferType.CONTINUOUS_SORT) {
+      writeConf.set(FlinkOptions.WRITE_BUFFER_SORT_CONTINUOUS_DRAIN_SIZE, 1);
+    } else if (bufferType == BufferType.DISRUPTOR) {
+      writeConf.set(FlinkOptions.WRITE_BUFFER_DISRUPTOR_RING_SIZE, 16);
+    }
+
+    List<RowData> inputData = Arrays.asList(
+        TestData.insertRow(StringData.fromString("uuid1"), StringData.fromString("Bob"), 30,
+            TimestampData.fromEpochMillis(1123), StringData.fromString("p1")),
+        TestData.insertRow(StringData.fromString("uuid2"), StringData.fromString("Alice"), 25,
+            TimestampData.fromEpochMillis(1124), StringData.fromString("p1")),
+        TestData.insertRow(StringData.fromString("uuid3"), StringData.fromString("Bob"), 21,
+            TimestampData.fromEpochMillis(31124), StringData.fromString("p1")));
+    List<String> expected = Arrays.asList(
+        "uuid2,Alice,25,1970-01-01 00:00:01.124,p1",
+        "uuid3,Bob,21,1970-01-01 00:00:31.124,p1",
+        "uuid1,Bob,30,1970-01-01 00:00:01.123,p1");
+
+    TestWriteBase.TestHarness harness = TestWriteBase.TestHarness.instance()
+        .preparePipeline(tempFile, writeConf);
+    try {
+      harness
+          .consume(inputData)
+          .checkpoint(1)
+          .assertNextEvent(1, "p1")
+          .checkpointComplete(1);
+
+      List<GenericRecord> persistedRows =
+          TestData.readAllData(new File(writeConf.get(FlinkOptions.PATH)), TestConfigurations.ROW_TYPE, 1);
+      List<String> actual = persistedRows.stream()
+          .map(TestData::filterOutVariablesWithoutHudiMetadata)
+          .collect(Collectors.toList());
+      assertArrayEquals(expected.toArray(), actual.toArray());
     } finally {
       harness.end();
     }

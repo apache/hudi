@@ -143,6 +143,7 @@ public class TestRecordLevelIndexBackend {
       backend.getPartitionBucketCaches().put(
           "existing", cacheWithHeapSize(backend, ONE_MB / 2, 1L));
 
+      assertEquals(ONE_MB / 2, backend.inferMemorySizeForCache());
       assertNull(backend.get("new-partition", "new-key"));
 
       assertTrue(backend.getPartitionBucketCaches().containsKey("existing"));
