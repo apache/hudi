@@ -18,10 +18,9 @@ package io.trino.plugin.hudi.testing;
  * {@code isProjectionCompatible() == false}, which makes the file-group reader request the FULL table schema
  * instead of the connector's projection.
  * <p>
- * The Trino connector can only resolve columns that are in the read projection (plus Hudi meta columns), so a
- * data column outside the projection is rejected with a {@code NOT_SUPPORTED} error. This merger exists purely
- * to exercise that guard; it shares {@link KeyBasedTestRecordMerger#MERGE_STRATEGY_ID} so it resolves against
- * the same test table.
+ * The connector expands the read projection to the full table schema for such mergers, so narrow queries
+ * still merge correctly. This merger exists purely to exercise that full-schema path; it shares
+ * {@link KeyBasedTestRecordMerger#MERGE_STRATEGY_ID} so it resolves against the same test table.
  */
 public class NonProjectionCompatibleTestRecordMerger
         extends KeyBasedTestRecordMerger

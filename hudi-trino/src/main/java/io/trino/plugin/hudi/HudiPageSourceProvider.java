@@ -37,7 +37,7 @@ import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.file.HudiBaseFile;
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
-import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
+import io.trino.plugin.hudi.util.PrefilledColumnValues;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorPageSource;
@@ -51,12 +51,15 @@ import io.trino.spi.connector.EmptyPageSource;
 import io.trino.spi.predicate.TupleDomain;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.io.MessageColumnIO;
@@ -96,13 +99,19 @@ import static io.trino.plugin.hudi.HudiSessionProperties.isParquetUseColumnIndex
 import static io.trino.plugin.hudi.HudiSessionProperties.isParquetVectorizedDecodingEnabled;
 import static io.trino.plugin.hudi.HudiSessionProperties.shouldUseParquetColumnNames;
 import static io.trino.plugin.hudi.HudiSessionProperties.useParquetBloomFilter;
+import static io.trino.plugin.hudi.HudiUtil.appendMissingMergeRequiredColumns;
+import static io.trino.plugin.hudi.HudiUtil.appendMissingSchemaColumns;
 import static io.trino.plugin.hudi.HudiUtil.buildTableMetaClient;
 import static io.trino.plugin.hudi.HudiUtil.constructSchema;
 import static io.trino.plugin.hudi.HudiUtil.convertToFileSlice;
 import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
 import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaAndMergeRequiredColumns;
+import static io.trino.plugin.hudi.HudiUtil.resolveMergeModeAndStrategyId;
+import static io.trino.plugin.hudi.HudiUtil.usesNonProjectionCompatibleMerger;
+import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 
 public class HudiPageSourceProvider
@@ -192,33 +201,52 @@ public class HudiPageSourceProvider
                 .withBloomFilter(useParquetBloomFilter(session))
                 .withVectorizedDecodingEnabled(isParquetVectorizedDecodingEnabled(session))
                 .build();
-        ConnectorPageSource dataPageSource = createPageSource(
-                session,
-                isBaseFileOnly ? dataColumnHandles : hudiMetaAndDataColumnHandles,
-                hudiSplit,
-                fileSystem.newInputFile(Location.of(hudiBaseFileOpt.get().getPath()), hudiBaseFileOpt.get().getFileSize()),
-                hudiBaseFileOpt.get().getPath(),
-                start,
-                length,
-                OptionalLong.of(hudiBaseFileOpt.get().getFileSize()),
-                dataSourceStats,
-                sessionOptions,
-                timeZone, dynamicFilter, isBaseFileOnly);
-
-        SynthesizedColumnHandler synthesizedColumnHandler = SynthesizedColumnHandler.create(hudiSplit);
+        PrefilledColumnValues prefilledColumnValues = PrefilledColumnValues.create(hudiSplit);
 
         // Avoid avro serialization if split/filegroup only contains base files
         if (isBaseFileOnly) {
             return new HudiBaseFileOnlyPageSource(
-                    dataPageSource,
+                    createBaseFilePageSource(session, dataColumnHandles, hudiSplit, fileSystem, sessionOptions, start, length, dynamicFilter, true),
                     hiveColumnHandles,
                     dataColumnHandles,
-                    synthesizedColumnHandler);
+                    prefilledColumnValues);
+        }
+
+        // The merge path below is built around a base-file page source; fail log-only file slices with a
+        // clear error instead of an opaque NoSuchElementException from getBaseFile().orElseThrow().
+        // TODO: support log-only file slices by feeding the file-group reader an empty base page source.
+        if (hudiBaseFileOpt.isEmpty()) {
+            throw new TrinoException(NOT_SUPPORTED, "Hudi splits with log files but no base file are not supported: "
+                    + hudiSplit.getLogFiles().getFirst().getPath());
         }
 
         // TODO: Move this into HudiTableHandle
         HoodieTableMetaClient metaClient = buildTableMetaClient(
                 fileSystemFactory.create(session), hudiTableHandle.getSchemaTableName().toString(), hudiTableHandle.getBasePath());
+        HoodieSchema dataSchema =
+                Optional.ofNullable(hudiTableHandle.getTableSchema())
+                        .orElseGet(() -> getLatestTableSchema(metaClient, hudiTableHandle.getTableName()));
+        TypedProperties readerProps = buildReaderProperties(session, metaClient);
+
+        // A non-projection-compatible CUSTOM merger makes the file-group reader demand the FULL table
+        // schema as requiredSchema for this split (it has log files), for the base and log reads alike.
+        // Expand the read projection to the full schema up front so the base page source carries every
+        // merge column; the log page sources resolve their columns from the same expanded handles.
+        List<HiveColumnHandle> readColumnHandles;
+        if (requiresFullSchemaRead(metaClient.getTableConfig(), readerProps)) {
+            log.debug("Expanding the read projection of %s to the full table schema: the resolved record merger is not projection compatible",
+                    hudiTableHandle.getSchemaTableName());
+            readColumnHandles = appendMissingSchemaColumns(dataSchema, hudiMetaAndDataColumnHandles);
+        }
+        else {
+            // The metastore may lack merge-required columns the table schema carries (e.g. hive sync with
+            // omit_metadata_fields=true drops _hoodie_operation); recover them from the already-resolved
+            // schema so the base read is not starved of them.
+            readColumnHandles = appendMissingMergeRequiredColumns(dataSchema, hudiMetaAndDataColumnHandles, metaClient.getTableConfig(), readerProps);
+        }
+
+        ConnectorPageSource dataPageSource =
+                createBaseFilePageSource(session, readColumnHandles, hudiSplit, fileSystem, sessionOptions, start, length, dynamicFilter, false);
         // Build native (RFC-103) delta-log parquet page sources on demand, projected on the file-group
         // reader's requiredSchema with predicate pushdown OFF so every log record is read and merged.
         HudiTrinoReaderContext.LogFileParquetPageSourceFactory logPageSourceFactory =
@@ -240,15 +268,11 @@ public class HudiPageSourceProvider
                 metaClient.getStorageConf(),
                 metaClient.getTableConfig(),
                 dataPageSource,
-                dataColumnHandles,
-                hudiMetaAndDataColumnHandles,
-                synthesizedColumnHandler,
+                readColumnHandles,
+                prefilledColumnValues,
                 logPageSourceFactory);
-        HoodieSchema dataSchema =
-                Optional.ofNullable(hudiTableHandle.getTableSchema())
-                        .orElseGet(() -> getLatestTableSchema(metaClient, hudiTableHandle.getTableName()));
 
-        Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), hudiMetaAndDataColumnHandles.stream().map(HiveColumnHandle::getName).toList());
+        Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), readColumnHandles.stream().map(HiveColumnHandle::getName).toList());
         FileSlice fileSlice = convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath());
         HoodieFileGroupReader<IndexedRecord> fileGroupReader =
                 HoodieFileGroupReader.<IndexedRecord>builder()
@@ -260,7 +284,7 @@ public class HudiPageSourceProvider
                         .withDataSchema(dataSchema)
                         .withRequestedSchema(HoodieSchema.fromAvroSchema(requestedSchema))
                         .withLatestCommitTime(hudiTableHandle.getLatestCommitTime())
-                        .withProps(buildReaderProperties(session, metaClient))
+                        .withProps(readerProps)
                         .withShouldUseRecordPosition(false)
                         .withStart(start)
                         .withLength(length)
@@ -268,9 +292,52 @@ public class HudiPageSourceProvider
         return new HudiPageSource(
                 dataPageSource,
                 fileGroupReader,
-                readerContext,
                 hiveColumnHandles,
-                synthesizedColumnHandler);
+                prefilledColumnValues);
+    }
+
+    private ConnectorPageSource createBaseFilePageSource(
+            ConnectorSession session,
+            List<HiveColumnHandle> columns,
+            HudiSplit hudiSplit,
+            TrinoFileSystem fileSystem,
+            ParquetReaderOptions sessionOptions,
+            long start,
+            long length,
+            DynamicFilter dynamicFilter,
+            boolean enablePredicatePushDown)
+    {
+        HudiBaseFile baseFile = hudiSplit.getBaseFile().orElseThrow();
+        return createPageSource(
+                session,
+                columns,
+                hudiSplit,
+                fileSystem.newInputFile(Location.of(baseFile.getPath()), baseFile.getFileSize()),
+                baseFile.getPath(),
+                start,
+                length,
+                OptionalLong.of(baseFile.getFileSize()),
+                dataSourceStats,
+                sessionOptions,
+                timeZone,
+                dynamicFilter,
+                enablePredicatePushDown);
+    }
+
+    /**
+     * Mirrors {@code FileGroupReaderSchemaHandler.generateRequiredSchema}'s full-schema decision for
+     * CUSTOM merge mode: resolves the merge mode and strategy id with the version-gated inference the
+     * file-group reader applies ({@link HudiUtil#resolveMergeModeAndStrategyId}) and asks the same
+     * resolved merger whether it is projection compatible. Only this decision is mirrored exactly; the
+     * mandatory-fields side ({@link HudiUtil#getMergeRequiredColumnHandles}) is a superset prediction,
+     * and the {@code HudiTrinoReaderContext.getFileRecordIterator} guard catches any residual drift.
+     */
+    private static boolean requiresFullSchemaRead(HoodieTableConfig tableConfig, TypedProperties readerProps)
+    {
+        Pair<RecordMergeMode, String> mergeModeAndStrategyId = resolveMergeModeAndStrategyId(tableConfig);
+        String mergeImplClasses = readerProps.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
+                readerProps.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, ""));
+        return usesNonProjectionCompatibleMerger(mergeModeAndStrategyId.getLeft(), mergeModeAndStrategyId.getRight(), mergeImplClasses);
     }
 
     /**
@@ -397,6 +464,11 @@ public class HudiPageSourceProvider
      * Creates a new list of ColumnHandles where the index associated with each handle corresponds to its physical position within the provided fileSchema (MessageType).
      * This is necessary when a downstream component relies on the handle's index for physical data access, and the logical schema order (potentially reflected in the
      * original handles) differs from the physical file layout.
+     * <p>
+     * A requested column the file schema does not carry is mapped one past the last physical field instead of failing: base files written before the column was added
+     * legitimately lack it (schema evolution), and so do old records for a merge-required column. {@code ParquetPageSourceFactory} reads an index-based column through
+     * {@code getBaseColumnParquetType}, which reports any index at or beyond the file's field count as absent, so the parquet reader skips it and the page source emits
+     * a null block -- the same result the name-based path ({@code hudi.parquet.use-column-names=true}) produces.
      *
      * @param fileSchema The MessageType representing the physical schema of the Parquet file.
      * @param requestedColumns The original list of Trino ColumnHandles as received from the engine.
@@ -415,7 +487,7 @@ public class HudiPageSourceProvider
         for (int i = 0; i < fileFields.size(); i++) {
             Type field = fileFields.get(i);
             String fieldName = field.getName();
-            String mapKey = caseSensitive ? fieldName : fieldName.toLowerCase(Locale.getDefault());
+            String mapKey = caseSensitive ? fieldName : fieldName.toLowerCase(Locale.ROOT);
             physicalIndexMap.put(mapKey, i);
         }
 
@@ -425,14 +497,15 @@ public class HudiPageSourceProvider
             String requestedName = originalHandle.getBaseColumnName();
 
             // Determine the key to use for looking up the physical index
-            String lookupKey = caseSensitive ? requestedName : requestedName.toLowerCase(Locale.getDefault());
+            String lookupKey = caseSensitive ? requestedName : requestedName.toLowerCase(Locale.ROOT);
 
-            // Find the physical index from the file schema map constructed from fielSchema
+            // Find the physical index from the file schema map constructed from fileSchema. A column the file
+            // does not carry keeps an index one past the last field, which the parquet reader null-fills.
             Integer physicalIndex = physicalIndexMap.get(lookupKey);
 
             HiveColumnHandle remappedHandle = new HiveColumnHandle(
                     requestedName,
-                    physicalIndex,
+                    physicalIndex == null ? fileFields.size() : physicalIndex,
                     originalHandle.getBaseHiveType(),
                     originalHandle.getType(),
                     originalHandle.getHiveColumnProjectionInfo(),

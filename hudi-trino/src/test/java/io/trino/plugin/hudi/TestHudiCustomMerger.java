@@ -23,7 +23,6 @@ import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies that the Hudi Trino connector resolves and applies a user-supplied custom record merger
@@ -86,19 +85,21 @@ public class TestHudiCustomMerger
     }
 
     @Test
-    public void testNonProjectionCompatibleMergerIsRejected()
+    public void testNonProjectionCompatibleMergerMergesWithFullTableSchema()
     {
-        // A merger that is not projection compatible makes the file-group reader ask for the FULL table schema.
-        // The connector can only resolve columns in the read projection (plus Hudi meta columns), so a data
-        // column outside the projection must fail loudly rather than silently merge against a null value.
+        // A merger that is not projection compatible makes the file-group reader ask for the FULL table
+        // schema, so base and log reads must resolve data columns outside the query projection.
+        // sum(value) projects neither key nor name, yet 199 proves the key-based merge still ran:
+        // base-only would be 110 and the built-in newest-wins 104.
         Session session = SessionBuilder.from(getSession())
                 .withRecordMergerImpls(NonProjectionCompatibleTestRecordMerger.class.getName())
                 .build();
-        // The guard throws inside the file-group reader and Hudi wraps it in a generic HoodieException
-        // ("Exception when reading log file"), but HudiPageSource rethrows the TrinoException from the
-        // cause chain, so the actionable text must be the top-level query failure message.
-        assertThatThrownBy(() -> computeScalar(session, "SELECT sum(value) FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME))
-                .hasMessageContaining("is required for merging but is not in the connector's read projection")
-                .hasMessageContaining("requires custom mergers to override isProjectionCompatible()");
+        assertThat(computeScalar(session, "SELECT sum(value) FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME))
+                .isEqualTo(199L);
+        // Row-level check: the same merge decisions hold for every column.
+        assertQuery(
+                session,
+                "SELECT key, name, value FROM " + CustomMergerHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
+                "VALUES ('k1', 'k1_updated', CAST(99 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
     }
 }

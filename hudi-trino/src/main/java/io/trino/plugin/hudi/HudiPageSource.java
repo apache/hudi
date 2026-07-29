@@ -14,9 +14,8 @@
 package io.trino.plugin.hudi;
 
 import io.trino.plugin.hive.HiveColumnHandle;
-import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
 import io.trino.plugin.hudi.util.HudiAvroSerializer;
-import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
+import io.trino.plugin.hudi.util.PrefilledColumnValues;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.TrinoException;
@@ -39,28 +38,23 @@ import static com.google.common.base.Throwables.throwIfUnchecked;
 public class HudiPageSource
         implements ConnectorPageSource
 {
-    HoodieFileGroupReader<IndexedRecord> fileGroupReader;
-    // TODO: Remove pageSource here, Hudi doesn't use this page source to read
-    ConnectorPageSource pageSource;
-    HudiTrinoReaderContext readerContext;
-    PageBuilder pageBuilder;
-    HudiAvroSerializer avroSerializer;
-    List<HiveColumnHandle> columnHandles;
-    ClosableIterator<IndexedRecord> recordIterator;
+    private final HoodieFileGroupReader<IndexedRecord> fileGroupReader;
+    // Reads flow through fileGroupReader; pageSource is kept for stats/isBlocked delegation
+    private final ConnectorPageSource pageSource;
+    private final PageBuilder pageBuilder;
+    private final HudiAvroSerializer avroSerializer;
+    private final ClosableIterator<IndexedRecord> recordIterator;
 
     public HudiPageSource(
             ConnectorPageSource pageSource,
             HoodieFileGroupReader<IndexedRecord> fileGroupReader,
-            HudiTrinoReaderContext readerContext,
             List<HiveColumnHandle> columnHandles,
-            SynthesizedColumnHandler synthesizedColumnHandler)
+            PrefilledColumnValues prefilledColumnValues)
     {
         this.pageSource = pageSource;
         this.fileGroupReader = fileGroupReader;
-        this.readerContext = readerContext;
-        this.columnHandles = columnHandles;
         this.pageBuilder = new PageBuilder(columnHandles.stream().map(HiveColumnHandle::getType).toList());
-        this.avroSerializer = new HudiAvroSerializer(columnHandles, synthesizedColumnHandler);
+        this.avroSerializer = new HudiAvroSerializer(columnHandles, prefilledColumnValues);
         try {
             this.recordIterator = fileGroupReader.getClosableIterator();
         }

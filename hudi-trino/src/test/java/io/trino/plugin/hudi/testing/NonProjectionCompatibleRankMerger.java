@@ -18,34 +18,29 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.LinkedHashSet;
 
 /**
- * Test-only custom {@link HoodieRecordMerger} that keeps, for each record key, the record with the largest value
- * in the {@code merge_rank} column. Ties are broken in favor of the newer (later-committed) record.
- * <p>
- * This policy is deliberately distinct from every built-in merge mode: it depends on an arbitrary data column
- * rather than commit time (newest-wins) or the ordering/precombine field (event-time ordering). Because the
- * winning commit for a key is frequently <em>not</em> the most recent one, the merged result is observably
- * different from both the read-optimized (base-only) view and the built-in newest-wins behavior, which is what
- * {@code TestHudiCustomMergerEndToEnd} validates after every commit.
- * <p>
- * Operates on Avro records ({@link HoodieRecord.HoodieRecordType#AVRO}), the record type the Trino reader
- * context uses ({@code EngineType.JAVA}).
+ * Test-only custom {@link HoodieRecordMerger} with the same keep-max-{@code merge_rank} policy as
+ * {@link MaxRankRecordMerger}, but deliberately WITHOUT the {@code isProjectionCompatible()} and
+ * {@code getMandatoryFieldsForMerging()} overrides. It therefore reports the interface default
+ * {@code isProjectionCompatible() == false} and never declares {@code merge_rank} as mandatory, so
+ * nothing prepends the rank column into the connector's read projection. The file-group reader reacts
+ * by demanding the FULL table schema as its required schema for any split with log files -- for the
+ * base and log reads alike -- making this merger the acceptance case for full-schema reads
+ * (apache/hudi#19249): a query that does not project {@code merge_rank} merges correctly only if both
+ * sides of the merge supply it.
  */
-public class MaxRankRecordMerger
+public class NonProjectionCompatibleRankMerger
         implements HoodieRecordMerger
 {
     /**
      * Unique strategy id identifying this custom merger. The test table's
      * {@code hoodie.record.merge.strategy.id} is set to this value so the reader resolves this implementation.
      */
-    public static final String MERGE_STRATEGY_ID = "3c2d7e10-9a4b-4f81-bd6e-7f0a1c5e8d24";
+    public static final String MERGE_STRATEGY_ID = "8e1f4a6b-2c9d-4d35-9a7e-5b0c8f3d1e42";
 
     /** Name of the column whose value decides the merge. */
     public static final String RANK_COLUMN = "merge_rank";
@@ -60,7 +55,7 @@ public class MaxRankRecordMerger
         }
         long olderRank = rankOf(older, recordContext);
         long newerRank = rankOf(newer, recordContext);
-        // Keep the newer record on ties so the policy stays deterministic and matches the expected-state fold.
+        // Keep the newer record on ties so the policy stays deterministic.
         return newerRank >= olderRank ? newer : older;
     }
 
@@ -68,30 +63,12 @@ public class MaxRankRecordMerger
     {
         HoodieSchema schema = recordContext.getSchemaFromBufferRecord(record);
         Object value = recordContext.getValue(record.getRecord(), schema, RANK_COLUMN);
+        // A null here means the reader failed to supply merge_rank on this side of the merge (the very
+        // regression this merger exists to catch); fail loudly instead of merging arbitrarily.
+        if (value == null) {
+            throw new IllegalStateException("merge_rank is missing from a record of schema " + schema);
+        }
         return ((Number) value).longValue();
-    }
-
-    @Override
-    public String[] getMandatoryFieldsForMerging(HoodieSchema dataSchema, HoodieTableConfig cfg, TypedProperties properties)
-    {
-        // Declare merge_rank (read in merge()) as mandatory, on top of the default key/ordering fields, so the
-        // reader includes it in the read schema even when a query does not project it.
-        LinkedHashSet<String> fields = new LinkedHashSet<>(
-                Arrays.asList(HoodieRecordMerger.super.getMandatoryFieldsForMerging(dataSchema, cfg, properties)));
-        fields.add(RANK_COLUMN);
-        return fields.toArray(new String[0]);
-    }
-
-    /**
-     * Merging depends only on {@code merge_rank}, which is declared mandatory above, so it works on projected
-     * records. Without this override the file-group reader reads ALL table columns for merging (see
-     * {@link NonProjectionCompatibleRankMerger} for that path); declaring projection compatibility keeps reads
-     * on the cheaper projected fast path.
-     */
-    @Override
-    public boolean isProjectionCompatible()
-    {
-        return true;
     }
 
     @Override

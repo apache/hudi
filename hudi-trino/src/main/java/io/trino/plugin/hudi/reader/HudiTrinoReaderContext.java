@@ -13,15 +13,15 @@
  */
 package io.trino.plugin.hudi.reader;
 
-import io.trino.metastore.HiveType;
+import com.google.common.collect.ImmutableSet;
 import io.trino.plugin.hive.HiveColumnHandle;
+import io.trino.plugin.hudi.HudiUtil;
 import io.trino.plugin.hudi.util.HudiAvroSerializer;
-import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
+import io.trino.plugin.hudi.util.PrefilledColumnValues;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.SourcePage;
-import io.trino.spi.type.VarcharType;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -29,7 +29,6 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -51,23 +50,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
+import java.util.NoSuchElementException;
+import java.util.Set;
 
-import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
+import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
 import static java.lang.String.format;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 
 public class HudiTrinoReaderContext
         extends HoodieReaderContext<IndexedRecord>
 {
-    ConnectorPageSource pageSource;
+    private final ConnectorPageSource pageSource;
     private final HudiAvroSerializer avroSerializer;
-    private final SynthesizedColumnHandler synthesizedColumnHandler;
+    private final PrefilledColumnValues prefilledColumnValues;
     private final LogFileParquetPageSourceFactory logPageSourceFactory;
-    Map<String, Integer> colToPosMap;
-    Map<String, HiveColumnHandle> colNameToHandle;
-    List<HiveColumnHandle> dataHandles;
-    List<HiveColumnHandle> columnHandles;
+    private final Map<String, HiveColumnHandle> colNameToHandle;
+    private final Set<String> baseProjectionNames;
 
     /**
      * Factory for building a Trino parquet page source over a native (RFC-103) delta-log file on demand.
@@ -83,25 +81,23 @@ public class HudiTrinoReaderContext
             StorageConfiguration storageConfiguration,
             HoodieTableConfig tableConfig,
             ConnectorPageSource pageSource,
-            List<HiveColumnHandle> dataHandles,
             List<HiveColumnHandle> columnHandles,
-            SynthesizedColumnHandler synthesizedColumnHandler,
+            PrefilledColumnValues prefilledColumnValues,
             LogFileParquetPageSourceFactory logPageSourceFactory)
     {
         super(storageConfiguration, tableConfig, Option.empty(), Option.empty(), new AvroRecordContext(tableConfig, tableConfig.getPayloadClass()));
         this.pageSource = pageSource;
-        this.synthesizedColumnHandler = synthesizedColumnHandler;
-        this.avroSerializer = new HudiAvroSerializer(columnHandles, synthesizedColumnHandler);
-        this.dataHandles = dataHandles;
-        this.columnHandles = columnHandles;
+        this.prefilledColumnValues = prefilledColumnValues;
+        this.avroSerializer = new HudiAvroSerializer(columnHandles, prefilledColumnValues);
         this.logPageSourceFactory = logPageSourceFactory;
-        this.colToPosMap = new HashMap<>();
         this.colNameToHandle = new HashMap<>();
-        for (int i = 0; i < columnHandles.size(); i++) {
-            HiveColumnHandle handle = columnHandles.get(i);
-            colToPosMap.put(handle.getBaseColumnName(), i);
+        for (HiveColumnHandle handle : columnHandles) {
             colNameToHandle.put(handle.getBaseColumnName().toLowerCase(Locale.ROOT), handle);
         }
+        // Immutable snapshot of the read projection for the base-read guard in getFileRecordIterator;
+        // colNameToHandle cannot serve that purpose because buildRequiredColumnHandles adds log-side
+        // handles to it on demand.
+        this.baseProjectionNames = ImmutableSet.copyOf(colNameToHandle.keySet());
     }
 
     @Override
@@ -147,54 +143,42 @@ public class HudiTrinoReaderContext
             }
             List<HiveColumnHandle> logProjection = buildRequiredColumnHandles(requiredSchema);
             ConnectorPageSource logSource = logPageSourceFactory.create(path.toString(), start, length, logProjection);
-            HudiAvroSerializer logSerializer = new HudiAvroSerializer(logProjection, synthesizedColumnHandler);
+            HudiAvroSerializer logSerializer = new HudiAvroSerializer(logProjection, prefilledColumnValues);
             return createRecordIterator(logSource, logSerializer);
+        }
+        // The base read reuses the pre-built page source, so it can only satisfy requiredSchema fields the
+        // read projection carries. The connector predicts the file-group reader's demands up front
+        // (HudiUtil.getMergeRequiredColumnHandles, HudiPageSourceProvider.requiresFullSchemaRead); if the
+        // two ever drift, fail loudly here instead of silently merging with null column values.
+        List<String> missingColumns = requiredSchema.getFields().stream()
+                .map(HoodieSchemaField::name)
+                .filter(name -> !baseProjectionNames.contains(name.toLowerCase(Locale.ROOT)))
+                .toList();
+        if (!missingColumns.isEmpty()) {
+            throw new TrinoException(HUDI_SCHEMA_ERROR, format(
+                    "The file-group reader requires columns %s for merging, but the base-file read projection "
+                            + "does not carry them. The connector's merge projection is out of sync with "
+                            + "FileGroupReaderSchemaHandler.generateRequiredSchema.",
+                    missingColumns));
         }
         return createRecordIterator(pageSource, avroSerializer);
     }
 
     /**
-     * Resolves the {@link HiveColumnHandle} for each field of {@code requiredSchema} against the reader's column
-     * handles (keyed by lowercased base column name) so the on-demand log page source reads exactly the columns
-     * the file-group reader needs to merge. The file-group reader can add meta fields to {@code requiredSchema}
-     * that the connector projection does not carry -- the projection holds only the query columns plus
-     * {@code HUDI_REQUIRED_META_COLUMNS} (record key + partition path), whereas the merge may also need e.g.
-     * {@code _hoodie_commit_time}; for such a Hudi meta column a handle is synthesized (see the inline note)
-     * rather than failing the read.
+     * Resolves the {@link HiveColumnHandle} for each field of {@code requiredSchema} so the on-demand log
+     * page source reads exactly the columns the file-group reader needs to merge. Fields the connector
+     * projection carries resolve to their projection handles (planner-authoritative types); the file-group
+     * reader can also require fields the projection does not carry (e.g. {@code _hoodie_commit_time} or a
+     * delete-marker column on a narrow query) -- every such field originates from the table schema and
+     * carries its real Avro type, so its handle is typed directly from the field and cached.
      */
     private List<HiveColumnHandle> buildRequiredColumnHandles(HoodieSchema requiredSchema)
     {
         List<HiveColumnHandle> handles = new ArrayList<>();
         for (HoodieSchemaField field : requiredSchema.getFields()) {
-            String name = field.name();
-            HiveColumnHandle handle = colNameToHandle.get(name.toLowerCase(Locale.ROOT));
-            if (handle == null) {
-                if (!HoodieRecord.HOODIE_META_COLUMNS.contains(name)) {
-                    // A data column outside the projection cannot be typed at this layer. The file-group reader
-                    // only asks for one when the table's custom merger is not projection compatible (it then
-                    // reads the FULL table schema), which this connector does not support.
-                    throw new TrinoException(NOT_SUPPORTED, format(
-                            "Column '%s' is required for merging but is not in the connector's read projection. "
-                                    + "This usually means the table's custom record merger is not projection compatible; "
-                                    + "the Hudi Trino connector requires custom mergers to override isProjectionCompatible() "
-                                    + "to true and declare getMandatoryFieldsForMerging().", name));
-                }
-                // Synthesize a handle for a Hudi meta column absent from the connector projection. This is safe:
-                //   1. Every Hudi meta column is a UTF8 string on disk, so HIVE_STRING/VARCHAR is the correct
-                //      physical type -- the same handle HudiUtil.prependHudiMetaAndMergeRequiredColumns builds for the
-                //      HUDI_REQUIRED_META_COLUMNS.
-                //   2. hiveColumnIndex (0) is a throwaway placeholder: HudiPageSourceProvider.createPageSource
-                //      resolves parquet columns by NAME (directly when useColumnNames=true, otherwise
-                //      remapColumnIndicesToPhysical rebuilds every index from the file schema by name), so this
-                //      ordinal is never read.
-                // TODO(apache/hudi#19249): remove this synthesis. Build colNameToHandle from the full data schema
-                //  (all meta + data columns, typed once from the table schema) so every requiredSchema field
-                //  resolves by lookup, dropping both the hand-built handle and the HOODIE_META_COLUMNS guard
-                //  above -- which would also lift the projection-compatible-merger restriction.
-                handle = new HiveColumnHandle(name, 0, HiveType.HIVE_STRING, VarcharType.VARCHAR,
-                        Optional.empty(), HiveColumnHandle.ColumnType.REGULAR, Optional.empty());
-            }
-            handles.add(handle);
+            handles.add(colNameToHandle.computeIfAbsent(
+                    field.name().toLowerCase(Locale.ROOT),
+                    _ -> HudiUtil.toColumnHandle(field)));
         }
         return handles;
     }
@@ -243,8 +227,7 @@ public class HudiTrinoReaderContext
             public IndexedRecord next()
             {
                 if (!hasNext()) {
-                    // TODO: This can probably be removed or ignored, added this as a sanity check
-                    throw new RuntimeException("No more records in the iterator");
+                    throw new NoSuchElementException("No more records in the iterator");
                 }
 
                 IndexedRecord record = serializer.serialize(currentPage, currentPosition);
@@ -270,6 +253,9 @@ public class HudiTrinoReaderContext
                 return Option.of(new OverwriteWithLatestMerger());
             case CUSTOM:
             default:
+                // createValidRecordMerger dereferences the strategy id on its first line, so a table that
+                // resolved to CUSTOM without persisting one must be rejected before it reaches hudi-common.
+                HudiUtil.validateCustomMergeStrategyId(mergeStrategyId);
                 Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
                 if (recordMerger.isEmpty()) {
                     throw new IllegalArgumentException("No valid merger implementation set for `" + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");

@@ -21,6 +21,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -35,24 +36,23 @@ import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_STRING;
 
 /**
- * Creates a non-partitioned Merge-On-Read table at test runtime that is configured to use a custom record
- * merger ({@link KeyBasedTestRecordMerger}) via {@link RecordMergeMode#CUSTOM}. The table is written with one
- * {@code insert} (producing base files) followed by one {@code upsert} of the same keys (producing log files),
- * with inline compaction disabled so the log files survive and must be merged at read time.
+ * Creates a non-partitioned Merge-On-Read table in {@link RecordMergeMode#EVENT_TIME_ORDERING} whose
+ * METASTORE column list deliberately omits the ordering field {@code ts} that the Avro table schema (and the
+ * data files) carry -- the shape hive sync leaves behind when a column is not synced. Event-time merging
+ * still needs {@code ts} on both sides of every merge, so reads of the real-time table only produce correct
+ * results when the merge path recovers the column from the resolved table schema; without that recovery the
+ * base read cannot supply {@code ts} and the read fails.
  * <p>
- * Two tables are registered in the metastore: a read-optimized table (base files only) and a real-time table
- * (suffix {@code _rt}) that merges base + log files through the file group reader.
- * <p>
- * Data is laid out so the key-based merge result is distinguishable from both the base-only view and the
- * built-in newest-wins behavior (see {@code TestHudiCustomMerger}).
+ * Data is laid out so each merge direction is distinguishable: {@code k1}'s winning event time is on the LOG
+ * record and {@code k2}'s on the BASE record. See {@code TestHudiNonProjectionCompatibleMerger}.
  */
-public class CustomMergerHudiTablesInitializer
+public class OmittedOrderingFieldHudiTablesInitializer
         extends AbstractMergerHudiTablesInitializer
 {
-    public static final String TABLE_NAME = "custom_merger_mor";
+    public static final String TABLE_NAME = "omitted_ordering_field_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
 
-    public CustomMergerHudiTablesInitializer()
+    public OmittedOrderingFieldHudiTablesInitializer()
     {
         super(TABLE_NAME);
     }
@@ -60,11 +60,11 @@ public class CustomMergerHudiTablesInitializer
     @Override
     protected List<Column> dataColumns()
     {
+        // No ts column: the fixture's whole point is a metastore that does not know the ordering field.
         return ImmutableList.of(
                 new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
                 new Column("name", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("value", HIVE_LONG, Optional.empty(), Map.of()),
-                new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()));
+                new Column("value", HIVE_LONG, Optional.empty(), Map.of()));
     }
 
     @Override
@@ -82,18 +82,14 @@ public class CustomMergerHudiTablesInitializer
     protected void configureTableConfig(HoodieTableMetaClient.TableBuilder tableBuilder)
     {
         tableBuilder
-                .setPayloadClassName(HoodieAvroPayload.class.getName())
-                .setRecordMergeMode(RecordMergeMode.CUSTOM)
-                .setRecordMergeStrategyId(KeyBasedTestRecordMerger.MERGE_STRATEGY_ID);
+                .setPayloadClassName(DefaultHoodieRecordPayload.class.getName())
+                .setRecordMergeMode(RecordMergeMode.EVENT_TIME_ORDERING);
     }
 
     @Override
     protected void configureWriteConfig(HoodieWriteConfig.Builder writeConfigBuilder)
     {
-        writeConfigBuilder
-                .withRecordMergeMode(RecordMergeMode.CUSTOM)
-                .withRecordMergeStrategyId(KeyBasedTestRecordMerger.MERGE_STRATEGY_ID)
-                .withRecordMergeImplClasses(KeyBasedTestRecordMerger.class.getName());
+        writeConfigBuilder.withRecordMergeMode(RecordMergeMode.EVENT_TIME_ORDERING);
     }
 
     @Override
@@ -103,17 +99,18 @@ public class CustomMergerHudiTablesInitializer
         // First commit: bulk insert base records (produces base parquet files).
         String firstCommit = client.startCommit();
         List<WriteStatus> firstStatuses = client.bulkInsert(ImmutableList.of(
-                record(schema, "k1", "k1_base", 10L, 1L),
-                record(schema, "k2", "k2_base", 100L, 1L)), firstCommit);
+                record(schema, "k1", "k1_base", 10L, 5L),
+                record(schema, "k2", "k2_base", 100L, 9L)), firstCommit);
         client.commit(firstCommit, firstStatuses);
 
         // Second commit: upserts the same keys (produces log files since inline compaction is disabled).
-        // k1 update has a larger value (99 > 10) -> keep-max keeps the update.
-        // k2 update has a smaller value (5 < 100) -> keep-max keeps the original base record.
+        // k1's update carries a NEWER event time (7 > 5) -> the update wins (99): the LOG record's ts decides.
+        // k2's update carries an OLDER event time (1 < 9) -> the base record wins (100): the BASE record's ts
+        // decides, which only works when the base read carries ts despite the metastore not knowing it.
         String secondCommit = client.startCommit();
         List<WriteStatus> secondStatuses = client.upsert(ImmutableList.of(
-                record(schema, "k1", "k1_updated", 99L, 2L),
-                record(schema, "k2", "k2_updated", 5L, 2L)), secondCommit);
+                record(schema, "k1", "k1_updated", 99L, 7L),
+                record(schema, "k2", "k2_updated", 4L, 1L)), secondCommit);
         client.commit(secondCommit, secondStatuses);
     }
 
