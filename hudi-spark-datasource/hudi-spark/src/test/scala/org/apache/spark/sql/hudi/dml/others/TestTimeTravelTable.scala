@@ -20,6 +20,7 @@
 package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -394,19 +395,18 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
        """.stripMargin)
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
 
-      // VERSION AS OF (a version with no timestamp) is rejected by the Hudi analysis rule, which
-      // does not support version-based time travel.
       checkExceptionContain(s"select * from $tableName VERSION AS OF 1")(
         "Version expression is not supported for time travel")
 
-      // A timestamp expression containing a subquery is rejected because time travel needs a
-      // constant instant. Which layer rejects it is version-dependent: Spark 3.3's native parser
-      // fails at parse time ("Invalid time travel spec: timestamp expression cannot contain
-      // subqueries"), while Spark 3.4+ defer to the Hudi analysis rule ("timestamp expression
-      // cannot refer to any columns or contain subqueries"). Assert on the shared substring.
+      // Spark 3.3 rejects a subquery timestamp at parse time; Spark 3.4+ defer to the Hudi guard.
+      val subqueryError = if (HoodieSparkUtils.isSpark3_3) {
+        "Invalid time travel spec: timestamp expression cannot contain subqueries"
+      } else {
+        "timestamp expression cannot refer to any columns or contain subqueries"
+      }
       checkExceptionContain(
         s"select * from $tableName TIMESTAMP AS OF (select max(ts) from $tableName)")(
-        "contain subqueries")
+        subqueryError)
     }
   }
 }
