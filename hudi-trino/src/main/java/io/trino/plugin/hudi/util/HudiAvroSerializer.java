@@ -60,9 +60,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
+import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
 import static io.airlift.slice.Slices.utf8Slice;
-import static io.trino.plugin.hudi.HudiUtil.constructSchema;
 import static io.trino.plugin.hudi.HudiUtil.getFieldFromSchema;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
@@ -111,31 +111,21 @@ public class HudiAvroSerializer
 
     private final List<HiveColumnHandle> columnHandles;
     private final List<Type> columnTypes;
+    // Both are null for a page-building-only serializer (the two-arg constructor): buildRecordInPage
+    // reads field positions off each record's own schema, so no record schema is needed there -- and
+    // none could be built for hidden (synthesized) columns, which are answered from the split by
+    // PrefilledColumnValues rather than read from the file. serialize() requires the three-arg
+    // constructor, which maps page channel i to record position channelToFieldPosition[i].
     private final Schema schema;
-    // serialize() writes page channel i at record position channelToFieldPosition[i]. -1 marks a
-    // hidden column: a Trino synthesized metadata column ($path, $file_size, $file_modified_time,
-    // $partition) with no counterpart in the data file or table schema -- its value is prefilled
-    // per split from PrefilledColumnValues -- so it has no record field and its channel is skipped.
     private final int[] channelToFieldPosition;
 
     public HudiAvroSerializer(List<HiveColumnHandle> columnHandles, PrefilledColumnValues prefilledColumnValues)
     {
         this.columnHandles = columnHandles;
         this.columnTypes = columnHandles.stream().map(HiveColumnHandle::getType).toList();
-        // The record schema carries only columns that exist in the data: hidden (synthesized
-        // metadata) columns are answered from the split by PrefilledColumnValues, not read from
-        // the file, and cannot be described as Avro fields
-        this.schema = constructSchema(columnHandles.stream().filter(ch -> !ch.isHidden()).map(HiveColumnHandle::getName).toList(),
-                columnHandles.stream().filter(ch -> !ch.isHidden()).map(HiveColumnHandle::getHiveType).toList());
         this.prefilledColumnValues = prefilledColumnValues;
-        // With hidden columns excluded from the schema, the remaining channels map to sequential
-        // field positions; hidden channels map to -1
-        int[] mapping = new int[columnHandles.size()];
-        int fieldPosition = 0;
-        for (int i = 0; i < columnHandles.size(); i++) {
-            mapping[i] = columnHandles.get(i).isHidden() ? -1 : fieldPosition++;
-        }
-        this.channelToFieldPosition = mapping;
+        this.schema = null;
+        this.channelToFieldPosition = null;
     }
 
     /**
@@ -164,14 +154,10 @@ public class HudiAvroSerializer
 
     public IndexedRecord serialize(Page sourcePage, int position)
     {
+        checkState(schema != null, "serialize() requires a serializer built with a record schema");
         IndexedRecord record = new GenericData.Record(schema);
         for (int i = 0; i < columnTypes.size(); i++) {
-            int fieldPosition = channelToFieldPosition[i];
-            if (fieldPosition < 0) {
-                // hidden (synthesized) column: prefilled per split, absent from the record schema
-                continue;
-            }
-            record.put(fieldPosition, getValue(sourcePage, i, position));
+            record.put(channelToFieldPosition[i], getValue(sourcePage, i, position));
         }
         return record;
     }

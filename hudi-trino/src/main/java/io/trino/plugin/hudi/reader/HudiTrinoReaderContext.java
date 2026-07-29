@@ -184,25 +184,14 @@ public class HudiTrinoReaderContext
     {
         List<HiveColumnHandle> handles = new ArrayList<>();
         for (HoodieSchemaField field : requiredSchema.getFields()) {
-            HiveColumnHandle handle = colNameToHandle.computeIfAbsent(
+            // A projection handle may carry the lowercased metastore column name (e.g. 'op' for the
+            // DMS delete key 'Op'); that is fine on this path: parquet columns resolve
+            // case-insensitively, the serializer maps channels into requiredSchema positions
+            // case-insensitively, and hudi-common reads merge fields off the record's own schema,
+            // which serialize() stamps with the table casing.
+            handles.add(colNameToHandle.computeIfAbsent(
                     field.name().toLowerCase(Locale.ROOT),
-                    _ -> HudiUtil.toColumnHandle(field));
-            if (!handle.getName().equals(field.name())) {
-                // A projection handle carries the (lowercased) metastore column name, but hudi-common
-                // reads merge fields off log records by the table schema's EXACT field name -- Avro
-                // field lookups are case-sensitive (e.g. DeleteContext's custom delete key 'Op' on DMS
-                // tables). Emit the field's name on the log projection, keeping the planner's types;
-                // parquet columns resolve case-insensitively either way.
-                handle = new HiveColumnHandle(
-                        field.name(),
-                        handle.getBaseHiveColumnIndex(),
-                        handle.getBaseHiveType(),
-                        handle.getType(),
-                        handle.getHiveColumnProjectionInfo(),
-                        handle.getColumnType(),
-                        handle.getComment());
-            }
-            handles.add(handle);
+                    _ -> HudiUtil.toColumnHandle(field)));
         }
         return handles;
     }
@@ -265,10 +254,12 @@ public class HudiTrinoReaderContext
     protected Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses)
     {
         // Dispatch on the table's merge mode, mirroring HoodieAvroReaderContext. The Trino reader
-        // operates on IndexedRecord, so the Avro mergers apply directly. Using the read-time merger
-        // (combineAndGetUpdateValue) rather than a fixed preCombine merger keeps COMMIT_TIME_ORDERING
-        // and custom-payload tables correct on MoR reads; TestHudiMorMergeModeSemantics and
-        // TestHudiMorPayloadSemantics cover these branches end-to-end (apache/hudi#18898).
+        // operates on IndexedRecord, so the Avro mergers apply directly. Only the CUSTOM arm's
+        // return value drives merging (combineAndGetUpdateValue at read time, covered end-to-end by
+        // TestHudiMorPayloadSemantics; apache/hudi#18898): for the two ordering modes hudi-common
+        // picks its buffered merger from the merge mode alone (BufferedRecordMergerFactory) and only
+        // reads getMergingStrategy() off the merger returned here, so those arms are not separately
+        // testable -- TestHudiMorMergeModeSemantics pins the mode semantics themselves.
         switch (mergeMode) {
             case EVENT_TIME_ORDERING:
                 return Option.of(new HoodieAvroRecordMerger());

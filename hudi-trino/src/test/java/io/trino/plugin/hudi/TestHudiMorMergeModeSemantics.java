@@ -13,21 +13,22 @@
  */
 package io.trino.plugin.hudi;
 
-import io.trino.plugin.hudi.testing.MergeModeSemanticsHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.CommitTimeOrderingHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
 
-import static io.trino.plugin.hudi.testing.MergeModeSemanticsHudiTablesInitializer.COMMIT_TIME_RT_TABLE_NAME;
-import static io.trino.plugin.hudi.testing.MergeModeSemanticsHudiTablesInitializer.COMMIT_TIME_TABLE_NAME;
-import static io.trino.plugin.hudi.testing.MergeModeSemanticsHudiTablesInitializer.DELETES_RT_TABLE_NAME;
-import static io.trino.plugin.hudi.testing.MergeModeSemanticsHudiTablesInitializer.DELETES_TABLE_NAME;
+import static io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME;
+import static io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer.TABLE_NAME;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * End-to-end MoR snapshot-read tests for the merge-mode dispatch in
  * {@code HudiTrinoReaderContext.getRecordMerger} with deletes (issue apache/hudi#18898), on tables
- * written by {@link MergeModeSemanticsHudiTablesInitializer}:
+ * written by {@link EventTimeDeletesHudiTablesInitializer} and
+ * {@link CommitTimeOrderingHudiTablesInitializer}:
  * <ul>
  *   <li>EVENT_TIME_ORDERING: updates and soft deletes apply only when their ordering value wins;
  *       obsolete (lower-ordering) updates and soft deletes must LOSE against the base row.</li>
@@ -45,7 +46,9 @@ public class TestHudiMorMergeModeSemantics
             throws Exception
     {
         return HudiQueryRunner.builder()
-                .setDataLoader(new MergeModeSemanticsHudiTablesInitializer())
+                .setDataLoader(new CompositeHudiTablesInitializer(
+                        new EventTimeDeletesHudiTablesInitializer(),
+                        new CommitTimeOrderingHudiTablesInitializer()))
                 .build();
     }
 
@@ -54,11 +57,11 @@ public class TestHudiMorMergeModeSemantics
     {
         // Deletes and updates live in log files only; the read-optimized tables reflect the base commit
         assertQuery(
-                "SELECT key, name, value FROM " + DELETES_TABLE_NAME + " ORDER BY key",
+                "SELECT key, name, value FROM " + TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT)), ('k2', 'k2_base', 20), ('k3', 'k3_base', 30),"
                         + " ('k4', 'k4_base', 40), ('k5', 'k5_base', 50), ('k6', 'k6_base', 60)");
         assertQuery(
-                "SELECT key, name, value FROM " + COMMIT_TIME_TABLE_NAME + " ORDER BY key",
+                "SELECT key, name, value FROM " + CommitTimeOrderingHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT)), ('k2', 'k2_base', 20), ('k3', 'k3_base', 30)");
     }
 
@@ -69,7 +72,7 @@ public class TestHudiMorMergeModeSemantics
         // k4: OBSOLETE soft delete (lower ts) -> base row survives;
         // k5: untouched; k6: OBSOLETE update (lower ts) -> base row survives
         assertQuery(
-                "SELECT key, name, value FROM " + DELETES_RT_TABLE_NAME + " ORDER BY key",
+                "SELECT key, name, value FROM " + RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k4', 'k4_base', 40),"
                         + " ('k5', 'k5_base', 50), ('k6', 'k6_base', 60)");
     }
@@ -79,9 +82,9 @@ public class TestHudiMorMergeModeSemantics
     {
         // The hard delete is a native delete log file, resolved through the connector's
         // getFileRecordIterator with the synthetic delete-log schema (record key + ordering field)
-        assertThat(computeScalar("SELECT count(*) FROM " + DELETES_RT_TABLE_NAME + " WHERE key = 'k2'"))
+        assertThat(computeScalar("SELECT count(*) FROM " + RT_TABLE_NAME + " WHERE key = 'k2'"))
                 .isEqualTo(0L);
-        assertThat(computeScalar("SELECT count(*) FROM " + DELETES_TABLE_NAME + " WHERE key = 'k2'"))
+        assertThat(computeScalar("SELECT count(*) FROM " + TABLE_NAME + " WHERE key = 'k2'"))
                 .isEqualTo(1L);
     }
 
@@ -89,9 +92,9 @@ public class TestHudiMorMergeModeSemantics
     public void testSoftDeleteRemovesRowOnSnapshotRead()
     {
         // _hoodie_is_deleted=true log record with a winning (higher) ordering value
-        assertThat(computeScalar("SELECT count(*) FROM " + DELETES_RT_TABLE_NAME + " WHERE key = 'k3'"))
+        assertThat(computeScalar("SELECT count(*) FROM " + RT_TABLE_NAME + " WHERE key = 'k3'"))
                 .isEqualTo(0L);
-        assertThat(computeScalar("SELECT count(*) FROM " + DELETES_TABLE_NAME + " WHERE key = 'k3'"))
+        assertThat(computeScalar("SELECT count(*) FROM " + TABLE_NAME + " WHERE key = 'k3'"))
                 .isEqualTo(1L);
     }
 
@@ -100,7 +103,7 @@ public class TestHudiMorMergeModeSemantics
     {
         // The k4 soft delete carries ts=50 < base ts=100: event-time merging must keep the base row
         assertQuery(
-                "SELECT key, name, value FROM " + DELETES_RT_TABLE_NAME + " WHERE key = 'k4'",
+                "SELECT key, name, value FROM " + RT_TABLE_NAME + " WHERE key = 'k4'",
                 "VALUES ('k4', 'k4_base', CAST(40 AS BIGINT))");
     }
 
@@ -111,15 +114,15 @@ public class TestHudiMorMergeModeSemantics
         // regardless of the ordering value -- the mirror of the event-time k6 case, where the same
         // shape keeps the BASE row. Together they discriminate the two merger dispatches.
         assertQuery(
-                "SELECT key, name, value FROM " + COMMIT_TIME_RT_TABLE_NAME + " ORDER BY key",
+                "SELECT key, name, value FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k3', 'k3_base', 30)");
     }
 
     @Test
     public void testCountAfterDeletes()
     {
-        assertThat(computeScalar("SELECT count(*) FROM " + DELETES_RT_TABLE_NAME)).isEqualTo(4L);
-        assertThat(computeScalar("SELECT count(*) FROM " + COMMIT_TIME_RT_TABLE_NAME)).isEqualTo(2L);
+        assertThat(computeScalar("SELECT count(*) FROM " + RT_TABLE_NAME)).isEqualTo(4L);
+        assertThat(computeScalar("SELECT count(*) FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME)).isEqualTo(2L);
     }
 
     @Test
@@ -128,7 +131,7 @@ public class TestHudiMorMergeModeSemantics
         // Neither the ordering field nor _hoodie_is_deleted is projected; the connector must still read
         // them on both the base and log sides for the merge to resolve updates and deletes correctly
         assertQuery(
-                "SELECT key, value FROM " + DELETES_RT_TABLE_NAME + " ORDER BY key",
+                "SELECT key, value FROM " + RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', CAST(11 AS BIGINT)), ('k4', 40), ('k5', 50), ('k6', 60)");
     }
 }

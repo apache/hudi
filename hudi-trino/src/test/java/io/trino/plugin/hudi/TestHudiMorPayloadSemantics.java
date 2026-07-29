@@ -13,24 +13,25 @@
  */
 package io.trino.plugin.hudi;
 
-import io.trino.plugin.hudi.testing.PayloadSemanticsHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.DmsPayloadHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.OverwriteNonDefaultsPayloadHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.SummingPayloadHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.SummingTestPayload;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
 
-import static io.trino.plugin.hudi.testing.PayloadSemanticsHudiTablesInitializer.DMS_RT_TABLE_NAME;
-import static io.trino.plugin.hudi.testing.PayloadSemanticsHudiTablesInitializer.DMS_TABLE_NAME;
-import static io.trino.plugin.hudi.testing.PayloadSemanticsHudiTablesInitializer.NON_DEFAULTS_RT_TABLE_NAME;
-import static io.trino.plugin.hudi.testing.PayloadSemanticsHudiTablesInitializer.NON_DEFAULTS_TABLE_NAME;
-import static io.trino.plugin.hudi.testing.PayloadSemanticsHudiTablesInitializer.SUMMING_RT_TABLE_NAME;
-import static io.trino.plugin.hudi.testing.PayloadSemanticsHudiTablesInitializer.SUMMING_TABLE_NAME;
+import static io.trino.plugin.hudi.testing.DmsPayloadHudiTablesInitializer.RT_TABLE_NAME;
+import static io.trino.plugin.hudi.testing.DmsPayloadHudiTablesInitializer.TABLE_NAME;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * End-to-end MoR snapshot-read tests for PAYLOAD-driven merge semantics (issue apache/hudi#18898), on
- * tables written by {@link PayloadSemanticsHudiTablesInitializer}. No {@code hudi.record-merger-impls}
- * connector property is set anywhere -- every behavior below must resolve purely from the table config:
+ * tables written by {@link DmsPayloadHudiTablesInitializer},
+ * {@link OverwriteNonDefaultsPayloadHudiTablesInitializer} and {@link SummingPayloadHudiTablesInitializer}.
+ * No {@code hudi.record-merger-impls} connector property is set anywhere -- every behavior below must
+ * resolve purely from the table config:
  * <ul>
  *   <li>AWSDms: a log record with {@code Op='D'} deletes the row at merge time via the translated
  *       delete-key/marker table properties (the narrow-projection case pins the fix that reads those
@@ -50,7 +51,10 @@ public class TestHudiMorPayloadSemantics
             throws Exception
     {
         return HudiQueryRunner.builder()
-                .setDataLoader(new PayloadSemanticsHudiTablesInitializer())
+                .setDataLoader(new CompositeHudiTablesInitializer(
+                        new DmsPayloadHudiTablesInitializer(),
+                        new OverwriteNonDefaultsPayloadHudiTablesInitializer(),
+                        new SummingPayloadHudiTablesInitializer()))
                 .build();
     }
 
@@ -59,11 +63,11 @@ public class TestHudiMorPayloadSemantics
     {
         // Read-optimized: both rows (the Op='D' record lives in a log file)
         assertQuery(
-                "SELECT key, name, value, Op FROM " + DMS_TABLE_NAME + " ORDER BY key",
+                "SELECT key, name, value, Op FROM " + TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT), 'I'), ('k2', 'k2_base', 20, 'I')");
         // Snapshot: k2 is deleted by the Op='D' log record via the delete-key/marker table properties
         assertQuery(
-                "SELECT key, name, value, Op FROM " + DMS_RT_TABLE_NAME + " ORDER BY key",
+                "SELECT key, name, value, Op FROM " + RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT), 'I')");
     }
 
@@ -74,9 +78,9 @@ public class TestHudiMorPayloadSemantics
         // from the PREFIXED table properties (hoodie.record.merge.property.hoodie.payload.delete.field)
         // for the base read -- the regression this suite pins for HudiUtil.mergeRequiredColumnNames
         assertQuery(
-                "SELECT key, value FROM " + DMS_RT_TABLE_NAME + " ORDER BY key",
+                "SELECT key, value FROM " + RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', CAST(10 AS BIGINT))");
-        assertThat(computeScalar("SELECT count(*) FROM " + DMS_RT_TABLE_NAME)).isEqualTo(1L);
+        assertThat(computeScalar("SELECT count(*) FROM " + RT_TABLE_NAME)).isEqualTo(1L);
     }
 
     @Test
@@ -84,12 +88,12 @@ public class TestHudiMorPayloadSemantics
     {
         // Read-optimized: base values
         assertQuery(
-                "SELECT key, a, b FROM " + NON_DEFAULTS_TABLE_NAME,
+                "SELECT key, a, b FROM " + OverwriteNonDefaultsPayloadHudiTablesInitializer.TABLE_NAME,
                 "VALUES ('k1', 'base_a', 'base_b')");
         // Snapshot: the update carried a='new_a' and b=null (the schema default); IGNORE_DEFAULTS
         // partial merging takes the update's a but keeps the STORED b
         assertQuery(
-                "SELECT key, a, b FROM " + NON_DEFAULTS_RT_TABLE_NAME,
+                "SELECT key, a, b FROM " + OverwriteNonDefaultsPayloadHudiTablesInitializer.RT_TABLE_NAME,
                 "VALUES ('k1', 'new_a', 'base_b')");
     }
 
@@ -97,9 +101,9 @@ public class TestHudiMorPayloadSemantics
     public void testSummingPayloadRunsCombineAndGetUpdateValueOnRead()
     {
         // Read-optimized: the base value
-        assertQuery("SELECT key, value FROM " + SUMMING_TABLE_NAME, "VALUES ('k1', CAST(10 AS BIGINT))");
+        assertQuery("SELECT key, value FROM " + SummingPayloadHudiTablesInitializer.TABLE_NAME, "VALUES ('k1', CAST(10 AS BIGINT))");
         // Snapshot: 10 + 99 = 109 -- only the payload's combineAndGetUpdateValue can produce this
         // (newest-wins would yield 99, base-only 10), proving the CUSTOM payload-strategy branch ran
-        assertQuery("SELECT key, value FROM " + SUMMING_RT_TABLE_NAME, "VALUES ('k1', CAST(109 AS BIGINT))");
+        assertQuery("SELECT key, value FROM " + SummingPayloadHudiTablesInitializer.RT_TABLE_NAME, "VALUES ('k1', CAST(109 AS BIGINT))");
     }
 }
