@@ -66,6 +66,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -810,5 +811,16 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     assertNotNull(result, "Batch result should not be null for table type: " + tableType);
     assertNotNull(result.getSplits(), "Batch splits should not be null for table type: " + tableType);
     assertFalse(result.getSplits().isEmpty(), "Batch splits should not be empty for table type: " + tableType);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void testMergeListHandlesEmptyAndPopulatedInputs() throws Exception {
+    Method mergeList = IncrementalInputSplits.class.getDeclaredMethod("mergeList", List.class, List.class);
+    mergeList.setAccessible(true);
+
+    assertEquals(List.of(1), mergeList.invoke(null, Collections.emptyList(), List.of(1)));
+    assertEquals(List.of(1), mergeList.invoke(null, List.of(1), Collections.emptyList()));
+    assertEquals(List.of(1, 2), mergeList.invoke(null, List.of(1), List.of(2)));
   }
 }

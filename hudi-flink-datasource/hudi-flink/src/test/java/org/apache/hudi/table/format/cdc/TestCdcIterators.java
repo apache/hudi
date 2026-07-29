@@ -115,7 +115,6 @@ class TestCdcIterators {
             imageManager,
             split -> split == first ? firstIterator : secondIterator);
 
-    assertFalse(iterator.hasNext());
     assertTrue(iterator.hasNext());
     assertSame(row, iterator.next());
     assertFalse(iterator.hasNext());

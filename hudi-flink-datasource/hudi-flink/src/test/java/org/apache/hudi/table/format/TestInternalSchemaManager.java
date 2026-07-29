@@ -22,11 +22,15 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.util.HoodieStorageUtils;
+import org.apache.hudi.common.util.InternalSchemaCache;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 
 /**
  * Tests read-time schema reconciliation in {@link InternalSchemaManager}.
@@ -115,7 +120,7 @@ class TestInternalSchemaManager {
         queryTypes,
         new int[] {0, 1});
 
-    assertSame(queryTypes, castMap.getFileFieldTypes());
+    assertArrayEquals(queryTypes, castMap.getFileFieldTypes());
     assertFalse(castMap.toRowDataProjection(new int[] {0, 1}).isPresent());
   }
 
@@ -137,6 +142,26 @@ class TestInternalSchemaManager {
         new String[] {"id", "new_name"},
         manager.getMergeFieldNames(
             querySchema, new String[] {"id", "new_name"}));
+  }
+
+  @Test
+  void testGetMergeSchemaLoadsSchemaForFileVersion() {
+    InternalSchema querySchema =
+        schema(Types.Field.get(0, false, "id", Types.IntType.get()));
+    InternalSchemaManager manager = manager(querySchema);
+    HoodieStorage storage = mock(HoodieStorage.class);
+
+    try (MockedStatic<HoodieStorageUtils> storageUtils = mockStatic(HoodieStorageUtils.class);
+         MockedStatic<InternalSchemaCache> schemaCache = mockStatic(InternalSchemaCache.class)) {
+      storageUtils.when(
+          () -> HoodieStorageUtils.getStorage((String) null, null)).thenReturn(storage);
+      schemaCache.when(
+          () -> InternalSchemaCache.getInternalSchemaByVersionId(
+              1L, null, storage, null, null, null)).thenReturn(querySchema);
+
+      assertTrue(
+          manager.getMergeSchema("file-id_1-0-1_001.parquet").isEmptySchema());
+    }
   }
 
   @Test

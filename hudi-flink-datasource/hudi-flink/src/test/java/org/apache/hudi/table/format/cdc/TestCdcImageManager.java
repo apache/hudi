@@ -19,8 +19,12 @@
 
 package org.apache.hudi.table.format.cdc;
 
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.format.FormatUtils;
 
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -30,10 +34,12 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -44,6 +50,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -99,6 +108,47 @@ class TestCdcImageManager {
     assertEquals(9, inputView.readUnsignedByte());
   }
 
+  @Test
+  void testImageCacheReuseEvictionAndClose() throws IOException {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getBasePath()).thenReturn("/table");
+    ExternalSpillableMap<String, byte[]> first = mockImageCache();
+    ExternalSpillableMap<String, byte[]> second = mockImageCache();
+    ExternalSpillableMap<String, byte[]> third = mockImageCache();
+    GenericRowData row = GenericRowData.of(
+        StringData.fromString("commit"),
+        StringData.fromString("seq"),
+        StringData.fromString("key-1"));
+    CdcImageManager imageManager = new CdcImageManager(
+        RowType.of(
+            new LogicalType[] {new VarCharType(), new VarCharType(), new VarCharType()},
+            new String[] {"commit", "seq", "record_key"}),
+        writeConfig,
+        split -> ClosableIterator.wrap(List.<RowData>of(row).iterator()));
+
+    try (MockedStatic<FormatUtils> mockedFormatUtils = mockStatic(FormatUtils.class)) {
+      mockedFormatUtils.when(() -> FormatUtils.spillableMap(
+          writeConfig, 1024L, CdcImageManager.class.getSimpleName()))
+          .thenReturn(first, second, third);
+
+      FileSlice slice1 = fileSlice("001");
+      FileSlice slice2 = fileSlice("002");
+      FileSlice slice3 = fileSlice("003");
+      assertSame(first, imageManager.getOrLoadImages(1024L, slice1));
+      assertSame(first, imageManager.getOrLoadImages(1024L, slice1));
+      assertSame(second, imageManager.getOrLoadImages(1024L, slice2));
+      assertSame(third, imageManager.getOrLoadImages(1024L, slice3));
+      verify(first).close();
+      verify(first).put(anyString(), any(byte[].class));
+
+      imageManager.close();
+      verify(second).close();
+      verify(third).close();
+      imageManager.close();
+      verify(second, times(1)).close();
+    }
+  }
+
   @SuppressWarnings("unchecked")
   private static ExternalSpillableMap<String, byte[]> mockImageCache() {
     ExternalSpillableMap<String, byte[]> imageCache = mock(ExternalSpillableMap.class);
@@ -116,5 +166,10 @@ class TestCdcImageManager {
     return RowType.of(
         new LogicalType[] {new VarCharType()},
         new String[] {fieldName});
+  }
+
+  private static FileSlice fileSlice(String instant) {
+    return new FileSlice(
+        new HoodieFileGroupId("partition", "file"), instant, null, java.util.Collections.emptyList());
   }
 }

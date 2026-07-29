@@ -19,13 +19,21 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.storage.inline.InLineFSUtils;
+import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
+import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.column.ColumnReader;
@@ -35,6 +43,7 @@ import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.BadConfigurationException;
 import org.apache.parquet.hadoop.util.SerializationUtil;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -46,10 +55,21 @@ import static org.apache.parquet.filter2.predicate.FilterApi.intColumn;
 import static org.apache.parquet.hadoop.ParquetInputFormat.FILTER_PREDICATE;
 import static org.apache.parquet.hadoop.ParquetInputFormat.UNBOUND_RECORD_FILTER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests configuration and path handling used by {@link RecordIterators}.
@@ -164,6 +184,54 @@ class TestRecordIterators {
         Collections.singletonList("region"),
         Collections.singletonList(DataTypes.STRING()));
     assertEquals(Collections.singletonMap("region", "us"), partitionSpec);
+  }
+
+  @Test
+  void testParquetIteratorBuildsPredicateAndSchemaEvolutionReader() throws Exception {
+    InternalSchema mergeSchema = new InternalSchema(Types.RecordType.get(
+        Types.Field.get(0, false, "id", Types.IntType.get())));
+    InternalSchemaManager schemaManager = mock(InternalSchemaManager.class);
+    CastMap castMap = new CastMap();
+    DataType[] fieldTypes = {DataTypes.INT()};
+    castMap.setFileFieldTypes(fieldTypes);
+    Predicate predicate = mock(Predicate.class);
+    when(predicate.filter()).thenReturn(eq(intColumn("id"), 7));
+    when(schemaManager.getMergeSchema(anyString())).thenReturn(mergeSchema);
+    when(schemaManager.getCastMap(
+        org.mockito.ArgumentMatchers.eq(mergeSchema),
+        any(String[].class),
+        any(DataType[].class),
+        any(int[].class))).thenReturn(castMap);
+    when(schemaManager.getMergeFieldNames(
+        org.mockito.ArgumentMatchers.eq(mergeSchema),
+        any(String[].class))).thenReturn(new String[] {"id"});
+    ParquetColumnarRowSplitReader reader = mock(ParquetColumnarRowSplitReader.class);
+    when(reader.reachedEnd()).thenReturn(true);
+
+    try (MockedStatic<ParquetSplitReaderUtil> mocked = mockStatic(ParquetSplitReaderUtil.class)) {
+      mocked.when(() -> ParquetSplitReaderUtil.genPartColumnarRowReader(
+          anyBoolean(), anyBoolean(), any(Configuration.class), any(String[].class),
+          any(DataType[].class), anyMap(), any(int[].class), anyInt(), any(), anyLong(),
+          anyLong(), any(), any())).thenReturn(reader);
+
+      ClosableIterator<RowData> iterator = RecordIterators.getParquetRecordIterator(
+          schemaManager,
+          true,
+          true,
+          new Configuration(),
+          new String[] {"id"},
+          fieldTypes,
+          Collections.emptyMap(),
+          new int[] {0},
+          16,
+          new org.apache.flink.core.fs.Path("file:///table.parquet"),
+          0L,
+          1L,
+          Collections.singletonList(predicate));
+      assertFalse(iterator.hasNext());
+      iterator.close();
+      verify(reader).close();
+    }
   }
 
   @SuppressWarnings("unchecked")
