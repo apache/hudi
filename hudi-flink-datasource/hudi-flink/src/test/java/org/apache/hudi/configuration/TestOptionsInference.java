@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.lang.reflect.Method;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -101,22 +100,27 @@ public class TestOptionsInference {
   }
 
   @Test
-  void testSchedulerTypeResolution() throws Exception {
-    Method method = OptionsInference.class.getDeclaredMethod("getSchedulerType",
-        org.apache.flink.configuration.ReadableConfig.class);
-    method.setAccessible(true);
+  void testSchedulerTypeResolutionThroughRuntimeSetup() {
+    Configuration runtimeConf = new Configuration();
+    runtimeConf.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.BATCH);
+    boolean isFlink2 = FlinkVersion.current().toString().compareTo("2.0") >= 0;
 
     Configuration reactive = new Configuration();
     reactive.set(JobManagerOptions.SCHEDULER_MODE, SchedulerExecutionMode.REACTIVE);
-    assertEquals(JobManagerOptions.SchedulerType.AdaptiveBatch, method.invoke(null, reactive));
+    OptionsInference.setupRuntimeConfigs(reactive, runtimeConf);
+    assertEquals(isFlink2,
+        reactive.get(FlinkOptions.WRITE_INCREMENTAL_JOB_GRAPH_GENERATION));
 
     Configuration adaptive = new Configuration();
     adaptive.set(JobManagerOptions.SCHEDULER, JobManagerOptions.SchedulerType.Adaptive);
-    assertEquals(JobManagerOptions.SchedulerType.AdaptiveBatch, method.invoke(null, adaptive));
+    OptionsInference.setupRuntimeConfigs(adaptive, runtimeConf);
+    assertEquals(isFlink2,
+        adaptive.get(FlinkOptions.WRITE_INCREMENTAL_JOB_GRAPH_GENERATION));
 
     Configuration defaultScheduler = new Configuration();
     defaultScheduler.set(JobManagerOptions.SCHEDULER, JobManagerOptions.SchedulerType.Default);
-    assertEquals(JobManagerOptions.SchedulerType.Default, method.invoke(null, defaultScheduler));
+    OptionsInference.setupRuntimeConfigs(defaultScheduler, runtimeConf);
+    assertFalse(defaultScheduler.get(FlinkOptions.WRITE_INCREMENTAL_JOB_GRAPH_GENERATION));
   }
 
   @Test

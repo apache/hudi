@@ -92,6 +92,14 @@ class TestFlinkClusteringConfig {
     assertEquals(256, conf.get(FlinkOptions.WRITE_SORT_MEMORY));
     assertEquals(10, conf.get(FlinkOptions.CLUSTERING_MAX_NUM_GROUPS));
     assertEquals(5, conf.get(FlinkOptions.CLUSTERING_TARGET_PARTITIONS));
+    assertEquals("2026-01-01",
+        conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLUSTER_BEGIN_PARTITION));
+    assertEquals("2026-01-31",
+        conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLUSTER_END_PARTITION));
+    assertEquals("2026-01-.*",
+        conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_REGEX_PATTERN));
+    assertEquals("2026-01-01,2026-01-02",
+        conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_SELECTED));
     assertTrue(conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED));
     assertFalse(conf.get(FlinkOptions.CLUSTERING_ASYNC_ENABLED));
     assertTrue(conf.get(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED));

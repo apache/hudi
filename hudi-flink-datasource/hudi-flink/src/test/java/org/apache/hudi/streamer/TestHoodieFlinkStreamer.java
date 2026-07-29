@@ -70,6 +70,7 @@ class TestHoodieFlinkStreamer {
     when(transformer.apply(source)).thenReturn(transformed);
     AtomicReference<Configuration> envConf = new AtomicReference<>();
 
+    // Static mocks intercept config inference and resolution so this test only exercises entry-point wiring.
     try (MockedStatic<StreamExecutionEnvironment> environments = mockStatic(StreamExecutionEnvironment.class);
          MockedStatic<StreamerUtils> streamerUtils = mockStatic(StreamerUtils.class);
          MockedStatic<StreamerUtil> streamerUtil = mockStatic(StreamerUtil.class, CALLS_REAL_METHODS);
@@ -110,6 +111,7 @@ class TestHoodieFlinkStreamer {
     DataStream<HoodieFlinkInternalRow> bootstrapped = mock(DataStream.class);
     DataStream<RowData> pipeline = mock(DataStream.class);
 
+    // Static mocks intercept config inference and resolution so this test only exercises entry-point wiring.
     try (MockedStatic<StreamExecutionEnvironment> environments = mockStatic(StreamExecutionEnvironment.class);
          MockedStatic<StreamerUtils> streamerUtils = mockStatic(StreamerUtils.class);
          MockedStatic<OptionsInference> inference = mockStatic(OptionsInference.class);

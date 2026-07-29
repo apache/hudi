@@ -56,7 +56,7 @@ class TestFlinkStreamerConfig {
         "--partition-path-field", "order_date",
         "--source-ordering-fields", "event_ts,seq_no",
         "--instant-retry-times", "7",
-        "--instant-retry-interval", "250",
+        "--instant-retry-interval", "2",
         "--filter-dupes",
         "--commit-on-errors",
         "--metadata-enabled",
@@ -83,7 +83,7 @@ class TestFlinkStreamerConfig {
     assertEquals("order_date", conf.get(FlinkOptions.PARTITION_PATH_FIELD));
     assertEquals("event_ts,seq_no", conf.get(FlinkOptions.ORDERING_FIELDS));
     assertEquals(7, conf.get(FlinkOptions.RETRY_TIMES));
-    assertEquals(250L, conf.get(FlinkOptions.RETRY_INTERVAL_MS));
+    assertEquals(2_000L, conf.get(FlinkOptions.RETRY_INTERVAL_MS));
     assertTrue(conf.get(FlinkOptions.PRE_COMBINE));
     assertTrue(conf.get(FlinkOptions.IGNORE_FAILED));
     assertTrue(conf.get(FlinkOptions.METADATA_ENABLED));
@@ -97,7 +97,8 @@ class TestFlinkStreamerConfig {
     assertTrue(conf.get(FlinkOptions.HIVE_SYNC_ENABLED));
     assertEquals("analytics", conf.get(FlinkOptions.HIVE_SYNC_DB));
     assertEquals("orders", conf.get(FlinkOptions.HIVE_SYNC_TABLE));
-    assertEquals("hoodie.datasource.write.drop.partition.columns=true", config.configs.get(0));
+    assertEquals("true",
+        conf.getString("hoodie.datasource.write.drop.partition.columns", null));
   }
 
   @Test

@@ -285,12 +285,16 @@ public class TestOptionsResolver {
   }
 
   @Test
-  void testBasicOptionPredicatesAndValues() {
+  void testIncrementalJobGraphPredicate() {
     Configuration conf = new Configuration();
     assertFalse(OptionsResolver.isIncrementalJobGraph(conf));
     conf.set(FlinkOptions.WRITE_INCREMENTAL_JOB_GRAPH_GENERATION, true);
     assertTrue(OptionsResolver.isIncrementalJobGraph(conf));
+  }
 
+  @Test
+  void testTableTypePredicates() {
+    Configuration conf = new Configuration();
     assertTrue(OptionsResolver.isCowTable(conf));
     assertFalse(OptionsResolver.isMorTable(conf));
     assertFalse(OptionsResolver.isMorTable(Collections.emptyMap()));
@@ -298,14 +302,22 @@ public class TestOptionsResolver {
     assertTrue(OptionsResolver.isMorTable(conf));
     assertTrue(OptionsResolver.isMorTable(
         Collections.singletonMap(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name())));
+  }
 
+  @Test
+  void testOperationTypePredicates() {
+    Configuration conf = new Configuration();
     conf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
     assertTrue(OptionsResolver.isInsertOperation(conf));
     conf.set(FlinkOptions.OPERATION, WriteOperationType.UPSERT.value());
     assertTrue(OptionsResolver.isUpsertOperation(conf));
     conf.set(FlinkOptions.OPERATION, WriteOperationType.BULK_INSERT.value());
     assertTrue(OptionsResolver.isBulkInsertOperation(conf));
+  }
 
+  @Test
+  void testPayloadAndCompactionPredicates() {
+    Configuration conf = new Configuration();
     conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, DefaultHoodieRecordPayload.class.getName());
     assertTrue(OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf));
     conf.set(FlinkOptions.COMPACTION_TRIGGER_STRATEGY, FlinkOptions.TIME_ELAPSED.toUpperCase());
@@ -315,7 +327,7 @@ public class TestOptionsResolver {
   }
 
   @Test
-  void testReadAndWriteUtilityOptions() {
+  void testReadOptions() {
     Configuration conf = new Configuration();
     assertEquals(-1, OptionsResolver.getReadCommitsLimit(conf));
     conf.set(FlinkOptions.READ_COMMITS_LIMIT, 5);
@@ -326,6 +338,16 @@ public class TestOptionsResolver {
     assertEquals(HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER,
         OptionsResolver.getCDCSupplementalLoggingMode(conf));
 
+    conf.set(FlinkOptions.READ_CDC_FROM_CHANGELOG, false);
+    assertFalse(OptionsResolver.readCDCFromChangelog(conf));
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "id,tenant");
+    assertEquals("id", OptionsResolver.getIndexKeyFields(conf).get(0));
+    assertEquals("tenant", OptionsResolver.getIndexKeyFields(conf).get(1));
+  }
+
+  @Test
+  void testSchemaAndTimestampOptions() {
+    Configuration conf = new Configuration();
     conf.setString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
     assertTrue(OptionsResolver.isSchemaEvolutionEnabled(conf));
     conf.setString(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
@@ -333,13 +355,11 @@ public class TestOptionsResolver {
     conf.setString(HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(),
         HollowCommitHandling.USE_TRANSITION_TIME.name());
     assertTrue(OptionsResolver.isReadByTxnCompletionTime(conf));
+  }
 
-    conf.set(FlinkOptions.READ_CDC_FROM_CHANGELOG, false);
-    assertFalse(OptionsResolver.readCDCFromChangelog(conf));
-    conf.set(FlinkOptions.RECORD_KEY_FIELD, "id,tenant");
-    assertEquals("id", OptionsResolver.getIndexKeyFields(conf).get(0));
-    assertEquals("tenant", OptionsResolver.getIndexKeyFields(conf).get(1));
-
+  @Test
+  void testWriteOptions() {
+    Configuration conf = new Configuration();
     conf.setString(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), "true");
     assertTrue(OptionsResolver.allowCommitOnEmptyBatch(conf));
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
@@ -353,21 +373,29 @@ public class TestOptionsResolver {
   }
 
   @Test
-  void testPartitionersConflictsAndBufferSizing() {
+  void testInsertPartitioner() {
     Configuration conf = new Configuration();
     assertFalse(OptionsResolver.getInsertPartitioner(conf).isPresent());
     conf.set(FlinkOptions.INSERT_PARTITIONER_CLASS_NAME, TestPartitioner.class.getName());
     assertTrue(OptionsResolver.getInsertPartitioner(conf).isPresent());
     conf.set(FlinkOptions.INSERT_PARTITIONER_CLASS_NAME, String.class.getName());
     assertThrows(HoodieException.class, () -> OptionsResolver.getInsertPartitioner(conf));
+  }
 
+  @Test
+  void testConflictResolutionStrategies() {
+    Configuration conf = new Configuration();
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BLOOM.name());
     assertInstanceOf(SimpleConcurrentFileWritesConflictResolutionStrategy.class,
         OptionsResolver.getConflictResolutionStrategy(conf));
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     assertInstanceOf(BucketIndexConcurrentFileWritesConflictResolutionStrategy.class,
         OptionsResolver.getConflictResolutionStrategy(conf));
+  }
 
+  @Test
+  void testWriteBufferSizingAndManagedMemory() {
+    Configuration conf = new Configuration();
     conf.set(FlinkOptions.WRITE_TASK_MAX_SIZE, 300D);
     conf.set(FlinkOptions.WRITE_MERGE_MAX_MEMORY, 50);
     assertEquals(150L * 1024 * 1024, OptionsResolver.getWriteBufferSizeInBytes(conf));
