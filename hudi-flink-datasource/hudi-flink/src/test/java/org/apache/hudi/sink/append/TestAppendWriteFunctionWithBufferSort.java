@@ -48,7 +48,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -202,7 +201,7 @@ public class TestAppendWriteFunctionWithBufferSort {
       List<String> actual = persistedRows.stream()
           .map(TestData::filterOutVariablesWithoutHudiMetadata)
           .collect(Collectors.toList());
-      assertArrayEquals(expected.toArray(), actual.toArray());
+      assertEquals(expected, actual);
     } finally {
       harness.end();
     }
