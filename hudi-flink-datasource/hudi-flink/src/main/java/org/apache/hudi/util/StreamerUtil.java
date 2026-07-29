@@ -137,7 +137,13 @@ public class StreamerUtil {
 
   public static TypedProperties getProps(FlinkStreamerConfig cfg) {
     if (cfg.propsFilePath.isEmpty()) {
-      return new TypedProperties();
+      TypedProperties properties = new TypedProperties();
+      cfg.configs.forEach(x -> {
+        String[] kv = x.split("=");
+        ValidationUtils.checkArgument(kv.length == 2);
+        properties.setProperty(kv[0], kv[1]);
+      });
+      return properties;
     }
     return readConfig(
         HadoopConfigurations.getHadoopConf(cfg),
