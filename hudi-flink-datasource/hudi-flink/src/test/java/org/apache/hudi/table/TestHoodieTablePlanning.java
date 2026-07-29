@@ -18,18 +18,26 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestTableEnvs;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.transformations.LegacySourceTransformation;
+import org.apache.flink.streaming.api.transformations.SourceTransformation;
 import org.apache.flink.table.api.ExplainDetail;
 import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.flink.types.Row;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,18 +53,26 @@ class TestHoodieTablePlanning {
 
   @Test
   void testSourcePushDownsForBothSourceImplementations() throws Exception {
-    TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
+    StreamTableEnvironment tableEnv =
+        (StreamTableEnvironment) TestTableEnvs.getBatchTableEnv();
     createTable(tableEnv, "source_v2", new File(tempFile, "source_v2"), true);
     createTable(tableEnv, "legacy_source", new File(tempFile, "legacy_source"), false);
 
     for (String tableName : new String[] {"source_v2", "legacy_source"}) {
+      String query = "SELECT name FROM " + tableName + " WHERE `partition` = 'p1'";
       String pushedPlan = tableEnv.explainSql(
-          "SELECT name FROM " + tableName + " WHERE `partition` = 'p1'",
+          query,
           ExplainDetail.CHANGELOG_MODE,
           ExplainDetail.JSON_EXECUTION_PLAN);
       assertTrue(pushedPlan.contains("TableSourceScan"), pushedPlan);
       assertTrue(pushedPlan.contains("filter=[=(partition"), pushedPlan);
       assertTrue(pushedPlan.contains("project=[name, partition]"), pushedPlan);
+      assertSourceTransformation(
+          tableEnv,
+          query,
+          tableName.equals("source_v2")
+              ? SourceTransformation.class
+              : LegacySourceTransformation.class);
 
       String limitedPlan = tableEnv.explainSql(
           "SELECT name FROM " + tableName + " LIMIT 2",
@@ -64,6 +80,25 @@ class TestHoodieTablePlanning {
           ExplainDetail.JSON_EXECUTION_PLAN);
       assertTrue(limitedPlan.contains("limit=[2]"), limitedPlan);
     }
+  }
+
+  private static void assertSourceTransformation(
+      StreamTableEnvironment tableEnv,
+      String query,
+      Class<?> expectedSourceTransformation) {
+    DataStream<Row> plannedStream = tableEnv.toDataStream(tableEnv.sqlQuery(query));
+    List<String> transformationNames = plannedStream.getTransformation()
+        .getTransitivePredecessors()
+        .stream()
+        .map(transformation -> transformation.getName()
+            + ":" + transformation.getClass().getName())
+        .collect(Collectors.toList());
+    assertTrue(
+        plannedStream.getTransformation()
+            .getTransitivePredecessors()
+            .stream()
+            .anyMatch(expectedSourceTransformation::isInstance),
+        "Expected " + expectedSourceTransformation.getSimpleName() + " in " + transformationNames);
   }
 
   @Test
@@ -79,6 +114,21 @@ class TestHoodieTablePlanning {
 
     assertTrue(plan.contains("Sink(table=[default_catalog.default_database.sink_table]"), plan);
     assertTrue(plan.contains("stream_write: default_database.sink_table"), plan);
+
+    createTable(
+        tableEnv,
+        "append_sink",
+        new File(tempFile, "append_sink"),
+        true,
+        WriteOperationType.INSERT.value());
+    String appendPlan = tableEnv.explainSql(
+        "INSERT INTO append_sink VALUES "
+            + "('id2', 'Bob', 30, TIMESTAMP '2026-01-02 00:00:00', 'p2')",
+        ExplainDetail.CHANGELOG_MODE,
+        ExplainDetail.JSON_EXECUTION_PLAN);
+    assertTrue(
+        appendPlan.contains("hoodie_append_write: default_database.append_sink"),
+        appendPlan);
   }
 
   private static void createTable(
@@ -86,7 +136,19 @@ class TestHoodieTablePlanning {
       String tableName,
       File tablePath,
       boolean sourceV2) throws Exception {
+    createTable(tableEnv, tableName, tablePath, sourceV2, null);
+  }
+
+  private static void createTable(
+      TableEnvironment tableEnv,
+      String tableName,
+      File tablePath,
+      boolean sourceV2,
+      String operation) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tablePath.getAbsolutePath());
+    if (operation != null) {
+      conf.set(FlinkOptions.OPERATION, operation);
+    }
     StreamerUtil.initTableIfNotExists(conf);
 
     tableEnv.executeSql(
@@ -102,6 +164,9 @@ class TestHoodieTablePlanning {
             + "'path' = '" + sqlLiteral(tablePath.getAbsolutePath()) + "',"
             + "'" + FlinkOptions.ORDERING_FIELDS.key() + "' = 'ts',"
             + "'" + FlinkOptions.READ_SOURCE_V2_ENABLED.key() + "' = '" + sourceV2 + "'"
+            + (operation == null
+                ? ""
+                : ",'" + FlinkOptions.OPERATION.key() + "' = '" + operation + "'")
             + ")");
   }
 

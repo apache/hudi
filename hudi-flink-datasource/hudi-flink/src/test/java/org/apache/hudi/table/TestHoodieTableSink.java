@@ -26,7 +26,6 @@ import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.connector.ChangelogMode;
-import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -50,9 +49,16 @@ class TestHoodieTableSink {
     assertEquals(ChangelogModes.FULL, sink.getChangelogMode(ChangelogMode.insertOnly()));
     assertEquals("HoodieTableSink", sink.asSummaryString());
 
-    DynamicTableSink copied = sink.copy();
+    HoodieTableSink copied = (HoodieTableSink) sink.copy();
     assertNotSame(sink, copied);
-    assertSame(conf, ((HoodieTableSink) copied).getConf());
+    assertNotSame(conf, copied.getConf());
+    assertEquals(ChangelogModes.FULL, copied.getChangelogMode(ChangelogMode.insertOnly()));
+
+    copied.applyRowLevelDelete(null);
+    assertEquals(
+        WriteOperationType.DELETE.value(),
+        copied.getConf().get(FlinkOptions.OPERATION));
+    assertEquals(WriteOperationType.UPSERT.value(), conf.get(FlinkOptions.OPERATION));
   }
 
   @Test

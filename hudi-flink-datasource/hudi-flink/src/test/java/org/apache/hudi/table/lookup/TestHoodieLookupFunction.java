@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -115,6 +116,7 @@ class TestHoodieLookupFunction {
     function.open(null);
 
     assertEquals(Duration.ofDays(1), function.getReloadInterval());
+    assertInstanceOf(RocksDBLookupCache.class, getCache(function));
     assertNull(function.lookup(lookupKey()));
     function.close();
 
@@ -124,7 +126,7 @@ class TestHoodieLookupFunction {
     setNextLoadTime(function, Long.MAX_VALUE);
     RuntimeException exception =
         assertThrows(RuntimeException.class, () -> function.lookup(lookupKey()));
-    assertTrue(exception.getCause() instanceof IOException);
+    assertInstanceOf(IOException.class, exception.getCause());
     function.close();
   }
 
@@ -160,9 +162,18 @@ class TestHoodieLookupFunction {
   }
 
   private static void setCache(HoodieLookupFunction function, LookupCache cache) throws Exception {
+    Field field = cacheField();
+    field.set(function, cache);
+  }
+
+  private static LookupCache getCache(HoodieLookupFunction function) throws Exception {
+    return (LookupCache) cacheField().get(function);
+  }
+
+  private static Field cacheField() throws NoSuchFieldException {
     Field field = HoodieLookupFunction.class.getDeclaredField("cache");
     field.setAccessible(true);
-    field.set(function, cache);
+    return field;
   }
 
   private static class CountingLookupTableReader extends HoodieLookupTableReader {
