@@ -107,20 +107,20 @@ public class HudiAvroSerializer
     };
 
     private static final AvroDecimalConverter DECIMAL_CONVERTER = new AvroDecimalConverter();
-    private final SynthesizedColumnHandler synthesizedColumnHandler;
+    private final PrefilledColumnValues prefilledColumnValues;
 
     private final List<HiveColumnHandle> columnHandles;
     private final List<Type> columnTypes;
     private final Schema schema;
 
-    public HudiAvroSerializer(List<HiveColumnHandle> columnHandles, SynthesizedColumnHandler synthesizedColumnHandler)
+    public HudiAvroSerializer(List<HiveColumnHandle> columnHandles, PrefilledColumnValues prefilledColumnValues)
     {
         this.columnHandles = columnHandles;
         this.columnTypes = columnHandles.stream().map(HiveColumnHandle::getType).toList();
         // Fetches projected schema
         this.schema = constructSchema(columnHandles.stream().filter(ch -> !ch.isHidden()).map(HiveColumnHandle::getName).toList(),
                 columnHandles.stream().filter(ch -> !ch.isHidden()).map(HiveColumnHandle::getHiveType).toList());
-        this.synthesizedColumnHandler = synthesizedColumnHandler;
+        this.prefilledColumnValues = prefilledColumnValues;
     }
 
     public IndexedRecord serialize(Page sourcePage, int position)
@@ -145,8 +145,8 @@ public class HudiAvroSerializer
         for (int channel = 0; channel < columnTypes.size(); channel++, blockSeq++) {
             BlockBuilder output = pageBuilder.getBlockBuilder(blockSeq);
             HiveColumnHandle columnHandle = columnHandles.get(channel);
-            if (synthesizedColumnHandler.isSynthesizedColumn(columnHandle)) {
-                synthesizedColumnHandler.getColumnStrategy(columnHandle).appendToBlock(output, columnTypes.get(channel));
+            if (prefilledColumnValues.isPrefilled(columnHandle)) {
+                prefilledColumnValues.appendTo(columnHandle, output);
             }
             else {
                 // Record may not be projected, get index from it

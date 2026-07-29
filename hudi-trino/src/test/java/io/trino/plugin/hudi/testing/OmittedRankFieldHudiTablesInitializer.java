@@ -35,24 +35,25 @@ import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_STRING;
 
 /**
- * Creates a non-partitioned Merge-On-Read table at test runtime that is configured to use a custom record
- * merger ({@link KeyBasedTestRecordMerger}) via {@link RecordMergeMode#CUSTOM}. The table is written with one
- * {@code insert} (producing base files) followed by one {@code upsert} of the same keys (producing log files),
- * with inline compaction disabled so the log files survive and must be merged at read time.
+ * Creates a non-partitioned Merge-On-Read table using the projection-compatible {@link MaxRankRecordMerger}
+ * via {@link RecordMergeMode#CUSTOM}, whose METASTORE column list deliberately omits the merger's mandatory
+ * {@code merge_rank} column that the Avro table schema (and the data files) carry. The merger reads
+ * {@code merge_rank} on both sides of every merge, so reads of the real-time table only produce correct
+ * results when the merge path recovers merger-declared mandatory columns from the resolved table schema by
+ * asking the merger itself; without that the base read cannot supply {@code merge_rank} and the read fails.
  * <p>
- * Two tables are registered in the metastore: a read-optimized table (base files only) and a real-time table
- * (suffix {@code _rt}) that merges base + log files through the file group reader.
- * <p>
- * Data is laid out so the key-based merge result is distinguishable from both the base-only view and the
- * built-in newest-wins behavior (see {@code TestHudiCustomMerger}).
+ * Data is laid out so each merge direction is distinguishable: {@code k1}'s winning rank is on the LOG
+ * record and {@code k2}'s on the BASE record. See {@code TestHudiNonProjectionCompatibleMerger}.
  */
-public class CustomMergerHudiTablesInitializer
+public class OmittedRankFieldHudiTablesInitializer
         extends AbstractMergerHudiTablesInitializer
 {
-    public static final String TABLE_NAME = "custom_merger_mor";
+    public static final String TABLE_NAME = "omitted_rank_field_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
 
-    public CustomMergerHudiTablesInitializer()
+    private static final String RANK_FIELD = MaxRankRecordMerger.RANK_COLUMN;
+
+    public OmittedRankFieldHudiTablesInitializer()
     {
         super(TABLE_NAME);
     }
@@ -60,6 +61,8 @@ public class CustomMergerHudiTablesInitializer
     @Override
     protected List<Column> dataColumns()
     {
+        // No merge_rank column: the fixture's whole point is a metastore that does not know the column the
+        // merger declares mandatory.
         return ImmutableList.of(
                 new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
                 new Column("name", HIVE_STRING, Optional.empty(), Map.of()),
@@ -74,6 +77,7 @@ public class CustomMergerHudiTablesInitializer
                 new Schema.Field(RECORD_KEY_FIELD, Schema.create(Schema.Type.STRING)),
                 new Schema.Field("name", Schema.create(Schema.Type.STRING)),
                 new Schema.Field("value", Schema.create(Schema.Type.LONG)),
+                new Schema.Field(RANK_FIELD, Schema.create(Schema.Type.LONG)),
                 new Schema.Field(ORDERING_FIELD, Schema.create(Schema.Type.LONG)));
         return Schema.createRecord(TABLE_NAME, null, null, false, new ArrayList<>(fields));
     }
@@ -84,7 +88,7 @@ public class CustomMergerHudiTablesInitializer
         tableBuilder
                 .setPayloadClassName(HoodieAvroPayload.class.getName())
                 .setRecordMergeMode(RecordMergeMode.CUSTOM)
-                .setRecordMergeStrategyId(KeyBasedTestRecordMerger.MERGE_STRATEGY_ID);
+                .setRecordMergeStrategyId(MaxRankRecordMerger.MERGE_STRATEGY_ID);
     }
 
     @Override
@@ -92,8 +96,8 @@ public class CustomMergerHudiTablesInitializer
     {
         writeConfigBuilder
                 .withRecordMergeMode(RecordMergeMode.CUSTOM)
-                .withRecordMergeStrategyId(KeyBasedTestRecordMerger.MERGE_STRATEGY_ID)
-                .withRecordMergeImplClasses(KeyBasedTestRecordMerger.class.getName());
+                .withRecordMergeStrategyId(MaxRankRecordMerger.MERGE_STRATEGY_ID)
+                .withRecordMergeImplClasses(MaxRankRecordMerger.class.getName());
     }
 
     @Override
@@ -103,26 +107,28 @@ public class CustomMergerHudiTablesInitializer
         // First commit: bulk insert base records (produces base parquet files).
         String firstCommit = client.startCommit();
         List<WriteStatus> firstStatuses = client.bulkInsert(ImmutableList.of(
-                record(schema, "k1", "k1_base", 10L, 1L),
-                record(schema, "k2", "k2_base", 100L, 1L)), firstCommit);
+                record(schema, "k1", "k1_base", 10L, 5L, 1L),
+                record(schema, "k2", "k2_base", 100L, 9L, 1L)), firstCommit);
         client.commit(firstCommit, firstStatuses);
 
         // Second commit: upserts the same keys (produces log files since inline compaction is disabled).
-        // k1 update has a larger value (99 > 10) -> keep-max keeps the update.
-        // k2 update has a smaller value (5 < 100) -> keep-max keeps the original base record.
+        // k1's update has a HIGHER rank (7 > 5) -> keep-max keeps the update (99): the LOG record's rank decides.
+        // k2's update has a LOWER rank (1 < 9) -> keep-max keeps the base record (100): the BASE record's rank
+        // decides, which only works when the base read carries merge_rank despite the metastore not knowing it.
         String secondCommit = client.startCommit();
         List<WriteStatus> secondStatuses = client.upsert(ImmutableList.of(
-                record(schema, "k1", "k1_updated", 99L, 2L),
-                record(schema, "k2", "k2_updated", 5L, 2L)), secondCommit);
+                record(schema, "k1", "k1_updated", 99L, 7L, 2L),
+                record(schema, "k2", "k2_updated", 4L, 1L, 2L)), secondCommit);
         client.commit(secondCommit, secondStatuses);
     }
 
-    private static HoodieRecord<HoodieAvroPayload> record(Schema schema, String key, String name, long value, long ts)
+    private static HoodieRecord<HoodieAvroPayload> record(Schema schema, String key, String name, long value, long rank, long ts)
     {
         GenericRecord record = new GenericData.Record(schema);
         record.put(RECORD_KEY_FIELD, key);
         record.put("name", name);
         record.put("value", value);
+        record.put(RANK_FIELD, rank);
         record.put(ORDERING_FIELD, ts);
         return avroRecord(record, key);
     }

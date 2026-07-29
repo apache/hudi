@@ -32,7 +32,6 @@ import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TestHudiPageSourceProviderTest
 {
@@ -93,9 +92,13 @@ class TestHudiPageSourceProviderTest
                 createDummyHandle("COL_A", 0, HiveType.HIVE_INT, INTEGER), // This will mismatch
                 createDummyHandle("col_b", 1, HiveType.HIVE_STRING, VARCHAR));
 
-        // Perform remapping (case-sensitive) - Expect NPE because "COL_A" won't be found
-        assertThatThrownBy(() -> remapColumnIndicesToPhysical(fileSchema, requestedColumns, true))
-                .isInstanceOf(NullPointerException.class); // Check the exception type
+        // Perform remapping (case-sensitive) - "COL_A" won't be found
+        List<HiveColumnHandle> remapped = remapColumnIndicesToPhysical(fileSchema, requestedColumns, true);
+
+        assertThat(remapped).hasSize(2);
+        // An unmatched column maps one past the last physical field, so the parquet reader null-fills it
+        assertHandle(remapped.get(0), "COL_A", fileSchema.getFieldCount(), HiveType.HIVE_INT, INTEGER);
+        assertHandle(remapped.get(1), "col_b", 1, HiveType.HIVE_STRING, VARCHAR);
     }
 
     @Test
@@ -178,12 +181,16 @@ class TestHudiPageSourceProviderTest
         // Requested Columns (includes a non-existent column)
         List<HiveColumnHandle> requestedColumns = List.of(
                 createDummyHandle("col_a", 0, HiveType.HIVE_INT, INTEGER),
-                // Not in schema
+                // Not in schema, e.g. a base file written before the column was added
                 createDummyHandle("col_x", 1, HiveType.HIVE_STRING, VARCHAR));
 
-        // Perform remapping (case-insensitive) - Expect NPE because "col_x" won't be found
-        assertThatThrownBy(() -> remapColumnIndicesToPhysical(fileSchema, requestedColumns, false))
-                .isInstanceOf(NullPointerException.class);
+        // Perform remapping (case-insensitive) - "col_x" won't be found
+        List<HiveColumnHandle> remapped = remapColumnIndicesToPhysical(fileSchema, requestedColumns, false);
+
+        assertThat(remapped).hasSize(2);
+        assertHandle(remapped.get(0), "col_a", 0, HiveType.HIVE_INT, INTEGER);
+        // Out of range on purpose: ParquetPageSourceFactory reports such a column as absent and null-fills it
+        assertHandle(remapped.get(1), "col_x", fileSchema.getFieldCount(), HiveType.HIVE_STRING, VARCHAR);
     }
 
     /**
