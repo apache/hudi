@@ -5,7 +5,7 @@
   The ASF licenses this file to You under the Apache License, Version 2.0.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1160" height="560" viewBox="0 0 1160 560" role="img" aria-labelledby="title desc">
-  <title id="title">RFC-104 vector search read path</title>
+  <title id="title">RFC-109 vector search read path</title>
   <desc id="desc">Read path loads vector metadata, probes centroids, scans postings, scores RaBitQ codes, reads base vectors, and exact reranks candidates.</desc>
   <defs>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-opacity="0.18"/></filter>
