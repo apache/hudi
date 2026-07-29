@@ -296,27 +296,30 @@ class TestStreamingSource extends StreamTest {
   }
 
   /**
-   * Exercises the legacy incremental streaming path in [[HoodieStreamSourceV1]], which is taken
-   * when the streaming read table version is below EIGHT and the file group reader is disabled.
-   * This drives the [[IncrementalRelationV1]] (COW) / [[MergeOnReadIncrementalRelationV1]] (MOR)
-   * branches of `getBatch` rather than the newer HadoopFsRelation factory path.
+   * Exercises the legacy incremental streaming path in [[HoodieStreamSourceV1]] (table version
+   * below EIGHT) and [[HoodieStreamSourceV2]] (table version EIGHT and above), taken when the file
+   * group reader is disabled. This drives the standalone incremental relations
+   * ([[IncrementalRelationV1]] / [[MergeOnReadIncrementalRelationV1]] for version 6,
+   * [[IncrementalRelationV2]] / [[MergeOnReadIncrementalRelationV2]] for version 8) via `getBatch`,
+   * rather than the newer HadoopFsRelation factory path.
    */
-  private def testLegacyIncrementalStreamSource(tableType: HoodieTableType): Unit = {
+  private def testLegacyIncrementalStreamSource(tableType: HoodieTableType,
+                                                tableVersion: HoodieTableVersion): Unit = {
     withTempDir { inputDir =>
-      val tablePath = s"${inputDir.getCanonicalPath}/test_${tableType.name}_legacy_stream"
+      val tablePath = s"${inputDir.getCanonicalPath}/test_${tableType.name}_v${tableVersion.versionCode}_legacy_stream"
       HoodieTableMetaClient.newTableBuilder()
         .setTableType(tableType)
         .setTableName(getTableName(tablePath))
-        .setTableVersion(HoodieTableVersion.SIX)
+        .setTableVersion(tableVersion)
         .setRecordKeyFields("id")
         .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
-      addData(tablePath, Seq(("1", "a1", "10", "000")), tableVersion = HoodieTableVersion.SIX)
+      addData(tablePath, Seq(("1", "a1", "10", "000")), tableVersion = tableVersion)
       val df = spark.readStream
         .format("org.apache.hudi")
-        .option(WRITE_TABLE_VERSION.key, HoodieTableVersion.SIX.versionCode().toString)
-        .option(STREAMING_READ_TABLE_VERSION.key, HoodieTableVersion.SIX.versionCode().toString)
+        .option(WRITE_TABLE_VERSION.key, tableVersion.versionCode().toString)
+        .option(STREAMING_READ_TABLE_VERSION.key, tableVersion.versionCode().toString)
         // force the legacy (non file-group-reader) incremental relation path
         .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key, "false")
         .load(tablePath)
@@ -330,7 +333,7 @@ class TestStreamingSource extends StreamTest {
         addDataToQuery(tablePath,
           Seq(("2", "a2", "12", "000"),
             ("3", "a3", "12", "000")),
-          tableVersion = HoodieTableVersion.SIX),
+          tableVersion = tableVersion),
         StartStream(),
         AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(
@@ -339,7 +342,7 @@ class TestStreamingSource extends StreamTest {
           lastOnly = true, isSorted = false),
         StopStream,
 
-        addDataToQuery(tablePath, Seq(("4", "a4", "13", "000")), tableVersion = HoodieTableVersion.SIX),
+        addDataToQuery(tablePath, Seq(("4", "a4", "13", "000")), tableVersion = tableVersion),
         StartStream(),
         AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(Seq(Row("4", "a4", "13", "000")), lastOnly = true, isSorted = false)
@@ -348,11 +351,19 @@ class TestStreamingSource extends StreamTest {
   }
 
   test("test cow stream source with legacy file group reader disabled") {
-    testLegacyIncrementalStreamSource(COPY_ON_WRITE)
+    testLegacyIncrementalStreamSource(COPY_ON_WRITE, HoodieTableVersion.SIX)
   }
 
   test("test mor stream source with legacy file group reader disabled") {
-    testLegacyIncrementalStreamSource(MERGE_ON_READ)
+    testLegacyIncrementalStreamSource(MERGE_ON_READ, HoodieTableVersion.SIX)
+  }
+
+  test("test cow stream source with legacy file group reader disabled on table version 8") {
+    testLegacyIncrementalStreamSource(COPY_ON_WRITE, HoodieTableVersion.EIGHT)
+  }
+
+  test("test mor stream source with legacy file group reader disabled on table version 8") {
+    testLegacyIncrementalStreamSource(MERGE_ON_READ, HoodieTableVersion.EIGHT)
   }
 
   private def testCheckpointTranslation(tableName: String,
