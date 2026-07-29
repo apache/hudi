@@ -327,12 +327,16 @@ public class TestOptionsResolver {
   }
 
   @Test
-  void testReadOptions() {
+  void testReadCommitsLimit() {
     Configuration conf = new Configuration();
     assertEquals(-1, OptionsResolver.getReadCommitsLimit(conf));
     conf.set(FlinkOptions.READ_COMMITS_LIMIT, 5);
     assertEquals(5, OptionsResolver.getReadCommitsLimit(conf));
+  }
 
+  @Test
+  void testCdcOptions() {
+    Configuration conf = new Configuration();
     conf.set(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE,
         HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER.name().toLowerCase());
     assertEquals(HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER,
@@ -340,6 +344,11 @@ public class TestOptionsResolver {
 
     conf.set(FlinkOptions.READ_CDC_FROM_CHANGELOG, false);
     assertFalse(OptionsResolver.readCDCFromChangelog(conf));
+  }
+
+  @Test
+  void testIndexKeyFields() {
+    Configuration conf = new Configuration();
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "id,tenant");
     assertEquals("id", OptionsResolver.getIndexKeyFields(conf).get(0));
     assertEquals("tenant", OptionsResolver.getIndexKeyFields(conf).get(1));
@@ -358,18 +367,23 @@ public class TestOptionsResolver {
   }
 
   @Test
-  void testWriteOptions() {
+  void testWriteFlags() {
     Configuration conf = new Configuration();
     conf.setString(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), "true");
     assertTrue(OptionsResolver.allowCommitOnEmptyBatch(conf));
+    conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), "true");
+    assertTrue(OptionsResolver.useComplexKeygenNewEncoding(conf));
+  }
+
+  @Test
+  void testConcurrencyControlModes() {
+    Configuration conf = new Configuration();
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
         WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     assertTrue(OptionsResolver.isNonBlockingConcurrencyControl(conf));
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
         WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name().toLowerCase());
     assertTrue(OptionsResolver.isOptimisticConcurrencyControl(conf));
-    conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), "true");
-    assertTrue(OptionsResolver.useComplexKeygenNewEncoding(conf));
   }
 
   @Test
