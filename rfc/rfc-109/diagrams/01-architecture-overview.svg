@@ -5,7 +5,7 @@
   The ASF licenses this file to You under the Apache License, Version 2.0.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1160" height="650" viewBox="0 0 1160 650" role="img" aria-labelledby="title desc">
-  <title id="title">RFC-104 MDT-native vector index architecture</title>
+  <title id="title">RFC-109 MDT-native vector index architecture</title>
   <desc id="desc">Base table stores exact vectors. Metadata table stores centroids, quantizer metadata, cluster manifests, and packed posting blocks. Queries use MDT first and exact re-rank from base table vectors.</desc>
   <defs>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
@@ -17,7 +17,7 @@
   </defs>
 
   <rect width="1160" height="650" fill="#f8fafc"/>
-  <text x="580" y="38" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#0f172a">RFC-104: MDT-native Vector Search</text>
+  <text x="580" y="38" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#0f172a">RFC-109: MDT-native Vector Search</text>
   <text x="580" y="66" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" fill="#475569">Base table keeps exact VECTOR(D); MDT stores IVF + RaBitQ routing and posting metadata</text>
 
   <g transform="translate(55,105)" filter="url(#shadow)">
@@ -43,17 +43,17 @@
       <rect x="24" y="72" width="178" height="72" rx="8" fill="white" stroke="#86efac"/>
       <text x="36" y="96" font-weight="700">Index metadata</text>
       <text x="36" y="119">__manifest__</text>
-      <text x="36" y="137">__centroids__, __quantizer__</text>
+      <text x="36" y="137">persisted-format version</text>
 
       <rect x="228" y="72" width="178" height="72" rx="8" fill="white" stroke="#86efac"/>
       <text x="240" y="96" font-weight="700">Generation rows</text>
       <text x="240" y="119">M|generation</text>
-      <text x="240" y="137">C|generation|cluster</text>
+      <text x="240" y="137">T|centroids, C|clusters, F|markers</text>
 
       <rect x="24" y="170" width="382" height="88" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
       <text x="36" y="196" font-weight="700" fill="#92400e">Posting blocks</text>
-      <text x="36" y="221" fill="#92400e">P|generation|cluster|shard|record_key</text>
-      <text x="36" y="244" fill="#92400e">fileGroupId, partitionPath, binaryCode, scalar</text>
+      <text x="36" y="221" fill="#92400e">P|generation|cluster|shard|blockId</text>
+      <text x="36" y="244" fill="#92400e">packed codes, factors, locators, record keys</text>
     </g>
   </g>
 
