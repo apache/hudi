@@ -39,6 +39,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.Map;
 import java.util.TreeMap;
@@ -170,6 +171,9 @@ public class CdcImageManager implements AutoCloseable {
     public void skipBytesToRead(int numBytes) throws IOException {
       while (numBytes > 0) {
         int skipped = skipBytes(numBytes);
+        if (skipped == 0) {
+          throw new EOFException("Could not skip " + numBytes + " remaining bytes");
+        }
         numBytes -= skipped;
       }
     }

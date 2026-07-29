@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
 import java.io.ByteArrayOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -106,6 +107,10 @@ class TestCdcImageManager {
     inputView.skipBytesToRead(3);
     assertEquals(8, inputView.readByte());
     assertEquals(9, inputView.readUnsignedByte());
+
+    CdcImageManager.BytesArrayInputView truncatedInputView =
+        new CdcImageManager.BytesArrayInputView(new byte[] {1, 2});
+    assertThrows(EOFException.class, () -> truncatedInputView.skipBytesToRead(3));
   }
 
   @Test
