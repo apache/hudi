@@ -48,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestHoodieCatalogUtil {
 
   @Test
-  void testPartitionKeyAndPathHelpers() {
+  void testPartitionKeyExtractionAndPathInference() {
     Schema schema = Schema.newBuilder()
         .column("id", DataTypes.INT())
         .column("region", DataTypes.STRING())

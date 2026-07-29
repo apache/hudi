@@ -165,9 +165,8 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
   }
 
   @Test
-  void testDatabaseAndTableApiAgainstMetastore() throws Exception {
-    String databaseName = "catalog_api_db";
-    ObjectPath databaseTablePath = new ObjectPath(databaseName, "catalog_api_table");
+  void testDatabaseLifecycle() throws Exception {
+    String databaseName = "catalog_database_lifecycle";
     hoodieCatalog.dropDatabase(databaseName, true, true);
 
     try {
@@ -198,20 +197,7 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
       assertFalse(
           hoodieCatalog.getDatabase(databaseName).getProperties().containsKey("is_generic"));
 
-      String newLocation = new Path(
-          hoodieCatalog.getHiveConf().getVar(
-              org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREWAREHOUSE),
-          databaseName + "_relocated").toString();
-      Map<String, String> locationProperties = new HashMap<>();
-      locationProperties.put(ALTER_DATABASE_OP, AlterHiveDatabaseOp.CHANGE_LOCATION.name());
-      locationProperties.put(DATABASE_LOCATION_URI, newLocation);
-      hoodieCatalog.alterDatabase(
-          databaseName,
-          new CatalogDatabaseImpl(locationProperties, null),
-          false);
-      assertNotNull(
-          hoodieCatalog.getDatabase(databaseName).getProperties().get(DATABASE_LOCATION_URI));
-
+      // Hive 2.x ObjectStore persists parameter and owner changes, but not location changes.
       Map<String, String> userOwner = new HashMap<>();
       userOwner.put(ALTER_DATABASE_OP, AlterHiveDatabaseOp.CHANGE_OWNER.name());
       userOwner.put(DATABASE_OWNER_NAME, "catalog-user");
@@ -223,6 +209,9 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
       assertEquals(
           PrincipalType.USER,
           hoodieCatalog.getClient().getDatabase(databaseName).getOwnerType());
+      assertEquals(
+          "catalog-user",
+          hoodieCatalog.getClient().getDatabase(databaseName).getOwnerName());
 
       Map<String, String> roleOwner = new HashMap<>();
       roleOwner.put(ALTER_DATABASE_OP, AlterHiveDatabaseOp.CHANGE_OWNER.name());
@@ -235,6 +224,9 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
       assertEquals(
           PrincipalType.ROLE,
           hoodieCatalog.getClient().getDatabase(databaseName).getOwnerType());
+      assertEquals(
+          "catalog-role",
+          hoodieCatalog.getClient().getDatabase(databaseName).getOwnerName());
 
       Map<String, String> invalidOwner = new HashMap<>();
       invalidOwner.put(ALTER_DATABASE_OP, AlterHiveDatabaseOp.CHANGE_OWNER.name());
@@ -258,10 +250,25 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
               new CatalogDatabaseImpl(Collections.emptyMap(), null),
               false));
 
-      Map<String, String> tableOptions = new HashMap<>();
-      tableOptions.put(CONNECTOR.key(), "hudi");
-      CatalogTable catalogTable =
-          CatalogUtils.createCatalogTable(schema, partitions, tableOptions, "stored in hms");
+      hoodieCatalog.dropDatabase(databaseName, false, false);
+      assertFalse(hoodieCatalog.databaseExists(databaseName));
+      assertThrows(
+          DatabaseNotExistException.class,
+          () -> hoodieCatalog.dropDatabase(databaseName, false, false));
+      hoodieCatalog.dropDatabase(databaseName, true, false);
+    } finally {
+      hoodieCatalog.dropDatabase(databaseName, true, true);
+    }
+  }
+
+  @Test
+  void testTableLifecycleAgainstMetastore() throws Exception {
+    String databaseName = "catalog_table_lifecycle";
+    ObjectPath databaseTablePath = new ObjectPath(databaseName, "catalog_api_table");
+    createCatalogDatabase(databaseName);
+
+    try {
+      CatalogTable catalogTable = createCatalogTable("stored in hms");
       hoodieCatalog.createTable(databaseTablePath, catalogTable, false);
       assertThrows(
           TableAlreadyExistException.class,
@@ -287,26 +294,6 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
               .map(Schema.UnresolvedColumn::getName)
               .collect(Collectors.toList()));
 
-      String metastoreUris = hoodieCatalog.getHiveConf().getVar(
-          org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREURIS);
-      try {
-        hoodieCatalog.getHiveConf().setVar(
-            org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREURIS,
-            "thrift://localhost:9083");
-        Map<String, String> supplementedOptions =
-            hoodieCatalog.getTable(databaseTablePath).getOptions();
-        assertEquals("true", supplementedOptions.get(FlinkOptions.HIVE_SYNC_ENABLED.key()));
-        assertEquals("hms", supplementedOptions.get(FlinkOptions.HIVE_SYNC_MODE.key()));
-        assertEquals(databaseName, supplementedOptions.get(FlinkOptions.HIVE_SYNC_DB.key()));
-        assertEquals(
-            databaseTablePath.getObjectName(),
-            supplementedOptions.get(FlinkOptions.HIVE_SYNC_TABLE.key()));
-      } finally {
-        hoodieCatalog.getHiveConf().setVar(
-            org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREURIS,
-            metastoreUris);
-      }
-
       assertThrows(
           DatabaseNotEmptyException.class,
           () -> hoodieCatalog.dropDatabase(databaseName, false, false));
@@ -315,19 +302,69 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
       assertThrows(
           TableNotExistException.class,
           () -> hoodieCatalog.dropTable(databaseTablePath, false));
-
-      hoodieCatalog.dropDatabase(databaseName, false, false);
-      assertFalse(hoodieCatalog.databaseExists(databaseName));
-      assertThrows(
-          DatabaseNotExistException.class,
-          () -> hoodieCatalog.dropDatabase(databaseName, false, false));
-      hoodieCatalog.dropDatabase(databaseName, true, false);
     } finally {
-      if (hoodieCatalog.tableExists(databaseTablePath)) {
-        hoodieCatalog.dropTable(databaseTablePath, true);
-      }
-      hoodieCatalog.dropDatabase(databaseName, true, true);
+      dropCatalogObjects(databaseName, databaseTablePath);
     }
+  }
+
+  @Test
+  void testHiveSyncOptionsInjected() throws Exception {
+    String databaseName = "catalog_hive_sync_options";
+    ObjectPath databaseTablePath = new ObjectPath(databaseName, "catalog_api_table");
+    createCatalogDatabase(databaseName);
+
+    try {
+      hoodieCatalog.createTable(databaseTablePath, createCatalogTable("hive sync options"), false);
+
+      String metastoreUris = hoodieCatalog.getHiveConf().getVar(
+          org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREURIS);
+      String remoteMetastoreUri = "thrift://localhost:9083";
+      try {
+        // Simulate a remote catalog so getTable must propagate its endpoint to Hive sync.
+        hoodieCatalog.getHiveConf().setVar(
+            org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREURIS,
+            remoteMetastoreUri);
+        Map<String, String> supplementedOptions =
+            hoodieCatalog.getTable(databaseTablePath).getOptions();
+        assertEquals("true", supplementedOptions.get(FlinkOptions.HIVE_SYNC_ENABLED.key()));
+        assertEquals("hms", supplementedOptions.get(FlinkOptions.HIVE_SYNC_MODE.key()));
+        assertEquals(databaseName, supplementedOptions.get(FlinkOptions.HIVE_SYNC_DB.key()));
+        assertEquals(
+            databaseTablePath.getObjectName(),
+            supplementedOptions.get(FlinkOptions.HIVE_SYNC_TABLE.key()));
+        assertEquals(
+            remoteMetastoreUri,
+            supplementedOptions.get(FlinkOptions.HIVE_SYNC_METASTORE_URIS.key()));
+      } finally {
+        hoodieCatalog.getHiveConf().setVar(
+            org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREURIS,
+            metastoreUris);
+      }
+    } finally {
+      dropCatalogObjects(databaseName, databaseTablePath);
+    }
+  }
+
+  private CatalogTable createCatalogTable(String comment) {
+    Map<String, String> tableOptions = new HashMap<>();
+    tableOptions.put(CONNECTOR.key(), "hudi");
+    return CatalogUtils.createCatalogTable(schema, partitions, tableOptions, comment);
+  }
+
+  private static void createCatalogDatabase(String databaseName) throws Exception {
+    hoodieCatalog.dropDatabase(databaseName, true, true);
+    hoodieCatalog.createDatabase(
+        databaseName,
+        new CatalogDatabaseImpl(Collections.emptyMap(), "catalog api database"),
+        false);
+  }
+
+  private static void dropCatalogObjects(
+      String databaseName, ObjectPath databaseTablePath) throws Exception {
+    if (hoodieCatalog.tableExists(databaseTablePath)) {
+      hoodieCatalog.dropTable(databaseTablePath, true);
+    }
+    hoodieCatalog.dropDatabase(databaseName, true, true);
   }
 
   @Test
