@@ -211,23 +211,11 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   @Override
   public void close() throws Exception {
-    try {
-      if (writeFunction != null) {
-        writeFunction.close();
-      }
-    } finally {
-      try {
-        this.coordinator.close();
-      } finally {
-        try {
-          this.ioManager.close();
-        } finally {
-          if (clusteringFunctionWrapper != null) {
-            clusteringFunctionWrapper.close();
-          }
-        }
-      }
-    }
+    TestFunctionWrapper.closeAll(
+        writeFunction == null ? null : writeFunction::close,
+        coordinator::close,
+        clusteringFunctionWrapper == null ? null : clusteringFunctionWrapper::close,
+        ioManager::close);
   }
 
   public BulkInsertWriterHelper getWriterHelper() {
