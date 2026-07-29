@@ -42,6 +42,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 
@@ -135,7 +136,7 @@ public class HiveDriverPool implements AutoCloseable {
             worker.driver.run(sql);
           }
         } catch (Throwable t) {
-          dispatch.abort();
+          dispatch.recordFailure(t);
           throw t;
         } finally {
           dispatch.taskSettled();
@@ -179,7 +180,7 @@ public class HiveDriverPool implements AutoCloseable {
         try {
           worker.driver.run(sql);
         } catch (Throwable t) {
-          dispatch.abort();
+          dispatch.recordFailure(t);
           throw t;
         } finally {
           dispatch.taskSettled();
@@ -208,7 +209,11 @@ public class HiveDriverPool implements AutoCloseable {
     dispatch.awaitSettledOrAborted();
     int cancelled = dispatch.cancelPending();
 
-    Exception firstError = null;
+    // Seeded from the batch's own record rather than discovered by walking the futures:
+    // cancelPending() above may have erased the failing task's exception. See
+    // Dispatch#recordFailure. The walk below still runs, to count outcomes and to catch
+    // a failure that somehow never made it into the record.
+    Throwable firstError = dispatch.firstFailure();
     int completed = 0;
     for (Future<?> f : dispatch.futures()) {
       try {
@@ -229,7 +234,11 @@ public class HiveDriverPool implements AutoCloseable {
           cancelled++;
         } else if (firstError == null) {
           firstError = cause;
-        } else {
+        } else if (ee.getCause() != firstError) {
+          // Identity check against the raw cause, not the unwrapped one: when the failing
+          // task wins the race against cancelPending(), its future reports the very
+          // Throwable already held in firstError, and re-logging it here would duplicate
+          // the exception this method is about to throw.
           LOG.warn("Additional SQL batch failed (suppressed in favor of first error)", cause);
         }
       }
@@ -256,6 +265,7 @@ public class HiveDriverPool implements AutoCloseable {
     private final int total;
     private final AtomicInteger settled = new AtomicInteger(0);
     private final AtomicBoolean aborted = new AtomicBoolean(false);
+    private final AtomicReference<Throwable> firstFailureRef = new AtomicReference<>();
     private final CountDownLatch done = new CountDownLatch(1);
     private volatile boolean sealed;
 
@@ -279,9 +289,23 @@ public class HiveDriverPool implements AutoCloseable {
       return aborted.get();
     }
 
-    private void abort() {
+    /**
+     * Records a task's failure and aborts the batch. The Throwable is kept here rather
+     * than being left for {@link Future#get()} to report, because the failing task is
+     * racing the awaiting thread: this call releases {@link #awaitSettledOrAborted()},
+     * but the task's exception only reaches its {@code FutureTask} after {@code call()}
+     * returns. {@link #cancelPending()} in between wins the {@code FutureTask} state CAS
+     * (cancel succeeds on any task still NEW, which includes one mid-unwind), turning the
+     * later {@code setException} into a no-op and the error into a CancellationException.
+     */
+    private void recordFailure(Throwable t) {
+      firstFailureRef.compareAndSet(null, t);
       aborted.set(true);
       done.countDown();
+    }
+
+    private Throwable firstFailure() {
+      return firstFailureRef.get();
     }
 
     private void taskSettled() {
