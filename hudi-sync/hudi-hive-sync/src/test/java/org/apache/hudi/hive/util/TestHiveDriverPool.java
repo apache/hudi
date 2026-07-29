@@ -40,6 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -138,7 +139,8 @@ class TestHiveDriverPool {
       HiveDriverPool.Dispatch futures = pool.dispatchAll(Arrays.asList("OK", "FAIL", "OK"));
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(futures));
-      assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
+      assertNotNull(ex.getCause());
+      assertTrue(ex.getCause().getMessage().contains("boom"));
     }
   }
 
@@ -254,7 +256,8 @@ class TestHiveDriverPool {
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(dispatch));
 
-      assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
+      assertNotNull(ex.getCause());
+      assertTrue(ex.getCause().getMessage().contains("boom"));
       assertEquals(Collections.singletonList("FAIL"), executed,
           "Statements queued behind the failure must never reach the Driver");
     }
@@ -307,10 +310,55 @@ class TestHiveDriverPool {
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(dispatch));
 
-      assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("boom"));
+      assertNotNull(ex.getCause());
+      assertTrue(ex.getCause().getMessage().contains("boom"));
       assertFalse(executed.contains("AFTER_FAIL"),
           "Statement queued behind a failure on the same worker must not be applied, "
               + "even while an earlier future on another worker is still running");
+    }
+  }
+
+  /**
+   * Regression for the swallowed-failure race: awaitAll must still report the error when
+   * its own cancel() sweep has already marked the failing task's future CANCELLED.
+   *
+   * <p>The failing worker aborts the batch from inside its catch block, which releases
+   * awaitAll, but its exception only reaches the FutureTask after {@code call()} returns.
+   * {@code FutureTask.cancel(false)} succeeds on any task still in state NEW - a task
+   * mid-unwind included - so the cancel wins the state CAS, the later {@code setException}
+   * becomes a no-op, and {@code get()} reports CancellationException instead of the error.
+   * awaitAll then counted it as merely cancelled and returned normally, reporting a failed
+   * partition-DDL batch as a successful sync.
+   *
+   * <p>Deterministic where the three tests above are not: instead of hoping the awaiting
+   * thread wins, this cancels the future explicitly - exactly what cancelPending() does -
+   * while the Driver is parked, and only then lets it throw.
+   */
+  @Test
+  void awaitAllReportsFailureWhenFailingFutureIsCancelledMidFlight() throws Exception {
+    HiveSyncConfig config = configWithEmptyHiveConf();
+    CountDownLatch entered = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    HiveDriverPool.DriverFactory factory = (db) -> {
+      Driver d = mock(Driver.class);
+      doAnswer(inv -> {
+        entered.countDown();
+        release.await(10, TimeUnit.SECONDS);
+        throw new RuntimeException("boom");
+      }).when(d).run(anyString());
+      return d;
+    };
+    try (HiveDriverPool pool = new HiveDriverPool(config, 1, factory)) {
+      HiveDriverPool.Dispatch dispatch = pool.dispatchAll(Collections.singletonList("FAIL"));
+      assertTrue(entered.await(10, TimeUnit.SECONDS), "Driver must have started the statement");
+      assertTrue(dispatch.futureAt(0).cancel(false),
+          "Sanity: a running FutureTask is still NEW, so cancel(false) must succeed");
+      release.countDown();
+
+      HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
+          () -> pool.awaitAll(dispatch));
+      assertNotNull(ex.getCause());
+      assertTrue(ex.getCause().getMessage().contains("boom"));
     }
   }
 }
