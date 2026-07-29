@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.append.AppendWriteFunction;
 import org.apache.hudi.sink.append.AppendWriteFunctions;
+import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -209,9 +210,15 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   @Override
   public void close() throws Exception {
-    this.coordinator.close();
-    if (clusteringFunctionWrapper != null) {
-      clusteringFunctionWrapper.close();
+    try {
+      if (writeFunction != null) {
+        writeFunction.close();
+      }
+    } finally {
+      this.coordinator.close();
+      if (clusteringFunctionWrapper != null) {
+        clusteringFunctionWrapper.close();
+      }
     }
   }
 
@@ -228,6 +235,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
+    writeFunction.setMemorySegmentPoolFactory(new MemorySegmentPoolFactory(null, null, -1));
     writeFunction.open(conf);
     writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
     // set up subtask gateway

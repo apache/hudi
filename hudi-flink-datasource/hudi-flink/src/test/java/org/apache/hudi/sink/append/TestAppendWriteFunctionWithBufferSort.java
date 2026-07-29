@@ -22,12 +22,21 @@ import org.apache.hudi.common.util.queue.DisruptorMessageQueue;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.buffer.BufferType;
+import org.apache.hudi.sink.utils.TestWriteBase;
+import org.apache.hudi.utils.TestConfigurations;
+import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -36,14 +45,19 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Unit tests for buffer sort configuration resolution in {@link AppendWriteFunctions}.
+ * Unit tests for append write functions with buffer sorting.
  */
 public class TestAppendWriteFunctionWithBufferSort {
 
   private Configuration conf;
+
+  @TempDir
+  File tempFile;
 
   @BeforeEach
   void setUp() {
@@ -79,6 +93,67 @@ public class TestAppendWriteFunctionWithBufferSort {
 
     List<String> resolvedSortKeys = AppendWriteFunctions.resolveSortKeys(conf);
     assertEquals(Arrays.asList("age", "name"), resolvedSortKeys);
+  }
+
+  @Test
+  public void testEmptySortKeysAreRejected() {
+    conf.set(FlinkOptions.WRITE_BUFFER_SORT_KEYS, " , , ");
+
+    assertThrows(IllegalArgumentException.class, () -> AppendWriteFunctions.resolveSortKeys(conf));
+  }
+
+  @ParameterizedTest
+  @EnumSource(BufferType.class)
+  public void testFactorySelectsConfiguredBuffer(BufferType bufferType) {
+    conf.set(FlinkOptions.WRITE_BUFFER_TYPE, bufferType.name());
+    RowType rowType = TestConfigurations.ROW_TYPE;
+
+    AppendWriteFunction<RowData> function = AppendWriteFunctions.create(conf, rowType);
+
+    switch (bufferType) {
+      case CONTINUOUS_SORT:
+        assertInstanceOf(AppendWriteFunctionWithContinuousSort.class, function);
+        break;
+      case DISRUPTOR:
+        assertInstanceOf(AppendWriteFunctionWithDisruptorBufferSort.class, function);
+        break;
+      case BOUNDED_IN_MEMORY:
+        assertInstanceOf(AppendWriteFunctionWithBIMBufferSort.class, function);
+        break;
+      case NONE:
+        assertEquals(AppendWriteFunction.class, function.getClass());
+        break;
+      default:
+        throw new AssertionError("Unexpected buffer type " + bufferType);
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = BufferType.class, names = {"CONTINUOUS_SORT", "DISRUPTOR", "BOUNDED_IN_MEMORY"})
+  public void testBufferedAppendFunctionsWriteAndFlushOnCheckpoint(BufferType bufferType) throws Exception {
+    Configuration writeConf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    writeConf.set(FlinkOptions.OPERATION, "insert");
+    writeConf.set(FlinkOptions.METADATA_ENABLED, false);
+    writeConf.set(FlinkOptions.WRITE_BUFFER_TYPE, bufferType.name());
+    writeConf.set(FlinkOptions.WRITE_BUFFER_SORT_KEYS, "name,age");
+    writeConf.set(FlinkOptions.WRITE_BUFFER_SIZE, 3L);
+    if (bufferType == BufferType.CONTINUOUS_SORT) {
+      writeConf.set(FlinkOptions.WRITE_BUFFER_SORT_CONTINUOUS_DRAIN_SIZE, 1);
+    } else if (bufferType == BufferType.DISRUPTOR) {
+      writeConf.set(FlinkOptions.WRITE_BUFFER_DISRUPTOR_RING_SIZE, 16);
+    }
+
+    TestWriteBase.TestHarness harness = TestWriteBase.TestHarness.instance()
+        .preparePipeline(tempFile, writeConf);
+    try {
+      harness
+          .consume(TestData.DATA_SET_INSERT)
+          .checkpoint(1)
+          .assertNextEvent(4, "par1,par2,par3,par4")
+          .checkpointComplete(1);
+    } finally {
+      harness.end();
+    }
   }
 
   // -------------------------------------------------------------------------
