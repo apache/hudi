@@ -95,6 +95,26 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
         resolvedLogicalPlan = analyzer.execute(logicalPlan)
         assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[RefreshIndexCommand].table, databaseName, tableName)
         assertResult("idx_name")(resolvedLogicalPlan.asInstanceOf[RefreshIndexCommand].indexName)
+
+        // CREATE INDEX without a USING clause: the index type defaults to empty
+        logicalPlan = sqlParser.parsePlan(s"create index idx_default on $tableName (name)")
+        resolvedLogicalPlan = analyzer.execute(logicalPlan)
+        assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].table, databaseName, tableName)
+        assertResult("idx_default")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
+        assertResult("")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
+        assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
+
+        // DROP INDEX without IF EXISTS
+        logicalPlan = sqlParser.parsePlan(s"drop index idx_price on $tableName")
+        resolvedLogicalPlan = analyzer.execute(logicalPlan)
+        assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[DropIndexCommand].table, databaseName, tableName)
+        assertResult("idx_price")(resolvedLogicalPlan.asInstanceOf[DropIndexCommand].indexName)
+        assertResult(false)(resolvedLogicalPlan.asInstanceOf[DropIndexCommand].ignoreIfNotExists)
+
+        // SHOW INDEXES with the IN keyword and an unqualified table identifier
+        logicalPlan = sqlParser.parsePlan(s"show indexes in $tableName")
+        resolvedLogicalPlan = analyzer.execute(logicalPlan)
+        assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[ShowIndexesCommand].table, databaseName, tableName)
       }
     }
   }

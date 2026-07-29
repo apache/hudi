@@ -24,7 +24,10 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
+import org.apache.spark.sql.catalyst.plans.logical.CreateTable
+import org.apache.spark.sql.connector.expressions.{FieldReference, LiteralValue, Transform}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.types._
 
 import java.io.File
 
@@ -281,5 +284,269 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
       assert(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0,
         "Expected at least one .clean instant on the timeline after compaction")
     })
+  }
+
+  // The following cases are parser-coverage only: a BLOB column routes the whole CREATE TABLE
+  // through the extended AST builder, so its clause visitors run. parsePlan is purely syntactic
+  // (no catalog, no execution), which lets us exercise clauses Hudi does not support at execution
+  // time (transform partitioning, STORED AS / ROW FORMAT, interval columns). The BLOB column type
+  // itself proves routing because the stock Spark parser rejects the BLOB type name.
+
+  private def parse(sql: String): CreateTable =
+    spark.sessionState.sqlParser.parsePlan(sql).asInstanceOf[CreateTable]
+
+  private def transformByName(plan: CreateTable, name: String): Transform =
+    plan.partitioning.find(_.name == name)
+      .getOrElse(fail(s"No partition transform named $name in ${plan.partitioning.mkString(", ")}"))
+
+  private def transformFieldRefs(t: Transform): Seq[Seq[String]] =
+    t.arguments().collect { case r: FieldReference => r.fieldNames().toSeq }.toSeq
+
+  private def firstLiteralArg(t: Transform): LiteralValue[_] =
+    t.arguments().collectFirst { case l: LiteralValue[_] => l }
+      .getOrElse(fail(s"No literal argument in transform ${t.name}"))
+
+  test("Test parse CREATE TABLE with BLOB column and primitive data types") {
+    // Exercises the primitive-data-type match arms plus NOT NULL and column COMMENT.
+    val plan = parse(
+      s"""
+         |CREATE TABLE blob_prim_tbl (
+         |  c_bool BOOLEAN,
+         |  c_tiny TINYINT,
+         |  c_small SMALLINT,
+         |  c_int INT,
+         |  c_big BIGINT,
+         |  c_float FLOAT,
+         |  c_double DOUBLE,
+         |  c_date DATE,
+         |  c_ts TIMESTAMP,
+         |  c_str STRING,
+         |  c_char CHAR(5),
+         |  c_varchar VARCHAR(10),
+         |  c_bin BINARY,
+         |  c_dec DECIMAL,
+         |  c_dec1 DECIMAL(12),
+         |  c_dec2 DECIMAL(12, 3),
+         |  c_notnull INT NOT NULL,
+         |  c_comment INT COMMENT 'a comment',
+         |  data BLOB
+         |) USING hudi
+       """.stripMargin)
+    val schema = plan.tableSchema
+    assertResult(BooleanType)(schema("c_bool").dataType)
+    assertResult(ByteType)(schema("c_tiny").dataType)
+    assertResult(ShortType)(schema("c_small").dataType)
+    assertResult(IntegerType)(schema("c_int").dataType)
+    assertResult(LongType)(schema("c_big").dataType)
+    assertResult(FloatType)(schema("c_float").dataType)
+    assertResult(DoubleType)(schema("c_double").dataType)
+    assertResult(DateType)(schema("c_date").dataType)
+    assertResult(TimestampType)(schema("c_ts").dataType)
+    assertResult(StringType)(schema("c_str").dataType)
+    // CHAR/VARCHAR may be preserved or replaced with STRING depending on the Spark version.
+    assert(Seq[DataType](CharType(5), StringType).contains(schema("c_char").dataType))
+    assert(Seq[DataType](VarcharType(10), StringType).contains(schema("c_varchar").dataType))
+    assertResult(BinaryType)(schema("c_bin").dataType)
+    assertResult(DecimalType(10, 0))(schema("c_dec").dataType)
+    assertResult(DecimalType(12, 0))(schema("c_dec1").dataType)
+    assertResult(DecimalType(12, 3))(schema("c_dec2").dataType)
+    assertResult(BlobType())(schema("data").dataType)
+    assert(!schema("c_notnull").nullable)
+    assertResult("a comment")(schema("c_comment").metadata.getString("comment"))
+  }
+
+  test("Test parse CREATE TABLE with BLOB column and complex data types") {
+    // Exercises the ARRAY / MAP / STRUCT arms and BLOB-in-struct metadata handling.
+    val plan = parse(
+      s"""
+         |CREATE TABLE blob_complex_tbl (
+         |  c_arr ARRAY<INT>,
+         |  c_map MAP<STRING, INT>,
+         |  c_struct STRUCT<a: INT, b: STRING>,
+         |  c_nested_blob STRUCT<x: BLOB>,
+         |  data BLOB
+         |) USING hudi
+       """.stripMargin)
+    val schema = plan.tableSchema
+    assertResult(ArrayType(IntegerType))(schema("c_arr").dataType)
+    assertResult(MapType(StringType, IntegerType))(schema("c_map").dataType)
+    val inner = schema("c_struct").dataType.asInstanceOf[StructType]
+    assertResult(IntegerType)(inner("a").dataType)
+    assertResult(StringType)(inner("b").dataType)
+    // A BLOB nested inside a struct still carries the BLOB type descriptor.
+    val nested = schema("c_nested_blob").dataType.asInstanceOf[StructType]("x")
+    assertResult(BlobType())(nested.dataType)
+    assertResult(HoodieSchemaType.BLOB.name())(
+      nested.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+  }
+
+  test("Test parse CREATE TABLE with BLOB column and interval data types") {
+    val plan = parse(
+      s"""
+         |CREATE TABLE blob_ivl_tbl (
+         |  i_year INTERVAL YEAR,
+         |  i_ym INTERVAL YEAR TO MONTH,
+         |  i_day INTERVAL DAY,
+         |  i_ds INTERVAL DAY TO SECOND,
+         |  data BLOB
+         |) USING hudi
+       """.stripMargin)
+    val schema = plan.tableSchema
+    assertResult(YearMonthIntervalType(YearMonthIntervalType.YEAR))(schema("i_year").dataType)
+    assertResult(YearMonthIntervalType(YearMonthIntervalType.YEAR, YearMonthIntervalType.MONTH))(
+      schema("i_ym").dataType)
+    assertResult(DayTimeIntervalType(DayTimeIntervalType.DAY))(schema("i_day").dataType)
+    assertResult(DayTimeIntervalType(DayTimeIntervalType.DAY, DayTimeIntervalType.SECOND))(
+      schema("i_ds").dataType)
+    assertResult(BlobType())(schema("data").dataType)
+
+    // Endpoints where the end field does not follow the start are rejected by both interval
+    // data-type visitors. The grammar only allows YEAR/MONTH -> MONTH and DAY/HOUR/MINUTE/SECOND
+    // -> HOUR/MINUTE/SECOND, so these stay grammatical yet still hit the builder's end <= start guard.
+    checkExceptionContain(
+      "CREATE TABLE blob_bad_ym (id BIGINT, bad INTERVAL MONTH TO MONTH, data BLOB) USING hudi")(
+      "are not supported")
+    checkExceptionContain(
+      "CREATE TABLE blob_bad_dt (id BIGINT, bad INTERVAL SECOND TO HOUR, data BLOB) USING hudi")(
+      "are not supported")
+
+    // An unknown primitive type name is rejected.
+    checkExceptionContain(
+      "CREATE TABLE blob_bad_type (id BIGINT, weird sometype, data BLOB) USING hudi")(
+      "is not supported")
+  }
+
+  test("Test parse CREATE TABLE with BLOB column and partition transforms") {
+    val plan = parse(
+      s"""
+         |CREATE TABLE blob_tf_tbl (
+         |  id BIGINT,
+         |  ts TIMESTAMP,
+         |  region STRING,
+         |  data BLOB
+         |) USING hudi
+         |PARTITIONED BY (region, years(ts), months(ts), days(ts), hours(ts), myfunc(id))
+       """.stripMargin)
+    assertResult(BlobType())(plan.tableSchema("data").dataType)
+    assertResult(Seq(Seq("region")))(transformFieldRefs(transformByName(plan, "identity")))
+    assertResult(Seq(Seq("ts")))(transformFieldRefs(transformByName(plan, "years")))
+    assertResult(Seq(Seq("ts")))(transformFieldRefs(transformByName(plan, "months")))
+    assertResult(Seq(Seq("ts")))(transformFieldRefs(transformByName(plan, "days")))
+    assertResult(Seq(Seq("ts")))(transformFieldRefs(transformByName(plan, "hours")))
+    // an arbitrary function transform falls through to the generic apply-transform arm
+    assertResult(Seq(Seq("id")))(transformFieldRefs(transformByName(plan, "myfunc")))
+
+    // bucket(numBuckets, col) with int, long and short number-of-buckets literals exercises the
+    // three numeric arms of the bucket handling.
+    Seq("4", "4L", "4S").foreach { numLiteral =>
+      val bp = parse(
+        s"CREATE TABLE blob_bkt_tbl (id BIGINT, data BLOB) USING hudi " +
+          s"PARTITIONED BY (bucket($numLiteral, id))")
+      val bkt = transformByName(bp, "bucket")
+      assertResult("4")(firstLiteralArg(bkt).value.toString)
+      assertResult(Seq(Seq("id")))(transformFieldRefs(bkt))
+    }
+  }
+
+  test("Test parse CREATE TABLE with BLOB column and typed transform-argument literals") {
+    // Constant transform arguments exercise the literal visitors: string, integer, big-integer and
+    // exponent numerics (the private numeric-literal helper), the typed timestamp constructor, and
+    // both interval forms (multi-unit and unit-to-unit). Note: a bare true/false/null in this
+    // position is parsed as a column reference (qualifiedName takes precedence over a constant in
+    // the grammar under the default non-ANSI config), so the boolean and null literal visitors are
+    // not reachable from a CREATE TABLE statement and are intentionally not asserted here.
+    val plan = parse(
+      s"""
+         |CREATE TABLE blob_lit_tbl (
+         |  id BIGINT,
+         |  data BLOB
+         |) USING hudi
+         |PARTITIONED BY (
+         |  str_t('x', id),
+         |  int_t(7, id),
+         |  long_t(9000000000L, id),
+         |  exp_t(1E3, id),
+         |  ts_t(TIMESTAMP '2020-01-01 00:00:00', id),
+         |  mu_ivl_t(INTERVAL '1' DAY, id),
+         |  uu_ivl_t(INTERVAL '1-2' YEAR TO MONTH, id)
+         |)
+       """.stripMargin)
+    assertResult(StringType)(firstLiteralArg(transformByName(plan, "str_t")).dataType)
+    assertResult("x")(firstLiteralArg(transformByName(plan, "str_t")).value.toString)
+    assertResult(IntegerType)(firstLiteralArg(transformByName(plan, "int_t")).dataType)
+    assertResult(LongType)(firstLiteralArg(transformByName(plan, "long_t")).dataType)
+    assertResult(DoubleType)(firstLiteralArg(transformByName(plan, "exp_t")).dataType)
+    assertResult(TimestampType)(firstLiteralArg(transformByName(plan, "ts_t")).dataType)
+    assertResult(DayTimeIntervalType(DayTimeIntervalType.DAY, DayTimeIntervalType.DAY))(
+      firstLiteralArg(transformByName(plan, "mu_ivl_t")).dataType)
+    assertResult(YearMonthIntervalType(YearMonthIntervalType.YEAR, YearMonthIntervalType.MONTH))(
+      firstLiteralArg(transformByName(plan, "uu_ivl_t")).dataType)
+  }
+
+  test("Test parse CREATE TABLE with BLOB column and invalid partition transforms") {
+    // Non-numeric number of buckets.
+    checkExceptionContain(
+      "CREATE TABLE blob_e1 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket('x', id))")(
+      "Invalid number of buckets")
+    // A non-column-reference where a column is required.
+    checkExceptionContain(
+      "CREATE TABLE blob_e2 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")(
+      "Expected a column reference")
+    // A single-field transform given more than one argument.
+    checkExceptionContain(
+      "CREATE TABLE blob_e3 (id BIGINT, ts TIMESTAMP, data BLOB) USING hudi " +
+        "PARTITIONED BY (years(id, ts))")(
+      "Too many arguments")
+  }
+
+  test("Test parse CREATE TABLE with BLOB column and file-format / row-format clauses") {
+    // Generic STORED AS format.
+    assertResult(BlobType())(
+      parse("CREATE TABLE blob_ff1 (id BIGINT, data BLOB) STORED AS PARQUET")
+        .tableSchema("data").dataType)
+    // STORED AS INPUTFORMAT ... OUTPUTFORMAT ... (the table-file-format arm).
+    assertResult(BlobType())(
+      parse("CREATE TABLE blob_ff2 (id BIGINT, data BLOB) " +
+        "STORED AS INPUTFORMAT 'com.example.InFmt' OUTPUTFORMAT 'com.example.OutFmt'")
+        .tableSchema("data").dataType)
+    // ROW FORMAT SERDE on its own.
+    assertResult(BlobType())(
+      parse("CREATE TABLE blob_ff3 (id BIGINT, data BLOB) " +
+        "ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'")
+        .tableSchema("data").dataType)
+    // ROW FORMAT DELIMITED on its own.
+    assertResult(BlobType())(
+      parse("CREATE TABLE blob_ff4 (id BIGINT, data BLOB) " +
+        "ROW FORMAT DELIMITED FIELDS TERMINATED BY ','")
+        .tableSchema("data").dataType)
+    // Compatible ROW FORMAT SERDE + STORED AS SEQUENCEFILE.
+    assertResult(BlobType())(
+      parse("CREATE TABLE blob_ff5 (id BIGINT, data BLOB) " +
+        "ROW FORMAT SERDE 'com.example.Serde' STORED AS SEQUENCEFILE")
+        .tableSchema("data").dataType)
+    // Compatible ROW FORMAT DELIMITED + STORED AS TEXTFILE.
+    assertResult(BlobType())(
+      parse("CREATE TABLE blob_ff6 (id BIGINT, data BLOB) " +
+        "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
+        .tableSchema("data").dataType)
+
+    // ROW FORMAT DELIMITED with a non-text file format is rejected.
+    checkExceptionContain(
+      "CREATE TABLE blob_ferr1 (id BIGINT, data BLOB) " +
+        "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS PARQUET")(
+      "only compatible with 'textfile'")
+    // ROW FORMAT SERDE with a format that also specifies a serde is rejected.
+    checkExceptionContain(
+      "CREATE TABLE blob_ferr2 (id BIGINT, data BLOB) " +
+        "ROW FORMAT SERDE 'com.example.Serde' STORED AS PARQUET")(
+      "incompatible with format")
+    // STORED BY (a storage handler) is not allowed.
+    checkExceptionContain(
+      "CREATE TABLE blob_ferr3 (id BIGINT, data BLOB) STORED BY 'com.example.Handler'")(
+      "STORED BY")
+    // A USING provider combined with a serde clause is not allowed.
+    checkExceptionContain(
+      "CREATE TABLE blob_ferr4 (id BIGINT, data BLOB) USING hudi STORED AS PARQUET")(
+      "CREATE TABLE ... USING")
   }
 }

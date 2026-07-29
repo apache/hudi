@@ -36,6 +36,8 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.plans.logical.CreateTable
+import org.apache.spark.sql.connector.expressions.{FieldReference, LiteralValue, Transform}
 import org.apache.spark.sql.functions.{col, concat, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
@@ -2337,6 +2339,150 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       val embeddingField = schema.find(_.name == "embedding").get
       assertTrue(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
       assertEquals(ArrayType(FloatType, containsNull = false), embeddingField.dataType)
+    }
+  }
+
+  // The following cases are parser-coverage only: a VECTOR column routes the whole CREATE TABLE
+  // through the extended AST builder, so its clause visitors run. parsePlan is purely syntactic
+  // (no catalog, no execution), matching how TestIndexSyntax exercises the index statements, which
+  // lets us cover clauses that are not supported at execution time (transform partitioning,
+  // CLUSTERED BY, typed literal arguments). The VECTOR column type proves the statement routed
+  // here because the stock Spark parser rejects the VECTOR type name.
+
+  private def parseCreateTable(sql: String): CreateTable =
+    spark.sessionState.sqlParser.parsePlan(sql).asInstanceOf[CreateTable]
+
+  private def transformByName(plan: CreateTable, name: String): Transform =
+    plan.partitioning.find(_.name == name)
+      .getOrElse(sys.error(s"No partition transform named $name in ${plan.partitioning.mkString(", ")}"))
+
+  private def transformFieldRefs(t: Transform): Seq[Seq[String]] =
+    t.arguments().collect { case r: FieldReference => r.fieldNames().toSeq }.toSeq
+
+  private def firstLiteralArg(t: Transform): LiteralValue[_] =
+    t.arguments().collectFirst { case l: LiteralValue[_] => l }
+      .getOrElse(sys.error(s"No literal argument in transform ${t.name}"))
+
+  test("test create VECTOR table with partition transforms parses (parser coverage)") {
+    val plan = parseCreateTable(
+      s"""
+         |CREATE TABLE vec_parse_tbl (
+         |  id BIGINT,
+         |  ts TIMESTAMP,
+         |  region STRING,
+         |  name STRING,
+         |  embedding VECTOR(8)
+         |) USING hudi
+         |PARTITIONED BY (region, bucket(4, id), years(ts), truncate(10, name))
+         """.stripMargin)
+
+    assertEquals(ArrayType(FloatType, containsNull = false), plan.tableSchema("embedding").dataType)
+
+    assertEquals(Seq(Seq("region")), transformFieldRefs(transformByName(plan, "identity")))
+    val bucket = transformByName(plan, "bucket")
+    assertEquals(IntegerType, firstLiteralArg(bucket).dataType)
+    assertEquals("4", firstLiteralArg(bucket).value.toString)
+    assertEquals(Seq(Seq("id")), transformFieldRefs(bucket))
+    assertEquals(Seq(Seq("ts")), transformFieldRefs(transformByName(plan, "years")))
+    val truncate = transformByName(plan, "truncate")
+    assertEquals(IntegerType, firstLiteralArg(truncate).dataType)
+    assertEquals("10", firstLiteralArg(truncate).value.toString)
+    assertEquals(Seq(Seq("name")), transformFieldRefs(truncate))
+  }
+
+  test("test create VECTOR table with typed transform-argument literals parses (parser coverage)") {
+    // Each transform carries a differently-typed constant argument to exercise the literal
+    // visitors: string, integer, long, exponent/double, the typed timestamp constructor, and both
+    // interval forms (multi-units and unit-to-unit). A bare true/false/null in this position is
+    // parsed as a column reference (qualifiedName takes precedence over a constant in the grammar
+    // under the default non-ANSI config), so the boolean and null literal visitors are not
+    // reachable from a CREATE TABLE statement.
+    val plan = parseCreateTable(
+      s"""
+         |CREATE TABLE vec_lit_tbl (
+         |  id BIGINT,
+         |  embedding VECTOR(4)
+         |) USING hudi
+         |PARTITIONED BY (
+         |  str_t('x', id),
+         |  int_t(4, id),
+         |  long_t(9000000000L, id),
+         |  exp_t(1E3, id),
+         |  ts_t(TIMESTAMP '2020-01-01 00:00:00', id),
+         |  mu_ivl_t(INTERVAL '1' DAY, id),
+         |  uu_ivl_t(INTERVAL '1-2' YEAR TO MONTH, id)
+         |)
+         """.stripMargin)
+
+    assertEquals(StringType, firstLiteralArg(transformByName(plan, "str_t")).dataType)
+    assertEquals("x", firstLiteralArg(transformByName(plan, "str_t")).value.toString)
+    assertEquals(IntegerType, firstLiteralArg(transformByName(plan, "int_t")).dataType)
+    assertEquals(LongType, firstLiteralArg(transformByName(plan, "long_t")).dataType)
+    assertEquals(DoubleType, firstLiteralArg(transformByName(plan, "exp_t")).dataType)
+    assertEquals(TimestampType, firstLiteralArg(transformByName(plan, "ts_t")).dataType)
+    assertEquals(
+      DayTimeIntervalType(DayTimeIntervalType.DAY, DayTimeIntervalType.DAY),
+      firstLiteralArg(transformByName(plan, "mu_ivl_t")).dataType)
+    assertEquals(
+      YearMonthIntervalType(YearMonthIntervalType.YEAR, YearMonthIntervalType.MONTH),
+      firstLiteralArg(transformByName(plan, "uu_ivl_t")).dataType)
+  }
+
+  test("test create VECTOR table with CLUSTERED BY bucket spec parses (parser coverage)") {
+    val plan = parseCreateTable(
+      "CREATE TABLE vec_bucket_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        "CLUSTERED BY (id) INTO 4 BUCKETS")
+    val bucket = transformByName(plan, "bucket")
+    assertEquals("4", firstLiteralArg(bucket).value.toString)
+    assertEquals(Seq(Seq("id")), transformFieldRefs(bucket))
+
+    // SORTED BY ... ASC is accepted by the bucket-spec visitor.
+    val sortedPlan = parseCreateTable(
+      "CREATE TABLE vec_sbucket_tbl (id BIGINT, ts BIGINT, embedding VECTOR(4)) USING hudi " +
+        "CLUSTERED BY (id, ts) SORTED BY (id ASC) INTO 8 BUCKETS")
+    assertTrue(sortedPlan.partitioning.exists(_.name.toLowerCase.contains("bucket")))
+
+    // SORTED BY ... DESC is rejected by the bucket-spec visitor.
+    checkExceptionContain(
+      "CREATE TABLE vec_bad_bucket_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        "CLUSTERED BY (id) SORTED BY (id DESC) INTO 4 BUCKETS")(
+      "Column ordering must be ASC")
+  }
+
+  test("test create VECTOR table with LOCATION/COMMENT/OPTIONS/TBLPROPERTIES parses (parser coverage)") {
+    // String, integer and boolean property values exercise all branches of the property visitors;
+    // COMMENT and LOCATION exercise their clause visitors.
+    val plan = parseCreateTable(
+      s"""
+         |CREATE TABLE vec_clause_tbl (
+         |  id BIGINT,
+         |  embedding VECTOR(4)
+         |) USING hudi
+         |COMMENT 'a vector table'
+         |LOCATION '/tmp/vec_clause_tbl'
+         |OPTIONS ('opt_str' = 'v', 'opt_int' = 1, 'opt_bool' = true)
+         |TBLPROPERTIES ('prop_str' = 'v', 'prop_int' = 2, 'prop_bool' = false)
+         """.stripMargin)
+    assertEquals(ArrayType(FloatType, containsNull = false), plan.tableSchema("embedding").dataType)
+
+    // A 'path' option with no LOCATION is folded into the table location by the option cleaner.
+    val pathPlan = parseCreateTable(
+      "CREATE TABLE vec_path_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        "OPTIONS ('path' = '/tmp/vec_path_tbl')")
+    assertEquals(ArrayType(FloatType, containsNull = false), pathPlan.tableSchema("embedding").dataType)
+
+    // A 'path' option colliding with LOCATION is rejected by the option cleaner.
+    checkExceptionContain(
+      "CREATE TABLE vec_dup_path_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        "OPTIONS ('path' = '/tmp/a') LOCATION '/tmp/b'")(
+      "Duplicated table paths")
+
+    // Each reserved table property (provider, location, owner) is rejected by the property cleaner.
+    Seq("provider", "location", "owner").foreach { reserved =>
+      checkExceptionContain(
+        s"CREATE TABLE vec_reserved_$reserved (id BIGINT, embedding VECTOR(4)) USING hudi " +
+          s"TBLPROPERTIES ('$reserved' = 'x')")(
+        "reserved table property")
     }
   }
 
