@@ -39,8 +39,14 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests for {@link HoodieLookupFunction}.
@@ -98,6 +104,32 @@ class TestHoodieLookupFunction {
     }
   }
 
+  @Test
+  void testRocksDBCacheLifecycleAndLookupFailure() throws Exception {
+    Configuration conf = getConf();
+    conf.set(FlinkOptions.LOOKUP_JOIN_CACHE_TYPE, "rocksdb");
+    conf.set(FlinkOptions.LOOKUP_JOIN_ROCKSDB_PATH, new File(tempFile, "rocksdb").getAbsolutePath());
+    StreamerUtil.initTableIfNotExists(conf);
+
+    HoodieLookupFunction function =
+        newLookupFunction(new CountingLookupTableReader(Collections.emptyList(), conf), conf);
+    function.open(null);
+
+    assertEquals(Duration.ofDays(1), function.getReloadInterval());
+    assertInstanceOf(RocksDBLookupCache.class, getCache(function));
+    assertNull(function.lookup(lookupKey()));
+    function.close();
+
+    LookupCache failingCache = mock(LookupCache.class);
+    when(failingCache.getRows(any())).thenThrow(new IOException("expected"));
+    setCache(function, failingCache);
+    setNextLoadTime(function, Long.MAX_VALUE);
+    RuntimeException exception =
+        assertThrows(RuntimeException.class, () -> function.lookup(lookupKey()));
+    assertInstanceOf(IOException.class, exception.getCause());
+    function.close();
+  }
+
   private HoodieLookupFunction newLookupFunction(CountingLookupTableReader reader, Configuration conf) {
     return new HoodieLookupFunction(
         reader,
@@ -127,6 +159,21 @@ class TestHoodieLookupFunction {
     Field field = HoodieLookupFunction.class.getDeclaredField("nextLoadTime");
     field.setAccessible(true);
     field.setLong(function, nextLoadTime);
+  }
+
+  private static void setCache(HoodieLookupFunction function, LookupCache cache) throws Exception {
+    Field field = cacheField();
+    field.set(function, cache);
+  }
+
+  private static LookupCache getCache(HoodieLookupFunction function) throws Exception {
+    return (LookupCache) cacheField().get(function);
+  }
+
+  private static Field cacheField() throws NoSuchFieldException {
+    Field field = HoodieLookupFunction.class.getDeclaredField("cache");
+    field.setAccessible(true);
+    return field;
   }
 
   private static class CountingLookupTableReader extends HoodieLookupTableReader {
