@@ -324,6 +324,66 @@ public class TestStringUtils {
   }
 
   @Test
+  public void testCompareUtf8BytesMatchesEncodedByteOrder() {
+    String[] alphabet = {
+        // One-byte UTF-8 characters, including the upper boundary.
+        "?",
+        "a",
+        String.valueOf((char) 0x007F),
+        // Two-byte UTF-8 lower and upper boundaries.
+        String.valueOf((char) 0x0080),
+        String.valueOf((char) 0x07FF),
+        // Three-byte UTF-8 boundaries around the surrogate range, plus U+FFFD.
+        String.valueOf((char) 0x0800),
+        String.valueOf((char) 0xD7FF),
+        String.valueOf((char) 0xE000),
+        String.valueOf((char) 0xFFFD),
+        // Four-byte UTF-8 supplementary characters, including two sharing a high surrogate.
+        "😀", // U+1F600
+        new String(Character.toChars(0x20000)),
+        new String(Character.toChars(0x20001)),
+        new String(Character.toChars(0x10FFFF))
+    };
+
+    // Generate every sequence of one to three code points from the alphabet. This covers cases
+    // where strings differ before, within, or after a supplementary character.
+    List<String> values = new ArrayList<>();
+    values.add("");
+    for (String first : alphabet) {
+      values.add(first);
+      for (String second : alphabet) {
+        values.add(first + second);
+        for (String third : alphabet) {
+          values.add(first + second + third);
+        }
+      }
+    }
+
+    // Compare only the sign because Comparator does not prescribe the magnitude of its result.
+    for (String left : values) {
+      for (String right : values) {
+        assertEquals(
+            Integer.signum(compareEncodedUtf8Bytes(left, right)),
+            Integer.signum(StringUtils.compareUtf8Bytes(left, right)));
+      }
+    }
+  }
+
+  private static int compareEncodedUtf8Bytes(String left, String right) {
+    byte[] leftBytes = left.getBytes(StandardCharsets.UTF_8);
+    byte[] rightBytes = right.getBytes(StandardCharsets.UTF_8);
+    int length = Math.min(leftBytes.length, rightBytes.length);
+    for (int index = 0; index < length; index++) {
+      // HFile compares raw key bytes as unsigned values.
+      int comparison = (leftBytes[index] & 0xFF) - (rightBytes[index] & 0xFF);
+      if (comparison != 0) {
+        return comparison;
+      }
+    }
+    return leftBytes.length - rightBytes.length;
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   public void testUtf8LexicographicComparatorSerializableAndRejectsNull() throws Exception {
     // Like String.compareTo, a null argument is rejected.
