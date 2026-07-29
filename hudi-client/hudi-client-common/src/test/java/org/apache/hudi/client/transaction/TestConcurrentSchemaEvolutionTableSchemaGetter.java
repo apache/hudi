@@ -36,6 +36,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -52,10 +53,17 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
@@ -70,6 +78,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDe
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -403,6 +412,82 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
         includeMetadataFields, Option.of(instant)).get());
   }
 
+  @Test
+  void testTableVersionEightAndAboveOrdersByCompletionTime() throws Exception {
+    metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(), "")
+        .initTable(getDefaultStorageConf(), basePath);
+    // The ordering is driven by the timeline layout version.
+    assertEquals(TimelineLayoutVersion.VERSION_2, metaClient.getTimelineLayoutVersion().getVersion());
+    testTable = HoodieTestTable.of(metaClient);
+
+    // Completion order inverts requested order: requested 001 completes last (at 100) with
+    // schema 2, requested 009 completes first (at 050) with schema 1.
+    testTable.addCommit("001", Option.of("100"), Option.of(buildMetadata(
+        Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UNKNOWN,
+        SCHEMA_WITHOUT_METADATA_STR2, COMMIT_ACTION)));
+    testTable.addCommit("009", Option.of("050"), Option.of(buildMetadata(
+        Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UNKNOWN,
+        SCHEMA_WITHOUT_METADATA_STR, COMMIT_ACTION)));
+
+    ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
+    // The latest table schema follows completion time: schema 2 of requested 001, completed 100.
+    assertEquals(SCHEMA_WITHOUT_METADATA2.toString(),
+        resolver.getTableSchemaIfPresent(false, Option.empty()).get().toString());
+    // A target completed at 075 only sees the commit completed at 050 (requested 009, schema 1).
+    assertEquals(SCHEMA_WITHOUT_METADATA.toString(),
+        resolver.getTableSchemaIfPresent(false,
+            Option.of(metaClient.getInstantGenerator().createNewInstant(
+                HoodieInstant.State.COMPLETED, COMMIT_ACTION, "005", "075"))).get().toString());
+  }
+
+  @Test
+  void testTableVersionSixOrdersByRequestedTime() throws Exception {
+    Properties properties = new Properties();
+    properties.setProperty(WRITE_TABLE_VERSION.key(), "6");
+    metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, properties, "")
+        .initTable(getDefaultStorageConf(), basePath);
+    // The ordering is driven by the timeline layout version.
+    assertEquals(TimelineLayoutVersion.VERSION_1, metaClient.getTimelineLayoutVersion().getVersion());
+    testTable = HoodieTestTable.of(metaClient);
+
+    // Same layout as the table-version-8 test: requested 001 carries schema 2, requested 009
+    // carries schema 1. The completion times below are ignored by the table-version-6
+    // (timeline layout v1) instant file naming.
+    testTable.addCommit("001", Option.of("100"), Option.of(buildMetadata(
+        Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UNKNOWN,
+        SCHEMA_WITHOUT_METADATA_STR2, COMMIT_ACTION)));
+    testTable.addCommit("009", Option.of("050"), Option.of(buildMetadata(
+        Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UNKNOWN,
+        SCHEMA_WITHOUT_METADATA_STR, COMMIT_ACTION)));
+    // Invert the file modification times so that the mtime-derived completion order disagrees
+    // with the requested order, mirroring the table-version-8 fixture above.
+    Path timelinePath = Paths.get(metaClient.getTimelinePath().makeQualified(new URI("file:///")).toUri());
+    Files.setLastModifiedTime(timelinePath.resolve("001.commit"), FileTime.fromMillis(2_000_000_000_000L));
+    Files.setLastModifiedTime(timelinePath.resolve("009.commit"), FileTime.fromMillis(1_000_000_000_000L));
+    metaClient.reloadActiveTimeline();
+
+    // The mtime inversion must stick, otherwise the assertions below also hold under completion-time
+    // ordering and the test would pass against unfixed code.
+    Map<String, String> completionTimeByRequestedTime = metaClient.getActiveTimeline().getInstantsAsStream()
+        .collect(Collectors.toMap(HoodieInstant::requestedTime, HoodieInstant::getCompletionTime));
+    assertTrue(completionTimeByRequestedTime.get("001").compareTo(completionTimeByRequestedTime.get("009")) > 0);
+
+    ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
+    // The latest table schema follows requested time (schema 1 of requested 009), not the
+    // mtime-derived completion order which would pick schema 2 of requested 001.
+    assertEquals(SCHEMA_WITHOUT_METADATA.toString(),
+        resolver.getTableSchemaIfPresent(false, Option.empty()).get().toString());
+    // An inflight target bounds the lookup by its requested time.
+    assertEquals(SCHEMA_WITHOUT_METADATA2.toString(),
+        resolver.getTableSchemaIfPresent(false,
+            Option.of(metaClient.getInstantGenerator().createNewInstant(
+                HoodieInstant.State.INFLIGHT, COMMIT_ACTION, "005"))).get().toString());
+    assertEquals(SCHEMA_WITHOUT_METADATA.toString(),
+        resolver.getTableSchemaIfPresent(false,
+            Option.of(metaClient.getInstantGenerator().createNewInstant(
+                HoodieInstant.State.INFLIGHT, COMMIT_ACTION, "999"))).get().toString());
+  }
+
   private static Stream<Arguments> partitionColumnSchemaTestParams() {
     return Stream.of(
         Arguments.of(false, SCHEMA_WITHOUT_METADATA),    // Schema with metadata fields, don't include metadata
@@ -527,6 +612,18 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
         Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, timestamp2, incTimestampStrByOne(timestamp2))));
     assertTrue(schema2Option.isPresent());
     assertEquals(schema2.toString(), schema2Option.get().toString());
+
+    // A target instant without a completion time (e.g., an inflight instant at pre-commit time)
+    // does not bound the lookup; the latest table schema is returned.
+    String inflightTimestamp = padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH);
+    Option<HoodieSchema> schemaAtInstantWithoutCompletionTime = resolver.getTableSchemaIfPresent(
+        false,
+        Option.of(metaClient.getInstantGenerator().createNewInstant(
+            HoodieInstant.State.INFLIGHT,
+            tableType.equals(HoodieTableType.COPY_ON_WRITE) ? COMMIT_ACTION : DELTA_COMMIT_ACTION,
+            inflightTimestamp)));
+    assertTrue(schemaAtInstantWithoutCompletionTime.isPresent());
+    assertEquals(schema2.toString(), schemaAtInstantWithoutCompletionTime.get().toString());
 
     // Now follow with more disqualified instants and try to get table schema with their request time, we should back track to instant 2.
     int endCommitTime = createExhaustiveDisqualifiedInstants(startCommitTime, tableType);
