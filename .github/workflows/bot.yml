@@ -90,8 +90,10 @@ jobs:
       # gets scanned too, and every root-anchored exclude in the root pom (such as `.github/**`)
       # silently stops applying to it.
       #
-      # hudi-trino needs no RAT exclude: its files carry AL headers that RAT accepts, and its
-      # Trino-style license checks are handled by airlift.
+      # hudi-trino needs no RAT exclude: its files carry AL headers that RAT's default matchers
+      # accept. The Trino-style header check (airbase's license-maven-plugin) runs only in the
+      # upstream trinodb/trino build; nothing in this repo runs it since RFC-105 dropped the
+      # trino-root parent.
       - name: Create source release directory
         run: ./scripts/release/create_source_directory.sh "${{ runner.temp }}/hudi-tmp-repo"
       - name: Check Binary Files
