@@ -82,7 +82,8 @@ elif [ "$#" == "1" ]; then
   exit 1
 fi
 
-COMMON_OPTIONS="-DdeployArtifacts=true -DskipTests -DretryFailedDeploymentCount=10"
+# -Dmaven.test.skip=true, not -DskipTests: test-compile needs hudi-trino-tests profile deps that are absent here.
+COMMON_OPTIONS="-DdeployArtifacts=true -Dmaven.test.skip=true -DretryFailedDeploymentCount=10"
 for v in "${ALL_VERSION_OPTS[@]}"
 do
   echo "Cleaning everything before any deployment"
