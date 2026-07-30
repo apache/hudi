@@ -98,8 +98,14 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     }
   }
 
+  /**
+   * Merges the incoming record with whatever is already buffered under {@code recordKey} and stores the
+   * result. Subclasses choose the identifier a record is buffered under (a record key here, a record
+   * position in {@link PositionBasedFileGroupRecordBuffer}), but must not alter the merge-then-store
+   * behavior itself, hence this method is final.
+   */
   @Override
-  public void processNextDataRecord(BufferedRecord<T> record, Serializable recordKey) throws IOException {
+  public final void processNextDataRecord(BufferedRecord<T> record, Serializable recordKey) throws IOException {
     BufferedRecord<T> existingRecord = records.get(recordKey);
     totalLogRecords++;
     bufferedRecordMerger.deltaMerge(record, existingRecord).ifPresent(bufferedRecord ->
@@ -139,7 +145,11 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     return hasNextLogRecord();
   }
 
-  public boolean isPartialMergingEnabled() {
+  /**
+   * Whether partial merging has been switched on for this buffer. The flag is owned by the base buffer
+   * and toggled while processing data blocks, so subclasses must not shadow it; hence this is final.
+   */
+  public final boolean isPartialMergingEnabled() {
     return enablePartialMerging;
   }
 }

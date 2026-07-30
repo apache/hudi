@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
@@ -42,6 +43,9 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.Serializable;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -50,6 +54,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -73,6 +78,27 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
   private final IndexedRecord testRecord6 = createTestRecord("6", 1, 5L);
   private final IndexedRecord testRecord6DeleteByCustomMarker = createTestRecord("6", 3, 2L);
   private final IndexedRecord testRecord7 = createTestRecord("7", 1, 5L);
+
+  /**
+   * Every buffer in this hierarchy must funnel records into the buffer through the same
+   * merge-then-put path and expose the same partial-merge state, so these methods are sealed with
+   * {@code final} and subclasses such as {@code PositionBasedFileGroupRecordBuffer} and
+   * {@code SortedKeyBasedFileGroupRecordBuffer} cannot replace that behavior. The methods that a
+   * subclass legitimately specializes (block processing, base-record advancement, buffer type) are
+   * deliberately left open. This test fails if a {@code final} modifier is dropped.
+   */
+  @Test
+  void keyMergeBehaviorIsSealedAgainstSubclasses() throws NoSuchMethodException {
+    assertMethodIsFinal(KeyBasedFileGroupRecordBuffer.class
+        .getDeclaredMethod("processNextDataRecord", BufferedRecord.class, Serializable.class));
+    assertMethodIsFinal(KeyBasedFileGroupRecordBuffer.class.getDeclaredMethod("isPartialMergingEnabled"));
+  }
+
+  private static void assertMethodIsFinal(Method method) {
+    assertTrue(Modifier.isFinal(method.getModifiers()),
+        () -> String.format("%s#%s must remain final so subclasses cannot override the key-based merge behavior",
+            method.getDeclaringClass().getSimpleName(), method.getName()));
+  }
 
   @Test
   void readWithEventTimeOrdering() throws IOException {
