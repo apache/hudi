@@ -52,7 +52,7 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
 public class OverwriteNonDefaultsPayloadHudiTablesInitializer
         extends AbstractMergerHudiTablesInitializer
 {
-    public static final String TABLE_NAME = "mor_overwrite_non_defaults";
+    public static final String TABLE_NAME = "overwrite_non_defaults_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
 
     public OverwriteNonDefaultsPayloadHudiTablesInitializer()

@@ -34,6 +34,8 @@ import java.util.Optional;
 
 import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_STRING;
+import static org.apache.hudi.common.model.AWSDmsAvroPayload.DELETE_OPERATION_VALUE;
+import static org.apache.hudi.common.model.AWSDmsAvroPayload.OP_FIELD;
 
 /**
  * Creates a non-partitioned Merge-On-Read table whose merge semantics come from the
@@ -43,7 +45,8 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
  * delete-key props ({@code hoodie.record.merge.property.hoodie.payload.delete.field=Op}, marker {@code D}).
  * <p>
  * A base commit is followed by a log record with {@code Op='D'}, which deletes the row at merge time via
- * {@code DeleteContext}, with the payload never executing at read.
+ * {@code DeleteContext}, with the payload never executing at read, plus a log record with the non-marker
+ * {@code Op='U'} whose update must APPLY rather than delete -- pinning the marker-value comparison itself.
  * <p>
  * Records are wrapped in {@link HoodieAvroPayload} (a pass-through that is NOT a {@code BaseAvroPayload}),
  * so rows a semantic payload would drop at write time land as DATA records and every merge decision happens
@@ -52,10 +55,8 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
 public class DmsPayloadHudiTablesInitializer
         extends AbstractMergerHudiTablesInitializer
 {
-    public static final String TABLE_NAME = "mor_dms";
+    public static final String TABLE_NAME = "dms_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
-
-    private static final String OP_FIELD = "Op";
 
     public DmsPayloadHudiTablesInitializer()
     {
@@ -110,12 +111,14 @@ public class DmsPayloadHudiTablesInitializer
                 record(schema, "k2", "k2_base", 20L, "I", 100L)), firstCommit);
         client.commit(firstCommit, firstStatuses);
 
-        // Log record with Op='D'. The pass-through HoodieAvroPayload writes it as a DATA record;
-        // DeleteContext (delete key Op, marker D from the translated table config) deletes the row
-        // at merge time.
+        // Log records, both written as DATA records by the pass-through HoodieAvroPayload. Only k2's
+        // marker value deletes at merge time via DeleteContext (delete key Op, marker D from the
+        // translated table config); k1 carries the NON-marker Op='U' and its update must apply, so a
+        // marker comparison that fires on any non-null Op fails the suite.
         String secondCommit = client.startCommit();
         List<WriteStatus> secondStatuses = client.upsert(ImmutableList.of(
-                record(schema, "k2", "k2_deleted", 22L, "D", 200L)), secondCommit);
+                record(schema, "k1", "k1_updated", 11L, "U", 200L),
+                record(schema, "k2", "k2_deleted", 22L, DELETE_OPERATION_VALUE, 200L)), secondCommit);
         client.commit(secondCommit, secondStatuses);
     }
 

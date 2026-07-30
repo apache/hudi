@@ -32,13 +32,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  * resolve purely from the table config:
  * <ul>
  *   <li>AWSDms: a log record with {@code Op='D'} deletes the row at merge time via the translated
- *       delete-key/marker table properties (the narrow-projection case pins the fix that reads those
- *       properties with their {@code hoodie.record.merge.property.} prefix).</li>
+ *       delete-key/marker table properties, while a log record with the non-marker {@code Op='U'} must
+ *       apply as an update (the narrow-projection case pins the fix that reads those properties with
+ *       their {@code hoodie.record.merge.property.} prefix).</li>
  *   <li>OverwriteNonDefaults: IGNORE_DEFAULTS partial merging keeps the stored value for update columns
  *       equal to the schema default (null).</li>
  *   <li>{@link SummingTestPayload}: a user-defined payload rides the payload-based CUSTOM merge
  *       strategy; the merged value is the SUM of stored and incoming values, which proves the payload's
- *       {@code combineAndGetUpdateValue} executed (overwrite would yield the incoming value).</li>
+ *       {@code combineAndGetUpdateValue} executed (overwrite would yield the incoming value), and a hard
+ *       delete routed through the same arm must remove its row.</li>
  * </ul>
  */
 public class TestHudiMorPayloadSemantics
@@ -59,14 +61,16 @@ public class TestHudiMorPayloadSemantics
     @Test
     public void testDmsDeleteMarkerRemovesRowOnSnapshotRead()
     {
-        // Read-optimized: both rows (the Op='D' record lives in a log file)
+        // Read-optimized: both rows (the log records are not merged)
         assertQuery(
                 "SELECT key, name, value, Op FROM " + DmsPayloadHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT), 'I'), ('k2', 'k2_base', 20, 'I')");
-        // Snapshot: k2 is deleted by the Op='D' log record via the delete-key/marker table properties
+        // Snapshot: k2 is deleted by the Op='D' log record via the delete-key/marker table properties,
+        // while k1's NON-marker Op='U' log record must apply as an update -- a marker comparison that
+        // fires on any non-null Op would wrongly delete k1 too
         assertQuery(
                 "SELECT key, name, value, Op FROM " + DmsPayloadHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
-                "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT), 'I')");
+                "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT), 'U')");
     }
 
     @Test
@@ -77,7 +81,7 @@ public class TestHudiMorPayloadSemantics
         // for the base read -- the regression this suite pins for HudiUtil.mergeRequiredColumnNames
         assertQuery(
                 "SELECT key, value FROM " + DmsPayloadHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
-                "VALUES ('k1', CAST(10 AS BIGINT))");
+                "VALUES ('k1', CAST(11 AS BIGINT))");
         assertThat(computeScalar("SELECT count(*) FROM " + DmsPayloadHudiTablesInitializer.RT_TABLE_NAME)).isEqualTo(1L);
     }
 
@@ -98,10 +102,27 @@ public class TestHudiMorPayloadSemantics
     @Test
     public void testSummingPayloadRunsCombineAndGetUpdateValueOnRead()
     {
-        // Read-optimized: the base value
-        assertQuery("SELECT key, value FROM " + SummingPayloadHudiTablesInitializer.TABLE_NAME, "VALUES ('k1', CAST(10 AS BIGINT))");
+        // Read-optimized: the base values
+        assertQuery(
+                "SELECT key, value FROM " + SummingPayloadHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
+                "VALUES ('k1', CAST(10 AS BIGINT)), ('k2', 20)");
         // Snapshot: 10 + 99 = 109 -- only the payload's combineAndGetUpdateValue can produce this
-        // (newest-wins would yield 99, base-only 10), proving the CUSTOM payload-strategy branch ran
-        assertQuery("SELECT key, value FROM " + SummingPayloadHudiTablesInitializer.RT_TABLE_NAME, "VALUES ('k1', CAST(109 AS BIGINT))");
+        // (newest-wins would yield 99, base-only 10), proving the CUSTOM payload-strategy branch ran;
+        // k2 is hard-deleted
+        assertQuery(
+                "SELECT key, value FROM " + SummingPayloadHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
+                "VALUES ('k1', CAST(109 AS BIGINT))");
+    }
+
+    @Test
+    public void testSummingPayloadHardDeleteRemovesRowOnSnapshotRead()
+    {
+        // The hard delete is a native delete log record routed through the payload-based CUSTOM merge
+        // arm (HoodieAvroRecordMerger with an empty payload) -- the delete path of the user-merger
+        // dispatch, which both ordering arms already cover
+        assertThat(computeScalar("SELECT count(*) FROM " + SummingPayloadHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k2'"))
+                .isEqualTo(0L);
+        assertThat(computeScalar("SELECT count(*) FROM " + SummingPayloadHudiTablesInitializer.TABLE_NAME + " WHERE key = 'k2'"))
+                .isEqualTo(1L);
     }
 }

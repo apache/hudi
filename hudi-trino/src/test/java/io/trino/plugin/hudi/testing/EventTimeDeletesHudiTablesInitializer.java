@@ -56,7 +56,7 @@ import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 public class EventTimeDeletesHudiTablesInitializer
         extends AbstractMergerHudiTablesInitializer
 {
-    public static final String TABLE_NAME = "mor_deletes";
+    public static final String TABLE_NAME = "deletes_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
 
     public EventTimeDeletesHudiTablesInitializer()

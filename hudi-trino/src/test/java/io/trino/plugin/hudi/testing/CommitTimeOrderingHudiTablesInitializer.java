@@ -49,7 +49,7 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
 public class CommitTimeOrderingHudiTablesInitializer
         extends AbstractMergerHudiTablesInitializer
 {
-    public static final String TABLE_NAME = "mor_commit_time";
+    public static final String TABLE_NAME = "commit_time_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
 
     public CommitTimeOrderingHudiTablesInitializer()

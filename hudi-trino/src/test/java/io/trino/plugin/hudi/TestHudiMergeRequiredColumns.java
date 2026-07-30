@@ -90,7 +90,7 @@ class TestHudiMergeRequiredColumns
     }
 
     @Test
-    public void testPrefixedDeleteKeyAndMarkerAreRequested()
+    public void testPrefixedDeleteKeyIsRequested()
     {
         // v9+ table creation persists the delete key/marker under the hoodie.record.merge.property.
         // prefix (e.g. for AWSDmsAvroPayload tables); the file-group reader strips the prefix via

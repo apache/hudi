@@ -41,13 +41,17 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
  * strategy id. Reads resolve {@code HoodieAvroRecordMerger} (no {@code hudi.record-merger-impls} needed) and
  * run the payload's {@code combineAndGetUpdateValue}, observable as SUMMED values.
  * <p>
+ * A final commit hard-deletes a key ({@code writeClient.delete}): the native delete log record must route
+ * through the payload-based CUSTOM merge arm ({@code HoodieAvroRecordMerger} with an empty payload) and
+ * win against the base row -- the delete coverage both ordering arms already have.
+ * <p>
  * Records are wrapped in {@link HoodieAvroPayload} (a pass-through that is NOT a {@code BaseAvroPayload}), so
  * every merge decision happens at read time from the table config. See {@code TestHudiMorPayloadSemantics}.
  */
 public class SummingPayloadHudiTablesInitializer
         extends AbstractMergerHudiTablesInitializer
 {
-    public static final String TABLE_NAME = "mor_summing";
+    public static final String TABLE_NAME = "summing_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
 
     private static final String SUM_FIELD = SummingTestPayload.SUM_COLUMN;
@@ -94,7 +98,8 @@ public class SummingPayloadHudiTablesInitializer
         Schema schema = avroSchema();
         String firstCommit = client.startCommit();
         List<WriteStatus> firstStatuses = client.bulkInsert(ImmutableList.of(
-                record(schema, "k1", 10L, 100L)), firstCommit);
+                record(schema, "k1", 10L, 100L),
+                record(schema, "k2", 20L, 100L)), firstCommit);
         client.commit(firstCommit, firstStatuses);
 
         // The payload's combineAndGetUpdateValue SUMS stored and incoming values: 10 + 99 = 109 --
@@ -103,6 +108,14 @@ public class SummingPayloadHudiTablesInitializer
         List<WriteStatus> secondStatuses = client.upsert(ImmutableList.of(
                 record(schema, "k1", 99L, 200L)), secondCommit);
         client.commit(secondCommit, secondStatuses);
+
+        // Third commit: hard delete of k2. The native delete log record reaches the payload-based
+        // CUSTOM merge arm as an empty payload, whose combineAndGetUpdateValue returns empty, so the
+        // delete wins against the base row -- the delete path of the user-merger dispatch.
+        String deleteCommit = client.startCommit();
+        List<WriteStatus> deleteStatuses = client.delete(
+                ImmutableList.of(hoodieKey("k2")), deleteCommit);
+        client.commit(deleteCommit, deleteStatuses);
     }
 
     private static HoodieRecord<HoodieAvroPayload> record(Schema schema, String key, long value, long ts)
