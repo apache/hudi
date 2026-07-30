@@ -86,12 +86,8 @@ fi
 COMMON_OPTIONS="-DdeployArtifacts=true -Dmaven.test.skip=true -DretryFailedDeploymentCount=10"
 for v in "${ALL_VERSION_OPTS[@]}"
 do
-  echo "Cleaning everything before any deployment"
-  $MVN clean $COMMON_OPTIONS ${v}
-  echo "Building with options ${v}"
-  $MVN install $COMMON_OPTIONS ${v}
-
-  echo "Deploying to repository.apache.org with version options ${v%-am}"
-  # remove `-am` option to only deploy intended modules
-  $MVN deploy $COMMON_OPTIONS ${v%-am}
+  echo "Deploying to repository.apache.org with options ${v}"
+  # Single pass: unlike deploy_staging_jars.sh there is no -am here, so a separate
+  # install pass would rebuild exactly what deploy builds.
+  $MVN clean deploy $COMMON_OPTIONS ${v}
 done
