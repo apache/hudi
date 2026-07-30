@@ -182,6 +182,16 @@ public class HoodieSyncConfig extends HoodieConfig {
       .withDocumentation("If true, TOUCH partition events will be emitted during meta sync. "
           + "TOUCH events indicate partitions that exist in both storage and metastore, no schema or location change, but the partition has received data.");
 
+  public static final ConfigProperty<Boolean> META_SYNC_FORCE_RECREATE_TABLE = ConfigProperty
+      .key("hoodie.meta.sync.force.recreate.table")
+      .defaultValue(false)
+      .sinceVersion("1.3.0")
+      .markAdvanced()
+      .withDocumentation("If true, always drop and recreate the table on every sync, regardless of whether "
+          + "the incremental sync would otherwise succeed. Useful for forcing a full resync of the table schema "
+          + "and properties to the metastore, e.g. after the table drifted from the Hoodie table definition "
+          + "out-of-band.");
+
   @Getter
   @Setter
   private Configuration hadoopConf;
