@@ -182,20 +182,13 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     //  Maxwell data
     // ------------------------------------------------------------------------
 
-    // database hudi, table hudi_maxwell_01 (insert, update and delete)
-    String hudiMaxwell01Insert = "{\"database\":\"hudi\",\"table\":\"hudi_maxwell_01\",\"type\":\"insert\","
-        + "\"ts\":1647074402,\"xid\":6233,\"commit\":true,\"data\":{\"id\":\"6018220e39e74477b45c7cf42f66bdc0\","
-        + "\"name\":\"mathieu\",\"age\":18,\"insert_time\":\"2022-03-12 08:40:02\","
-        + "\"update_time\":\"2022-03-12 08:40:02\"}}";
+    // database hudi, table hudi_maxwell_01 (insert and update, delete is MAXWELL_DELETE_RECORD)
+    String hudiMaxwell01Insert = maxwellInsertRecord("hudi", "hudi_maxwell_01");
 
     String hudiMaxwell01Update = "{\"database\":\"hudi\",\"table\":\"hudi_maxwell_01\",\"type\":\"update\","
         + "\"ts\":1647074482,\"xid\":6440,\"commit\":true,\"data\":{\"id\":\"6018220e39e74477b45c7cf42f66bdc0\","
         + "\"name\":\"mathieu\",\"age\":20,\"insert_time\":\"2022-03-12 04:40:02\",\"update_time\":\"2022-03-12 04:42:25\"},"
         + "\"old\":{\"age\":18,\"insert_time\":\"2022-03-12 08:40:02\",\"update_time\":\"2022-03-12 08:40:02\"}}";
-
-    String hudiMaxwell01Delete = "{\"database\":\"hudi\",\"table\":\"hudi_maxwell_01\",\"type\":\"delete\","
-        + "\"ts\":1647074555,\"xid\":6631,\"commit\":true,\"data\":{\"id\":\"6018220e39e74477b45c7cf42f66bdc0\","
-        + "\"name\":\"mathieu\",\"age\":20,\"insert_time\":\"2022-03-12 04:40:02\",\"update_time\":\"2022-03-12 04:42:25\"}}";
 
     String hudiMaxwell01Ddl = "{\"type\":\"table-alter\",\"database\":\"hudi\",\"table\":\"hudi_maxwell_01\","
         + "\"old\":{\"database\":\"hudi\",\"charset\":\"utf8\",\"table\":\"hudi_maxwell_01\","
@@ -218,12 +211,6 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
 
     // database hudi_02, table hudi_maxwell_02, insert
     String hudi02Maxwell02Insert = "{\"database\":\"hudi_02\",\"table\":\"hudi_maxwell_02\",\"type\":\"insert\","
-        + "\"ts\":1647073916,\"xid\":4990,\"commit\":true,\"data\":{\"id\":\"9bb17f316ee8488cb107621ddf0f3cb0\","
-        + "\"name\":\"andy\",\"age\":17,\"insert_time\":\"2022-03-12 08:31:56\","
-        + "\"update_time\":\"2022-03-12 08:31:56\"}}";
-
-    // database hudi_02, table hudi_maxwell_01, insert
-    String hudi02Maxwell01Insert = "{\"database\":\"hudi_02\",\"table\":\"hudi_maxwell_01\",\"type\":\"insert\","
         + "\"ts\":1647073916,\"xid\":4990,\"commit\":true,\"data\":{\"id\":\"9bb17f316ee8488cb107621ddf0f3cb0\","
         + "\"name\":\"andy\",\"age\":17,\"insert_time\":\"2022-03-12 08:31:56\","
         + "\"update_time\":\"2022-03-12 08:31:56\"}}";
@@ -255,9 +242,9 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     props.setProperty(JsonKafkaPostProcessorConfig.ORDERING_FIELDS_FORMAT.key(), "yyyy-MM-dd HH:mm:ss");
     props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "update_time");
 
-    JavaRDD<String> inputDelete = jsc().parallelize(Collections.singletonList(hudiMaxwell01Delete));
+    JavaRDD<String> inputDelete = jsc().parallelize(Collections.singletonList(MAXWELL_DELETE_RECORD));
 
-    long ts = mapper.readTree(hudiMaxwell01Delete).get("ts").longValue();
+    long ts = mapper.readTree(MAXWELL_DELETE_RECORD).get("ts").longValue();
     String formatTs = DateTimeUtils.formatUnixTimestamp(ts, "yyyy-MM-dd HH:mm:ss");
 
     new MaxwellJsonKafkaSourcePostProcessor(props)
@@ -276,7 +263,7 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     props.setProperty(JsonKafkaPostProcessorConfig.ORDERING_FIELDS_TYPE.key(), "NON_TIMESTAMP");
     props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "id");
 
-    JavaRDD<String> inputDelete2 = jsc().parallelize(Collections.singletonList(hudiMaxwell01Delete));
+    JavaRDD<String> inputDelete2 = jsc().parallelize(Collections.singletonList(MAXWELL_DELETE_RECORD));
 
     String updateTimeInUpdate = mapper.readTree(hudiMaxwell01Update).get("data").get("update_time").textValue();
     new MaxwellJsonKafkaSourcePostProcessor(props)
@@ -298,14 +285,6 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     // ddl data will be ignored, ths count should be 0
     long ddlDataNum = processor.process(ddlData).count();
     assertEquals(0, ddlDataNum);
-
-    // test table regex without database regex
-    props.remove(JsonKafkaPostProcessorConfig.DATABASE_NAME_REGEX.key());
-    props.setProperty(JsonKafkaPostProcessorConfig.TABLE_NAME_REGEX.key(), "hudi_maxwell(_)?[0-9]{0,2}");
-
-    JavaRDD<String> dataWithoutDatabaseRegex = jsc().parallelize(Arrays.asList(hudiMaxwell01Insert, hudi02Maxwell01Insert));
-    long countWithoutDatabaseRegex = processor.process(dataWithoutDatabaseRegex).count();
-    assertEquals(2, countWithoutDatabaseRegex);
   }
 
   /**

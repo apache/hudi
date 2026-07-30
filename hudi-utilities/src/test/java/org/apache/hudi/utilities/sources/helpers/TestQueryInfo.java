@@ -79,13 +79,18 @@ class TestQueryInfo {
   }
 
   @Test
-  void withUpdatedEndInstantOnlyMovesTheEndInstant() {
-    QueryInfo updated = incrementalQueryInfo().withUpdatedEndInstant("20240101030000000");
+  void withUpdatedEndInstantMovesTheEndInstantAndDropsThePredicateFilter() {
+    QueryInfo queryInfo = new QueryInfo(QUERY_TYPE_INCREMENTAL_OPT_VAL(), PREVIOUS_INSTANT, START_INSTANT, END_INSTANT,
+        "partition_path = 'a'", ORDER_COLUMN, KEY_COLUMN, LIMIT_COLUMN);
+    assertTrue(queryInfo.getPredicateFilter().isPresent());
+
+    QueryInfo updated = queryInfo.withUpdatedEndInstant("20240101030000000");
 
     assertEquals("20240101030000000", updated.getEndInstant());
     assertEquals(START_INSTANT, updated.getStartInstant());
     assertEquals(PREVIOUS_INSTANT, updated.getPreviousInstant());
     assertEquals(QUERY_TYPE_INCREMENTAL_OPT_VAL(), updated.getQueryType());
+    // withUpdatedEndInstant routes through the 7-arg ctor, so any predicate filter is dropped
     assertFalse(updated.getPredicateFilter().isPresent());
   }
 

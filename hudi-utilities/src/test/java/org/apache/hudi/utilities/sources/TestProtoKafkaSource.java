@@ -79,6 +79,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_PROTO_VALUE_DESERIALIZER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests against {@link ProtoKafkaSource}.
@@ -190,8 +191,10 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
 
     // the deserializer is validated while constructing the source, i.e. before touching kafka
-    assertThrows(HoodieReadFromSourceException.class,
+    HoodieReadFromSourceException exception = assertThrows(HoodieReadFromSourceException.class,
         () -> new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics));
+    assertTrue(exception.getMessage().contains(
+        "Only ByteArrayDeserializer and KafkaProtobufDeserializer are supported for ProtoKafkaSource"), exception.getMessage());
   }
 
   @Test
@@ -201,8 +204,10 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
 
     // appending kafka offsets is not supported for proto sources
-    assertThrows(HoodieReadFromSourceException.class,
+    HoodieReadFromSourceException exception = assertThrows(HoodieReadFromSourceException.class,
         () -> new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics));
+    assertTrue(exception.getMessage().contains(
+        "Appending kafka offsets to ProtoKafkaSource is not supported"), exception.getMessage());
   }
 
   private static List<Sample> createSampleMessages(int count) {

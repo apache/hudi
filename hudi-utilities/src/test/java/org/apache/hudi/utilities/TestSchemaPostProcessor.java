@@ -50,7 +50,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class TestSchemaPostProcessor extends UtilitiesTestBase {
 
@@ -159,8 +158,12 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     Schema avroSchema = processor.processSchema(HoodieSchema.parse(ORIGINAL_SCHEMA).toAvroSchema());
     HoodieSchema withDeleteMarker = HoodieSchema.fromAvroSchema(avroSchema);
     assertNotNull(withDeleteMarker.getField("_hoodie_is_deleted").orElse(null));
-    // reprocessing returns the input as is instead of adding the column twice
-    assertSame(withDeleteMarker, processor.processSchema(withDeleteMarker));
+
+    // reprocessing yields the same schema instead of adding the column twice
+    HoodieSchema reprocessed = processor.processSchema(withDeleteMarker);
+    assertEquals(withDeleteMarker, reprocessed);
+    assertEquals(1, reprocessed.getFields().stream()
+        .filter(field -> "_hoodie_is_deleted".equals(field.name())).count());
   }
 
   @Test
@@ -182,9 +185,9 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
 
   @Test
   public void testDeprecatedConfigConstants() {
-    assertEquals(SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR.key(),
+    assertEquals("hoodie.streamer.schemaprovider.schema_post_processor",
         SchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_PROP);
-    assertEquals(SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key(),
+    assertEquals("hoodie.streamer.schemaprovider.schema_post_processor.delete.columns",
         DropColumnSchemaPostProcessor.Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP);
   }
 

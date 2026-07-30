@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.utilities.config.FilebasedSchemaProviderConfig;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
@@ -127,16 +128,24 @@ class TestFilebasedSchemaProvider extends UtilitiesTestBase {
   }
 
   @Test
-  void testRefreshRereadsSourceAndTargetSchemaFiles() throws IOException {
+  void testRefreshPicksUpRewrittenSourceAndTargetSchemaFiles() throws IOException {
     TypedProperties targetProps = Helpers.setupSchemaOnDFS("streamer-config", "source_uber_encoded_decimal.avsc");
     TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_valid.avsc");
     props.setProperty(FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE.key(),
         targetProps.getString(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE.key()));
     this.schemaProvider = new FilebasedSchemaProvider(props, jsc);
+    assertEquals(this.schemaProvider.getSourceHoodieSchema(), generateProperFormattedSchema());
+
+    // rewrite the configured source schema file in place with an unrelated schema: refresh() has to
+    // re-read the file rather than serve the schema cached at construction time
+    HoodieSchema rewrittenSchema = new FilebasedSchemaProvider(
+        Helpers.setupSchemaOnDFS("streamer-config", "source_uber.avsc"), jsc).getSourceHoodieSchema();
+    Helpers.copyToDFS("streamer-config/source_uber.avsc", storage,
+        props.getString(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE.key()));
 
     this.schemaProvider.refresh();
 
-    assertEquals(this.schemaProvider.getSourceHoodieSchema(), generateProperFormattedSchema());
+    assertEquals(rewrittenSchema, this.schemaProvider.getSourceHoodieSchema());
     assertEquals(this.schemaProvider.getTargetHoodieSchema(),
         new FilebasedSchemaProvider(targetProps, jsc).getSourceHoodieSchema());
   }

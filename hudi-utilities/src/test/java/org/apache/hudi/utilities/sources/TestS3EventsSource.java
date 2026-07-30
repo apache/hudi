@@ -128,7 +128,13 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
     Pair<Option<Dataset<Row>>, Checkpoint> batch = source.fetchNextBatch(Option.empty(), Long.MAX_VALUE);
     Dataset<Row> eventRecords = batch.getLeft().get();
     assertEquals(1, eventRecords.count());
-    assertTrue(Arrays.asList(eventRecords.columns()).contains("s3"));
+    // inference has to recover the whole sqs event, nested structs included: a payload spark fails
+    // to infer surfaces as a single _corrupt_record column instead
+    assertEquals(Arrays.asList("awsRegion", "eventName", "eventSource", "eventTime", "eventVersion",
+        "requestParameters", "s3", "userIdentity"), Arrays.asList(eventRecords.columns()));
+    Row eventRecord = eventRecords.select("s3.object.key", "s3.object.size").first();
+    assertEquals("1.parquet", eventRecord.getString(0));
+    assertEquals(123L, eventRecord.getLong(1));
     assertNotNull(batch.getRight());
   }
 

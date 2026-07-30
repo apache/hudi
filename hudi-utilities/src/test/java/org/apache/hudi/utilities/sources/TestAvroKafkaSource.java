@@ -318,7 +318,9 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
 
     props.put("hoodie.streamer.source.kafka.value.deserializer.class", "org.apache.hudi.NotADeserializer");
     // the deserializer class is resolved while constructing the source, i.e. before touching kafka
-    assertThrows(HoodieReadFromSourceException.class,
+    HoodieReadFromSourceException exception = assertThrows(HoodieReadFromSourceException.class,
         () -> new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics));
+    assertTrue(exception.getMessage().contains(
+        "Could not load custom avro kafka deserializer: org.apache.hudi.NotADeserializer"), exception.getMessage());
   }
 }

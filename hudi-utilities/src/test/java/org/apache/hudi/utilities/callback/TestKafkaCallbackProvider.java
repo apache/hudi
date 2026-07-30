@@ -44,6 +44,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -83,34 +84,30 @@ public class TestKafkaCallbackProvider extends UtilitiesTestBase {
 
   @Test
   public void testCallbackMessage() {
-    testUtils.createTopic(testTopicName, 2);
-
-    HoodieWriteConfig hoodieConfig = createConfigForKafkaCallback();
-    HoodieWriteCommitCallback commitCallback = HoodieCommitCallbackFactory.create(hoodieConfig);
-
-    List<HoodieWriteStat> stats = generateFakeHoodieWriteStat(1);
-
-    assertDoesNotThrow(() -> commitCallback.call(new HoodieWriteCommitCallbackMessage(makeNewCommitTime(), hoodieConfig.getTableName(), hoodieConfig.getBasePath(), stats)));
-  }
-
-  @Test
-  public void testCallbackMessageWithConfiguredPartition() {
-    int numPartitions = 3;
+    int numPartitions = 2;
     testUtils.createTopic(testTopicName, numPartitions);
 
-    HoodieWriteConfig hoodieConfig = createConfigForKafkaCallback("0");
-    HoodieWriteCommitCallback commitCallback = HoodieCommitCallbackFactory.create(hoodieConfig);
-
     List<HoodieWriteStat> stats = generateFakeHoodieWriteStat(1);
-    commitCallback.call(new HoodieWriteCommitCallbackMessage(makeNewCommitTime(), hoodieConfig.getTableName(), hoodieConfig.getBasePath(), stats));
 
-    List<ConsumerRecord<String, String>> consumed = consumeCallbackMessages(numPartitions);
-    assertEquals(1, consumed.size());
-    // without the partition config the message would be routed by hashing the table name key instead
-    assertEquals(0, consumed.get(0).partition());
+    // without a partition config the message is routed by hashing the table name key
+    HoodieWriteConfig defaultRoutedConfig = createConfigForKafkaCallback(null);
+    HoodieWriteCommitCallback defaultRoutedCallback = HoodieCommitCallbackFactory.create(defaultRoutedConfig);
+    assertDoesNotThrow(() -> defaultRoutedCallback.call(new HoodieWriteCommitCallbackMessage(
+        makeNewCommitTime(), defaultRoutedConfig.getTableName(), defaultRoutedConfig.getBasePath(), stats)));
+
+    // an explicit partition config overrides the key hashing
+    HoodieWriteConfig pinnedConfig = createConfigForKafkaCallback("1");
+    HoodieWriteCommitCallback pinnedCallback = HoodieCommitCallbackFactory.create(pinnedConfig);
+    assertDoesNotThrow(() -> pinnedCallback.call(new HoodieWriteCommitCallbackMessage(
+        makeNewCommitTime(), pinnedConfig.getTableName(), pinnedConfig.getBasePath(), stats)));
+
+    List<ConsumerRecord<String, String>> consumed = consumeCallbackMessages(numPartitions, 2);
+    // hashing the table name key routes to partition 0, so partition 1 can only come from the config
+    assertEquals(Arrays.asList(0, 1),
+        consumed.stream().map(ConsumerRecord::partition).sorted().collect(Collectors.toList()));
   }
 
-  private List<ConsumerRecord<String, String>> consumeCallbackMessages(int numPartitions) {
+  private List<ConsumerRecord<String, String>> consumeCallbackMessages(int numPartitions, int expectedCount) {
     Properties consumerProps = new Properties();
     consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, testUtils.brokerAddress());
     consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "test-kafka-callback-" + UUID.randomUUID());
@@ -125,15 +122,11 @@ public class TestKafkaCallbackProvider extends UtilitiesTestBase {
       consumer.assign(partitions);
       consumer.seekToBeginning(partitions);
       long deadline = System.currentTimeMillis() + 60000;
-      while (records.isEmpty() && System.currentTimeMillis() < deadline) {
+      while (records.size() < expectedCount && System.currentTimeMillis() < deadline) {
         consumer.poll(Duration.ofSeconds(1)).forEach(records::add);
       }
     }
     return records;
-  }
-
-  private HoodieWriteConfig createConfigForKafkaCallback() {
-    return createConfigForKafkaCallback(null);
   }
 
   private HoodieWriteConfig createConfigForKafkaCallback(String partition) {

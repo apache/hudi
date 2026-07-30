@@ -41,28 +41,30 @@ class TestDeprecatedCloudIngestionConfigs {
 
   @Test
   void cloudStoreIngestionConfigDelegatesToCloudSourceConfig() {
+    // covers the implicit constructor of the deprecated constant holder
     assertNotNull(new CloudStoreIngestionConfig());
 
-    assertEquals(CloudSourceConfig.BATCH_SIZE_CONF.key(), CloudStoreIngestionConfig.BATCH_SIZE_CONF);
-    assertEquals(CloudSourceConfig.BATCH_SIZE_CONF.defaultValue().intValue(), CloudStoreIngestionConfig.DEFAULT_BATCH_SIZE);
-    assertEquals(CloudSourceConfig.ACK_MESSAGES.key(), CloudStoreIngestionConfig.ACK_MESSAGES);
-    assertEquals(CloudSourceConfig.ACK_MESSAGES.defaultValue(), CloudStoreIngestionConfig.ACK_MESSAGES_DEFAULT_VALUE);
-    assertEquals(CloudSourceConfig.ENABLE_EXISTS_CHECK.key(), CloudStoreIngestionConfig.ENABLE_EXISTS_CHECK);
-    assertEquals(CloudSourceConfig.ENABLE_EXISTS_CHECK.defaultValue(), CloudStoreIngestionConfig.DEFAULT_ENABLE_EXISTS_CHECK);
-    assertEquals(CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX.key(), CloudStoreIngestionConfig.SELECT_RELATIVE_PATH_PREFIX);
-    assertEquals(CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX.key(), CloudStoreIngestionConfig.IGNORE_RELATIVE_PATH_PREFIX);
-    assertEquals(CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR.key(), CloudStoreIngestionConfig.IGNORE_RELATIVE_PATH_SUBSTR);
-    assertEquals(CloudSourceConfig.SPARK_DATASOURCE_OPTIONS.key(), CloudStoreIngestionConfig.SPARK_DATASOURCE_OPTIONS);
-    assertEquals(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), CloudStoreIngestionConfig.CLOUD_DATAFILE_EXTENSION);
-    assertEquals(CloudSourceConfig.DATAFILE_FORMAT.key(), CloudStoreIngestionConfig.DATAFILE_FORMAT);
+    assertEquals("hoodie.streamer.source.cloud.meta.batch.size", CloudStoreIngestionConfig.BATCH_SIZE_CONF);
+    assertEquals(10, CloudStoreIngestionConfig.DEFAULT_BATCH_SIZE);
+    assertEquals("hoodie.streamer.source.cloud.meta.ack", CloudStoreIngestionConfig.ACK_MESSAGES);
+    assertTrue(CloudStoreIngestionConfig.ACK_MESSAGES_DEFAULT_VALUE);
+    assertEquals("hoodie.streamer.source.cloud.data.check.file.exists", CloudStoreIngestionConfig.ENABLE_EXISTS_CHECK);
+    assertFalse(CloudStoreIngestionConfig.DEFAULT_ENABLE_EXISTS_CHECK);
+    assertEquals("hoodie.streamer.source.cloud.data.select.relpath.prefix", CloudStoreIngestionConfig.SELECT_RELATIVE_PATH_PREFIX);
+    assertEquals("hoodie.streamer.source.cloud.data.ignore.relpath.prefix", CloudStoreIngestionConfig.IGNORE_RELATIVE_PATH_PREFIX);
+    assertEquals("hoodie.streamer.source.cloud.data.ignore.relpath.substring", CloudStoreIngestionConfig.IGNORE_RELATIVE_PATH_SUBSTR);
+    assertEquals("hoodie.streamer.source.cloud.data.datasource.options", CloudStoreIngestionConfig.SPARK_DATASOURCE_OPTIONS);
+    assertEquals("hoodie.streamer.source.cloud.data.select.file.extension", CloudStoreIngestionConfig.CLOUD_DATAFILE_EXTENSION);
+    assertEquals("hoodie.streamer.source.cloud.data.datafile.format", CloudStoreIngestionConfig.DATAFILE_FORMAT);
   }
 
   @Test
   void gcsIngestionConfigDelegatesToGcsEventsSourceConfig() {
+    // covers the implicit constructor of the deprecated constant holder
     assertNotNull(new GcsIngestionConfig());
 
-    assertEquals(GCSEventsSourceConfig.GOOGLE_PROJECT_ID.key(), GcsIngestionConfig.GOOGLE_PROJECT_ID);
-    assertEquals(GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID.key(), GcsIngestionConfig.PUBSUB_SUBSCRIPTION_ID);
+    assertEquals("hoodie.streamer.source.gcs.project.id", GcsIngestionConfig.GOOGLE_PROJECT_ID);
+    assertEquals("hoodie.streamer.source.gcs.subscription.id", GcsIngestionConfig.PUBSUB_SUBSCRIPTION_ID);
   }
 
   @Test

@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -184,22 +185,22 @@ public class TestOpenAICompatibleEmbeddingProvider {
 
   @Test
   public void testUnparsableRetryAfterFallsBackToExponentialBackoff() {
-    // one 429 whose Retry-After cannot be parsed as seconds, then success
-    REMAINING_FAILURES.set(1);
+    // two 429s whose Retry-After cannot be parsed as seconds, then success
+    REMAINING_FAILURES.set(2);
     failureStatus = 429;
     retryAfterHeader = "abc";
     long startMs = System.currentTimeMillis();
     assertEquals(1, provider(null).embed(Arrays.asList("throttled")).size());
-    assertEquals(2, REQUEST_COUNT.get());
-    // the unparsable header is ignored in favour of the base backoff of the first attempt
-    assertTrue(System.currentTimeMillis() - startMs >= 1000);
+    assertEquals(3, REQUEST_COUNT.get());
+    // the unparsable header is ignored in favour of exponential backoff: 1000ms then 2000ms.
+    // honoring "abc" as one second would only add up to 2000ms in total.
+    assertTrue(System.currentTimeMillis() - startMs >= 3000);
   }
 
   @Test
   public void testProviderInitDefaultsToNoOp() {
-    // an implementation that needs no configuration inherits the no-op init
+    // an implementation that needs no configuration inherits the interface's no-op init
     EmbeddingProvider inMemoryProvider = texts -> Collections.singletonList(new float[] {1.0f});
-    inMemoryProvider.init(new TypedProperties());
-    assertEquals(1, inMemoryProvider.embed(Arrays.asList("text")).size());
+    assertDoesNotThrow(() -> inMemoryProvider.init(new TypedProperties()));
   }
 }

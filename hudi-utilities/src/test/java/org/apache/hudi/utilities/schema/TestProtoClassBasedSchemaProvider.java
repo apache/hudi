@@ -90,7 +90,10 @@ public class TestProtoClassBasedSchemaProvider {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
-    Assertions.assertEquals(protoToAvroSchemaProvider.getSourceSchema(), protoToAvroSchemaProvider.getTargetSchema());
+    HoodieSchema expectedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
+    // no target schema is configurable for this provider, so both accessors must serve the source schema
+    Assertions.assertEquals(expectedSchema, HoodieSchema.fromAvroSchema(protoToAvroSchemaProvider.getSourceSchema()));
+    Assertions.assertEquals(expectedSchema, HoodieSchema.fromAvroSchema(protoToAvroSchemaProvider.getTargetSchema()));
   }
 
   @Test
@@ -104,13 +107,13 @@ public class TestProtoClassBasedSchemaProvider {
 
   @Test
   public void validateDeprecatedConfigConstants() {
-    Assertions.assertSame(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME,
-        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME);
-    Assertions.assertSame(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS,
-        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS);
-    Assertions.assertSame(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS,
-        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS);
-    Assertions.assertSame(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH,
-        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_MAX_RECURSION_DEPTH);
+    Assertions.assertEquals("hoodie.streamer.schemaprovider.proto.class.name",
+        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key());
+    Assertions.assertEquals("hoodie.streamer.schemaprovider.proto.flatten.wrappers",
+        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key());
+    Assertions.assertEquals("hoodie.streamer.schemaprovider.proto.timestamps.as.records",
+        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS.key());
+    Assertions.assertEquals("hoodie.streamer.schemaprovider.proto.max.recursion.depth",
+        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_MAX_RECURSION_DEPTH.key());
   }
 }
