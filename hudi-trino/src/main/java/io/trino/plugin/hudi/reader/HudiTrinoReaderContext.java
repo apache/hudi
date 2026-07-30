@@ -61,7 +61,7 @@ public class HudiTrinoReaderContext
         extends HoodieReaderContext<IndexedRecord>
 {
     private final ConnectorPageSource pageSource;
-    private final HudiAvroSerializer avroSerializer;
+    private final List<HiveColumnHandle> columnHandles;
     private final PrefilledColumnValues prefilledColumnValues;
     private final LogFileParquetPageSourceFactory logPageSourceFactory;
     private final Map<String, HiveColumnHandle> colNameToHandle;
@@ -88,7 +88,7 @@ public class HudiTrinoReaderContext
         super(storageConfiguration, tableConfig, Option.empty(), Option.empty(), new AvroRecordContext(tableConfig, tableConfig.getPayloadClass()));
         this.pageSource = pageSource;
         this.prefilledColumnValues = prefilledColumnValues;
-        this.avroSerializer = new HudiAvroSerializer(columnHandles, prefilledColumnValues);
+        this.columnHandles = columnHandles;
         this.logPageSourceFactory = logPageSourceFactory;
         this.colNameToHandle = new HashMap<>();
         for (HiveColumnHandle handle : columnHandles) {
@@ -129,6 +129,11 @@ public class HudiTrinoReaderContext
      * fresh page source is built on demand with predicate pushdown disabled so every log record is read and
      * merged; for the base file the pre-built base page source is reused. Classic Avro log blocks never reach
      * here (they deserialize inline).
+     * <p>
+     * Both paths emit records that CARRY {@code requiredSchema}: the file-group reader tracks that schema for
+     * every buffered record, and payload-based merging round-trips records through Avro binary with it
+     * ({@code BaseAvroPayload}), so a record whose own schema differs (in field order or nullability) would
+     * decode into garbage values there.
      */
     private ClosableIterator<IndexedRecord> getFileRecordIterator(
             StoragePath path,
@@ -143,7 +148,7 @@ public class HudiTrinoReaderContext
             }
             List<HiveColumnHandle> logProjection = buildRequiredColumnHandles(requiredSchema);
             ConnectorPageSource logSource = logPageSourceFactory.create(path.toString(), start, length, logProjection);
-            HudiAvroSerializer logSerializer = new HudiAvroSerializer(logProjection, prefilledColumnValues);
+            HudiAvroSerializer logSerializer = new HudiAvroSerializer(logProjection, prefilledColumnValues, requiredSchema.toAvroSchema());
             return createRecordIterator(logSource, logSerializer);
         }
         // The base read reuses the pre-built page source, so it can only satisfy requiredSchema fields the
@@ -161,7 +166,10 @@ public class HudiTrinoReaderContext
                             + "FileGroupReaderSchemaHandler.generateRequiredSchema.",
                     missingColumns));
         }
-        return createRecordIterator(pageSource, avroSerializer);
+        // Every requiredSchema field is in the base projection (checked above) and every projected column is
+        // a requiredSchema field (the file-group reader's required schema always contains the full requested
+        // schema), so the by-name channel mapping resolves in both directions.
+        return createRecordIterator(pageSource, new HudiAvroSerializer(columnHandles, prefilledColumnValues, requiredSchema.toAvroSchema()));
     }
 
     /**
@@ -176,6 +184,11 @@ public class HudiTrinoReaderContext
     {
         List<HiveColumnHandle> handles = new ArrayList<>();
         for (HoodieSchemaField field : requiredSchema.getFields()) {
+            // A projection handle may carry the lowercased metastore column name (e.g. 'op' for the
+            // DMS delete key 'Op'); that is fine on this path: parquet columns resolve
+            // case-insensitively, the serializer maps channels into requiredSchema positions
+            // case-insensitively, and hudi-common reads merge fields off the record's own schema,
+            // which serialize() stamps with the table casing.
             handles.add(colNameToHandle.computeIfAbsent(
                     field.name().toLowerCase(Locale.ROOT),
                     _ -> HudiUtil.toColumnHandle(field)));
@@ -241,11 +254,13 @@ public class HudiTrinoReaderContext
     protected Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses)
     {
         // Dispatch on the table's merge mode, mirroring HoodieAvroReaderContext. The Trino reader
-        // operates on IndexedRecord, so the Avro mergers apply directly. Using the read-time merger
-        // (combineAndGetUpdateValue) rather than a fixed preCombine merger keeps COMMIT_TIME_ORDERING
-        // and custom-payload tables correct on MoR reads.
-        // TODO(apache/hudi#18898): add MoR read tests for delete markers and custom payloads to
-        //  exercise the EVENT_TIME_ORDERING (combineAndGetUpdateValue) and CUSTOM branches below.
+        // operates on IndexedRecord, so the Avro mergers apply directly. The CUSTOM arm's return
+        // value drives merging (combineAndGetUpdateValue at read time, covered end-to-end by
+        // TestHudiMorPayloadSemantics; apache/hudi#18898). The ordering arms' mergers are reached
+        // through partialMerge when a log block carries IS_PARTIAL (BufferedRecordMergerFactory),
+        // which these suites do not cover; TestHudiMorMergeModeSemantics pins the mode semantics
+        // themselves. TODO(apache/hudi#19413): cover the ordering arms' partialMerge path
+        // (IS_PARTIAL log blocks) once the Avro mergers implement it.
         switch (mergeMode) {
             case EVENT_TIME_ORDERING:
                 return Option.of(new HoodieAvroRecordMerger());
