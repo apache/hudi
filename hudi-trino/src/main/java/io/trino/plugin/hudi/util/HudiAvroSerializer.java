@@ -60,9 +60,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
+import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
 import static io.airlift.slice.Slices.utf8Slice;
-import static io.trino.plugin.hudi.HudiUtil.constructSchema;
 import static io.trino.plugin.hudi.HudiUtil.getFieldFromSchema;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
@@ -111,24 +111,53 @@ public class HudiAvroSerializer
 
     private final List<HiveColumnHandle> columnHandles;
     private final List<Type> columnTypes;
+    // Both are null for a page-building-only serializer (the two-arg constructor): buildRecordInPage
+    // reads field positions off each record's own schema, so no record schema is needed there -- and
+    // none could be built for hidden (synthesized) columns, which are answered from the split by
+    // PrefilledColumnValues rather than read from the file. serialize() requires the three-arg
+    // constructor, which maps page channel i to record position channelToFieldPosition[i].
     private final Schema schema;
+    private final int[] channelToFieldPosition;
 
     public HudiAvroSerializer(List<HiveColumnHandle> columnHandles, PrefilledColumnValues prefilledColumnValues)
     {
         this.columnHandles = columnHandles;
         this.columnTypes = columnHandles.stream().map(HiveColumnHandle::getType).toList();
-        // Fetches projected schema
-        this.schema = constructSchema(columnHandles.stream().filter(ch -> !ch.isHidden()).map(HiveColumnHandle::getName).toList(),
-                columnHandles.stream().filter(ch -> !ch.isHidden()).map(HiveColumnHandle::getHiveType).toList());
         this.prefilledColumnValues = prefilledColumnValues;
+        this.schema = null;
+        this.channelToFieldPosition = null;
+    }
+
+    /**
+     * Builds a serializer whose {@link #serialize} records carry {@code recordSchema} -- the exact
+     * schema hudi-common tracks for the records of this read (the file-group reader's required
+     * schema) -- instead of a schema reconstructed from the projection's Hive types. The
+     * reconstruction differs from the table's real schema (every Hive column becomes a nullable
+     * union, fields follow projection order), and payload-based merging round-trips the record
+     * through Avro BINARY with the tracked schema ({@code BaseAvroPayload}), where any structural
+     * difference misaligns the decode and yields garbage values. Page channels are matched to
+     * record fields BY NAME, so the projection may order columns differently from the schema;
+     * every projected column must be a field of {@code recordSchema}.
+     */
+    public HudiAvroSerializer(List<HiveColumnHandle> columnHandles, PrefilledColumnValues prefilledColumnValues, Schema recordSchema)
+    {
+        this.columnHandles = columnHandles;
+        this.columnTypes = columnHandles.stream().map(HiveColumnHandle::getType).toList();
+        this.schema = recordSchema;
+        this.prefilledColumnValues = prefilledColumnValues;
+        int[] mapping = new int[columnHandles.size()];
+        for (int i = 0; i < columnHandles.size(); i++) {
+            mapping[i] = getFieldFromSchema(columnHandles.get(i).getName(), recordSchema).pos();
+        }
+        this.channelToFieldPosition = mapping;
     }
 
     public IndexedRecord serialize(Page sourcePage, int position)
     {
+        checkState(schema != null, "serialize() requires a serializer built with a record schema");
         IndexedRecord record = new GenericData.Record(schema);
         for (int i = 0; i < columnTypes.size(); i++) {
-            Object value = getValue(sourcePage, i, position);
-            record.put(i, value);
+            record.put(channelToFieldPosition[i], getValue(sourcePage, i, position));
         }
         return record;
     }
