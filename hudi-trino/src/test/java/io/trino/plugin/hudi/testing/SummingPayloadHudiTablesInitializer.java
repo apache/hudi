@@ -41,9 +41,10 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
  * strategy id. Reads resolve {@code HoodieAvroRecordMerger} (no {@code hudi.record-merger-impls} needed) and
  * run the payload's {@code combineAndGetUpdateValue}, observable as SUMMED values.
  * <p>
- * A final commit hard-deletes a key ({@code writeClient.delete}): the native delete log record must route
- * through the payload-based CUSTOM merge arm ({@code HoodieAvroRecordMerger} with an empty payload) and
- * win against the base row -- the delete coverage both ordering arms already have.
+ * A final commit hard-deletes a key ({@code writeClient.delete}): the native delete log record routes to
+ * {@code HoodieAvroRecordMerger} but wins on its {@code isCommitTimeOrderingDelete} short-circuit (the
+ * delete carries the sentinel ordering value), before any payload is constructed -- the delete coverage
+ * both ordering arms already have.
  * <p>
  * Records are wrapped in {@link HoodieAvroPayload} (a pass-through that is NOT a {@code BaseAvroPayload}), so
  * every merge decision happens at read time from the table config. See {@code TestHudiMorPayloadSemantics}.
@@ -110,8 +111,9 @@ public class SummingPayloadHudiTablesInitializer
         client.commit(secondCommit, secondStatuses);
 
         // Third commit: hard delete of k2. The native delete log record reaches the payload-based
-        // CUSTOM merge arm as an empty payload, whose combineAndGetUpdateValue returns empty, so the
-        // delete wins against the base row -- the delete path of the user-merger dispatch.
+        // CUSTOM merge arm, where it wins on HoodieAvroRecordMerger's isCommitTimeOrderingDelete
+        // short-circuit (writeClient.delete records carry the sentinel ordering value), before any
+        // payload is constructed -- the delete path of the user-merger dispatch.
         String deleteCommit = client.startCommit();
         List<WriteStatus> deleteStatuses = client.delete(
                 ImmutableList.of(hoodieKey("k2")), deleteCommit);

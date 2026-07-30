@@ -117,9 +117,10 @@ public class TestHudiMorPayloadSemantics
     @Test
     public void testSummingPayloadHardDeleteRemovesRowOnSnapshotRead()
     {
-        // The hard delete is a native delete log record routed through the payload-based CUSTOM merge
-        // arm (HoodieAvroRecordMerger with an empty payload) -- the delete path of the user-merger
-        // dispatch, which both ordering arms already cover
+        // The hard delete is a native delete log record routed to the payload-based CUSTOM merge arm,
+        // where it wins on HoodieAvroRecordMerger's isCommitTimeOrderingDelete short-circuit (the
+        // delete carries the sentinel ordering value) -- the delete path of the user-merger dispatch,
+        // which both ordering arms already cover
         assertThat(computeScalar("SELECT count(*) FROM " + SummingPayloadHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k2'"))
                 .isEqualTo(0L);
         assertThat(computeScalar("SELECT count(*) FROM " + SummingPayloadHudiTablesInitializer.TABLE_NAME + " WHERE key = 'k2'"))
