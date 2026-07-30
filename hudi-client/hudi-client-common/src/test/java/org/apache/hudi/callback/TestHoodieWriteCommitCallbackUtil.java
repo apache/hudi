@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -84,8 +85,7 @@ public class TestHoodieWriteCommitCallbackUtil {
 
     assertTrue(resolved.isEmpty(), "inserts (no prevCommit) must not resolve a prev base file");
     // The view must not even be consulted for inserts.
-    verify(view, never()).getBaseFileOn(org.mockito.ArgumentMatchers.anyString(),
-        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
+    verify(view, never()).getBaseFileOn(anyString(), anyString(), anyString());
   }
 
   @Test

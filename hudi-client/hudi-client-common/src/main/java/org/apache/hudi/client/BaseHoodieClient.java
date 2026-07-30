@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.callback.HoodieClientInitCallback;
 import org.apache.hudi.callback.HoodieCommitCallbackFactory;
 import org.apache.hudi.callback.HoodieWriteCommitCallback;
-import org.apache.hudi.callback.HoodieWriteCommitCallbackUtil;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -501,7 +500,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       commitCallback.call(new HoodieWriteCommitCallbackMessage(
           commitTime, config.getTableName(), config.getBasePath(),
           stats, Option.of(commitActionType), extraMetadata,
-          () -> HoodieWriteCommitCallbackUtil.resolvePrevFilePaths(stats, fsViewSupplier.get()),
+          fsViewSupplier,
           Collections.emptyMap()));
     } catch (Exception e) {
       log.warn("HoodieWriteCommitCallback failed for commit {} ({}); ignoring",
