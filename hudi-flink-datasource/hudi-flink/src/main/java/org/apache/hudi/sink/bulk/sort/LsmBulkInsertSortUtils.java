@@ -38,7 +38,7 @@ public final class LsmBulkInsertSortUtils {
 
   public static final String SHUFFLE_KEY_FIELD = "_shuffle_key";
   public static final String RECORD_KEY_FIELD = "_record_key";
-  public static final String PAYLOAD_FIELD = "_payload";
+  public static final String RECORD_FIELD = "_record";
 
   private LsmBulkInsertSortUtils() {
   }
@@ -46,18 +46,18 @@ public final class LsmBulkInsertSortUtils {
   /**
    * Returns the internal row type passed from LSM key decoration through the external sorter.
    *
-   * <p>The fields are ordered as shuffle key, encoded Hudi record key, and original table row.
+   * <p>The fields are ordered as shuffle key, encoded record key, and original table row.
    *
-   * @param payloadType logical type of the original table row
+   * @param rowType logical type of the original table row
    * @return logical type of the internal LSM sort row
    */
-  public static RowType sortRowType(RowType payloadType) {
+  public static RowType sortRowType(RowType rowType) {
     LogicalType[] types = new LogicalType[] {
         DataTypes.STRING().getLogicalType(),
         DataTypes.STRING().getLogicalType(),
-        payloadType
+        rowType
     };
-    String[] names = new String[] {SHUFFLE_KEY_FIELD, RECORD_KEY_FIELD, PAYLOAD_FIELD};
+    String[] names = new String[] {SHUFFLE_KEY_FIELD, RECORD_KEY_FIELD, RECORD_FIELD};
     return RowType.of(types, names);
   }
 

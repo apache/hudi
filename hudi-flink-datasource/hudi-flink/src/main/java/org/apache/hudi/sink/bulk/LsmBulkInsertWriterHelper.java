@@ -61,12 +61,12 @@ public class LsmBulkInsertWriterHelper extends BulkInsertWriterHelper {
   }
 
   /**
-   * Decorates a table row with the partition path and encoded Hudi record key used by the LSM
+   * Decorates a table row with the partition path and encoded record key used by the LSM
    * sorter.
    *
    * @param partitionPath partition path
-   * @param record        original table row used to generate the Hudi record key
-   * @param keyGen        Hudi RowData key generator
+   * @param record        original table row used to generate the record key
+   * @param keyGen        RowData key generator
    * @return internal LSM sort row containing partition path, record key, and original table row
    */
   public static RowData rowWithPartitionAndKey(

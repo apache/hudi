@@ -145,9 +145,9 @@ public class Pipelines {
     final boolean isLsmTreeStorageLayout = OptionsResolver.isLsmTreeStorageLayout(conf);
 
     DataStream<RowData> preparedDataStream = isBucketIndexType
-        ? prepareBucketBulkInsert(
+        ? bucketShuffleAndSort(
             conf, rowType, dataStream, writeTasks, isLsmTreeStorageLayout)
-        : prepareNonBucketBulkInsert(
+        : shuffleAndSort(
             conf, rowType, dataStream, writeTasks, isLsmTreeStorageLayout);
 
     String operatorName =
@@ -160,14 +160,14 @@ public class Pipelines {
   }
 
   /**
-   * Prepares the input stream for a bucket bulk insert writer.
+   * Shuffles and sorts the input stream for a bucket bulk insert writer.
    *
    * <p>Records are first routed to the write task that owns the target bucket. For the default
    * layout, the file ID is appended and the stream is optionally sorted by file ID. For the LSM
    * layout, the file ID and record key are appended in the same transform, then the stream is
    * sorted by file ID and record key.
    */
-  private static DataStream<RowData> prepareBucketBulkInsert(
+  private static DataStream<RowData> bucketShuffleAndSort(
       Configuration conf,
       RowType rowType,
       DataStream<RowData> dataStream,
@@ -238,7 +238,7 @@ public class Pipelines {
   }
 
   /**
-   * Prepares the input stream for a non-bucket bulk insert writer.
+   * Shuffles and sorts the input stream for a non-bucket bulk insert writer.
    *
    * <p>Partitioned input is optionally shuffled by partition path. The LSM layout then appends
    * the partition path and record key and sorts by both fields; for a non-partitioned table the
@@ -246,7 +246,7 @@ public class Pipelines {
    * the existing behavior: non-partitioned input is passed through without shuffle or sort, while
    * partitioned input is sorted only when bulk-insert input sorting is enabled.
    */
-  private static DataStream<RowData> prepareNonBucketBulkInsert(
+  private static DataStream<RowData> shuffleAndSort(
       Configuration conf,
       RowType rowType,
       DataStream<RowData> dataStream,
@@ -272,6 +272,7 @@ public class Pipelines {
     }
 
     if (isLsmTreeStorageLayout) {
+      // LSM sorted runs are ordered by partition path and the encoded record key strings.
       RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(rowType);
       InternalTypeInfo<RowData> sortTypeInfo = InternalTypeInfo.of(sortRowType);
       DataStream<RowData> sortInput = routedDataStream
@@ -292,6 +293,9 @@ public class Pipelines {
       return routedDataStream;
     }
 
+    // Unlike the LSM path, the default-layout sorter orders the original record-key fields by
+    // their Flink logical types. The resulting order can differ from encoded record-key String
+    // ordering; for example, numeric keys are ordered as 2, 10 here but as "10", "2" for LSM.
     final boolean sortByRecordKey =
         conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY);
     final String[] partitionFields = FilePathUtils.extractPartitionKeys(conf);
