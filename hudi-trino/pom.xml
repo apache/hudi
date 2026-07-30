@@ -597,6 +597,17 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <!-- The parent release profile pins javadoc source to 11, which rejects records
+                         (a Java 16 feature); follow hudi.trino.java.version instead. -->
+                    <source>${hudi.trino.java.version}</source>
+                    <!-- The release profile also sets failOnError=false; this module's javadoc is clean, keep breaks loud. -->
+                    <failOnError>true</failOnError>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
                 <executions>
                     <execution>
