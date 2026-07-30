@@ -42,7 +42,7 @@ public class WriterHelpers {
     } else {
       return OptionsResolver.isBucketIndexType(conf)
           ? new BucketBulkInsertWriterHelper(
-          conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType)
+              conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType)
           : new BulkInsertWriterHelper(
               conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType);
     }
