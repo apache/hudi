@@ -20,20 +20,29 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 import org.apache.hudi.utilities.testutils.sources.AbstractCloudObjectsSourceTestBase;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
@@ -42,7 +51,11 @@ import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_RE
 import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_URL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 /**
  * Basic tests for {@link S3EventsSource}.
@@ -103,9 +116,50 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
     verifyRddsArePersisted(sourceFormatAdapter, fetch2, persistSourceRdd);
   }
 
+  /**
+   * Without a schema provider the event schema is inferred from the SQS payload instead of being
+   * applied on read.
+   */
+  @Test
+  public void testReadingFromSourceWithoutSchemaProvider() {
+    S3EventsSource source = prepareS3EventsSource(generateProperties(false), null);
+    generateMessageInQueue("1");
+
+    Pair<Option<Dataset<Row>>, Checkpoint> batch = source.fetchNextBatch(Option.empty(), Long.MAX_VALUE);
+    Dataset<Row> eventRecords = batch.getLeft().get();
+    assertEquals(1, eventRecords.count());
+    assertTrue(Arrays.asList(eventRecords.columns()).contains("s3"));
+    assertNotNull(batch.getRight());
+  }
+
+  /**
+   * Messages picked up by a fetch are deleted from the queue on commit, exactly once, and the sqs
+   * client is released when the source is closed.
+   */
+  @Test
+  public void testOnCommitDeletesProcessedMessagesAndClose() throws IOException {
+    S3EventsSource source = prepareS3EventsSource(generateProperties(false), schemaProvider);
+    generateMessageInQueue("1");
+    CloudObjectTestUtils.deleteMessagesInQueue(sqs);
+    source.fetchNextBatch(Option.empty(), Long.MAX_VALUE);
+
+    source.onCommit("1");
+    verify(sqs, times(1)).deleteMessageBatch(any(DeleteMessageBatchRequest.class));
+    // the processed messages are cleared on commit, so a second commit has nothing left to delete
+    source.onCommit("2");
+    verify(sqs, times(1)).deleteMessageBatch(any(DeleteMessageBatchRequest.class));
+
+    source.close();
+    verify(sqs).close();
+  }
+
   @Override
   public Source prepareCloudObjectSource(TypedProperties props) {
-    S3EventsSource dfsSource = new S3EventsSource(props, jsc, sparkSession, schemaProvider);
+    return prepareS3EventsSource(props, schemaProvider);
+  }
+
+  private S3EventsSource prepareS3EventsSource(TypedProperties props, SchemaProvider sourceSchemaProvider) {
+    S3EventsSource dfsSource = new S3EventsSource(props, jsc, sparkSession, sourceSchemaProvider);
     dfsSource.sqs = this.sqs;
     return dfsSource;
   }

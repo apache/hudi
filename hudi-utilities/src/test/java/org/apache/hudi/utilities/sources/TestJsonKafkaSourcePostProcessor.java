@@ -38,16 +38,20 @@ import org.apache.hudi.utilities.testutils.KafkaTestUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 import static org.apache.hudi.utilities.config.JsonKafkaPostProcessorConfig.JSON_KAFKA_PROCESSOR_CLASS;
@@ -55,11 +59,18 @@ import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.json
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestHarness {
+  // database hudi, table hudi_maxwell_01, delete
+  private static final String MAXWELL_DELETE_RECORD = "{\"database\":\"hudi\",\"table\":\"hudi_maxwell_01\","
+      + "\"type\":\"delete\",\"ts\":1647074555,\"xid\":6631,\"commit\":true,"
+      + "\"data\":{\"id\":\"6018220e39e74477b45c7cf42f66bdc0\",\"name\":\"mathieu\",\"age\":20,"
+      + "\"insert_time\":\"2022-03-12 04:40:02\",\"update_time\":\"2022-03-12 04:42:25\"}}";
+
   private static KafkaTestUtils testUtils;
 
   private final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
@@ -295,6 +306,81 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     JavaRDD<String> dataWithoutDatabaseRegex = jsc().parallelize(Arrays.asList(hudiMaxwell01Insert, hudi02Maxwell01Insert));
     long countWithoutDatabaseRegex = processor.process(dataWithoutDatabaseRegex).count();
     assertEquals(2, countWithoutDatabaseRegex);
+  }
+
+  /**
+   * The delete time of a maxwell record is rewritten with `ts` for every timestamp-like ordering
+   * field type, using the numeric representation the type asks for.
+   */
+  @ParameterizedTest
+  @CsvSource({"EPOCHMILLISECONDS, 1647074555000", "UNIX_TIMESTAMP, 1647074555"})
+  public void testMaxwellPostProcessorNumericOrderingFieldsType(String orderingFieldsType,
+                                                                long expectedOrderingValue) throws IOException {
+    TypedProperties props = maxwellProps();
+    props.setProperty(JsonKafkaPostProcessorConfig.ORDERING_FIELDS_TYPE.key(), orderingFieldsType);
+    props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "update_time");
+
+    List<String> processed = new MaxwellJsonKafkaSourcePostProcessor(props)
+        .process(jsc().parallelize(Collections.singletonList(MAXWELL_DELETE_RECORD))).collect();
+
+    assertEquals(1, processed.size());
+    JsonNode record = new ObjectMapper().readTree(processed.get(0));
+    assertTrue(record.get(HoodieRecord.HOODIE_IS_DELETED_FIELD).booleanValue());
+    assertEquals(expectedOrderingValue, record.get("update_time").longValue());
+  }
+
+  /**
+   * An unknown ordering field type is rejected while resolving the enum, i.e. before the processor
+   * gets a chance to reach its unsupported-format branch.
+   */
+  @Test
+  public void testMaxwellPostProcessorWithUnknownOrderingFieldsType() {
+    TypedProperties props = maxwellProps();
+    props.setProperty(JsonKafkaPostProcessorConfig.ORDERING_FIELDS_TYPE.key(), "EPOCH_SECONDS");
+    props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "update_time");
+    MaxwellJsonKafkaSourcePostProcessor processor = new MaxwellJsonKafkaSourcePostProcessor(props);
+    JavaRDD<String> input = jsc().parallelize(Collections.singletonList(MAXWELL_DELETE_RECORD));
+
+    // the ordering field type is read inside the map task, so spark wraps up the failure
+    SparkException exception = Assertions.assertThrows(SparkException.class, () -> processor.process(input).collect());
+    Throwable cause = exception;
+    while (cause != null && !(cause instanceof IllegalArgumentException)) {
+      cause = cause.getCause();
+    }
+    assertNotNull(cause);
+    assertTrue(cause.getMessage().contains("EPOCH_SECONDS"));
+  }
+
+  /**
+   * Without a database regex, records are kept based on the table name alone.
+   */
+  @Test
+  public void testMaxwellPostProcessorWithoutDatabaseRegex() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(JsonKafkaPostProcessorConfig.TABLE_NAME_REGEX.key(), "hudi_maxwell(_)?[0-9]{0,2}");
+    MaxwellJsonKafkaSourcePostProcessor processor = new MaxwellJsonKafkaSourcePostProcessor(props);
+
+    JavaRDD<String> input = jsc().parallelize(Arrays.asList(
+        maxwellInsertRecord("hudi", "hudi_maxwell_01"),
+        maxwellInsertRecord("not_a_hudi_database", "hudi_maxwell_02"),
+        maxwellInsertRecord("hudi", "not_a_target_table")));
+
+    // both target tables are kept, whatever the database they come from
+    assertEquals(2, processor.process(input).count());
+  }
+
+  private static TypedProperties maxwellProps() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(JsonKafkaPostProcessorConfig.DATABASE_NAME_REGEX.key(), "hudi(_)?[0-9]{0,2}");
+    props.setProperty(JsonKafkaPostProcessorConfig.TABLE_NAME_REGEX.key(), "hudi_maxwell(_)?[0-9]{0,2}");
+    return props;
+  }
+
+  private static String maxwellInsertRecord(String database, String table) {
+    return "{\"database\":\"" + database + "\",\"table\":\"" + table + "\",\"type\":\"insert\","
+        + "\"ts\":1647074402,\"xid\":6233,\"commit\":true,"
+        + "\"data\":{\"id\":\"6018220e39e74477b45c7cf42f66bdc0\",\"name\":\"mathieu\",\"age\":18,"
+        + "\"insert_time\":\"2022-03-12 08:40:02\",\"update_time\":\"2022-03-12 08:40:02\"}}";
   }
 
   /**

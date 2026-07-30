@@ -30,6 +30,11 @@ import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackCo
 import org.apache.hudi.utilities.testutils.KafkaTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -37,12 +42,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestKafkaCallbackProvider extends UtilitiesTestBase {
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
@@ -82,10 +93,56 @@ public class TestKafkaCallbackProvider extends UtilitiesTestBase {
     assertDoesNotThrow(() -> commitCallback.call(new HoodieWriteCommitCallbackMessage(makeNewCommitTime(), hoodieConfig.getTableName(), hoodieConfig.getBasePath(), stats)));
   }
 
+  @Test
+  public void testCallbackMessageWithConfiguredPartition() {
+    int numPartitions = 3;
+    testUtils.createTopic(testTopicName, numPartitions);
+
+    HoodieWriteConfig hoodieConfig = createConfigForKafkaCallback("0");
+    HoodieWriteCommitCallback commitCallback = HoodieCommitCallbackFactory.create(hoodieConfig);
+
+    List<HoodieWriteStat> stats = generateFakeHoodieWriteStat(1);
+    commitCallback.call(new HoodieWriteCommitCallbackMessage(makeNewCommitTime(), hoodieConfig.getTableName(), hoodieConfig.getBasePath(), stats));
+
+    List<ConsumerRecord<String, String>> consumed = consumeCallbackMessages(numPartitions);
+    assertEquals(1, consumed.size());
+    // without the partition config the message would be routed by hashing the table name key instead
+    assertEquals(0, consumed.get(0).partition());
+  }
+
+  private List<ConsumerRecord<String, String>> consumeCallbackMessages(int numPartitions) {
+    Properties consumerProps = new Properties();
+    consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, testUtils.brokerAddress());
+    consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "test-kafka-callback-" + UUID.randomUUID());
+    consumerProps.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+    consumerProps.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+
+    List<ConsumerRecord<String, String>> records = new ArrayList<>();
+    try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps)) {
+      List<TopicPartition> partitions = IntStream.range(0, numPartitions)
+          .mapToObj(partition -> new TopicPartition(testTopicName, partition))
+          .collect(Collectors.toList());
+      consumer.assign(partitions);
+      consumer.seekToBeginning(partitions);
+      long deadline = System.currentTimeMillis() + 60000;
+      while (records.isEmpty() && System.currentTimeMillis() < deadline) {
+        consumer.poll(Duration.ofSeconds(1)).forEach(records::add);
+      }
+    }
+    return records;
+  }
+
   private HoodieWriteConfig createConfigForKafkaCallback() {
+    return createConfigForKafkaCallback(null);
+  }
+
+  private HoodieWriteConfig createConfigForKafkaCallback(String partition) {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieWriteCommitKafkaCallbackConfig.TOPIC.key(), testTopicName);
     props.setProperty(HoodieWriteCommitKafkaCallbackConfig.BOOTSTRAP_SERVERS.key(), testUtils.brokerAddress());
+    if (partition != null) {
+      props.setProperty(HoodieWriteCommitKafkaCallbackConfig.PARTITION.key(), partition);
+    }
 
     HoodieWriteConfig hoodieWriteConfig = HoodieWriteConfig.newBuilder()
             .withCallbackConfig(
