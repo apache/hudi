@@ -87,8 +87,13 @@ jobs:
       #
       # Stage the copy outside the workspace. `mvn apache-rat:check` in the RAT check step scans
       # the filesystem from the repository root, so a copy of the tree left inside the workspace
-      # gets scanned too, and every root-anchored exclude in the root pom (such as
-      # `hudi-trino-plugin/**`) silently stops applying to it.
+      # gets scanned too, and every root-anchored exclude in the root pom (such as `.github/**`)
+      # silently stops applying to it.
+      #
+      # hudi-trino needs no RAT exclude: its files carry AL headers that RAT's default matchers
+      # accept. The Trino-style header check (airbase's license-maven-plugin) runs only in the
+      # upstream trinodb/trino build; nothing in this repo runs it since RFC-105 dropped the
+      # trino-root parent.
       - name: Create source release directory
         run: ./scripts/release/create_source_directory.sh "${{ runner.temp }}/hudi-tmp-repo"
       - name: Check Binary Files

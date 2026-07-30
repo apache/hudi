@@ -142,6 +142,12 @@ jobs:
       - name: Build connector (JDK 25)
         if: needs.changes.outputs.trino == 'true'
         run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
+      # The release deploy (-DdeployArtifacts=true) runs javadoc:jar with doclint=none,
+      # and the module pom keeps failOnError=true. Reproduce that exact configuration here
+      # so a javadoc break fails the PR instead of surfacing during the staging deploy.
+      - name: Javadoc check (JDK 25)
+        if: needs.changes.outputs.trino == 'true'
+        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino javadoc:jar -Ddoclint=none
       - name: Test connector (JDK 25)
         if: needs.changes.outputs.trino == 'true'
         run: mvn $MVN_ARGS -Phudi-trino,hudi-trino-tests -pl hudi-trino test
