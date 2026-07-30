@@ -177,7 +177,11 @@ public class CloudObjectsSelector {
   // Retries only ever target transient, server-side failures (SQS InternalError, throttling, a dropped
   // connection); retrying microseconds later would almost certainly hit the same condition, so each pass
   // backs off exponentially from this base: 100ms, 200ms, 400ms. Bounded by DELETE_MAX_RETRIES, so the
-  // delete phase adds at most 700ms of sleep on the driver even in the worst case.
+  // retries add at most 700ms of *sleep* on the driver even in the worst case. That is the sleep alone,
+  // not a bound on the phase: the dominant term is up to DELETE_MAX_RETRIES + 1 passes of ceil(M/10)
+  // concurrent calls, which at a large maxMessagePerBatch is the part that can approach a short
+  // visibilityTimeout - at which point retries start failing on stale handles and the remaining budget
+  // is spent on entries that have already moved to the permanent bucket.
   static final long DELETE_RETRY_BASE_BACKOFF_MS = 100;
   // How many failed message ids to name in the residual-failure WARN. Enough for on-call to grep the
   // queue or a DLQ for a concrete message without dumping an unbounded list into the log.
@@ -891,7 +895,7 @@ public class CloudObjectsSelector {
     DeleteStats stats = new DeleteStats();
     int retries = 0;
     try {
-      DeletePass pass = deleteBatchesConcurrently(pool, sqs, queueUrl, deleteBatches, busyNanos);
+      DeletePass pass = deleteBatchesConcurrently(pool, sqs, queueUrl, deleteBatches, workers, busyNanos);
       stats.add(pass);
       List<FailedDelete> retryable = splitOffPermanentFailures(pass, permanentFailures);
       while (!retryable.isEmpty() && retries < DELETE_MAX_RETRIES) {
@@ -900,7 +904,7 @@ public class CloudObjectsSelector {
         List<MessageTracker> retryTrackers =
             retryable.stream().map(failedDelete -> failedDelete.message).collect(Collectors.toList());
         pass = deleteBatchesConcurrently(pool, sqs, queueUrl,
-            createListPartitions(retryTrackers, SQS_BATCH_MAX_ENTRIES), busyNanos);
+            createListPartitions(retryTrackers, SQS_BATCH_MAX_ENTRIES), workers, busyNanos);
         stats.add(pass);
         retryable = splitOffPermanentFailures(pass, permanentFailures);
         log.debug("Delete retry {} for queue {} (backoff {} ms) left {} messages still failing.",
@@ -970,10 +974,16 @@ public class CloudObjectsSelector {
    * message that was not deleted, plus the call stats. Each batch's SQS call time is accumulated into
    * {@code busyNanos} so the caller can log the serialized-equivalent time and prove the deletes
    * actually overlapped.
+   *
+   * @param workers the pool's size, passed in rather than re-derived from {@code deleteBatches}. A retry
+   *     pass carries fewer batches than the first one, so deriving it here would produce a second,
+   *     smaller value under the same name as the caller's - and the caller's is the one that sized the
+   *     pool and is reported as {@code parallelism} on the perf line. Over-dispatch is not a concern:
+   *     {@code pending} is exhausted once every batch is submitted, whatever the slot count says.
    */
   private DeletePass deleteBatchesConcurrently(ExecutorService pool, SqsClient sqs, String queueUrl,
-                                               List<List<MessageTracker>> deleteBatches, AtomicLong busyNanos) {
-    int workers = Math.max(1, Math.min(processingParallelism, deleteBatches.size()));
+                                               List<List<MessageTracker>> deleteBatches, int workers,
+                                               AtomicLong busyNanos) {
     CompletionService<BatchOutcome> completionService = new ExecutorCompletionService<>(pool);
     Iterator<List<MessageTracker>> pending = deleteBatches.iterator();
     DeletePass pass = new DeletePass();
