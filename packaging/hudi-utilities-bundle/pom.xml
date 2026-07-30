@@ -153,6 +153,11 @@
                   <include>com.101tec:zkclient</include>
                   <include>org.apache.kafka:kafka-clients</include>
 
+                  <!-- AWS SDK for JsonKinesisSource; relocated below, matching hudi-aws-bundle. -->
+                  <include>software.amazon.awssdk:*</include>
+                  <!-- KPL de-aggregation: extracts user records from Kinesis Producer Library aggregated records -->
+                  <include>com.amazonaws:amazon-kinesis-deaggregator</include>
+
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
                   <include>org.apache.hive:hive-service-rpc</include>
@@ -234,6 +239,10 @@
                 <relocation>
                   <pattern>org.apache.httpcomponents.</pattern>
                   <shadedPattern>org.apache.hudi.aws.org.apache.httpcomponents.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>software.amazon.awssdk.</pattern>
+                  <shadedPattern>org.apache.hudi.software.amazon.awssdk.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.uber.m3.</pattern>
