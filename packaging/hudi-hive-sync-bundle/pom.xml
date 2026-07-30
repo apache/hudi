@@ -123,7 +123,7 @@
                   <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
                 </relocation>
               </relocations>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <createDependencyReducedPom>true</createDependencyReducedPom>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>

@@ -136,7 +136,7 @@
                   <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
                 </relocation>
               </relocations>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <createDependencyReducedPom>true</createDependencyReducedPom>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>
