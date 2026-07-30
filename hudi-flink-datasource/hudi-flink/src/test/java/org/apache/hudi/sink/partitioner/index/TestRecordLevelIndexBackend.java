@@ -40,6 +40,8 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
@@ -120,6 +122,54 @@ public class TestRecordLevelIndexBackend {
   }
 
   @Test
+  public void testGetAndUpdateLazilyCreatedPartitionCache() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.registerMetrics(new UnregisteredMetricsGroup());
+
+      assertNull(backend.get("new-partition", "new-key"));
+
+      backend.onCheckpoint(3L);
+      backend.update("new-partition", "new-key", "new-file-group");
+
+      assertEquals("new-file-group", backend.get("new-partition", "new-key"));
+      assertEquals(1, backend.getPartitionBucketCaches().size());
+    }
+  }
+
+  @Test
+  public void testNewPartitionUsesAverageExistingCacheSize() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.registerMetrics(new UnregisteredMetricsGroup());
+      backend.getPartitionBucketCaches().put(
+          "existing", cacheWithHeapSize(backend, ONE_MB / 2, 1L));
+
+      assertEquals(ONE_MB / 2, backend.inferMemorySizeForCache());
+      assertNull(backend.get("new-partition", "new-key"));
+
+      assertTrue(backend.getPartitionBucketCaches().containsKey("existing"));
+      assertTrue(backend.getPartitionBucketCaches().containsKey("new-partition"));
+    }
+  }
+
+  @Test
+  public void testCheckpointCompletionUsesOldestInflightCheckpoint() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("old", cacheWithHeapSize(backend, 2 * ONE_MB, 1L));
+      Map<Long, String> inflightInstants = new HashMap<>();
+      inflightInstants.put(2L, "002");
+      inflightInstants.put(4L, "004");
+
+      backend.onCheckpointComplete(new TestCorrespondent(inflightInstants), 5L);
+      backend.cleanIfNecessary(0L, null);
+
+      assertFalse(backend.getPartitionBucketCaches().containsKey("old"));
+      assertThrows(IllegalArgumentException.class,
+          () -> backend.onCheckpointComplete(
+              new TestCorrespondent(Collections.singletonMap(1L, "001")), 6L));
+    }
+  }
+
+  @Test
   public void testPartitionCacheDictionaryEncodesFileGroupId() throws Exception {
     try (RecordLevelIndexBackend backend = createBackend()) {
       ExternalSpillableMap<String, Integer> recordKeyToFileGroupIdCode = mapWithStorage(0L);
@@ -128,10 +178,13 @@ public class TestRecordLevelIndexBackend {
       cache.putRecordKey("key1", "file-group-id-000000000000000000000001");
       cache.putRecordKey("key2", "file-group-id-000000000000000000000001");
       cache.putRecordKey("key3", "file-group-id-000000000000000000000002");
+      cache.bootstrapRecordKey("key4", "file-group-id-000000000000000000000002");
 
       assertEquals("file-group-id-000000000000000000000001", cache.getFileGroupId("key1"));
       assertEquals("file-group-id-000000000000000000000001", cache.getFileGroupId("key2"));
       assertEquals("file-group-id-000000000000000000000002", cache.getFileGroupId("key3"));
+      assertEquals("file-group-id-000000000000000000000002", cache.getFileGroupId("key4"));
+      assertEquals(4, cache.size());
       assertEquals(Integer.valueOf(0), recordKeyToFileGroupIdCode.get("key1"));
       assertEquals(Integer.valueOf(0), recordKeyToFileGroupIdCode.get("key2"));
       assertEquals(Integer.valueOf(1), recordKeyToFileGroupIdCode.get("key3"));
@@ -163,6 +216,18 @@ public class TestRecordLevelIndexBackend {
 
       assertNotNull(metricGroup.getHistogram("partition_bootstrap_latency_millis"));
       assertNotNull(metricGroup.getHistogram("partition_bootstrap_keys_loaded"));
+    }
+  }
+
+  @Test
+  public void testLazyEvictReturnsWhenOnlyProtectedPartitionExceedsLimit() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("protected", cacheWithHeapSize(backend, 2 * ONE_MB, 1L));
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+
+      backend.cleanIfNecessary(0L, "protected");
+
+      assertTrue(backend.getPartitionBucketCaches().containsKey("protected"));
     }
   }
 

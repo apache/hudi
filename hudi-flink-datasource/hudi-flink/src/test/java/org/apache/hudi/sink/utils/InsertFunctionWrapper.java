@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.append.AppendWriteFunction;
 import org.apache.hudi.sink.append.AppendWriteFunctions;
+import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -66,6 +67,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final MockOperatorEventGateway gateway;
   private final MockSubtaskGateway subtaskGateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
+  private final IOManager ioManager;
   @Getter
   private StreamWriteOperatorCoordinator coordinator;
   private final MockStateInitializationContext stateInitializationContext;
@@ -84,11 +86,11 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public InsertFunctionWrapper(String tablePath, Configuration conf, ExecutionConfig executionConfig) throws Exception {
-    IOManager ioManager = new IOManagerAsync();
+    this.ioManager = new IOManagerAsync();
     MockEnvironment environment = new MockEnvironmentBuilder()
         .setTaskName("mockTask")
         .setManagedMemorySize(4 * MemoryManager.DEFAULT_PAGE_SIZE)
-        .setIOManager(ioManager)
+        .setIOManager(this.ioManager)
         .setExecutionConfig(executionConfig)
         .build();
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment, executionConfig);
@@ -209,10 +211,11 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   @Override
   public void close() throws Exception {
-    this.coordinator.close();
-    if (clusteringFunctionWrapper != null) {
-      clusteringFunctionWrapper.close();
-    }
+    TestFunctionWrapper.closeAll(
+        writeFunction == null ? null : writeFunction::close,
+        coordinator::close,
+        clusteringFunctionWrapper == null ? null : clusteringFunctionWrapper::close,
+        ioManager::close);
   }
 
   public BulkInsertWriterHelper getWriterHelper() {
@@ -228,6 +231,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
+    writeFunction.setMemorySegmentPoolFactory(new MemorySegmentPoolFactory(null, null, -1));
     writeFunction.open(conf);
     writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
     // set up subtask gateway
