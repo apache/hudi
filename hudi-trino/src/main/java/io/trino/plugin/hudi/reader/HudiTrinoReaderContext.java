@@ -254,12 +254,13 @@ public class HudiTrinoReaderContext
     protected Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses)
     {
         // Dispatch on the table's merge mode, mirroring HoodieAvroReaderContext. The Trino reader
-        // operates on IndexedRecord, so the Avro mergers apply directly. Only the CUSTOM arm's
-        // return value drives merging (combineAndGetUpdateValue at read time, covered end-to-end by
-        // TestHudiMorPayloadSemantics; apache/hudi#18898): for the two ordering modes hudi-common
-        // picks its buffered merger from the merge mode alone (BufferedRecordMergerFactory) and only
-        // reads getMergingStrategy() off the merger returned here, so those arms are not separately
-        // testable -- TestHudiMorMergeModeSemantics pins the mode semantics themselves.
+        // operates on IndexedRecord, so the Avro mergers apply directly. The CUSTOM arm's return
+        // value drives merging (combineAndGetUpdateValue at read time, covered end-to-end by
+        // TestHudiMorPayloadSemantics; apache/hudi#18898). The ordering arms' mergers are reached
+        // through partialMerge when a log block carries IS_PARTIAL (BufferedRecordMergerFactory),
+        // which these suites do not cover; TestHudiMorMergeModeSemantics pins the mode semantics
+        // themselves. TODO(apache/hudi#19413): cover the ordering arms' partialMerge path
+        // (IS_PARTIAL log blocks) once the Avro mergers implement it.
         switch (mergeMode) {
             case EVENT_TIME_ORDERING:
                 return Option.of(new HoodieAvroRecordMerger());

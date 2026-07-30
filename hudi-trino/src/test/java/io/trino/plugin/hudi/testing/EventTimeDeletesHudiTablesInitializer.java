@@ -23,7 +23,6 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -59,9 +58,6 @@ public class EventTimeDeletesHudiTablesInitializer
 {
     public static final String TABLE_NAME = "mor_deletes";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
-
-    /** The single unnamed partition this fixture writes into, needed to address hard-deleted keys. */
-    private static final String PARTITION_PATH = "";
 
     public EventTimeDeletesHudiTablesInitializer()
     {
@@ -141,7 +137,7 @@ public class EventTimeDeletesHudiTablesInitializer
         // Hard deletes carry the sentinel ordering value and win regardless of merge mode.
         String deleteCommit = client.startCommit();
         List<WriteStatus> deleteStatuses = client.delete(
-                ImmutableList.of(new HoodieKey("k2", PARTITION_PATH)), deleteCommit);
+                ImmutableList.of(hoodieKey("k2")), deleteCommit);
         client.commit(deleteCommit, deleteStatuses);
     }
 

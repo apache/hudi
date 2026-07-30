@@ -206,7 +206,13 @@ public abstract class AbstractMergerHudiTablesInitializer
 
     protected static HoodieRecord<HoodieAvroPayload> avroRecord(GenericRecord record, String key)
     {
-        return new HoodieAvroRecord<>(new HoodieKey(key, PARTITION_PATH), new HoodieAvroPayload(Option.of(record)), null);
+        return new HoodieAvroRecord<>(hoodieKey(key), new HoodieAvroPayload(Option.of(record)), null);
+    }
+
+    /** Addresses a record in the single unnamed partition, e.g. for hard deletes via {@code writeClient.delete}. */
+    protected static HoodieKey hoodieKey(String key)
+    {
+        return new HoodieKey(key, PARTITION_PATH);
     }
 
     /** Mirrors the staged table into the Trino filesystem so the connector observes the commits written so far. */

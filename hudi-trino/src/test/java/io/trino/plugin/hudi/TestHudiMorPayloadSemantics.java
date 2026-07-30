@@ -22,8 +22,6 @@ import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
 
-import static io.trino.plugin.hudi.testing.DmsPayloadHudiTablesInitializer.RT_TABLE_NAME;
-import static io.trino.plugin.hudi.testing.DmsPayloadHudiTablesInitializer.TABLE_NAME;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -63,11 +61,11 @@ public class TestHudiMorPayloadSemantics
     {
         // Read-optimized: both rows (the Op='D' record lives in a log file)
         assertQuery(
-                "SELECT key, name, value, Op FROM " + TABLE_NAME + " ORDER BY key",
+                "SELECT key, name, value, Op FROM " + DmsPayloadHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT), 'I'), ('k2', 'k2_base', 20, 'I')");
         // Snapshot: k2 is deleted by the Op='D' log record via the delete-key/marker table properties
         assertQuery(
-                "SELECT key, name, value, Op FROM " + RT_TABLE_NAME + " ORDER BY key",
+                "SELECT key, name, value, Op FROM " + DmsPayloadHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT), 'I')");
     }
 
@@ -78,9 +76,9 @@ public class TestHudiMorPayloadSemantics
         // from the PREFIXED table properties (hoodie.record.merge.property.hoodie.payload.delete.field)
         // for the base read -- the regression this suite pins for HudiUtil.mergeRequiredColumnNames
         assertQuery(
-                "SELECT key, value FROM " + RT_TABLE_NAME + " ORDER BY key",
+                "SELECT key, value FROM " + DmsPayloadHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', CAST(10 AS BIGINT))");
-        assertThat(computeScalar("SELECT count(*) FROM " + RT_TABLE_NAME)).isEqualTo(1L);
+        assertThat(computeScalar("SELECT count(*) FROM " + DmsPayloadHudiTablesInitializer.RT_TABLE_NAME)).isEqualTo(1L);
     }
 
     @Test
