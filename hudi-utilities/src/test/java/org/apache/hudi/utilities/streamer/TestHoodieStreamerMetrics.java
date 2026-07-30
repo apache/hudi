@@ -21,6 +21,9 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.util.HoodieStorageUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
@@ -30,7 +33,10 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.withSettings;
 
 /**
  * Tests {@link HoodieStreamerMetrics}.
@@ -114,5 +120,36 @@ public class TestHoodieStreamerMetrics {
     metrics.emitStreamerJobSuccessMetrics();
     metrics.emitStreamerJobFailedMetrics();
     assertNull(metrics.getMetrics());
+  }
+
+  @Test
+  public void testDeprecatedDeltaStreamerMetricsAlias() {
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
+        .on(true)
+        .withPath("/tmp/path6")
+        .withReporterType("INMEMORY")
+        .build();
+    HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(
+        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+    metrics.emitStreamerJobSuccessMetrics();
+    assertEquals(".deltastreamer.success", metrics.getMetrics().getRegistry().getGauges().firstKey());
+
+    // the write config overload reports against the metrics config derived from the write config
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/path7")
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(true).withReporterType("INMEMORY").build())
+        .build();
+    HoodieDeltaStreamerMetrics metricsFromWriteConfig = new HoodieDeltaStreamerMetrics(
+        writeConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+    metricsFromWriteConfig.emitStreamerJobFailedMetrics();
+    assertEquals(".deltastreamer.failure",
+        metricsFromWriteConfig.getMetrics().getRegistry().getGauges().firstKey());
+  }
+
+  @Test
+  public void testIngestionMetricsAcceptsWriteConfig() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/path8").build();
+    // the write config constructor of the abstract base is only reachable from external subclasses
+    assertNotNull(mock(HoodieIngestionMetrics.class, withSettings().useConstructor(writeConfig)));
   }
 }

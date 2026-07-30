@@ -32,6 +32,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,6 +56,7 @@ public class TestOpenAICompatibleEmbeddingProvider {
   private static volatile int failureStatus = 500;
   private static volatile boolean abortConnection = false;
   private static volatile int vectorsToReturn = -1; // -1 = one per input
+  private static volatile String retryAfterHeader = "1";
   private static final AtomicReference<String> LAST_BODY = new AtomicReference<>();
   private static final AtomicReference<String> LAST_AUTH = new AtomicReference<>();
 
@@ -72,7 +74,7 @@ public class TestOpenAICompatibleEmbeddingProvider {
           exchange.close(); // no response -> client-side IOException
           return;
         }
-        exchange.getResponseHeaders().add("Retry-After", "1");
+        exchange.getResponseHeaders().add("Retry-After", retryAfterHeader);
         exchange.sendResponseHeaders(failureStatus, -1);
         exchange.close();
         return;
@@ -107,6 +109,7 @@ public class TestOpenAICompatibleEmbeddingProvider {
     failureStatus = 500;
     abortConnection = false;
     vectorsToReturn = -1;
+    retryAfterHeader = "1";
   }
 
   private OpenAICompatibleEmbeddingProvider provider(String apiKeyEnv) {
@@ -177,5 +180,26 @@ public class TestOpenAICompatibleEmbeddingProvider {
     vectorsToReturn = 1;
     assertThrows(HoodieException.class,
         () -> provider(null).embed(Arrays.asList("one", "two")));
+  }
+
+  @Test
+  public void testUnparsableRetryAfterFallsBackToExponentialBackoff() {
+    // one 429 whose Retry-After cannot be parsed as seconds, then success
+    REMAINING_FAILURES.set(1);
+    failureStatus = 429;
+    retryAfterHeader = "abc";
+    long startMs = System.currentTimeMillis();
+    assertEquals(1, provider(null).embed(Arrays.asList("throttled")).size());
+    assertEquals(2, REQUEST_COUNT.get());
+    // the unparsable header is ignored in favour of the base backoff of the first attempt
+    assertTrue(System.currentTimeMillis() - startMs >= 1000);
+  }
+
+  @Test
+  public void testProviderInitDefaultsToNoOp() {
+    // an implementation that needs no configuration inherits the no-op init
+    EmbeddingProvider inMemoryProvider = texts -> Collections.singletonList(new float[] {1.0f});
+    inMemoryProvider.init(new TypedProperties());
+    assertEquals(1, inMemoryProvider.embed(Arrays.asList("text")).size());
   }
 }

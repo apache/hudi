@@ -18,14 +18,19 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import org.apache.avro.Schema;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -55,5 +60,33 @@ public class TestInputBatch {
     SchemaProvider schemaProvider = new RowBasedSchemaProvider(null);
     final InputBatch<String> inputBatch = new InputBatch<>(Option.of("foo"), null, schemaProvider);
     assertSame(schemaProvider, inputBatch.getSchemaProvider());
+  }
+
+  @Test
+  public void rowBasedSchemaProviderShouldDeriveSchemaFromRowStruct() {
+    Schema sourceSchema = new RowBasedSchemaProvider(
+        new StructType().add("id", DataTypes.LongType, false)).getSourceSchema();
+    assertEquals(RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME, sourceSchema.getName());
+    assertEquals(RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE, sourceSchema.getNamespace());
+    assertNotNull(sourceSchema.getField("id"));
+    // the (props, jssc) constructor is the signature HoodieStreamer resolves reflectively
+    assertNotNull(new RowBasedSchemaProvider(new TypedProperties(), null));
+  }
+
+  @Test
+  public void jsonAndAvroSourcesShouldRejectDeprecatedFetchNewData() {
+    JsonSource jsonSource = new JsonSource(new TypedProperties(), null, null, null) {
+    };
+    AvroSource avroSource = new AvroSource(new TypedProperties(), null, null, null) {
+    };
+
+    assertEquals(Source.SourceType.JSON, jsonSource.getSourceType());
+    assertEquals(Source.SourceType.AVRO, avroSource.getSourceType());
+    assertThrows(UnsupportedOperationException.class, () -> jsonSource.fetchNewData(Option.empty(), 100L));
+    assertThrows(UnsupportedOperationException.class, () -> avroSource.fetchNewData(Option.empty(), 100L));
+
+    // commit callback and cleanup are no-ops for sources that cache nothing
+    jsonSource.onCommit("00000000000001");
+    jsonSource.releaseResources();
   }
 }

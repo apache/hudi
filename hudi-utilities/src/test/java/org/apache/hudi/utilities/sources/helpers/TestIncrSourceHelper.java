@@ -129,6 +129,20 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
   }
 
   @Test
+  void testCloudObjectIncrCheckpointSerialization() {
+    // neither commit nor key: falls back to the sentinel start timestamp
+    assertEquals(IncrSourceHelper.DEFAULT_START_TIMESTAMP, new CloudObjectIncrCheckpoint(null, null).toString());
+
+    CloudObjectIncrCheckpoint commitOnly = new CloudObjectIncrCheckpoint("commit1", null);
+    assertEquals("commit1", commitOnly.toString());
+    assertEquals("commit1", commitOnly.getCommit());
+
+    CloudObjectIncrCheckpoint commitAndKey = new CloudObjectIncrCheckpoint("commit1", "path/to/file1.json");
+    assertEquals("commit1#path/to/file1.json", commitAndKey.toString());
+    assertEquals("path/to/file1.json", commitAndKey.getKey());
+  }
+
+  @Test
   void testSingleObjectExceedingSourceLimit() {
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
     // Add file paths and sizes to the list

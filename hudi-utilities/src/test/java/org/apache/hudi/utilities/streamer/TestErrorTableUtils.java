@@ -33,6 +33,7 @@ import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -73,5 +74,17 @@ public class TestErrorTableUtils {
     assertThrows(HoodieException.class,
         () -> ErrorTableUtils.getErrorTableWriter(
             new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem, Option.empty()));
+  }
+
+  @Test
+  public void testBaseErrorTableWriterMetricsConstructor() {
+    // the metrics aware constructor of the abstract writer is only reachable from writer subclasses
+    assertNotNull(Mockito.mock(BaseErrorTableWriter.class, Mockito.withSettings().useConstructor(
+        new HoodieStreamer.Config(),
+        Mockito.mock(SparkSession.class),
+        new TypedProperties(),
+        Mockito.mock(HoodieSparkEngineContext.class),
+        Mockito.mock(FileSystem.class),
+        Option.empty())));
   }
 }
