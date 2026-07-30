@@ -140,12 +140,18 @@ public class StringUtils {
    * <p>This comparison does not materialize the UTF-8 byte arrays. It compares UTF-16 code units
    * directly and handles supplementary characters specially to preserve UTF-8 byte order.
    *
+   * <p>Assumes well-formed UTF-16 input. For strings containing unpaired surrogates the result no
+   * longer matches {@code String#getBytes(UTF_8)} byte order: the encoder replaces an unpaired
+   * surrogate with {@code '?'} while this method sorts it after every BMP character. Production
+   * callers derive keys by decoding UTF-8, which cannot produce unpaired surrogates.
+   *
    * <p>Ported from Google Firebase Firestore's {@code compareUtf8Strings}.
    */
   public static int compareUtf8Bytes(String s1, String s2) {
-    // Source: https://github.com/firebase/firebase-android-sdk/blame/f05e4bcb7f86f3b21833b1e0960d793b800d38d1/firebase-firestore/src/main/java/com/google/firebase/firestore/util/Util.java#L76-L132
-    // noinspection StringEquality
-    if (s1 == s2) {
+    // Source: https://github.com/firebase/firebase-android-sdk/blob/f05e4bcb7f86f3b21833b1e0960d793b800d38d1/firebase-firestore/src/main/java/com/google/firebase/firestore/util/Util.java#L76-L132
+    // The identity check intentionally avoids scanning when both references point to the same
+    // non-null String while preserving the method's fail-fast null contract.
+    if (s1 == s2 && s1 != null) {
       return 0;
     }
 
