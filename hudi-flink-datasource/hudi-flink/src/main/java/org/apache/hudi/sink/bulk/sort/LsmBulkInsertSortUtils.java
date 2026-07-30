@@ -28,7 +28,7 @@ import org.apache.flink.table.types.logical.RowType;
  * <p>Each internal row contains a shuffle key, the actual encoded record key, and the original
  * table row. The shuffle key is the partition path for the regular bulk-insert path and the file ID
  * for the bucket-index path. The external sorter orders rows by the shuffle key first and the
- * record key second, so records for each writer route form a record-key-ordered run.
+ * record key second, so records for each shuffle key form a record-key-ordered run.
  *
  * <p>The original table row remains nested in the internal row and is not part of the sort key.
  * After sorting, the LSM writer helpers consume the internal row directly and reuse the retained
@@ -36,9 +36,10 @@ import org.apache.flink.table.types.logical.RowType;
  */
 public final class LsmBulkInsertSortUtils {
 
-  public static final String SHUFFLE_KEY_FIELD = "_shuffle_key";
+  public static final String FILE_GROUP_META_FIELD = "_fg";
+  public static final String PARTITION_META_FIELD = "_partition";
   public static final String RECORD_KEY_FIELD = "_record_key";
-  public static final String RECORD_FIELD = "_record";
+  public static final String RECORD_FIELD = "record";
 
   private LsmBulkInsertSortUtils() {
   }
@@ -49,15 +50,16 @@ public final class LsmBulkInsertSortUtils {
    * <p>The fields are ordered as shuffle key, encoded record key, and original table row.
    *
    * @param rowType logical type of the original table row
+   * @param shuffleKeyField field name for the partition path or file group
    * @return logical type of the internal LSM sort row
    */
-  public static RowType sortRowType(RowType rowType) {
+  public static RowType sortRowType(RowType rowType, String shuffleKeyField) {
     LogicalType[] types = new LogicalType[] {
         DataTypes.STRING().getLogicalType(),
         DataTypes.STRING().getLogicalType(),
         rowType
     };
-    String[] names = new String[] {SHUFFLE_KEY_FIELD, RECORD_KEY_FIELD, RECORD_FIELD};
+    String[] names = new String[] {shuffleKeyField, RECORD_KEY_FIELD, RECORD_FIELD};
     return RowType.of(types, names);
   }
 
@@ -67,13 +69,13 @@ public final class LsmBulkInsertSortUtils {
    * <p>The nested payload is deliberately excluded from the sort keys, so duplicate record keys
    * are retained without comparing or aggregating their payloads.
    *
-   * @param sortRowType logical type returned by {@link #sortRowType(RowType)}
+   * @param sortRowType logical type returned by {@link #sortRowType(RowType, String)}
    * @return generator for the LSM bulk-insert sort operator
    */
   public static SortOperatorGen getLsmSorterGen(RowType sortRowType) {
     return new SortOperatorGen(sortRowType,
         new String[] {
-            SHUFFLE_KEY_FIELD,
+            sortRowType.getFieldNames().get(0),
             RECORD_KEY_FIELD
         });
   }

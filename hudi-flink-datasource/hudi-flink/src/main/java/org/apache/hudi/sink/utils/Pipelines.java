@@ -191,7 +191,8 @@ public class Pipelines {
         dataStream.partitionCustom(partitioner, keyGen::getHoodieKey);
 
     if (isLsmTreeStorageLayout) {
-      RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(rowType);
+      RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(
+          rowType, LsmBulkInsertSortUtils.FILE_GROUP_META_FIELD);
       InternalTypeInfo<RowData> sortTypeInfo = InternalTypeInfo.of(sortRowType);
       DataStream<RowData> sortInput = routedDataStream
           .map(record -> LsmBucketBulkInsertWriterHelper.rowWithFileIdAndRecordKey(
@@ -273,7 +274,8 @@ public class Pipelines {
 
     if (isLsmTreeStorageLayout) {
       // LSM sorted runs are ordered by partition path and the encoded record key strings.
-      RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(rowType);
+      RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(
+          rowType, LsmBulkInsertSortUtils.PARTITION_META_FIELD);
       InternalTypeInfo<RowData> sortTypeInfo = InternalTypeInfo.of(sortRowType);
       DataStream<RowData> sortInput = routedDataStream
           .map(record -> LsmBulkInsertWriterHelper.rowWithPartitionAndKey(

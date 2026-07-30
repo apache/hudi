@@ -79,7 +79,11 @@ class TestLsmBulkInsertSortUtils {
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "id");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
-    RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(rowType);
+    RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(
+        rowType, LsmBulkInsertSortUtils.PARTITION_META_FIELD);
+    assertEquals(
+        Arrays.asList("_partition", "_record_key", "record"),
+        sortRowType.getFieldNames());
 
     RowData row10 = row(10L, "ten", "p1");
     RowData row2 = row(2L, "two", "p1");

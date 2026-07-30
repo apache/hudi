@@ -107,7 +107,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
     this.lsmSortInput = OptionsResolver.isLsmTreeStorageLayout(conf);
     this.sortInputRowType = lsmSortInput
-        ? LsmBulkInsertSortUtils.sortRowType(rowType)
+        ? LsmBulkInsertSortUtils.sortRowType(rowType, LsmBulkInsertSortUtils.FILE_GROUP_META_FIELD)
         : rowTypeWithFileId;
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
