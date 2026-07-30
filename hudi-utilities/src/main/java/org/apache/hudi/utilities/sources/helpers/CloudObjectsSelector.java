@@ -136,7 +136,14 @@ public class CloudObjectsSelector {
   // including one that returns no messages, which still proves the endpoint and credentials are healthy.
   // Kept small because the AWS SDK has already exhausted its own standard retry strategy (3 attempts
   // with exponential backoff) before the exception ever surfaces here, so this is a second layer.
-  // Independent of parallelism, so tolerance is identical at parallelism=1 and parallelism=16.
+  // NOTE: this counts consecutive *completions*, not serial calls, so the tolerance it delivers is
+  // tighter at high parallelism than at 1 - a throttling episode tends to fail several in-flight calls
+  // at once, and 5 such completions in a row is far likelier than 5 serial calls failing in a row.
+  // Tightest on a queue that is not yielding: there the only calls that could reset the run are 20s
+  // empty polls, and a burst of ~100ms failures lands well ahead of them. The direction is intended - a
+  // fan-out-wide failure is stronger evidence of a systemic problem than one isolated failure - and it
+  // is safe because in-flight calls are drained rather than cancelled, so their healthy responses are
+  // still folded in before the empty-result check in getMessagesToProcess decides whether to throw.
   static final int MAX_CONSECUTIVE_TRANSIENT_FAILURES = 5;
   // ReceiveMessage returns OverLimit "if the maximum number of in flight messages is reached" (~120,000
   // for a standard queue, 20,000 for FIFO). That is backpressure, not an error: received messages stay
@@ -155,7 +162,9 @@ public class CloudObjectsSelector {
   // resetting the empty counter and can hold the loop for hours. Cap the total calls at this multiple of
   // the ideal count (plannedReceiveCalls), which tolerates an average per-call yield as low as
   // 1/RECEIVE_CALL_BUDGET_FACTOR of the maximum before the batch gives up and lets the next ingestion
-  // cycle continue from where it left off.
+  // cycle continue from where it left off. Counted in calls rather than seconds on purpose: the budget
+  // then encodes a claim about queue yield alone and is latency-independent by construction, so slow
+  // round-trips make a batch take longer without making it smaller.
   static final int RECEIVE_CALL_BUDGET_FACTOR = 2;
   // SQS caps DeleteMessageBatch at 10 entries per call (AWS hard limit); a larger batch is rejected
   // outright with TooManyEntriesInBatchRequest.
@@ -263,6 +272,13 @@ public class CloudObjectsSelector {
    * absent (e.g. {@code RedrivePolicy} without a dead-letter queue) go through
    * {@link #attrOrUnknown}.
    *
+   * <p>FIFO-ness is diagnostic only and deliberately does not gate the receive fan-out, which would
+   * otherwise be the obvious thing to check: concurrent receives on a FIFO queue would break the
+   * per-message-group ordering such a queue exists to provide. It is not reachable here. This selector
+   * is driven by S3 event notifications, and S3 cannot publish to a FIFO queue - neither directly nor
+   * through SNS, since a standard SNS topic cannot deliver to a FIFO queue. If this class is ever
+   * repointed at an arbitrary queue, that assumption is what has to be re-checked.
+   *
    * @param queueUrl        the queue url, for correlation
    * @param queueAttributes attributes already fetched for this batch (no extra SQS call is made)
    */
@@ -360,6 +376,15 @@ public class CloudObjectsSelector {
    * #MAX_CONSECUTIVE_TRANSIENT_FAILURES} transient failures occur in a row; or the receive-call budget
    * ({@value #RECEIVE_CALL_BUDGET_FACTOR}x {@code plannedReceiveCalls}) is spent.
    *
+   * <p>Three of those bounds overlap and are deliberately not merged - each answers a different question,
+   * in the unit natural to it. {@code maxMessagePerBatch} bounds how much work to take, in messages.
+   * {@link #emptyReceivesToConfirmDrain} decides whether the queue is empty, using the explicit empty
+   * response SQS returns rather than inferring emptiness from the absence of a signal.
+   * {@code receiveCallBudget} bounds runaway, in calls - deliberately not in seconds, so that slow
+   * round-trips make a batch take longer without making it smaller. A time-based budget would conflate
+   * "the queue is yielding poorly" with "the network is slow right now", which are different problems
+   * with different fixes.
+   *
    * <p>Whenever a <em>stop condition</em> ends dispatch, the calls already in flight are drained and their
    * messages kept - never cancelled. A ReceiveMessage that succeeded server-side has already made its
    * messages invisible, so discarding the response would strand them for the full visibility timeout. For
@@ -376,6 +401,10 @@ public class CloudObjectsSelector {
    * - an empty result would otherwise be indistinguishable from a drained queue to the caller and to
    * on-call. A batch that did get a real answer from SQS (an empty response, or an in-flight-limit
    * rejection) returns normally even if some sibling call failed, since the queue is demonstrably healthy.
+   *
+   * @return the received messages in <em>completion</em> order, not call-issue order. Callers must not
+   *     depend on the ordering: {@code S3EventsMetaSelector} sorts on the S3 event time and derives its
+   *     checkpoint from the maximum, so the source already treats receive order as unordered input.
    */
   protected List<Message> getMessagesToProcess(
       SqsClient sqsClient,
@@ -415,7 +444,7 @@ public class CloudObjectsSelector {
     if (numMessagesToProcess <= 0) {
       log.info("SQS receive summary for queue {}: fetched 0 messages across 0 receive calls, exitReason={}.",
           queueUrl, ReceiveExitReason.NO_MESSAGES);
-      return new ArrayList<>();
+      return Collections.emptyList();
     }
 
     // Bound the total number of receive calls: plannedReceiveCalls is the ideal count (every call
@@ -515,6 +544,18 @@ public class CloudObjectsSelector {
    * still holds messages is expected rather than exceptional, so scattered empties can end a batch before
    * its target is reached. That costs throughput on a non-default setting, not correctness: confirming a
    * drain early only defers the remainder to the next ingestion cycle, it never drops a message.
+   *
+   * <p>Deliberately not scaled by the worker count, even though at the default this returns 1 while
+   * {@code processingParallelism} defaults to 16. Concurrent polls are not independent draws: they
+   * observe the same queue over the same overlapping window, and a long-poll empty reports queue state
+   * ("nothing was visible on any server for the full wait") rather than a per-call sample, so a shared
+   * cause does not compound across workers. The sampling that does produce false empties belongs to
+   * short polling, which queries only a subset of servers - which is why AWS scopes the residual risk to
+   * low wait times, and why {@code longPollWait} is already the right variable to key on. A worker-count
+   * term would also be inert precisely where it is needed: at {@code longPollWait=1} the poll-cost term
+   * already demands 20 empties, while at the default it would raise 1 to 8 in the regime where a single
+   * empty is strongest. It would additionally make the threshold depend on batch size, since the worker
+   * count is {@code min(processingParallelism, plannedReceiveCalls)}.
    */
   static int emptyReceivesToConfirmDrain(int longPollWait) {
     if (longPollWait <= 0) {
