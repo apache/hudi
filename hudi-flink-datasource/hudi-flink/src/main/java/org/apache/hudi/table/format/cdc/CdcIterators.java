@@ -124,19 +124,19 @@ public final class CdcIterators {
 
     @Override
     public boolean hasNext() {
-      if (recordIterator != null) {
-        if (recordIterator.hasNext()) {
-          return true;
-        } else {
+      while (true) {
+        if (recordIterator != null) {
+          if (recordIterator.hasNext()) {
+            return true;
+          }
           recordIterator.close();
           recordIterator = null;
         }
-      }
-      if (fileSplitIterator.hasNext()) {
+        if (!fileSplitIterator.hasNext()) {
+          return false;
+        }
         recordIterator = recordIteratorFunc.apply(fileSplitIterator.next());
-        return recordIterator.hasNext();
       }
-      return false;
     }
 
     @Override
