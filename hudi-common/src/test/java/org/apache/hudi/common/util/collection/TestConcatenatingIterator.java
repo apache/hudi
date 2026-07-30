@@ -29,6 +29,9 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class TestConcatenatingIterator {
 
@@ -61,5 +64,22 @@ public class TestConcatenatingIterator {
     } catch (IllegalArgumentException e) {
       //
     }
+  }
+
+  @Test
+  public void testCloseableConcatClosesRemainingIterators() {
+    ClosableIterator<Integer> first = mock(ClosableIterator.class);
+    ClosableIterator<Integer> second = mock(ClosableIterator.class);
+    when(first.hasNext()).thenReturn(true);
+    when(first.next()).thenReturn(1);
+
+    CloseableConcatenatingIterator<Integer> iterator =
+        new CloseableConcatenatingIterator<>(Arrays.asList(first, second));
+    assertEquals(1, iterator.next());
+
+    iterator.close();
+
+    verify(first).close();
+    verify(second).close();
   }
 }

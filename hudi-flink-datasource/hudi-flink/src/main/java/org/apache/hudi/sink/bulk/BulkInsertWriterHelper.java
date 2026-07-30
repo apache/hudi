@@ -59,7 +59,7 @@ import static org.apache.hudi.common.util.FutureUtils.allOf;
  * Helper class for bulk insert used by Flink.
  */
 @Slf4j
-public class BulkInsertWriterHelper {
+public class BulkInsertWriterHelper implements AutoCloseable {
 
   @Getter
   protected final String instantTime;
@@ -170,6 +170,7 @@ public class BulkInsertWriterHelper {
     return handles.get(partitionPath);
   }
 
+  @Override
   public void close() throws IOException {
     if (handles.isEmpty()) {
       return;
@@ -228,4 +229,3 @@ public class BulkInsertWriterHelper {
   }
 
 }
-
