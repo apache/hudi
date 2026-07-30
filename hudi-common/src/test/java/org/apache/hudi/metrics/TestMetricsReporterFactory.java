@@ -94,6 +94,28 @@ class TestMetricsReporterFactory {
     }
   }
 
+  /**
+   * {@code hudi-aws} is deliberately absent from this module's test classpath, which is exactly the
+   * situation a user hits with {@code hudi-spark-bundle}: that bundle does not shade {@code hudi-aws},
+   * so the reflectively loaded CloudWatch reporter cannot be found. The failure must name the missing
+   * class and how to fix it, not just report that some class could not be loaded.
+   */
+  @Test
+  void metricsReporterFactoryShouldExplainHowToEnableCloudWatchWhenHudiAwsIsMissing() {
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
+
+    HoodieException exception = assertThrows(HoodieException.class,
+        () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
+
+    String message = exception.getMessage();
+    assertTrue(message.contains("org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter"),
+        () -> "The failure should name the missing reporter class, but was: " + message);
+    assertTrue(message.contains("hudi-aws-bundle"),
+        () -> "The failure should name the bundle that provides the reporter, but was: " + message);
+    assertTrue(message.contains(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()),
+        () -> "The failure should name the config to change, but was: " + message);
+  }
+
   @Test
   void metricsReporterFactoryShouldReturnUserDefinedReporter() {
     when(metricsConfig.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
