@@ -95,6 +95,8 @@ spec:
               value: {{ .Values.trino.schema | quote }}
             - name: GATEWAY_TRINO_USER
               value: {{ .Values.trino.user | quote }}
+            - name: GATEWAY_SCHEMA_HINTS
+              value: {{ .Values.schemaHints | default "both" | quote }}
             - name: GATEWAY_SQL_ROW_CAP
               value: {{ .Values.guardrails.rowCap | quote }}
             - name: GATEWAY_SQL_TIMEOUT_SECONDS

@@ -32,12 +32,17 @@ Spark differences, kept behind the shared contract:
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import Field
 
 from hudi_agent_gateway.config import GatewaySettings
-from hudi_agent_gateway.tools.common import error_payload, shape_result, validate_identifier
+from hudi_agent_gateway.tools.common import (
+    error_payload,
+    schema_error_hint,
+    shape_result,
+    validate_identifier,
+)
 from hudi_agent_gateway.tools.connector import (
     EngineInfo,
     LakehouseClient,
@@ -87,7 +92,18 @@ def _split_table_name(table: str, settings: GatewaySettings) -> tuple[str, str]:
     )
 
 
-def register(registry: ToolRegistry, client: SparkThriftClient, settings: GatewaySettings) -> None:
+def register(
+    registry: ToolRegistry,
+    client: SparkThriftClient,
+    settings: GatewaySettings,
+    schema_cache: Any = None,
+) -> None:
+    async def _not_found_hint(message: str) -> str:
+        """Schema-aware hint for name errors (GATEWAY_SCHEMA_HINTS=errors|both)."""
+        if schema_cache is None or settings.schema_hints not in ("errors", "both"):
+            return ""
+        return schema_error_hint(message, await schema_cache.get())
+
     @registry.register("query_lakehouse", _QUERY_DESC)
     async def query_lakehouse(
         sql: Annotated[
@@ -109,7 +125,8 @@ def register(registry: ToolRegistry, client: SparkThriftClient, settings: Gatewa
                 "GATEWAY_SQL_TIMEOUT_SECONDS.",
             )
         except SparkQueryError as e:
-            return error_payload(f"query failed: {e}", "Fix the SQL and try again.")
+            hint = await _not_found_hint(str(e))
+            return error_payload(f"query failed: {e}", hint or "Fix the SQL and try again.")
         return shape_result(
             result,
             max_bytes=settings.tool_result_max_bytes,
@@ -184,9 +201,41 @@ class SparkConnector(LakehouseConnector):
         return SparkThriftClient(settings)
 
     def register_tools(
-        self, registry: ToolRegistry, client: LakehouseClient, settings: GatewaySettings
+        self,
+        registry: ToolRegistry,
+        client: LakehouseClient,
+        settings: GatewaySettings,
+        schema_cache: Any = None,
     ) -> None:
-        register(registry, client, settings)  # type: ignore[arg-type]
+        register(registry, client, settings, schema_cache)  # type: ignore[arg-type]
+
+    async def fetch_schema(
+        self, client: LakehouseClient, settings: GatewaySettings
+    ) -> dict[str, list[tuple[str, str]]]:
+        """SHOW TABLES then one DESCRIBE per table (Spark has no
+        information_schema), bounded by the configured schema caps."""
+        db = settings.spark_database
+        tables = await client.execute(
+            f"SHOW TABLES IN `{db}`",
+            timeout=settings.sql_timeout_seconds,
+            max_rows=settings.schema_max_tables,
+        )
+        schema: dict[str, list[tuple[str, str]]] = {}
+        for row in tables.rows:
+            name = row[1]  # (namespace, tableName, isTemporary)
+            described = await client.execute(
+                f"DESCRIBE TABLE `{db}`.`{name}`",
+                timeout=settings.sql_timeout_seconds,
+                max_rows=settings.schema_max_columns + 10,
+            )
+            columns: list[tuple[str, str]] = []
+            for col_name, col_type, *_ in described.rows:
+                col_name = (col_name or "").strip()
+                if not col_name or col_name.startswith("#"):
+                    break  # blank line / "# Partition Information" section
+                columns.append((col_name, col_type))
+            schema[name] = columns[: settings.schema_max_columns]
+        return schema
 
     def prompt_context(self, settings: GatewaySettings) -> PromptContext:
         return PromptContext(

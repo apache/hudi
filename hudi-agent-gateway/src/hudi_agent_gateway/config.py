@@ -32,6 +32,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 LLMProvider = Literal["anthropic", "openai", "ollama", "openai-compatible"]
 LakehouseEngine = Literal["trino", "spark"]
 SparkAuth = Literal["none", "nosasl", "ldap"]
+SchemaHints = Literal["off", "errors", "prompt", "both"]
 
 
 class GatewaySettings(BaseSettings):
@@ -94,6 +95,17 @@ class GatewaySettings(BaseSettings):
     sql_row_cap: int = 200
     sql_timeout_seconds: float = 120.0
     tool_result_max_bytes: int = 50_000
+
+    # --- schema hints ---
+    # Live schema context for the model, auto-derived from the engine (never
+    # hand-written): "errors" enriches column/table-not-found errors with the
+    # real names ("did you mean `beds`?"), "prompt" injects a compact schema
+    # snapshot into the system prompt so small models stop guessing names,
+    # "both" (default) does both, "off" restores pure tool-based discovery.
+    schema_hints: SchemaHints = "both"
+    schema_cache_ttl_seconds: float = Field(default=300.0, gt=0)
+    schema_max_tables: int = Field(default=20, ge=1, le=200)
+    schema_max_columns: int = Field(default=40, ge=1, le=500)
 
     # --- agent / sessions ---
     agent_max_iterations: int = 25

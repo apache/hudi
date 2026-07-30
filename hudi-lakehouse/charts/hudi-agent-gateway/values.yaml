@@ -75,6 +75,8 @@ spark:
   # Pooled HiveServer2 sessions (also the query concurrency bound).
   maxConnections: 8
 
+# Live schema context for the model: off | errors | prompt | both.
+schemaHints: both
 guardrails:
   rowCap: 200
   queryTimeoutSeconds: 120

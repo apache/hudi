@@ -35,6 +35,7 @@ from hudi_agent_gateway.tools.connector import (
     get_connector,
 )
 from hudi_agent_gateway.tools.registry import ToolRegistry
+from hudi_agent_gateway.tools.schema_cache import SchemaCache
 
 # Built-in connectors. The import registers them (decorator side effect); the
 # re-export makes them part of the package's public surface.
@@ -42,9 +43,11 @@ from hudi_agent_gateway.tools.spark_tools import SparkConnector
 from hudi_agent_gateway.tools.trino_tools import TrinoConnector
 
 __all__ = [
+    "SchemaCache",
     "SparkConnector",
     "TrinoConnector",
     "build_registry",
+    "build_schema_cache",
     "connector_names",
     "create_lakehouse_client",
     "get_connector",
@@ -56,15 +59,39 @@ def create_lakehouse_client(settings: GatewaySettings) -> LakehouseClient:
     return get_connector(settings.engine).create_client(settings)
 
 
+def build_schema_cache(
+    settings: GatewaySettings, client: LakehouseClient
+) -> SchemaCache | None:
+    """The schema cache behind ``GATEWAY_SCHEMA_HINTS``; None when off."""
+    if settings.schema_hints == "off":
+        return None
+    connector = get_connector(settings.engine)
+    return SchemaCache(
+        fetch=lambda: connector.fetch_schema(client, settings),
+        ttl_seconds=settings.schema_cache_ttl_seconds,
+        max_tables=settings.schema_max_tables,
+        max_columns=settings.schema_max_columns,
+    )
+
+
 def build_registry(
-    settings: GatewaySettings, client: LakehouseClient | None = None
+    settings: GatewaySettings,
+    client: LakehouseClient | None = None,
+    schema_cache: SchemaCache | None = None,
 ) -> ToolRegistry:
     """Build the tool registry for the configured engine.
 
     ``client`` is injectable for tests; when omitted a real client is created
-    for the engine. Tool registration is delegated to the engine's connector.
+    for the engine. ``schema_cache`` (optional) lets the tools enrich
+    not-found errors with real names. Tool registration is delegated to the
+    engine's connector.
     """
     connector = get_connector(settings.engine)
     registry = ToolRegistry()
-    connector.register_tools(registry, client or connector.create_client(settings), settings)
+    connector.register_tools(
+        registry,
+        client or connector.create_client(settings),
+        settings,
+        schema_cache=schema_cache,
+    )
     return registry

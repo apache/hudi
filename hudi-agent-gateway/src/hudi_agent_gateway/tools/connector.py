@@ -50,7 +50,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from hudi_agent_gateway.config import GatewaySettings
 from hudi_agent_gateway.tools.common import QueryResult
@@ -106,9 +106,29 @@ class LakehouseConnector(ABC):
 
     @abstractmethod
     def register_tools(
-        self, registry: ToolRegistry, client: LakehouseClient, settings: GatewaySettings
+        self,
+        registry: ToolRegistry,
+        client: LakehouseClient,
+        settings: GatewaySettings,
+        schema_cache: Any = None,
     ) -> None:
-        """Register query_lakehouse / list_tables / describe_table on ``registry``."""
+        """Register query_lakehouse / list_tables / describe_table on ``registry``.
+
+        ``schema_cache`` (a :class:`~hudi_agent_gateway.tools.schema_cache.
+        SchemaCache`, or None when schema hints are off) lets tools enrich
+        not-found errors with real names.
+        """
+
+    async def fetch_schema(
+        self, client: LakehouseClient, settings: GatewaySettings
+    ) -> dict[str, list[tuple[str, str]]]:
+        """The default namespace's schema: table -> [(column, type), ...].
+
+        Powers the schema cache behind ``GATEWAY_SCHEMA_HINTS``. The default
+        returns nothing, which simply disables schema hints for connectors
+        that do not implement it.
+        """
+        return {}
 
     @abstractmethod
     def prompt_context(self, settings: GatewaySettings) -> PromptContext:

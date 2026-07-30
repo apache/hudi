@@ -36,7 +36,7 @@ from hudi_agent_gateway.llm import LLMReadiness
 from hudi_agent_gateway.log import log_event, setup_logging
 from hudi_agent_gateway.mcp_server import build_mcp
 from hudi_agent_gateway.sessions import SessionStore
-from hudi_agent_gateway.tools import build_registry, create_lakehouse_client
+from hudi_agent_gateway.tools import build_registry, build_schema_cache, create_lakehouse_client
 
 logger = logging.getLogger("hudi_agent_gateway.app")
 
@@ -46,7 +46,8 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
     setup_logging(s.log_level)
 
     lakehouse_client = create_lakehouse_client(s)
-    registry = build_registry(s, client=lakehouse_client)
+    schema_cache = build_schema_cache(s, lakehouse_client)
+    registry = build_registry(s, client=lakehouse_client, schema_cache=schema_cache)
     # NOTE: the MCP ASGI sub-app has its own lifespan that MUST run inside the
     # outer app's lifespan, or FastMCP's streamable-HTTP session manager never
     # starts and /mcp requests hang.
@@ -56,11 +57,19 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = s
         app.state.lakehouse_client = lakehouse_client
+        app.state.schema_cache = schema_cache
         app.state.registry = registry
         app.state.llm_readiness = LLMReadiness(s)
         app.state.sessions = SessionStore(s)
-        app.state.agents = AgentCache(registry, app.state.sessions.checkpointer, s)
+        app.state.agents = AgentCache(
+            registry, app.state.sessions.checkpointer, s, schema_cache=schema_cache
+        )
         sweeper = asyncio.create_task(app.state.sessions.sweep_loop())
+        if schema_cache is not None:
+            # Warm the snapshot so the first chat already has schema context;
+            # fail-open, so an unreachable engine only delays hints.
+            prefetch = asyncio.create_task(schema_cache.get())
+            prefetch.add_done_callback(lambda t: t.cancelled() or t.exception())
         log_event(
             logger,
             "gateway_started",

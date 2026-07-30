@@ -33,6 +33,26 @@ passes AST-level guardrails (single statement, SELECT-only, row cap injected
 as a real `LIMIT`) and every invocation is logged as structured JSON — the
 seed of the gateway's trace collection.
 
+## Schema hints
+
+Small local models routinely skip `describe_table` and guess column names.
+The gateway counters this with live schema context, auto-derived from the
+engine (never hand-written), controlled by `GATEWAY_SCHEMA_HINTS`:
+
+- **`errors`** -- when a query fails on an unknown column/table, the error
+  hint carries the real names: `Did you mean `beds`? Columns in `listings`:
+  listing_id, address, ...` -- the model corrects itself in one hop.
+- **`prompt`** -- a compact snapshot of tables and columns (TTL-cached,
+  size-capped, Hudi meta columns filtered) is rendered into the system prompt
+  each turn, so the model writes SQL against real names without a discovery
+  hop.
+- **`both`** (default) enables both; `off` restores pure tool-based discovery.
+
+The snapshot comes from one `information_schema` query (Trino) or
+`SHOW TABLES` + `DESCRIBE` (Spark), refreshed every
+`GATEWAY_SCHEMA_CACHE_TTL_SECONDS` and strictly fail-open: an unreachable
+engine only degrades hints, never queries.
+
 ## Quickstart (local process)
 
 ```bash
@@ -163,6 +183,9 @@ Environment variables (prefix `GATEWAY_` except the standard key names):
 | `GATEWAY_SPARK_POOL_MAX_IDLE_SECONDS` / `_MAX_LIFETIME_SECONDS` | `300` / `1800` | pooled sessions are recycled past these limits |
 | `GATEWAY_SQL_ROW_CAP` | `200` | LIMIT enforced on every query |
 | `GATEWAY_SQL_TIMEOUT_SECONDS` | `120` | per-query timeout |
+| `GATEWAY_SCHEMA_HINTS` | `both` | live schema context for the model: `off` \| `errors` (did-you-mean on name errors) \| `prompt` (schema snapshot in the system prompt) \| `both` |
+| `GATEWAY_SCHEMA_CACHE_TTL_SECONDS` | `300` | schema snapshot refresh interval |
+| `GATEWAY_SCHEMA_MAX_TABLES` / `_MAX_COLUMNS` | `20` / `40` | caps on the snapshot size |
 | `GATEWAY_TOOL_RESULT_MAX_BYTES` | `50000` | tool results truncated beyond this (with notice) |
 | `GATEWAY_AGENT_MAX_ITERATIONS` | `25` | agent loop recursion limit |
 | `GATEWAY_SESSION_TTL_SECONDS` / `GATEWAY_MAX_SESSIONS` | `3600` / `1000` | session store bounds |

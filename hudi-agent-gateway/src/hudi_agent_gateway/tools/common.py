@@ -25,6 +25,7 @@ and the engine-specific SQL for listing and describing tables.
 
 from __future__ import annotations
 
+import difflib
 import json
 import re
 from dataclasses import dataclass, field
@@ -120,6 +121,77 @@ def validate_identifier(value: str, kind: str) -> str:
             "and must not start with a digit.",
         )
     return value
+
+
+# --- schema-aware error hints ------------------------------------------------
+# Engine error fragments identifying "you referenced a name that does not
+# exist". Table markers are checked first: Spark/Trino table errors often also
+# contain the word "column"-adjacent phrasing, but never vice versa.
+_TABLE_NOT_FOUND_MARKERS = (
+    "table_or_view_not_found",
+    "table or view not found",
+    "table_not_found",
+)
+_COLUMN_NOT_FOUND_MARKERS = (
+    "unresolved_column",
+    "column_not_found",
+    "cannot be resolved",
+    "cannot resolve",
+)
+
+# `name`, 'name' or "name" -- how engines quote the offending identifier.
+_QUOTED_IDENTIFIER_RE = re.compile(r"[`'\"]([A-Za-z0-9_$.\-]+)[`'\"]")
+
+_MAX_HINT_CHARS = 700
+
+
+def schema_error_hint(message: str, schema: dict[str, list[tuple[str, str]]]) -> str:
+    """An actionable hint for a not-found query error, built from the cached
+    schema: fuzzy "did you mean" plus the real names, so the model can correct
+    itself in one hop instead of guessing again. Returns "" when the error is
+    not a not-found error or the schema is unknown.
+    """
+    if not schema:
+        return ""
+    lowered = message.lower()
+    is_table_error = any(m in lowered for m in _TABLE_NOT_FOUND_MARKERS) or (
+        "table" in lowered and "does not exist" in lowered  # Trino TABLE_NOT_FOUND
+    )
+    is_column_error = not is_table_error and any(
+        m in lowered for m in _COLUMN_NOT_FOUND_MARKERS
+    )
+    if not (is_table_error or is_column_error):
+        return ""
+
+    match = _QUOTED_IDENTIFIER_RE.search(message)
+    # engines may qualify the name (`db.table` / `t.col`); compare the leaf
+    name = match.group(1).split(".")[-1] if match else ""
+
+    if is_table_error:
+        tables = list(schema)
+        suggestions = difflib.get_close_matches(name, tables, n=1, cutoff=0.5)
+        did_you_mean = f"Did you mean `{suggestions[0]}`? " if suggestions else ""
+        hint = f"{did_you_mean}Available tables: {', '.join(tables)}."
+        return hint[:_MAX_HINT_CHARS]
+
+    # column error: find the closest column anywhere, then show that table's
+    # real column list -- models are far better at copying than guessing.
+    all_columns: dict[str, str] = {}
+    for table, columns in schema.items():
+        for col, _ in columns:
+            all_columns.setdefault(col, table)
+    suggestions = difflib.get_close_matches(name, list(all_columns), n=1, cutoff=0.5)
+    if suggestions:
+        col = suggestions[0]
+        table = all_columns[col]
+        cols = ", ".join(c for c, _ in schema[table])
+        hint = f"Did you mean `{col}`? Columns in `{table}`: {cols}."
+    else:
+        hint = (
+            f"Available tables: {', '.join(schema)}. "
+            "Call describe_table to see their columns."
+        )
+    return hint[:_MAX_HINT_CHARS]
 
 
 def split_table_name(
