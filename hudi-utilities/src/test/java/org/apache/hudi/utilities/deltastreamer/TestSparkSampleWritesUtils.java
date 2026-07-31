@@ -42,10 +42,10 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.table.HoodieTableMetaClient.SAMPLE_WRITES_FOLDER_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -148,7 +148,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
    * sample write was not flattened into a single non-partitioned file.
    */
   private void assertSampleWritesNonPartitioned() throws IOException {
-    Path sampleWritesPath = new Path(basePath(), ".hoodie/.aux/.sample_writes");
+    Path sampleWritesPath = new Path(basePath(), SAMPLE_WRITES_FOLDER_PATH);
     FileSystem fs = sampleWritesPath.getFileSystem(jsc().hadoopConfiguration());
     assertTrue(fs.exists(sampleWritesPath), "Sample-writes folder should exist after a sample write.");
     FileStatus[] runs = fs.listStatus(sampleWritesPath);
@@ -162,7 +162,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
       }
       assertTrue(partitionDirs.isEmpty(),
           "Sample-writes run at " + run.getPath() + " should have no source partition subdirectories, but found: "
-              + Arrays.toString(partitionDirs.toArray()));
+              + partitionDirs);
     }
   }
 }
