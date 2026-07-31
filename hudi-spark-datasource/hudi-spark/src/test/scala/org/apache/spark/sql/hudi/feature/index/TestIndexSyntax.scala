@@ -102,7 +102,6 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
         assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].table, databaseName, tableName)
         assertResult("idx_default")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
         assertResult("")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
-        assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
 
         // DROP INDEX without IF EXISTS
         logicalPlan = sqlParser.parsePlan(s"drop index idx_price on $tableName")

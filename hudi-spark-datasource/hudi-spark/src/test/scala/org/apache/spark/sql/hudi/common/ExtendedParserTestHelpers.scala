@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.plans.logical.CreateTable
 import org.apache.spark.sql.connector.expressions.{FieldReference, LiteralValue, Transform}
 import org.scalatest.Assertions
@@ -24,10 +25,16 @@ import org.scalatest.Assertions
 /**
  * Shared helpers for the extended-parser coverage tests (e.g. TestCreateTable, TestBlobDataType),
  * which route a full CREATE TABLE through the extended AST builder and pull partition transforms and
- * their arguments out of the resulting [[CreateTable]] plan. Kept in one place so the transform
- * inspection stays consistent across the per-type test suites that share it.
+ * their arguments out of the resulting [[CreateTable]] plan. Kept in one place so the parse entry
+ * point and the transform inspection stay consistent across the per-type test suites that share it.
  */
 trait ExtendedParserTestHelpers extends Assertions {
+
+  /** Satisfied by HoodieSparkSqlTestBase's `protected lazy val spark`. */
+  protected def spark: SparkSession
+
+  protected def parseCreateTable(sql: String): CreateTable =
+    spark.sessionState.sqlParser.parsePlan(sql).asInstanceOf[CreateTable]
 
   protected def transformByName(plan: CreateTable, name: String): Transform =
     plan.partitioning.find(_.name == name)

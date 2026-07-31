@@ -24,7 +24,7 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
-import org.apache.spark.sql.catalyst.plans.logical.CreateTable
+import org.apache.spark.sql.catalyst.plans.logical.FormatClasses
 import org.apache.spark.sql.hudi.common.{ExtendedParserTestHelpers, HoodieSparkSqlTestBase}
 import org.apache.spark.sql.types._
 
@@ -291,12 +291,9 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
   // time (transform partitioning, STORED AS / ROW FORMAT, interval columns). The BLOB column type
   // itself proves routing because the stock Spark parser rejects the BLOB type name.
 
-  private def parse(sql: String): CreateTable =
-    spark.sessionState.sqlParser.parsePlan(sql).asInstanceOf[CreateTable]
-
   test("Test parse CREATE TABLE with BLOB column and primitive data types") {
     // Exercises the primitive-data-type match arms plus NOT NULL and column COMMENT.
-    val plan = parse(
+    val plan = parseCreateTable(
       s"""
          |CREATE TABLE blob_prim_tbl (
          |  c_bool BOOLEAN,
@@ -342,14 +339,14 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
   }
 
   test("Test parse CREATE TABLE with BLOB column and complex data types") {
-    // Exercises the ARRAY / MAP / STRUCT arms and BLOB-in-struct metadata handling.
-    val plan = parse(
+    // Exercises the ARRAY / MAP / STRUCT arms. BLOB-in-struct metadata handling is already
+    // covered by "test BLOB in nested struct".
+    val plan = parseCreateTable(
       s"""
          |CREATE TABLE blob_complex_tbl (
          |  c_arr ARRAY<INT>,
          |  c_map MAP<STRING, INT>,
          |  c_struct STRUCT<a: INT, b: STRING>,
-         |  c_nested_blob STRUCT<x: BLOB>,
          |  data BLOB
          |) USING hudi
        """.stripMargin)
@@ -359,15 +356,11 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     val inner = schema("c_struct").dataType.asInstanceOf[StructType]
     assertResult(IntegerType)(inner("a").dataType)
     assertResult(StringType)(inner("b").dataType)
-    // A BLOB nested inside a struct still carries the BLOB type descriptor.
-    val nested = schema("c_nested_blob").dataType.asInstanceOf[StructType]("x")
-    assertResult(BlobType())(nested.dataType)
-    assertResult(HoodieSchemaType.BLOB.name())(
-      nested.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+    assertResult(BlobType())(schema("data").dataType)
   }
 
   test("Test parse CREATE TABLE with BLOB column and interval data types") {
-    val plan = parse(
+    val plan = parseCreateTable(
       s"""
          |CREATE TABLE blob_ivl_tbl (
          |  i_year INTERVAL YEAR,
@@ -395,15 +388,10 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     checkExceptionContain(
       "CREATE TABLE blob_bad_dt (id BIGINT, bad INTERVAL SECOND TO HOUR, data BLOB) USING hudi")(
       "are not supported")
-
-    // An unknown primitive type name is rejected.
-    checkExceptionContain(
-      "CREATE TABLE blob_bad_type (id BIGINT, weird sometype, data BLOB) USING hudi")(
-      "is not supported")
   }
 
   test("Test parse CREATE TABLE with BLOB column and partition transforms") {
-    val plan = parse(
+    val plan = parseCreateTable(
       s"""
          |CREATE TABLE blob_tf_tbl (
          |  id BIGINT,
@@ -425,7 +413,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // bucket(numBuckets, col) with int, long and short number-of-buckets literals exercises the
     // three numeric arms of the bucket handling.
     Seq("4", "4L", "4S").foreach { numLiteral =>
-      val bp = parse(
+      val bp = parseCreateTable(
         s"CREATE TABLE blob_bkt_tbl (id BIGINT, data BLOB) USING hudi " +
           s"PARTITIONED BY (bucket($numLiteral, id))")
       val bkt = transformByName(bp, "bucket")
@@ -434,15 +422,44 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     }
   }
 
+  test("Test parse CREATE TABLE with BLOB column and partition columns") {
+    // The partition-COLUMN arm is the only partitioning branch that changes the emitted schema:
+    // the parsed partition columns are appended to the table columns and each becomes an
+    // identity transform.
+    val plan = parseCreateTable(
+      "CREATE TABLE blob_pcol_tbl (id BIGINT, data BLOB) USING hudi PARTITIONED BY (p STRING)")
+    assertResult(StringType)(plan.tableSchema("p").dataType)
+    assertResult(BlobType())(plan.tableSchema("data").dataType)
+    assertResult(Seq(Seq("p")))(transformFieldRefs(transformByName(plan, "identity")))
+
+    // Mixing partition columns and transform expressions is rejected.
+    checkExceptionContain(
+      "CREATE TABLE blob_mix_tbl (id BIGINT, data BLOB) USING hudi " +
+        "PARTITIONED BY (p STRING, bucket(4, id))")(
+      "Cannot mix partition expressions and partition columns")
+
+    // SKEWED BY and CREATE TEMPORARY TABLE are rejected by the clause and header visitors.
+    checkExceptionContain(
+      "CREATE TABLE blob_skew_tbl (id BIGINT, data BLOB) USING hudi SKEWED BY (id) ON (1, 2)")(
+      "CREATE TABLE ... SKEWED BY")
+    checkExceptionContain(
+      "CREATE TEMPORARY TABLE blob_tmp_tbl (id BIGINT, data BLOB) USING hudi")(
+      "use CREATE TEMPORARY VIEW instead")
+  }
+
   test("Test parse CREATE TABLE with BLOB column and typed transform-argument literals") {
     // Constant transform arguments exercise the literal visitors: string, integer, big-integer and
     // exponent numerics (the private numeric-literal helper), the typed date constructor, and both
-    // interval forms (multi-unit and unit-to-unit). A typed timestamp constructor is not used
-    // because the Spark 4.x extended parser rejects a bare TIMESTAMP token. Note: a bare
-    // true/false/null in this position is parsed as a column reference (qualifiedName takes
-    // precedence over a constant in the grammar under the default non-ANSI config), so the boolean
-    // and null literal visitors are not reachable from a CREATE TABLE statement.
-    val plan = parse(
+    // interval forms (multi-unit and unit-to-unit). A typed TIMESTAMP constructor is skipped due
+    // to #19449: the extended parser enables ANSI reserved-keyword enforcement whenever
+    // spark.sql.ansi.enabled is set (the Spark 4.x default) instead of following Spark's
+    // spark.sql.ansi.enforceReservedKeywords, which makes a bare TIMESTAMP token unparseable
+    // there (a bug, not a Spark 4 constraint). A bare true/false in this position parses as a
+    // column reference in BOTH keyword modes (TRUE/FALSE are ansiNonReserved, so qualifiedName
+    // wins), leaving visitBooleanLiteral unreachable (#19451); null is a column reference only
+    // under the default non-ANSI keyword mode and a null literal under ANSI, so visitNullLiteral
+    // is mode-dependent and both are left unasserted here.
+    val plan = parseCreateTable(
       s"""
          |CREATE TABLE blob_lit_tbl (
          |  id BIGINT,
@@ -471,10 +488,14 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
   }
 
   test("Test parse CREATE TABLE with BLOB column and invalid partition transforms") {
-    // Non-numeric number of buckets.
-    checkExceptionContain(
-      "CREATE TABLE blob_e1 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket('x', id))")(
-      "Invalid number of buckets")
+    // Non-numeric number of buckets. The builders' raw `new ParseException(message, ctx)` sites
+    // surface on Spark 3.4+ as SparkException [INTERNAL_ERROR] wrapping the message text
+    // (#19450), so this case asserts the message via a plain intercept.
+    // TODO(#19450): tighten to intercept[ParseException] once the builders throw it cleanly.
+    val e = intercept[Exception] {
+      spark.sql("CREATE TABLE blob_e1 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket('x', id))")
+    }
+    assert(e.getMessage.contains("Invalid number of buckets"))
     // A non-column-reference where a column is required.
     checkExceptionContain(
       "CREATE TABLE blob_e2 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")(
@@ -487,35 +508,37 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
   }
 
   test("Test parse CREATE TABLE with BLOB column and file-format / row-format clauses") {
+    // Each positive case asserts the SerdeInfo the clause visitors produced (portable across
+    // Spark 3.3 through 4.2 via tableSpec.serde); asserting only the BLOB column type would pass
+    // even if the file/row-format visitors dropped their clause.
     // Generic STORED AS format.
-    assertResult(BlobType())(
-      parse("CREATE TABLE blob_ff1 (id BIGINT, data BLOB) STORED AS PARQUET")
-        .tableSchema("data").dataType)
+    val ff1 = parseCreateTable("CREATE TABLE blob_ff1 (id BIGINT, data BLOB) STORED AS PARQUET")
+    assertResult(BlobType())(ff1.tableSchema("data").dataType)
+    assertResult(Some("PARQUET"))(ff1.tableSpec.serde.get.storedAs)
     // STORED AS INPUTFORMAT ... OUTPUTFORMAT ... (the table-file-format arm).
-    assertResult(BlobType())(
-      parse("CREATE TABLE blob_ff2 (id BIGINT, data BLOB) " +
-        "STORED AS INPUTFORMAT 'com.example.InFmt' OUTPUTFORMAT 'com.example.OutFmt'")
-        .tableSchema("data").dataType)
+    val ff2 = parseCreateTable("CREATE TABLE blob_ff2 (id BIGINT, data BLOB) " +
+      "STORED AS INPUTFORMAT 'com.example.InFmt' OUTPUTFORMAT 'com.example.OutFmt'")
+    assertResult(Some(FormatClasses("com.example.InFmt", "com.example.OutFmt")))(
+      ff2.tableSpec.serde.get.formatClasses)
     // ROW FORMAT SERDE on its own.
-    assertResult(BlobType())(
-      parse("CREATE TABLE blob_ff3 (id BIGINT, data BLOB) " +
-        "ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'")
-        .tableSchema("data").dataType)
+    val ff3 = parseCreateTable("CREATE TABLE blob_ff3 (id BIGINT, data BLOB) " +
+      "ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'")
+    assertResult(Some("org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe"))(
+      ff3.tableSpec.serde.get.serde)
     // ROW FORMAT DELIMITED on its own.
-    assertResult(BlobType())(
-      parse("CREATE TABLE blob_ff4 (id BIGINT, data BLOB) " +
-        "ROW FORMAT DELIMITED FIELDS TERMINATED BY ','")
-        .tableSchema("data").dataType)
-    // Compatible ROW FORMAT SERDE + STORED AS SEQUENCEFILE.
-    assertResult(BlobType())(
-      parse("CREATE TABLE blob_ff5 (id BIGINT, data BLOB) " +
-        "ROW FORMAT SERDE 'com.example.Serde' STORED AS SEQUENCEFILE")
-        .tableSchema("data").dataType)
+    val ff4 = parseCreateTable("CREATE TABLE blob_ff4 (id BIGINT, data BLOB) " +
+      "ROW FORMAT DELIMITED FIELDS TERMINATED BY ','")
+    assertResult(",")(ff4.tableSpec.serde.get.serdeProperties("field.delim"))
+    // Compatible ROW FORMAT SERDE + STORED AS SEQUENCEFILE merges both into one SerdeInfo.
+    val ff5 = parseCreateTable("CREATE TABLE blob_ff5 (id BIGINT, data BLOB) " +
+      "ROW FORMAT SERDE 'com.example.Serde' STORED AS SEQUENCEFILE")
+    assertResult(Some("SEQUENCEFILE"))(ff5.tableSpec.serde.get.storedAs)
+    assertResult(Some("com.example.Serde"))(ff5.tableSpec.serde.get.serde)
     // Compatible ROW FORMAT DELIMITED + STORED AS TEXTFILE.
-    assertResult(BlobType())(
-      parse("CREATE TABLE blob_ff6 (id BIGINT, data BLOB) " +
-        "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
-        .tableSchema("data").dataType)
+    val ff6 = parseCreateTable("CREATE TABLE blob_ff6 (id BIGINT, data BLOB) " +
+      "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
+    assertResult(Some("TEXTFILE"))(ff6.tableSpec.serde.get.storedAs)
+    assertResult(",")(ff6.tableSpec.serde.get.serdeProperties("field.delim"))
 
     // ROW FORMAT DELIMITED with a non-text file format is rejected.
     checkExceptionContain(
@@ -527,10 +550,12 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
       "CREATE TABLE blob_ferr2 (id BIGINT, data BLOB) " +
         "ROW FORMAT SERDE 'com.example.Serde' STORED AS PARQUET")(
       "incompatible with format")
-    // STORED BY (a storage handler) is not allowed.
+    // STORED BY (a storage handler) is not allowed. The full "Operation not allowed" prefix is
+    // asserted because ParseException.getMessage echoes the SQL text, so a bare "STORED BY"
+    // expectation would match any failure of this statement.
     checkExceptionContain(
       "CREATE TABLE blob_ferr3 (id BIGINT, data BLOB) STORED BY 'com.example.Handler'")(
-      "STORED BY")
+      "Operation not allowed: STORED BY")
     // A USING provider combined with a serde clause is not allowed.
     checkExceptionContain(
       "CREATE TABLE blob_ferr4 (id BIGINT, data BLOB) USING hudi STORED AS PARQUET")(

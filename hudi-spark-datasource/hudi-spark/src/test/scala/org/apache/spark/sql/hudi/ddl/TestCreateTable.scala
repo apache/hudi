@@ -36,7 +36,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
-import org.apache.spark.sql.catalyst.plans.logical.CreateTable
 import org.apache.spark.sql.functions.{col, concat, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
@@ -2344,78 +2343,12 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
   // The following cases are parser-coverage only: a VECTOR column routes the whole CREATE TABLE
   // through the extended AST builder, so its clause visitors run. parsePlan is purely syntactic
   // (no catalog, no execution), matching how TestIndexSyntax exercises the index statements, which
-  // lets us cover clauses that are not supported at execution time (transform partitioning,
-  // CLUSTERED BY, typed literal arguments). The VECTOR column type proves the statement routed
-  // here because the stock Spark parser rejects the VECTOR type name.
-
-  private def parseCreateTable(sql: String): CreateTable =
-    spark.sessionState.sqlParser.parsePlan(sql).asInstanceOf[CreateTable]
-
-  test("test create VECTOR table with partition transforms parses (parser coverage)") {
-    val plan = parseCreateTable(
-      s"""
-         |CREATE TABLE vec_parse_tbl (
-         |  id BIGINT,
-         |  ts DATE,
-         |  region STRING,
-         |  name STRING,
-         |  embedding VECTOR(8)
-         |) USING hudi
-         |PARTITIONED BY (region, bucket(4, id), years(ts), truncate(10, name))
-         """.stripMargin)
-
-    assertEquals(ArrayType(FloatType, containsNull = false), plan.tableSchema("embedding").dataType)
-
-    assertEquals(Seq(Seq("region")), transformFieldRefs(transformByName(plan, "identity")))
-    val bucket = transformByName(plan, "bucket")
-    assertEquals(IntegerType, firstLiteralArg(bucket).dataType)
-    assertEquals("4", firstLiteralArg(bucket).value.toString)
-    assertEquals(Seq(Seq("id")), transformFieldRefs(bucket))
-    assertEquals(Seq(Seq("ts")), transformFieldRefs(transformByName(plan, "years")))
-    val truncate = transformByName(plan, "truncate")
-    assertEquals(IntegerType, firstLiteralArg(truncate).dataType)
-    assertEquals("10", firstLiteralArg(truncate).value.toString)
-    assertEquals(Seq(Seq("name")), transformFieldRefs(truncate))
-  }
-
-  test("test create VECTOR table with typed transform-argument literals parses (parser coverage)") {
-    // Each transform carries a differently-typed constant argument to exercise the literal
-    // visitors: string, integer, long, exponent/double, the typed date constructor, and both
-    // interval forms (multi-units and unit-to-unit). A typed timestamp constructor is not used
-    // because the Spark 4.x extended parser rejects a bare TIMESTAMP token. A bare true/false/null
-    // in this position is parsed as a column reference (qualifiedName takes precedence over a
-    // constant in the grammar under the default non-ANSI config), so the boolean and null literal
-    // visitors are not reachable from a CREATE TABLE statement.
-    val plan = parseCreateTable(
-      s"""
-         |CREATE TABLE vec_lit_tbl (
-         |  id BIGINT,
-         |  embedding VECTOR(4)
-         |) USING hudi
-         |PARTITIONED BY (
-         |  str_t('x', id),
-         |  int_t(4, id),
-         |  long_t(9000000000L, id),
-         |  exp_t(1E3, id),
-         |  date_t(DATE '2020-01-01', id),
-         |  mu_ivl_t(INTERVAL '1' DAY, id),
-         |  uu_ivl_t(INTERVAL '1-2' YEAR TO MONTH, id)
-         |)
-         """.stripMargin)
-
-    assertEquals(StringType, firstLiteralArg(transformByName(plan, "str_t")).dataType)
-    assertEquals("x", firstLiteralArg(transformByName(plan, "str_t")).value.toString)
-    assertEquals(IntegerType, firstLiteralArg(transformByName(plan, "int_t")).dataType)
-    assertEquals(LongType, firstLiteralArg(transformByName(plan, "long_t")).dataType)
-    assertEquals(DoubleType, firstLiteralArg(transformByName(plan, "exp_t")).dataType)
-    assertEquals(DateType, firstLiteralArg(transformByName(plan, "date_t")).dataType)
-    assertEquals(
-      DayTimeIntervalType(DayTimeIntervalType.DAY, DayTimeIntervalType.DAY),
-      firstLiteralArg(transformByName(plan, "mu_ivl_t")).dataType)
-    assertEquals(
-      YearMonthIntervalType(YearMonthIntervalType.YEAR, YearMonthIntervalType.MONTH),
-      firstLiteralArg(transformByName(plan, "uu_ivl_t")).dataType)
-  }
+  // lets us cover clauses that are not supported at execution time (CLUSTERED BY bucket specs).
+  // Transform-partitioning and typed-literal coverage lives in TestBlobDataType only: the clause
+  // visitors are type-agnostic (the builder branches on blob-vs-vector solely in
+  // visitPrimitiveDataType), so a second per-type copy would exercise no new production line. The
+  // VECTOR column type proves the statement routed here because the stock Spark parser rejects the
+  // VECTOR type name.
 
   test("test create VECTOR table with CLUSTERED BY bucket spec parses (parser coverage)") {
     val plan = parseCreateTable(
@@ -2425,11 +2358,12 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     assertEquals("4", firstLiteralArg(bucket).value.toString)
     assertEquals(Seq(Seq("id")), transformFieldRefs(bucket))
 
-    // SORTED BY ... ASC is accepted by the bucket-spec visitor.
+    // SORTED BY ... ASC is accepted by the bucket-spec visitor and yields a sorted_bucket
+    // transform; a plain bucket transform here would mean the SORTED BY clause was dropped.
     val sortedPlan = parseCreateTable(
       "CREATE TABLE vec_sbucket_tbl (id BIGINT, ts BIGINT, embedding VECTOR(4)) USING hudi " +
         "CLUSTERED BY (id, ts) SORTED BY (id ASC) INTO 8 BUCKETS")
-    assertTrue(sortedPlan.partitioning.exists(_.name.toLowerCase.contains("bucket")))
+    assertEquals("sorted_bucket", sortedPlan.partitioning.head.name)
 
     // SORTED BY ... DESC is rejected by the bucket-spec visitor.
     checkExceptionContain(
@@ -2440,7 +2374,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
 
   test("test create VECTOR table with LOCATION/COMMENT/OPTIONS/TBLPROPERTIES parses (parser coverage)") {
     // String, integer and boolean property values exercise all branches of the property visitors;
-    // COMMENT and LOCATION exercise their clause visitors.
+    // COMMENT and LOCATION exercise their clause visitors. The clause results are asserted on
+    // tableSpec (location/comment/properties are stable across Spark 3.3 through 4.2; the parsed
+    // options map is not exposed on the 3.5+ TableSpecBase, so OPTIONS is only asserted through
+    // the path-folding case below).
     val plan = parseCreateTable(
       s"""
          |CREATE TABLE vec_clause_tbl (
@@ -2453,12 +2390,17 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
          |TBLPROPERTIES ('prop_str' = 'v', 'prop_int' = 2, 'prop_bool' = false)
          """.stripMargin)
     assertEquals(ArrayType(FloatType, containsNull = false), plan.tableSchema("embedding").dataType)
+    assertEquals(Some("a vector table"), plan.tableSpec.comment)
+    assertEquals(Some("/tmp/vec_clause_tbl"), plan.tableSpec.location)
+    assertEquals("v", plan.tableSpec.properties("prop_str"))
+    assertEquals("2", plan.tableSpec.properties("prop_int"))
+    assertEquals("false", plan.tableSpec.properties("prop_bool"))
 
     // A 'path' option with no LOCATION is folded into the table location by the option cleaner.
     val pathPlan = parseCreateTable(
       "CREATE TABLE vec_path_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
         "OPTIONS ('path' = '/tmp/vec_path_tbl')")
-    assertEquals(ArrayType(FloatType, containsNull = false), pathPlan.tableSchema("embedding").dataType)
+    assertEquals(Some("/tmp/vec_path_tbl"), pathPlan.tableSpec.location)
 
     // A 'path' option colliding with LOCATION is rejected by the option cleaner.
     checkExceptionContain(
