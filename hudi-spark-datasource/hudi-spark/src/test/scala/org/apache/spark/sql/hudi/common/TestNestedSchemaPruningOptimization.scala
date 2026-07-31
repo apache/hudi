@@ -30,6 +30,14 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with SparkAdapterSupport {
 
+  // NOTE: We disable WCE once for the whole suite so the executed plans stay a plain Project over the
+  //       scan node (no WholeStageCodegenExec wrapper); every test here pattern-matches the scan to
+  //       read its required schema, so this keeps the plan-inspection helpers free of side effects.
+  override protected def beforeAll(): Unit = {
+    super.beforeAll()
+    spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
+  }
+
   private def explain(plan: LogicalPlan): String = {
     val explainCommand = sparkAdapter.getCatalystPlanUtils.createExplainCommand(plan, extended = true)
     executePlan(explainCommand)
@@ -110,9 +118,6 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
         val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string,price:int>>"
 
-        // NOTE: We're disabling WCE to simplify resulting plan
-        spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
-
         // NOTE: Unfortunately, we can't use pattern-matching to extract required fields, due to a need to maintain
         //       compatibility w/ Spark 2.4
         selectDF.queryExecution.executedPlan match {
@@ -183,7 +188,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
         StructField("name", StringType, nullable = false),
         StructField("price", IntegerType, nullable = false)
       ))
-      assertEquals(expectedItemStruct, nestedFieldOf(selectDF, "item"))
+      assertEquals(expectedItemStruct, prunedStructTypeOf(selectDF, "item"))
 
       selectDF.count
     }
@@ -205,7 +210,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
       withSQLConf(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key -> "false") {
         val selectDF = spark.sql(s"SELECT id, item.name FROM $tableName")
-        assertEquals(expectedItemStruct, nestedFieldOf(selectDF, "item"))
+        assertEquals(expectedItemStruct, prunedStructTypeOf(selectDF, "item"))
         selectDF.count
       }
     }
@@ -216,9 +221,6 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
                                      expectedSchema: StructType,
                                      expectedReadSchemaClause: String,
                                      hint: String = ""): Unit = {
-    // NOTE: We're disabling WCE to simplify resulting plan
-    spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
-
     // NOTE: Unfortunately, we can't use pattern-matching to extract required fields, due to a need to maintain
     //       compatibility w/ Spark 2.4
     selectDF.queryExecution.executedPlan match {
@@ -238,10 +240,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
     }
   }
 
-  private def nestedFieldOf(selectDF: DataFrame, fieldName: String): StructType = {
-    // NOTE: We're disabling WCE to simplify resulting plan
-    spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
-
+  private def prunedStructTypeOf(selectDF: DataFrame, fieldName: String): StructType = {
     val requiredSchema = selectDF.queryExecution.executedPlan match {
       case ProjectExec(_, fileScan: FileSourceScanExec) => fileScan.requiredSchema
       case ProjectExec(_, dataScan: RowDataSourceScanExec) => dataScan.requiredSchema
