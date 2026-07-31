@@ -89,10 +89,13 @@ import static java.nio.file.Files.createTempDirectory;
  * Data layout (partitions {@code part_col=p1} / {@code part_col=p2}, hive-style paths so the MDT
  * partition listing and the metastore agree on names):
  * <pre>
- * commit 1 (insert): k1(p1, price 10,  ts 100), k2(p2, price 1000, ts 100)
- * commit 2 (insert): k3(p1, price 20,  ts 200), k4(p2, price 2000, ts 200)
- * commit 3 (upsert): k1(p1, price 15,  ts 300)
+ * commit 1 (insert, MDT off): k1(p1, price 10,  ts 100), k2(p2, price 1000, ts 100)
+ * commit 2 (insert, MDT on):  k3(p1, price 20,  ts 200), k4(p2, price 2000, ts 200)
+ * commit 3 (upsert, MDT on):  k1(p1, price 15,  ts 300)
  * </pre>
+ * The MDT is enabled only from commit 2 so its bootstrap sees existing data; a bootstrap over an
+ * empty table would register the col-stats index definition with no source fields, permanently
+ * disabling stats-based pruning in the connector (see {@code writeTable}).
  * Final rows: k1=15, k2=1000, k3=20, k4=2000. Partition p1 holds prices [15, 20] and p2 holds
  * [1000, 2000], so a predicate like {@code price < 100} lets the partition-stats index prune p2.
  * <p>
@@ -202,13 +205,24 @@ public class UncompactedMetadataHudiTablesInitializer
     private static void writeTable(Path tablePath, String tableName)
     {
         Schema schema = createAvroSchema();
-        try (HoodieJavaWriteClient<HoodieAvroPayload> writeClient = createWriteClient(schema, tablePath, tableName)) {
+        initTable(tablePath, tableName);
+
+        // Commit 1 runs with the MDT off so the MDT bootstraps AFTER data exists. Index
+        // definitions get their source fields from ColumnStatsIndexer.postInitialization, which
+        // registers an EMPTY field list when the bootstrap sees no records, and
+        // HoodieJavaWriteClient.updateColumnsToIndexWithColStats is a no-op (the Spark client
+        // refreshes the definition on each commit), so a definition registered over an empty
+        // table keeps empty source fields forever and the connector's canApply() then rejects
+        // the col-stats/partition-stats indexes, silently disabling pruning.
+        try (HoodieJavaWriteClient<HoodieAvroPayload> writeClient = createWriteClient(schema, tablePath, tableName, false)) {
             String firstCommit = writeClient.startCommit();
             List<WriteStatus> firstStatuses = writeClient.insert(ImmutableList.of(
                     record(schema, "k1", "k1_c1", 10L, 100L, PARTITION_PATHS.get(0)),
                     record(schema, "k2", "k2_c1", 1000L, 100L, PARTITION_PATHS.get(1))), firstCommit);
             writeClient.commit(firstCommit, firstStatuses);
+        }
 
+        try (HoodieJavaWriteClient<HoodieAvroPayload> writeClient = createWriteClient(schema, tablePath, tableName, true)) {
             String secondCommit = writeClient.startCommit();
             List<WriteStatus> secondStatuses = writeClient.insert(ImmutableList.of(
                     record(schema, "k3", "k3_c2", 20L, 200L, PARTITION_PATHS.get(0)),
@@ -222,9 +236,8 @@ public class UncompactedMetadataHudiTablesInitializer
         }
     }
 
-    private static HoodieJavaWriteClient<HoodieAvroPayload> createWriteClient(Schema schema, Path tablePath, String tableName)
+    private static void initTable(Path tablePath, String tableName)
     {
-        Configuration conf = new Configuration();
         try {
             HoodieTableMetaClient.newTableBuilder()
                     .setTableType(HoodieTableType.COPY_ON_WRITE)
@@ -236,12 +249,16 @@ public class UncompactedMetadataHudiTablesInitializer
                     .setPartitionFields(PARTITION_FIELD)
                     .setHiveStylePartitioningEnable(true)
                     .setOrderingFields(ORDERING_FIELD)
-                    .initTable(new HadoopStorageConfiguration(conf), tablePath.toString());
+                    .initTable(new HadoopStorageConfiguration(new Configuration()), tablePath.toString());
         }
         catch (IOException e) {
             throw new RuntimeException("Could not init table " + tableName, e);
         }
+    }
 
+    private static HoodieJavaWriteClient<HoodieAvroPayload> createWriteClient(Schema schema, Path tablePath, String tableName, boolean metadataEnabled)
+    {
+        Configuration conf = new Configuration();
         HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder()
                 .withPath(tablePath.toString())
                 .withSchema(schema.toString())
@@ -259,10 +276,11 @@ public class UncompactedMetadataHudiTablesInitializer
                 // whose compaction never fires within this test (the zip fixtures use
                 // compact.max.delta.commits=1), so its partitions keep native HFILE log deltas.
                 // MDT HFILE writing is native (hudi-io HFileWriterImpl) -- no hbase involved.
+                // metadataEnabled is false for the first commit only; see writeTable.
                 .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-                        .enable(true)
-                        .withMetadataIndexColumnStats(true)
-                        .withMetadataIndexPartitionStats(true)
+                        .enable(metadataEnabled)
+                        .withMetadataIndexColumnStats(metadataEnabled)
+                        .withMetadataIndexPartitionStats(metadataEnabled)
                         .withMaxNumDeltaCommitsBeforeCompaction(100)
                         .build())
                 .build();
