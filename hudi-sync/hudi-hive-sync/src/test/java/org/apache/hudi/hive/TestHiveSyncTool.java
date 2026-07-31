@@ -1575,6 +1575,17 @@ public class TestHiveSyncTool {
     reInitHiveSyncClient();
     reSyncHiveTable();
 
+    // a second sync round with a new commit: the bare table name's read-optimized sync (which runs
+    // immediately before the origin-table sync within the same doSync() call) advances its own
+    // last-commit-time-synced marker, so the origin-table step is the only one still eligible to run
+    // and flip the format if not guarded
+    ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
+    String commitTime2 = "102";
+    String deltaCommitTime2 = "103";
+    HiveTestUtil.addMORPartitions(1, true, false, true, dateTime, commitTime2, deltaCommitTime2);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+
     String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
     String roSuffixTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
 
