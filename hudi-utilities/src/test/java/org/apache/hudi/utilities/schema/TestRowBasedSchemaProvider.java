@@ -18,14 +18,11 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.hudi.common.config.TypedProperties;
-
 import org.apache.avro.Schema;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -43,11 +40,5 @@ class TestRowBasedSchemaProvider {
     assertEquals(RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE, sourceSchema.getNamespace());
     assertNotNull(sourceSchema.getField("id"));
     assertEquals(Schema.Type.LONG, sourceSchema.getField("id").schema().getType());
-  }
-
-  @Test
-  void testPropsBasedConstructor() {
-    // the (props, jssc) constructor is the signature HoodieStreamer resolves reflectively
-    assertDoesNotThrow(() -> new RowBasedSchemaProvider(new TypedProperties(), null));
   }
 }

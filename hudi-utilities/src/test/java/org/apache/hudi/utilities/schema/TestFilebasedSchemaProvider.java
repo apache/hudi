@@ -150,6 +150,25 @@ class TestFilebasedSchemaProvider extends UtilitiesTestBase {
         new FilebasedSchemaProvider(targetProps, jsc).getSourceHoodieSchema());
   }
 
+  @Test
+  void testRefreshWithoutTargetSchemaFileConfigured() throws IOException {
+    TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_valid.avsc");
+    FilebasedSchemaProvider provider = new FilebasedSchemaProvider(props, jsc);
+    // without a target schema file the constructor leaves the target schema unset, so the target
+    // falls back to the source schema
+    assertEquals(generateProperFormattedSchema(), provider.getTargetHoodieSchema());
+
+    // refresh() populates the target schema from the target file, which defaults to the source
+    // file, so a rewrite of that file now surfaces through the populated branch of getTargetSchema()
+    HoodieSchema rewrittenSchema = new FilebasedSchemaProvider(
+        Helpers.setupSchemaOnDFS("streamer-config", "source_uber.avsc"), jsc).getSourceHoodieSchema();
+    Helpers.copyToDFS("streamer-config/source_uber.avsc", storage,
+        props.getString(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE.key()));
+    provider.refresh();
+
+    assertEquals(rewrittenSchema, provider.getTargetHoodieSchema());
+  }
+
   /**
    * Json schema converter whose conversion always fails, to exercise the conversion failure path.
    */

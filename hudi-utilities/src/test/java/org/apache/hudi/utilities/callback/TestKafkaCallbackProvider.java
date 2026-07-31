@@ -43,20 +43,26 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestKafkaCallbackProvider extends UtilitiesTestBase {
+  private static final long POLL_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
+
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
 
   private KafkaTestUtils testUtils;
@@ -92,19 +98,29 @@ public class TestKafkaCallbackProvider extends UtilitiesTestBase {
     // without a partition config the message is routed by hashing the table name key
     HoodieWriteConfig defaultRoutedConfig = createConfigForKafkaCallback(null);
     HoodieWriteCommitCallback defaultRoutedCallback = HoodieCommitCallbackFactory.create(defaultRoutedConfig);
-    assertDoesNotThrow(() -> defaultRoutedCallback.call(new HoodieWriteCommitCallbackMessage(
-        makeNewCommitTime(), defaultRoutedConfig.getTableName(), defaultRoutedConfig.getBasePath(), stats)));
+    String defaultRoutedCommitTime = makeNewCommitTime();
+    defaultRoutedCallback.call(new HoodieWriteCommitCallbackMessage(
+        defaultRoutedCommitTime, defaultRoutedConfig.getTableName(), defaultRoutedConfig.getBasePath(), stats));
 
     // an explicit partition config overrides the key hashing
     HoodieWriteConfig pinnedConfig = createConfigForKafkaCallback("1");
     HoodieWriteCommitCallback pinnedCallback = HoodieCommitCallbackFactory.create(pinnedConfig);
-    assertDoesNotThrow(() -> pinnedCallback.call(new HoodieWriteCommitCallbackMessage(
-        makeNewCommitTime(), pinnedConfig.getTableName(), pinnedConfig.getBasePath(), stats)));
+    String pinnedCommitTime = makeNewCommitTime(Instant.now().plusSeconds(1));
+    pinnedCallback.call(new HoodieWriteCommitCallbackMessage(
+        pinnedCommitTime, pinnedConfig.getTableName(), pinnedConfig.getBasePath(), stats));
 
-    List<ConsumerRecord<String, String>> consumed = consumeCallbackMessages(numPartitions, 2);
+    // call() swallows send failures, so consuming the topic is the only proof the sends went through;
     // hashing the table name key routes to partition 0, so partition 1 can only come from the config
+    List<ConsumerRecord<String, String>> consumed = consumeCallbackMessages(numPartitions, 2);
     assertEquals(Arrays.asList(0, 1),
         consumed.stream().map(ConsumerRecord::partition).sorted().collect(Collectors.toList()));
+    Map<Integer, String> expectedCommitTimeByPartition = new HashMap<>();
+    expectedCommitTimeByPartition.put(0, defaultRoutedCommitTime);
+    expectedCommitTimeByPartition.put(1, pinnedCommitTime);
+    for (ConsumerRecord<String, String> record : consumed) {
+      assertTrue(record.value().contains(expectedCommitTimeByPartition.get(record.partition())),
+          () -> "unexpected callback message on partition " + record.partition() + ": " + record.value());
+    }
   }
 
   private List<ConsumerRecord<String, String>> consumeCallbackMessages(int numPartitions, int expectedCount) {
@@ -121,7 +137,7 @@ public class TestKafkaCallbackProvider extends UtilitiesTestBase {
           .collect(Collectors.toList());
       consumer.assign(partitions);
       consumer.seekToBeginning(partitions);
-      long deadline = System.currentTimeMillis() + 60000;
+      long deadline = System.currentTimeMillis() + POLL_TIMEOUT_MS;
       while (records.size() < expectedCount && System.currentTimeMillis() < deadline) {
         consumer.poll(Duration.ofSeconds(1)).forEach(records::add);
       }
