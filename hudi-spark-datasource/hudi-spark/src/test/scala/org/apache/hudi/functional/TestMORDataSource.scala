@@ -38,7 +38,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.table.upgrade.TestUpgradeDowngrade.getFixtureName
-import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
 
 import org.apache.commons.io.FileUtils
@@ -103,6 +103,330 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
+
+  @Test
+  def testLsmUpsertUsesUtf8Ordering(): Unit = {
+    val fullWidthAKey = "Ａ-key"
+    val emojiFaceKey = "😀-key"
+    val _spark = spark
+    import _spark.implicits._
+
+    Seq(HoodieTableType.COPY_ON_WRITE, HoodieTableType.MERGE_ON_READ).foreach { tableType =>
+      val tablePath = s"${basePath}_${tableType.name.toLowerCase}_lsm"
+      val options = Map[String, String](
+        DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
+        DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+        HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+        HoodieTableConfig.TABLE_STORAGE_LAYOUT.key -> HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue,
+        HoodieWriteConfig.TBL_NAME.key -> s"hoodie_lsm_${tableType.name.toLowerCase}",
+        HoodieMetadataConfig.ENABLE.key -> "false",
+        HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+        HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
+        "hoodie.insert.shuffle.parallelism" -> "1",
+        "hoodie.upsert.shuffle.parallelism" -> "1")
+      val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options)
+
+      Seq(
+        (fullWidthAKey, "full-width-a-v1", 1L),
+        (emojiFaceKey, "emoji-v1", 1L))
+        .toDF("id", "value", "ts")
+        .repartition(1)
+        .write.format("hudi")
+        .options(writeOpts)
+        .mode(SaveMode.Append)
+        .save(tablePath)
+
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tablePath)
+        .setConf(storageConf.newInstance())
+        .build()
+      assertTrue(metaClient.getTableConfig.isLSMTreeStorageLayout)
+
+      // All LSM sorted runs use UTF-8 byte order, where U+FF21 (Ａ) sorts before U+1F600 (😀).
+      val physicalBaseFileKeys = spark.read.parquet(tablePath)
+        .select(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+        .collect()
+        .map(_.getString(0))
+        .toList
+      assertEquals(Seq(fullWidthAKey, emojiFaceKey), physicalBaseFileKeys)
+
+      Seq(
+        (fullWidthAKey, "full-width-a-v2", 2L),
+        (emojiFaceKey, "emoji-v2", 2L))
+        .toDF("id", "value", "ts")
+        .repartition(1)
+        .write.format("hudi")
+        .options(writeOpts)
+        .mode(SaveMode.Append)
+        .save(tablePath)
+
+      val actual = spark.read.format("hudi")
+        .options(readOpts)
+        .load(tablePath)
+        .select("id", "value")
+        .collect()
+        .map(row => row.getString(0) -> row.getString(1))
+        .toMap
+      assertEquals(Map(
+        fullWidthAKey -> "full-width-a-v2",
+        emojiFaceKey -> "emoji-v2"), actual)
+    }
+  }
+
+  @Test
+  def testLsmBaseFileOnlyReadPreservesDuplicateKeys(): Unit = {
+    val duplicateKey = "duplicate-key"
+    val tablePath = s"${basePath}_mor_lsm_base_file_only_duplicates"
+    val _spark = spark
+    import _spark.implicits._
+
+    val options = Map[String, String](
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
+      DataSourceWriteOptions.OPERATION.key -> INSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.INSERT_DUP_POLICY.key -> DataSourceWriteOptions.NONE_INSERT_DUP_POLICY,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> "false",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_mor_lsm_base_file_only_duplicates",
+      HoodieMetadataConfig.ENABLE.key -> "false",
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+      "hoodie.insert.shuffle.parallelism" -> "1")
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options)
+
+    Seq(
+      (duplicateKey, "first", 1L),
+      (duplicateKey, "second", 2L))
+      .toDF("id", "value", "ts")
+      .repartition(1)
+      .write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    val physicalRows = spark.read.parquet(tablePath)
+      .select("id", "value")
+      .collect()
+    assertEquals(2, physicalRows.length)
+    assertEquals(Set("first", "second"), physicalRows.map(_.getString(1)).toSet)
+
+    val dataFiles = storage.listDirectEntries(new StoragePath(tablePath)).asScala
+      .filterNot(_.isDirectory)
+    assertEquals(1, dataFiles.count(_.getPath.getName.endsWith(HoodieFileFormat.PARQUET.getFileExtension)))
+    assertFalse(dataFiles.exists(pathInfo => org.apache.hudi.common.fs.FSUtils.isLogFile(pathInfo.getPath)))
+
+    // Build the duplicate-bearing base file with the supported default-layout insert path, then
+    // switch only the test fixture to LSM so this test does not imply LSM insert support.
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(tablePath)
+      .setConf(storageConf.newInstance())
+      .build()
+    assertFalse(metaClient.getTableConfig.isLSMTreeStorageLayout)
+    val tableProps = metaClient.getTableConfig.getProps
+    tableProps.setProperty(
+      HoodieTableConfig.TABLE_STORAGE_LAYOUT.key,
+      HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue)
+    HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPath, tableProps)
+    metaClient.reloadTableConfig()
+    assertTrue(metaClient.getTableConfig.isLSMTreeStorageLayout)
+
+    // With no log records to merge, the LSM reader delegates directly to the base-file iterator and
+    // preserve duplicate record keys just like the classic Spark file-group reader.
+    val snapshotRows = spark.read.format("hudi")
+      .options(readOpts)
+      .load(tablePath)
+      .select("id", "value")
+      .collect()
+    assertEquals(2, snapshotRows.length)
+    assertTrue(snapshotRows.forall(_.getString(0) == duplicateKey))
+    assertEquals(Set("first", "second"), snapshotRows.map(_.getString(1)).toSet)
+  }
+
+  @Test
+  def testLsmIncrementalAndSkipMergeReads(): Unit = {
+    val fullWidthAKey = "Ａ-key"
+    val emojiFaceKey = "😀-key"
+    val tablePath = s"${basePath}_mor_lsm_read_paths"
+    val _spark = spark
+    import _spark.implicits._
+
+    val options = Map[String, String](
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
+      DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieTableConfig.TABLE_STORAGE_LAYOUT.key -> HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue,
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_mor_lsm_read_paths",
+      HoodieMetadataConfig.ENABLE.key -> "false",
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1")
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options)
+
+    Seq(
+      (fullWidthAKey, "full-width-a-v1", 1L),
+      (emojiFaceKey, "emoji-v1", 1L))
+      .toDF("id", "value", "ts")
+      .repartition(1)
+      .write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(tablePath)
+    val firstCompletionTime = DataSourceTestUtils.latestDeltaCommitCompletionTime(storage, tablePath)
+
+    // Updating only the first physical key makes the base and log sorted runs have different key
+    // sets, exposing an ordering mismatch while the readers merge them.
+    Seq((fullWidthAKey, "full-width-a-v2", 2L))
+      .toDF("id", "value", "ts")
+      .repartition(1)
+      .write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    val expectedSnapshot = Map(
+      fullWidthAKey -> "full-width-a-v2",
+      emojiFaceKey -> "emoji-v1")
+    val snapshotRows = spark.read.format("hudi")
+      .options(readOpts)
+      .load(tablePath)
+      .select("id", "value")
+      .collect()
+    assertEquals(2, snapshotRows.length)
+    val actualSnapshot = snapshotRows
+      .map(row => row.getString(0) -> row.getString(1))
+      .toMap
+    assertEquals(expectedSnapshot, actualSnapshot)
+
+    val incrementalOptions = readOpts ++ Map(
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      DataSourceReadOptions.START_COMMIT.key -> firstCompletionTime)
+    val expectedIncremental = Map(fullWidthAKey -> "full-width-a-v2")
+    val incrementalRows = spark.read.format("hudi")
+      .options(incrementalOptions)
+      .load(tablePath)
+      .select("id", "value")
+      .collect()
+    assertEquals(1, incrementalRows.length)
+    val actualIncremental = incrementalRows
+      .map(row => row.getString(0) -> row.getString(1))
+      .toMap
+    assertEquals(expectedIncremental, actualIncremental)
+
+    // Skip-merge intentionally stays on the classic reader and exposes the base and log versions.
+    val skipMergeRows = spark.read.format("hudi")
+      .options(readOpts)
+      .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
+      .load(tablePath)
+      .select("id", "value")
+      .collect()
+    assertEquals(3, skipMergeRows.length)
+    val skipMergeVersions = skipMergeRows
+      .map(row => row.getString(0) -> row.getString(1))
+      .groupBy(_._1)
+      .mapValues(_.map(_._2).toSet)
+    assertEquals(Set("full-width-a-v1", "full-width-a-v2"), skipMergeVersions(fullWidthAKey))
+    assertEquals(Set("emoji-v1"), skipMergeVersions(emojiFaceKey))
+  }
+
+  @Test
+  def testLsmCompactionUsesUtf8Ordering(): Unit = {
+    val fullWidthAKey = "Ａ-key"
+    val emojiFaceKey = "😀-key"
+    val tableName = "hoodie_mor_lsm_compaction"
+    val tablePath = s"${basePath}_mor_lsm_compaction"
+    val _spark = spark
+    import _spark.implicits._
+
+    val options = Map[String, String](
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
+      DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieTableConfig.TABLE_STORAGE_LAYOUT.key -> HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue,
+      HoodieWriteConfig.TBL_NAME.key -> tableName,
+      HoodieMetadataConfig.ENABLE.key -> "false",
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1",
+      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1")
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options)
+
+    Seq(
+      (fullWidthAKey, "full-width-a-v1", 1L),
+      (emojiFaceKey, "emoji-v1", 1L))
+      .toDF("id", "value", "ts")
+      .repartition(1)
+      .write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    // Update only the full-width A key so the base and log sorted runs have different key sets. This
+    // exposes an ordering mismatch during the LSM merge instead of merging two identical runs.
+    Seq((fullWidthAKey, "full-width-a-v2", 2L))
+      .toDF("id", "value", "ts")
+      .repartition(1)
+      .write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(tablePath)
+      .setConf(storageConf.newInstance())
+      .build()
+    assertTrue(metaClient.getTableConfig.isLSMTreeStorageLayout)
+
+    val client = DataSourceUtils.createHoodieClient(
+      spark.sparkContext, "", tablePath, tableName, writeOpts.asJava)
+      .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+    val compactionInstant = try {
+      val instant = client.scheduleCompaction(Option.empty()).get()
+      val statuses = client.compact(instant, true).getWriteStatuses.collect()
+      assertFalse(statuses.isEmpty)
+      assertTrue(statuses.asScala.forall(status => !status.hasErrors))
+      instant
+    } finally {
+      client.close()
+    }
+
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants.containsInstant(compactionInstant))
+
+    val latestBaseFiles = HoodieClientTestUtils.getLatestBaseFiles(
+      tablePath, metaClient.getStorage, s"$tablePath/*")
+    assertEquals(1, latestBaseFiles.size())
+    assertEquals(compactionInstant, latestBaseFiles.get(0).getCommitTime)
+
+    // Compacted LSM base files retain the table-level UTF-8 record-key ordering contract.
+    val physicalBaseFileKeys = spark.read.parquet(latestBaseFiles.get(0).getPath)
+      .select(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+      .collect()
+      .map(_.getString(0))
+      .toList
+    assertEquals(Seq(fullWidthAKey, emojiFaceKey), physicalBaseFileKeys)
+
+    val actual = spark.read.format("hudi")
+      .options(readOpts)
+      .load(tablePath)
+      .select("id", "value")
+      .collect()
+      .map(row => row.getString(0) -> row.getString(1))
+      .toMap
+    assertEquals(Map(
+      fullWidthAKey -> "full-width-a-v2",
+      emojiFaceKey -> "emoji-v1"), actual)
+  }
 
   @ParameterizedTest
   @CsvSource(Array(

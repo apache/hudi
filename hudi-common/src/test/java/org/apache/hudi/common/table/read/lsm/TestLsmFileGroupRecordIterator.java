@@ -197,6 +197,21 @@ class TestLsmFileGroupRecordIterator {
   }
 
   @Test
+  void testLoserTreeUsesUtf8Ordering() {
+    String bmpPrivateUseKey = new String(Character.toChars(0xE000));
+    String supplementaryKey = new String(Character.toChars(0x20000));
+
+    LsmFileGroupRecordIterator.LoserTree<String> loserTree =
+        new LsmFileGroupRecordIterator.LoserTree<>(
+            Arrays.asList(
+                sortedRunReader(0, record(bmpPrivateUseKey, "bmp")),
+                sortedRunReader(1, record(supplementaryKey, "supplementary"))));
+    assertEquals(Arrays.asList(
+        bmpPrivateUseKey + ":bmp",
+        supplementaryKey + ":supplementary"), drain(loserTree));
+  }
+
+  @Test
   void testSelectDirectLogReadersPrioritizesDeletesThenSmallFiles() {
     List<LsmFileGroupRecordIterator.LogReaderSpec> logReaderSpecs = Arrays.asList(
         new LsmFileGroupRecordIterator.LogReaderSpec(1, logFile("file1_1-0-1_001_1.log.parquet", 10)),
