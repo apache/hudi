@@ -3,11 +3,14 @@
 target/
 metastore_db/
 .metals/
-# Keep ignoring locally generated .mvn content (e.g. the maven wrapper), but track
-# .mvn/extensions.xml: the directory must exist for maven.multiModuleProjectDirectory to
-# resolve to the repo root when a build runs from inside a submodule (HUDI-6111).
-.mvn/*
-!.mvn/extensions.xml
+# Keep ignoring .mvn directories anywhere in the tree (maven wrapper, IDE output, and
+# nested ones such as hudi-trino/.mvn), while tracking the repo-root .mvn/extensions.xml:
+# that directory must exist for maven.multiModuleProjectDirectory to resolve to the repo
+# root when a build runs from inside a submodule (HUDI-6111).
+.mvn/
+!/.mvn/
+/.mvn/*
+!/.mvn/extensions.xml
 *.bloop/
 *.vscode/
 *.metals/
