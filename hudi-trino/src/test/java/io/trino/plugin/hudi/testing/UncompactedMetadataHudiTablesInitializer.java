@@ -55,11 +55,15 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
+import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.io.MoreFiles.deleteRecursively;
 import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
 import static io.trino.hive.formats.HiveClassNames.HUDI_PARQUET_INPUT_FORMAT;
@@ -91,27 +95,30 @@ import static java.nio.file.Files.createTempDirectory;
  * </pre>
  * Final rows: k1=15, k2=1000, k3=20, k4=2000. Partition p1 holds prices [15, 20] and p2 holds
  * [1000, 2000], so a predicate like {@code price < 100} lets the partition-stats index prune p2.
+ * <p>
+ * A second, identical table {@link #CORRUPTED_TABLE_NAME} is written whose MDT log files are
+ * corrupted in place before upload: every MDT read of it throws, pinning the connector's
+ * fallbacks (direct file listing in {@code HudiSnapshotDirectoryLister}, unpruned split
+ * generation in {@code HudiBackgroundSplitLoader}) instead of only the clean-read path.
  */
 public class UncompactedMetadataHudiTablesInitializer
         implements HudiTablesInitializer
 {
     public static final String TABLE_NAME = "hudi_uncompacted_mdt_pt_cow";
+    public static final String CORRUPTED_TABLE_NAME = "hudi_corrupted_mdt_pt_cow";
 
     private static final String RECORD_KEY_FIELD = "id";
     private static final String PARTITION_FIELD = "part_col";
     private static final String ORDERING_FIELD = "ts";
     private static final List<String> PARTITION_PATHS = ImmutableList.of(PARTITION_FIELD + "=p1", PARTITION_FIELD + "=p2");
 
-    private static final List<Column> DATA_COLUMNS = ImmutableList.of(
-            new Column("_hoodie_commit_time", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_commit_seqno", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_record_key", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_partition_path", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_file_name", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("name", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("price", HIVE_LONG, Optional.empty(), Map.of()),
-            new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()));
+    private static final List<Column> DATA_COLUMNS = ImmutableList.<Column>builder()
+            .addAll(AbstractMergerHudiTablesInitializer.HUDI_META_COLUMNS)
+            .add(new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()))
+            .add(new Column("name", HIVE_STRING, Optional.empty(), Map.of()))
+            .add(new Column("price", HIVE_LONG, Optional.empty(), Map.of()))
+            .add(new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()))
+            .build();
 
     private static final List<Column> PARTITION_COLUMNS =
             ImmutableList.of(new Column(PARTITION_FIELD, HIVE_STRING, Optional.empty(), Map.of()));
@@ -127,26 +134,75 @@ public class UncompactedMetadataHudiTablesInitializer
                 .getInstance(HiveMetastoreFactory.class)
                 .createMetastore(Optional.empty());
 
-        Location tableLocation = externalLocation.appendPath(TABLE_NAME);
-
         java.nio.file.Path tempDir = createTempDirectory("uncompacted-mdt");
         try {
-            java.nio.file.Path tempTableDir = tempDir.resolve(TABLE_NAME);
-            writeTable(new Path(tempTableDir.toUri()));
-            ResourceHudiTablesInitializer.copyDir(tempTableDir, fileSystem, tableLocation);
+            for (String tableName : ImmutableList.of(TABLE_NAME, CORRUPTED_TABLE_NAME)) {
+                java.nio.file.Path tempTableDir = tempDir.resolve(tableName);
+                writeTable(new Path(tempTableDir.toUri()), tableName);
+                if (tableName.equals(CORRUPTED_TABLE_NAME)) {
+                    corruptMetadataLogFiles(tempTableDir);
+                }
+                Location tableLocation = externalLocation.appendPath(tableName);
+                ResourceHudiTablesInitializer.copyDir(tempTableDir, fileSystem, tableLocation);
 
-            metastore.createTable(createTableDefinition(schemaName, tableLocation), PrincipalPrivileges.NO_PRIVILEGES);
-            metastore.addPartitions(schemaName, TABLE_NAME, createPartitions(schemaName, tableLocation));
+                metastore.createTable(createTableDefinition(schemaName, tableName, tableLocation), PrincipalPrivileges.NO_PRIVILEGES);
+                metastore.addPartitions(schemaName, tableName, createPartitions(schemaName, tableName, tableLocation));
+            }
         }
         finally {
             deleteRecursively(tempDir, ALLOW_INSECURE);
         }
     }
 
-    private static void writeTable(Path tablePath)
+    /**
+     * Corrupts every MDT log file so that any metadata-table read of the table throws, without the
+     * log reader silently skipping the damage. The corrupted window targets the HFile TRAILER of
+     * the last block's content: hudi-io HFiles end with a fixed 4096-byte trailer whose magic and
+     * protobuf fields sit at the trailer's START, followed by padding, so the window is placed
+     * ~4KB before EOF to land on those fields (corrupting near EOF would only flip padding). The
+     * log block FRAMING -- the leading magic/block-size fields and the trailing footer plus
+     * reverse-pointer long, which {@code HoodieLogFileReader.isBlockCorrupted} validates -- stays
+     * intact on purpose: framing damage is classified as a {@code HoodieCorruptBlock} and skipped
+     * WITHOUT an exception, which would silently drop records instead of exercising the
+     * connector's fallbacks.
+     */
+    private static void corruptMetadataLogFiles(java.nio.file.Path tableDir)
+            throws IOException
+    {
+        java.nio.file.Path metadataDir = tableDir.resolve(".hoodie").resolve("metadata");
+        List<java.nio.file.Path> logFiles;
+        try (Stream<java.nio.file.Path> walk = Files.walk(metadataDir)) {
+            logFiles = walk
+                    .filter(Files::isRegularFile)
+                    .filter(file -> file.getFileName().toString().contains(".log."))
+                    .collect(toImmutableList());
+        }
+        int corrupted = 0;
+        for (java.nio.file.Path logFile : logFiles) {
+            byte[] bytes = Files.readAllBytes(logFile);
+            // The last block's content ends (up to the small log block footer) at EOF and its
+            // HFile trailer spans the content's final 4096 bytes, so the trailer's magic and
+            // fields sit just past EOF - 4160; a data-bearing block always reaches that deep
+            int start = bytes.length - 4160;
+            int end = bytes.length - 3648;
+            if (start < 64) {
+                // Too small to hold a data-bearing block (e.g. only the file-group bootstrap
+                // block, which carries no records); nothing worth corrupting
+                continue;
+            }
+            for (int i = start; i < end; i++) {
+                bytes[i] ^= 0x5A;
+            }
+            Files.write(logFile, bytes);
+            corrupted++;
+        }
+        checkState(corrupted > 0, "No MDT log files corrupted under %s; the fallback tests would pass vacuously", metadataDir);
+    }
+
+    private static void writeTable(Path tablePath, String tableName)
     {
         Schema schema = createAvroSchema();
-        try (HoodieJavaWriteClient<HoodieAvroPayload> writeClient = createWriteClient(schema, tablePath)) {
+        try (HoodieJavaWriteClient<HoodieAvroPayload> writeClient = createWriteClient(schema, tablePath, tableName)) {
             String firstCommit = writeClient.startCommit();
             List<WriteStatus> firstStatuses = writeClient.insert(ImmutableList.of(
                     record(schema, "k1", "k1_c1", 10L, 100L, PARTITION_PATHS.get(0)),
@@ -166,13 +222,13 @@ public class UncompactedMetadataHudiTablesInitializer
         }
     }
 
-    private static HoodieJavaWriteClient<HoodieAvroPayload> createWriteClient(Schema schema, Path tablePath)
+    private static HoodieJavaWriteClient<HoodieAvroPayload> createWriteClient(Schema schema, Path tablePath, String tableName)
     {
         Configuration conf = new Configuration();
         try {
             HoodieTableMetaClient.newTableBuilder()
                     .setTableType(HoodieTableType.COPY_ON_WRITE)
-                    .setTableName(TABLE_NAME)
+                    .setTableName(tableName)
                     .setTimelineLayoutVersion(1)
                     .setBootstrapIndexClass(NoOpBootstrapIndex.class.getName())
                     .setPayloadClassName(HoodieAvroPayload.class.getName())
@@ -183,7 +239,7 @@ public class UncompactedMetadataHudiTablesInitializer
                     .initTable(new HadoopStorageConfiguration(conf), tablePath.toString());
         }
         catch (IOException e) {
-            throw new RuntimeException("Could not init table " + TABLE_NAME, e);
+            throw new RuntimeException("Could not init table " + tableName, e);
         }
 
         HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder()
@@ -191,7 +247,7 @@ public class UncompactedMetadataHudiTablesInitializer
                 .withSchema(schema.toString())
                 .withParallelism(2, 2)
                 .withDeleteParallelism(2)
-                .forTable(TABLE_NAME)
+                .forTable(tableName)
                 .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
                 .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                         .withInlineCompaction(false)
@@ -238,11 +294,11 @@ public class UncompactedMetadataHudiTablesInitializer
         return Schema.createRecord(TABLE_NAME, null, null, false, new ArrayList<>(fields));
     }
 
-    private static Table createTableDefinition(String schemaName, Location location)
+    private static Table createTableDefinition(String schemaName, String tableName, Location location)
     {
         return Table.builder()
                 .setDatabaseName(schemaName)
-                .setTableName(TABLE_NAME)
+                .setTableName(tableName)
                 .setTableType(EXTERNAL_TABLE.name())
                 .setOwner(Optional.of("public"))
                 .setDataColumns(DATA_COLUMNS)
@@ -254,14 +310,14 @@ public class UncompactedMetadataHudiTablesInitializer
                 .build();
     }
 
-    private static List<PartitionWithStatistics> createPartitions(String schemaName, Location tableLocation)
+    private static List<PartitionWithStatistics> createPartitions(String schemaName, String tableName, Location tableLocation)
     {
         List<PartitionWithStatistics> partitions = new ArrayList<>();
         for (String partitionName : PARTITION_PATHS) {
             // Hive-style partition paths, so the partition NAME and the relative PATH coincide
             Partition partition = Partition.builder()
                     .setDatabaseName(schemaName)
-                    .setTableName(TABLE_NAME)
+                    .setTableName(tableName)
                     .setValues(extractPartitionValues(partitionName))
                     .withStorage(storageBuilder -> storageBuilder
                             .setStorageFormat(storageFormat())

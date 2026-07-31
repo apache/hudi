@@ -20,6 +20,7 @@ import io.trino.testing.MaterializedResult;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
 
+import static io.trino.plugin.hudi.testing.UncompactedMetadataHudiTablesInitializer.CORRUPTED_TABLE_NAME;
 import static io.trino.plugin.hudi.testing.UncompactedMetadataHudiTablesInitializer.TABLE_NAME;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,6 +32,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * keeps its MDT deliberately uncompacted (the zip fixtures always compact after every commit), so the
  * queries below only succeed if the connector reads HFILE log deltas in the MDT's
  * {@code files}/{@code column_stats}/{@code partition_stats} partitions.
+ * <p>
+ * The initializer also writes {@code CORRUPTED_TABLE_NAME}, an identical table whose MDT log files
+ * are corrupted so every MDT read throws; queries on it pin the fallbacks (direct file listing,
+ * unpruned split generation) instead of only the clean-read path.
  */
 public class TestHudiUncompactedMetadataTable
         extends AbstractTestQueryFramework
@@ -70,22 +75,44 @@ public class TestHudiUncompactedMetadataTable
         // The exact crash from the issue: partition-stats pruning reads the partition_stats MDT
         // partition, whose deltas are uncompacted HFILE log files. Partition p2 holds prices
         // [1000, 2000], so `price < 100` lets the index prune it entirely.
-        Session session = SessionBuilder.from(getSession())
-                .withMdtEnabled(true)
-                .withColStatsIndexEnabled(false)
-                .withRecordLevelIndexEnabled(false)
-                .withSecondaryIndexEnabled(false)
-                .withPartitionStatsIndexEnabled(true)
-                .build();
-        MaterializedResult pruned = getQueryRunner().execute(session,
+        MaterializedResult pruned = getQueryRunner().execute(partitionStatsPruningOnly(),
                 "SELECT id, price FROM " + TABLE_NAME + " WHERE price < 100");
         assertThat(pruned.getMaterializedRows()).hasSize(2);
 
-        MaterializedResult unpruned = getQueryRunner().execute(mdtEnabled(),
-                "SELECT id, price FROM " + TABLE_NAME);
-        // Pruning must not scan more than the full table does; correctness is asserted above
-        assertThat(pruned.getStatementStats().get().getTotalSplits())
-                .isLessThanOrEqualTo(unpruned.getStatementStats().get().getTotalSplits());
+        // Index pruning must scan exactly p1's file groups: the same split count as a
+        // metastore-pruned scan of p1, strictly fewer than the full scan. Split counts are
+        // compared instead of hardcoded because the number of file groups per partition depends
+        // on the write client's small-file packing.
+        int fullScanSplits = totalSplits(mdtEnabled(), "SELECT id, price FROM " + TABLE_NAME);
+        int p1ScanSplits = totalSplits(mdtEnabled(), "SELECT id, price FROM " + TABLE_NAME + " WHERE part_col = 'p1'");
+        assertThat(p1ScanSplits).isLessThan(fullScanSplits);
+        assertThat(pruned.getStatementStats().get().getTotalSplits()).isEqualTo(p1ScanSplits);
+    }
+
+    @Test
+    public void testReadFallsBackToDirectListingOnUnreadableMetadataTable()
+    {
+        // The corrupted twin table's MDT log deltas cannot be decoded, so the MDT-backed
+        // file-system-view load throws; HudiSnapshotDirectoryLister must fall back to listing
+        // files directly from storage and still return complete, correct rows.
+        assertQuery(
+                mdtEnabled(),
+                "SELECT id, name, price FROM " + CORRUPTED_TABLE_NAME + " ORDER BY id",
+                "VALUES ('k1', 'k1_c3', CAST(15 AS BIGINT)), ('k2', 'k2_c1', 1000), ('k3', 'k3_c2', 20), ('k4', 'k4_c2', 2000)");
+    }
+
+    @Test
+    public void testPartitionStatsPruningFallsBackUnprunedOnUnreadableMetadataTable()
+    {
+        // Same pruning setup as above, but the partition_stats read throws on the corrupted
+        // table: prunePartitionsSafely must degrade to "no pruning", so the scan covers the
+        // same splits as a full scan instead of failing the query.
+        MaterializedResult unpruned = getQueryRunner().execute(partitionStatsPruningOnly(),
+                "SELECT id, price FROM " + CORRUPTED_TABLE_NAME + " WHERE price < 100");
+        assertThat(unpruned.getMaterializedRows()).hasSize(2);
+
+        int fullScanSplits = totalSplits(mdtDisabled(), "SELECT id, price FROM " + CORRUPTED_TABLE_NAME);
+        assertThat(unpruned.getStatementStats().get().getTotalSplits()).isEqualTo(fullScanSplits);
     }
 
     @Test
@@ -113,5 +140,22 @@ public class TestHudiUncompactedMetadataTable
     private Session mdtDisabled()
     {
         return SessionBuilder.from(getSession()).withMdtEnabled(false).build();
+    }
+
+    /** MDT on with only the partition-stats index enabled, isolating partition pruning. */
+    private Session partitionStatsPruningOnly()
+    {
+        return SessionBuilder.from(getSession())
+                .withMdtEnabled(true)
+                .withColStatsIndexEnabled(false)
+                .withRecordLevelIndexEnabled(false)
+                .withSecondaryIndexEnabled(false)
+                .withPartitionStatsIndexEnabled(true)
+                .build();
+    }
+
+    private int totalSplits(Session session, String query)
+    {
+        return getQueryRunner().execute(session, query).getStatementStats().get().getTotalSplits();
     }
 }
