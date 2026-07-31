@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -45,6 +46,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -57,9 +59,14 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -1676,5 +1683,120 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       when(storagePathInfo.isFile()).thenReturn(true);
       when(storage.listFiles(new StoragePath(basePath + "/" + partition))).thenReturn(Collections.singletonList(storagePathInfo));
     }
+  }
+
+  /**
+   * On a table version 6 metadata table the partition-initialization deltacommits are the data instant
+   * they were derived from with a three-digit suffix appended (010 for FILES, 011 for RECORD_INDEX) -
+   * see {@code HoodieBackedTableMetadataWriterTableVersionSix#createIndexInitTimestamp}. Those instants
+   * sort AFTER the bare data instant under Hudi's lexicographic instant comparison, so a metadata-table
+   * snapshot taken as of the data table's latest completed commit must still include them. When the data
+   * table has no commit after the metadata table was initialized, failing to do so makes the record index
+   * read back empty and every data-table key is reported as missing from it.
+   * <p>
+   * Table version 8 and above are unaffected: {@code HoodieBackedTableMetadataWriter#generateUniqueInstantTime}
+   * derives the init instants from {@code SOLO_COMMIT_TIMESTAMP}, which sorts below every data instant.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testRecordIndexValidationWhenMdtInitializedAtLatestDataCommit(boolean validateContent) throws Exception {
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "COPY_ON_WRITE");
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value());
+    // Leave the metadata table off for the write; it is bootstrapped out of band below so that the
+    // data table's latest completed commit stays the instant the init instants are derived from.
+    writeOptions.put(HoodieMetadataConfig.ENABLE.key(), "false");
+    // Table version 6 is the one whose metadata table initialization instants carry the suffix.
+    writeOptions.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "6");
+
+    makeInsertDf("000", 50).write().format("hudi").options(writeOptions)
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .forTable("test_table")
+        .withWriteTableVersion(6)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableGlobalRecordLevelIndex(true)
+            .withRecordIndexFileGroupCount(1, 1)
+            .build())
+        .build();
+    HoodieTableMetaClient metaClientBeforeInit = HoodieTableMetaClient.builder()
+        .setBasePath(basePath).setConf(HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration())).build();
+    assertEquals(HoodieTableVersion.SIX, metaClientBeforeInit.getTableConfig().getTableVersion(),
+        "the suffixed initialization instants only exist on table version 6");
+
+    // Creating the writer initializes the FILES and RECORD_INDEX partitions from the filesystem
+    // without adding a commit to the data table. Go through the factory so the table-version-6 writer
+    // is selected, exactly as production does.
+    try (HoodieTableMetadataWriter ignored = SparkMetadataWriterFactory.create(
+        HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()), writeConfig, context,
+        Option.empty(), metaClientBeforeInit.getTableConfig())) {
+      // constructing the writer performs the initialization
+    }
+
+    HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.reload(metaClientBeforeInit);
+    assertTrue(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
+        "record index should be registered on the data table");
+    String latestDataCommit = dataMetaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
+        .filterCompletedInstants().lastInstant().get().requestedTime();
+    HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))
+        .setConf(HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration())).build();
+    List<String> mdtInstants = mdtMetaClient.getActiveTimeline().filterCompletedInstants()
+        .getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
+    assertTrue(
+        mdtInstants.stream().allMatch(instant -> instant.startsWith(latestDataCommit)
+            && instant.length() > latestDataCommit.length()),
+        "expected every metadata instant to be a suffixed extension of " + latestDataCommit
+            + " but got " + mdtInstants);
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    // validateRecordIndexContent shadows validateRecordIndexCount, so toggling it exercises both paths.
+    config.validateRecordIndexContent = validateContent;
+    config.validateRecordIndexCount = true;
+    config.ignoreFailed = true;
+
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    // Assert on the record index validation directly: doMetadataTableValidation() reports any
+    // non-HoodieValidationException as a successful run, so run() alone cannot distinguish a genuine
+    // pass from the read blowing up.
+    assertDoesNotThrow(() -> validator.validateRecordIndex(new HoodieSparkEngineContext(jsc), dataMetaClient),
+        "record index validation should pass against an intact record index");
+    assertTrue(validator.run(), "validation should succeed against an intact record index");
+    assertFalse(validator.hasValidationFailure(), () -> "unexpected validation failures: "
+        + validator.getThrowables());
+  }
+
+  @Test
+  public void testMetadataTableInstantForIncludesEveryDerivedInstant() {
+    String dataTableInstant = "20231012054834279";
+
+    String queryInstant = HoodieMetadataTableValidator.metadataTableInstantFor(dataTableInstant);
+
+    assertEquals("20231012054834280", queryInstant, "the bound should advance the instant by one millisecond");
+    // 010-013 are appended when a metadata table partition is initialized, 001-006 by the
+    // metadata-table-internal operations; all of them must fall inside the queried window.
+    for (String suffix : new String[] {"001", "002", "003", "004", "005", "006", "010", "011", "012", "013"}) {
+      assertTrue(
+          InstantComparison.compareTimestamps(dataTableInstant + suffix, InstantComparison.LESSER_THAN_OR_EQUALS, queryInstant),
+          () -> "metadata instant " + dataTableInstant + suffix + " should be included by " + queryInstant);
+    }
+    // ... while the next data table instant stays outside it.
+    assertTrue(InstantComparison.compareTimestamps("20231012054834281", InstantComparison.GREATER_THAN, queryInstant),
+        "a later data table instant should not be included");
+  }
+
+  @Test
+  public void testMetadataTableInstantForLeavesNonTimestampInstantUnchanged() {
+    assertEquals("100", HoodieMetadataTableValidator.metadataTableInstantFor("100"));
   }
 }

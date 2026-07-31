@@ -61,6 +61,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -111,11 +112,13 @@ import org.apache.spark.storage.StorageLevel;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -208,6 +211,10 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLogFileColumnR
 public class HoodieMetadataTableValidator implements Serializable {
 
   private static final long serialVersionUID = 1L;
+
+  // Advance the metadata table query instant by this much so that instants derived from a data table
+  // instant, which carry a three-digit suffix, fall inside the queried window. See #metadataTableInstantFor.
+  private static final long METADATA_INSTANT_LOOKAHEAD_MS = 1;
 
   // Spark context
   private transient JavaSparkContext jsc;
@@ -1236,7 +1243,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         .select(RECORD_KEY_METADATA_FIELD)
         .count();
     long countKeyFromRecordIndex = sparkEngineContext.getSqlContext().read().format("hudi")
-        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(),latestCompletedCommit)
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), metadataTableInstantFor(latestCompletedCommit))
         .load(getMetadataTableBasePath(basePath))
         .select("key")
         .filter("type = 5")
@@ -1338,6 +1345,37 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
+  /**
+   * Returns the instant to query the metadata table with, so that the snapshot reflects the data
+   * table as of {@code dataTableInstant}.
+   * <p>
+   * Metadata table instants derived from a data table instant carry a three-digit numeric suffix:
+   * partition initialization appends 010 and up (see
+   * {@code HoodieTableMetadataUtil#createIndexInitTimestamp}), and metadata-table-internal
+   * compaction, clean, restore, indexing, log compaction and rollback append 001 to 006. Hudi
+   * compares instants as strings, so every one of those derived instants sorts AFTER the bare data
+   * instant, and a snapshot taken as of the data instant itself excludes them - leaving, for
+   * instance, the record index unreadable until the data table receives another commit.
+   * <p>
+   * The bound is therefore advanced by a single millisecond. That is strictly greater than any
+   * {@code <dataTableInstant><suffix>} (which shares the whole 17-character prefix and so compares
+   * lower), while still being a valid {@code yyyyMMddHHmmssSSS} instant - the time travel option
+   * rejects anything else, see {@code HoodieSqlCommonUtils#formatQueryInstant}. Instants that are
+   * not timestamps (legacy or test instants such as "100") are returned unchanged; they have no
+   * metadata table counterpart to include.
+   */
+  @VisibleForTesting
+  static String metadataTableInstantFor(String dataTableInstant) {
+    try {
+      Date dataTableInstantDate = TimelineUtils.parseDateFromInstantTime(dataTableInstant);
+      return TimelineUtils.formatDate(new Date(dataTableInstantDate.getTime() + METADATA_INSTANT_LOOKAHEAD_MS));
+    } catch (ParseException e) {
+      log.warn("Cannot parse instant {} as a timestamp; querying the metadata table as of it verbatim",
+          dataTableInstant);
+      return dataTableInstant;
+    }
+  }
+
   @VisibleForTesting
   JavaPairRDD<String, Pair<String, String>> getRecordLocationsFromFSBasedListing(HoodieSparkEngineContext sparkEngineContext,
                                                                                                       String basePath,
@@ -1358,7 +1396,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                                                                       String basePath,
                                                                       String latestCompletedCommit) {
     return sparkEngineContext.getSqlContext().read().format("hudi")
-        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), metadataTableInstantFor(latestCompletedCommit))
         .load(getMetadataTableBasePath(basePath))
         .filter("type = 5")
         .select(functions.col("key"),
