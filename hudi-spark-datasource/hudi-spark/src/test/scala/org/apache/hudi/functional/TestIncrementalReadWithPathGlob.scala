@@ -25,7 +25,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -131,6 +131,5 @@ class TestIncrementalReadWithPathGlob extends HoodieSparkClientTestBase {
     val actual = df.groupBy("_hoodie_partition_path").count().collect()
       .map(row => row.getString(0) -> row.getLong(1).toInt).toMap
     assertEquals(expected, actual, "incremental path glob returned unexpected per-partition counts")
-    assertTrue(actual.values.sum == expected.values.sum)
   }
 }
