@@ -19,6 +19,7 @@
 
 package org.apache.hudi.variant;
 
+import org.apache.hudi.common.avro.ConvertingGenericData;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -34,7 +35,6 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -48,15 +48,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Round-trip and behavior-pinning coverage for {@link Spark4VariantShreddingProvider}: shred an
  * unshredded variant, then reconstruct it, asserting both the intermediate shredded schema/values and
  * the reconstructed variant. This exercises {@code shredVariantRecord}, {@code rebuildVariantRecord},
  * {@code avroTypeToScalarType}, {@code convertScalarToAvro}, and the
- * {@code AvroVariantRow}/{@code AvroObjectRow}/{@code AvroArrayRow} accessors across every scalar leaf
- * type, object/array shapes, partial (residual) shredding, and the null/error guards - the AVRO
- * read-path reconstruction that the Spark MOR SQL test cannot reach (Spark compaction reads base
+ * {@code AvroVariantRow}/{@code AvroObjectRow}/{@code AvroArrayRow} accessors across every reachable
+ * scalar leaf type, object/array shapes, partial (residual) shredding, and the null/error guards - the
+ * AVRO read-path reconstruction that the Spark MOR SQL test cannot reach (Spark compaction reads base
  * files via the InternalRow reader, not HoodieAvroParquetReader).
  */
 class TestSpark4VariantShreddingProvider {
@@ -73,7 +74,12 @@ class TestSpark4VariantShreddingProvider {
   }
 
   private GenericRecord shred(Variant variant, HoodieSchema.Variant shredded) {
-    return provider.shredVariantRecord(unshredded(variant), shredded.getAvroSchema(), shredded);
+    GenericRecord record = provider.shredVariantRecord(unshredded(variant), shredded.getAvroSchema(), shredded);
+    // ConvertingGenericData.INSTANCE is the data model HoodieAvroWriteSupport hands to parquet-avro,
+    // so this pins that every shredded record produced here is writable at its declared schema.
+    assertTrue(ConvertingGenericData.INSTANCE.validate(shredded.getAvroSchema(), record),
+        "shredded record is not writable at its declared schema");
+    return record;
   }
 
   private Variant rebuild(GenericRecord shreddedRecord, HoodieSchema.Variant shredded) {
@@ -83,18 +89,31 @@ class TestSpark4VariantShreddingProvider {
   }
 
   private void assertRoundTrips(Variant variant, HoodieSchema.Variant shredded) {
+    assertRoundTrips(variant, shredded, "");
+  }
+
+  private void assertRoundTrips(Variant variant, HoodieSchema.Variant shredded, String context) {
     Variant rebuilt = rebuild(shred(variant, shredded), shredded);
     assertEquals(variant.toJson(ZoneOffset.UTC), rebuilt.toJson(ZoneOffset.UTC),
-        "variant did not round-trip through shred/rebuild");
+        "variant did not round-trip through shred/rebuild" + context);
   }
 
   /** Parse json to a variant, shred it, rebuild it, assert the json round-trips. */
   private void assertRoundTrips(String json, HoodieSchema.Variant shredded) throws Exception {
-    assertRoundTrips(VariantBuilder.parseJson(json, false), shredded);
+    assertRoundTrips(VariantBuilder.parseJson(json, false), shredded, " for: " + json);
+  }
+
+  /**
+   * Wrap a scalar leaf into a shredded variant schema with a nullable {@code typed_value}, the shape
+   * production always emits ({@code createShreddedFieldStruct} wraps every leaf in
+   * {@code createNullable}, and the parquet shredding spec requires {@code typed_value} optional).
+   */
+  private static HoodieSchema.Variant shreddedLeaf(HoodieSchema typedValue) {
+    return HoodieSchema.createVariantShredded(HoodieSchema.createNullable(typedValue));
   }
 
   private void assertScalarRoundTrips(String json, HoodieSchema typedValue) throws Exception {
-    assertRoundTrips(json, HoodieSchema.createVariantShredded(typedValue));
+    assertRoundTrips(json, shreddedLeaf(typedValue));
   }
 
   /**
@@ -103,7 +122,7 @@ class TestSpark4VariantShreddingProvider {
    * round-trips back to the original variant.
    */
   private void assertScalarShredsTo(Variant variant, HoodieSchema typedValue, Object expectedTypedValue) {
-    HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(typedValue);
+    HoodieSchema.Variant shredded = shreddedLeaf(typedValue);
     GenericRecord shreddedRecord = shred(variant, shredded);
     assertNotNull(shreddedRecord.get(VARIANT_METADATA_FIELD), "shredded record must carry metadata");
     assertNull(shreddedRecord.get(VARIANT_VALUE_FIELD), "a matching scalar leaves no residual value");
@@ -113,13 +132,17 @@ class TestSpark4VariantShreddingProvider {
         "scalar did not round-trip through shred/rebuild");
   }
 
+  private void assertScalarShredsTo(String json, HoodieSchema typedValue, Object expectedTypedValue) throws Exception {
+    assertScalarShredsTo(VariantBuilder.parseJson(json, false), typedValue, expectedTypedValue);
+  }
+
   /**
    * Shred {@code variant} against a scalar {@code typedValue} it does not match: assert it is NOT
    * shredded (typed_value stays null, the value lands in the residual {@code value}) yet still
    * round-trips. Exercises the "decline to shred, keep in residual" fallbacks.
    */
   private void assertStaysInResidual(Variant variant, HoodieSchema typedValue) {
-    HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(typedValue);
+    HoodieSchema.Variant shredded = shreddedLeaf(typedValue);
     GenericRecord shreddedRecord = shred(variant, shredded);
     assertNull(shreddedRecord.get(VARIANT_TYPED_VALUE_FIELD), "value should not have been shredded");
     assertNotNull(shreddedRecord.get(VARIANT_VALUE_FIELD), "unshredded value must survive in residual");
@@ -134,13 +157,9 @@ class TestSpark4VariantShreddingProvider {
   }
 
   // ---------------------------------------------------------------------------
-  // Scalar leaf types: one per branch of avroTypeToScalarType / convertScalarToAvro.
+  // Scalar leaf types: one per reachable branch of avroTypeToScalarType / convertScalarToAvro
+  // (the Byte/Short widening arms in convertScalarToAvro are unreachable: Avro has no byte/short).
   // ---------------------------------------------------------------------------
-
-  @Test
-  void numericRoundTrips() throws Exception {
-    assertScalarRoundTrips("42", HoodieSchema.create(HoodieSchemaType.LONG));
-  }
 
   @Test
   void intLeafShredsToInteger() {
@@ -150,8 +169,10 @@ class TestSpark4VariantShreddingProvider {
   }
 
   @Test
-  void longLeafShredsToLong() {
+  void longLeafShredsToLong() throws Exception {
     assertScalarShredsTo(scalar(b -> b.appendLong(100000)), HoodieSchema.create(HoodieSchemaType.LONG), 100000L);
+    // Same branch through the json entry point.
+    assertScalarShredsTo("42", HoodieSchema.create(HoodieSchemaType.LONG), 42L);
   }
 
   @Test
@@ -165,18 +186,18 @@ class TestSpark4VariantShreddingProvider {
   }
 
   @Test
-  void stringRoundTrips() throws Exception {
-    assertScalarRoundTrips("\"hello world\"", HoodieSchema.create(HoodieSchemaType.STRING));
+  void stringLeafShredsToString() throws Exception {
+    assertScalarShredsTo("\"hello world\"", HoodieSchema.create(HoodieSchemaType.STRING), "hello world");
   }
 
   @Test
-  void booleanRoundTrips() throws Exception {
-    assertScalarRoundTrips("true", HoodieSchema.create(HoodieSchemaType.BOOLEAN));
+  void booleanLeafShredsToBoolean() throws Exception {
+    assertScalarShredsTo("true", HoodieSchema.create(HoodieSchemaType.BOOLEAN), true);
   }
 
   @Test
   void binaryShredsToByteBuffer() {
-    byte[] payload = "not-utf8- ÿ".getBytes(StandardCharsets.ISO_8859_1);
+    byte[] payload = {'n', 'o', 't', '-', 'u', 't', 'f', '8', (byte) 0xC0, (byte) 0xFF};
     assertScalarShredsTo(scalar(b -> b.appendBinary(payload)),
         HoodieSchema.create(HoodieSchemaType.BYTES), ByteBuffer.wrap(payload));
   }
@@ -205,8 +226,17 @@ class TestSpark4VariantShreddingProvider {
   }
 
   @Test
-  void decimalRoundTrips() throws Exception {
-    assertScalarRoundTrips("123.45", HoodieSchema.createDecimal(10, 2));
+  void decimalLeafShredsToBigDecimal() throws Exception {
+    assertScalarShredsTo("123.45", HoodieSchema.createDecimal(10, 2), new BigDecimal("123.45"));
+  }
+
+  @Test
+  void numericScaleChangesShredWhenExact() {
+    // allowNumericScaleChanges() lets Spark shred an integral variant into a decimal leaf (and a
+    // decimal variant into an integral leaf) when the value is exactly representable.
+    assertScalarShredsTo(scalar(b -> b.appendLong(5)), HoodieSchema.createDecimal(10, 2), new BigDecimal("5.00"));
+    assertScalarShredsTo(scalar(b -> b.appendDecimal(new BigDecimal("5.00"))),
+        HoodieSchema.create(HoodieSchemaType.LONG), 5L);
   }
 
   // ---------------------------------------------------------------------------
@@ -214,7 +244,7 @@ class TestSpark4VariantShreddingProvider {
   // ---------------------------------------------------------------------------
 
   @Test
-  void millisTimestampIsNotShreddedIntoMicrosLeaf() {
+  void microsTimestampIsNotShreddedIntoMillisLeaf() {
     // A millisecond-precision typed_value cannot represent a micros variant timestamp, so
     // avroTypeToScalarType returns null and the value is left unshredded in the residual.
     assertStaysInResidual(scalar(b -> b.appendTimestamp(1_700_000_000_000_000L)),
@@ -224,12 +254,24 @@ class TestSpark4VariantShreddingProvider {
   }
 
   @Test
-  void fixedLeafShredsBinaryToByteBuffer() {
-    // A FIXED typed_value maps to BinaryType, so a binary variant is shredded into typed_value (had
-    // avroTypeToScalarType returned null for FIXED, the value would fall to the residual instead).
-    byte[] payload = {1, 2, 3, 4};
-    assertScalarShredsTo(scalar(b -> b.appendBinary(payload)),
-        HoodieSchema.createFixed("fx", "org.apache.hudi.test", null, 4), ByteBuffer.wrap(payload));
+  void lossyDecimalIsNotShredded() {
+    // decimal(10,2) cannot represent 123.456 exactly, so the value must fall to the residual.
+    assertStaysInResidual(scalar(b -> b.appendDecimal(new BigDecimal("123.456"))),
+        HoodieSchema.createDecimal(10, 2));
+  }
+
+  @Test
+  void enumLeafIsNotShredded() {
+    // avroTypeToScalarType has no mapping for ENUM (the default: branch), so the value declines
+    // to the residual.
+    assertStaysInResidual(scalar(b -> b.appendString("A")),
+        HoodieSchema.createEnum("e", "org.apache.hudi.test", null, Arrays.asList("A", "B")));
+  }
+
+  @Test
+  void noTypedValueSchemaRoundTrips() throws Exception {
+    // A shredded schema without typed_value keeps the whole variant in the residual value.
+    assertRoundTrips("{\"a\":1}", HoodieSchema.createVariantShredded(null));
   }
 
   // ---------------------------------------------------------------------------
@@ -259,9 +301,31 @@ class TestSpark4VariantShreddingProvider {
     // The unmatched field forces a non-null residual value at the top level.
     assertNotNull(shreddedRecord.get(VARIANT_VALUE_FIELD), "extra field must be captured in residual value");
     GenericRecord typedValue = (GenericRecord) shreddedRecord.get(VARIANT_TYPED_VALUE_FIELD);
+    GenericRecord aField = (GenericRecord) typedValue.get("a");
+    assertEquals("x", aField.get(VARIANT_TYPED_VALUE_FIELD), "declared field a must shred into typed_value");
+    assertNull(aField.get(VARIANT_VALUE_FIELD), "matched field a carries no residual");
     GenericRecord bField = (GenericRecord) typedValue.get("b");
     assertNull(bField.get(VARIANT_VALUE_FIELD), "absent field b carries no residual value");
     assertNull(bField.get(VARIANT_TYPED_VALUE_FIELD), "absent field b carries no typed_value");
+
+    assertEquals(variant.toJson(ZoneOffset.UTC), rebuild(shreddedRecord, shredded).toJson(ZoneOffset.UTC));
+  }
+
+  @Test
+  void typeMismatchedObjectFieldFallsToFieldResidual() throws Exception {
+    // The field is declared LONG but the variant supplies a string: the field's own value carries
+    // the residual, its typed_value stays null, and the top-level value stays null.
+    Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
+    shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.LONG));
+    HoodieSchema.Variant shredded = HoodieSchema.createVariantShreddedObject(shreddedFields);
+
+    Variant variant = VariantBuilder.parseJson("{\"a\":\"str\"}", false);
+    GenericRecord shreddedRecord = shred(variant, shredded);
+
+    assertNull(shreddedRecord.get(VARIANT_VALUE_FIELD), "no unmatched field, so the top-level residual stays null");
+    GenericRecord aField = (GenericRecord) ((GenericRecord) shreddedRecord.get(VARIANT_TYPED_VALUE_FIELD)).get("a");
+    assertNotNull(aField.get(VARIANT_VALUE_FIELD), "mismatched field a keeps its value in the field residual");
+    assertNull(aField.get(VARIANT_TYPED_VALUE_FIELD), "mismatched field a must not shred");
 
     assertEquals(variant.toJson(ZoneOffset.UTC), rebuild(shreddedRecord, shredded).toJson(ZoneOffset.UTC));
   }
@@ -282,23 +346,24 @@ class TestSpark4VariantShreddingProvider {
 
   @Test
   void rebuildDecimalFromBytesEncoding() {
-    assertDecimalRebuildsFromEncoding(HoodieSchema.createDecimal(10, 2), false);
+    assertDecimalRebuildsFromEncoding(HoodieSchema.createDecimal(10, 2));
   }
 
   @Test
   void rebuildDecimalFromFixedEncoding() {
     assertDecimalRebuildsFromEncoding(
-        HoodieSchema.createDecimal("dec_fixed", "org.apache.hudi.test", null, 10, 2, 8), true);
+        HoodieSchema.createDecimal("dec_fixed", "org.apache.hudi.test", null, 10, 2, 8));
   }
 
-  private void assertDecimalRebuildsFromEncoding(HoodieSchema decimalType, boolean fixed) {
+  private void assertDecimalRebuildsFromEncoding(HoodieSchema decimalType) {
     BigDecimal value = new BigDecimal("123.45");
-    HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(decimalType);
+    HoodieSchema.Variant shredded = shreddedLeaf(decimalType);
     GenericRecord shreddedRecord = shred(scalar(b -> b.appendDecimal(value)), shredded);
 
-    Schema tvSchema = shredded.getAvroSchema().getField(VARIANT_TYPED_VALUE_FIELD).schema();
+    // Encode against the concrete decimal branch (typed_value itself is a nullable union).
+    Schema tvSchema = decimalType.getAvroSchema();
     Conversions.DecimalConversion conversion = new Conversions.DecimalConversion();
-    Object encoded = fixed
+    Object encoded = tvSchema.getType() == Schema.Type.FIXED
         ? conversion.toFixed(value, tvSchema, tvSchema.getLogicalType())
         : conversion.toBytes(value, tvSchema, tvSchema.getLogicalType());
     shreddedRecord.put(VARIANT_TYPED_VALUE_FIELD, encoded);
@@ -309,7 +374,7 @@ class TestSpark4VariantShreddingProvider {
 
   @Test
   void rebuildDecimalRejectsUnexpectedEncoding() {
-    HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(HoodieSchema.createDecimal(10, 2));
+    HoodieSchema.Variant shredded = shreddedLeaf(HoodieSchema.createDecimal(10, 2));
     GenericRecord shreddedRecord = shred(scalar(b -> b.appendDecimal(new BigDecimal("1.00"))), shredded);
     shreddedRecord.put(VARIANT_TYPED_VALUE_FIELD, "not-a-decimal");
     assertThrows(IllegalStateException.class,
@@ -322,7 +387,7 @@ class TestSpark4VariantShreddingProvider {
 
   @Test
   void shredReturnsNullWhenValueOrMetadataMissing() {
-    HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(HoodieSchema.create(HoodieSchemaType.LONG));
+    HoodieSchema.Variant shredded = shreddedLeaf(HoodieSchema.create(HoodieSchemaType.LONG));
     Variant variant = scalar(b -> b.appendLong(1));
 
     GenericRecord missingValue = unshredded(variant);
@@ -336,13 +401,15 @@ class TestSpark4VariantShreddingProvider {
 
   @Test
   void rebuildReturnsNullForNullRecord() {
-    HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(HoodieSchema.create(HoodieSchemaType.LONG));
+    // Coverage of a defensive guard only: the sole production caller (HoodieVariantReconstruction)
+    // already checks instanceof GenericRecord before calling rebuildVariantRecord.
+    HoodieSchema.Variant shredded = shreddedLeaf(HoodieSchema.create(HoodieSchemaType.LONG));
     assertNull(provider.rebuildVariantRecord(null, shredded.getAvroSchema(), unshreddedSchema));
   }
 
   @Test
   void rebuildThrowsWhenMetadataMissing() {
-    HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(HoodieSchema.create(HoodieSchemaType.LONG));
+    HoodieSchema.Variant shredded = shreddedLeaf(HoodieSchema.create(HoodieSchemaType.LONG));
     GenericRecord shreddedRecord = shred(scalar(b -> b.appendLong(7)), shredded);
     shreddedRecord.put(VARIANT_METADATA_FIELD, null);
     assertThrows(HoodieException.class,
