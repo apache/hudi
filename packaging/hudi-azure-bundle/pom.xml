@@ -133,6 +133,9 @@
                 </relocation>
               </relocations>
               <createDependencyReducedPom>true</createDependencyReducedPom>
+              <!-- Keep dependencies that are not absorbed into the shaded jar, so the reduced POM still
+                   declares what consumers need at runtime. -->
+              <promoteTransitiveDependencies>true</promoteTransitiveDependencies>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>
