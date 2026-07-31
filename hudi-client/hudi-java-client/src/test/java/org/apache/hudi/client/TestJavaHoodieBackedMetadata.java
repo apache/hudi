@@ -2008,7 +2008,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withClusteringExecutionStrategyClass(JavaSortAndSizeExecutionStrategy.class.getName())
         .build();
 
-    HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
+    HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.LAZY)
         .withClusteringConfig(clusteringConfig)
         .withRollbackUsingMarkers(false)
         .build();
@@ -2024,6 +2024,22 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         partitionFiles.getValue().stream().forEach(file ->
             replacedFileIds.add(new HoodieFileGroupId(partitionFiles.getKey(), file))));
 
+    // manually remove clustering completed instant from .hoodie folder to mimic clustering
+    // succeeded in metadata table, but failed before committing to data table. This must happen
+    // before any subsequent metadata-table read so that no reader ever sees the first attempt's
+    // instant as committed, matching the crash scenario this test simulates.
+    FileCreateUtilsLegacy.deleteReplaceCommit(basePath, clusteringCommitTime);
+
+    // preconditions: clustering is pending on the data table while its deltacommit is completed
+    // in the metadata table.
+    metaClient.reloadActiveTimeline();
+    assertFalse(metaClient.getActiveTimeline().filterCompletedInstants().containsInstant(clusteringCommitTime));
+    assertTrue(metaClient.getActiveTimeline().filterPendingClusteringTimeline().containsInstant(clusteringCommitTime));
+    HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(
+        metaClient.getStorageConf(), getMetadataTableBasePath(basePath));
+    assertTrue(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline()
+        .filterCompletedInstants().containsInstant(clusteringCommitTime));
+
     // trigger new write to mimic other writes succeeding before re-attempt.
     newCommitTime = WriteClientTestUtils.createNewInstantTime();
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
@@ -2031,10 +2047,15 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeStatuses = client.insert(records, newCommitTime);
     client.commit(newCommitTime, writeStatuses);
     assertNoWriteErrors(writeStatuses);
-    validateMetadata(client);
+    // ignore the first clustering attempt's uncommitted files when comparing listings.
+    validateMetadata(client, Option.of(clusteringCommitTime));
 
-    // manually remove clustering completed instant from .hoodie folder and to mimic succeeded clustering in metadata table, but failed in data table.
-    FileCreateUtilsLegacy.deleteReplaceCommit(basePath, clusteringCommitTime);
+    // the new write must leave the pending clustering and its metadata-table deltacommit intact.
+    metaClient.reloadActiveTimeline();
+    assertTrue(metaClient.getActiveTimeline().filterPendingClusteringTimeline().containsInstant(clusteringCommitTime));
+    assertTrue(metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline()
+        .filterCompletedInstants().containsInstant(clusteringCommitTime));
+
     HoodieWriteMetadata<List<WriteStatus>> updatedClusterMetadata = newClient.cluster(clusteringCommitTime, true);
 
     metaClient.reloadActiveTimeline();
