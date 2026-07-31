@@ -1325,7 +1325,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("hive_sync.mode")
       .stringType()
       .defaultValue(HiveSyncMode.HMS.name())
-      .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'hms'");
+      .withDescription("Mode to choose for Hive ops. Valid values are hms, glue, jdbc and hiveql, default 'hms'");
 
   @AdvancedConfig
   public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions
