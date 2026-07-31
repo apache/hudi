@@ -116,6 +116,7 @@ import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_FORCE_RECREATE_TABLE;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
@@ -271,7 +272,42 @@ public class TestHiveSyncTool {
       throw new HoodieHiveSyncException("Failed to get the metastore location from the table " + tableName, e);
     }
   }
-  
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  void testForceRecreateTable(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    String instantTime = "100";
+    HiveTestUtil.createCOWTable(instantTime, 1, true);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME));
+
+    // simulate manual drift on the metastore table that a fully-synced incremental sync would never touch
+    ddlExecutor.runSQL("ALTER TABLE `" + HiveTestUtil.TABLE_NAME + "` SET TBLPROPERTIES ('drift_marker'='true')");
+    IMetaStoreClient client = IMetaStoreClientUtil.getMSC(getHiveConf());
+    assertTrue(client.getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME).getParameters().containsKey("drift_marker"));
+
+    // nothing changed on the Hoodie timeline, so a normal sync is a no-op and leaves the drift behind
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    client.reconnect();
+    assertTrue(client.getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME).getParameters().containsKey("drift_marker"),
+        "a no-op incremental sync must not touch the table");
+
+    // forcing recreation drops and rebuilds the table from scratch, even though nothing else changed
+    hiveSyncProps.setProperty(META_SYNC_FORCE_RECREATE_TABLE.key(), "true");
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    client.reconnect();
+    assertFalse(client.getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME).getParameters().containsKey("drift_marker"),
+        "force-recreate must drop and recreate the table even when the incremental sync would otherwise be a no-op");
+    assertEquals(HoodieVersion.get(), client.getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME).getParameters().get(HoodieVersion.HOODIE_WRITER_VERSION),
+        "force-recreate must republish the hudi writer version on the recreated table");
+    assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get());
+    client.close();
+  }
+
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testSyncAllPartition() throws Exception {

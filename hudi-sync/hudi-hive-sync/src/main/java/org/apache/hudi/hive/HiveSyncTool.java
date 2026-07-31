@@ -73,6 +73,7 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.getSchemaDifference;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_FORCE_RECREATE_TABLE;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SNAPSHOT_WITH_TABLE_NAME;
@@ -239,9 +240,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     log.info("Trying to sync hoodie table {} with base path {} of type {}", tableName, syncClient.getBasePath(), syncClient.getTableType());
 
     final boolean tableExists = syncClient.tableExists(tableName);
-    // if table exists and location of the metastore table doesn't match the hoodie base path, recreate the table
-    if (tableExists && !FSUtils.comparePathsWithoutScheme(syncClient.getBasePath(), syncClient.getTableLocation(tableName))) {
-      log.info("basepath is updated for the table {}", tableName);
+    // recreate the table if it exists and either its metastore location no longer matches the hoodie base path,
+    // or a full recreate was explicitly requested
+    if (tableExists && shouldRecreateTableBeforeSync(tableName)) {
       recreateAndSyncHiveTable(tableName, useRealtimeInputFormat, readAsOptimized);
       return;
     }
@@ -360,6 +361,23 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     return config.getBooleanOrDefault(RECREATE_HIVE_TABLE_ON_ERROR);
   }
 
+  /**
+   * Whether the metastore table (assumed to already exist) should be dropped and recreated before the normal
+   * sync runs, either because a full recreate was explicitly requested, or because its stored location no
+   * longer matches the hoodie base path.
+   */
+  private boolean shouldRecreateTableBeforeSync(String tableName) {
+    if (config.getBooleanOrDefault(META_SYNC_FORCE_RECREATE_TABLE)) {
+      log.info("Force recreating the table {} since {} is set to true", tableName, META_SYNC_FORCE_RECREATE_TABLE.key());
+      return true;
+    }
+    if (!FSUtils.comparePathsWithoutScheme(syncClient.getBasePath(), syncClient.getTableLocation(tableName))) {
+      log.info("basepath is updated for the table {}", tableName);
+      return true;
+    }
+    return false;
+  }
+
   private void recreateAndSyncHiveTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized) {
     log.info("recreating and syncing the table {}", tableName);
     Timer.Context timerContext = metrics.getRecreateAndSyncTimer();
@@ -368,6 +386,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       createOrReplaceTable(tableName, useRealtimeInputFormat, readAsOptimized, schema);
       syncAllPartitions(tableName);
       syncClient.updateLastCommitTimeSynced(tableName);
+      syncClient.updateHoodieWriterVersion(tableName);
       if (Objects.nonNull(timerContext)) {
         long durationInNs = timerContext.stop();
         metrics.updateRecreateAndSyncDurationInMs(durationInNs);
