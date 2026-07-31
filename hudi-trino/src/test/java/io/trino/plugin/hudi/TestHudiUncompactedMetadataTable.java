@@ -52,7 +52,7 @@ public class TestHudiUncompactedMetadataTable
                 mdtEnabled(),
                 "SELECT id, name, price FROM " + TABLE_NAME + " ORDER BY id",
                 "VALUES ('k1', 'k1_c3', CAST(15 AS BIGINT)), ('k2', 'k2_c1', 1000), ('k3', 'k3_c2', 20), ('k4', 'k4_c2', 2000)");
-        assertThat(computeScalarWith(mdtEnabled(), "SELECT count(*) FROM " + TABLE_NAME)).isEqualTo(4L);
+        assertThat(computeScalar(mdtEnabled(), "SELECT count(*) FROM " + TABLE_NAME)).isEqualTo(4L);
     }
 
     @Test
@@ -113,10 +113,5 @@ public class TestHudiUncompactedMetadataTable
     private Session mdtDisabled()
     {
         return SessionBuilder.from(getSession()).withMdtEnabled(false).build();
-    }
-
-    private Object computeScalarWith(Session session, String query)
-    {
-        return getQueryRunner().execute(session, query).getOnlyValue();
     }
 }
