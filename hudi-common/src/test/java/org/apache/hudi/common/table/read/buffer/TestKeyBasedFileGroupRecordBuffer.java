@@ -80,15 +80,20 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
   private final IndexedRecord testRecord7 = createTestRecord("7", 1, 5L);
 
   /**
-   * Every buffer in this hierarchy must funnel records into the buffer through the same
-   * merge-then-put path and expose the same partial-merge state, so these methods are sealed with
-   * {@code final} and subclasses such as {@code PositionBasedFileGroupRecordBuffer} and
-   * {@code SortedKeyBasedFileGroupRecordBuffer} cannot replace that behavior. The methods that a
-   * subclass legitimately specializes (block processing, base-record advancement, buffer type) are
-   * deliberately left open. This test fails if a {@code final} modifier is dropped.
+   * Asserts that {@code processNextDataRecord} and {@code isPartialMergingEnabled} keep their
+   * {@code final} modifier, so a subclass cannot substitute its own implementation of either.
+   *
+   * <p>That is the entire guarantee, and it is deliberately narrow. It does <em>not</em> mean all buffer
+   * mutations go through {@code processNextDataRecord}: {@code records} and {@code enablePartialMerging}
+   * are {@code protected}, and {@code PositionBasedFileGroupRecordBuffer} legitimately writes to
+   * {@code records} directly when it re-keys entries in its key-based fallback and when it overwrites
+   * delete markers under commit-time ordering, as well as overriding block processing. Those paths must
+   * not merge, so routing them through this method would be wrong.
+   *
+   * <p>The modifier itself is compiler-enforced; this test exists only to catch it being dropped.
    */
   @Test
-  void keyMergeBehaviorIsSealedAgainstSubclasses() throws NoSuchMethodException {
+  void sealedMethodsCannotBeOverridden() throws NoSuchMethodException {
     assertMethodIsFinal(KeyBasedFileGroupRecordBuffer.class
         .getDeclaredMethod("processNextDataRecord", BufferedRecord.class, Serializable.class));
     assertMethodIsFinal(KeyBasedFileGroupRecordBuffer.class.getDeclaredMethod("isPartialMergingEnabled"));
@@ -96,7 +101,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
 
   private static void assertMethodIsFinal(Method method) {
     assertTrue(Modifier.isFinal(method.getModifiers()),
-        () -> String.format("%s#%s must remain final so subclasses cannot override the key-based merge behavior",
+        () -> String.format("%s#%s must remain final so subclasses cannot override it",
             method.getDeclaringClass().getSimpleName(), method.getName()));
   }
 

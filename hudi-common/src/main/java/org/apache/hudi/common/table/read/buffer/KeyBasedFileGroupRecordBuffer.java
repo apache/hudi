@@ -101,8 +101,13 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   /**
    * Merges the incoming record with whatever is already buffered under {@code recordKey} and stores the
    * result. Subclasses choose the identifier a record is buffered under (a record key here, a record
-   * position in {@link PositionBasedFileGroupRecordBuffer}), but must not alter the merge-then-store
-   * behavior itself, hence this method is final.
+   * position in {@link PositionBasedFileGroupRecordBuffer}), but cannot replace this merge-then-store
+   * step itself, hence the {@code final}.
+   *
+   * <p>This is not the only way {@code records} is mutated. The map is {@code protected}, and
+   * {@link PositionBasedFileGroupRecordBuffer} writes to it directly where merging would be wrong: when
+   * re-keying already-merged entries in its key-based fallback, and when overwriting delete markers under
+   * commit-time ordering.
    */
   @Override
   public final void processNextDataRecord(BufferedRecord<T> record, Serializable recordKey) throws IOException {
@@ -146,8 +151,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   /**
-   * Whether partial merging has been switched on for this buffer. The flag is owned by the base buffer
-   * and toggled while processing data blocks, so subclasses must not shadow it; hence this is final.
+   * Whether partial merging has been switched on for this buffer. Subclasses cannot replace this accessor,
+   * hence the {@code final}; they may still set the underlying {@code enablePartialMerging} flag while
+   * processing a data block, as {@link PositionBasedFileGroupRecordBuffer} does.
    */
   public final boolean isPartialMergingEnabled() {
     return enablePartialMerging;
