@@ -150,9 +150,9 @@ class TestAvroUtils {
         |  {"name":"id","type":"int"},
         |  {"name":"ghost","type":["null","int"]}
         |]}""".stripMargin)
-    val helper2 = new AvroUtils.AvroSchemaHelper(
+    val helperWithOptionalGhost = new AvroUtils.AvroSchemaHelper(
       avroWithOptionalGhost, catalyst, Seq.empty, Seq.empty, false)
-    helper2.validateNoExtraRequiredAvroFields()
+    helperWithOptionalGhost.validateNoExtraRequiredAvroFields()
   }
 
   @Test
