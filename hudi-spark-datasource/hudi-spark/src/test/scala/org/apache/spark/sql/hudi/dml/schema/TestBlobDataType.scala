@@ -25,13 +25,12 @@ import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.catalyst.plans.logical.CreateTable
-import org.apache.spark.sql.connector.expressions.{FieldReference, LiteralValue, Transform}
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.{ExtendedParserTestHelpers, HoodieSparkSqlTestBase}
 import org.apache.spark.sql.types._
 
 import java.io.File
 
-class TestBlobDataType extends HoodieSparkSqlTestBase {
+class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHelpers {
 
   private val referenceStructType =
     "struct<external_path:string, offset:bigint, length:bigint, managed:boolean>"
@@ -294,17 +293,6 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
 
   private def parse(sql: String): CreateTable =
     spark.sessionState.sqlParser.parsePlan(sql).asInstanceOf[CreateTable]
-
-  private def transformByName(plan: CreateTable, name: String): Transform =
-    plan.partitioning.find(_.name == name)
-      .getOrElse(fail(s"No partition transform named $name in ${plan.partitioning.mkString(", ")}"))
-
-  private def transformFieldRefs(t: Transform): Seq[Seq[String]] =
-    t.arguments().collect { case r: FieldReference => r.fieldNames().toSeq }.toSeq
-
-  private def firstLiteralArg(t: Transform): LiteralValue[_] =
-    t.arguments().collectFirst { case l: LiteralValue[_] => l }
-      .getOrElse(fail(s"No literal argument in transform ${t.name}"))
 
   test("Test parse CREATE TABLE with BLOB column and primitive data types") {
     // Exercises the primitive-data-type match arms plus NOT NULL and column COMMENT.

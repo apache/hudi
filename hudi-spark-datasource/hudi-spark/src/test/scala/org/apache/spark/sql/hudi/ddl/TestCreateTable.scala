@@ -37,18 +37,17 @@ import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.plans.logical.CreateTable
-import org.apache.spark.sql.connector.expressions.{FieldReference, LiteralValue, Transform}
 import org.apache.spark.sql.functions.{col, concat, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.{ExtendedParserTestHelpers, HoodieSparkSqlTestBase}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, getLastCommitMetadata}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull, assertTrue}
 
 import scala.collection.JavaConverters._
 
-class TestCreateTable extends HoodieSparkSqlTestBase {
+class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelpers {
 
   test("Test Create Managed Hoodie Table") {
     val databaseName = "hudi_database"
@@ -2351,17 +2350,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
   private def parseCreateTable(sql: String): CreateTable =
     spark.sessionState.sqlParser.parsePlan(sql).asInstanceOf[CreateTable]
-
-  private def transformByName(plan: CreateTable, name: String): Transform =
-    plan.partitioning.find(_.name == name)
-      .getOrElse(sys.error(s"No partition transform named $name in ${plan.partitioning.mkString(", ")}"))
-
-  private def transformFieldRefs(t: Transform): Seq[Seq[String]] =
-    t.arguments().collect { case r: FieldReference => r.fieldNames().toSeq }.toSeq
-
-  private def firstLiteralArg(t: Transform): LiteralValue[_] =
-    t.arguments().collectFirst { case l: LiteralValue[_] => l }
-      .getOrElse(sys.error(s"No literal argument in transform ${t.name}"))
 
   test("test create VECTOR table with partition transforms parses (parser coverage)") {
     val plan = parseCreateTable(
