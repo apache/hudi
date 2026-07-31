@@ -242,7 +242,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     final boolean tableExists = syncClient.tableExists(tableName);
     // recreate the table if it exists and either its metastore location no longer matches the hoodie base path,
     // or a full recreate was explicitly requested
-    if (tableExists && shouldRecreateTable(tableName)) {
+    if (tableExists && shouldRecreateTableBeforeSync(tableName)) {
       recreateAndSyncHiveTable(tableName, useRealtimeInputFormat, readAsOptimized);
       return;
     }
@@ -362,10 +362,11 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   /**
-   * Whether the metastore table (assumed to already exist) should be dropped and recreated, either because a
-   * full recreate was explicitly requested, or because its stored location no longer matches the hoodie base path.
+   * Whether the metastore table (assumed to already exist) should be dropped and recreated before the normal
+   * sync runs, either because a full recreate was explicitly requested, or because its stored location no
+   * longer matches the hoodie base path.
    */
-  private boolean shouldRecreateTable(String tableName) {
+  private boolean shouldRecreateTableBeforeSync(String tableName) {
     if (config.getBooleanOrDefault(META_SYNC_FORCE_RECREATE_TABLE)) {
       log.info("Force recreating the table {} since {} is set to true", tableName, META_SYNC_FORCE_RECREATE_TABLE.key());
       return true;
@@ -385,6 +386,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       createOrReplaceTable(tableName, useRealtimeInputFormat, readAsOptimized, schema);
       syncAllPartitions(tableName);
       syncClient.updateLastCommitTimeSynced(tableName);
+      syncClient.updateHoodieWriterVersion(tableName);
       if (Objects.nonNull(timerContext)) {
         long durationInNs = timerContext.stop();
         metrics.updateRecreateAndSyncDurationInMs(durationInNs);
