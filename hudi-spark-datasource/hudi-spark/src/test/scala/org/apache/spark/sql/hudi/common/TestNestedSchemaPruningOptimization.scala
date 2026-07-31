@@ -17,18 +17,15 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.config.HoodieWriteConfig
 
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec, RowDataSourceScanExec, SparkPlan}
+import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.apache.spark.sql.types.{ArrayType, IntegerType, MapType, StringType, StructField, StructType}
+import org.junit.jupiter.api.Assertions.assertEquals
 
-class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with SparkAdapterSupport {
+class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
 
   // NOTE: We disable WCE once for the whole suite so the executed plans stay a plain Project over the
   //       scan node (no WholeStageCodegenExec wrapper); every test here pattern-matches the scan to
@@ -38,17 +35,6 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
     spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
   }
 
-  private def explain(plan: LogicalPlan): String = {
-    val explainCommand = sparkAdapter.getCatalystPlanUtils.createExplainCommand(plan, extended = true)
-    executePlan(explainCommand)
-      .executeCollect()
-      .map(_.getString(0))
-      .mkString("\n")
-  }
-
-  private def executePlan(plan: LogicalPlan): SparkPlan =
-    spark.sessionState.executePlan(plan).executedPlan
-
   test("Test NestedSchemaPruning optimization successful") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
@@ -57,152 +43,106 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
         createTableWithNestedStructSchema(tableType, tableName, tablePath)
 
+        // Only "item.name" is referenced, so the read schema prunes "item" down to a single leaf
         val selectDF = spark.sql(s"SELECT id, item.name FROM $tableName")
 
         val expectedSchema = StructType(Seq(
           StructField("id", IntegerType, nullable = true),
-          StructField("item" , StructType(Seq(StructField("name", StringType, nullable = false))), nullable = true)
+          StructField("item", StructType(Seq(StructField("name", StringType, nullable = false))), nullable = true)
         ))
 
-        val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string>>"
-        val hint =
-          s"""
-             |Following is expected to be present in the plan (where ReadSchema has properly pruned nested structs, which
-             |is an optimization performed by NestedSchemaPruning rule):
-             |
-             |== Physical Plan ==
-             |*(1) Project [id#45, item#46.name AS name#55]
-             |+- FileScan parquet default.h0[id#45,item#46] Batched: false, DataFilters: [], Format: Parquet, Location: HoodieFileIndex(1 paths)[file:/private/var/folders/kb/cnff55vj041g2nnlzs5ylqk00000gn/T/spark-7137..., PartitionFilters: [], PushedFilters: [], $expectedReadSchemaClause
-             |]
-             |""".stripMargin
+        assertPrunedReadSchema(selectDF, tableName, expectedSchema)
 
-        assertPrunedReadSchema(selectDF, tableName, expectedSchema, expectedReadSchemaClause, hint)
-
-        // Execute the query to make sure it's working as expected (smoke test)
-        selectDF.count
+        checkAnswer(s"SELECT id, item.name FROM $tableName")(Seq(1, "a1"))
       }
     }
   }
 
-  test("Test NestedSchemaPruning optimization unsuccessful") {
-    withTempDir { tmp =>
-      // TODO add cow
-      Seq("mor").foreach { tableType =>
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-
-        // NOTE: Set of opts that will make [[NestedSchemaPruning]] ineffective
-        val (writeOpts, readOpts): (Map[String, String], Map[String, String]) =
-          tableType match {
-            case "cow" =>
-              (Map(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true"),
-                Map(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true"))
-
-            case "mor" =>
-              (Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> "org.apache.hudi.common.model.DefaultHoodieRecordPayload"),
-                Map.empty)
-          }
-
-        createTableWithNestedStructSchema(tableType, tableName, tablePath, writeOpts)
-
-        val selectDF = withSQLConf(readOpts.toSeq: _*) {
-          spark.sql(s"SELECT id, item.name FROM $tableName")
-        }
-
-        val expectedSchema = StructType(Seq(
-          StructField("id", IntegerType, nullable = true),
-          StructField("item",
-            StructType(Seq(
-              StructField("name", StringType, nullable = false))), nullable = true)
-        ))
-
-        val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string,price:int>>"
-
-        // NOTE: Unfortunately, we can't use pattern-matching to extract required fields, due to a need to maintain
-        //       compatibility w/ Spark 2.4
-        selectDF.queryExecution.executedPlan match {
-          // COW
-          case ProjectExec(_, fileScan: FileSourceScanExec) =>
-            val tableIdentifier = fileScan.tableIdentifier
-            val requiredSchema = fileScan.requiredSchema
-
-            assertEquals(tableName, tableIdentifier.get.table)
-            assertEquals(expectedSchema, requiredSchema)
-
-          // MOR
-          case ProjectExec(_, dataScan: RowDataSourceScanExec) =>
-            // NOTE: This is temporary solution to assert for Spark 2.4, until it's deprecated
-            val explainedPlan = explain(selectDF.queryExecution.logical)
-            assertTrue(explainedPlan.contains(expectedReadSchemaClause))
-
-            val tableIdentifier = dataScan.tableIdentifier
-            //val requiredSchema = dataScan.requiredSchema
-
-            assertEquals(tableName, tableIdentifier.get.table)
-            //assertEquals(expectedSchema, requiredSchema, hint)
-        }
-
-        // Execute the query to make sure it's working as expected (smoke test)
-        selectDF.count
-      }
-    }
-  }
-
-  test("Test NestedSchemaPruning prunes nested struct when array and map columns are present") {
+  test("Test nested schema pruning with DefaultHoodieRecordPayload") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-      createTableWithComplexNestedSchema(tableName, tablePath)
+      // NOTE: On the file-group-reader based read path the payload class does not affect nested
+      //       schema pruning, so the read schema is pruned the same way as with the default payload
+      createTableWithNestedStructSchema("mor", tableName, tablePath,
+        Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> "org.apache.hudi.common.model.DefaultHoodieRecordPayload"))
 
-      // Only a single nested sub-field is projected, so "item" is pruned down to just "name" and the
-      // unreferenced "tags" (array<struct>) and "props" (map<string,struct>) columns are dropped.
-      // Traversing the full data schema exercises the array and map branches of countLeaves.
       val selectDF = spark.sql(s"SELECT id, item.name FROM $tableName")
 
       val expectedSchema = StructType(Seq(
         StructField("id", IntegerType, nullable = true),
         StructField("item", StructType(Seq(StructField("name", StringType, nullable = false))), nullable = true)
       ))
-      val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string>>"
 
-      assertPrunedReadSchema(selectDF, tableName, expectedSchema, expectedReadSchemaClause)
+      assertPrunedReadSchema(selectDF, tableName, expectedSchema)
 
-      // Execute the query to make sure it's working as expected (smoke test)
-      selectDF.count
+      checkAnswer(s"SELECT id, item.name FROM $tableName")(Seq(1, "a1"))
     }
   }
 
-  test("Test NestedSchemaPruning is a no-op when all nested sub-fields are selected") {
+  test("Test nested schema pruning with array, map and partition columns") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-      createTableWithNestedStructSchema("mor", tableName, tablePath)
+      // NOTE: Meta fields stay enabled here since the SQL UPDATE on MOR needs them to locate the file group
+      createTableWithNestedStructSchema("mor", tableName, tablePath,
+        extraColumns = ", array(named_struct('k', 'k0', 'v', 'v0')) AS tags," +
+          " map('m0', named_struct('a', 1, 'b', 2)) AS props",
+        partitionCol = "part",
+        populateMetaFields = true)
 
-      // Every leaf is projected, so the pruned schema has the same leaf count as the data schema and
-      // the rule leaves "item" untouched (the countLeaves comparison is an equality, not a >).
-      val selectDF = spark.sql(s"SELECT id, item.name, item.price, ts FROM $tableName")
+      // The update writes a log file, so the pruned reads below merge base and log records
+      // (the historically fragile path of HUDI-5443)
+      spark.sql(s"UPDATE $tableName SET ts = 123457 WHERE id = 1")
 
-      val expectedItemStruct = StructType(Seq(
-        StructField("name", StringType, nullable = false),
-        StructField("price", IntegerType, nullable = false)
+      // Only "item.name" is referenced, so "item" is pruned down to a single leaf and the
+      // unreferenced "tags" (array<struct>) and "props" (map<string,struct>) columns are dropped
+      val selectDF = spark.sql(s"SELECT id, item.name FROM $tableName")
+      val expectedSchema = StructType(Seq(
+        StructField("id", IntegerType, nullable = true),
+        StructField("item", StructType(Seq(StructField("name", StringType, nullable = false))), nullable = true)
       ))
-      assertEquals(expectedItemStruct, prunedStructTypeOf(selectDF, "item"))
+      assertPrunedReadSchema(selectDF, tableName, expectedSchema)
 
-      selectDF.count
+      // Partition column values must survive the pruned read (see #18570)
+      checkAnswer(s"SELECT id, item.name, part FROM $tableName")(Seq(1, "a1", "p1"))
+
+      // Projecting through the array keeps only the referenced leaf of the element struct
+      val tagsDF = spark.sql(s"SELECT tags.k FROM $tableName")
+      val expectedTagsSchema = StructType(Seq(
+        StructField("tags",
+          ArrayType(StructType(Seq(StructField("k", StringType, nullable = false))), containsNull = false),
+          nullable = true)
+      ))
+      assertPrunedReadSchema(tagsDF, tableName, expectedTagsSchema)
+      checkAnswer(s"SELECT tags.k FROM $tableName")(Seq(Seq("k0")))
+
+      // Projecting through the map keeps only the referenced leaf of the value struct
+      val propsDF = spark.sql(s"SELECT props['m0'].a FROM $tableName")
+      val expectedPropsSchema = StructType(Seq(
+        StructField("props",
+          MapType(StringType, StructType(Seq(StructField("a", IntegerType, nullable = false))), valueContainsNull = false),
+          nullable = true)
+      ))
+      assertPrunedReadSchema(propsDF, tableName, expectedPropsSchema)
+      checkAnswer(s"SELECT props['m0'].a FROM $tableName")(Seq(1))
+
+      // Filter on a nested field combined with pruning
+      checkAnswer(s"SELECT id, item.price FROM $tableName WHERE item.name = 'a1'")(Seq(1, 10))
     }
   }
 
-  test("Test NestedSchemaPruning is a no-op when nested schema pruning is disabled") {
+  test("Test no nested schema pruning when disabled") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
       createTableWithNestedStructSchema("mor", tableName, tablePath)
 
-      // With the optimizer flag off the rule short-circuits, so "item" keeps "price" even though only
-      // "item.name" is projected.
+      // With the optimizer flag off no nested schema pruning happens, so "item" keeps "price" even
+      // though only "item.name" is projected
       val expectedItemStruct = StructType(Seq(
         StructField("name", StringType, nullable = false),
         StructField("price", IntegerType, nullable = false)
@@ -218,73 +158,47 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
   private def assertPrunedReadSchema(selectDF: DataFrame,
                                      tableName: String,
-                                     expectedSchema: StructType,
-                                     expectedReadSchemaClause: String,
-                                     hint: String = ""): Unit = {
-    // NOTE: Unfortunately, we can't use pattern-matching to extract required fields, due to a need to maintain
-    //       compatibility w/ Spark 2.4
+                                     expectedSchema: StructType): Unit = {
+    val fileScan = fileScanOf(selectDF)
+    assertEquals(tableName, fileScan.tableIdentifier.get.table)
+    assertEquals(expectedSchema, fileScan.requiredSchema)
+  }
+
+  private def prunedStructTypeOf(selectDF: DataFrame, fieldName: String): StructType =
+    fileScanOf(selectDF).requiredSchema(fieldName).dataType.asInstanceOf[StructType]
+
+  private def fileScanOf(selectDF: DataFrame): FileSourceScanExec =
     selectDF.queryExecution.executedPlan match {
-      // COW
-      case ProjectExec(_, fileScan: FileSourceScanExec) =>
-        assertEquals(tableName, fileScan.tableIdentifier.get.table)
-        assertEquals(expectedSchema, fileScan.requiredSchema, hint)
-
-      // MOR
-      case ProjectExec(_, dataScan: RowDataSourceScanExec) =>
-        // NOTE: This is temporary solution to assert for Spark 2.4, until it's deprecated
-        val explainedPlan = explain(selectDF.queryExecution.logical)
-        assertTrue(explainedPlan.contains(expectedReadSchemaClause))
-
-        assertEquals(tableName, dataScan.tableIdentifier.get.table)
-        assertEquals(expectedSchema, dataScan.requiredSchema, hint)
+      case ProjectExec(_, fileScan: FileSourceScanExec) => fileScan
+      case other => fail(s"Unexpected plan shape (expected Project over FileSourceScanExec):\n$other")
     }
-  }
-
-  private def prunedStructTypeOf(selectDF: DataFrame, fieldName: String): StructType = {
-    val requiredSchema = selectDF.queryExecution.executedPlan match {
-      case ProjectExec(_, fileScan: FileSourceScanExec) => fileScan.requiredSchema
-      case ProjectExec(_, dataScan: RowDataSourceScanExec) => dataScan.requiredSchema
-      case fileScan: FileSourceScanExec => fileScan.requiredSchema
-      case dataScan: RowDataSourceScanExec => dataScan.requiredSchema
-    }
-    requiredSchema(fieldName).dataType.asInstanceOf[StructType]
-  }
-
-  private def createTableWithComplexNestedSchema(tableName: String,
-                                                 tablePath: String): Unit = {
-    spark.sql(
-      s"""
-         |CREATE TABLE $tableName USING HUDI TBLPROPERTIES (
-         |  type = 'mor',
-         |  primaryKey = 'id',
-         |  orderingFields = 'ts',
-         |  hoodie.populate.meta.fields = 'false'
-         |)
-         |LOCATION '$tablePath'
-         |AS SELECT
-         |  1 AS id,
-         |  named_struct('name', 'a1', 'price', 10) AS item,
-         |  array(named_struct('k', 'k0', 'v', 'v0')) AS tags,
-         |  map('m0', named_struct('a', 1, 'b', 2)) AS props,
-         |  123456 AS ts
-             """.stripMargin)
-  }
 
   private def createTableWithNestedStructSchema(tableType: String,
                                                 tableName: String,
                                                 tablePath: String,
-                                                opts: Map[String, String] = Map.empty): Unit = {
+                                                opts: Map[String, String] = Map.empty,
+                                                extraColumns: String = "",
+                                                partitionCol: String = "",
+                                                populateMetaFields: Boolean = false): Unit = {
+    val partitionedByClause = if (partitionCol.nonEmpty) s"PARTITIONED BY ($partitionCol)" else ""
+    val partitionSelectExpr = if (partitionCol.nonEmpty) s", 'p1' AS $partitionCol" else ""
+    val optsClause = if (opts.nonEmpty) "," + opts.map { case (k, v) => s"'$k' = '$v'" }.mkString(",") else ""
     spark.sql(
       s"""
-         |CREATE TABLE $tableName USING HUDI TBLPROPERTIES (
+         |CREATE TABLE $tableName USING HUDI
+         |$partitionedByClause
+         |TBLPROPERTIES (
          |  type = '$tableType',
          |  primaryKey = 'id',
          |  orderingFields = 'ts',
-         |  hoodie.populate.meta.fields = 'false'
-         |  ${if (opts.nonEmpty) "," + opts.map{ case (k, v) => s"'$k' = '$v'" }.mkString(",") else ""}
+         |  hoodie.populate.meta.fields = '$populateMetaFields'
+         |  $optsClause
          |)
          |LOCATION '$tablePath'
-         |AS SELECT 1 AS id, named_struct('name', 'a1', 'price', 10) AS item, 123456 AS ts
+         |AS SELECT
+         |  1 AS id,
+         |  named_struct('name', 'a1', 'price', 10) AS item$extraColumns,
+         |  123456 AS ts$partitionSelectExpr
              """.stripMargin)
   }
 }
