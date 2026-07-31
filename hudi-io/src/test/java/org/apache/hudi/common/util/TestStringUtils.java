@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.io.hfile.UTF8StringKey;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -306,6 +308,74 @@ public class TestStringUtils {
     assertTrue(StringUtils.compareUtf8Bytes("ab", "abc") < 0);
     assertTrue(StringUtils.compareUtf8Bytes("abc", "ab") > 0);
     assertEquals(0, StringUtils.compareUtf8Bytes("abc", "abc"));
+    assertEquals(0, StringUtils.compareUtf8Bytes(new String("abc"), new String("abc")));
+  }
+
+  @Test
+  public void testCompareUtf8BytesDocumentsUnpairedSurrogateBehavior() {
+    String unpairedSurrogate = String.valueOf((char) 0xD800);
+    String replacementCharacter = String.valueOf((char) 0xFFFD);
+
+    // Java's UTF-8 encoder replaces the unpaired surrogate with '?' while the Firestore-derived
+    // comparator orders all surrogate code units after BMP characters. Production callers decode
+    // UTF-8 into well-formed UTF-16, so malformed strings are outside this method's contract.
+    assertTrue(StringUtils.compareUtf8Bytes(unpairedSurrogate, replacementCharacter) > 0);
+    assertTrue(StringUtils.compareUtf8Bytes(unpairedSurrogate, "?") > 0);
+  }
+
+  @Test
+  public void testCompareUtf8BytesMatchesEncodedByteOrder() {
+    String[] alphabet = {
+        // One-byte UTF-8 characters, including the upper boundary.
+        "?",
+        "a",
+        String.valueOf((char) 0x007F),
+        // Two-byte UTF-8 lower and upper boundaries.
+        String.valueOf((char) 0x0080),
+        String.valueOf((char) 0x07FF),
+        // Three-byte UTF-8 boundaries around the surrogate range, plus U+FFFD.
+        String.valueOf((char) 0x0800),
+        String.valueOf((char) 0xD7FF),
+        String.valueOf((char) 0xE000),
+        String.valueOf((char) 0xFFFD),
+        // Four-byte UTF-8 supplementary characters, including two sharing a high surrogate.
+        "😀", // U+1F600
+        new String(Character.toChars(0x20000)),
+        new String(Character.toChars(0x20001)),
+        new String(Character.toChars(0x10FFFF))
+    };
+
+    // Generate every sequence of zero to three code points from the alphabet. This covers cases
+    // where strings differ before, within, or after a supplementary character.
+    List<String> values = new ArrayList<>();
+    values.add("");
+    for (String first : alphabet) {
+      values.add(first);
+      for (String second : alphabet) {
+        values.add(first + second);
+        for (String third : alphabet) {
+          values.add(first + second + third);
+        }
+      }
+    }
+
+    // Pre-encode each value once, then use the production HFile key comparator as the oracle.
+    UTF8StringKey[] hfileKeys = values.stream()
+        .map(UTF8StringKey::new)
+        .toArray(UTF8StringKey[]::new);
+
+    // Compare only the sign because Comparator does not prescribe the magnitude of its result.
+    for (int leftIndex = 0; leftIndex < values.size(); leftIndex++) {
+      String left = values.get(leftIndex);
+      for (int rightIndex = 0; rightIndex < values.size(); rightIndex++) {
+        String right = values.get(rightIndex);
+        assertEquals(
+            Integer.signum(hfileKeys[leftIndex].compareTo(hfileKeys[rightIndex])),
+            Integer.signum(StringUtils.compareUtf8Bytes(left, right)),
+            () -> "left=" + Arrays.toString(left.codePoints().toArray())
+                + " right=" + Arrays.toString(right.codePoints().toArray()));
+      }
+    }
   }
 
   @Test
@@ -313,6 +383,8 @@ public class TestStringUtils {
   public void testUtf8LexicographicComparatorSerializableAndRejectsNull() throws Exception {
     // Like String.compareTo, a null argument is rejected.
     assertThrows(NullPointerException.class, () -> StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR.compare(null, "a"));
+    assertThrows(NullPointerException.class, () -> StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR.compare("a", null));
+    assertThrows(NullPointerException.class, () -> StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR.compare(null, null));
 
     // The comparator is declared as (Comparator<String> & Serializable) so Spark can capture it inside
     // serialized closures. Round-trip it through Java serialization and confirm the deserialized

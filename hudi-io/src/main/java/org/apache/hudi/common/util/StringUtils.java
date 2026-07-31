@@ -136,23 +136,36 @@ public class StringUtils {
    * <p>Neither argument may be {@code null}; like {@link String#compareTo(String)}, a {@code null}
    * argument throws {@link NullPointerException}.
    *
-   * <p>Assumes well-formed UTF-16 input: {@code String#getBytes(UTF_8)} replaces unpaired surrogates
-   * with {@code '?'}, so strings differing only in unpaired surrogates compare equal.
+   * <p>This comparison does not materialize the UTF-8 byte arrays. It compares UTF-16 code units
+   * directly and handles supplementary characters specially to preserve UTF-8 byte order.
    *
-   * <p>Note: encodes both strings to UTF-8 on every call; for very large sorts consider
-   * pre-encoding keys to byte arrays once and comparing those.
+   * <p>Assumes well-formed UTF-16 input. For strings containing unpaired surrogates the result no
+   * longer matches {@code String#getBytes(UTF_8)} byte order: the encoder replaces an unpaired
+   * surrogate with {@code '?'} while this method sorts it after every BMP character. Production
+   * callers derive keys by decoding UTF-8, which cannot produce unpaired surrogates.
+   *
+   * <p>Ported from Google Firebase Firestore's {@code compareUtf8Strings}.
    */
   public static int compareUtf8Bytes(String s1, String s2) {
-    byte[] b1 = getUTF8Bytes(s1);
-    byte[] b2 = getUTF8Bytes(s2);
-    int len = Math.min(b1.length, b2.length);
-    for (int i = 0; i < len; i++) {
-      int cmp = (b1[i] & 0xFF) - (b2[i] & 0xFF);
-      if (cmp != 0) {
-        return cmp;
+    // Source: https://github.com/firebase/firebase-android-sdk/blob/f05e4bcb7f86f3b21833b1e0960d793b800d38d1/firebase-firestore/src/main/java/com/google/firebase/firestore/util/Util.java#L76-L132
+    // The identity check intentionally avoids scanning when both references point to the same
+    // non-null String while preserving the method's fail-fast null contract.
+    if (s1 == s2 && s1 != null) {
+      return 0;
+    }
+
+    final int length = Math.min(s1.length(), s2.length());
+    for (int i = 0; i < length; i++) {
+      final char char1 = s1.charAt(i);
+      final char char2 = s2.charAt(i);
+      if (char1 != char2) {
+        return (Character.isSurrogate(char1) == Character.isSurrogate(char2))
+            ? Character.compare(char1, char2)
+            : Character.isSurrogate(char1) ? 1 : -1;
       }
     }
-    return b1.length - b2.length;
+
+    return Integer.compare(s1.length(), s2.length());
   }
 
   public static String fromUTF8Bytes(byte[] bytes) {
