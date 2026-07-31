@@ -118,18 +118,28 @@ public class TestHudiUncompactedMetadataTable
     @Test
     public void testColumnStatsFileSkippingOverUncompactedStats()
     {
-        // Column-stats file skipping reads the column_stats MDT partition's HFILE log deltas
+        // Column-stats file skipping reads the column_stats MDT partition's HFILE log deltas.
+        // The wait timeout must be raised above its 1s default (matching the col-stats tests in
+        // TestHudiSmokeTest): shouldSkipFileSlice keeps the file on any failure or timeout, so
+        // with the default a broken col-stats read would still return correct rows and a
+        // value-only assertion would pass without the deltas ever being read.
         Session session = SessionBuilder.from(getSession())
                 .withMdtEnabled(true)
                 .withColStatsIndexEnabled(true)
                 .withRecordLevelIndexEnabled(false)
                 .withSecondaryIndexEnabled(false)
                 .withPartitionStatsIndexEnabled(false)
+                .withColumnStatsTimeout("10s")
                 .build();
-        assertQuery(
-                session,
-                "SELECT id, price FROM " + TABLE_NAME + " WHERE price = 15",
-                "VALUES ('k1', CAST(15 AS BIGINT))");
+        MaterializedResult skipped = getQueryRunner().execute(session,
+                "SELECT id, price FROM " + TABLE_NAME + " WHERE price = 15");
+        assertThat(skipped.getMaterializedRows()).hasSize(1);
+        assertThat(skipped.getMaterializedRows().get(0).getFields()).containsExactly("k1", 15L);
+
+        // File skipping must drop at least p2's file group (its prices [1000, 2000] exclude 15),
+        // so the filtered scan uses strictly fewer splits than the unfiltered full scan
+        int fullScanSplits = totalSplits(mdtEnabled(), "SELECT id, price FROM " + TABLE_NAME);
+        assertThat(skipped.getStatementStats().get().getTotalSplits()).isLessThan(fullScanSplits);
     }
 
     private Session mdtEnabled()

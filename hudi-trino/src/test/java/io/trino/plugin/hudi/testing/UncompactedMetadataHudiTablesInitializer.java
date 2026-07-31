@@ -47,11 +47,14 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import java.io.IOException;
@@ -144,6 +147,7 @@ public class UncompactedMetadataHudiTablesInitializer
                 writeTable(new Path(tempTableDir.toUri()), tableName);
                 if (tableName.equals(CORRUPTED_TABLE_NAME)) {
                     corruptMetadataLogFiles(tempTableDir);
+                    verifyMetadataTableUnreadable(new Path(tempTableDir.toUri()));
                 }
                 Location tableLocation = externalLocation.appendPath(tableName);
                 ResourceHudiTablesInitializer.copyDir(tempTableDir, fileSystem, tableLocation);
@@ -200,6 +204,32 @@ public class UncompactedMetadataHudiTablesInitializer
             corrupted++;
         }
         checkState(corrupted > 0, "No MDT log files corrupted under %s; the fallback tests would pass vacuously", metadataDir);
+    }
+
+    /**
+     * Proves the corruption is effective, not just that bytes were flipped: a metadata-table read
+     * of the corrupted table must throw. This guards the fallback tests against the fixed trailer
+     * offsets in {@link #corruptMetadataLogFiles} ever missing (e.g. after an HFile layout change),
+     * in which case those tests would pass vacuously against a clean MDT read.
+     */
+    private static void verifyMetadataTableUnreadable(Path tablePath)
+    {
+        HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(new Configuration());
+        List<String> partitions;
+        try (HoodieTableMetadata metadata = new HoodieBackedTableMetadata(
+                new HoodieJavaEngineContext(storageConf),
+                HoodieStorageUtils.getStorage(tablePath.toString(), storageConf),
+                HoodieMetadataConfig.newBuilder().enable(true).build(),
+                tablePath.toString())) {
+            // The files partition backs getAllPartitionPaths; its log delta is corrupted like all others
+            partitions = metadata.getAllPartitionPaths();
+        }
+        catch (Exception expected) {
+            return;
+        }
+        throw new IllegalStateException(
+                "Metadata table of " + CORRUPTED_TABLE_NAME + " is still readable (partitions: " + partitions
+                        + "); corruptMetadataLogFiles no longer lands on the HFile trailer fields");
     }
 
     private static void writeTable(Path tablePath, String tableName)
