@@ -27,6 +27,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
@@ -56,7 +57,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -898,19 +898,42 @@ public class TestHoodieTableFactory {
   }
 
   @Test
-  void testInsertOperationsDoNotSupportLsmTreeStorageLayout() throws IOException {
-    for (String operation : Arrays.asList("insert", "bulk_insert")) {
-      Configuration newTableConf = new Configuration();
-      newTableConf.set(FlinkOptions.PATH, new File(tempFile, operation).getAbsolutePath());
-      newTableConf.set(FlinkOptions.TABLE_NAME, "t_" + operation);
-      newTableConf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
-      newTableConf.set(FlinkOptions.OPERATION, operation);
-      newTableConf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
-          HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+  void testStorageLayoutValidationAndBulkInsertSort() throws IOException {
+    Configuration insertConf = new Configuration();
+    insertConf.set(FlinkOptions.PATH, new File(tempFile, "insert").getAbsolutePath());
+    insertConf.set(FlinkOptions.TABLE_NAME, "t_insert");
+    insertConf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    insertConf.set(FlinkOptions.OPERATION, "insert");
+    insertConf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    assertThrows(IllegalArgumentException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(insertConf)));
 
-      assertThrows(IllegalArgumentException.class,
-          () -> new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(newTableConf)));
-    }
+    Configuration bulkInsertConf = new Configuration();
+    bulkInsertConf.set(FlinkOptions.PATH, new File(tempFile, "bulk_insert").getAbsolutePath());
+    bulkInsertConf.set(FlinkOptions.TABLE_NAME, "t_bulk_insert");
+    bulkInsertConf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    bulkInsertConf.set(FlinkOptions.OPERATION, "bulk_insert");
+    bulkInsertConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
+    bulkInsertConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, false);
+    HoodieTableSink lsmSink = (HoodieTableSink) new HoodieTableFactory()
+        .createDynamicTableSink(MockContext.getInstance(bulkInsertConf));
+    assertThat(OptionsResolver.isLsmTreeStorageLayout(lsmSink.getConf()), is(true));
+    assertThat(lsmSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT), is(true));
+    assertThat(lsmSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY), is(true));
+
+    Configuration defaultBulkInsertConf = new Configuration(bulkInsertConf);
+    defaultBulkInsertConf.set(FlinkOptions.PATH,
+        new File(tempFile, "default_bulk_insert").getAbsolutePath());
+    defaultBulkInsertConf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
+    defaultBulkInsertConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
+    defaultBulkInsertConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, false);
+    HoodieTableSink defaultSink = (HoodieTableSink) new HoodieTableFactory()
+        .createDynamicTableSink(MockContext.getInstance(defaultBulkInsertConf));
+    assertThat(OptionsResolver.isLsmTreeStorageLayout(defaultSink.getConf()), is(false));
+    assertThat(defaultSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT), is(false));
+    assertThat(defaultSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY), is(false));
 
     Configuration tableConf = new Configuration();
     tableConf.set(FlinkOptions.PATH, new File(tempFile, "existing_lsm").getAbsolutePath());
@@ -926,6 +949,15 @@ public class TestHoodieTableFactory {
     writeConf.set(FlinkOptions.OPERATION, "insert");
     assertThrows(IllegalArgumentException.class,
         () -> new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(writeConf)));
+
+    writeConf.set(FlinkOptions.OPERATION, "bulk_insert");
+    writeConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
+    writeConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, false);
+    HoodieTableSink existingLsmSink = (HoodieTableSink) new HoodieTableFactory()
+        .createDynamicTableSink(MockContext.getInstance(writeConf));
+    assertThat(OptionsResolver.isLsmTreeStorageLayout(existingLsmSink.getConf()), is(true));
+    assertThat(existingLsmSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT), is(true));
+    assertThat(existingLsmSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY), is(true));
   }
 
   // -------------------------------------------------------------------------

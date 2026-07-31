@@ -115,7 +115,9 @@ public class BulkInsertWriterHelper implements AutoCloseable {
         ? schema
         : HoodieSchemaUtils.addMetadataFields(schema, writeConfig.allowOperationMetadataField());
     this.preserveHoodieMetadata = preserveHoodieMetadata;
-    this.isInputSorted = OptionsResolver.isBulkInsertOperation(conf) && conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
+    this.isInputSorted = OptionsResolver.isBulkInsertOperation(conf)
+        && (conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)
+        || OptionsResolver.isLsmTreeStorageLayout(conf));
     this.fileIdPrefix = UUID.randomUUID().toString();
     this.keyGen = preserveHoodieMetadata ? null : RowDataKeyGens.instance(conf, rowType, taskPartitionId, instantTime);
     this.writeMetrics = writeMetrics;
@@ -129,19 +131,24 @@ public class BulkInsertWriterHelper implements AutoCloseable {
       String partitionPath = preserveHoodieMetadata
           ? record.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD).toString()
           : keyGen.getPartitionPath(record);
-
-      if ((lastKnownPartitionPath == null) || !lastKnownPartitionPath.equals(partitionPath) || !handle.canWrite()) {
-        handle = getRowCreateHandle(partitionPath);
-        lastKnownPartitionPath = partitionPath;
-        writeMetrics.ifPresent(FlinkStreamWriteMetrics::markHandleSwitch);
-      }
-      handle.write(recordKey, partitionPath, record);
-      writeMetrics.ifPresent(FlinkStreamWriteMetrics::markRecordIn);
+      writeRecord(recordKey, partitionPath, record);
     } catch (Throwable t) {
       IOException ioException = new IOException("Exception happened when bulk insert.", t);
       log.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", ioException);
       throw new IOException(ioException);
     }
+  }
+
+  protected void writeRecord(String recordKey, String partitionPath, RowData record) throws IOException {
+    if ((lastKnownPartitionPath == null)
+        || !lastKnownPartitionPath.equals(partitionPath)
+        || !handle.canWrite()) {
+      handle = getRowCreateHandle(partitionPath);
+      lastKnownPartitionPath = partitionPath;
+      writeMetrics.ifPresent(FlinkStreamWriteMetrics::markHandleSwitch);
+    }
+    handle.write(recordKey, partitionPath, record);
+    writeMetrics.ifPresent(FlinkStreamWriteMetrics::markRecordIn);
   }
 
   private HoodieRowDataCreateHandle getRowCreateHandle(String partitionPath) throws IOException {
