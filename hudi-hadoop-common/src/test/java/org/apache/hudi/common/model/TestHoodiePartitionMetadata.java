@@ -20,10 +20,16 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,11 +41,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -125,16 +133,54 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
     // the existence check slips through the race window once, then observes the peer's file
     doReturn(false).doCallRealMethod().when(racingStorage).exists(metaPath);
 
-    long startMs = System.currentTimeMillis();
-    assertDoesNotThrow(() -> new HoodiePartitionMetadata(
-        racingStorage, "000000000002", new StoragePath(basePath), partitionPath, Option.empty()).trySave());
-    long elapsedMs = System.currentTimeMillis() - startMs;
+    // watch what the retry helper logs while the race is being lost
+    TestLogAppender appender = new TestLogAppender();
+    Logger retryLogger = (Logger) LogManager.getLogger(RetryHelper.class);
+    appender.start();
+    retryLogger.addAppender(appender);
+
+    long elapsedMs;
+    try {
+      long startMs = System.currentTimeMillis();
+      assertDoesNotThrow(() -> new HoodiePartitionMetadata(
+          racingStorage, "000000000002", new StoragePath(basePath), partitionPath, Option.empty()).trySave());
+      elapsedMs = System.currentTimeMillis() - startMs;
+    } finally {
+      retryLogger.removeAppender(appender);
+      appender.stop();
+    }
+
+    // the symptom from HUDI-9095: losing the race used to be reported as a warning with a full
+    // stack trace, even though the file the caller asked for is right there
+    List<String> problems = appender.getLog().stream()
+        .filter(event -> event.getLevel().isMoreSpecificThan(Level.WARN))
+        .map(event -> event.getMessage().getFormattedMessage())
+        .collect(Collectors.toList());
+    assertTrue(problems.isEmpty(),
+        "losing the metafile creation race must not be logged as a problem, got: " + problems);
 
     // Losing the race is a success, so it must not go through the retry helper: every retry sleeps
-    // for at least the initial 1s interval, which is what used to emit the stack trace warning.
+    // for at least the initial 1s interval.
     assertTrue(elapsedMs < 1000,
         "trySave should not retry when the metafile already exists, but it took " + elapsedMs + " ms");
     assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(storage, partitionPath));
+  }
+
+  static class TestLogAppender extends AbstractAppender {
+    private final List<LogEvent> log = new ArrayList<>();
+
+    protected TestLogAppender() {
+      super(UUID.randomUUID().toString(), null, null, false, null);
+    }
+
+    @Override
+    public void append(LogEvent event) {
+      log.add(event.toImmutable());
+    }
+
+    List<LogEvent> getLog() {
+      return new ArrayList<>(log);
+    }
   }
 
   @Test
