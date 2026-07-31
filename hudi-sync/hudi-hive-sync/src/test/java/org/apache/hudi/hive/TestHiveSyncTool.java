@@ -99,6 +99,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABAS
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BATCHING_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BATCHING_THREADS;
@@ -119,6 +120,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SNAPSHOT_WITH_TABLE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TOUCH_PARTITIONS_ENABLED;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -1555,6 +1557,51 @@ public class TestHiveSyncTool {
                 "Table " + snapshotTableName
                         + " should exist after sync completes");
     }
+  }
+
+  @Test
+  void testSkipRoSuffixTakesPrecedenceOverSnapshotWithTableName() throws Exception {
+    // skip_ro_suffix explicitly claims the bare table name for the RO view; the now-default-true
+    // sync_snapshot_with_table_name must not be allowed to flip it to RT.
+    hiveSyncProps.setProperty(HIVE_SYNC_TABLE_STRATEGY.key(), HoodieSyncTableStrategy.ALL.name());
+    hiveSyncProps.setProperty(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key(), "true");
+    hiveSyncProps.setProperty(META_SYNC_SNAPSHOT_WITH_TABLE_NAME.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_AS_DATA_SOURCE_TABLE.key(), "true");
+
+    String instantTime = "100";
+    String deltaCommitTime = "101";
+    HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true, true);
+
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+
+    // a second sync round with a new commit reproduces the flip; a single round does not
+    ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
+    String commitTime2 = "102";
+    String deltaCommitTime2 = "103";
+    HiveTestUtil.addMORPartitions(1, true, false, true, dateTime, commitTime2, deltaCommitTime2);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+
+    String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
+    String roSuffixTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
+
+    // the bare table name must stay registered as the read-optimized view
+    StorageDescriptor bareTableSd = hiveClient.getMetastoreStorageDescriptor(HiveTestUtil.TABLE_NAME);
+    assertEquals(HoodieParquetInputFormat.class.getName(), bareTableSd.getInputFormat(),
+        "Bare table name should remain the RO view (skip_ro_suffix=true) despite sync_snapshot_with_table_name=true");
+    assertEquals("true", bareTableSd.getSerdeInfo().getParameters().get(ConfigUtils.IS_QUERY_AS_RO_TABLE),
+        "Bare table name should still be marked as the RO table");
+
+    // the real-time/snapshot view remains available, and only there
+    assertTrue(hiveClient.tableExists(snapshotTableName), "Table " + snapshotTableName + " should exist after sync completes");
+    StorageDescriptor snapshotTableSd = hiveClient.getMetastoreStorageDescriptor(snapshotTableName);
+    assertEquals(HoodieParquetRealtimeInputFormat.class.getName(), snapshotTableSd.getInputFormat(),
+        "Table " + snapshotTableName + " should use the realtime input format");
+
+    // no separate "<t>_ro" table should be created when skip_ro_suffix is set
+    assertFalse(hiveClient.tableExists(roSuffixTableName),
+        "Table " + roSuffixTableName + " should not exist when skip_ro_suffix is set");
   }
 
   @ParameterizedTest

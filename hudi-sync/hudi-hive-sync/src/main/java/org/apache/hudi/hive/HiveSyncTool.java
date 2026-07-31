@@ -211,7 +211,14 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
             syncHoodieTable(snapshotTableName, true, false);
             // sync origin table for MOR
             if (config.getBoolean(META_SYNC_SNAPSHOT_WITH_TABLE_NAME)) {
-              syncHoodieTable(tableName, true, false);
+              if (config.getBoolean(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)) {
+                log.warn("{}=true claims the bare table name '{}' for the read-optimized view; "
+                        + "ignoring {} for this table (the real-time view remains registered as '{}').",
+                    HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key(), tableId(databaseName, tableName),
+                    META_SYNC_SNAPSHOT_WITH_TABLE_NAME.key(), snapshotTableName);
+              } else {
+                syncHoodieTable(tableName, true, false);
+              }
             }
         }
         break;
