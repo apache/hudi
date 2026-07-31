@@ -18,14 +18,21 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.callback.HoodieWriteCommitCallback;
+import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
+import org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy;
+import org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -37,12 +44,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertDataInMORTable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTestHarness {
@@ -178,6 +189,116 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
   @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;
+  }
+
+  @Test
+  public void testWriteCommitCallbackFiresOnCompaction() throws Exception {
+    RecordingCommitCallback.MESSAGES.clear();
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
+        .withCallbackConfig(HoodieWriteCommitCallbackConfig.newBuilder()
+            .writeCommitCallbackOn("true")
+            .withCallbackClass(RecordingCommitCallback.class.getName())
+            .build())
+        .build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    // Two delta commits through the auto-commit path.
+    String commitTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, commitTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    String prevCommit = commitTime;
+    commitTime = WriteClientTestUtils.createNewInstantTime();
+    updateBatch(config, client, commitTime, prevCommit,
+        Option.of(Arrays.asList(prevCommit)), "000", 50, HoodieJavaWriteClient::upsert,
+        false, false, 5, 100, 2, config.populateMetaFields(), INSTANT_GENERATOR);
+
+    // The callback must fire for the auto-committed delta commits with the deltacommit action.
+    assertTrue(RecordingCommitCallback.MESSAGES.stream().anyMatch(m ->
+            HoodieTimeline.DELTA_COMMIT_ACTION.equals(m.getCommitActionType().orElse(null))),
+        "callback must fire for delta commits");
+
+    // Schedule, execute and commit compaction.
+    Option<String> compactionTime = client.scheduleCompaction(Option.empty());
+    assertTrue(compactionTime.isPresent());
+    HoodieWriteMetadata writeMetadata = client.compact(compactionTime.get());
+    client.commitCompaction(compactionTime.get(), writeMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTime.get()));
+
+    // The callback must fire exactly once for the compaction completion, reporting the completed
+    // timeline action (commit).
+    List<HoodieWriteCommitCallbackMessage> compactionMessages = RecordingCommitCallback.MESSAGES.stream()
+        .filter(m -> m.getCommitTime().equals(compactionTime.get()))
+        .collect(Collectors.toList());
+    assertEquals(1, compactionMessages.size(), "callback must fire once for the compaction commit");
+    assertEquals(HoodieTimeline.COMMIT_ACTION, compactionMessages.get(0).getCommitActionType().orElse(null));
+    assertNotNull(compactionMessages.get(0).getPrevFilePaths(), "prevFilePaths must never be null");
+  }
+
+  @Test
+  public void testWriteCommitCallbackFiresOnClustering() throws Exception {
+    RecordingCommitCallback.MESSAGES.clear();
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder()
+        .withClusteringMaxNumGroups(10)
+        .withClusteringSortColumns("_row_key")
+        .withClusteringTargetPartitions(0)
+        .withClusteringPlanStrategyClass(JavaSizeBasedClusteringPlanStrategy.class.getName())
+        .withClusteringExecutionStrategyClass(JavaSortAndSizeExecutionStrategy.class.getName())
+        .build();
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+        HoodieIndex.IndexType.INMEMORY)
+        .withClusteringConfig(clusteringConfig)
+        .withCallbackConfig(HoodieWriteCommitCallbackConfig.newBuilder()
+            .writeCommitCallbackOn("true")
+            .withCallbackClass(RecordingCommitCallback.class.getName())
+            .build())
+        .build();
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    // Two inserts create base-file groups that clustering can rewrite.
+    String commitTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, commitTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    commitTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, commitTime, "001", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 200, 2, Option.empty(), INSTANT_GENERATOR);
+
+    // Schedule and execute clustering inline (shouldComplete = true completes the commit).
+    Option<String> clusteringTime = client.scheduleClustering(Option.empty());
+    assertTrue(clusteringTime.isPresent(), "expected a clustering plan to be scheduled");
+    client.cluster(clusteringTime.get(), true);
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(clusteringTime.get()));
+
+    // The callback must fire once for the clustering completion, reporting the action actually on
+    // the timeline (replacecommit for table version < 8, clustering for 8+).
+    List<HoodieWriteCommitCallbackMessage> clusteringMessages = RecordingCommitCallback.MESSAGES.stream()
+        .filter(m -> m.getCommitTime().equals(clusteringTime.get()))
+        .collect(Collectors.toList());
+    assertEquals(1, clusteringMessages.size(), "callback must fire once for the clustering commit");
+    String action = clusteringMessages.get(0).getCommitActionType().orElse(null);
+    assertTrue(HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action) || HoodieTimeline.CLUSTERING_ACTION.equals(action),
+        "clustering callback must report the timeline action, got: " + action);
+  }
+
+  /**
+   * A recording {@link HoodieWriteCommitCallback} that captures every fired message so tests can
+   * assert the callback fires for table-service (compaction/clustering) commits with the expected
+   * action type. Loaded reflectively from the write config, so it needs a public
+   * {@code (HoodieWriteConfig)} constructor.
+   */
+  public static class RecordingCommitCallback implements HoodieWriteCommitCallback {
+
+    static final List<HoodieWriteCommitCallbackMessage> MESSAGES = new CopyOnWriteArrayList<>();
+
+    public RecordingCommitCallback(HoodieWriteConfig config) {
+      // config arg required for reflective instantiation
+    }
+
+    @Override
+    public void call(HoodieWriteCommitCallbackMessage callbackMessage) {
+      MESSAGES.add(callbackMessage);
+    }
   }
 
 }

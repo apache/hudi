@@ -24,9 +24,6 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.callback.HoodieCommitCallbackFactory;
-import org.apache.hudi.callback.HoodieWriteCommitCallback;
-import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.WriterHeartbeatUtils;
@@ -149,7 +146,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   @Getter
   @Setter
   private transient WriteOperationType operationType;
-  private transient HoodieWriteCommitCallback commitCallback;
 
   protected transient Timer.Context writeTimer = null;
 
@@ -290,7 +286,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     boolean postCommitStatus = true;
     HoodieTimer postCommitTimer = HoodieTimer.start();
     try {
-      postCommit(table, metadata, instantTime, extraMetadata);
+      postCommit(table, metadata, instantTime, commitActionType, extraMetadata);
       mayBeCleanAndArchive(table);
       runTableServicesInline(table, metadata, extraMetadata);
     } catch (Exception e) {
@@ -306,15 +302,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     emitCommitMetrics(instantTime, metadata, commitActionType);
-
-    // callback if needed.
-    if (config.writeCommitCallbackOn()) {
-      if (null == commitCallback) {
-        commitCallback = HoodieCommitCallbackFactory.create(config);
-      }
-      commitCallback.call(new HoodieWriteCommitCallbackMessage(
-          instantTime, config.getTableName(), config.getBasePath(), tableWriteStats.getDataTableWriteStats(), Option.of(commitActionType), extraMetadata));
-    }
     return true;
   }
 
@@ -645,7 +632,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       boolean postCommitStatus = true;
       HoodieTimer postCommitTimer = HoodieTimer.start();
       try {
-        postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
+        String commitActionType = CommitUtils.getCommitActionType(operationType, hoodieTable.getMetaClient().getTableType());
+        postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime,
+            commitActionType, Option.empty());
         mayBeCleanAndArchive(hoodieTable);
       } catch (Exception e) {
         postCommitStatus = false;
@@ -672,7 +661,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime   Instant Time
    * @param extraMetadata Additional Metadata passed by user
    */
-  protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
+  protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime, String commitActionType, Option<Map<String, String>> extraMetadata) {
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Cleaning up marker directories for commit " + instantTime + " in table "
           + config.getTableName());
@@ -680,6 +669,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       metrics.updateTableServiceInstantMetrics(table.getActiveTimeline());
+      // Fire write commit callback if a callback class is registered. postCommit() is reached
+      // by both auto-commit and explicit-commit paths; compaction and clustering have their own
+      // explicit fireCommitCallbackIfNecessary call sites in BaseHoodieTableServiceClient.
+      List<HoodieWriteStat> stats = metadata.getWriteStats();
+      fireCommitCallbackIfNecessary(instantTime, commitActionType, stats,
+          table::getBaseFileOnlyView, extraMetadata);
     } finally {
       this.heartbeatClient.stop(instantTime);
     }
