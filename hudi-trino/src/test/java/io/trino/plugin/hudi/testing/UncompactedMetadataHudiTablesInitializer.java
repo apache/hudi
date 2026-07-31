@@ -320,11 +320,11 @@ public class UncompactedMetadataHudiTablesInitializer
                         .build())
                 .withEmbeddedTimelineServerEnabled(false)
                 .withMarkersType(MarkerType.DIRECT.name())
-                // The whole point of this initializer: an ENABLED metadata table with stats indexes,
-                // whose compaction never fires within this test (the zip fixtures use
-                // compact.max.delta.commits=1), so its partitions keep native HFILE log deltas.
-                // MDT HFILE writing is native (hudi-io HFileWriterImpl) -- no hbase involved.
-                // metadataEnabled is false for the first commit only; see writeTable.
+                // The whole point of this initializer: an ENABLED metadata table with stats
+                // indexes whose compaction never fires within this test, so its partitions keep
+                // native HFILE log deltas. MDT HFILE writing is native (hudi-io HFileWriterImpl)
+                // -- no hbase involved. metadataEnabled is false for the first commit only; see
+                // writeTable.
                 .withMetadataConfig(HoodieMetadataConfig.newBuilder()
                         .enable(metadataEnabled)
                         .withMetadataIndexColumnStats(metadataEnabled)
