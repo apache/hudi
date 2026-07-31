@@ -22,9 +22,11 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.file.FileAlreadyExistsException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -50,6 +52,21 @@ public class TestRetryHelper {
     retryHelper =  new RetryHelper(INTERVAL_TIME, NUM, INTERVAL_TIME, Exception.class.getName());
     retry = (boolean) privateOne.invoke(retryHelper, new UnsupportedOperationException("test"));
     assertTrue(retry);
+  }
+
+  @Test
+  public void testSummariseKeepsRootCauseOnASingleLine() {
+    // a wrapped exception keeps both layers, so the warning stays actionable without a stack trace
+    IOException wrapped = new IOException("Failed to create file /a/b/.hoodie_partition_metadata",
+        new FileAlreadyExistsException("File already exists: /a/b/.hoodie_partition_metadata"));
+    String summary = RetryHelper.summarise(wrapped);
+    assertTrue(summary.contains("java.io.IOException: Failed to create file /a/b/.hoodie_partition_metadata"), summary);
+    assertTrue(summary.contains("caused by java.nio.file.FileAlreadyExistsException"), summary);
+    assertFalse(summary.contains("\n"), "the summary must stay on a single line: " + summary);
+    assertFalse(summary.contains("\tat "), "the summary must not carry a stack trace: " + summary);
+
+    // an exception with no cause is rendered as-is
+    assertEquals("java.io.IOException: plain", RetryHelper.summarise(new IOException("plain")));
   }
 
   @Test

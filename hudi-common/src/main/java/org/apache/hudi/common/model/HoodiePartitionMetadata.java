@@ -106,20 +106,35 @@ public class HoodiePartitionMetadata {
     RetryHelper<Void, HoodieIOException>  retryHelper = new RetryHelper(1000, 3, 1000, HoodieIOException.class.getName())
         .tryWith(() -> {
           if (!storage.exists(metaPath)) {
-            if (format.isPresent()) {
-              writeMetafileInFormat(metaPath, format.get());
-            } else {
-              // Backwards compatible properties file format
-              try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
-                props.store(os, "partition metadata");
-                Option<byte []> content = Option.of(os.toByteArray());
-                storage.createImmutableFileInPath(metaPath, content.map(HoodieInstantWriter::convertByteArrayToWriter));
+            try {
+              writeMetafile(metaPath);
+            } catch (IOException | HoodieIOException e) {
+              // The metafile is immutable, so tasks writing to the same partition concurrently race
+              // to create it and all but the winner fail with an 'already exists' error. Losing that
+              // race means the metafile is in place, which is what the caller asked for: retrying
+              // would only re-observe the same file, and warning about it is pure noise.
+              if (!storage.exists(metaPath)) {
+                throw e;
               }
+              log.debug("Partition metafile {} was concurrently created by another task.", metaPath);
             }
           }
           return null;
         });
     retryHelper.start();
+  }
+
+  private void writeMetafile(StoragePath metaPath) throws IOException {
+    if (format.isPresent()) {
+      writeMetafileInFormat(metaPath, format.get());
+    } else {
+      // Backwards compatible properties file format
+      try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+        props.store(os, "partition metadata");
+        Option<byte []> content = Option.of(os.toByteArray());
+        storage.createImmutableFileInPath(metaPath, content.map(HoodieInstantWriter::convertByteArrayToWriter));
+      }
+    }
   }
 
   private String getMetafileExtension() {
