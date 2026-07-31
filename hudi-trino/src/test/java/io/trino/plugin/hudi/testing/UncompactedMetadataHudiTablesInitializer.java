@@ -226,6 +226,7 @@ public class UncompactedMetadataHudiTablesInitializer
      * in which case those tests would pass vacuously against a clean MDT read.
      */
     private static void verifyMetadataTableUnreadable(Path tablePath)
+            throws Exception
     {
         HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(new Configuration());
         List<String> partitions;
