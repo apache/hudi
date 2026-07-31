@@ -1193,7 +1193,9 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
+          # No `cache: maven` on purpose. This job runs no Maven on the host: run_docker_java17.sh
+          # builds inside the container and never mounts $HOME/.m2. Caching here seals a near-empty
+          # repo under the key all jobs share, which every later job then discards and re-downloads.
       - name: UT/FT - Docker Test - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1203,7 +1205,6 @@ jobs:
         # Only support Spark 3.4 for now
         if: ${{ env.SPARK_PROFILE >= 'spark3.4' && needs.changes.outputs.relevant == 'true' }}
         run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/run_docker_java17.sh
 
   validate-bundles:
