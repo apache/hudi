@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ShiftLeft, Sqrt, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, ShiftLeft, Sqrt, Upper}
 import org.apache.spark.sql.types.{DateType, DoubleType, IntegerType, LongType, StringType}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -28,12 +28,13 @@ import org.junit.jupiter.api.Test
  * transformed column reference back to its source attribute, so each case is pinned to the exact
  * source [[AttributeReference]] it must recover, and non-order-preserving shapes must not match.
  */
-class TestCatalystExpressionOrderPreserving extends SparkAdapterSupport {
+class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   private val intAttr = AttributeReference("i", IntegerType)()
   private val strAttr = AttributeReference("s", StringType)()
   private val dblAttr = AttributeReference("d", DoubleType)()
   private val dateAttr = AttributeReference("dt", DateType)()
+  private val longAttr = AttributeReference("l", LongType)()
 
   private def matched(expr: Expression): Option[AttributeReference] =
     sparkAdapter.getCatalystExpressionUtils.tryMatchAttributeOrderingPreservingTransformation(expr)
@@ -70,11 +71,23 @@ class TestCatalystExpressionOrderPreserving extends SparkAdapterSupport {
   }
 
   @Test
+  def testDateParsingTransformationsPreserveOrdering(): Unit = {
+    // ParseToDate's case-class shape differs across Spark versions, so the matcher dispatches it
+    // through the per-version unapplyOrderPreservingDateParsing hook. The 1-arg auxiliary
+    // constructor is stable on all profiles, letting this pin that hook everywhere.
+    assertEquals(Some(strAttr), matched(new ParseToDate(strAttr)))
+  }
+
+  @Test
   def testUpCastPreservesOrderingButNumericToStringDoesNot(): Unit = {
     // Widening a numeric column preserves ordering, so the source attribute is recovered.
     assertEquals(Some(intAttr), matched(Cast(intAttr, LongType)))
     // Casting a numeric column to string can reorder values, so it must not match.
     assertEquals(None, matched(Cast(intAttr, StringType)))
+    // TODO(#19445): a narrowing numeric cast wraps around in non-ANSI mode and does not preserve
+    // ordering, so this should be None; pinning the current (incorrect) behavior until
+    // isCastPreservingOrdering rejects it.
+    assertEquals(Some(longAttr), matched(Cast(longAttr, IntegerType)))
   }
 
   @Test

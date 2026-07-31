@@ -18,9 +18,11 @@
 package org.apache.spark.sql.avro
 
 import org.apache.avro.Schema
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.function.Executable
 
 /**
  * Direct coverage for [[AvroUtils]] and its [[AvroUtils.AvroSchemaHelper]], which are otherwise only
@@ -34,6 +36,7 @@ class TestAvroUtils {
 
   @Test
   def testSupportsDataType(): Unit = {
+    // supportsDataType has no live Hudi caller; this guards the vendored copy against edit drift.
     assertTrue(AvroUtils.supportsDataType(IntegerType))
     assertTrue(AvroUtils.supportsDataType(StringType))
     assertTrue(AvroUtils.supportsDataType(NullType))
@@ -79,10 +82,11 @@ class TestAvroUtils {
 
   @Test
   def testMatchedFieldsAndGetAvroFieldByName(): Unit = {
+    // Avro order differs from Catalyst so by-name lookup is discriminated from positional.
     val avro = parse(
       """{"type":"record","name":"r","fields":[
-        |  {"name":"id","type":"int"},
-        |  {"name":"name","type":["null","string"]}
+        |  {"name":"name","type":["null","string"]},
+        |  {"name":"id","type":"int"}
         |]}""".stripMargin)
     val catalyst = new StructType().add("id", IntegerType).add("name", StringType)
     val helper = new AvroUtils.AvroSchemaHelper(avro, catalyst, Seq.empty, Seq.empty, false)
@@ -97,6 +101,7 @@ class TestAvroUtils {
     val avro = parse(
       """{"type":"record","name":"r","fields":[{"name":"only","type":"int"}]}""")
     val helper = new AvroUtils.AvroSchemaHelper(avro, new StructType(), Seq.empty, Seq.empty, true)
+    // Hudi never enables positionalFieldMatch; vendored-path drift guard.
     // Positional matching ignores the name and selects by index.
     assertEquals("only", helper.getAvroField("anything", 0).get.name())
     assertTrue(helper.getAvroField("anything", 1).isEmpty)
@@ -115,11 +120,22 @@ class TestAvroUtils {
     assertTrue(ex.getMessage.contains("Cannot find field 'extra' in Avro schema"))
 
     // When nullable Catalyst fields are ignored, the same extra field is tolerated.
-    helper.validateNoExtraCatalystFields(ignoreNullable = true)
+    assertDoesNotThrow(new Executable {
+      def execute(): Unit = helper.validateNoExtraCatalystFields(ignoreNullable = true)
+    })
+
+    // A non-nullable extra Catalyst field must still throw even when nullables are ignored;
+    // this is the combination the deserializer relies on (ignoreNullable = true).
+    val strictCatalyst = new StructType().add("id", IntegerType).add("extra", StringType, nullable = false)
+    val strictHelper = new AvroUtils.AvroSchemaHelper(avro, strictCatalyst, Seq.empty, Seq.empty, false)
+    val strictEx = assertThrows(classOf[IncompatibleSchemaException],
+      () => strictHelper.validateNoExtraCatalystFields(ignoreNullable = true))
+    assertTrue(strictEx.getMessage.contains("Cannot find field 'extra' in Avro schema"))
   }
 
   @Test
   def testValidateNoExtraCatalystFieldsPositional(): Unit = {
+    // Hudi never enables positionalFieldMatch; vendored-path drift guard.
     val avro = parse(
       """{"type":"record","name":"r","fields":[{"name":"id","type":"int"}]}""")
     val catalyst = new StructType().add("id", IntegerType).add("second", IntegerType)
@@ -152,20 +168,32 @@ class TestAvroUtils {
         |]}""".stripMargin)
     val helperWithOptionalGhost = new AvroUtils.AvroSchemaHelper(
       avroWithOptionalGhost, catalyst, Seq.empty, Seq.empty, false)
-    helperWithOptionalGhost.validateNoExtraRequiredAvroFields()
+    assertDoesNotThrow(new Executable {
+      def execute(): Unit = helperWithOptionalGhost.validateNoExtraRequiredAvroFields()
+    })
   }
 
   @Test
   def testGetFieldByNameAmbiguousMatch(): Unit = {
-    // Two fields differing only by case collide under the default case-insensitive resolver.
+    // Two fields differing only by case collide under a case-insensitive resolver.
     val avro = parse(
       """{"type":"record","name":"r","fields":[
         |  {"name":"ID","type":"int"},
         |  {"name":"id","type":"int"}
         |]}""".stripMargin)
     val helper = new AvroUtils.AvroSchemaHelper(avro, new StructType(), Seq.empty, Seq.empty, false)
-    val ex = assertThrows(classOf[IncompatibleSchemaException],
-      () => helper.getFieldByName("id"))
-    assertTrue(ex.getMessage.contains("gave 2 matches"))
+    // The resolver comes from ambient SQLConf, so pin it instead of relying on the JVM default.
+    val conf = SQLConf.get
+    conf.setConfString("spark.sql.caseSensitive", "false")
+    try {
+      val ex = assertThrows(classOf[IncompatibleSchemaException],
+        () => helper.getFieldByName("id"))
+      assertTrue(ex.getMessage.contains("gave 2 matches"))
+      // Under a case-sensitive resolver the same lookup is unambiguous.
+      conf.setConfString("spark.sql.caseSensitive", "true")
+      assertEquals("id", helper.getFieldByName("id").get.name())
+    } finally {
+      conf.unsetConf("spark.sql.caseSensitive")
+    }
   }
 }

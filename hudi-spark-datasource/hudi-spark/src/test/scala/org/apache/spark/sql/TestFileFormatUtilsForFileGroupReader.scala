@@ -17,10 +17,10 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeReference, Contains, EndsWith, EqualNullSafe, EqualTo, Expression, GreaterThan, In, IsNotNull, IsNull, LessThanOrEqual, Literal, Not, Or, StartsWith}
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeReference, Contains, EndsWith, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation}
 import org.apache.spark.sql.types.{BooleanType, IntegerType, StringType, StructType}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertSame}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertSame, assertThrows}
 import org.junit.jupiter.api.Test
 
 /**
@@ -50,6 +50,10 @@ class TestFileFormatUtilsForFileGroupReader {
     assertEquals(EqualTo(a, Literal(1)), condOf(Seq(sources.EqualTo("a", 1))))
     assertEquals(EqualNullSafe(a, Literal(1)), condOf(Seq(sources.EqualNullSafe("a", 1))))
     assertEquals(GreaterThan(a, Literal(5)), condOf(Seq(sources.GreaterThan("a", 5))))
+    // GreaterThanOrEqual is the comparison incremental reads actually push down
+    // (MergeOnReadIncrementalRelationV1.incrementalSpanRecordFilters).
+    assertEquals(GreaterThanOrEqual(a, Literal(5)), condOf(Seq(sources.GreaterThanOrEqual("a", 5))))
+    assertEquals(LessThan(a, Literal(5)), condOf(Seq(sources.LessThan("a", 5))))
     assertEquals(LessThanOrEqual(a, Literal(5)), condOf(Seq(sources.LessThanOrEqual("a", 5))))
     assertEquals(IsNull(b), condOf(Seq(sources.IsNull("b"))))
     assertEquals(IsNotNull(b), condOf(Seq(sources.IsNotNull("b"))))
@@ -77,14 +81,29 @@ class TestFileFormatUtilsForFileGroupReader {
     assertEquals(
       Or(EqualTo(a, Literal(1)), Not(IsNull(b))),
       condOf(Seq(sources.Or(sources.EqualTo("a", 1), sources.Not(sources.IsNull("b"))))))
+    // An explicit sources.And lowers through its own translate arm.
+    assertEquals(
+      And(EqualTo(a, Literal(1)), IsNull(b)),
+      condOf(Seq(sources.And(sources.EqualTo("a", 1), sources.IsNull("b")))))
   }
 
   @Test
   def testMultipleFiltersAreAndedInOrder(): Unit = {
-    // Several top-level filters combine left-to-right via And.
+    // Three filters (the shape incremental reads emit) make the left-nesting observable;
+    // with only two, reduceLeft and reduceRight produce the same tree.
     assertEquals(
-      And(GreaterThan(a, Literal(5)), IsNotNull(b)),
-      condOf(Seq(sources.GreaterThan("a", 5), sources.IsNotNull("b"))))
+      And(And(IsNotNull(b), GreaterThan(a, Literal(5))), LessThanOrEqual(a, Literal(9))),
+      condOf(Seq(sources.IsNotNull("b"), sources.GreaterThan("a", 5), sources.LessThanOrEqual("a", 9))))
+  }
+
+  @Test
+  def testFilterOnMissingColumnThrows(): Unit = {
+    // A filter naming a column absent from the table schema makes toRef miss, and the bare
+    // .get surfaces as NoSuchElementException. Reachable via readStream.schema(...) omitting
+    // the meta columns while incremental relations inject _hoodie_commit_time filters.
+    assertThrows(classOf[NoSuchElementException],
+      () => FileFormatUtilsForFileGroupReader.applyFiltersToPlan(
+        plan, tableSchema, resolved, Seq(sources.EqualTo("missing", 1))))
   }
 
   @Test
