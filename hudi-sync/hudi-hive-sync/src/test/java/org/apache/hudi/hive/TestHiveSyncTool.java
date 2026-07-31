@@ -302,6 +302,8 @@ public class TestHiveSyncTool {
     client.reconnect();
     assertFalse(client.getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME).getParameters().containsKey("drift_marker"),
         "force-recreate must drop and recreate the table even when the incremental sync would otherwise be a no-op");
+    assertEquals(HoodieVersion.get(), client.getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME).getParameters().get(HoodieVersion.HOODIE_WRITER_VERSION),
+        "force-recreate must republish the hudi writer version on the recreated table");
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get());
     client.close();
   }
