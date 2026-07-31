@@ -18,16 +18,26 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.FileAlreadyExistsException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -52,6 +62,44 @@ public class TestRetryHelper {
     retryHelper =  new RetryHelper(INTERVAL_TIME, NUM, INTERVAL_TIME, Exception.class.getName());
     retry = (boolean) privateOne.invoke(retryHelper, new UnsupportedOperationException("test"));
     assertTrue(retry);
+  }
+
+  /**
+   * The point of HUDI-9095: a retry that is going to be attempted again must not dump a stack trace
+   * into the log. The cause still has to be identifiable from the message itself.
+   */
+  @Test
+  public void testRetryWarningCarriesNoStackTrace() {
+    TestLogAppender appender = new TestLogAppender();
+    Logger logger = (Logger) LogManager.getLogger(RetryHelper.class);
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      AtomicInteger attempts = new AtomicInteger(0);
+      RetryHelper retryHelper = new RetryHelper(INTERVAL_TIME, 3, INTERVAL_TIME, (String) null, "save partition metafile");
+      assertDoesNotThrow(() -> retryHelper.start(() -> {
+        if (attempts.incrementAndGet() < 3) {
+          throw new IOException("Failed to create file /a/b/.hoodie_partition_metadata",
+              new FileAlreadyExistsException("File already exists: /a/b/.hoodie_partition_metadata"));
+        }
+        return true;
+      }));
+
+      List<LogEvent> warnings = appender.getLog().stream()
+          .filter(event -> Level.WARN.equals(event.getLevel())).collect(Collectors.toList());
+      assertFalse(warnings.isEmpty(), "the retries should still be reported at warn level");
+      for (LogEvent warning : warnings) {
+        assertNull(warning.getThrown(),
+            "the retry warning must not carry a throwable, otherwise the logger prints its stack trace");
+        String message = warning.getMessage().getFormattedMessage();
+        assertTrue(message.contains("save partition metafile"), message);
+        assertTrue(message.contains("java.io.IOException: Failed to create file /a/b/.hoodie_partition_metadata"), message);
+        assertTrue(message.contains("FileAlreadyExistsException"), "the root cause must survive: " + message);
+      }
+    } finally {
+      logger.removeAppender(appender);
+      appender.stop();
+    }
   }
 
   @Test
@@ -82,5 +130,22 @@ public class TestRetryHelper {
         return true;
       });
     });
+  }
+
+  static class TestLogAppender extends AbstractAppender {
+    private final List<LogEvent> log = new ArrayList<>();
+
+    protected TestLogAppender() {
+      super(UUID.randomUUID().toString(), null, null, false, null);
+    }
+
+    @Override
+    public void append(LogEvent event) {
+      log.add(event.toImmutable());
+    }
+
+    List<LogEvent> getLog() {
+      return new ArrayList<>(log);
+    }
   }
 }
