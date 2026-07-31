@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
@@ -47,6 +48,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -138,6 +140,39 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
       }
     }
     writeClient.close();
+  }
+
+  /**
+   * HUDI-5011: exercises the Java write client against both marker types with the embedded timeline
+   * server running. {@code HoodieWriteConfig.Builder} defaults the Java engine to
+   * {@link MarkerType#DIRECT}, so the timeline-server-based path is only reached when
+   * {@code hoodie.write.markers.type} is set explicitly, and nothing covered that combination.
+   */
+  @ParameterizedTest
+  @EnumSource(MarkerType.class)
+  public void testInsertWithEmbeddedTimelineServerAndMarkerType(MarkerType markerType) throws Exception {
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder(basePath)
+        .withEmbeddedTimelineServerEnabled(true)
+        .withMarkersType(markerType.name())
+        .build();
+
+    HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
+    assertTrue(writeClient.getTimelineServer().isPresent(),
+        "The embedded timeline server should be running for marker type " + markerType);
+
+    List<HoodieRecord> records = new ArrayList<>();
+    records.add(createSimpleRecord("1", "2021-09-11T16:16:41.415Z", 1));
+    records.add(createSimpleRecord("2", "2021-09-11T16:16:41.415Z", 2));
+
+    String commitTime = makeNewCommitTime(1, "%09d");
+    WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
+    writeClient.commit(commitTime, writeClient.insert(records, commitTime));
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertTrue(metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent(),
+        "The commit should have completed for marker type " + markerType);
+    assertEquals(1, getIncrementalFiles("2021/09/11", "0", -1).length,
+        "One base file should have been written for marker type " + markerType);
   }
 
   @Test
