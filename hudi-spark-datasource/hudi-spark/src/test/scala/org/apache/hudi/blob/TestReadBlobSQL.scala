@@ -452,6 +452,222 @@ class TestReadBlobSQL extends HoodieClientTestBase {
     assertTrue(thrown.getCause.isInstanceOf[HoodieIOException])
   }
 
+  /**
+   * INLINE BLOB writes accept the minimal `{type, data}` struct (no `reference` field) at
+   * the DataFrame entry. The writer pads each row to the canonical 3-field shape with
+   * `reference = null`. Round-trips the bytes through `read_blob()` to confirm the padded
+   * row materializes correctly.
+   */
+  @Test
+  def testInlineBlobWriteAcceptsMinimalStruct(): Unit = {
+    val tablePath = s"$tempDir/hudi_inline_min_struct_table"
+    val payload = Array[Byte](0xA, 0xB, 0xC, 0xD)
+
+    val minimalInlineSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", StructType(Seq(
+        StructField(HoodieSchema.Blob.TYPE, StringType, nullable = true),
+        StructField(HoodieSchema.Blob.INLINE_DATA_FIELD, BinaryType, nullable = true)
+      )), nullable = true, blobMetadata)
+    ))
+    val minimalRow = Row(1, Row(HoodieSchema.Blob.INLINE, payload))
+    val minimalDf = sparkSession.createDataFrame(
+      Collections.singletonList(minimalRow), minimalInlineSchema)
+
+    minimalDf.write.format("hudi")
+      .option("hoodie.table.name", "blob_inline_min_struct")
+      .option("hoodie.datasource.write.recordkey.field", "id")
+      .option("hoodie.datasource.write.operation", "bulk_insert")
+      .mode("overwrite")
+      .save(tablePath)
+
+    val readBack = sparkSession.read.format("hudi").load(tablePath)
+      .select("id", "payload")
+      .collect()
+    assertEquals(1, readBack.length)
+    val payloadStruct = readBack(0).getStruct(readBack(0).fieldIndex("payload"))
+    assertEquals(HoodieSchema.Blob.INLINE,
+      payloadStruct.getString(payloadStruct.fieldIndex(HoodieSchema.Blob.TYPE)))
+    assertArrayEquals(payload,
+      payloadStruct.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD))
+    // The padder filled `reference` with null on the way in.
+    assertTrue(payloadStruct.isNullAt(
+      payloadStruct.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)))
+
+    // read_blob() resolves INLINE bytes directly.
+    sparkSession.read.format("hudi").load(tablePath)
+      .createOrReplaceTempView("blob_min_inline_view")
+    val readBlobBytes = sparkSession.sql(
+      "SELECT id, read_blob(payload) AS bytes FROM blob_min_inline_view")
+      .collect().head.getAs[Array[Byte]]("bytes")
+    assertArrayEquals(payload, readBlobBytes)
+  }
+
+  /**
+   * OUT_OF_LINE BLOB writes accept the minimal `{type, reference}` struct (no `data`
+   * field) at the DataFrame entry. The writer pads each row to the canonical 3-field
+   * shape with `data = null`.
+   */
+  @Test
+  def testOutOfLineBlobWriteAcceptsMinimalStruct(): Unit = {
+    val extFile = createTestFile(tempDir, "minstruct_ool.bin", 1000)
+    val tablePath = s"$tempDir/hudi_oolline_min_struct_table"
+
+    // Minimal {type, reference} schema — no `data` field.
+    val refStructType = StructType(Seq(
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, StringType, nullable = true),
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, LongType, nullable = true),
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, LongType, nullable = true),
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, BooleanType, nullable = true)
+    ))
+    val minimalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", StructType(Seq(
+        StructField(HoodieSchema.Blob.TYPE, StringType, nullable = true),
+        StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE, refStructType, nullable = true)
+      )), nullable = true, blobMetadata)
+    ))
+    val refRow = Row(extFile, 0L, 100L, false)
+    val minimalRow = Row(1, Row(HoodieSchema.Blob.OUT_OF_LINE, refRow))
+    val minimalDf = sparkSession.createDataFrame(
+      Collections.singletonList(minimalRow), minimalSchema)
+
+    minimalDf.write.format("hudi")
+      .option("hoodie.table.name", "blob_oolline_min_struct")
+      .option("hoodie.datasource.write.recordkey.field", "id")
+      .option("hoodie.datasource.write.operation", "bulk_insert")
+      .mode("overwrite")
+      .save(tablePath)
+
+    val readBack = sparkSession.read.format("hudi").load(tablePath)
+      .select("id", "payload")
+      .collect()
+    assertEquals(1, readBack.length)
+    val payloadStruct = readBack(0).getStruct(readBack(0).fieldIndex("payload"))
+    assertEquals(HoodieSchema.Blob.OUT_OF_LINE,
+      payloadStruct.getString(payloadStruct.fieldIndex(HoodieSchema.Blob.TYPE)))
+    // The padder filled `data` with null on the way in.
+    assertTrue(payloadStruct.isNullAt(
+      payloadStruct.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)))
+    val ref = payloadStruct.getStruct(
+      payloadStruct.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE))
+    assertTrue(ref.getString(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH))
+      .endsWith("minstruct_ool.bin"))
+
+    // read_blob() dereferences the external file and reads the byte range.
+    sparkSession.read.format("hudi").load(tablePath)
+      .createOrReplaceTempView("blob_min_oolline_view")
+    val readBlobBytes = sparkSession.sql(
+      "SELECT id, read_blob(payload) AS bytes FROM blob_min_oolline_view")
+      .collect().head.getAs[Array[Byte]]("bytes")
+    assertEquals(100, readBlobBytes.length)
+    assertBytesContent(readBlobBytes, expectedOffset = 0)
+  }
+
+  /**
+   * Partial INLINE blob structs nested inside a non-blob struct, an array of structs, and
+   * a map of string -> struct are all padded by the writer. Exercises the recursive pad
+   * paths in `padPartialBlobColumns` (struct rebuild, `transform`, `transform_values`).
+   */
+  @Test
+  def testNestedPartialBlobWritesAcceptedThroughStructArrayAndMap(): Unit = {
+    val tablePath = s"$tempDir/hudi_nested_partial_blob_table"
+
+    val payloadStruct = StructType(Seq(
+      StructField(HoodieSchema.Blob.TYPE, StringType, nullable = true),
+      StructField(HoodieSchema.Blob.INLINE_DATA_FIELD, BinaryType, nullable = true)
+    ))
+    val nestedStructField = StructField(
+      "doc", StructType(Seq(
+        StructField("doc_id", IntegerType, nullable = false),
+        StructField("payload", payloadStruct, nullable = true, blobMetadata)
+      )), nullable = true)
+    val nestedArrayField = StructField(
+      "items", ArrayType(StructType(Seq(
+        StructField("idx", IntegerType, nullable = false),
+        StructField("payload", payloadStruct, nullable = true, blobMetadata)
+      )), containsNull = true), nullable = true)
+    val nestedMapField = StructField(
+      "by_label", MapType(StringType, StructType(Seq(
+        StructField("payload", payloadStruct, nullable = true, blobMetadata)
+      )), valueContainsNull = true), nullable = true)
+
+    val schema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      nestedStructField,
+      nestedArrayField,
+      nestedMapField
+    ))
+
+    val structPayload = Array[Byte](0x1, 0x2)
+    val arrPayload0 = Array[Byte](0x3, 0x4)
+    val arrPayload1 = Array[Byte](0x5, 0x6)
+    val mapPayload = Array[Byte](0x7, 0x8)
+
+    val docRow = Row(101, Row(HoodieSchema.Blob.INLINE, structPayload))
+    val itemsRow = Seq(
+      Row(0, Row(HoodieSchema.Blob.INLINE, arrPayload0)),
+      Row(1, Row(HoodieSchema.Blob.INLINE, arrPayload1))
+    )
+    val byLabelRow = Map("a" -> Row(Row(HoodieSchema.Blob.INLINE, mapPayload)))
+    val row = Row(1, docRow, itemsRow, byLabelRow)
+
+    val df = sparkSession.createDataFrame(Collections.singletonList(row), schema)
+
+    df.write.format("hudi")
+      .option("hoodie.table.name", "blob_nested_partial")
+      .option("hoodie.datasource.write.recordkey.field", "id")
+      .option("hoodie.datasource.write.operation", "bulk_insert")
+      .mode("overwrite")
+      .save(tablePath)
+
+    val rows = sparkSession.read.format("hudi").load(tablePath)
+      .select("id", "doc", "items", "by_label").collect()
+    assertEquals(1, rows.length)
+    val readBack = rows(0)
+
+    // Struct-nested blob: padded `reference` is null, bytes round-trip.
+    val docReadBack = readBack.getStruct(readBack.fieldIndex("doc"))
+    val docPayload = docReadBack.getStruct(docReadBack.fieldIndex("payload"))
+    assertEquals(HoodieSchema.Blob.INLINE,
+      docPayload.getString(docPayload.fieldIndex(HoodieSchema.Blob.TYPE)))
+    assertArrayEquals(structPayload,
+      docPayload.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD))
+    assertTrue(docPayload.isNullAt(docPayload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)))
+
+    // Array-nested blob: each element's blob is independently padded.
+    val items = readBack.getList[Row](readBack.fieldIndex("items"))
+    assertEquals(2, items.size())
+    val itemPayloads = (0 until 2).map { i =>
+      val itemBlob = items.get(i).getStruct(items.get(i).fieldIndex("payload"))
+      assertEquals(HoodieSchema.Blob.INLINE,
+        itemBlob.getString(itemBlob.fieldIndex(HoodieSchema.Blob.TYPE)))
+      assertTrue(itemBlob.isNullAt(itemBlob.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)))
+      itemBlob.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD)
+    }
+    assertArrayEquals(arrPayload0, itemPayloads(0))
+    assertArrayEquals(arrPayload1, itemPayloads(1))
+
+    // Map-nested blob: padded value's blob is canonical.
+    val byLabel = readBack.getJavaMap[String, Row](readBack.fieldIndex("by_label"))
+    val mapVal = byLabel.get("a")
+    val mapBlob = mapVal.getStruct(mapVal.fieldIndex("payload"))
+    assertEquals(HoodieSchema.Blob.INLINE,
+      mapBlob.getString(mapBlob.fieldIndex(HoodieSchema.Blob.TYPE)))
+    assertTrue(mapBlob.isNullAt(mapBlob.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)))
+    assertArrayEquals(mapPayload,
+      mapBlob.getAs[Array[Byte]](HoodieSchema.Blob.INLINE_DATA_FIELD))
+
+    // read_blob() resolves the struct-nested blob directly: the rule lifts the
+    // nested expression to a synthetic top-level alias before BatchedBlobRead.
+    sparkSession.read.format("hudi").load(tablePath)
+      .createOrReplaceTempView("blob_nested_view")
+    val sqlBytes = sparkSession.sql(
+      "SELECT read_blob(doc.payload) AS bytes FROM blob_nested_view")
+      .collect().head.getAs[Array[Byte]]("bytes")
+    assertArrayEquals(structPayload, sqlBytes)
+  }
+
   @Test
   def testReadBlobOnNonBlobColumn(): Unit = {
     val df = sparkSession.createDataFrame(Seq(

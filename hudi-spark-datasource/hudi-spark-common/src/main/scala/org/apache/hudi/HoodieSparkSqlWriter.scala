@@ -70,6 +70,7 @@ import org.apache.hadoop.hive.shims.ShimLoader
 import org.apache.spark.{SPARK_VERSION, SparkContext}
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.sql._
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
@@ -356,11 +357,15 @@ class HoodieSparkSqlWriterInternal {
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
       val latestTableSchemaOpt = getLatestTableSchema(tableMetaClient, schemaFromCatalog)
-      val df = if (preppedWriteOperation || preppedSparkSqlWrites || preppedSparkSqlMergeInto || sourceDf.isStreaming) {
+      val dfPreBlobPad = if (preppedWriteOperation || preppedSparkSqlWrites || preppedSparkSqlMergeInto || sourceDf.isStreaming) {
         sourceDf
       } else {
         sourceDf.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*)
       }
+      // RFC-100 BLOB QoL: accept partial INLINE-only `{type,data}` or OUT_OF_LINE-only
+      // `{type,reference}` user inputs by padding the missing sibling field with null at the
+      // ingest boundary. No-op for already-canonical 3-field structs.
+      val df = HoodieSparkSchemaConverters.padPartialBlobColumns(dfPreBlobPad)
       // NOTE: We need to make sure that upon conversion of the schemas b/w Catalyst's [[StructType]] and
       //       Avro's [[Schema]] we're preserving corresponding "record-name" and "record-namespace" that
       //       play crucial role in establishing compatibility b/w schemas

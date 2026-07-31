@@ -45,6 +45,34 @@ object BlobTestHelpers {
     ).as(name, blobMetadata)
   }
 
+  /**
+   * Minimal `{type, data}` shape - exercises the writer's auto-padding path that
+   * fills in `reference: null` for INLINE blobs.
+   */
+  def inlineBlobStructColMinimal(name: String, bytesCol: Column): Column = {
+    struct(
+      lit(HoodieSchema.Blob.INLINE).as(HoodieSchema.Blob.TYPE),
+      bytesCol.cast("binary").as(HoodieSchema.Blob.INLINE_DATA_FIELD)
+    ).as(name, blobMetadata)
+  }
+
+  /**
+   * Minimal `{type, reference}` shape - exercises the writer's auto-padding path
+   * that fills in `data: null` for OUT_OF_LINE blobs.
+   */
+  def outOfLineBlobStructColMinimal(
+      name: String, filePathCol: Column, offsetCol: Column, lengthCol: Column): Column = {
+    struct(
+      lit(HoodieSchema.Blob.OUT_OF_LINE).as(HoodieSchema.Blob.TYPE),
+      struct(
+        filePathCol.as(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH),
+        offsetCol.as(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET),
+        lengthCol.cast("bigint").as(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH),
+        lit(false).as(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED)
+      ).as(HoodieSchema.Blob.EXTERNAL_REFERENCE)
+    ).as(name, blobMetadata)
+  }
+
   def wholeFileBlobStructCol(name: String, filePathCol: Column): Column = {
     struct(
       lit(HoodieSchema.Blob.OUT_OF_LINE).as(HoodieSchema.Blob.TYPE),

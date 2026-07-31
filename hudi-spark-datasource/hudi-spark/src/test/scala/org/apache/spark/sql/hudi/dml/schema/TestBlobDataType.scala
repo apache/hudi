@@ -20,6 +20,7 @@
 package org.apache.spark.sql.hudi.dml.schema
 
 import org.apache.hudi.blob.BlobTestHelpers
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -280,6 +281,348 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
       metaClient.reloadActiveTimeline()
       assert(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0,
         "Expected at least one .clean instant on the timeline after compaction")
+    })
+  }
+
+  test("Test Query Log Only MOR Table With BLOB INLINE column triggers compaction (Lance)") {
+    assume(System.getProperty("lance.skip.tests") != "true",
+      "Lance tests disabled via -Dlance.skip.tests=true")
+    // Covers log-only MOR ingest of INLINE blobs on a Lance base format, the inline
+    // compaction trigger, and the post-compaction inline read shape.
+
+    withRecordType()(withTempDir { tmp =>
+      val tablePath = new File(tmp, "hudi").getCanonicalPath
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  data blob,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'INMEMORY',
+           |  hoodie.compact.inline = 'true',
+           |  hoodie.clean.commits.retained = '1',
+           |  'hoodie.table.base.file.format' = 'LANCE'
+           | )
+       """.stripMargin)
+
+      // Verify the LANCE config was actually persisted to hoodie.properties.
+      assertResult(HoodieFileFormat.LANCE)(
+        createMetaClient(spark, tablePath).getTableConfig.getBaseFileFormat)
+
+      spark.sql(s"insert into $tableName values (1, ${inlineBlobLiteral("01")}, 1000)")
+      spark.sql(s"insert into $tableName values (2, ${inlineBlobLiteral("02")}, 1000)")
+      spark.sql(s"insert into $tableName values (3, ${inlineBlobLiteral("03")}, 1000)")
+      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tablePath))
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 1 as id, ${inlineBlobLiteral("11")} as data, 1001L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when matched then update set *
+           |""".stripMargin)
+      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tablePath))
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 4 as id, ${inlineBlobLiteral("04")} as data, 1000L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when not matched then insert *
+           |""".stripMargin)
+
+      assertResult(false)(DataSourceTestUtils.isLogFileOnly(tablePath))
+
+      val bytesById = spark.sql(
+        s"select id, read_blob(data) as bytes from $tableName order by id"
+      ).collect().map(r => r.getInt(0) -> r.getAs[Array[Byte]]("bytes")).toMap
+      assertResult(4)(bytesById.size)
+      assert(bytesById(1).sameElements(Array(0x11.toByte)))
+      assert(bytesById(2).sameElements(Array(0x02.toByte)))
+      assert(bytesById(3).sameElements(Array(0x03.toByte)))
+      assert(bytesById(4).sameElements(Array(0x04.toByte)))
+
+      spark.sql(s"select id, data from $tableName order by id").collect().foreach { row =>
+        val blob = row.getStruct(1)
+        assertResult("INLINE")(blob.getString(blob.fieldIndex(HoodieSchema.Blob.TYPE)))
+        assert(!blob.isNullAt(blob.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)))
+        // Lance materializes the `reference` struct as non-null with all-null leaves for
+        // INLINE rows (vs. a null struct on Parquet). `type` is the canonical INLINE
+        // discriminator per RFC-100; tolerate either shape and just check the leaves.
+        val refIdx = blob.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)
+        if (!blob.isNullAt(refIdx)) {
+          val ref = blob.getStruct(refIdx)
+          assert(ref.isNullAt(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH)))
+        }
+      }
+
+      val blobField = spark.table(tableName).schema.find(_.name == "data").get
+      assert(blobField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD),
+        s"Expected BLOB type metadata on data field after compaction, " +
+          s"got: ${blobField.metadata}")
+      assertResult(HoodieSchemaType.BLOB.name())(
+        blobField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+
+      // 6th commit drives an auto-clean that retires the now-superseded log-only slice.
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 2 as id, ${inlineBlobLiteral("22")} as data, 1002L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when matched then update set *
+           |""".stripMargin)
+      val updatedBytesById = spark.sql(
+        s"select id, read_blob(data) as bytes from $tableName order by id"
+      ).collect().map(r => r.getInt(0) -> r.getAs[Array[Byte]]("bytes")).toMap
+      assert(updatedBytesById(2).sameElements(Array(0x22.toByte)))
+
+      val metaClient = createMetaClient(spark, tablePath)
+      metaClient.reloadActiveTimeline()
+      assert(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0,
+        "Expected at least one .clean instant on the timeline after compaction")
+    })
+  }
+
+  test("Test Query Log Only MOR Table With BLOB OUT_OF_LINE column triggers compaction (Lance)") {
+    assume(System.getProperty("lance.skip.tests") != "true",
+      "Lance tests disabled via -Dlance.skip.tests=true")
+    // Lance writer has no BLOB handling today (RFC-100 Phase 2). Expected to fail
+    // until support lands in HoodieSparkLanceWriter; this test pins the gap.
+
+    withRecordType()(withTempDir { tmp =>
+      val tablePath = new File(tmp, "hudi").getCanonicalPath
+      val blobDir = new File(tmp, "blobs")
+      blobDir.mkdirs()
+      val file1 = BlobTestHelpers.createTestFile(blobDir.toPath, "blob1.bin", 100)
+      val file2 = BlobTestHelpers.createTestFile(blobDir.toPath, "blob2.bin", 100)
+      val file3 = BlobTestHelpers.createTestFile(blobDir.toPath, "blob3.bin", 100)
+      val file4 = BlobTestHelpers.createTestFile(blobDir.toPath, "blob4.bin", 100)
+      val file1Updated = BlobTestHelpers.createTestFile(blobDir.toPath, "blob1_updated.bin", 80)
+      val file2Updated = BlobTestHelpers.createTestFile(blobDir.toPath, "blob2_updated.bin", 60)
+
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  data blob,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'INMEMORY',
+           |  hoodie.compact.inline = 'true',
+           |  hoodie.clean.commits.retained = '1',
+           |  'hoodie.table.base.file.format' = 'LANCE'
+           | )
+       """.stripMargin)
+
+      // Verify the LANCE config was actually persisted to hoodie.properties.
+      assertResult(HoodieFileFormat.LANCE)(
+        createMetaClient(spark, tablePath).getTableConfig.getBaseFileFormat)
+
+      spark.sql(
+        s"insert into $tableName values (1, ${outOfLineBlobLiteral(file1, 0L, 100L)}, 1000)")
+      spark.sql(
+        s"insert into $tableName values (2, ${outOfLineBlobLiteral(file2, 0L, 100L)}, 1000)")
+      spark.sql(
+        s"insert into $tableName values (3, ${outOfLineBlobLiteral(file3, 0L, 100L)}, 1000)")
+      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tablePath))
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 1 as id, ${outOfLineBlobLiteral(file1Updated, 0L, 80L)} as data, 1001L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when matched then update set *
+           |""".stripMargin)
+      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tablePath))
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 4 as id, ${outOfLineBlobLiteral(file4, 0L, 100L)} as data, 1000L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when not matched then insert *
+           |""".stripMargin)
+
+      assertResult(false)(DataSourceTestUtils.isLogFileOnly(tablePath))
+
+      val bytesById = spark.sql(
+        s"select id, read_blob(data) as bytes from $tableName order by id"
+      ).collect().map(r => r.getInt(0) -> r.getAs[Array[Byte]]("bytes")).toMap
+      assertResult(4)(bytesById.size)
+      assertResult(80)(bytesById(1).length)
+      BlobTestHelpers.assertBytesContent(bytesById(1))
+      assertResult(100)(bytesById(2).length)
+      BlobTestHelpers.assertBytesContent(bytesById(2))
+      assertResult(100)(bytesById(3).length)
+      BlobTestHelpers.assertBytesContent(bytesById(3))
+      assertResult(100)(bytesById(4).length)
+      BlobTestHelpers.assertBytesContent(bytesById(4))
+
+      spark.sql(s"select id, data from $tableName order by id").collect().foreach { row =>
+        val blob = row.getStruct(1)
+        assertResult("OUT_OF_LINE")(blob.getString(blob.fieldIndex(HoodieSchema.Blob.TYPE)))
+        assert(blob.isNullAt(blob.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)))
+        assert(!blob.isNullAt(blob.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)))
+      }
+
+      val blobField = spark.table(tableName).schema.find(_.name == "data").get
+      assert(blobField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD),
+        s"Expected BLOB type metadata on data field after compaction, " +
+          s"got: ${blobField.metadata}")
+      assertResult(HoodieSchemaType.BLOB.name())(
+        blobField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+
+      // 6th commit drives an auto-clean that retires the now-superseded log-only slice.
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 2 as id, ${outOfLineBlobLiteral(file2Updated, 0L, 60L)} as data, 1002L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when matched then update set *
+           |""".stripMargin)
+      val updatedBytesById = spark.sql(
+        s"select id, read_blob(data) as bytes from $tableName order by id"
+      ).collect().map(r => r.getInt(0) -> r.getAs[Array[Byte]]("bytes")).toMap
+      assertResult(60)(updatedBytesById(2).length)
+      BlobTestHelpers.assertBytesContent(updatedBytesById(2))
+
+      val metaClient = createMetaClient(spark, tablePath)
+      metaClient.reloadActiveTimeline()
+      assert(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0,
+        "Expected at least one .clean instant on the timeline after compaction")
+    })
+  }
+
+  /**
+   * INLINE BLOB column accepts the minimal `named_struct('type','INLINE','data', X'..')`
+   * literal at INSERT time, no `reference` field required. The writer pads the missing
+   * `reference` with null. Both the canonical 3-field literal and the minimal 2-field
+   * literal coexist in the same table.
+   */
+  test("Test Inline BLOB SQL insert accepts minimal named_struct") {
+    withRecordType()(withTempDir { tmp =>
+      val tablePath = new File(tmp, "hudi").getCanonicalPath
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  data blob,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'INMEMORY'
+           | )
+       """.stripMargin)
+
+      val minimalLiteral =
+        """named_struct(
+          |  'type', 'INLINE',
+          |  'data', cast(X'AB' as binary)
+          |)""".stripMargin
+
+      // Minimal 2-field named_struct now writes successfully.
+      spark.sql(s"insert into $tableName values (1, $minimalLiteral, 1000)")
+      // Canonical 3-field literal still writes successfully.
+      spark.sql(s"insert into $tableName values (2, ${inlineBlobLiteral("CD")}, 1000)")
+
+      val bytesById = spark.sql(s"select id, read_blob(data) as bytes from $tableName order by id")
+        .collect().map(r => r.getInt(0) -> r.getAs[Array[Byte]]("bytes")).toMap
+      assertResult(2)(bytesById.size)
+      assert(bytesById(1).sameElements(Array(0xAB.toByte)))
+      assert(bytesById(2).sameElements(Array(0xCD.toByte)))
+
+      // Confirm structural shape: type=INLINE, data populated, reference null on both rows.
+      spark.sql(s"select id, data from $tableName order by id").collect().foreach { row =>
+        val blob = row.getStruct(1)
+        assertResult("INLINE")(blob.getString(blob.fieldIndex(HoodieSchema.Blob.TYPE)))
+        assert(!blob.isNullAt(blob.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)))
+        assert(blob.isNullAt(blob.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)))
+      }
+    })
+  }
+
+  /**
+   * OUT_OF_LINE BLOB column accepts the minimal `named_struct('type','OUT_OF_LINE',
+   * 'reference', named_struct(...))` literal — no `data` field required. The writer
+   * pads the missing `data` with null.
+   */
+  test("Test OUT_OF_LINE BLOB SQL insert accepts minimal named_struct") {
+    withRecordType()(withTempDir { tmp =>
+      val tablePath = new File(tmp, "hudi").getCanonicalPath
+      val blobDir = new File(tmp, "blobs")
+      blobDir.mkdirs()
+      val file1 = BlobTestHelpers.createTestFile(blobDir.toPath, "min_ool.bin", 100)
+
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  data blob,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'INMEMORY'
+           | )
+       """.stripMargin)
+
+      val minimalLiteral =
+        s"""named_struct(
+           |  'type', 'OUT_OF_LINE',
+           |  'reference', named_struct(
+           |    'external_path', '$file1',
+           |    'offset', cast(0 as bigint),
+           |    'length', cast(100 as bigint),
+           |    'managed', false
+           |  )
+           |)""".stripMargin
+
+      spark.sql(s"insert into $tableName values (1, $minimalLiteral, 1000)")
+
+      val bytes = spark.sql(s"select id, read_blob(data) as bytes from $tableName")
+        .collect().head.getAs[Array[Byte]]("bytes")
+      assertResult(100)(bytes.length)
+      BlobTestHelpers.assertBytesContent(bytes)
+
+      val blob = spark.sql(s"select data from $tableName").collect().head.getStruct(0)
+      assertResult("OUT_OF_LINE")(blob.getString(blob.fieldIndex(HoodieSchema.Blob.TYPE)))
+      // Padder filled `data` with null.
+      assert(blob.isNullAt(blob.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)))
+      assert(!blob.isNullAt(blob.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)))
     })
   }
 }
