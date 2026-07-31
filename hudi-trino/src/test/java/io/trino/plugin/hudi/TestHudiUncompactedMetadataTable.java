@@ -29,8 +29,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * UNCOMPACTED delta commits. Those deltas are native HFILE log files, which the connector previously
  * rejected ("Native HFILE log files are not supported..."), failing every query through the unguarded
  * partition-stats pruning path. The table written by {@link UncompactedMetadataHudiTablesInitializer}
- * keeps its MDT deliberately uncompacted (the zip fixtures always compact after every commit), so the
- * queries below only succeed if the connector reads HFILE log deltas in the MDT's
+ * keeps its MDT deliberately uncompacted and its deltas are whole-file native HFILE logs (the zip
+ * fixtures predate that write path; their block-format deltas were always readable), so the queries
+ * below only succeed if the connector reads native HFILE log files in the MDT's
  * {@code files}/{@code column_stats}/{@code partition_stats} partitions.
  * <p>
  * The initializer also writes {@code CORRUPTED_TABLE_NAME}, an identical table whose MDT log files

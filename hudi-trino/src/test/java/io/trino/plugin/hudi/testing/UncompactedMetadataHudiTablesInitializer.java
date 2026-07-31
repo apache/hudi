@@ -52,6 +52,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -60,9 +61,11 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
@@ -80,12 +83,17 @@ import static java.nio.file.Files.createTempDirectory;
 
 /**
  * Creates a partitioned COW table at test runtime with an ENABLED, UNCOMPACTED metadata table (MDT):
- * {@code hoodie.metadata.compact.max.delta.commits} is set high (the zip fixtures use {@code =1}, so
- * their MDTs are always freshly compacted) and several commits are written, leaving the MDT's
- * {@code files}/{@code column_stats}/{@code partition_stats} partitions with native HFILE LOG deltas
- * that the connector must read at query time (issue apache/hudi#19279).
+ * {@code hoodie.metadata.compact.max.delta.commits} is set high and several commits are written,
+ * leaving the MDT's {@code files}/{@code column_stats}/{@code partition_stats} partitions with
+ * NATIVE HFILE log files that the connector must read at query time (issue apache/hudi#19279):
+ * {@code *.log.hfile} deltas where the whole file is an HFile, as current writers produce. The zip
+ * fixtures cannot cover this even where their MDTs are uncompacted (e.g. {@code hudi_trips_cow_v8}):
+ * they predate the native-log write path, so their MDT deltas are {@code #HUDI#} block-format logs
+ * carrying HFILE_DATA_BLOCKs, which the connector already read through its HFile content reader;
+ * only whole-file native HFILE logs hit the previously unimplemented
+ * {@code getFileFormatUtils(HFILE)} path.
  * <p>
- * Note: MDT writing here is fully native -- HFILE base files and log blocks are written via hudi-io's
+ * Note: MDT writing here is fully native -- HFILE base files and log files are written via hudi-io's
  * pure-Java {@code HFileWriterImpl}, so no hbase dependency is involved (the "requires hbase" note in
  * older initializers is stale).
  * <p>
@@ -162,16 +170,14 @@ public class UncompactedMetadataHudiTablesInitializer
     }
 
     /**
-     * Corrupts every MDT log file so that any metadata-table read of the table throws, without the
-     * log reader silently skipping the damage. The corrupted window targets the HFile TRAILER of
-     * the last block's content: hudi-io HFiles end with a fixed 4096-byte trailer whose magic and
-     * protobuf fields sit at the trailer's START, followed by padding, so the window is placed
-     * ~4KB before EOF to land on those fields (corrupting near EOF would only flip padding). The
-     * log block FRAMING -- the leading magic/block-size fields and the trailing footer plus
-     * reverse-pointer long, which {@code HoodieLogFileReader.isBlockCorrupted} validates -- stays
-     * intact on purpose: framing damage is classified as a {@code HoodieCorruptBlock} and skipped
-     * WITHOUT an exception, which would silently drop records instead of exercising the
-     * connector's fallbacks.
+     * Corrupts the MDT log files so that any metadata-table read of the table throws. The deltas
+     * here are NATIVE HFILE log files (the whole file is an HFile): hudi-io HFiles end with a
+     * fixed 4096-byte trailer whose magic and protobuf fields sit at the trailer's START, followed
+     * by padding, so the corrupted window is placed ~4KB before EOF to land on those fields --
+     * flipping bytes near EOF would only hit padding and reads would still succeed.
+     * {@link #verifyMetadataTableUnreadable} then proves the corruption took. Every MDT partition
+     * directory must end up with at least one corrupted log file, so that none of the read paths
+     * (files listing, col-stats skipping, partition-stats pruning) can see a clean partition.
      */
     private static void corruptMetadataLogFiles(java.nio.file.Path tableDir)
             throws IOException
@@ -182,28 +188,35 @@ public class UncompactedMetadataHudiTablesInitializer
             logFiles = walk
                     .filter(Files::isRegularFile)
                     .filter(file -> file.getFileName().toString().contains(".log."))
+                    // Only files directly inside an MDT partition directory, not timeline or
+                    // marker leftovers under the MDT's own .hoodie
+                    .filter(file -> metadataDir.equals(file.getParent().getParent()))
                     .collect(toImmutableList());
         }
-        int corrupted = 0;
+        Set<java.nio.file.Path> partitionsWithLogFiles = new HashSet<>();
+        Set<java.nio.file.Path> partitionsCorrupted = new HashSet<>();
         for (java.nio.file.Path logFile : logFiles) {
+            partitionsWithLogFiles.add(logFile.getParent());
             byte[] bytes = Files.readAllBytes(logFile);
-            // The last block's content ends (up to the small log block footer) at EOF and its
-            // HFile trailer spans the content's final 4096 bytes, so the trailer's magic and
-            // fields sit just past EOF - 4160; a data-bearing block always reaches that deep
             int start = bytes.length - 4160;
             int end = bytes.length - 3648;
             if (start < 64) {
-                // Too small to hold a data-bearing block (e.g. only the file-group bootstrap
-                // block, which carries no records); nothing worth corrupting
+                // Too small to even hold an HFile trailer: a record-less file-group bootstrap
+                // marker that no read decodes. The per-partition check below still requires a
+                // corrupted data-bearing file next to it.
                 continue;
             }
             for (int i = start; i < end; i++) {
                 bytes[i] ^= 0x5A;
             }
             Files.write(logFile, bytes);
-            corrupted++;
+            partitionsCorrupted.add(logFile.getParent());
         }
-        checkState(corrupted > 0, "No MDT log files corrupted under %s; the fallback tests would pass vacuously", metadataDir);
+        checkState(!partitionsWithLogFiles.isEmpty(), "No MDT log files found under %s", metadataDir);
+        Set<java.nio.file.Path> untouched = new HashSet<>(partitionsWithLogFiles);
+        untouched.removeAll(partitionsCorrupted);
+        checkState(untouched.isEmpty(),
+                "No MDT log file corrupted in partition(s) %s; reads of those partitions would still succeed and their fallback tests would pass vacuously", untouched);
     }
 
     /**
@@ -224,7 +237,10 @@ public class UncompactedMetadataHudiTablesInitializer
             // The files partition backs getAllPartitionPaths; its log delta is corrupted like all others
             partitions = metadata.getAllPartitionPaths();
         }
-        catch (Exception expected) {
+        catch (HoodieMetadataException expected) {
+            // Only the wrapper BaseTableMetadata puts around a genuine read failure counts: the
+            // bare IllegalArgumentException it throws for a never-initialized MDT must NOT pass,
+            // or this guard would go quiet if the fixture's MDT bootstrap ever stopped happening
             return;
         }
         throw new IllegalStateException(
@@ -240,10 +256,11 @@ public class UncompactedMetadataHudiTablesInitializer
         // Commit 1 runs with the MDT off so the MDT bootstraps AFTER data exists. Index
         // definitions get their source fields from ColumnStatsIndexer.postInitialization, which
         // registers an EMPTY field list when the bootstrap sees no records, and
-        // HoodieJavaWriteClient.updateColumnsToIndexWithColStats is a no-op (the Spark client
-        // refreshes the definition on each commit), so a definition registered over an empty
-        // table keeps empty source fields forever and the connector's canApply() then rejects
-        // the col-stats/partition-stats indexes, silently disabling pruning.
+        // HoodieJavaWriteClient.updateColumnsToIndexWithColStats is a no-op (HUDI-8801; the
+        // Spark client refreshes the definition on each commit), so a definition registered over
+        // an empty table keeps empty source fields forever and the connector's canApply() then
+        // rejects the col-stats/partition-stats indexes, silently disabling pruning. Once
+        // HUDI-8801 fixes the Java client, this two-client split can collapse back to one.
         try (HoodieJavaWriteClient<HoodieAvroPayload> writeClient = createWriteClient(schema, tablePath, tableName, false)) {
             String firstCommit = writeClient.startCommit();
             List<WriteStatus> firstStatuses = writeClient.insert(ImmutableList.of(
