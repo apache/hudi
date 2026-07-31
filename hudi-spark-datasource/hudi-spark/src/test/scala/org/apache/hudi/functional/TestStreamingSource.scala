@@ -336,13 +336,28 @@ class TestStreamingSource extends StreamTest {
           tableVersion = tableVersion),
         StartStream(),
         AssertOnQuery { q => q.processAllAvailable(); true },
+        // The legacy branch of getBatch materializes the micro batch from an RDD via
+        // internalCreateDataFrame, so the physical plan is a "Scan ExistingRDD"; this fails if the
+        // legacy branch is dropped and the source silently falls back to the file group reader
+        // path, which scans a HadoopFsRelation ("FileScan" / "Scan parquet") instead.
+        AssertOnQuery { q =>
+          val plan = q.lastExecution.executedPlan.toString
+          assertTrue(plan.contains("Scan ExistingRDD"),
+            "expected the legacy RDD-backed incremental batch, but got plan: " + plan)
+          assertTrue(!plan.contains("FileScan"),
+            "expected no file-group-reader HadoopFsRelation scan, but got plan: " + plan)
+          true
+        },
         CheckAnswerRows(
           Seq(Row("2", "a2", "12", "000"),
             Row("3", "a3", "12", "000")),
           lastOnly = true, isSorted = false),
         StopStream,
 
-        addDataToQuery(tablePath, Seq(("4", "a4", "13", "000")), tableVersion = tableVersion),
+        // inline clustering on this write lands a replacecommit inside the next getBatch span, which
+        // reaches the replaced-file-group filtering of the legacy incremental relations
+        addDataToQuery(tablePath, Seq(("4", "a4", "13", "000")), enableInlineCluster = true,
+          tableVersion = tableVersion),
         StartStream(),
         AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(Seq(Row("4", "a4", "13", "000")), lastOnly = true, isSorted = false)
@@ -486,9 +501,10 @@ class TestStreamingSource extends StreamTest {
 
   private def addDataToQuery(inputPath: String,
                              rows: Seq[(String, String, String, String)],
+                             enableInlineCluster: Boolean = false,
                              tableVersion: HoodieTableVersion = HoodieTableVersion.current): AssertOnQuery = {
     AssertOnQuery { _=>
-      addData(inputPath, rows, tableVersion = tableVersion)
+      addData(inputPath, rows, enableInlineCluster = enableInlineCluster, tableVersion = tableVersion)
       true
     }
   }
