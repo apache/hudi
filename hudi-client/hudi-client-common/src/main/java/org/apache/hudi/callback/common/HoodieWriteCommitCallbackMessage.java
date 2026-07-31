@@ -28,6 +28,8 @@ import org.apache.hudi.common.util.Option;
 import lombok.AccessLevel;
 import lombok.Getter;
 
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
@@ -74,19 +76,29 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
   private final Option<Map<String, String>> extraMetadata;
 
   /**
-   * Previous base file paths keyed by fileId, derived lazily from {@link #hoodieWriteStat} and
-   * the {@link BaseFileOnlyView} handed over by the write client, so that callback
+   * Previous base file paths keyed by fileId, derived from {@link #hoodieWriteStat} and the
+   * {@link BaseFileOnlyView} handed over by the write client, so that callback
    * implementations don't have to rebuild a view themselves. Empty for inserts and for
    * callers that don't supply a view.
    *
-   * <p>Resolution is deferred until the first {@link #getPrevFilePaths()} call: a callback
-   * that never reads the previous paths pays nothing (no FileSystemView access). Transient
-   * because it captures a FileSystemView supplier, which is not serializable - these paths
-   * are JVM-local derived state, so a message restored from Java serialization reports none.
-   * Excluded from the generated getters so the {@link Lazy} wrapper never leaks into JSON.
+   * <p>Holds the resolved map once {@link #getPrevFilePaths()} has run, and stays null until
+   * then. Not transient: this is the copy that crosses Java serialization, which is why
+   * {@link #writeObject} forces resolution before writing. Excluded from the generated
+   * getters so it is published only through {@link #getPrevFilePaths()}.
    */
   @Getter(AccessLevel.NONE)
-  private final transient Lazy<Map<String, PrevFilePaths>> prevFilePaths;
+  private volatile Map<String, PrevFilePaths> prevFilePaths;
+
+  /**
+   * Resolves {@link #prevFilePaths} on demand. Resolution is deferred until the first
+   * {@link #getPrevFilePaths()} call, so a callback that never reads the previous paths pays
+   * nothing (no FileSystemView access at all). Transient because it captures a
+   * FileSystemView supplier, which is not serializable: on a deserialized instance this is
+   * null and the already-resolved {@link #prevFilePaths} is used instead. Excluded from the
+   * generated getters so the {@link Lazy} wrapper never leaks into JSON.
+   */
+  @Getter(AccessLevel.NONE)
+  private final transient Lazy<Map<String, PrevFilePaths>> prevFilePathsResolver;
 
   /**
    * Free-form context that producers can attach for downstream callback consumers.
@@ -109,7 +121,7 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
     this.hoodieWriteStat = hoodieWriteStat;
     this.commitActionType = commitActionType;
     this.extraMetadata = extraMetadata;
-    this.prevFilePaths = Lazy.lazily(() -> HoodieWriteCommitCallbackUtil.resolvePrevFilePaths(
+    this.prevFilePathsResolver = Lazy.lazily(() -> HoodieWriteCommitCallbackUtil.resolvePrevFilePaths(
         hoodieWriteStat, fsViewSupplier == null ? null : fsViewSupplier.get()));
     this.extraContext = extraContext;
   }
@@ -134,13 +146,28 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
 
   /**
    * Returns the previous base file paths keyed by fileId, resolving them from the file-system
-   * view on first access. A consumer that never calls this triggers no FileSystemView lookup.
-   * Never null: empty when no view was supplied, when the commit only inserted, or when this
-   * message was restored from Java serialization.
+   * view on first access and memoizing the result. A consumer that never calls this triggers
+   * no FileSystemView lookup. Never null: empty when no view was supplied and when the commit
+   * only inserted.
    */
   public Map<String, PrevFilePaths> getPrevFilePaths() {
-    // Null only on an instance restored from Java serialization, since the holder is transient.
-    return prevFilePaths == null ? Collections.emptyMap() : prevFilePaths.get();
+    Map<String, PrevFilePaths> paths = prevFilePaths;
+    if (paths == null) {
+      // The resolver is null only on an instance restored from Java serialization, and there
+      // the resolved map has already been read back into prevFilePaths (see writeObject).
+      paths = prevFilePathsResolver == null ? Collections.emptyMap() : prevFilePathsResolver.get();
+      prevFilePaths = paths;
+    }
+    return paths;
+  }
+
+  /**
+   * A {@link BaseFileOnlyView} cannot cross a serialization boundary, so materialize the
+   * paths at the last possible moment and let the resolved map travel in their place.
+   */
+  private void writeObject(ObjectOutputStream out) throws IOException {
+    getPrevFilePaths();
+    out.defaultWriteObject();
   }
 
   /**

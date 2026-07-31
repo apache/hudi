@@ -18,7 +18,9 @@
 
 package org.apache.hudi.callback.common;
 
+import org.apache.hudi.callback.HoodieWriteCommitCallbackUtil;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage.PrevFilePaths;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
@@ -49,8 +51,8 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for the {@link HoodieWriteCommitCallbackMessage} contract: default (never-null)
  * collections, lazy one-shot resolution of {@code prevFilePaths} off the supplied file-system
- * view, and the Java-serialization round trip (the paths are JVM-local derived state, so they
- * are not carried across, but the getter still must not blow up).
+ * view, and the Java-serialization round trip (the view cannot be shipped, so the resolved
+ * paths must be materialized at the boundary and carried across in its place).
  */
 public class TestHoodieWriteCommitCallbackMessage {
 
@@ -58,6 +60,7 @@ public class TestHoodieWriteCommitCallbackMessage {
   private static final String PARTITION = "2024/01/01";
   private static final String PREV_COMMIT = "001";
   private static final String PREV_PATH = "/tbl/" + PARTITION + "/f0_0-1-1_" + PREV_COMMIT + ".parquet";
+  private static final String BOOTSTRAP_PATH = "/bootstrap/source/f0.parquet";
 
   private static List<HoodieWriteStat> updateStat() {
     HoodieWriteStat writeStat = new HoodieWriteStat();
@@ -71,6 +74,13 @@ public class TestHoodieWriteCommitCallbackMessage {
     BaseFileOnlyView view = mock(BaseFileOnlyView.class);
     when(view.getBaseFileOn(PARTITION, PREV_COMMIT, "f0"))
         .thenReturn(Option.of(new HoodieBaseFile(prevBaseFilePath)));
+    return view;
+  }
+
+  private static BaseFileOnlyView viewResolvingWithBootstrap(String prevBaseFilePath, String bootstrapPath) {
+    BaseFileOnlyView view = mock(BaseFileOnlyView.class);
+    when(view.getBaseFileOn(PARTITION, PREV_COMMIT, "f0"))
+        .thenReturn(Option.of(new HoodieBaseFile(prevBaseFilePath, new BaseFile(bootstrapPath))));
     return view;
   }
 
@@ -135,20 +145,44 @@ public class TestHoodieWriteCommitCallbackMessage {
   }
 
   @Test
-  public void javaSerializationRoundTripsWithoutPrevFilePaths() throws IOException, ClassNotFoundException {
-    // The view supplier is not serializable: it must not be shipped, and the restored message
-    // must report no previous paths rather than fail.
+  public void javaSerializationResolvesAndPreservesPrevFilePaths() throws IOException, ClassNotFoundException {
+    AtomicInteger viewLookups = new AtomicInteger();
+    // The view supplier cannot be shipped, so writeObject has to materialize the paths first.
+    HoodieWriteCommitCallbackMessage message = new HoodieWriteCommitCallbackMessage(
+        COMMIT_TIME, "table", "/base", updateStat(),
+        Option.of("commit"), Option.empty(),
+        () -> {
+          viewLookups.incrementAndGet();
+          return viewResolvingWithBootstrap(PREV_PATH, BOOTSTRAP_PATH);
+        },
+        Collections.emptyMap());
+
+    assertEquals(0, viewLookups.get(), "building the message must not touch the file-system view");
+
+    HoodieWriteCommitCallbackMessage roundTripped = serializeAndDeserialize(message);
+
+    assertEquals(1, viewLookups.get(), "serialization must force resolution exactly once");
+    assertEquals(COMMIT_TIME, roundTripped.getCommitTime());
+    assertEquals("commit", roundTripped.getCommitActionType().get());
+    assertEquals(1, roundTripped.getHoodieWriteStat().size());
+    assertEquals(PREV_PATH, roundTripped.getPrevFilePaths().get("f0").getBaseFilePath());
+    assertEquals(BOOTSTRAP_PATH, roundTripped.getPrevFilePaths().get("f0").getBootstrapBaseFilePath(),
+        "the bootstrap source path must survive the round trip too");
+  }
+
+  @Test
+  public void jsonPayloadExposesPrevFilePathsAndNotTheResolver() {
     HoodieWriteCommitCallbackMessage message = new HoodieWriteCommitCallbackMessage(
         COMMIT_TIME, "table", "/base", updateStat(),
         Option.of("commit"), Option.empty(), () -> viewResolving(PREV_PATH), Collections.emptyMap());
 
-    HoodieWriteCommitCallbackMessage roundTripped = serializeAndDeserialize(message);
+    // This is the payload the built-in HTTP/Kafka/Pulsar callbacks put on the wire.
+    String json = HoodieWriteCommitCallbackUtil.convertToJsonString(message);
 
-    assertEquals(COMMIT_TIME, roundTripped.getCommitTime());
-    assertEquals("commit", roundTripped.getCommitActionType().get());
-    assertEquals(1, roundTripped.getHoodieWriteStat().size());
-    assertTrue(roundTripped.getPrevFilePaths().isEmpty(),
-        "prevFilePaths is JVM-local derived state; a deserialized message must report an empty map, never null");
+    assertTrue(json.contains("\"prevFilePaths\""), "prevFilePaths must be part of the callback payload");
+    assertTrue(json.contains(PREV_PATH), "Jackson must see the resolved paths, not the lazy holder");
+    assertFalse(json.contains("prevFilePathsResolver"),
+        "the lazy resolver is an implementation detail and must never reach the payload");
   }
 
   private static HoodieWriteCommitCallbackMessage serializeAndDeserialize(
