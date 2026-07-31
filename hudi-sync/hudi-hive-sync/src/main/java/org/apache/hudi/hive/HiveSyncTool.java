@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.sync.common.HoodieSyncClient;
@@ -303,12 +304,16 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
    * the written and dropped partitions since that instant. Advancing it when it crosses the
    * midpoint bounds that staleness with an infrequent table-property update.
    */
-  private boolean isLastCommitTimeSyncedBehindTimelineMidpoint(String tableName) {
+  @VisibleForTesting
+  boolean isLastCommitTimeSyncedBehindTimelineMidpoint(String tableName) {
     Option<String> lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
     if (!lastCommitTimeSynced.isPresent()) {
       return false;
     }
-    List<HoodieInstant> completedInstants = syncClient.getActiveTimeline().getInstants();
+    // Compute the midpoint over completed commits only: an inflight instant is not a candidate
+    // last commit time synced, and counting it would inflate the instant count and shift the midpoint.
+    List<HoodieInstant> completedInstants =
+        syncClient.getActiveTimeline().filterCompletedInstants().getInstants();
     if (completedInstants.isEmpty()) {
       return false;
     }
