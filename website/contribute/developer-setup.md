@@ -118,7 +118,7 @@ Watch this [quick video](https://www.youtube.com/watch?v=N2eDfU_rQ_U) for a code
 
 IntelliJ is the recommended IDE for developing Hudi. To contribute, you would need to do the following
 
-- Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [spark quickstart](/docs/quick-start-guide) or [flink quickstart](/docs/flink-quick-start-guide).
+- Fork the Hudi code on Github & then clone your own fork locally. Once cloned, build Hudi by following [Building Apache Hudi from source](https://github.com/apache/hudi#building-apache-hudi-from-source) in the README, which also covers building against a specific [Spark version](https://github.com/apache/hudi#build-with-different-spark-versions) or [Flink version](https://github.com/apache/hudi#build-with-different-flink-versions).
 
 - In IntelliJ, select `File` > `New` > `Project from Existing Sources...` and select the `pom.xml` file under your local Hudi source folder.
 
