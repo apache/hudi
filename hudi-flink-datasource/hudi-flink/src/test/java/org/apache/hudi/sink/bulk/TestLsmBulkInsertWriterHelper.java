@@ -16,12 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.bulk.sort;
+package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.bulk.LsmBulkInsertWriterHelper;
-import org.apache.hudi.sink.bulk.RowDataKeyGen;
-import org.apache.hudi.sink.bulk.RowDataKeyGens;
+import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.GenericRowData;
@@ -41,8 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Tests for LSM sort-row construction and {@link LsmBulkInsertSortUtils}. */
-class TestLsmBulkInsertSortUtils {
+/** Tests for LSM sort-row construction and {@link LsmBulkInsertWriterHelper}. */
+class TestLsmBulkInsertWriterHelper {
 
   @Test
   void testActualCompositeRecordKeyAndPayloadAreRetained() {
@@ -79,8 +77,7 @@ class TestLsmBulkInsertSortUtils {
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "id");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
-    RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(
-        rowType, LsmBulkInsertSortUtils.PARTITION_META_FIELD);
+    RowType sortRowType = LsmBulkInsertWriterHelper.rowTypeWithPartitionAndKey(rowType);
     assertEquals(
         Arrays.asList("_partition", "_record_key", "record"),
         sortRowType.getFieldNames());
@@ -93,7 +90,8 @@ class TestLsmBulkInsertSortUtils {
     RowData sortRowOtherPartition =
         LsmBulkInsertWriterHelper.rowWithPartitionAndKey("p2", rowOtherPartition, keyGen);
 
-    SortOperatorGen sortOperatorGen = LsmBulkInsertSortUtils.getLsmSorterGen(sortRowType);
+    SortOperatorGen sortOperatorGen =
+        LsmBulkInsertWriterHelper.getPartitionAndKeySorterGen(sortRowType);
     RecordComparator comparator = sortOperatorGen.generateRecordComparator("TestLsmBulkInsertComparator")
         .newInstance(Thread.currentThread().getContextClassLoader());
 

@@ -45,7 +45,6 @@ import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.LsmBulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.RowDataKeyGens;
-import org.apache.hudi.sink.bulk.sort.LsmBulkInsertSortUtils;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;
@@ -191,11 +190,11 @@ public class Pipelines {
         dataStream.partitionCustom(partitioner, keyGen::getHoodieKey);
 
     if (isLsmTreeStorageLayout) {
-      RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(
-          rowType, LsmBulkInsertSortUtils.FILE_GROUP_META_FIELD);
+      RowType sortRowType =
+          LsmBucketBulkInsertWriterHelper.rowTypeWithFileIdAndKey(rowType);
       InternalTypeInfo<RowData> sortTypeInfo = InternalTypeInfo.of(sortRowType);
       DataStream<RowData> sortInput = routedDataStream
-          .map(record -> LsmBucketBulkInsertWriterHelper.rowWithFileIdAndRecordKey(
+          .map(record -> LsmBucketBulkInsertWriterHelper.rowWithFileIdAndKey(
               bucketIdToFileId,
               keyGen,
               record,
@@ -208,7 +207,7 @@ public class Pipelines {
           conf,
           sortInput,
           sortTypeInfo,
-          LsmBulkInsertSortUtils.getLsmSorterGen(sortRowType),
+          LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(sortRowType),
           "lsm_sorter:(file_group, record_key)",
           writeTasks);
     }
@@ -274,8 +273,7 @@ public class Pipelines {
 
     if (isLsmTreeStorageLayout) {
       // LSM sorted runs are ordered by partition path and the encoded record key strings.
-      RowType sortRowType = LsmBulkInsertSortUtils.sortRowType(
-          rowType, LsmBulkInsertSortUtils.PARTITION_META_FIELD);
+      RowType sortRowType = LsmBulkInsertWriterHelper.rowTypeWithPartitionAndKey(rowType);
       InternalTypeInfo<RowData> sortTypeInfo = InternalTypeInfo.of(sortRowType);
       DataStream<RowData> sortInput = routedDataStream
           .map(record -> LsmBulkInsertWriterHelper.rowWithPartitionAndKey(
@@ -286,7 +284,7 @@ public class Pipelines {
           conf,
           sortInput,
           sortTypeInfo,
-          LsmBulkInsertSortUtils.getLsmSorterGen(sortRowType),
+          LsmBulkInsertWriterHelper.getPartitionAndKeySorterGen(sortRowType),
           "lsm_sorter:(partition_path, record_key)",
           writeTasks);
     }

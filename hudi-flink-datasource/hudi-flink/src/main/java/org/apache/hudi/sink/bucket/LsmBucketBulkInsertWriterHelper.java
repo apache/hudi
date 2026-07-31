@@ -21,12 +21,15 @@ package org.apache.hudi.sink.bucket;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
@@ -39,6 +42,9 @@ import java.util.Map;
  * <p>The input row contains file ID, encoded record key, and the original table row.
  */
 public class LsmBucketBulkInsertWriterHelper extends BucketBulkInsertWriterHelper {
+
+  private static final String RECORD_KEY_FIELD = "_record_key";
+  private static final String RECORD_FIELD = "record";
 
   public LsmBucketBulkInsertWriterHelper(
       Configuration conf,
@@ -61,7 +67,7 @@ public class LsmBucketBulkInsertWriterHelper extends BucketBulkInsertWriterHelpe
     writeRecord(recordKey, partitionPath, fileId, record);
   }
 
-  public static RowData rowWithFileIdAndRecordKey(
+  public static RowData rowWithFileIdAndKey(
       Map<String, String> bucketIdToFileId,
       RowDataKeyGen keyGen,
       RowData record,
@@ -81,5 +87,33 @@ public class LsmBucketBulkInsertWriterHelper extends BucketBulkInsertWriterHelpe
         StringData.fromString(fileId),
         StringData.fromString(recordKey),
         record);
+  }
+
+  /**
+   * Returns the internal row type used to sort LSM bucket bulk-insert records by file ID and
+   * record key.
+   *
+   * <p>The fields are ordered as file ID, encoded record key, and original table row.
+   */
+  public static RowType rowTypeWithFileIdAndKey(RowType rowType) {
+    LogicalType[] types = new LogicalType[] {
+        DataTypes.STRING().getLogicalType(),
+        DataTypes.STRING().getLogicalType(),
+        rowType
+    };
+    String[] names =
+        new String[] {FILE_GROUP_META_FIELD, RECORD_KEY_FIELD, RECORD_FIELD};
+    return RowType.of(types, names);
+  }
+
+  /**
+   * Creates an external sorter ordered by file ID and encoded record key.
+   *
+   * <p>The nested payload is deliberately excluded from the sort keys, so duplicate record keys
+   * are retained without comparing or aggregating their payloads.
+   */
+  public static SortOperatorGen getFileIdAndKeySorterGen(RowType rowType) {
+    return new SortOperatorGen(
+        rowType, new String[] {FILE_GROUP_META_FIELD, RECORD_KEY_FIELD});
   }
 }

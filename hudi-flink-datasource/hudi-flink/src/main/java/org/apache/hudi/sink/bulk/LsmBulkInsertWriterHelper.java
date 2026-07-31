@@ -19,12 +19,15 @@
 package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
@@ -36,6 +39,10 @@ import java.io.IOException;
  * routing and record keys are retained after sorting so the writer does not generate them again.
  */
 public class LsmBulkInsertWriterHelper extends BulkInsertWriterHelper {
+
+  private static final String PARTITION_META_FIELD = "_partition";
+  private static final String RECORD_KEY_FIELD = "_record_key";
+  private static final String RECORD_FIELD = "record";
 
   private final int recordArity;
 
@@ -77,5 +84,32 @@ public class LsmBulkInsertWriterHelper extends BulkInsertWriterHelper {
         StringData.fromString(partitionPath),
         StringData.fromString(keyGen.getRecordKey(record)),
         record);
+  }
+
+  /**
+   * Returns the internal row type used to sort LSM bulk-insert records by partition and record key.
+   *
+   * <p>The fields are ordered as partition path, encoded record key, and original table row.
+   */
+  public static RowType rowTypeWithPartitionAndKey(RowType rowType) {
+    LogicalType[] types = new LogicalType[] {
+        DataTypes.STRING().getLogicalType(),
+        DataTypes.STRING().getLogicalType(),
+        rowType
+    };
+    String[] names =
+        new String[] {PARTITION_META_FIELD, RECORD_KEY_FIELD, RECORD_FIELD};
+    return RowType.of(types, names);
+  }
+
+  /**
+   * Creates an external sorter ordered by partition path and encoded record key.
+   *
+   * <p>The nested payload is deliberately excluded from the sort keys, so duplicate record keys
+   * are retained without comparing or aggregating their payloads.
+   */
+  public static SortOperatorGen getPartitionAndKeySorterGen(RowType rowType) {
+    return new SortOperatorGen(
+        rowType, new String[] {PARTITION_META_FIELD, RECORD_KEY_FIELD});
   }
 }

@@ -31,7 +31,6 @@ import org.apache.hudi.sink.bucket.LsmBucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.BulkInsertWriteFunction;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.RowDataKeyGens;
-import org.apache.hudi.sink.bulk.sort.LsmBulkInsertSortUtils;
 import org.apache.hudi.sink.bulk.sort.SortOperator;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
@@ -107,7 +106,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
     this.lsmSortInput = OptionsResolver.isLsmTreeStorageLayout(conf);
     this.sortInputRowType = lsmSortInput
-        ? LsmBulkInsertSortUtils.sortRowType(rowType, LsmBulkInsertSortUtils.FILE_GROUP_META_FIELD)
+        ? LsmBucketBulkInsertWriterHelper.rowTypeWithFileIdAndKey(rowType)
         : rowTypeWithFileId;
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
@@ -229,7 +228,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
     this.bucketIdToFileId = new HashMap<>();
     this.mapFunction = lsmSortInput
-        ? r -> LsmBucketBulkInsertWriterHelper.rowWithFileIdAndRecordKey(
+        ? r -> LsmBucketBulkInsertWriterHelper.rowWithFileIdAndKey(
             bucketIdToFileId, keyGen, r, indexKeyFieldList, numBucketsFunction, needFixedFileIdSuffix)
         : r -> BucketBulkInsertWriterHelper.rowWithFileId(
             bucketIdToFileId, keyGen, r, indexKeyFieldList, numBucketsFunction, needFixedFileIdSuffix);
@@ -246,7 +245,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
         .setExecutionConfig(new ExecutionConfig().enableObjectReuse())
         .build();
     SortOperatorGen sortOperatorGen = lsmSortInput
-        ? LsmBulkInsertSortUtils.getLsmSorterGen(sortInputRowType)
+        ? LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(sortInputRowType)
         : BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
     this.sortOperator = (SortOperator) sortOperatorGen.createSortOperator(conf);
     this.sortOperator.setProcessingTimeService(new TestProcessingTimeService());
