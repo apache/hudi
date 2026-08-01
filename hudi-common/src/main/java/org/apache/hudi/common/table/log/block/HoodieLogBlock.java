@@ -56,6 +56,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -468,7 +469,12 @@ public abstract class HoodieLogBlock {
         int metadataEntrySize = dis.readInt();
         byte[] metadataEntry = new byte[metadataEntrySize];
         dis.readFully(metadataEntry, 0, metadataEntrySize);
-        metadata.put(typeMapper.apply(metadataEntryIndex), new String(metadataEntry));
+        // Decode as UTF-8 to match the write side: getLogMetadataBytes() serializes these values
+        // with StringUtils.getUTF8Bytes(). Using new String(byte[]) here applies the platform
+        // default charset instead, so on any JVM whose default charset is not UTF-8 a non-ASCII
+        // header value (e.g. a writer schema containing non-ASCII field names) is corrupted on
+        // read, and downstream Avro parsing fails with "Illegal initial character".
+        metadata.put(typeMapper.apply(metadataEntryIndex), fromUTF8Bytes(metadataEntry));
         metadataCount--;
       }
       return metadata;
