@@ -21,19 +21,18 @@ import org.apache.hudi.spark.sql.parser.{HoodieSqlBaseBaseVisitor, HoodieSqlBase
 import org.apache.hudi.spark.sql.parser.HoodieSqlBaseParser._
 
 import org.antlr.v4.runtime.{ParserRuleContext, Token}
-import org.antlr.v4.runtime.tree.{ParseTree, RuleNode, TerminalNode}
+import org.antlr.v4.runtime.tree.{ParseTree, RuleNode}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
-import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis._
-import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogStorageFormat}
+import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.expressions.aggregate.{First, Last}
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
-import org.apache.spark.sql.catalyst.parser.ParserUtils.{checkDuplicateClauses, checkDuplicateKeys, entry, escapedIdentifier, operationNotAllowed, source, string, stringWithoutUnescape, validate, withOrigin, EnhancedLogicalPlan}
+import org.apache.spark.sql.catalyst.parser.ParserUtils.{checkDuplicateClauses, checkDuplicateKeys, operationNotAllowed, source, string, stringWithoutUnescape, validate, withOrigin}
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.util.{truncatedString, CharVarcharUtils, DateTimeUtils, IntervalUtils}
+import org.apache.spark.sql.catalyst.util.{DateTimeUtils, IntervalUtils}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.BucketSpecHelper
 import org.apache.spark.sql.connector.catalog.TableCatalog
@@ -212,17 +211,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
    */
   override def visitNullLiteral(ctx: NullLiteralContext): Literal = withOrigin(ctx) {
     Literal(null)
-  }
-
-  /**
-   * Create a Boolean literal expression.
-   */
-  override def visitBooleanLiteral(ctx: BooleanLiteralContext): Literal = withOrigin(ctx) {
-    if (ctx.getText.toBoolean) {
-      Literal.TrueLiteral
-    } else {
-      Literal.FalseLiteral
-    }
   }
 
   /**
@@ -643,13 +631,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
   }
 
   /**
-   * Create top level table schema.
-   */
-  protected def createSchema(ctx: ColTypeListContext): StructType = {
-    StructType(Option(ctx).toSeq.flatMap(visitColTypeList))
-  }
-
-  /**
    * Create a [[StructType]] from a number of column definitions.
    */
   override def visitColTypeList(ctx: ColTypeListContext): Seq[StructField] = withOrigin(ctx) {
@@ -689,13 +670,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       val vectorSchema = HoodieSchema.parseTypeDescriptor(typeText).asInstanceOf[HoodieSchema.Vector]
       builder.putString(HoodieSchema.TYPE_METADATA_FIELD, vectorSchema.toTypeDescriptor)
     }
-  }
-
-  /**
-   * Create a [[StructType]] from a sequence of [[StructField]]s.
-   */
-  protected def createStructType(ctx: ComplexColTypeListContext): StructType = {
-    StructType(Option(ctx).toSeq.flatMap(visitComplexColTypeList))
   }
 
   /**
@@ -776,7 +750,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
 
   /**
    * Convert a table property list into a key-value map.
-   * This should be called through [[visitPropertyKeyValues]] or [[visitPropertyKeys]].
+   * This should be called through [[visitPropertyKeyValues]].
    */
   override def visitTablePropertyList(
                                        ctx: TablePropertyListContext): Map[String, String] = withOrigin(ctx) {
@@ -801,19 +775,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         s"Values must be specified for key(s): ${badKeys.mkString("[", ",", "]")}", ctx)
     }
     props
-  }
-
-  /**
-   * Parse a list of keys from a [[TablePropertyListContext]], assuming no values are specified.
-   */
-  def visitPropertyKeys(ctx: TablePropertyListContext): Seq[String] = {
-    val props = visitTablePropertyList(ctx)
-    val badKeys = props.filter { case (_, v) => v != null }.keys
-    if (badKeys.nonEmpty) {
-      operationNotAllowed(
-        s"Values should not be specified for key(s): ${badKeys.mkString("[", ",", "]")}", ctx)
-    }
-    props.keys.toSeq
   }
 
   /**
@@ -925,10 +886,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       lazy val name: String = ctx.identifier.getText
       if (arguments.size > 1) {
         throw new ParseException(s"Too many arguments for transform $name", ctx)
-      } else if (arguments.isEmpty) {
-        throw
-
-          new ParseException(s"Not enough arguments for transform $name", ctx)
       } else {
         getFieldReference(ctx, arguments.head)
       }
@@ -988,8 +945,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       val literal = Option(ctx.constant)
         .map(typedVisit[Literal])
         .map(lit => LiteralValue(lit.value, lit.dataType))
-      reference.orElse(literal)
-        .getOrElse(throw new ParseException("Invalid transform argument", ctx))
+      reference.orElse(literal).get
     }
   }
 
@@ -1044,8 +1000,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         SerdeInfo(storedAs = Some(c.identifier.getText))
       case (null, storageHandler) =>
         operationNotAllowed("STORED BY", ctx)
-      case _ =>
-        throw new ParseException("Expected either STORED AS or STORED BY, not both", ctx)
     }
   }
 
@@ -1360,7 +1314,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
 
   /**
    * Convert a property list into a key-value map.
-   * This should be called through [[visitPropertyKeyValues]] or [[visitPropertyKeys]].
+   * This should be called through [[visitPropertyKeyValues]].
    */
   override def visitPropertyList(ctx: PropertyListContext): Map[String, String] = withOrigin(ctx) {
     val properties = ctx.property.asScala.map { property =>
@@ -1384,19 +1338,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         s"Values must be specified for key(s): ${badKeys.mkString("[", ",", "]")}", ctx)
     }
     props
-  }
-
-  /**
-   * Parse a list of keys from a [[PropertyListContext]], assuming no values are specified.
-   */
-  def visitPropertyKeys(ctx: PropertyListContext): Seq[String] = {
-    val props = visitPropertyList(ctx)
-    val badKeys = props.filter { case (_, v) => v != null }.keys
-    if (badKeys.nonEmpty) {
-      operationNotAllowed(
-        s"Values should not be specified for key(s): ${badKeys.mkString("[", ",", "]")}", ctx)
-    }
-    props.keys.toSeq
   }
 
   /**
