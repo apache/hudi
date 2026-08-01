@@ -17,6 +17,7 @@ import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileFormatUtils;
+import org.apache.hudi.common.util.HFileUtils;
 import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
@@ -47,7 +48,15 @@ public class HudiTrinoIOFactory
     public FileFormatUtils getFileFormatUtils(HoodieFileFormat fileFormat)
     {
         if (fileFormat == HoodieFileFormat.PARQUET) {
+            // Parquet needs a Trino-native implementation: hudi's own ParquetUtils lives in
+            // hudi-hadoop-common, which is excluded from the Trino runtime.
             return new HudiTrinoParquetFileFormatUtils();
+        }
+        if (fileFormat == HoodieFileFormat.HFILE) {
+            // hudi-common's HFileUtils is hadoop-free (it decodes via hudi-io's native HFile
+            // reader), so it is safe in the Trino runtime. This is what lets the connector read
+            // uncompacted metadata-table deltas, which are native HFILE log files.
+            return new HFileUtils();
         }
         throw new UnsupportedOperationException(
                 "Native " + fileFormat + " log files are not supported by the Hudi Trino connector");
