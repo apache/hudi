@@ -296,13 +296,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   /**
-   * Checks whether last commit time synced trails the midpoint of the active commits timeline.
-   * Under conditional sync, last commit time synced advances only when a sync detects a schema,
-   * table property, or partition change; a sync that finds none of those leaves it unchanged,
-   * independent of whether the commit wrote data. Once last commit time synced falls behind the
-   * start of the active timeline, every subsequent round reads the archived timeline to compute
-   * the written and dropped partitions since that instant. Advancing it when it crosses the
-   * midpoint bounds that staleness with an infrequent table-property update.
+   * Whether last commit time synced trails the midpoint of the completed commit instants.
+   * Advancing it at the midpoint bounds how far it can fall behind, capping the archived-timeline
+   * scans a stale value forces on every conditional-sync round.
    */
   @VisibleForTesting
   boolean isLastCommitTimeSyncedBehindTimelineMidpoint(String tableName) {
@@ -310,14 +306,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     if (!lastCommitTimeSynced.isPresent()) {
       return false;
     }
-    // Compute the midpoint over completed commits only: an inflight instant is not a candidate
-    // last commit time synced, and counting it would inflate the instant count and shift the midpoint.
-    List<HoodieInstant> completedInstants =
-        syncClient.getActiveTimeline().filterCompletedInstants().getInstants();
-    if (completedInstants.isEmpty()) {
+    // Narrow to completed commits: getCommitsTimeline() drops clean, rollback, and other non-commit actions.
+    List<HoodieInstant> completedCommits =
+        syncClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
+    if (completedCommits.isEmpty()) {
       return false;
     }
-    String midpointInstantTime = completedInstants.get(completedInstants.size() / 2).requestedTime();
+    String midpointInstantTime = completedCommits.get(completedCommits.size() / 2).requestedTime();
     return compareTimestamps(lastCommitTimeSynced.get(), LESSER_THAN, midpointInstantTime);
   }
 

@@ -101,6 +101,26 @@ class TestHiveSyncToolTimelineMidpoint {
     assertFalse(tool.isLastCommitTimeSyncedBehindTimelineMidpoint(TABLE_NAME));
   }
 
+  @Test
+  void midpointNarrowsToCommitsTimeline() {
+    HiveSyncTool tool = mock(HiveSyncTool.class, CALLS_REAL_METHODS);
+    HoodieSyncClient syncClient = mock(HoodieSyncClient.class);
+    tool.syncClient = syncClient;
+
+    // The active timeline also carries clean, rollback, and other non-commit actions. The helper
+    // must narrow to getCommitsTimeline() so only completed commits [100, 102, 104] (midpoint 102)
+    // count; reading the active timeline directly would leave getCommitsTimeline() unstubbed and NPE.
+    HoodieTimeline activeTimeline = mock(HoodieTimeline.class);
+    when(activeTimeline.getCommitsTimeline())
+        .thenReturn(new MockHoodieTimeline(Stream.of("100", "102", "104"), Stream.empty()));
+    when(syncClient.getActiveTimeline()).thenReturn(activeTimeline);
+
+    stubLastCommitTimeSynced(syncClient, Option.of("101"));
+    assertTrue(tool.isLastCommitTimeSyncedBehindTimelineMidpoint(TABLE_NAME));
+    stubLastCommitTimeSynced(syncClient, Option.of("102"));
+    assertFalse(tool.isLastCommitTimeSyncedBehindTimelineMidpoint(TABLE_NAME));
+  }
+
   private static void stubLastCommitTimeSynced(HoodieSyncClient syncClient, Option<String> value) {
     when(syncClient.getLastCommitTimeSynced(TABLE_NAME)).thenReturn(value);
   }
