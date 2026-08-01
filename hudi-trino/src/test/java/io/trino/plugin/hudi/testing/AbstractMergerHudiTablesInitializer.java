@@ -89,7 +89,7 @@ public abstract class AbstractMergerHudiTablesInitializer
     private static final String PARTITION_PATH = "";
 
     /** Hudi metadata columns, prepended to every table's data columns in the metastore definition. */
-    private static final List<Column> HUDI_META_COLUMNS = ImmutableList.of(
+    static final List<Column> HUDI_META_COLUMNS = ImmutableList.of(
             new Column("_hoodie_commit_time", HIVE_STRING, Optional.empty(), Map.of()),
             new Column("_hoodie_commit_seqno", HIVE_STRING, Optional.empty(), Map.of()),
             new Column("_hoodie_record_key", HIVE_STRING, Optional.empty(), Map.of()),
