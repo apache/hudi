@@ -763,6 +763,7 @@ class HoodieSparkSqlWriterInternal {
         val partitionValueExtractorClassName = hoodieConfig.getStringOrDefault(
           DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key(), null)
         HoodieTableMetaClient.newTableBuilder()
+          .setBootstrapIndexEnable(true)
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
           .setRecordKeyFields(recordKeyFields)
