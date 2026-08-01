@@ -45,7 +45,7 @@ class TestHiveSyncToolTimelineMidpoint {
   private static final String TABLE_NAME = "table";
 
   @Test
-  void midpointIsTakenOverCompletedCommitsOnly() {
+  void midpointIsComputedFromCompletedCommitsOnly() {
     // Completed commits [100, 102, 104], midpoint 102; the later inflight 106 must not shift it to 104.
     HoodieSyncClient syncClient = mockSyncClient(new MockHoodieTimeline(Stream.of("100", "102", "104"), Stream.of("106")));
     HiveSyncTool tool = toolWith(syncClient);
