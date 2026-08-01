@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -35,7 +36,9 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link HiveSyncTool#isLastCommitTimeSyncedBehindTimelineMidpoint}, which decides
- * whether a no-change conditional sync should still advance last commit time synced.
+ * whether a no-change conditional sync should still advance last commit time synced. The helper
+ * reads the completed commits timeline, so these mock {@code getMetaClient().getCommitsTimeline()};
+ * a call to any other timeline would hit an unstubbed mock and fail.
  */
 class TestHiveSyncToolTimelineMidpoint {
 
@@ -43,14 +46,9 @@ class TestHiveSyncToolTimelineMidpoint {
 
   @Test
   void midpointIsTakenOverCompletedCommitsOnly() {
-    HiveSyncTool tool = mock(HiveSyncTool.class, CALLS_REAL_METHODS);
-    HoodieSyncClient syncClient = mock(HoodieSyncClient.class);
-    tool.syncClient = syncClient;
-
-    // Completed commits [100, 102, 104], completed midpoint 102; the later inflight 106 must not
-    // shift the midpoint to 104.
-    HoodieTimeline timeline = new MockHoodieTimeline(Stream.of("100", "102", "104"), Stream.of("106"));
-    when(syncClient.getActiveTimeline()).thenReturn(timeline);
+    // Completed commits [100, 102, 104], midpoint 102; the later inflight 106 must not shift it to 104.
+    HoodieSyncClient syncClient = mockSyncClient(new MockHoodieTimeline(Stream.of("100", "102", "104"), Stream.of("106")));
+    HiveSyncTool tool = toolWith(syncClient);
 
     // Not synced yet: nothing to advance.
     stubLastCommitTimeSynced(syncClient, Option.empty());
@@ -71,19 +69,17 @@ class TestHiveSyncToolTimelineMidpoint {
 
   @Test
   void midpointHandlesSmallTimelines() {
-    HiveSyncTool tool = mock(HiveSyncTool.class, CALLS_REAL_METHODS);
-    HoodieSyncClient syncClient = mock(HoodieSyncClient.class);
-    tool.syncClient = syncClient;
-
-    // Size 1: the sole instant is the midpoint.
-    when(syncClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Stream.of("101"), Stream.empty()));
+    // Size 1: the sole commit is the midpoint.
+    HoodieSyncClient syncClient = mockSyncClient(new MockHoodieTimeline(Stream.of("101"), Stream.empty()));
+    HiveSyncTool tool = toolWith(syncClient);
     stubLastCommitTimeSynced(syncClient, Option.of("100"));
     assertTrue(tool.isLastCommitTimeSyncedBehindTimelineMidpoint(TABLE_NAME));
     stubLastCommitTimeSynced(syncClient, Option.of("101"));
     assertFalse(tool.isLastCommitTimeSyncedBehindTimelineMidpoint(TABLE_NAME));
 
-    // Size 2: the midpoint (index 1) is the newer instant.
-    when(syncClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Stream.of("100", "102"), Stream.empty()));
+    // Size 2: the midpoint (index 1) is the newer commit.
+    syncClient = mockSyncClient(new MockHoodieTimeline(Stream.of("100", "102"), Stream.empty()));
+    tool = toolWith(syncClient);
     stubLastCommitTimeSynced(syncClient, Option.of("101"));
     assertTrue(tool.isLastCommitTimeSyncedBehindTimelineMidpoint(TABLE_NAME));
     stubLastCommitTimeSynced(syncClient, Option.of("102"));
@@ -91,34 +87,25 @@ class TestHiveSyncToolTimelineMidpoint {
   }
 
   @Test
-  void emptyActiveTimelineIsNotBehind() {
-    HiveSyncTool tool = mock(HiveSyncTool.class, CALLS_REAL_METHODS);
-    HoodieSyncClient syncClient = mock(HoodieSyncClient.class);
-    tool.syncClient = syncClient;
-
-    when(syncClient.getActiveTimeline()).thenReturn(new MockHoodieTimeline(Stream.empty(), Stream.empty()));
+  void emptyCommitsTimelineIsNotBehind() {
+    HoodieSyncClient syncClient = mockSyncClient(new MockHoodieTimeline(Stream.empty(), Stream.empty()));
+    HiveSyncTool tool = toolWith(syncClient);
     stubLastCommitTimeSynced(syncClient, Option.of("103"));
     assertFalse(tool.isLastCommitTimeSyncedBehindTimelineMidpoint(TABLE_NAME));
   }
 
-  @Test
-  void midpointNarrowsToCommitsTimeline() {
-    HiveSyncTool tool = mock(HiveSyncTool.class, CALLS_REAL_METHODS);
+  private static HoodieSyncClient mockSyncClient(HoodieTimeline commitsTimeline) {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
     HoodieSyncClient syncClient = mock(HoodieSyncClient.class);
+    when(syncClient.getMetaClient()).thenReturn(metaClient);
+    return syncClient;
+  }
+
+  private static HiveSyncTool toolWith(HoodieSyncClient syncClient) {
+    HiveSyncTool tool = mock(HiveSyncTool.class, CALLS_REAL_METHODS);
     tool.syncClient = syncClient;
-
-    // The active timeline also carries clean, rollback, and other non-commit actions. The helper
-    // must narrow to getCommitsTimeline() so only completed commits [100, 102, 104] (midpoint 102)
-    // count; reading the active timeline directly would leave getCommitsTimeline() unstubbed and NPE.
-    HoodieTimeline activeTimeline = mock(HoodieTimeline.class);
-    when(activeTimeline.getCommitsTimeline())
-        .thenReturn(new MockHoodieTimeline(Stream.of("100", "102", "104"), Stream.empty()));
-    when(syncClient.getActiveTimeline()).thenReturn(activeTimeline);
-
-    stubLastCommitTimeSynced(syncClient, Option.of("101"));
-    assertTrue(tool.isLastCommitTimeSyncedBehindTimelineMidpoint(TABLE_NAME));
-    stubLastCommitTimeSynced(syncClient, Option.of("102"));
-    assertFalse(tool.isLastCommitTimeSyncedBehindTimelineMidpoint(TABLE_NAME));
+    return tool;
   }
 
   private static void stubLastCommitTimeSynced(HoodieSyncClient syncClient, Option<String> value) {

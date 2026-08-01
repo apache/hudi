@@ -306,9 +306,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     if (!lastCommitTimeSynced.isPresent()) {
       return false;
     }
-    // Narrow to completed commits: getCommitsTimeline() drops clean, rollback, and other non-commit actions.
+    // Completed commits only: getCommitsTimeline() excludes non-commit actions (clean, rollback),
+    // and filterCompletedInstants() excludes inflight instants.
     List<HoodieInstant> completedCommits =
-        syncClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
+        syncClient.getMetaClient().getCommitsTimeline().filterCompletedInstants().getInstants();
     if (completedCommits.isEmpty()) {
       return false;
     }
