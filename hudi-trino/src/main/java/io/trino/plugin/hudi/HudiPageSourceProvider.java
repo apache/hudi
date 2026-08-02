@@ -34,6 +34,7 @@ import io.trino.parquet.reader.ParquetReader;
 import io.trino.parquet.reader.RowGroupInfo;
 import io.trino.plugin.base.metrics.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveColumnHandle;
+import io.trino.plugin.hive.HiveColumnProjectionInfo;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.file.HudiBaseFile;
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
@@ -387,9 +388,15 @@ public class HudiPageSourceProvider
 
             // When not using columnNames, physical indexes are used and there could be cases when the physical index in HiveColumnHandle is different from the fileSchema of the
             // parquet files. This could happen when schema evolution happened. In such a case, we will need to remap the column indices in the HiveColumnHandles.
+            // The projection and the predicate resolve the same names against the same file, so the name-to-position
+            // map is built once per split and shared: one lookup table means the two can never disagree about which
+            // physical column a name denotes, and a wide table pays for the lower-casing pass only once.
+            // HiveColumnHandle names are in lower case, case-insensitive
+            Optional<Map<String, Integer>> physicalIndexMap = Optional.empty();
             if (!useColumnNames) {
-                // HiveColumnHandle names are in lower case, case-insensitive
-                columns = remapColumnIndicesToPhysical(fileSchema, columns, false);
+                Map<String, Integer> indexMap = buildPhysicalIndexMap(fileSchema, false);
+                columns = remapColumnIndicesToPhysical(fileSchema, columns, indexMap, false);
+                physicalIndexMap = Optional.of(indexMap);
             }
 
             Optional<MessageType> message = getParquetMessageType(columns, useColumnNames, fileSchema);
@@ -401,7 +408,7 @@ public class HudiPageSourceProvider
 
             TupleDomain<ColumnDescriptor> parquetTupleDomain = options.isIgnoreStatistics() || !enablePredicatePushDown
                     ? TupleDomain.all()
-                    : getParquetTupleDomain(descriptorsByPath, getPushdownPredicate(hudiSplit, dynamicFilter, fileSchema, useColumnNames), fileSchema, useColumnNames);
+                    : getParquetTupleDomain(descriptorsByPath, getPushdownPredicate(hudiSplit, dynamicFilter, physicalIndexMap), fileSchema, useColumnNames);
 
             TupleDomainParquetPredicate parquetPredicate = buildPredicate(requestedSchema, parquetTupleDomain, descriptorsByPath, timeZone);
 
@@ -486,14 +493,26 @@ public class HudiPageSourceProvider
             boolean caseSensitive)
     {
         // Create a map from column name to its physical index in the fileSchema.
-        Map<String, Integer> physicalIndexMap = buildPhysicalIndexMap(fileSchema, caseSensitive);
+        return remapColumnIndicesToPhysical(fileSchema, requestedColumns, buildPhysicalIndexMap(fileSchema, caseSensitive), caseSensitive);
+    }
 
+    /**
+     * {@link #remapColumnIndicesToPhysical(MessageType, List, boolean)} against a {@code physicalIndexMap} the caller
+     * already built, so a split that remaps both its projection and its predicate builds the map once.
+     * {@code caseSensitive} must be the one the map was built with, or the lookups miss.
+     */
+    private static List<HiveColumnHandle> remapColumnIndicesToPhysical(
+            MessageType fileSchema,
+            List<HiveColumnHandle> requestedColumns,
+            Map<String, Integer> physicalIndexMap,
+            boolean caseSensitive)
+    {
         // Iterate through the columns requested by Trino IN ORDER.
         List<HiveColumnHandle> remappedHandles = new ArrayList<>(requestedColumns.size());
         for (HiveColumnHandle originalHandle : requestedColumns) {
             // Find the physical index from the file schema map constructed from fileSchema. A column the file
             // does not carry keeps an index one past the last field, which the parquet reader null-fills.
-            Integer physicalIndex = physicalIndexMap.get(lookupKey(originalHandle.getBaseColumnName(), caseSensitive));
+            Integer physicalIndex = physicalIndexMap.get(normalizeColumnName(originalHandle.getBaseColumnName(), caseSensitive));
             remappedHandles.add(withPhysicalIndex(originalHandle, physicalIndex == null ? fileSchema.getFieldCount() : physicalIndex));
         }
 
@@ -534,25 +553,40 @@ public class HudiPageSourceProvider
             TupleDomain<HiveColumnHandle> predicate,
             boolean caseSensitive)
     {
+        return remapPredicateColumnIndicesToPhysical(predicate, buildPhysicalIndexMap(fileSchema, caseSensitive), caseSensitive);
+    }
+
+    /**
+     * {@link #remapPredicateColumnIndicesToPhysical(MessageType, TupleDomain, boolean)} against a
+     * {@code physicalIndexMap} the caller already built, so a split that remaps both its projection and its predicate
+     * builds the map once. {@code caseSensitive} must be the one the map was built with, or the lookups miss.
+     */
+    private static TupleDomain<HiveColumnHandle> remapPredicateColumnIndicesToPhysical(
+            TupleDomain<HiveColumnHandle> predicate,
+            Map<String, Integer> physicalIndexMap,
+            boolean caseSensitive)
+    {
         if (predicate.isAll() || predicate.isNone()) {
             return predicate;
         }
 
-        Map<String, Integer> physicalIndexMap = buildPhysicalIndexMap(fileSchema, caseSensitive);
-        Set<Integer> pushedPhysicalIndices = new HashSet<>();
+        Set<Map.Entry<Integer, Optional<HiveColumnProjectionInfo>>> pushedFields = new HashSet<>();
         Map<HiveColumnHandle, Domain> remappedDomains = new LinkedHashMap<>();
         for (Map.Entry<HiveColumnHandle, Domain> entry : predicate.getDomains().orElseThrow().entrySet()) {
-            Integer physicalIndex = physicalIndexMap.get(lookupKey(entry.getKey().getBaseColumnName(), caseSensitive));
+            Integer physicalIndex = physicalIndexMap.get(normalizeColumnName(entry.getKey().getBaseColumnName(), caseSensitive));
             if (physicalIndex == null) {
                 continue;
             }
-            // Deduplicate on the physical index rather than on the rebuilt handle: two handles whose names differ
-            // only by case resolve to one file column while staying unequal to each other, and pushing both down
-            // would hand getParquetTupleDomain the same ColumnDescriptor twice, which it rejects by failing the
-            // split. That needs a metastore holding two such columns, which Hive's name normalisation rules out,
-            // but keeping only the first domain is a cheap guarantee that the read can never be made worse than
-            // pushing nothing down.
-            if (pushedPhysicalIndices.add(physicalIndex)) {
+            // Deduplicate on what getParquetTupleDomain resolves the handle to rather than on the handle itself: two
+            // handles whose names differ only by case resolve to one file column while staying unequal to each other,
+            // and pushing both down would hand it the same ColumnDescriptor twice, which it rejects by failing the
+            // split. The base column alone is too coarse a key, because a dereference handle carries its subfield
+            // path into the descriptor, so the projection is part of the key and two projections of one base column
+            // both survive. Neither collision is reachable today - the case one needs a metastore holding two such
+            // columns, which Hive's name normalisation rules out, and trino-parquet lower-cases every field name when
+            // it builds the MessageType from the footer anyway - but keeping only the first domain is a cheap
+            // guarantee that the read can never be made worse than pushing nothing down.
+            if (pushedFields.add(Map.entry(physicalIndex, entry.getKey().getHiveColumnProjectionInfo()))) {
                 remappedDomains.put(withPhysicalIndex(entry.getKey(), physicalIndex), entry.getValue());
             }
         }
@@ -567,12 +601,12 @@ public class HudiPageSourceProvider
         Map<String, Integer> physicalIndexMap = new HashMap<>();
         List<Type> fileFields = fileSchema.getFields();
         for (int i = 0; i < fileFields.size(); i++) {
-            physicalIndexMap.put(lookupKey(fileFields.get(i).getName(), caseSensitive), i);
+            physicalIndexMap.put(normalizeColumnName(fileFields.get(i).getName(), caseSensitive), i);
         }
         return physicalIndexMap;
     }
 
-    private static String lookupKey(String columnName, boolean caseSensitive)
+    private static String normalizeColumnName(String columnName, boolean caseSensitive)
     {
         return caseSensitive ? columnName : columnName.toLowerCase(Locale.ROOT);
     }
@@ -583,9 +617,10 @@ public class HudiPageSourceProvider
      * {@code getType()} only for a dereference handle, whose {@code getType()} is the projected subfield's type
      * rather than the column's, and {@code createParquetPageSource} reads the base type throughout.
      * <p>
-     * Copying a dereference handle's projection across is not a claim that such a handle would be read correctly;
-     * {@code createParquetPageSource} ignores {@code getHiveColumnProjectionInfo} entirely. The connector never
-     * produces one, because {@code HudiMetadata} does not implement {@code applyProjection}.
+     * Copying a dereference handle's projection across matters: {@code createParquetPageSource} branches on
+     * {@code isBaseColumn()} and dereferences through {@code getHiveColumnProjectionInfo}, and it reads the base
+     * column's stored {@code baseType} on the way. The connector never produces such a handle today, because
+     * {@code HudiMetadata} does not implement {@code applyProjection}.
      */
     private static HiveColumnHandle withPhysicalIndex(HiveColumnHandle handle, int physicalIndex)
     {
@@ -602,17 +637,19 @@ public class HudiPageSourceProvider
     /**
      * Resolves the predicate handed to {@code ParquetPageSourceFactory.getParquetTupleDomain}. Only the
      * positional mode needs the handles rebuilt; when columns are resolved by name the metastore ordinals are
-     * never read. The remap is case-insensitive, the same {@code false} the projection remap is called with, so
-     * predicate and projection can never disagree about which physical column a name denotes.
+     * never read, which is exactly when {@code physicalIndexMap} is empty. Being handed the very map the projection
+     * was remapped with is what makes it structural, rather than a convention, that the two agree about which
+     * physical column a name denotes.
      */
     private static TupleDomain<HiveColumnHandle> getPushdownPredicate(
             HudiSplit hudiSplit,
             DynamicFilter dynamicFilter,
-            MessageType fileSchema,
-            boolean useColumnNames)
+            Optional<Map<String, Integer>> physicalIndexMap)
     {
         TupleDomain<HiveColumnHandle> combinedPredicate = getCombinedPredicate(hudiSplit, dynamicFilter);
-        return useColumnNames ? combinedPredicate : remapPredicateColumnIndicesToPhysical(fileSchema, combinedPredicate, false);
+        return physicalIndexMap
+                .map(indexMap -> remapPredicateColumnIndicesToPhysical(combinedPredicate, indexMap, false))
+                .orElse(combinedPredicate);
     }
 
     private static TupleDomain<HiveColumnHandle> getCombinedPredicate(HudiSplit hudiSplit, DynamicFilter dynamicFilter)
