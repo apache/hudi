@@ -132,4 +132,25 @@ public class TestHudiMorMergeModeSemantics
                 "SELECT key, value FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', CAST(11 AS BIGINT)), ('k4', 40), ('k5', 50), ('k6', 60)");
     }
+
+    @Test
+    public void testPredicateIsNotPushedIntoTheBaseReadOfAMergedSplit()
+    {
+        // HudiPageSourceProvider enables parquet predicate pushdown for base-file-only splits ONLY; the merge
+        // path builds its base page source with it off. That invariant is load-bearing and nothing else pins it:
+        // pruning happens on the BASE row group's statistics, before the log records the merge needs are seen.
+        //
+        // 65 is above every base value (10..60) and below the obsolete k6 update (66), which loses on event time
+        // and must not surface. With pushdown enabled on this path the whole row group is pruned, the base side
+        // comes back empty, and every log record is then emitted as an insert -- so k6 appears with 66 and the
+        // merge is silently skipped. Note the naive shape does NOT discriminate: for a row whose log record wins
+        // and carries the full record, dropping the base row still yields the right answer.
+        assertQueryReturnsEmptyResult(
+                "SELECT key, value FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " WHERE value > 65");
+        // Anchor: the same predicate one step lower does return the rows it should, so the query above is empty
+        // because of the merge, not because nothing ever matches.
+        assertQuery(
+                "SELECT key, value FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " WHERE value > 45 ORDER BY key",
+                "VALUES ('k5', CAST(50 AS BIGINT)), ('k6', 60)");
+    }
 }
