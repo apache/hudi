@@ -335,7 +335,7 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(override val sqlCont
                                                             isBootstrap: Boolean,
                                                             rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends HoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
-    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType))
+    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, rangeType))
 
 class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
                                                   override val metaClient: HoodieTableMetaClient,
@@ -435,7 +435,7 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(override val sqlCont
                                                             isBootstrap: Boolean,
                                                             rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
-    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType))
+    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, rangeType))
 
 class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
                                                   override val metaClient: HoodieTableMetaClient,

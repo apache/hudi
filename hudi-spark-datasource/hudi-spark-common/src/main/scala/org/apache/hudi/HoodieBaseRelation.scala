@@ -45,7 +45,6 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
-import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 
 import org.apache.avro.generic.GenericRecord
@@ -93,15 +92,13 @@ case class HoodieTableState(tablePath: String,
 abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                   val metaClient: HoodieTableMetaClient,
                                   val optParams: Map[String, String],
-                                  private val schemaSpec: Option[StructType],
-                                  private val prunedDataSchema: Option[StructType])
+                                  private val schemaSpec: Option[StructType])
   extends BaseRelation
     with FileRelation
     with PrunedFilteredScan
     with Logging {
 
   type FileSplit <: HoodieFileSplit
-  type Relation <: HoodieBaseRelation
 
   imbueConfigs(sqlContext)
 
@@ -235,10 +232,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath || shouldUseBootstrapFastRead
   }
 
-  /**
-   * NOTE: This fields are accessed by [[NestedSchemaPruning]] component which is only enabled for
-   *       Spark >= 3.1
-   */
   protected lazy val (fileFormat: FileFormat, fileFormatClassName: String) =
     metaClient.getTableConfig.getBaseFileFormat match {
       case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
@@ -297,39 +290,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   def hasSchemaOnRead: Boolean = internalSchemaOpt.isDefined
 
-  /**
-   * Data schema is determined as the actual schema of the Table's Data Files (for ex, parquet/orc/etc);
-   *
-   * In cases when partition values are not persisted w/in the data files, data-schema is defined as
-   * <pre>table's schema - partition columns</pre>
-   *
-   * Check scala-doc for [[shouldExtractPartitionValuesFromPartitionPath]] for more details
-   */
-  def dataSchema: StructType = if (shouldExtractPartitionValuesFromPartitionPath) {
-    prunePartitionColumns(tableStructSchema)
-  } else {
-    tableStructSchema
-  }
-
-  /**
-   * Determines whether relation's schema could be pruned by Spark's Optimizer
-   */
-  def canPruneRelationSchema: Boolean =
-    !HoodieTableMetadata.isMetadataTable(basePath.toString) &&
-      (fileFormat.isInstanceOf[ParquetFileFormat] || fileFormat.isInstanceOf[OrcFileFormat]) &&
-      // NOTE: In case this relation has already been pruned there's no point in pruning it again
-      prunedDataSchema.isEmpty &&
-      // TODO(HUDI-5421) internal schema doesn't support nested schema pruning currently
-      !hasSchemaOnRead
-
   override def sizeInBytes: Long = fileIndex.sizeInBytes
 
-  override def schema: StructType = {
-    // NOTE: Optimizer could prune the schema (applying for ex, [[NestedSchemaPruning]] rule) setting new updated
-    //       schema in-place (via [[setPrunedDataSchema]] method), therefore we have to make sure that we pick
-    //       pruned data schema (if present) over the standard table's one
-    prunedDataSchema.getOrElse(tableStructSchema)
-  }
+  override def schema: StructType = tableStructSchema
 
   /**
    * This method controls whether relation will be producing
@@ -355,13 +318,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //   (!) Please note, however, that it's critical to avoid _reordering_ of the requested columns as this
     //       will break the upstream projection
     val targetColumns: Array[String] = appendMandatoryColumns(requiredColumns)
-    // NOTE: We explicitly fallback to default table's Avro schema to make sure we avoid unnecessary Catalyst > Avro
-    //       schema conversion, which is lossy in nature (for ex, it doesn't preserve original Avro type-names) and
-    //       could have an effect on subsequent de-/serializing records in some exotic scenarios (when Avro unions
-    //       w/ more than 2 types are involved)
-    val sourceSchema = prunedDataSchema.map(s => convertToHoodieSchema(s, tableName)).getOrElse(tableSchema)
     val (requiredProjectedSchema, requiredStructSchema, requiredInternalSchema) =
-      projectSchema(Either.cond(internalSchemaOpt.isDefined, internalSchemaOpt.get, sourceSchema), targetColumns)
+      projectSchema(Either.cond(internalSchemaOpt.isDefined, internalSchemaOpt.get, tableSchema), targetColumns)
 
     val filterExpressions = convertToExpressions(filters)
     val (partitionFilters, dataFilters) = filterExpressions.partition(isPartitionPredicate)
@@ -508,16 +466,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       InternalRow.empty
     }
   }
-
-  /**
-   * Hook for Spark's Optimizer to update expected relation schema after pruning
-   *
-   * NOTE: Only limited number of optimizations in respect to schema pruning could be performed
-   *       internally w/in the relation itself w/o consideration for how the relation output is used.
-   *       Therefore more advanced optimizations (like [[NestedSchemaPruning]]) have to be carried out
-   *       by Spark's Optimizer holistically evaluating Spark's [[LogicalPlan]]
-   */
-  def updatePrunedDataSchema(prunedSchema: StructType): Relation
 
   protected def createBaseFileReaders(tableSchema: HoodieTableSchema,
                                       requiredSchema: HoodieTableSchema,

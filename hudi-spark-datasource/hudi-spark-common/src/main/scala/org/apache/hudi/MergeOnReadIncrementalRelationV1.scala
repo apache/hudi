@@ -48,15 +48,9 @@ import scala.collection.immutable
 case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
                                             override val optParams: Map[String, String],
                                             override val metaClient: HoodieTableMetaClient,
-                                            private val userSchema: Option[StructType],
-                                            private val prunedDataSchema: Option[StructType] = None)
-  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, userSchema, prunedDataSchema)
+                                            private val userSchema: Option[StructType])
+  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, userSchema)
     with HoodieIncrementalRelationV1Trait with MergeOnReadIncrementalRelation {
-
-  override type Relation = MergeOnReadIncrementalRelationV1
-
-  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
-    this.copy(prunedDataSchema = Some(prunedSchema))
 
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
