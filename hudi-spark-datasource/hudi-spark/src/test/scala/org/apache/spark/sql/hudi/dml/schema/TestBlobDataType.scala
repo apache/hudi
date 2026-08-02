@@ -457,7 +457,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // there (a bug, not a Spark 4 constraint). Boolean and null literals are keyword-mode
     // dependent: only TRUE is ansiNonReserved, so a bare true always parses as a column
     // reference, while false and null are column references under the default non-ANSI keyword
-    // mode but typed literals under ANSI mode (the boolean case is asserted below).
+    // mode but typed literals under ANSI mode (both cases are asserted below).
     val plan = parseCreateTable(
       s"""
          |CREATE TABLE blob_lit_tbl (
@@ -485,14 +485,17 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     assertResult(YearMonthIntervalType(YearMonthIntervalType.YEAR, YearMonthIntervalType.MONTH))(
       firstLiteralArg(transformByName(plan, "uu_ivl_t")).dataType)
 
-    // Under ANSI keyword mode a bare false must survive visitBooleanLiteral as a typed literal,
-    // while a bare true stays a column reference (TRUE is ansiNonReserved, FALSE is not).
+    // Under ANSI keyword mode a bare false and a bare null must survive visitBooleanLiteral
+    // and visitNullLiteral as typed literals, while a bare true stays a column reference
+    // (TRUE is ansiNonReserved; FALSE and NULL are not).
     withSQLConf("spark.sql.ansi.enabled" -> "true") {
       val ansiPlan = parseCreateTable(
         "CREATE TABLE blob_bool_tbl (id BIGINT, data BLOB) USING hudi " +
-          "PARTITIONED BY (bool_t(false, id), true_t(true, id))")
+          "PARTITIONED BY (bool_t(false, id), true_t(true, id), null_t(null, id))")
       assertResult(BooleanType)(firstLiteralArg(transformByName(ansiPlan, "bool_t")).dataType)
       assertResult(false)(firstLiteralArg(transformByName(ansiPlan, "bool_t")).value)
+      assertResult(NullType)(firstLiteralArg(transformByName(ansiPlan, "null_t")).dataType)
+      assertResult(null)(firstLiteralArg(transformByName(ansiPlan, "null_t")).value)
       assertResult(Seq(Seq("true"), Seq("id")))(
         transformFieldRefs(transformByName(ansiPlan, "true_t")))
     }

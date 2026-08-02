@@ -206,7 +206,9 @@ class HoodieSpark3_4ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
   }
 
   /**
-   * Create a NULL literal expression.
+   * Create a NULL literal expression. Reachable under ANSI keyword mode, where NULL (like
+   * FALSE) is a reserved word, so f(null, id) in transform-argument position parses as a
+   * null literal instead of a column reference.
    */
   override def visitNullLiteral(ctx: NullLiteralContext): Literal = withOrigin(ctx) {
     Literal(null)
@@ -1244,7 +1246,7 @@ class HoodieSpark3_4ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     // partition transforms for BucketSpec was moved inside parser
     // https://issues.apache.org/jira/browse/SPARK-37923
     val partitioning =
-    partitionExpressions(partTransforms, partCols, ctx) ++ bucketSpec.map(_.asTransform)
+      partitionExpressions(partTransforms, partCols, ctx) ++ bucketSpec.map(_.asTransform)
     val tableSpec = TableSpec(properties, provider, options, location, comment,
       serdeInfo, external)
 
