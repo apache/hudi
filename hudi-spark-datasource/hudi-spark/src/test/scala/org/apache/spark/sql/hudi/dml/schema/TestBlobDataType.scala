@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
+import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.plans.logical.FormatClasses
 import org.apache.spark.sql.hudi.common.{ExtendedParserTestHelpers, HoodieSparkSqlTestBase}
 import org.apache.spark.sql.types._
@@ -502,23 +503,23 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
   }
 
   test("Test parse CREATE TABLE with BLOB column and invalid partition transforms") {
-    // Non-numeric number of buckets. The builders' raw `new ParseException(message, ctx)` sites
-    // surface on Spark 3.4+ as SparkException [INTERNAL_ERROR] wrapping the message text
-    // (#19450), so this case asserts the message via a plain intercept.
-    // TODO(#19450): tighten to intercept[ParseException] once the builders throw it cleanly.
-    val e = intercept[Exception] {
+    // Non-numeric number of buckets. All three cases must surface as a clean ParseException
+    // on every Spark profile now that the builders construct it correctly (#19450).
+    val e1 = intercept[ParseException] {
       spark.sql("CREATE TABLE blob_e1 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket('x', id))")
     }
-    assert(e.getMessage.contains("Invalid number of buckets"))
+    assert(e1.getMessage.contains("Invalid number of buckets"))
     // A non-column-reference where a column is required.
-    checkExceptionContain(
-      "CREATE TABLE blob_e2 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")(
-      "Expected a column reference")
+    val e2 = intercept[ParseException] {
+      spark.sql("CREATE TABLE blob_e2 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")
+    }
+    assert(e2.getMessage.contains("Expected a column reference"))
     // A single-field transform given more than one argument.
-    checkExceptionContain(
-      "CREATE TABLE blob_e3 (id BIGINT, ts DATE, data BLOB) USING hudi " +
-        "PARTITIONED BY (years(id, ts))")(
-      "Too many arguments")
+    val e3 = intercept[ParseException] {
+      spark.sql("CREATE TABLE blob_e3 (id BIGINT, ts DATE, data BLOB) USING hudi " +
+        "PARTITIONED BY (years(id, ts))")
+    }
+    assert(e3.getMessage.contains("Too many arguments"))
   }
 
   test("Test parse CREATE TABLE with BLOB column and file-format / row-format clauses") {
