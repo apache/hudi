@@ -39,7 +39,6 @@ import org.apache.spark.sql.connector.catalog.TableCatalog
 import org.apache.spark.sql.connector.expressions.{ApplyTransform, BucketTransform, DaysTransform, Expression => V2Expression, FieldReference, HoursTransform, IdentityTransform, LiteralValue, MonthsTransform, Transform, YearsTransform}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.types.BlobType
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 import org.apache.spark.util.Utils.isTesting
 
@@ -211,6 +210,19 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
    */
   override def visitNullLiteral(ctx: NullLiteralContext): Literal = withOrigin(ctx) {
     Literal(null)
+  }
+
+  /**
+   * Create a Boolean literal expression. Reachable under ANSI keyword mode, where FALSE is a
+   * reserved word (only TRUE is ansiNonReserved), so a bare false in transform-argument
+   * position parses as a boolean literal instead of a column reference.
+   */
+  override def visitBooleanLiteral(ctx: BooleanLiteralContext): Literal = withOrigin(ctx) {
+    if (ctx.getText.toBoolean) {
+      Literal.TrueLiteral
+    } else {
+      Literal.FalseLiteral
+    }
   }
 
   /**
@@ -945,7 +957,8 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       val literal = Option(ctx.constant)
         .map(typedVisit[Literal])
         .map(lit => LiteralValue(lit.value, lit.dataType))
-      reference.orElse(literal).get
+      reference.orElse(literal)
+        .getOrElse(throw new ParseException("Invalid transform argument", ctx))
     }
   }
 
@@ -1098,7 +1111,8 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
               s"ROW FORMAT DELIMITED is only compatible with 'textfile', not '$fmt'", parentCtx)
           }
         case _ =>
-          // should never happen
+          // Reachable: ROW FORMAT ... STORED BY 'handler' leaves createFileFormatCtx.fileFormat
+          // null, so none of the typed arms above match.
           def str(ctx: ParserRuleContext): String = {
             (0 until ctx.getChildCount).map { i => ctx.getChild(i).getText }.mkString(" ")
           }
@@ -1184,14 +1198,13 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
   }
 
   /**
-   * Create a table, returning a [[CreateTable]] or [[CreateTableAsSelect]] logical plan.
+   * Create a table, returning a [[CreateTable]] logical plan.
    *
    * Expected format:
    * {{{
    *   CREATE [TEMPORARY] TABLE [IF NOT EXISTS] [db_name.]table_name
    *   [USING table_provider]
-   *   create_table_clauses
-   *   [[AS] select_statement];
+   *   create_table_clauses;
    *
    *   create_table_clauses (order insensitive):
    *     [PARTITIONED BY (partition_fields)]
@@ -1231,7 +1244,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     // partition transforms for BucketSpec was moved inside parser
     // https://issues.apache.org/jira/browse/SPARK-37923
     val partitioning =
-      partitionExpressions(partTransforms, partCols, ctx) ++ bucketSpec.map(_.asTransform)
+    partitionExpressions(partTransforms, partCols, ctx) ++ bucketSpec.map(_.asTransform)
     val tableSpec = TableSpec(properties, provider, options, location, comment,
       serdeInfo, external)
 

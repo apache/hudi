@@ -213,6 +213,19 @@ class HoodieSpark4_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
   }
 
   /**
+   * Create a Boolean literal expression. Reachable under ANSI keyword mode, where FALSE is a
+   * reserved word (only TRUE is ansiNonReserved), so a bare false in transform-argument
+   * position parses as a boolean literal instead of a column reference.
+   */
+  override def visitBooleanLiteral(ctx: BooleanLiteralContext): Literal = withOrigin(ctx) {
+    if (ctx.getText.toBoolean) {
+      Literal.TrueLiteral
+    } else {
+      Literal.FalseLiteral
+    }
+  }
+
+  /**
    * Create an integral literal expression. The code selects the most narrow integral type
    * possible, either a BigDecimal, a Long or an Integer is returned.
    */
@@ -944,7 +957,8 @@ class HoodieSpark4_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       val literal = Option(ctx.constant)
         .map(typedVisit[Literal])
         .map(lit => LiteralValue(lit.value, lit.dataType))
-      reference.orElse(literal).get
+      reference.orElse(literal)
+        .getOrElse(throw new ParseException("Invalid transform argument", ctx))
     }
   }
 
@@ -1097,7 +1111,8 @@ class HoodieSpark4_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
               s"ROW FORMAT DELIMITED is only compatible with 'textfile', not '$fmt'", parentCtx)
           }
         case _ =>
-          // should never happen
+          // Reachable: ROW FORMAT ... STORED BY 'handler' leaves createFileFormatCtx.fileFormat
+          // null, so none of the typed arms above match.
           def str(ctx: ParserRuleContext): String = {
             (0 until ctx.getChildCount).map { i => ctx.getChild(i).getText }.mkString(" ")
           }

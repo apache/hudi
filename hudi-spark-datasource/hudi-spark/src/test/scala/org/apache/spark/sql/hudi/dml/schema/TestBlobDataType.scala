@@ -454,11 +454,10 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // to #19449: the extended parser enables ANSI reserved-keyword enforcement whenever
     // spark.sql.ansi.enabled is set (the Spark 4.x default) instead of following Spark's
     // spark.sql.ansi.enforceReservedKeywords, which makes a bare TIMESTAMP token unparseable
-    // there (a bug, not a Spark 4 constraint). A bare true/false in this position parses as a
-    // column reference in BOTH keyword modes (TRUE/FALSE are ansiNonReserved, so qualifiedName
-    // wins), leaving visitBooleanLiteral unreachable (#19451); null is a column reference only
-    // under the default non-ANSI keyword mode and a null literal under ANSI, so visitNullLiteral
-    // is mode-dependent and both are left unasserted here.
+    // there (a bug, not a Spark 4 constraint). Boolean and null literals are keyword-mode
+    // dependent: only TRUE is ansiNonReserved, so a bare true always parses as a column
+    // reference, while false and null are column references under the default non-ANSI keyword
+    // mode but typed literals under ANSI mode (the boolean case is asserted below).
     val plan = parseCreateTable(
       s"""
          |CREATE TABLE blob_lit_tbl (
@@ -485,6 +484,18 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
       firstLiteralArg(transformByName(plan, "mu_ivl_t")).dataType)
     assertResult(YearMonthIntervalType(YearMonthIntervalType.YEAR, YearMonthIntervalType.MONTH))(
       firstLiteralArg(transformByName(plan, "uu_ivl_t")).dataType)
+
+    // Under ANSI keyword mode a bare false must survive visitBooleanLiteral as a typed literal,
+    // while a bare true stays a column reference (TRUE is ansiNonReserved, FALSE is not).
+    withSQLConf("spark.sql.ansi.enabled" -> "true") {
+      val ansiPlan = parseCreateTable(
+        "CREATE TABLE blob_bool_tbl (id BIGINT, data BLOB) USING hudi " +
+          "PARTITIONED BY (bool_t(false, id), true_t(true, id))")
+      assertResult(BooleanType)(firstLiteralArg(transformByName(ansiPlan, "bool_t")).dataType)
+      assertResult(false)(firstLiteralArg(transformByName(ansiPlan, "bool_t")).value)
+      assertResult(Seq(Seq("true"), Seq("id")))(
+        transformFieldRefs(transformByName(ansiPlan, "true_t")))
+    }
   }
 
   test("Test parse CREATE TABLE with BLOB column and invalid partition transforms") {
@@ -539,6 +550,14 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
       "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
     assertResult(Some("TEXTFILE"))(ff6.tableSpec.serde.get.storedAs)
     assertResult(",")(ff6.tableSpec.serde.get.serdeProperties("field.delim"))
+    // Any ROW FORMAT combined with STORED AS INPUTFORMAT/OUTPUTFORMAT is accepted (the
+    // table-file-format arm of validateRowFormatFileFormat).
+    val ff7 = parseCreateTable("CREATE TABLE blob_ff7 (id BIGINT, data BLOB) " +
+      "ROW FORMAT SERDE 'com.example.Serde' " +
+      "STORED AS INPUTFORMAT 'com.example.InFmt' OUTPUTFORMAT 'com.example.OutFmt'")
+    assertResult(Some("com.example.Serde"))(ff7.tableSpec.serde.get.serde)
+    assertResult(Some(FormatClasses("com.example.InFmt", "com.example.OutFmt")))(
+      ff7.tableSpec.serde.get.formatClasses)
 
     // ROW FORMAT DELIMITED with a non-text file format is rejected.
     checkExceptionContain(
@@ -556,6 +575,13 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     checkExceptionContain(
       "CREATE TABLE blob_ferr3 (id BIGINT, data BLOB) STORED BY 'com.example.Handler'")(
       "Operation not allowed: STORED BY")
+    // ROW FORMAT combined with STORED BY leaves no file format for the row format to pair with;
+    // validateRowFormatFileFormat's catch-all arm rejects the combination before the STORED BY
+    // error can fire.
+    checkExceptionContain(
+      "CREATE TABLE blob_ferr5 (id BIGINT, data BLOB) " +
+        "ROW FORMAT SERDE 'com.example.Serde' STORED BY 'com.example.Handler'")(
+      "Unexpected combination of")
     // A USING provider combined with a serde clause is not allowed.
     checkExceptionContain(
       "CREATE TABLE blob_ferr4 (id BIGINT, data BLOB) USING hudi STORED AS PARQUET")(
