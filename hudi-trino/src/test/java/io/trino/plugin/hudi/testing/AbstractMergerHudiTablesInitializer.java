@@ -148,6 +148,16 @@ public abstract class AbstractMergerHudiTablesInitializer
     /** The table's data columns, in schema order; the Hudi metadata columns are prepended by this class. */
     protected abstract List<Column> dataColumns();
 
+    /**
+     * Whether the metastore definition prepends {@link #HUDI_META_COLUMNS}. The base file always carries them, so
+     * returning {@code false} models hive sync with {@code hoodie.datasource.hive_sync.omit_metadata_fields=true}:
+     * every data column's metastore ordinal then sits five below its physical position in the file.
+     */
+    protected boolean includeMetaColumnsInMetastore()
+    {
+        return true;
+    }
+
     /** The Avro schema the write client writes, matching {@link #dataColumns()}. */
     protected abstract Schema avroSchema();
 
@@ -285,7 +295,7 @@ public abstract class AbstractMergerHudiTablesInitializer
                 .setTableType(EXTERNAL_TABLE.name())
                 .setOwner(Optional.of("public"))
                 .setDataColumns(ImmutableList.<Column>builder()
-                        .addAll(HUDI_META_COLUMNS)
+                        .addAll(includeMetaColumnsInMetastore() ? HUDI_META_COLUMNS : ImmutableList.<Column>of())
                         .addAll(dataColumns())
                         .build())
                 .setParameters(ImmutableMap.of("serialization.format", "1", "EXTERNAL", "TRUE"))
