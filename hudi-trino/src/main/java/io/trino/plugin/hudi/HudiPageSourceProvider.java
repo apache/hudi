@@ -48,6 +48,7 @@ import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.ConnectorTransactionHandle;
 import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.connector.EmptyPageSource;
+import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -70,11 +71,14 @@ import org.joda.time.DateTimeZone;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static io.trino.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
@@ -397,7 +401,7 @@ public class HudiPageSourceProvider
 
             TupleDomain<ColumnDescriptor> parquetTupleDomain = options.isIgnoreStatistics() || !enablePredicatePushDown
                     ? TupleDomain.all()
-                    : getParquetTupleDomain(descriptorsByPath, getCombinedPredicate(hudiSplit, dynamicFilter), fileSchema, useColumnNames);
+                    : getParquetTupleDomain(descriptorsByPath, getPushdownPredicate(hudiSplit, dynamicFilter, fileSchema, useColumnNames), fileSchema, useColumnNames);
 
             TupleDomainParquetPredicate parquetPredicate = buildPredicate(requestedSchema, parquetTupleDomain, descriptorsByPath, timeZone);
 
@@ -482,39 +486,133 @@ public class HudiPageSourceProvider
             boolean caseSensitive)
     {
         // Create a map from column name to its physical index in the fileSchema.
-        Map<String, Integer> physicalIndexMap = new HashMap<>();
-        List<Type> fileFields = fileSchema.getFields();
-        for (int i = 0; i < fileFields.size(); i++) {
-            Type field = fileFields.get(i);
-            String fieldName = field.getName();
-            String mapKey = caseSensitive ? fieldName : fieldName.toLowerCase(Locale.ROOT);
-            physicalIndexMap.put(mapKey, i);
-        }
+        Map<String, Integer> physicalIndexMap = buildPhysicalIndexMap(fileSchema, caseSensitive);
 
         // Iterate through the columns requested by Trino IN ORDER.
         List<HiveColumnHandle> remappedHandles = new ArrayList<>(requestedColumns.size());
         for (HiveColumnHandle originalHandle : requestedColumns) {
-            String requestedName = originalHandle.getBaseColumnName();
-
-            // Determine the key to use for looking up the physical index
-            String lookupKey = caseSensitive ? requestedName : requestedName.toLowerCase(Locale.ROOT);
-
             // Find the physical index from the file schema map constructed from fileSchema. A column the file
             // does not carry keeps an index one past the last field, which the parquet reader null-fills.
-            Integer physicalIndex = physicalIndexMap.get(lookupKey);
-
-            HiveColumnHandle remappedHandle = new HiveColumnHandle(
-                    requestedName,
-                    physicalIndex == null ? fileFields.size() : physicalIndex,
-                    originalHandle.getBaseHiveType(),
-                    originalHandle.getType(),
-                    originalHandle.getHiveColumnProjectionInfo(),
-                    originalHandle.getColumnType(),
-                    originalHandle.getComment());
-            remappedHandles.add(remappedHandle);
+            Integer physicalIndex = physicalIndexMap.get(lookupKey(originalHandle.getBaseColumnName(), caseSensitive));
+            remappedHandles.add(withPhysicalIndex(originalHandle, physicalIndex == null ? fileSchema.getFieldCount() : physicalIndex));
         }
 
         return remappedHandles;
+    }
+
+    /**
+     * Rebuilds a predicate's column handles on physical file ordinals, the predicate-side counterpart of
+     * {@link #remapColumnIndicesToPhysical}. With {@code hudi.parquet.use-column-names=false},
+     * {@code ParquetPageSourceFactory.getParquetTupleDomain} resolves a predicate column positionally, as
+     * {@code fileSchema.getType(handle.getBaseHiveColumnIndex())}, but the handles reaching it carry METASTORE
+     * ordinals: a metastore that omits the Hudi meta fields (hive sync with {@code omit_metadata_fields=true})
+     * shifts every data column, and so does reordering or dropping one. Left unremapped, the domain attaches to
+     * whichever column happens to sit at the stale ordinal and row groups are pruned on that column's statistics,
+     * silently dropping rows.
+     * <p>
+     * Resolution is by name, so the predicate ends up bound to exactly the column the projection reads - which is
+     * the property that matters, since the two are compared against each other. It is not a defence against a
+     * column being dropped and re-added under full schema evolution: name-based binding will match the new column
+     * to the old one, exactly as the projection remap and the whole {@code use-column-names=true} mode already do.
+     * <p>
+     * A column the file does not carry is dropped from the predicate rather than mapped to the
+     * {@link #remapColumnIndicesToPhysical} sentinel, which every absent column would share. Dropping loses row
+     * group pruning but never a row: the static half of the predicate is handed back to the engine in full as
+     * {@code HudiMetadata.applyFilter}'s remaining filter, and the dynamic half is by construction redundant with
+     * the join above the scan. It is also what already happens today for a predicate column the query does not
+     * read, since {@code descriptorsByPath} is derived from the projection and
+     * {@code getParquetTupleDomain} skips any column it cannot resolve.
+     *
+     * @param fileSchema The MessageType representing the physical schema of the Parquet file.
+     * @param predicate The predicate to push down, keyed on handles carrying metastore ordinals.
+     * @param caseSensitive Whether the lookup between Trino column names (from handles) and Parquet field names (from fileSchema) should be case-sensitive.
+     * @return The same domains, keyed on handles carrying physical ordinals, minus the columns the file lacks.
+     */
+    @VisibleForTesting
+    public static TupleDomain<HiveColumnHandle> remapPredicateColumnIndicesToPhysical(
+            MessageType fileSchema,
+            TupleDomain<HiveColumnHandle> predicate,
+            boolean caseSensitive)
+    {
+        if (predicate.isAll() || predicate.isNone()) {
+            return predicate;
+        }
+
+        Map<String, Integer> physicalIndexMap = buildPhysicalIndexMap(fileSchema, caseSensitive);
+        Set<Integer> pushedPhysicalIndices = new HashSet<>();
+        Map<HiveColumnHandle, Domain> remappedDomains = new LinkedHashMap<>();
+        for (Map.Entry<HiveColumnHandle, Domain> entry : predicate.getDomains().orElseThrow().entrySet()) {
+            Integer physicalIndex = physicalIndexMap.get(lookupKey(entry.getKey().getBaseColumnName(), caseSensitive));
+            if (physicalIndex == null) {
+                continue;
+            }
+            // Deduplicate on the physical index rather than on the rebuilt handle: two handles whose names differ
+            // only by case resolve to one file column while staying unequal to each other, and pushing both down
+            // would hand getParquetTupleDomain the same ColumnDescriptor twice, which it rejects by failing the
+            // split. That needs a metastore holding two such columns, which Hive's name normalisation rules out,
+            // but keeping only the first domain is a cheap guarantee that the read can never be made worse than
+            // pushing nothing down.
+            if (pushedPhysicalIndices.add(physicalIndex)) {
+                remappedDomains.put(withPhysicalIndex(entry.getKey(), physicalIndex), entry.getValue());
+            }
+        }
+        return TupleDomain.withColumnDomains(remappedDomains);
+    }
+
+    /**
+     * Maps each of {@code fileSchema}'s top-level field names to its physical position.
+     */
+    private static Map<String, Integer> buildPhysicalIndexMap(MessageType fileSchema, boolean caseSensitive)
+    {
+        Map<String, Integer> physicalIndexMap = new HashMap<>();
+        List<Type> fileFields = fileSchema.getFields();
+        for (int i = 0; i < fileFields.size(); i++) {
+            physicalIndexMap.put(lookupKey(fileFields.get(i).getName(), caseSensitive), i);
+        }
+        return physicalIndexMap;
+    }
+
+    private static String lookupKey(String columnName, boolean caseSensitive)
+    {
+        return caseSensitive ? columnName : columnName.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Copies {@code handle} with its base column index replaced by a physical one, every other attribute carried
+     * over unchanged. Note that the constructor's fourth argument is the BASE type: it differs from
+     * {@code getType()} only for a dereference handle, whose {@code getType()} is the projected subfield's type
+     * rather than the column's, and {@code createParquetPageSource} reads the base type throughout.
+     * <p>
+     * Copying a dereference handle's projection across is not a claim that such a handle would be read correctly;
+     * {@code createParquetPageSource} ignores {@code getHiveColumnProjectionInfo} entirely. The connector never
+     * produces one, because {@code HudiMetadata} does not implement {@code applyProjection}.
+     */
+    private static HiveColumnHandle withPhysicalIndex(HiveColumnHandle handle, int physicalIndex)
+    {
+        return new HiveColumnHandle(
+                handle.getBaseColumnName(),
+                physicalIndex,
+                handle.getBaseHiveType(),
+                handle.getBaseType(),
+                handle.getHiveColumnProjectionInfo(),
+                handle.getColumnType(),
+                handle.getComment());
+    }
+
+    /**
+     * Resolves the predicate handed to {@code ParquetPageSourceFactory.getParquetTupleDomain}. Only the
+     * positional mode needs the handles rebuilt; when columns are resolved by name the metastore ordinals are
+     * never read. The remap is case-insensitive, the same {@code false} the projection remap is called with, so
+     * predicate and projection can never disagree about which physical column a name denotes.
+     */
+    private static TupleDomain<HiveColumnHandle> getPushdownPredicate(
+            HudiSplit hudiSplit,
+            DynamicFilter dynamicFilter,
+            MessageType fileSchema,
+            boolean useColumnNames)
+    {
+        TupleDomain<HiveColumnHandle> combinedPredicate = getCombinedPredicate(hudiSplit, dynamicFilter);
+        return useColumnNames ? combinedPredicate : remapPredicateColumnIndicesToPhysical(fileSchema, combinedPredicate, false);
     }
 
     private static TupleDomain<HiveColumnHandle> getCombinedPredicate(HudiSplit hudiSplit, DynamicFilter dynamicFilter)
