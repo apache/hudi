@@ -63,7 +63,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression
 import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
-import org.apache.spark.sql.execution.datasources.parquet.{LegacyHoodieParquetFileFormat, ParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
@@ -80,7 +80,6 @@ case class HoodieTableState(tablePath: String,
                             recordKeyField: String,
                             orderingFields: List[String],
                             usesVirtualKeys: Boolean,
-                            recordPayloadClassName: String,
                             metadataConfig: HoodieMetadataConfig,
                             recordMergeImplClasses: List[String],
                             recordMergeStrategyId: String)
@@ -261,7 +260,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       recordKeyField = recordKeyField,
       orderingFields = orderingFields,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
-      recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = fileIndex.getMetadataConfig,
       recordMergeImplClasses = recordMergerImpls,
       recordMergeStrategyId = tableConfig.getRecordMergeStrategyId
