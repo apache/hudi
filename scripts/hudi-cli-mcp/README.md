@@ -23,11 +23,17 @@ The server wraps the Hudi CLI (`hudi-cli`) in a structured MCP interface with:
 
 The following environment variables must be set before starting the server:
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `SPARK_HOME` | Path to your Spark installation | `/opt/spark-3.5.3-bin-hadoop3` |
-| `CLI_BUNDLE_JAR` | Path to `hudi-cli-bundle` JAR | `/path/to/hudi-cli-bundle_2.12-0.14.1.jar` |
-| `SPARK_BUNDLE_JAR` | Path to `hudi-spark-bundle` JAR | `/path/to/hudi-spark3.5-bundle_2.12-0.14.1.jar` |
+| Variable | Required | Description | Example |
+|----------|----------|-------------|---------|
+| `SPARK_HOME` | yes | Path to your Spark installation | `/opt/spark-3.5.3-bin-hadoop3` |
+| `CLI_BUNDLE_JAR` | yes | Path to `hudi-cli-bundle` JAR | `/path/to/hudi-cli-bundle_2.12-1.0.0.jar` |
+| `SPARK_BUNDLE_JAR` | yes | Path to `hudi-spark-bundle` JAR | `/path/to/hudi-spark3.5-bundle_2.12-1.0.0.jar` |
+| `HUDI_CLI_BIN` | yes | Path to the `hudi-cli-with-bundle.sh` launcher | `/path/to/hudi/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh` |
+| `HUDI_MCP_TIMEOUT` | no | Per-command timeout in seconds (default `120`). Raise for long compaction/clustering runs. | `1800` |
+| `HUDI_MCP_MAX_ROWS` | no | Max rows returned per table (default `200`). | `500` |
+
+> `HUDI_CLI_BIN` has no default — a default under world-writable `/tmp` would let a
+> local user plant an executable the server then runs, so it must be set explicitly.
 
 ## Installation
 
@@ -45,8 +51,9 @@ The only dependency is `fastmcp>=2.0.0`.
 ```bash
 # Set required environment variables
 export SPARK_HOME=/path/to/spark
-export CLI_BUNDLE_JAR=/path/to/hudi-cli-bundle_2.12-0.14.1.jar
-export SPARK_BUNDLE_JAR=/path/to/hudi-spark3.5-bundle_2.12-0.14.1.jar
+export CLI_BUNDLE_JAR=/path/to/hudi-cli-bundle_2.12-1.0.0.jar
+export SPARK_BUNDLE_JAR=/path/to/hudi-spark3.5-bundle_2.12-1.0.0.jar
+export HUDI_CLI_BIN=/path/to/hudi/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh
 
 # Start the server (stdio transport, used by most MCP clients)
 python server.py
@@ -66,8 +73,9 @@ Add the following to your Claude Desktop config (`~/Library/Application Support/
       "args": ["/path/to/hudi/scripts/hudi-cli-mcp/server.py"],
       "env": {
         "SPARK_HOME": "/path/to/spark",
-        "CLI_BUNDLE_JAR": "/path/to/hudi-cli-bundle_2.12-0.14.1.jar",
-        "SPARK_BUNDLE_JAR": "/path/to/hudi-spark3.5-bundle_2.12-0.14.1.jar"
+        "CLI_BUNDLE_JAR": "/path/to/hudi-cli-bundle_2.12-1.0.0.jar",
+        "SPARK_BUNDLE_JAR": "/path/to/hudi-spark3.5-bundle_2.12-1.0.0.jar",
+        "HUDI_CLI_BIN": "/path/to/hudi/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh"
       }
     }
   }
@@ -86,8 +94,9 @@ Add to your MCP settings (`~/.claude/mcp.json`):
       "args": ["/path/to/hudi/scripts/hudi-cli-mcp/server.py"],
       "env": {
         "SPARK_HOME": "/path/to/spark",
-        "CLI_BUNDLE_JAR": "/path/to/hudi-cli-bundle_2.12-0.14.1.jar",
-        "SPARK_BUNDLE_JAR": "/path/to/hudi-spark3.5-bundle_2.12-0.14.1.jar"
+        "CLI_BUNDLE_JAR": "/path/to/hudi-cli-bundle_2.12-1.0.0.jar",
+        "SPARK_BUNDLE_JAR": "/path/to/hudi-spark3.5-bundle_2.12-1.0.0.jar",
+        "HUDI_CLI_BIN": "/path/to/hudi/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh"
       }
     }
   }
@@ -212,6 +221,15 @@ To execute a MEDIUM or HIGH risk operation:
 3. Call `confirm_operation` with the token to execute, or `cancel_operation` to abort.
 
 Tokens expire after 5 minutes. Each token can only be used once.
+
+> **The confirmation is same-actor.** The token is issued to, and redeemed by, the
+> same LLM that requested the operation — so it is a deliberate-friction speed bump
+> (it forces a distinct, explicit second tool call and surfaces a preview), not a
+> human-in-the-loop gate. The **real** human gate is your MCP client's own tool-approval
+> prompt (Claude Desktop / Claude Code ask before running a tool). Keep that enabled
+> for the write tools, and treat this server as you would any tool that can mutate a
+> table. The read/write allowlist split, the risk tiers, and the injection guards
+> reduce blast radius; they do not replace client-side approval.
 
 ## Usage Examples
 

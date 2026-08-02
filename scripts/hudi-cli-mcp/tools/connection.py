@@ -1,3 +1,20 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 """Connection management tools."""
 
 from __future__ import annotations
@@ -23,19 +40,19 @@ def connect_to_table(
     ]
     result = executor.execute(commands)
 
-    if result.return_code != 0:
-        error_output = result.parsed.to_dict()
+    # is_success() already folds in captured error lines from the CLI; use it
+    # instead of scanning messages for the substrings "error"/"exception", which
+    # false-fails on any table path or property that merely contains those words
+    # (e.g. /data/error_logs_table).
+    if not result.is_success():
+        error_output = result.to_dict()
         error_output["success"] = False
-        error_output["error"] = f"Failed to connect to table at: {path}"
+        error_output["error"] = (
+            result.parsed.errors[0]
+            if result.parsed.errors
+            else f"Failed to connect to table at: {path}"
+        )
         return json.dumps(error_output, indent=2)
-
-    # Check for connection errors in messages
-    for msg in result.parsed.messages:
-        if "exception" in msg.lower() or "error" in msg.lower():
-            error_output = result.parsed.to_dict()
-            error_output["success"] = False
-            error_output["error"] = msg
-            return json.dumps(error_output, indent=2)
 
     # Connection succeeded — store in session
     session.connect(path)

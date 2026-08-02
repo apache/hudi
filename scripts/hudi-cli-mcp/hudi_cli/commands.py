@@ -1,3 +1,20 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 """Command validation and building utilities."""
 
 from __future__ import annotations
@@ -152,25 +169,68 @@ def is_write_command(command: str) -> bool:
     return any(cmd.startswith(prefix.lower()) for prefix in WRITE_COMMAND_PREFIXES)
 
 
+# Match the longest prefix first, so a command that extends a shorter prefix is
+# classified by its most specific entry. Otherwise "compaction scheduleAndExecute"
+# (HIGH) would match "compaction schedule" (MEDIUM) first and skip the HIGH-risk
+# preview + confirmation. Recomputed once at import time.
+_WRITE_PREFIXES_BY_LENGTH = sorted(
+    WRITE_COMMAND_PREFIXES.items(), key=lambda kv: len(kv[0]), reverse=True
+)
+
+
 def get_risk_level(command: str) -> RiskLevel | None:
     """Return the risk level for a write command, or None if not a write command."""
     cmd = command.strip().lower()
-    for prefix, level in WRITE_COMMAND_PREFIXES.items():
+    for prefix, level in _WRITE_PREFIXES_BY_LENGTH:
         if cmd.startswith(prefix.lower()):
             return level
     return None
 
 
-def validate_command(command: str) -> None:
-    """Validate that a command is allowed (read-only).
+def _reject_injection(command: str) -> None:
+    """Reject a command that smuggles extra commands via an embedded newline.
 
-    Raises CommandNotAllowedError if the command is not allowed.
+    The allowlist validates only the first line, but the executor writes each
+    command as its own line in the CLI script file -- so a newline would let an
+    unvalidated second command (e.g. a rollback) run. The caller is an LLM, so
+    prompt-injected content reaching a command argument is an expected threat.
     """
-    if not is_readonly_command(command):
+    if "\n" in command or "\r" in command:
         raise CommandNotAllowedError(
-            f"Command '{command}' is not allowed in read-only mode. "
-            f"Use the dedicated write operation tools for write commands."
+            "Command contains an embedded newline (possible injection); "
+            "commands must be single-line."
         )
+
+
+# Guidance appended when a command isn't a recognized read-only command, so the
+# caller (often an LLM) is steered to a real command instead of guessing again.
+_READ_COMMAND_HINT = (
+    "Supported read commands include: commits show, desc, metadata stats, stats wa, "
+    "show fsview all, timeline show active, cleans show, compactions show all, "
+    "savepoints show. To see which metadata indexes the table has, run `desc` and read "
+    "the `hoodie.table.metadata.partitions` property (e.g. files, column_stats, "
+    "partition_stats, record_index)."
+)
+
+
+def validate_command(command: str) -> None:
+    """Validate that a command is an allowed read-only command.
+
+    Distinguishes three cases so the error is actionable: (1) allowed, (2) a known
+    write command that belongs on a dedicated write tool, (3) an unrecognized
+    command -- do NOT tell the caller a nonexistent command is a "write command".
+    """
+    _reject_injection(command)
+    if is_readonly_command(command):
+        return
+    if is_write_command(command):
+        raise CommandNotAllowedError(
+            f"'{command}' is a write operation and cannot be run via "
+            "execute_hudi_command. Use the dedicated write tool for it."
+        )
+    raise CommandNotAllowedError(
+        f"'{command}' is not a recognized read-only Hudi CLI command. " + _READ_COMMAND_HINT
+    )
 
 
 def validate_write_command(command: str) -> None:
@@ -178,6 +238,7 @@ def validate_write_command(command: str) -> None:
 
     Raises CommandNotAllowedError if the command is not recognized.
     """
+    _reject_injection(command)
     if not is_write_command(command):
         raise CommandNotAllowedError(
             f"Command '{command}' is not a recognized write operation."
@@ -187,9 +248,14 @@ def validate_write_command(command: str) -> None:
 def validate_commands(commands: list[str]) -> None:
     """Validate that all commands in a list are allowed."""
     for cmd in commands:
-        # Skip connect — it's always allowed and auto-prepended
+        # Reject a user-supplied connect: the session is the single source of truth
+        # for the connected table (it auto-prepends its own connect). Allowing one
+        # here would let a batch silently re-target a different table.
         if cmd.strip().lower().startswith("connect"):
-            continue
+            raise CommandNotAllowedError(
+                "Do not include 'connect' in commands; the server connects to the "
+                "session's table automatically. Use connect_to_table to switch tables."
+            )
         validate_command(cmd)
 
 
@@ -214,5 +280,17 @@ def build_command(base: str, **kwargs) -> str:
             continue
         else:
             parts.append(f"--{key}")
-            parts.append(str(value))
+            parts.append(_quote(str(value)))
     return " ".join(parts)
+
+
+def _quote(value: str) -> str:
+    """Quote a value that contains whitespace so it stays a single CLI argument.
+
+    Spring Shell splits script-mode arguments on whitespace, so an unquoted path
+    like ``/data/my table`` would be parsed as two arguments.
+    """
+    if value and any(c.isspace() for c in value):
+        escaped = value.replace('"', '\\"')
+        return f'"{escaped}"'
+    return value

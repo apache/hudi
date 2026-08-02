@@ -1,3 +1,20 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 """Tests for command validation."""
 
 import pytest
@@ -48,21 +65,45 @@ class TestValidateCommand:
     def test_allowed_command_passes(self):
         validate_command("commits show --limit 10")  # Should not raise
 
-    def test_blocked_command_raises(self):
-        with pytest.raises(CommandNotAllowedError, match="not allowed"):
+    def test_write_command_raises_write_hint(self):
+        # A known write command must be reported as a write op, not "unknown".
+        with pytest.raises(CommandNotAllowedError, match="write operation"):
             validate_command("commit rollback --commit 123")
+
+    def test_unknown_command_raises_recognized_hint(self):
+        # A nonexistent command must NOT be mislabeled as a write command; the
+        # hint should steer the caller to real read commands.
+        with pytest.raises(CommandNotAllowedError, match="not a recognized"):
+            validate_command("metadata list-index")
+
+    def test_unknown_command_hint_steers_to_desc_property(self):
+        try:
+            validate_command("metadata list-index")
+        except CommandNotAllowedError as e:
+            # Steer to the property that actually lists metadata indexes.
+            assert "hoodie.table.metadata.partitions" in str(e)
+            assert "desc" in str(e)
+            assert "write operation" not in str(e)
 
 
 class TestValidateCommands:
     def test_all_allowed(self):
         validate_commands(["commits show", "stats wa", "desc"])
 
-    def test_connect_always_allowed(self):
-        validate_commands(["connect --path /tmp/t"])
+    def test_user_supplied_connect_rejected(self):
+        # The session owns the connected path; a connect smuggled into a batch
+        # would silently re-target a different table.
+        with pytest.raises(CommandNotAllowedError, match="connect"):
+            validate_commands(["connect --path /tmp/t"])
 
     def test_one_blocked_raises(self):
         with pytest.raises(CommandNotAllowedError):
             validate_commands(["commits show", "commit rollback --commit 123"])
+
+    def test_embedded_newline_rejected(self):
+        # A newline would smuggle an unvalidated second command past the allowlist.
+        with pytest.raises(CommandNotAllowedError):
+            validate_command("commits show --limit 5\nsavepoint rollback --savepoint 1")
 
 
 class TestBuildCommand:
@@ -84,3 +125,8 @@ class TestBuildCommand:
     def test_empty_string_skipped(self):
         result = build_command("commits show", sortBy="")
         assert result == "commits show"
+
+    def test_value_with_space_is_quoted(self):
+        # An unquoted path with a space would be split into two CLI arguments.
+        result = build_command("table update-configs", **{"props-file": "/my dir/t.props"})
+        assert result == 'table update-configs --props-file "/my dir/t.props"'

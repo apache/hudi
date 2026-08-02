@@ -1,3 +1,20 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 """Tests for write command classification and validation."""
 
 import pytest
@@ -87,6 +104,20 @@ class TestGetRiskLevel:
         assert get_risk_level("commit rollback --commit 123") == RiskLevel.HIGH
         assert get_risk_level("cleans run") == RiskLevel.HIGH
         assert get_risk_level("create --path /tmp/t") == RiskLevel.HIGH
+
+    def test_schedule_and_execute_is_high_not_medium(self):
+        # "compaction scheduleAndExecute" extends "compaction schedule" (MEDIUM),
+        # but it *executes* compaction and must be HIGH. The classifier has to
+        # match the longest prefix, not the first one inserted.
+        assert (
+            get_risk_level("compaction scheduleAndExecute") == RiskLevel.HIGH
+        )
+        assert (
+            get_risk_level("clustering scheduleAndExecute") == RiskLevel.HIGH
+        )
+        # ...while the plain schedule variants stay MEDIUM.
+        assert get_risk_level("compaction schedule") == RiskLevel.MEDIUM
+        assert get_risk_level("clustering schedule") == RiskLevel.MEDIUM
 
     def test_unknown_command_returns_none(self):
         assert get_risk_level("commits show") is None

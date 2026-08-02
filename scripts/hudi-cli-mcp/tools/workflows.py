@@ -1,3 +1,20 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 """Higher-level workflow tools that compose multiple CLI commands."""
 
 from __future__ import annotations
@@ -23,12 +40,28 @@ def _execute_workflow(
     full_commands = [f"connect --path {path}"] + commands
     result = executor.execute(full_commands)
 
-    # Update session on successful connect
-    if result.return_code == 0:
+    # A composite workflow runs several read commands in one JVM. A single
+    # sub-command that doesn't apply to this table (e.g. `compactions show all` on a
+    # COPY_ON_WRITE table) must not fail the whole workflow -- and it can even flip
+    # the CLI's exit code non-zero. Treat the run as successful if it produced any
+    # table output (i.e. connected and the other commands ran); the offending
+    # sub-command's error is surfaced under `errors` with a `partial` flag. A true
+    # failure (bad path, timeout) yields no tables.
+    ran = not result.timed_out and (
+        result.return_code == 0 or len(result.parsed.tables) > 0
+    )
+
+    if ran:
         session.connect(path)
 
     output = result.to_dict()
-    output["success"] = result.return_code == 0
+    output["success"] = ran
+    if ran and result.parsed.errors:
+        output["partial"] = True
+        output["notice"] = (
+            "Some sub-commands did not apply to this table (see 'errors'); "
+            "the rest of the workflow completed."
+        )
     output["workflow"] = workflow_name
     output["table_path"] = path
     return json.dumps(output, indent=2)
@@ -78,7 +111,7 @@ def table_overview(
 ) -> str:
     """Get a comprehensive overview of a Hudi table.
 
-    Executes: desc, fetch table schema, metadata list-partitions
+    Executes: desc, metadata list-partitions
     """
     commands = [
         "desc",

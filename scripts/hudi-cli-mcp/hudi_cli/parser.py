@@ -1,3 +1,20 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 """Parse Hudi CLI FlipTable ASCII output into structured data."""
 
 from __future__ import annotations
@@ -31,6 +48,23 @@ NOISE_PATTERNS = [
 # Border-only lines (no data)
 BORDER_CHARS = set("╔╗╚╝═╤╧╠╣╪─┌┐└┘┬┴├┤┼+|-")
 
+# Lines that indicate a real command failure. These are surfaced in a dedicated
+# ``errors`` field rather than dropped as noise, so callers can tell "the command
+# failed" apart from "the command returned an empty result" -- the CLI's script
+# mode does not reliably propagate inner-command failures to the process exit code.
+ERROR_MARKERS = [
+    re.compile(r"^ERROR\s"),
+    re.compile(r"Exception(:|\b)"),  # e.g. org.apache.hudi.exception.HoodieException
+    re.compile(r"\bcommand (failed|error)\b", re.IGNORECASE),
+    re.compile(r"\bfailed to\b", re.IGNORECASE),
+    re.compile(r"can only be run", re.IGNORECASE),  # e.g. compaction on a COW table
+]
+
+
+def _is_error_line(line: str) -> bool:
+    """Check if a line signals a real command failure (not routine log noise)."""
+    return any(p.search(line) for p in ERROR_MARKERS)
+
 
 @dataclass
 class ParsedTable:
@@ -50,6 +84,7 @@ class ParsedOutput:
 
     tables: list[ParsedTable] = field(default_factory=list)
     messages: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
     raw: str = ""
 
     def to_dict(self) -> dict:
@@ -63,11 +98,20 @@ class ParsedOutput:
                 for t in self.tables
             ],
             "messages": self.messages,
+            "errors": self.errors,
         }
 
 
 # Pattern to strip CLI prompt prefixes like "hudi->" or "hudi:tablename->"
 PROMPT_PREFIX = re.compile(r"^hudi[:\w]*->\s*")
+
+# ANSI SGR color codes (the CLI prints errors in red); strip so captured error and
+# message text is clean rather than wrapped in escape sequences.
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(line: str) -> str:
+    return ANSI_ESCAPE.sub("", line)
 
 
 def _strip_prompt_prefix(line: str) -> str:
@@ -109,11 +153,18 @@ def _parse_table_row(line: str) -> list[str]:
 
 
 def _is_table_inner_border(line: str) -> bool:
-    """Check if a line is an inner FlipTable border (╠═══╪═══╣) — between rows."""
+    """Check if a line is an inner FlipTable border between rows.
+
+    Hudi's CLI (FlipTable) uses two distinct inter-row separators: a heavy
+    ``╠═══╪═══╣`` after the header, and a light ``╟───┼───╢`` between data rows
+    (some tables use ``├───┼───┤``). Both must be recognized as inner borders --
+    otherwise every data row after the first is treated as the start of a new
+    single-row table and its values are misread as headers.
+    """
     stripped = line.strip()
     if not stripped:
         return False
-    return stripped.startswith("╠") and all(c in set("╠╣═╪ ") for c in stripped)
+    return stripped[0] in "╠╟├" and all(c in set("╠╣═╪╟╢─┼├┤ ") for c in stripped)
 
 
 def _is_table_end_border(line: str) -> bool:
@@ -179,14 +230,22 @@ def parse_cli_output(raw_output: str) -> ParsedOutput:
     - Filters out log noise, banners, prompts
     """
     raw_lines = raw_output.splitlines()
-    # Strip prompt prefixes (e.g., "hudi->" or "hudi:trips->")
-    lines = [_strip_prompt_prefix(line) for line in raw_lines]
+    # Strip ANSI color codes and prompt prefixes (e.g., "hudi->" or "hudi:trips->")
+    lines = [_strip_prompt_prefix(_strip_ansi(line)) for line in raw_lines]
     result = ParsedOutput(raw=raw_output)
 
     # Separate table rows from other content
     message_lines: list[str] = []
+    error_lines: list[str] = []
 
     for line in lines:
+        # Capture real failures first, before they are dropped as noise -- the
+        # error markers overlap the noise patterns (e.g. lines starting "ERROR ").
+        if _is_error_line(line):
+            cleaned = line.strip()
+            if cleaned:
+                error_lines.append(cleaned)
+            continue
         if _is_noise(line):
             continue
         if _is_border_only(line):
@@ -199,6 +258,7 @@ def parse_cli_output(raw_output: str) -> ParsedOutput:
                 message_lines.append(cleaned)
 
     result.messages = message_lines
+    result.errors = error_lines
 
     # Group table rows into blocks and parse each
     # Re-scan all cleaned lines to detect block boundaries

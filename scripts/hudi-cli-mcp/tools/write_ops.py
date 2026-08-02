@@ -1,3 +1,20 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 """Write operation tools — individual write commands with safety controls."""
 
 from __future__ import annotations
@@ -53,7 +70,7 @@ def _execute_write_operation(
         commands = session.build_command_list([command])
         result = executor.execute(commands)
         output = result.to_dict()
-        output["success"] = result.return_code == 0
+        output["success"] = result.is_success()
         output["command"] = command
         output["risk_level"] = risk_level.value
         return json.dumps(output, indent=2)
@@ -287,6 +304,19 @@ def repair_table(
         )
 
     if repair_type == "corrupted-clean-files":
+        # This CLI command has no --dryrun flag. Silently preparing the *real*
+        # repair when the caller asked for a dry run would be a dangerous
+        # surprise, so require an explicit opt-out instead.
+        if dry_run:
+            return json.dumps(
+                {
+                    "success": False,
+                    "error": "'corrupted-clean-files' repair has no dry-run mode. "
+                    "It always modifies the timeline. Re-run with dry_run=false to "
+                    "proceed (you will still get a confirmation token first).",
+                },
+                indent=2,
+            )
         command = "repair corrupted clean files"
     else:
         command = build_command(f"repair {repair_type}", dryrun=str(dry_run).lower())
