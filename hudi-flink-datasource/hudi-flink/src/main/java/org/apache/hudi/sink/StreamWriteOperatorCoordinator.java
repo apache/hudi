@@ -253,9 +253,13 @@ public class StreamWriteOperatorCoordinator
         initClientIds(conf);
       }
       restoreEvents(Long.MAX_VALUE);
-    } catch (Throwable throwable) {
-      log.error("Failed to start operator coordinator.", throwable);
-      context.failJob(throwable);
+    } catch (Exception exception) {
+      // Rethrow instead of context.failJob(): failJob triggers an in-graph global failover that
+      // keeps this same coordinator instance alive without calling start() again, leaving the
+      // half-initialized null fields (executor, writeClient, metaClient ...) to be reused and NPE
+      // later. Rethrowing surfaces the failure as a JobMaster start failure so the partially
+      // initialized instance is discarded rather than kept serving.
+      throw new HoodieException("Failed to start operator coordinator.", exception);
     }
   }
 
