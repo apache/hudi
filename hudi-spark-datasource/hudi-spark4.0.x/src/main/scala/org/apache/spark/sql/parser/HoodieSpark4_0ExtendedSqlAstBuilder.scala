@@ -59,11 +59,13 @@ class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
 
   /**
    * Returns a [[ParseException]] carrying `message` as human-readable text, positioned at `ctx`.
-   * Spark 4.x only exposes error-class constructors, so route the message through the legacy
-   * class that ParserUtils.operationNotAllowed also uses ("Operation not allowed: ...") (#19450).
+   * Spark 4.x only exposes error-class constructors, so route the message through the class that
+   * ParserUtils.operationNotAllowed uses; output gains an "Operation not allowed: " prefix (the
+   * trailing period is stripped to avoid doubling). If Spark drops _LEGACY_ERROR_TEMP_0035, the
+   * intercept[ParseException] cases in TestBlobDataType fail loudly on the 4.x profiles (#19450).
    */
   private def parseException(message: String, ctx: ParserRuleContext): ParseException = {
-    new ParseException("_LEGACY_ERROR_TEMP_0035", Map("message" -> message), ctx)
+    new ParseException("_LEGACY_ERROR_TEMP_0035", Map("message" -> message.stripSuffix(".")), ctx)
   }
 
   protected def typedVisit[T](ctx: ParseTree): T = {
@@ -466,6 +468,8 @@ class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       }
       visitUnitToUnitInterval(innerCtx.body)
     } else {
+      // Unreachable through Hudi's pruned grammar: a bare INTERVAL keyword binds to
+      // transformArgument's qualifiedName alternative first. Kept for parity with Spark.
       throw parseException("at least one time unit should be given for interval literal", ctx)
     }
   }

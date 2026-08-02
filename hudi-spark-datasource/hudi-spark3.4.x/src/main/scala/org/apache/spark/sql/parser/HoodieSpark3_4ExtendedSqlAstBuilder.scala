@@ -61,6 +61,8 @@ class HoodieSpark3_4ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
    * Returns a [[ParseException]] carrying `message` as plain human-readable text, positioned at
    * `ctx`. The (String, ParserRuleContext) constructor treats the string as an error class on
    * Spark 3.4+, so use the message-based primary constructor (errorClass stays None) (#19450).
+   * The Spark 4.x builders render the same messages behind an "Operation not allowed: " prefix,
+   * so cross-profile test assertions must stay substring-based.
    */
   private def parseException(message: String, ctx: ParserRuleContext): ParseException = {
     new ParseException(Option(command(ctx)), message, position(ctx.start), position(ctx.stop))
@@ -466,6 +468,8 @@ class HoodieSpark3_4ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       }
       visitUnitToUnitInterval(innerCtx.body)
     } else {
+      // Unreachable through Hudi's pruned grammar: a bare INTERVAL keyword binds to
+      // transformArgument's qualifiedName alternative first. Kept for parity with Spark.
       throw parseException("at least one time unit should be given for interval literal", ctx)
     }
   }

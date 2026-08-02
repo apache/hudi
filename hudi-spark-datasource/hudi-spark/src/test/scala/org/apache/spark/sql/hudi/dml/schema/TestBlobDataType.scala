@@ -24,7 +24,6 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
-import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.plans.logical.FormatClasses
 import org.apache.spark.sql.hudi.common.{ExtendedParserTestHelpers, HoodieSparkSqlTestBase}
 import org.apache.spark.sql.types._
@@ -383,10 +382,10 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // Endpoints where the end field does not follow the start are rejected by both interval
     // data-type visitors. The grammar only allows YEAR/MONTH -> MONTH and DAY/HOUR/MINUTE/SECOND
     // -> HOUR/MINUTE/SECOND, so these stay grammatical yet still hit the builder's end <= start guard.
-    checkExceptionContain(
+    interceptParse(
       "CREATE TABLE blob_bad_ym (id BIGINT, bad INTERVAL MONTH TO MONTH, data BLOB) USING hudi")(
       "are not supported")
-    checkExceptionContain(
+    interceptParse(
       "CREATE TABLE blob_bad_dt (id BIGINT, bad INTERVAL SECOND TO HOUR, data BLOB) USING hudi")(
       "are not supported")
   }
@@ -503,23 +502,31 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
   }
 
   test("Test parse CREATE TABLE with BLOB column and invalid partition transforms") {
-    // Non-numeric number of buckets. All three cases must surface as a clean ParseException
-    // on every Spark profile now that the builders construct it correctly (#19450).
-    val e1 = intercept[ParseException] {
-      spark.sql("CREATE TABLE blob_e1 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket('x', id))")
-    }
-    assert(e1.getMessage.contains("Invalid number of buckets"))
-    // A non-column-reference where a column is required.
-    val e2 = intercept[ParseException] {
-      spark.sql("CREATE TABLE blob_e2 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")
-    }
-    assert(e2.getMessage.contains("Expected a column reference"))
+    // Each case pins a distinct visitor arm of the extended AST builders; all must surface as a
+    // clean ParseException on every Spark profile (#19450). Assertions stay substring-based
+    // because the Spark 4.x builders add an "Operation not allowed: " prefix.
+    // Non-numeric number of buckets.
+    interceptParse("CREATE TABLE blob_e1 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket('x', id))")(
+      "Invalid number of buckets")
+    // A non-column-reference where a column is required; the full text pins ${nonRef.describe}.
+    interceptParse("CREATE TABLE blob_e2 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")(
+      "Expected a column reference for transform bucket: 5")
     // A single-field transform given more than one argument.
-    val e3 = intercept[ParseException] {
-      spark.sql("CREATE TABLE blob_e3 (id BIGINT, ts DATE, data BLOB) USING hudi " +
-        "PARTITIONED BY (years(id, ts))")
-    }
-    assert(e3.getMessage.contains("Too many arguments"))
+    interceptParse("CREATE TABLE blob_e3 (id BIGINT, ts DATE, data BLOB) USING hudi PARTITIONED BY (years(id, ts))")(
+      "Too many arguments")
+    // Typed literal that fails to parse (visitTypeConstructor arm).
+    interceptParse("CREATE TABLE blob_e4 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(DATE 'nope', id))")(
+      "Cannot parse the DATE value: nope")
+    // Invalid INTERVAL literal (the construct-then-setStackTrace arm).
+    interceptParse("CREATE TABLE blob_e5 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 'x', id))")(
+      "Cannot parse the INTERVAL value: x")
+    // Out-of-range fractional literal; pre-fix the message's interior dots broke Spark 3.4+
+    // error-class lookup and surfaced as a bare AssertionError.
+    interceptParse("CREATE TABLE blob_e6 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(1e40F, id))")(
+      "does not fit in range")
+    // Mixed year-month and day-time interval fields.
+    interceptParse("CREATE TABLE blob_e7 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1 year 2 hours', id))")(
+      "Cannot mix year-month and day-time fields")
   }
 
   test("Test parse CREATE TABLE with BLOB column and file-format / row-format clauses") {
