@@ -21,6 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
@@ -39,6 +40,10 @@ import java.util.Properties;
  */
 @Slf4j
 public class MetricsReporterFactory {
+
+  @VisibleForTesting
+  static final String CLOUDWATCH_REPORTER_CLASS =
+      "org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter";
 
   public static Option<MetricsReporter> createReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
     String reporterClassName = metricsConfig.getMetricReporterClassName();
@@ -84,8 +89,7 @@ public class MetricsReporterFactory {
         reporter = new ConsoleMetricsReporter(registry);
         break;
       case CLOUDWATCH:
-        reporter = (MetricsReporter) ReflectionUtils.loadClass("org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter",
-            new Class[]{HoodieMetricsConfig.class, MetricRegistry.class}, metricsConfig, registry);
+        reporter = createCloudWatchReporter(metricsConfig, registry);
         break;
       case M3:
         reporter = new M3MetricsReporter(metricsConfig, registry);
@@ -98,5 +102,27 @@ public class MetricsReporterFactory {
         break;
     }
     return Option.ofNullable(reporter);
+  }
+
+  /**
+   * The CloudWatch reporter ships in the optional {@code hudi-aws} module and so is loaded reflectively.
+   * Not every engine bundle shades that module, in which case class loading fails without pointing at a
+   * remedy. Translate that into an actionable error.
+   */
+  private static MetricsReporter createCloudWatchReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
+    try {
+      return (MetricsReporter) ReflectionUtils.loadClass(CLOUDWATCH_REPORTER_CLASS,
+          new Class[] {HoodieMetricsConfig.class, MetricRegistry.class}, metricsConfig, registry);
+    } catch (HoodieException e) {
+      if (e.getCause() instanceof ClassNotFoundException) {
+        throw new HoodieException(String.format(
+            "Cannot report metrics to CloudWatch: %s was not found on the classpath. It ships in the "
+                + "optional hudi-aws module, which not every engine bundle includes. Add the "
+                + "hudi-aws-bundle jar matching your Hudi version to the classpath, or set %s to a "
+                + "different reporter type.",
+            CLOUDWATCH_REPORTER_CLASS, HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()), e);
+      }
+      throw e;
+    }
   }
 }

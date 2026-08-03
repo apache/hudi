@@ -50,7 +50,7 @@ public class ReflectionUtils {
       try {
         return Class.forName(c);
       } catch (ClassNotFoundException e) {
-        throw new HoodieException("Unable to load class", e);
+        throw new HoodieException("Unable to load class " + c, e);
       }
     });
   }
