@@ -106,8 +106,9 @@ public class MetricsReporterFactory {
 
   /**
    * The CloudWatch reporter ships in the optional {@code hudi-aws} module and so is loaded reflectively.
-   * Not every engine bundle shades that module, in which case class loading fails without pointing at a
-   * remedy. Translate that into an actionable error.
+   * Reflection reports its two distinct failures - the module is absent, or the module is present but was
+   * built against a different Hudi version - as the same opaque {@link HoodieException}. Translate each into
+   * an error that names its own remedy, and leave anything else untouched.
    */
   private static MetricsReporter createCloudWatchReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
     try {
@@ -121,6 +122,18 @@ public class MetricsReporterFactory {
                 + "hudi-aws-bundle jar matching your Hudi version to the classpath, or set %s to a "
                 + "different reporter type.",
             CLOUDWATCH_REPORTER_CLASS, HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()), e);
+      }
+      if (e.getCause() instanceof NoSuchMethodException) {
+        // The class resolved, so hudi-aws is present; only the constructor did not match. That means the
+        // jar providing it was built against a different Hudi version, which is a mismatch rather than
+        // something missing, and the two need different remedies.
+        throw new HoodieException(String.format(
+            "Cannot report metrics to CloudWatch: %s was found on the classpath but has no (%s, %s) "
+                + "constructor. The jar providing it was most likely built against a different Hudi "
+                + "version. Use a hudi-aws-bundle whose version matches the Hudi bundle in use, or set %s "
+                + "to a different reporter type.",
+            CLOUDWATCH_REPORTER_CLASS, HoodieMetricsConfig.class.getSimpleName(),
+            MetricRegistry.class.getSimpleName(), HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()), e);
       }
       throw e;
     }

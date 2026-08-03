@@ -37,9 +37,11 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -137,11 +139,13 @@ class TestMetricsReporterFactory {
   }
 
   /**
-   * The other direction, and the branch most likely to regress: a failure that is not a missing class must
-   * pass through untouched, so an unrelated instantiation error is never rewritten into "add hudi-aws-bundle".
+   * A missing constructor means hudi-aws resolved but was built against a different Hudi version, which is
+   * a mismatch rather than something absent. Reflection reports it as the same opaque HoodieException as a
+   * missing class, and the bare "Unable to instantiate class" that resulted took a maintainer reading the
+   * buried NoSuchMethodException to explain (#12902).
    */
   @Test
-  void metricsReporterFactoryLeavesNonClassNotFoundFailuresUntouched() {
+  void metricsReporterFactoryExplainsAConstructorMismatch() {
     when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
     try (MockedStatic<ReflectionUtils> mockedStatic = Mockito.mockStatic(ReflectionUtils.class)) {
       mockedStatic.when(() -> ReflectionUtils.loadClass(
@@ -151,8 +155,34 @@ class TestMetricsReporterFactory {
 
       HoodieException exception = assertThrows(HoodieException.class,
           () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
+      String message = exception.getMessage();
+      assertTrue(message.contains("constructor"),
+          () -> "The failure should say the constructor did not match, but was: " + message);
+      assertTrue(message.contains("different Hudi version"),
+          () -> "The failure should name version skew as the likely cause, but was: " + message);
+      assertFalse(message.contains("was not found on the classpath"),
+          () -> "A class that resolved must not be reported as missing, but was: " + message);
+    }
+  }
+
+  /**
+   * The other direction, and the branch most likely to regress: a failure that is neither a missing class
+   * nor a missing constructor must pass through untouched, so an error raised by the reporter's own
+   * constructor is never rewritten into a classpath diagnosis.
+   */
+  @Test
+  void metricsReporterFactoryLeavesOtherFailuresUntouched() {
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
+    try (MockedStatic<ReflectionUtils> mockedStatic = Mockito.mockStatic(ReflectionUtils.class)) {
+      mockedStatic.when(() -> ReflectionUtils.loadClass(
+          eq(MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS), any(Class[].class), eq(metricsConfig), eq(registry)))
+          .thenThrow(new HoodieException("Unable to instantiate class " + MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS,
+              new InvocationTargetException(new IllegalStateException("no AWS region configured"))));
+
+      HoodieException exception = assertThrows(HoodieException.class,
+          () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
       assertEquals("Unable to instantiate class " + MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS,
-          exception.getMessage(), "A non-ClassNotFound failure must not be rewritten");
+          exception.getMessage(), "A failure that is neither cause must not be rewritten");
     }
   }
 
