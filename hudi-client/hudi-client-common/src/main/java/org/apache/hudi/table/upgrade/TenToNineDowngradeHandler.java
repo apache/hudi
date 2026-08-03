@@ -59,7 +59,7 @@ public class TenToNineDowngradeHandler implements DowngradeHandler {
     MetaFieldsMode metaFieldsMode = upgradeDowngradeHelper == null
         ? MetaFieldsMode.ALL
         : upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig().getMetaFieldsMode();
-    if (metaFieldsMode != MetaFieldsMode.ALL && metaFieldsMode != MetaFieldsMode.NONE) {
+    if (metaFieldsMode.isSelective()) {
       LOG.warn("Table is using {}={}, which table version 9 cannot express. The property is being "
               + "removed and the table will behave as {}=false (no meta columns) to version 9 readers. "
               + "Already-written files keep their populated meta columns, but incremental queries that "

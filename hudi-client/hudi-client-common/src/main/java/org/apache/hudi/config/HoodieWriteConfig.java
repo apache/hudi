@@ -3943,7 +3943,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       MetaFieldsMode metaFieldsMode = writeConfig.getMetaFieldsMode();
       // Selective meta-field modes are CoW-only in this release. MoR log-write path does not yet
       // respect the mode, which would silently produce log records with null meta columns.
-      boolean isSelective = metaFieldsMode != MetaFieldsMode.ALL && metaFieldsMode != MetaFieldsMode.NONE;
+      boolean isSelective = metaFieldsMode.isSelective();
       checkArgument(!(writeConfig.getTableType() == HoodieTableType.MERGE_ON_READ && isSelective),
           String.format("%s=%s is currently supported for COPY_ON_WRITE tables only. MoR support is a follow-up. "
                   + "For MoR use %s=ALL or %s=NONE.",

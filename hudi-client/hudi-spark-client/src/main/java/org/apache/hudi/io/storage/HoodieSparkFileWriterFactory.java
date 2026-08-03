@@ -22,6 +22,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -56,8 +57,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    org.apache.hudi.common.model.MetaFieldsMode metaFieldsMode =
-        org.apache.hudi.common.model.MetaFieldsMode.resolve(config);
+    MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
     boolean populateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(path, storage.getConf(), config);
