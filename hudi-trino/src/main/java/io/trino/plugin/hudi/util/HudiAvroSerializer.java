@@ -551,12 +551,13 @@ public class HudiAvroSerializer
         // convert() runs once per decimal cell on the record read path, and building a Schema costs
         // orders of magnitude more than the conversion itself. The (precision, scale) space is tiny
         // and fixed per column, so cache the schemas globally.
-        private static final Map<Long, Schema> DECIMAL_SCHEMAS = new ConcurrentHashMap<>();
+        private static final Map<Integer, Schema> DECIMAL_SCHEMAS = new ConcurrentHashMap<>();
 
         BigDecimal convert(int precision, int scale, byte[] bytes)
         {
+            // The key is unique because precision and scale are at most 38
             Schema schema = DECIMAL_SCHEMAS.computeIfAbsent(
-                    (((long) precision) << 32) | (scale & 0xFFFFFFFFL),
+                    precision * 100 + scale,
                     key -> LogicalTypes.decimal(precision, scale).addToSchema(Schema.create(Schema.Type.BYTES)));
             return AVRO_DECIMAL_CONVERSION.fromBytes(ByteBuffer.wrap(bytes), schema, schema.getLogicalType());
         }
