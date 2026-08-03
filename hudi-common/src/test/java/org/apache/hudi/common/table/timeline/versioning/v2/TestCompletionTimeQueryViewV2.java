@@ -31,13 +31,14 @@ import org.junit.jupiter.api.Test;
 
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineV2.ACTION_ARCHIVED_META_FIELD;
 import static org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineV2.COMPLETION_TIME_ARCHIVED_META_FIELD;
-import static org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineV2.INSTANT_TIME_ARCHIVED_META_FIELD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * Test cases for {@link CompletionTimeQueryViewV2}.
+ */
 class TestCompletionTimeQueryViewV2 {
 
   /**
@@ -51,12 +52,10 @@ class TestCompletionTimeQueryViewV2 {
    * "org.apache.avro.generic.GenericRecord.get(String)" is null} from this path.
    */
   @Test
-  void readCompletionTimeFallsBackWhenTheArchivedRecordHasNoCompletionTime() {
+  void testReadCompletionTimeWithoutCompletionTime() {
     try (CompletionTimeQueryViewV2 view = new CompletionTimeQueryViewV2(mockMetaClientWithEmptyTimeline())) {
       GenericRecord record = new GenericData.Record(HoodieLSMTimelineInstant.getClassSchema());
-      record.put(INSTANT_TIME_ARCHIVED_META_FIELD, "00000001");
-      record.put(ACTION_ARCHIVED_META_FIELD, "commit");
-      // completionTime deliberately left unset
+      // only completionTime is read by the method under test; deliberately left unset
 
       view.readCompletionTime("00000001", record);
 
@@ -66,16 +65,15 @@ class TestCompletionTimeQueryViewV2 {
   }
 
   @Test
-  void readCompletionTimeUsesTheArchivedCompletionTimeWhenPresent() {
+  void testReadCompletionTime() {
     try (CompletionTimeQueryViewV2 view = new CompletionTimeQueryViewV2(mockMetaClientWithEmptyTimeline())) {
       GenericRecord record = new GenericData.Record(HoodieLSMTimelineInstant.getClassSchema());
-      record.put(INSTANT_TIME_ARCHIVED_META_FIELD, "00000001");
-      record.put(ACTION_ARCHIVED_META_FIELD, "commit");
       record.put(COMPLETION_TIME_ARCHIVED_META_FIELD, "00001001");
 
       view.readCompletionTime("00000001", record);
 
-      assertEquals(Option.of("00001001"), view.getCompletionTime("00000001"));
+      assertEquals(Option.of("00001001"), view.getCompletionTime("00000001"),
+          "A present completion time should be used as-is");
     }
   }
 
