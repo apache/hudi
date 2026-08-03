@@ -56,7 +56,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
@@ -182,12 +184,23 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     metaClient = HoodieTableMetaClient.reload(metaClient);
     StoragePath markerDir = new StoragePath(metaClient.getMarkerFolderPath(commitTime));
     boolean markerTypeFileExists = MarkerUtils.doesMarkerTypeFileExist(metaClient.getStorage(), markerDir);
+    List<String> markerFileNames = listMarkerFileNames(markerDir);
     if (markerType == MarkerType.TIMELINE_SERVER_BASED) {
       assertTrue(markerTypeFileExists,
           "Timeline-server-based markers should have written " + MarkerUtils.MARKER_TYPE_FILENAME);
+      assertTrue(markerFileNames.stream().anyMatch(
+          name -> name.startsWith(MarkerUtils.MARKERS_FILENAME_PREFIX)
+              && !name.equals(MarkerUtils.MARKER_TYPE_FILENAME)),
+          () -> "Timeline-server-based markers should have written a "
+              + MarkerUtils.MARKERS_FILENAME_PREFIX + "<n> file. Found: " + markerFileNames);
     } else {
       assertFalse(markerTypeFileExists,
           "Direct markers should not have written " + MarkerUtils.MARKER_TYPE_FILENAME);
+      // Absence of MARKERS.type alone would also hold if the write produced no markers at all, so
+      // require the direct markers themselves.
+      assertTrue(markerFileNames.stream().anyMatch(name -> name.contains(HoodieTableMetaClient.MARKER_EXTN)),
+          () -> "Direct markers should have written a " + HoodieTableMetaClient.MARKER_EXTN
+              + " file. Found: " + markerFileNames);
     }
 
     writeClient.commit(commitTime, statuses);
@@ -197,6 +210,19 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
         "The commit should have completed for marker type " + markerType);
     assertEquals(1, getIncrementalFiles("2021/09/11", "0", -1).length,
         "One base file should have been written for marker type " + markerType);
+  }
+
+  /**
+   * The marker file names written under {@code markerDir}, read recursively off storage rather than
+   * through the timeline server, so the assertion does not lean on the path it is checking.
+   */
+  private List<String> listMarkerFileNames(StoragePath markerDir) throws IOException {
+    if (!metaClient.getStorage().exists(markerDir)) {
+      return Collections.emptyList();
+    }
+    return metaClient.getStorage().listFiles(markerDir).stream()
+        .map(pathInfo -> pathInfo.getPath().getName())
+        .collect(Collectors.toList());
   }
 
   @Test
