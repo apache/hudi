@@ -45,7 +45,6 @@ import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -107,9 +106,13 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     FileSystem fileSystem =
         new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers,
             initialRetryIntervalMs, "");
-    HoodieWrapperFileSystem fs =
-        new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
-    assertDoesNotThrow(fs::getScheme, "Method #getSchema does not implement correctly");
+    // FakeRemoteFileSystem deliberately does not override getScheme(), so FileSystem's own implementation
+    // throws - the PrestoS3FileSystem shape (HUDI-4602). Assert on the retry wrapper itself: asserting on
+    // HoodieWrapperFileSystem instead would only exercise its own uri.getScheme() and never reach here,
+    // which is why this guard was inert from the day HUDI-5286 added it.
+    assertThrows(UnsupportedOperationException.class, fakeFs::getScheme);
+    assertEquals("file", ((HoodieRetryWrapperFileSystem) fileSystem).getScheme(),
+        "the retry wrapper should resolve the scheme of a filesystem that does not implement getScheme()");
   }
 
   @Test
@@ -252,11 +255,6 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     @Override
     public Configuration getConf() {
       return fs.getConf();
-    }
-
-    @Override
-    public String getScheme() {
-      return fs.getScheme();
     }
 
     @Override
