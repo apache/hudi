@@ -270,15 +270,14 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     client.cluster(clusteringTime.get(), true);
     assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(clusteringTime.get()));
 
-    // The callback must fire once for the clustering completion, reporting the action actually on
-    // the timeline (replacecommit for table version < 8, clustering for 8+).
+    // The callback must fire exactly once for the clustering completion, reporting the completed
+    // timeline action (replacecommit).
     List<HoodieWriteCommitCallbackMessage> clusteringMessages = RecordingCommitCallback.MESSAGES.stream()
         .filter(m -> m.getCommitTime().equals(clusteringTime.get()))
         .collect(Collectors.toList());
     assertEquals(1, clusteringMessages.size(), "callback must fire once for the clustering commit");
-    String action = clusteringMessages.get(0).getCommitActionType().orElse(null);
-    assertTrue(HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action) || HoodieTimeline.CLUSTERING_ACTION.equals(action),
-        "clustering callback must report the timeline action, got: " + action);
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringMessages.get(0).getCommitActionType().orElse(null));
+    assertNotNull(clusteringMessages.get(0).getPrevFilePaths(), "prevFilePaths must never be null");
   }
 
   /**

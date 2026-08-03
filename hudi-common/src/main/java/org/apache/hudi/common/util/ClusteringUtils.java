@@ -121,14 +121,18 @@ public class ClusteringUtils {
   /**
    * Transitions the provided clustering instant fron inflight to complete based on the clustering
    * action type. After HUDI-7905, the new clustering commits are written with clustering action.
+   *
+   * @return the completed instant, whose action is the one recorded on the timeline. This differs
+   *         from the inflight action: a {@code clustering} inflight instant completes as
+   *         {@code replacecommit}.
    */
-  public static <T> void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
-                                                                         HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline,
-                                                                         TableFormatCompletionAction tableFormatCompletionAction) {
+  public static <T> HoodieInstant transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
+                                                                                  HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline,
+                                                                                  TableFormatCompletionAction tableFormatCompletionAction) {
     if (clusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
-      activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, metadata, tableFormatCompletionAction);
+      return activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, metadata, tableFormatCompletionAction);
     } else {
-      activeTimeline.transitionReplaceInflightToComplete(shouldLock, clusteringInstant, metadata, tableFormatCompletionAction);
+      return activeTimeline.transitionReplaceInflightToComplete(shouldLock, clusteringInstant, metadata, tableFormatCompletionAction);
     }
   }
 

@@ -608,6 +608,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     handleWriteErrors(writeStats, TableServiceType.CLUSTER);
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,
         table.getActiveTimeline(), table.getMetaClient().getInstantGenerator()).get();
+    final HoodieInstant completedClusteringInstant;
     try {
       this.txnManager.beginStateChange(Option.of(clusteringInstant),
           lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
@@ -623,7 +624,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
       log.info("Committing Clustering {} for table {}", clusteringCommitTime, table.getConfig().getBasePath());
 
-      ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(false, clusteringInstant, replaceCommitMetadata, table.getActiveTimeline(),
+      completedClusteringInstant = ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(false, clusteringInstant, replaceCommitMetadata, table.getActiveTimeline(),
           completedInstant -> table.getMetaClient().getTableFormat().commit(replaceCommitMetadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
       log.debug("Clustering {} finished with result {}", clusteringCommitTime, replaceCommitMetadata);
     } catch (Exception e) {
@@ -644,7 +645,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       heartbeatClient.stop(clusteringCommitTime);
     }
     log.info("Clustering successfully on commit {} for table {}", clusteringCommitTime, table.getConfig().getBasePath());
-    fireCommitCallbackIfNecessary(clusteringCommitTime, clusteringInstant.getAction(),
+    fireCommitCallbackIfNecessary(clusteringCommitTime, completedClusteringInstant.getAction(),
         writeStats, table::getBaseFileOnlyView, Option.empty());
   }
 

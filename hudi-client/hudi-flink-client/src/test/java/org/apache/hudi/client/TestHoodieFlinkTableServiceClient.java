@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.callback.HoodieWriteCommitCallback;
+import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -31,6 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieLockConfig;
+import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
@@ -53,12 +56,16 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -218,15 +225,24 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
 
   @Test
   void testCompleteClusteringCommitsAndCleansMarkers() {
+    ClusteringCallback.MESSAGES.clear();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(metaClient.getBasePath())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withCallbackConfig(HoodieWriteCommitCallbackConfig.newBuilder()
+            .writeCommitCallbackOn("true")
+            .withCallbackClass(ClusteringCallback.class.getName())
+            .build())
         .build();
     HoodieFlinkTable table = mock(HoodieFlinkTable.class);
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     when(table.getActiveTimeline()).thenReturn(activeTimeline);
     when(table.getInstantGenerator()).thenReturn(metaClient.getInstantGenerator());
     HoodieInstant clusteringInstant = mock(HoodieInstant.class);
+    // The inflight instant is a clustering instant on timeline v2; the completed one is always a
+    // replacecommit, and it is the completed action the callback must report.
+    HoodieInstant completedInstant = mock(HoodieInstant.class);
+    when(completedInstant.getAction()).thenReturn(HoodieTimeline.REPLACE_COMMIT_ACTION);
     HoodieReplaceCommitMetadata metadata = new HoodieReplaceCommitMetadata();
     TestableHoodieFlinkTableServiceClient client =
         new TestableHoodieFlinkTableServiceClient(context, writeConfig, Option.empty(), table);
@@ -237,6 +253,9 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
       clusteringUtils.when(() -> ClusteringUtils.getInflightClusteringInstant(
           "20260723120000001", activeTimeline, metaClient.getInstantGenerator()))
           .thenReturn(Option.of(clusteringInstant));
+      clusteringUtils.when(() -> ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
+          anyBoolean(), any(), any(), any(), any()))
+          .thenReturn(completedInstant);
       markersFactory.when(() -> WriteMarkersFactory.get(any(), any(), any())).thenReturn(writeMarkers);
       client.callCompleteClustering(metadata, table, "20260723120000001");
     } finally {
@@ -244,6 +263,23 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
     }
 
     verify(writeMarkers).quietDeleteMarkerDir(any(), any(Integer.class));
+    assertEquals(1, ClusteringCallback.MESSAGES.size(), "callback must fire once for the clustering commit");
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION,
+        ClusteringCallback.MESSAGES.get(0).getCommitActionType().orElse(null));
+  }
+
+  public static class ClusteringCallback implements HoodieWriteCommitCallback {
+
+    static final List<HoodieWriteCommitCallbackMessage> MESSAGES = new CopyOnWriteArrayList<>();
+
+    public ClusteringCallback(HoodieWriteConfig config) {
+      // config arg required for reflective instantiation
+    }
+
+    @Override
+    public void call(HoodieWriteCommitCallbackMessage callbackMessage) {
+      MESSAGES.add(callbackMessage);
+    }
   }
 
   private static class TestableHoodieFlinkTableServiceClient extends HoodieFlinkTableServiceClient<Object> {
