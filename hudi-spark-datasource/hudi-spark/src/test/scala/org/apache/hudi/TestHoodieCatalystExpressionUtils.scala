@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateSub, Divide, Exp, Expression, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, Sqrt, Upper}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DateType, DoubleType, IntegerType, LongType, StringType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
@@ -71,29 +72,43 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   @Test
-  def testDateParsingTransformationsPreserveOrdering(): Unit = {
-    // ParseToDate's case-class shape differs across Spark versions, so the matcher dispatches it
-    // through the per-version unapplyOrderPreservingDateParsing hook. The 1-arg auxiliary
-    // constructor is stable on all profiles, letting this pin that hook everywhere.
-    assertEquals(Some(strAttr), matched(new ParseToDate(strAttr)))
-  }
-
-  @Test
   def testDateParsingReplacementShapesPreserveOrdering(): Unit = {
     // ParseToDate/ParseToTimestamp are RuntimeReplaceable (SPARK-38240): on the real read path
     // the optimizer's ReplaceExpressions rewrites them before data skipping sees the filter, so
-    // the matcher must also recover the source attribute from the replacement shapes. They are
+    // the matcher must recover the source attribute from the replacement shapes. They are
     // built here via replacement() because GetTimestamp's constructor arity differs across
     // Spark versions while the 2-arg ParseTo* auxiliary constructors are stable everywhere.
-    val toTimestampReplacement = new ParseToTimestamp(strAttr, Literal("yyyy-MM-dd")).replacement
-    assertTrue(toTimestampReplacement.isInstanceOf[GetTimestamp])
-    assertEquals(Some(strAttr), matched(toTimestampReplacement))
+    // The matcher gates on the format literal (fixed-width, year-first) and on failOnError, so
+    // the shapes are built under an explicitly pinned ANSI setting (ANSI is the default on
+    // Spark 4 and would otherwise flip failOnError at construction time).
+    val nonAnsiConf = new SQLConf
+    nonAnsiConf.setConf(SQLConf.ANSI_ENABLED, false)
+    SQLConf.withExistingConf(nonAnsiConf) {
+      val toTimestampReplacement = new ParseToTimestamp(strAttr, Literal("yyyy-MM-dd")).replacement
+      assertTrue(toTimestampReplacement.isInstanceOf[GetTimestamp])
+      assertEquals(Some(strAttr), matched(toTimestampReplacement))
 
-    // to_date's replacement wraps GetTimestamp in a cast to date; the matcher must recurse
-    // through both
-    val toDateReplacement = new ParseToDate(strAttr, Literal("yyyy-MM-dd")).replacement
-    assertTrue(toDateReplacement.collectFirst { case gt: GetTimestamp => gt }.isDefined)
-    assertEquals(Some(strAttr), matched(toDateReplacement))
+      // to_date's replacement wraps GetTimestamp in a cast to date; the matcher must recurse
+      // through both
+      val toDateReplacement = new ParseToDate(strAttr, Literal("yyyy-MM-dd")).replacement
+      assertTrue(toDateReplacement.collectFirst { case gt: GetTimestamp => gt }.isDefined)
+      assertEquals(Some(strAttr), matched(toDateReplacement))
+
+      // Non-order-preserving formats must be rejected: lexicographic ordering of 'MM/dd/yyyy'
+      // strings does not follow chronological ordering, so pruning on re-parsed min/max stats
+      // would return wrong results
+      assertEquals(None, matched(new ParseToTimestamp(strAttr, Literal("MM/dd/yyyy")).replacement))
+      assertEquals(None, matched(new ParseToDate(strAttr, Literal("MM/dd/yyyy")).replacement))
+    }
+
+    // Under ANSI the parse throws on unparseable input, so probing min/max stats with it could
+    // fail queries whose files should simply not be pruned; even an order-preserving format
+    // must not match then
+    val ansiConf = new SQLConf
+    ansiConf.setConf(SQLConf.ANSI_ENABLED, true)
+    SQLConf.withExistingConf(ansiConf) {
+      assertEquals(None, matched(new ParseToTimestamp(strAttr, Literal("yyyy-MM-dd")).replacement))
+    }
   }
 
   @Test
