@@ -63,14 +63,30 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER
 @Slf4j
 public class FileSystemBasedLockProvider implements LockProvider<String>, Serializable {
   private static final String LOCK_FILE_NAME = "lock";
+  /**
+   * Guards this provider's lock-file operations.
+   *
+   * <p>These blocks used to synchronize on {@link #LOCK_FILE_NAME}. That is a compile-time String
+   * constant, so it is interned and shared JVM-wide with every other {@code "lock"} literal - including
+   * {@code FileSystemBasedLockProviderTestClass}, which declares its own {@code static final String LOCK =
+   * "lock"} and therefore contends on the very same monitor. Any unrelated code doing the same silently
+   * couples itself to Hudi's lock acquisition. A private object cannot be aliased that way.
+   *
+   * <p>Kept static so the mutual-exclusion scope is unchanged by this fix.
+   */
+  private static final Object LOCK_FILE_MONITOR = new Object();
   private final int lockTimeoutMinutes;
   private final transient HoodieStorage storage;
   private final transient StoragePath lockFile;
   protected LockConfiguration lockConfiguration;
   private final SimpleDateFormat sdf;
   private final LockInfo lockInfo;
+  /**
+   * Written while holding {@link #LOCK_FILE_MONITOR} in {@code tryLock}, but read through the generated
+   * getter without it, so the read needs to be volatile for the value to be visible to other threads.
+   */
   @Getter
-  private String currentOwnerLockInfo;
+  private volatile String currentOwnerLockInfo;
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
     checkRequiredProps(lockConfiguration);
@@ -97,7 +113,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   @Override
   public void close() {
-    synchronized (LOCK_FILE_NAME) {
+    synchronized (LOCK_FILE_MONITOR) {
       try {
         storage.deleteFile(this.lockFile);
       } catch (IOException e) {
@@ -120,7 +136,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   @Override
   public boolean tryLock(long time, TimeUnit unit) {
     try {
-      synchronized (LOCK_FILE_NAME) {
+      synchronized (LOCK_FILE_MONITOR) {
         // Check whether lock is already expired, if so try to delete lock file
         if (storage.exists(this.lockFile)) {
           if (checkIfExpired()) {
@@ -142,7 +158,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   @Override
   public void unlock() {
-    synchronized (LOCK_FILE_NAME) {
+    synchronized (LOCK_FILE_MONITOR) {
       try {
         if (storage.exists(this.lockFile)) {
           storage.deleteFile(this.lockFile);

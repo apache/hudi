@@ -34,6 +34,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
@@ -76,6 +80,50 @@ public class TestFileSystemBasedLockProvider {
       // After unlock the file is gone, so the lock is acquirable again.
       assertTrue(provider.tryLock(1, TimeUnit.SECONDS), "re-acquisition after unlock should succeed");
     } finally {
+      provider.unlock();
+      provider.close();
+    }
+  }
+
+  /**
+   * The lock-file operations used to synchronize on the {@code "lock"} String constant, which is interned
+   * and therefore shared JVM-wide with every other {@code "lock"} literal. Unrelated code holding that
+   * monitor blocked lock acquisition outright. {@code FileSystemBasedLockProviderTestClass} in this very
+   * repo declares {@code static final String LOCK = "lock"} and so aliases it.
+   */
+  @Test
+  public void testAcquisitionIsNotBlockedByTheInternedLockLiteral() throws Exception {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    FileSystemBasedLockProvider provider =
+        new FileSystemBasedLockProvider(lockConfiguration(lockDir("interned"), 0), storageConf);
+    CountDownLatch holding = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    // stands in for any other class in the JVM doing synchronized ("lock")
+    Thread unrelated = new Thread(() -> {
+      synchronized ("lock") {
+        holding.countDown();
+        try {
+          release.await();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    });
+    unrelated.setDaemon(true);
+    unrelated.start();
+    assertTrue(holding.await(10, TimeUnit.SECONDS), "the unrelated thread should hold the interned monitor");
+
+    try {
+      ExecutorService executor = Executors.newSingleThreadExecutor();
+      try {
+        Future<Boolean> acquired = executor.submit(() -> provider.tryLock(1, TimeUnit.SECONDS));
+        assertTrue(acquired.get(10, TimeUnit.SECONDS),
+            "acquisition must not wait on a monitor held by code that has nothing to do with Hudi");
+      } finally {
+        executor.shutdownNow();
+      }
+    } finally {
+      release.countDown();
       provider.unlock();
       provider.close();
     }
