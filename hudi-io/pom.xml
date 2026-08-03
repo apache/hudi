@@ -116,6 +116,12 @@
               <goal>shade</goal>
             </goals>
             <configuration>
+              <!-- Must stay false here, and only here. This is the one module using
+                   shadedArtifactAttached: the shaded jar ships under the "shaded" classifier while the main
+                   artifact stays unshaded, so the published POM has to keep declaring protobuf-java, which
+                   the primary jar genuinely needs. Reducing it would strip a real dependency. The invariant
+                   is that false is correct iff the shaded jar is attached under a classifier - it is not a
+                   leftover to be "fixed" by analogy with the packaging bundles. -->
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <shadedArtifactAttached>true</shadedArtifactAttached>
               <shadedClassifierName>shaded</shadedClassifierName>
