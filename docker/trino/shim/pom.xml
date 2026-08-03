@@ -29,8 +29,9 @@
   Build (JDK 25, after installing hudi-trino into the local m2):
       mvn -f docker/trino/shim/pom.xml clean package -DskipTests
   Output plugin dir: target/trino-hudi-<trino.version>/
-  Use `package`, never `install`: installing would shadow the real
-  io.trino:trino-hudi release coordinates in the local repository.
+  Use `package`; `install` is hard-disabled via maven.install.skip below because
+  installing would shadow the real io.trino:trino-hudi release coordinates in
+  the local repository.
 
   The parent version below must stay in sync with trino.version in the root pom,
   the TRINO_VERSION ARG in docker/trino/Dockerfile, and the compose image tag.
@@ -58,8 +59,11 @@
              analysis). ASF headers are enforced separately by
              scripts/release/validate_source_copyright.sh. -->
         <air.check.skip-all>true</air.check.skip-all>
-        <!-- Test infra only: never deploy/release this artifact. -->
+        <!-- Test infra only: never deploy/release this artifact, and never
+             install it - a stray install would publish a stub at the real
+             io.trino:trino-hudi coordinates and poison the local m2. -->
         <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
         <skipNexusStagingDeployMojo>true</skipNexusStagingDeployMojo>
     </properties>
 

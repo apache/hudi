@@ -5,14 +5,14 @@ on:
     branches:
       - master
       - 'release-*'
-      # TEMPORARY: validate the workflow on the dev branch; drop this line
-      # (and the commit that added it) before merging upstream.
-      - trino-e2e-testcontainers
     paths:
+      # docker/demo/** is deliberately broad: the ITs drive several demo fixture
+      # scripts (sparksql-*.commands, setup_demo_container.sh), so any demo edit
+      # must re-run this pipeline.
       - 'hudi-trino/**'
       - 'docker/trino/**'
       - 'docker/compose/docker-compose_hadoop340_hive2310_spark402*'
-      - 'docker/demo/sparksql-stock-ticks-trino.commands'
+      - 'docker/demo/**'
       - 'hudi-integ-test/src/test/java/org/apache/hudi/integ2/**'
       - '.github/workflows/hudi_trino_e2e.yml'
   pull_request:
@@ -23,7 +23,7 @@ on:
       - 'hudi-trino/**'
       - 'docker/trino/**'
       - 'docker/compose/docker-compose_hadoop340_hive2310_spark402*'
-      - 'docker/demo/sparksql-stock-ticks-trino.commands'
+      - 'docker/demo/**'
       - 'hudi-integ-test/src/test/java/org/apache/hudi/integ2/**'
       - '.github/workflows/hudi_trino_e2e.yml'
   workflow_dispatch:
@@ -33,7 +33,9 @@ concurrency:
   cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'release-') }}
 
 env:
-  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log
+  # The wagon retry flags mirror bot.yml's MVN_ARGS: the JDK 17 step below is a
+  # cold-cache full-reactor build, exactly what those were added for.
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5
   SCALA_PROFILE: -Dscala-2.13 -Dscala.binary.version=2.13
   COMPOSE_PREFIX: docker-compose_hadoop340_hive2310_spark402
 
@@ -88,9 +90,16 @@ jobs:
           mvn $MVN_ARGS -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
       - name: Assemble trino-hudi plugin dir via in-repo shim (JDK 25)
         # package, NOT install: installing would shadow the real
-        # io.trino:trino-hudi release coordinates in the local m2.
-        run:
-          mvn $MVN_ARGS -f docker/trino/shim/pom.xml clean package -DskipTests
+        # io.trino:trino-hudi release coordinates in the local m2 (the shim pom
+        # also hard-disables install via maven.install.skip).
+        # dep.hudi.version is derived from the reactor pom because the shim sits
+        # outside the reactor: cut_release_branch.sh's `mvn versions:set` cannot
+        # bump its literal default, and a stale value could resolve silently
+        # from the actions maven cache instead of failing loudly.
+        run: |
+          HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
+          echo "Building shim against hudi version: $HUDI_VERSION"
+          mvn $MVN_ARGS -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
       - name: Build apachehudi/hudi-trino_481 image
         run: |
           docker/trino/build_image.sh --plugin-dir docker/trino/shim/target/trino-hudi-481
@@ -136,6 +145,8 @@ jobs:
           # -DskipITs=false overrides the spark4.0 profile's skipITs=true default
           # (see root pom.xml). -Dcompose.profiles=trino starts the profile-gated
           # trinocoordinator service; without it every ITTestTrino* class skips.
+          # redirectTestOutputToFile makes failsafe write per-class *-output.txt
+          # files, which the on-failure dump step below relies on.
           mvn verify $SCALA_PROFILE -Dspark4.0 -Pintegration-tests \
             -pl hudi-integ-test \
             -DskipITs=false \
@@ -143,9 +154,10 @@ jobs:
             -Dit.test='ITTestTrino*' \
             -Dcompose.profiles=trino \
             -Dspark.docker.compose.prefix=$COMPOSE_PREFIX \
+            -Dmaven.test.redirectTestOutputToFile=true \
             $MVN_ARGS
       - name: Dump failsafe test outputs on failure
-        # Surefire redirects test stdout (incl. the streamed trinocoordinator
+        # The IT step redirects test stdout (incl. the streamed trinocoordinator
         # boot/query logs) into per-class output files; print their tails so
         # server-side failures are readable straight from the workflow log.
         if: failure()

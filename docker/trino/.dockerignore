@@ -1,0 +1,3 @@
+# Keep the shim build tree out of the docker build context; build_image.sh
+# stages the one plugin dir the Dockerfile needs into plugin/.
+shim/
