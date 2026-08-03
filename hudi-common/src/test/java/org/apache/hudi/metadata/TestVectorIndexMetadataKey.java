@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestVectorIndexMetadataKey {
@@ -79,12 +80,33 @@ class TestVectorIndexMetadataKey {
   @Test
   void testFamilyMajorOrdering() {
     assertOrdered(
+        VectorIndexMetadataKey.activeManifest(),
         VectorIndexMetadataKey.manifest(1),
         VectorIndexMetadataKey.manifest(2),
         VectorIndexMetadataKey.quantizer(1, 0),
-        VectorIndexMetadataKey.centroids(1, 10L, 0),
+        VectorIndexMetadataKey.centroids(1, 0),
         VectorIndexMetadataKey.clusterStats(1, 7),
-        VectorIndexMetadataKey.postingBlock(1, 7, 0, 0));
+        VectorIndexMetadataKey.postingBlock(1, 7, 0, 0),
+        VectorIndexMetadataKey.sourceInstantMarker(1, "20260724010101"));
+  }
+
+  @Test
+  void testSourceInstantMarkersSortWithinGenerationAndDecode() {
+    String prefix = VectorIndexMetadataKey.sourceInstantMarkerPrefix(3);
+    String first = VectorIndexMetadataKey.sourceInstantMarker(3, "20260724010101");
+    String second = VectorIndexMetadataKey.sourceInstantMarker(3, "20260724010202");
+    String nextGeneration = VectorIndexMetadataKey.sourceInstantMarker(4, "20260724000000");
+
+    assertOrdered(prefix, first, second, nextGeneration);
+    assertEquals("20260724010101", VectorIndexMetadataKey.sourceInstant(first));
+    assertNull(VectorIndexMetadataKey.sourceInstant(VectorIndexMetadataKey.manifest(3)));
+    assertNull(VectorIndexMetadataKey.sourceInstant(prefix));
+    assertThrows(IllegalArgumentException.class,
+        () -> VectorIndexMetadataKey.sourceInstantMarker(3, ""));
+    assertThrows(IllegalArgumentException.class,
+        () -> VectorIndexMetadataKey.sourceInstantMarker(3, null));
+    assertTrue(VectorIndexMetadataKey.compareUnsigned(
+        second, VectorIndexMetadataKey.exclusiveEnd(prefix)) < 0);
   }
 
   @Test

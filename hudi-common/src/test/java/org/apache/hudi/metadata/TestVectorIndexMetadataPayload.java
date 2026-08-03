@@ -19,13 +19,22 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieVectorIndexActiveManifest;
+import org.apache.hudi.avro.model.HoodieVectorIndexCentroids;
+import org.apache.hudi.avro.model.HoodieVectorIndexClusterStats;
+import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.avro.model.HoodieVectorIndexPostingDelta;
 import org.apache.hudi.avro.model.HoodieVectorIndexQuantizer;
+import org.apache.hudi.avro.model.HoodieVectorIndexSourceInstantMarker;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestVectorIndexMetadataPayload {
@@ -54,6 +63,75 @@ class TestVectorIndexMetadataPayload {
     assertEquals("file-group-1", delta.getFileGroupId());
     assertEquals("dt=2026-04-01", delta.getPartitionPath());
     assertEquals("20260603120000", delta.getBaseInstantTime());
+  }
+
+  @Test
+  void testActiveManifestCarriesReaderVisibleGeneration() {
+    HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createVectorIndexActiveManifestRecord(
+        2, "vector_index_demo");
+
+    HoodieVectorIndexActiveManifest manifest =
+        (HoodieVectorIndexActiveManifest) record.getData().getVectorIndexMetadata().get();
+    assertEquals(VectorIndexMetadataKey.activeManifest(), record.getRecordKey());
+    assertEquals(1, manifest.getIndexVersion());
+    assertEquals(2, manifest.getActiveGeneration());
+  }
+
+  @Test
+  void testEpochFreeCentroidRecordUsesGenerationAndChunkKey() {
+    HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createVectorIndexCentroidsRecord(
+        2,
+        7,
+        ByteBuffer.wrap(new byte[] {1, 0, 0, 0}),
+        ByteBuffer.wrap(new byte[] {2, 3}),
+        ByteBuffer.wrap(new byte[] {4, 5}),
+        "vector_index_demo");
+
+    HoodieVectorIndexCentroids centroids =
+        (HoodieVectorIndexCentroids) record.getData().getVectorIndexMetadata().get();
+    assertEquals(VectorIndexMetadataKey.centroids(2, 7), record.getRecordKey());
+    assertEquals(2, centroids.getCentroidBytes().remaining());
+    assertNull(HoodieVectorIndexCentroids.getClassSchema().getField("centroidEpoch"));
+  }
+
+  @Test
+  void testManifestCarriesVerifiedContiguousFrontierWithoutEpoch() {
+    HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createVectorIndexManifestRecord(
+        2, "build-2", "BUILDING", 128, 128, 16, 2, 1, 64, 1,
+        "COSINE", true, true, "embedding", 524288, 2048, 4096, 1024,
+        "20260724000000", "20260724010101", 123L, "vector_index_demo");
+
+    HoodieVectorIndexManifest manifest =
+        (HoodieVectorIndexManifest) record.getData().getVectorIndexMetadata().get();
+    assertEquals("20260724000000", manifest.getBootstrapInstant());
+    assertEquals("20260724010101", manifest.getVerifiedFrontier());
+    assertEquals("BUILDING", manifest.getState().toString());
+    assertNull(HoodieVectorIndexManifest.getClassSchema().getField("centroidEpoch"));
+  }
+
+  @Test
+  void testClusterManifestPersistsRoutingFields() {
+    HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createVectorIndexClusterManifestRecord(
+        2, 9, 2, Arrays.asList("fg-a", "fg-b"), 17L, 123L, "vector_index_demo");
+
+    HoodieVectorIndexClusterStats stats =
+        (HoodieVectorIndexClusterStats) record.getData().getVectorIndexMetadata().get();
+    assertEquals(0, stats.getRoutingVersion());
+    assertEquals(2, stats.getShardCount());
+    assertEquals(Arrays.asList("fg-a", "fg-b"), stats.getFileGroupIds());
+    assertEquals(17L, stats.getLiveCount());
+    assertNull(HoodieVectorIndexClusterStats.getClassSchema().getField("centroidEpoch"));
+  }
+
+  @Test
+  void testSourceInstantMarkerCarriesSourceIdentity() {
+    HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createVectorIndexSourceInstantMarkerRecord(
+        2, "20260724010101", "vector_index_demo");
+
+    HoodieVectorIndexSourceInstantMarker marker =
+        (HoodieVectorIndexSourceInstantMarker) record.getData().getVectorIndexMetadata().get();
+    assertEquals(VectorIndexMetadataKey.sourceInstantMarker(2, "20260724010101"), record.getRecordKey());
+    assertEquals("20260724010101", marker.getDataInstant().toString());
   }
 
   @Test

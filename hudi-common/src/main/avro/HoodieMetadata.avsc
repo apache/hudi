@@ -562,6 +562,15 @@
                 "null",
                 {
                     "type": "record",
+                    "name": "HoodieVectorIndexActiveManifest",
+                    "fields": [
+                        {"name": "indexVersion", "type": "int", "doc": "Persisted vector-index format version."},
+                        {"name": "activeGeneration", "type": ["null", "int"], "default": null,
+                         "doc": "Reader-visible generation ordinal, or null before first activation."}
+                    ]
+                },
+                {
+                    "type": "record",
                     "name": "HoodieVectorIndexManifest",
                     "fields": [
                         {"name": "indexVersion", "type": "int"},
@@ -582,7 +591,10 @@
                         {"name": "vectorsPerBlock", "type": "int", "doc": "Resolved N. Frozen per generation; readers never re-derive."},
                         {"name": "splitLimit", "type": "int"},
                         {"name": "mergeFloor", "type": "int"},
-                        {"name": "centroidEpoch", "type": "long"},
+                        {"name": "bootstrapInstant", "type": ["null", "string"], "default": null,
+                         "doc": "Source data-write instant included by the generation bootstrap baseline."},
+                        {"name": "verifiedFrontier", "type": ["null", "string"], "default": null,
+                         "doc": "Latest source data-write instant with verified contiguous marker coverage from the bootstrap baseline."},
                         {"name": "createdTs", "type": "long"}
                     ]
                 },
@@ -600,7 +612,6 @@
                     "type": "record",
                     "name": "HoodieVectorIndexCentroids",
                     "fields": [
-                        {"name": "centroidEpoch", "type": "long"},
                         {"name": "clusterIds", "type": "bytes", "doc": "k x u32 LE cluster ids in this chunk, parallel to centroidBytes rows."},
                         {"name": "centroidBytes", "type": "bytes", "doc": "k x dimPadded float32 LE, row-major, in rotated space."},
                         {"name": "clusterRadii", "type": "bytes", "doc": "k x float32 LE max residual norm per cluster."}
@@ -647,12 +658,21 @@
                     "type": "record",
                     "name": "HoodieVectorIndexClusterStats",
                     "fields": [
+                        {"name": "routingVersion", "type": "int", "doc": "Cache invalidation version for atomically published cluster routing changes."},
+                        {"name": "shardCount", "type": "int"},
+                        {"name": "fileGroupIds", "type": {"type": "array", "items": "string"}, "doc": "Candidate base-table file groups for this cluster."},
                         {"name": "liveCount", "type": "long"},
                         {"name": "deltaCount", "type": "long"},
                         {"name": "tombstoneCount", "type": "long"},
-                        {"name": "centroidEpoch", "type": "long"},
                         {"name": "lastRebalanceInstant", "type": ["null", "string"], "default": null},
                         {"name": "lastUpdatedTs", "type": "long"}
+                    ]
+                },
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexSourceInstantMarker",
+                    "fields": [
+                        {"name": "dataInstant", "type": "string", "doc": "Completed source data-write instant incorporated by this generation."}
                     ]
                 },
                 {
