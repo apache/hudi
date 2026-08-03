@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
@@ -217,9 +218,27 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     }
   }
 
+  /**
+   * The completion time of an archived instant, falling back to its instant time when the record carries
+   * none.
+   *
+   * <p>{@code completionTime} is declared {@code ["null","string"]} with a null default in
+   * {@code HoodieLSMTimelineInstant} and has no value for instants archived before the field existed, so it
+   * must not be dereferenced. Defaulting to the instant time is the fallback
+   * {@code CompletionTimeQueryViewV2#setCompletionTime} already documents for the same records.
+   *
+   * @param record       an LSM timeline record.
+   * @param instantTime  the instant time to fall back to.
+   * @return the completion time, never null as long as {@code instantTime} is not.
+   */
+  public static String completionTimeOrInstantTime(GenericRecord record, String instantTime) {
+    String completionTime = StringUtils.objToString(record.get(COMPLETION_TIME_ARCHIVED_META_FIELD));
+    return completionTime != null ? completionTime : instantTime;
+  }
+
   private HoodieInstant readCommit(String instantTime, GenericRecord record, Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer) {
     final String action = record.get(ACTION_ARCHIVED_META_FIELD).toString();
-    final String completionTime = record.get(COMPLETION_TIME_ARCHIVED_META_FIELD).toString();
+    final String completionTime = completionTimeOrInstantTime(record, instantTime);
     instantDetailsConsumer.ifPresent(consumer -> consumer.accept(instantTime, record));
     return instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime);
   }
