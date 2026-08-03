@@ -29,10 +29,11 @@ import static org.apache.hudi.integ2.testcontainers.TestcontainersConfig.Paths;
 
 /**
  * End-to-end coverage that the native trino-hudi connector can read both COW and
- * MOR tables that came from Spark + Hive sync. Mirrors the historical
- * {@code docker/demo/trino-batch1.commands} demo flow but uses a self-contained
- * spark-sql fixture (see {@code sparksql-stock-ticks-trino.commands}) instead of
- * the full Kafka/streaming pipeline, which integ2 doesn't otherwise exercise.
+ * MOR tables that came from Spark + Hive sync. Mirrors the retired
+ * {@code docker/demo/trino-batch1.commands} demo flow (removed together with the
+ * rest of the legacy trino-coordinator path) but uses a self-contained spark-sql
+ * fixture (see {@code sparksql-stock-ticks-trino.commands}) instead of the full
+ * Kafka/streaming pipeline, which integ2 doesn't otherwise exercise.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class ITTestTrinoStockTicks extends ITTestBaseTestcontainers {
@@ -67,7 +68,7 @@ public class ITTestTrinoStockTicks extends ITTestBaseTestcontainers {
         + STOCK_TICKS_COW_PATH + " " + STOCK_TICKS_MOR_PATH).expectToSucceed();
   }
 
-  // ---------- Queries reproduced from docker/demo/trino-batch1.commands ----------
+  // ---------- Queries reproduced from the retired docker/demo/trino-batch1.commands ----------
 
   @Test
   public void testTrinoReadsCowMaxTs() throws Exception {

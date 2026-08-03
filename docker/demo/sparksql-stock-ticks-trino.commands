@@ -17,7 +17,7 @@
  */
 
 // Self-contained COW + MOR stock-ticks seed for the Trino E2E tests
-// (ITTestTrinoStockTicks). Mirrors the docker/demo/trino-batch1.commands data
+// (ITTestTrinoStockTicks). Mirrors the retired trino-batch1.commands data
 // shape without the Kafka/streaming pipeline, which integ2 does not exercise.
 // ts stays STRING so Trino's CSV_UNQUOTED output matches the test's exact
 // row assertion: GOOG,2018-08-31 10:29:00,6330,1230.5,1230.5
