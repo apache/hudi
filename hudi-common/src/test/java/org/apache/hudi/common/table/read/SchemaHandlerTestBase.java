@@ -132,25 +132,25 @@ public abstract class SchemaHandlerTestBase {
     assertFalse(readerContext.getNeedsBootstrapMerge());
 
     //read subset of columns with a nested-narrowed field, the shape Spark's nested schema pruning
-    //requests: "fare" keeps only its "amount" leaf
-    requestedSchema = narrowFareToAmountOnly(generateProjectionSchema("begin_lat", "fare", "rider"));
-    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, supportsParquetRowIndex);
-    if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
-      expectedRequiredSchema = narrowFareToAmountOnly(generateProjectionSchema(hasBuiltInDelete, "begin_lat", "fare", "rider", "_hoodie_record_key", "timestamp"));
-    } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
-      expectedRequiredSchema = narrowFareToAmountOnly(generateProjectionSchema(hasBuiltInDelete, "begin_lat", "fare", "rider", "_hoodie_record_key"));
-    } else if (mergeMode == CUSTOM && isProjectionCompatible) {
-      expectedRequiredSchema = narrowFareToAmountOnly(generateProjectionSchema("begin_lat", "fare", "rider", "begin_lon", "_hoodie_record_key", "timestamp"));
-    } else {
-      //a projection-incompatible custom merger may need any column to merge, so the handler must
-      //re-expand the nested-narrowed request back to the full data schema (see HUDI-5443)
-      expectedRequiredSchema = dataSchema;
+    //requests: "fare" keeps only its "amount" leaf. Skipped for a projection-incompatible custom
+    //merger: that branch returns the full data schema before looking at the requested schema, so
+    //the flat-projection assertion above already covers it
+    if (!(mergeMode == CUSTOM && !isProjectionCompatible)) {
+      requestedSchema = narrowFareToAmountOnly(generateProjectionSchema("begin_lat", "fare", "rider"));
+      schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, supportsParquetRowIndex);
+      if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
+        expectedRequiredSchema = narrowFareToAmountOnly(generateProjectionSchema(hasBuiltInDelete, "begin_lat", "fare", "rider", "_hoodie_record_key", "timestamp"));
+      } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
+        expectedRequiredSchema = narrowFareToAmountOnly(generateProjectionSchema(hasBuiltInDelete, "begin_lat", "fare", "rider", "_hoodie_record_key"));
+      } else {
+        expectedRequiredSchema = narrowFareToAmountOnly(generateProjectionSchema("begin_lat", "fare", "rider", "begin_lon", "_hoodie_record_key", "timestamp"));
+      }
+      if (supportsParquetRowIndex && mergeUseRecordPosition) {
+        expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
+      }
+      assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
+      assertFalse(readerContext.getNeedsBootstrapMerge());
     }
-    if (supportsParquetRowIndex && mergeUseRecordPosition) {
-      expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
-    }
-    assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
-    assertFalse(readerContext.getNeedsBootstrapMerge());
   }
 
   public void testMorBootstrap(RecordMergeMode mergeMode,
