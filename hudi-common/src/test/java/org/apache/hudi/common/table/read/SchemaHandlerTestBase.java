@@ -276,7 +276,7 @@ public abstract class SchemaHandlerTestBase {
     assertEquals(expectedBootstrapFields.getRight(), bootstrapFields.getRight());
   }
 
-  private static void setupMORTable(RecordMergeMode mergeMode, boolean hasPrecombine, HoodieTableConfig hoodieTableConfig) {
+  static void setupMORTable(RecordMergeMode mergeMode, boolean hasPrecombine, HoodieTableConfig hoodieTableConfig) {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
@@ -292,7 +292,7 @@ public abstract class SchemaHandlerTestBase {
     }
   }
 
-  private static HoodieRecordMerger mockRecordMerger(boolean isProjectionCompatible, String[] mandatoryFields) throws IOException {
+  static HoodieRecordMerger mockRecordMerger(boolean isProjectionCompatible, String[] mandatoryFields) throws IOException {
     HoodieRecordMerger merger = mock(HoodieRecordMerger.class);
     when(merger.isProjectionCompatible()).thenReturn(isProjectionCompatible);
     when(merger.merge(any(), any(), any(), any())).thenReturn(null);
@@ -330,7 +330,7 @@ public abstract class SchemaHandlerTestBase {
    * Rebuilds the given projection schema, narrowing its "fare" record down to the "amount" leaf to
    * mimic the schema shape Spark's nested schema pruning requests.
    */
-  private static HoodieSchema narrowFareToAmountOnly(HoodieSchema projectionSchema) {
+  static HoodieSchema narrowFareToAmountOnly(HoodieSchema projectionSchema) {
     List<HoodieSchemaField> fields = new ArrayList<>(projectionSchema.getFields().size());
     for (HoodieSchemaField field : projectionSchema.getFields()) {
       if (field.name().equals("fare")) {

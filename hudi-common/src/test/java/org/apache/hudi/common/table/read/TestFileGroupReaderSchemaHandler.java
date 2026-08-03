@@ -145,6 +145,20 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     super.testMor(mergeMode, hasPrecombine, isProjectionCompatible, mergeUseRecordPosition, supportsParquetRowIndex, hasBuiltInDelete);
   }
 
+  @Test
+  public void testMorNestedMandatoryFieldMergesIntoNarrowedRecord() throws IOException {
+    setupMORTable(RecordMergeMode.CUSTOM, false, hoodieTableConfig);
+    HoodieRecordMerger merger = mockRecordMerger(true, new String[] {"fare.currency"});
+    HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, true, false, false, merger);
+
+    //the request narrows "fare" to its "amount" leaf while the merger declares the sibling leaf
+    //"fare.currency" mandatory, so the handler has to merge the two projections of "fare"
+    HoodieSchema requestedSchema = narrowFareToAmountOnly(generateProjectionSchema("begin_lat", "fare", "rider"));
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, false);
+    assertEquals(generateProjectionSchema("begin_lat", "fare", "rider"), schemaHandler.getRequiredSchema());
+    assertFalse(readerContext.getNeedsBootstrapMerge());
+  }
+
   @ParameterizedTest
   @MethodSource("testMorParams")
   public void testMorBootstrap(RecordMergeMode mergeMode,
