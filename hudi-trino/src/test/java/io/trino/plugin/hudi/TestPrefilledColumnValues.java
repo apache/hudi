@@ -81,9 +81,20 @@ class TestPrefilledColumnValues
     {
         // Trino's HivePartitionKey encodes a null partition value as the literal string "\N"
         PrefilledColumnValues values = prefilledValues(new HivePartitionKey("pk_string", "\\N"));
+        HiveColumnHandle handle = partitionKey("pk_string", VARCHAR, HiveType.HIVE_STRING);
 
-        Block block = singleValueBlock(values, partitionKey("pk_string", VARCHAR, HiveType.HIVE_STRING));
+        Block block = singleValueBlock(values, handle);
         assertThat(block.isNull(0)).isTrue();
+
+        // Resolved values are memoized per column, and null is a legitimate resolved value, so a second
+        // read of the same column has to stay null rather than fall through and re-resolve.
+        BlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 2);
+        values.appendTo(handle, blockBuilder);
+        values.appendTo(handle, blockBuilder);
+        Block repeated = blockBuilder.build();
+        assertThat(repeated.isNull(0)).isTrue();
+        assertThat(repeated.isNull(1)).isTrue();
+        assertThat(values.toRleBlock(handle, 1).isNull(0)).isTrue();
     }
 
     @Test
