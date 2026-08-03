@@ -2286,7 +2286,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
   test("test create table with VECTOR without dimension fails") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      checkExceptionContain(
+      interceptParse(
         s"""
            |CREATE TABLE $tableName (
            |  id BIGINT,
@@ -2304,7 +2304,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     withTempDir { tmp =>
       val tableName = generateTableName
       // Unsupported element type
-      checkExceptionContain(
+      interceptParse(
         s"""
            |CREATE TABLE $tableName (
            |  id BIGINT,
@@ -2403,14 +2403,14 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     assertEquals(Some("/tmp/vec_path_tbl"), pathPlan.tableSpec.location)
 
     // A 'path' option colliding with LOCATION is rejected by the option cleaner.
-    checkExceptionContain(
+    interceptParse(
       "CREATE TABLE vec_dup_path_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
         "OPTIONS ('path' = '/tmp/a') LOCATION '/tmp/b'")(
       "Duplicated table paths")
 
     // Each reserved table property (provider, location, owner) is rejected by the property cleaner.
     Seq("provider", "location", "owner").foreach { reserved =>
-      checkExceptionContain(
+      interceptParse(
         s"CREATE TABLE vec_reserved_$reserved (id BIGINT, embedding VECTOR(4)) USING hudi " +
           s"TBLPROPERTIES ('$reserved' = 'x')")(
         "reserved table property")
