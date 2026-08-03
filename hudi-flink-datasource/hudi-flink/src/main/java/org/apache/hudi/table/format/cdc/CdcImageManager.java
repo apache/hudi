@@ -86,7 +86,12 @@ public class CdcImageManager implements AutoCloseable {
       cache.remove(oldest).close();
     }
     ExternalSpillableMap<String, byte[]> images = loadImageRecords(maxCompactionMemoryInBytes, fileSlice);
-    cache.put(instant, images);
+    try {
+      cache.put(instant, images);
+    } catch (RuntimeException | Error e) {
+      closeSuppressing(images, e);
+      throw e;
+    }
     return images;
   }
 
@@ -105,13 +110,26 @@ public class CdcImageManager implements AutoCloseable {
         serializer.serialize(row, new BytesArrayOutputView(baos));
         imageRecordsMap.put(recordKey, baos.toByteArray());
       }
+    } catch (IOException | RuntimeException | Error e) {
+      closeSuppressing(imageRecordsMap, e);
+      throw e;
     }
     return imageRecordsMap;
   }
 
+  private static void closeSuppressing(
+      ExternalSpillableMap<String, byte[]> imageRecordsMap,
+      Throwable primary) {
+    try {
+      imageRecordsMap.close();
+    } catch (RuntimeException | Error closeError) {
+      primary.addSuppressed(closeError);
+    }
+  }
+
   public RowData getImageRecord(
       String recordKey,
-      ExternalSpillableMap<String, byte[]> imageCache,
+      Map<String, byte[]> imageCache,
       RowKind rowKind) {
     byte[] bytes = imageCache.get(recordKey);
     ValidationUtils.checkState(bytes != null,
@@ -127,7 +145,7 @@ public class CdcImageManager implements AutoCloseable {
 
   public void updateImageRecord(
       String recordKey,
-      ExternalSpillableMap<String, byte[]> imageCache,
+      Map<String, byte[]> imageCache,
       RowData row) {
     ByteArrayOutputStream baos = new ByteArrayOutputStream(4096);
     try {
@@ -140,7 +158,7 @@ public class CdcImageManager implements AutoCloseable {
 
   public RowData removeImageRecord(
       String recordKey,
-      ExternalSpillableMap<String, byte[]> imageCache) {
+      Map<String, byte[]> imageCache) {
     byte[] bytes = imageCache.remove(recordKey);
     if (bytes == null) {
       return null;

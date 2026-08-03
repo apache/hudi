@@ -154,6 +154,55 @@ class TestCdcImageManager {
     }
   }
 
+  @Test
+  void testLoadClosesImageCacheWhenIteratorCreationFails() {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getBasePath()).thenReturn("/table");
+    ExternalSpillableMap<String, byte[]> imageCache = mockImageCache();
+    RuntimeException failure = new RuntimeException("iterator creation failed");
+    CdcImageManager imageManager = new CdcImageManager(
+        rowType("value"),
+        writeConfig,
+        split -> {
+          throw failure;
+        });
+
+    try (MockedStatic<FormatUtils> mockedFormatUtils = mockStatic(FormatUtils.class)) {
+      mockedFormatUtils.when(() -> FormatUtils.spillableMap(
+          writeConfig, 1024L, CdcImageManager.class.getSimpleName()))
+          .thenReturn(imageCache);
+
+      assertSame(failure, assertThrows(
+          RuntimeException.class,
+          () -> imageManager.getOrLoadImages(1024L, fileSlice("001"))));
+      verify(imageCache).close();
+    }
+  }
+
+  @Test
+  void testLoadClosesIteratorAndImageCacheWhenIterationFails() {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getBasePath()).thenReturn("/table");
+    ExternalSpillableMap<String, byte[]> imageCache = mockImageCache();
+    ClosableIterator<RowData> iterator = mock(ClosableIterator.class);
+    RuntimeException failure = new RuntimeException("iteration failed");
+    when(iterator.hasNext()).thenThrow(failure);
+    CdcImageManager imageManager = new CdcImageManager(
+        rowType("value"), writeConfig, split -> iterator);
+
+    try (MockedStatic<FormatUtils> mockedFormatUtils = mockStatic(FormatUtils.class)) {
+      mockedFormatUtils.when(() -> FormatUtils.spillableMap(
+          writeConfig, 1024L, CdcImageManager.class.getSimpleName()))
+          .thenReturn(imageCache);
+
+      assertSame(failure, assertThrows(
+          RuntimeException.class,
+          () -> imageManager.getOrLoadImages(1024L, fileSlice("001"))));
+      verify(iterator).close();
+      verify(imageCache).close();
+    }
+  }
+
   @SuppressWarnings("unchecked")
   private static ExternalSpillableMap<String, byte[]> mockImageCache() {
     ExternalSpillableMap<String, byte[]> imageCache = mock(ExternalSpillableMap.class);
