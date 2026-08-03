@@ -109,6 +109,30 @@ public enum MetaFieldsMode {
   }
 
   /**
+   * @return true for the modes that populate some but not all meta columns, i.e. everything except
+   * {@link #ALL} and {@link #NONE}.
+   *
+   * <p>These are the modes the deprecated {@code hoodie.populate.meta.fields} boolean cannot
+   * express, so they are what callers gate on when a code path only understands all-or-nothing meta
+   * fields — writer engines not yet wired for selective population, table versions that predate the
+   * mode property, and validation that must not let a two-state writer speak for a five-state table.
+   */
+  public boolean isSelective() {
+    return this != ALL && this != NONE;
+  }
+
+  /**
+   * Resolve the effective mode from any {@link HoodieConfig} that may carry the two properties —
+   * a table config, a write config, or a bare config built from write options. Preferred over the
+   * two-argument overload: it keeps the property keys and the precedence rule in one place instead
+   * of repeating them at every call site.
+   */
+  public static MetaFieldsMode resolve(HoodieConfig config) {
+    return resolve(config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
+        config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
+  }
+
+  /**
    * Resolve the effective mode. {@code hoodie.meta.fields.mode} is the source of truth; the
    * deprecated {@code hoodie.populate.meta.fields} boolean is a fallback for tables written before
    * the mode property existed. Precedence:
@@ -125,17 +149,6 @@ public enum MetaFieldsMode {
    *         includes the pre-enum comma-separated format — callers that upgrade an old table must
    *         migrate the value through the hudi-cli.
    */
-  /**
-   * Resolve the effective mode from any {@link HoodieConfig} that may carry the two properties —
-   * a table config, a write config, or a bare config built from write options. Preferred over the
-   * two-argument overload: it keeps the property keys and the precedence rule in one place instead
-   * of repeating them at every call site.
-   */
-  public static MetaFieldsMode resolve(HoodieConfig config) {
-    return resolve(config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
-        config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
-  }
-
   public static MetaFieldsMode resolve(String rawMode, boolean legacyPopulateMetaFields) {
     if (StringUtils.isNullOrEmpty(rawMode)) {
       return legacyPopulateMetaFields ? ALL : NONE;
