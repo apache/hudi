@@ -114,10 +114,10 @@ public class PrefilledColumnValues
 
     private Object nativeValueOf(HiveColumnHandle columnHandle)
     {
-        // Every input to resolve() is a constant of the split, but appendTo is called once per prefilled
-        // column per record, and resolving re-parses the partition string each time ($file_modified_time
-        // even formats a timestamp and parses it straight back). Memoize per column so each one is
-        // resolved once per split. Keyed on the name rather than the handle because
+        // Every input to computeNativeValue() is a constant of the split, but appendTo is called once per
+        // prefilled column per record, and computing re-parses the partition string each time
+        // ($file_modified_time even formats a timestamp and parses it straight back). Memoize per column so
+        // each one is resolved once per split. Keyed on the name rather than the handle because
         // HiveColumnHandle.hashCode hashes seven fields through a varargs array, whereas a String caches
         // its hash. containsKey rather than a null check: null is a legitimate resolved value, both for
         // the hive-null convention and for the lenient fallback below.
@@ -125,12 +125,12 @@ public class PrefilledColumnValues
         if (resolvedValues.containsKey(name)) {
             return resolvedValues.get(name);
         }
-        Object value = resolve(columnHandle);
+        Object value = computeNativeValue(columnHandle);
         resolvedValues.put(name, value);
         return value;
     }
 
-    private Object resolve(HiveColumnHandle columnHandle)
+    private Object computeNativeValue(HiveColumnHandle columnHandle)
     {
         if (!isPrefilled(columnHandle)) {
             // Lenient null fill, e.g. for a hidden column Trino defines but Hudi does not populate.
