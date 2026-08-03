@@ -90,7 +90,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
       assertPrunedReadSchema(selectDF, tableName, expectedSchema)
 
       checkAnswer(s"SELECT id, item.name FROM $tableName")(Seq(1, "a1"))
-      // The merged row keeps nested leaves that the pruned read schema dropped
+      // A second query pruned to different leaves still observes the correctly merged values
       checkAnswer(s"SELECT id, item.price, ts FROM $tableName")(Seq(1, 10, 123457))
     }
   }
