@@ -303,8 +303,7 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
         .forEach(instant -> setCompletionTime(instant.requestedTime(), instant.getCompletionTime()));
   }
 
-  @VisibleForTesting
-  void readCompletionTime(String instantTime, GenericRecord record) {
+  private void readCompletionTime(String instantTime, GenericRecord record) {
     // The field is nullable in HoodieLSMTimelineInstant and is absent for instants archived before it
     // existed, so leave the fallback to setCompletionTime rather than dereferencing here.
     setCompletionTime(instantTime, StringUtils.objToString(record.get(COMPLETION_TIME_ARCHIVED_META_FIELD)));
