@@ -54,7 +54,6 @@ import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSIO
 import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_METRIC_TYPE_KEY;
 import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_TABLE_NAME_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(MockitoExtension.class)
 public class TestCloudWatchReporter {
@@ -168,18 +167,33 @@ public class TestCloudWatchReporter {
     Mockito.verify(cloudWatchAsync).close();
   }
 
+  /**
+   * A metric name with no dot has no table name to report under. Such names do reach the reporter -
+   * {@code HoodieMetadataMetrics#setMetric} registers gauges without a prefix, so
+   * {@code HoodieMetadataMetrics.getStats} contributes a bare {@code partitionCount} - and this used to
+   * throw. {@link com.codahale.metrics.ScheduledReporter} suppresses whatever {@code report()} throws, so
+   * the result was that no metrics reached CloudWatch at all, which is what #12182 and #13051 report.
+   * The unmappable metric is now skipped and the rest of the batch is still published.
+   */
   @Test
-  public void testReportOnMetricsWithoutTableName() {
+  public void testReportSkipsMetricsWithoutTableNameAndPublishesTheRest() {
     SortedMap<String, Gauge> gauges = new TreeMap<>();
-    Gauge<Long> gauge1 = () -> 100L;
-    Gauge<Double> gauge2 = () -> 100.1;
-    gauges.put("gauge1", gauge1);
-    gauges.put(TABLE_NAME + ".gauge2", gauge2);
+    Gauge<Long> unmappable = () -> 7L;
+    Gauge<Double> wellFormed = () -> 100.1;
+    gauges.put("partitionCount", unmappable);
+    gauges.put(TABLE_NAME + ".gauge2", wellFormed);
 
     Mockito.when(metricRegistry.getGauges(MetricFilter.ALL)).thenReturn(gauges);
 
-    // should fail if metric name doesn't have at least two parts
-    assertThrows(IllegalArgumentException.class, () -> reporter.report());
+    reporter.report();
+
+    Mockito.verify(cloudWatchAsync, Mockito.times(1)).putMetricData(putMetricDataRequestCaptor.capture());
+    List<MetricDatum> metricData = putMetricDataRequestCaptor.getValue().metricData();
+    assertEquals(1, metricData.size(),
+        "The unmappable metric should be skipped and the well-formed one still published");
+    assertEquals(PREFIX + ".gauge2", metricData.get(0).metricName());
+    assertEquals(wellFormed.getValue(), metricData.get(0).value());
+    assertDimensions(metricData.get(0).dimensions(), DIMENSION_GAUGE_TYPE_VALUE);
 
     reporter.stop();
     Mockito.verify(cloudWatchAsync).close();
