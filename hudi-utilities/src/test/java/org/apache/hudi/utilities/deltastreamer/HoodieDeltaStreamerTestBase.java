@@ -779,13 +779,20 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       try {
         Future<Boolean> res = executor.submit(() -> {
           boolean ret = false;
-          while (!ret && !dsFuture.isDone()) {
+          while (!ret && !dsFuture.isDone() && !Thread.currentThread().isInterrupted()) {
             try {
               Thread.sleep(2000);
               ret = condition.apply(true);
               if (ret) {
                 log.info("Condition completed successfully");
               }
+            } catch (InterruptedException interrupted) {
+              // shutdownNow below interrupts this thread once the wait has given up. Thread.sleep clears
+              // the interrupt flag when it throws, so catching this with everything else would re-enter
+              // the loop and keep polling forever. Restore the flag and stop; this is not a condition
+              // failure, so it is deliberately not recorded as one.
+              Thread.currentThread().interrupt();
+              break;
             } catch (Throwable error) {
               lastError.set(error);
               ret = false;
