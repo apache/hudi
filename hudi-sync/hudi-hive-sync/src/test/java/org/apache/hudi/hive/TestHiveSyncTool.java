@@ -2500,12 +2500,16 @@ public class TestHiveSyncTool {
 
     HiveTestUtil.addMORPartitions(0, true, true, true, ZonedDateTime.now().plusDays(2), commitTime2, commitTime3);
 
+    // No sync condition is met, but the sync marker trails the midpoint of the active commits
+    // timeline ([100, 101, 102, 103] with midpoint 102), so it advances to the last commit.
+    reInitHiveSyncClient();
     reSyncHiveTable();
-    assertEquals(commitTime1, hiveClient.getLastCommitTimeSynced(tableName).get());
+    assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(tableName).get());
 
     // Let the last commit time synced to be before the start of the active timeline,
-    // to trigger the fallback of listing all partitions. There is no partition change
-    // and the last commit time synced should still be the same.
+    // to trigger the fallback of listing all partitions. There is no partition change,
+    // and the sync marker again trails the timeline midpoint, so it advances to the
+    // last commit instead of aging out further.
     HiveTestUtil.addMORPartitions(0, true, true, true, ZonedDateTime.now().plusDays(2), commitTime4, commitTime5);
     HiveTestUtil.removeCommitFromActiveTimeline(commitTime0, COMMIT_ACTION);
     HiveTestUtil.removeCommitFromActiveTimeline(commitTime1, DELTA_COMMIT_ACTION);
@@ -2513,7 +2517,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.removeCommitFromActiveTimeline(commitTime3, DELTA_COMMIT_ACTION);
     reInitHiveSyncClient();
     reSyncHiveTable();
-    assertEquals(commitTime1, hiveClient.getLastCommitTimeSynced(tableName).get());
+    assertEquals(commitTime5, hiveClient.getLastCommitTimeSynced(tableName).get());
   }
 
   @ParameterizedTest
