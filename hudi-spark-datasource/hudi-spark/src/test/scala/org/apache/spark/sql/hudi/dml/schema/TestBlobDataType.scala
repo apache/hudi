@@ -508,18 +508,22 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // Non-numeric number of buckets.
     interceptParse("CREATE TABLE blob_e1 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket('x', id))")(
       "Invalid number of buckets")
-    // A non-column-reference where a column is required; the full text pins ${nonRef.describe}.
-    interceptParse("CREATE TABLE blob_e2 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")(
+    // A non-column-reference where a column is required. The buggy interpolation rendered the
+    // literal text "5.describe" (a superstring of the expected message), so pin its absence too.
+    val e2 = interceptParse("CREATE TABLE blob_e2 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")(
       "Expected a column reference for transform bucket: 5")
+    assert(!e2.getMessage.contains(".describe"))
     // A single-field transform given more than one argument.
     interceptParse("CREATE TABLE blob_e3 (id BIGINT, ts DATE, data BLOB) USING hudi PARTITIONED BY (years(id, ts))")(
       "Too many arguments")
     // Typed literal that fails to parse (visitTypeConstructor arm).
     interceptParse("CREATE TABLE blob_e4 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(DATE 'nope', id))")(
       "Cannot parse the DATE value: nope")
-    // Invalid INTERVAL literal (the construct-then-setStackTrace arm).
-    interceptParse("CREATE TABLE blob_e5 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 'x', id))")(
+    // Invalid INTERVAL literal: the builders copy the triggering exception's stack trace onto the
+    // ParseException (the construct-then-setStackTrace arm), so the thrower must be visible.
+    val e5 = interceptParse("CREATE TABLE blob_e5 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 'x', id))")(
       "Cannot parse the INTERVAL value: x")
+    assert(e5.getStackTrace.exists(_.getClassName.contains("IntervalUtils")))
     // Out-of-range fractional literal; pre-fix the message's interior dots broke Spark 3.4+
     // error-class lookup and surfaced as a bare AssertionError.
     interceptParse("CREATE TABLE blob_e6 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(1e40F, id))")(
@@ -527,6 +531,32 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // Mixed year-month and day-time interval fields.
     interceptParse("CREATE TABLE blob_e7 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1 year 2 hours', id))")(
       "Cannot mix year-month and day-time fields")
+  }
+
+  test("Test parse CREATE TABLE with BLOB column and invalid literal transform arguments") {
+    // Remaining error arms of the literal and interval visitors, one SQL per throw site; all must
+    // surface as a clean ParseException on every Spark profile (#19450).
+    // A typed literal whose type keyword has no visitor arm.
+    interceptParse("CREATE TABLE blob_e8 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(FOO 'bar', id))")(
+      "Literals of type 'FOO' are currently not supported")
+    // A hex literal with a non-hex character (the IllegalArgumentException fallback arm).
+    interceptParse("CREATE TABLE blob_e9 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(X'zz', id))")(
+      "hexBinary")
+    // Multi-unit interval combined with a from-to unit.
+    interceptParse("CREATE TABLE blob_e10 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 1 DAY 2 HOUR TO MINUTE, id))")(
+      "Can only have a single from-to unit in the interval literal syntax")
+    // From-to unit combined with a trailing multi-unit interval (the error-recovery arm).
+    interceptParse("CREATE TABLE blob_e11 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1' DAY TO HOUR '2' MINUTE, id))")(
+      "Can only have a single from-to unit in the interval literal syntax")
+    // A non-numeric value in a unit-value pair.
+    interceptParse("CREATE TABLE blob_e12 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 'x' DAY, id))")(
+      "Can only use numbers in the interval value part")
+    // A from-to interval whose value is not a string literal.
+    interceptParse("CREATE TABLE blob_e13 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 1 DAY TO HOUR, id))")(
+      "The value of from-to unit must be a string")
+    // A from-to unit pair outside the supported YEAR TO MONTH / DAY TO SECOND family.
+    interceptParse("CREATE TABLE blob_e14 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1' MONTH TO HOUR, id))")(
+      "Intervals FROM month TO hour are not supported")
   }
 
   test("Test parse CREATE TABLE with BLOB column and file-format / row-format clauses") {

@@ -39,14 +39,16 @@ trait ExtendedParserTestHelpers extends Assertions {
 
   /**
    * Asserts that `sql` fails with a [[ParseException]] (not merely some Exception) whose message
-   * contains `expected`. Matching stays on a substring so the same assertion holds on Spark 4.x,
+   * contains `expected`, and returns the exception so callers can assert further properties (e.g.
+   * stack-trace frames). Matching stays on a substring so the same assertion holds on Spark 4.x,
    * where the builders wrap the message in an "Operation not allowed: " prefix.
    */
-  protected def interceptParse(sql: String)(expected: String): Unit = {
+  protected def interceptParse(sql: String)(expected: String): ParseException = {
     val e = intercept[ParseException] {
       spark.sql(sql)
     }
     assert(e.getMessage.contains(expected), s"actual: ${e.getMessage}")
+    e
   }
 
   protected def transformByName(plan: CreateTable, name: String): Transform =
