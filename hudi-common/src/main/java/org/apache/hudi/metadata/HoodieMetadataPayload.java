@@ -24,12 +24,14 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
+import org.apache.hudi.avro.model.HoodieVectorIndexActiveManifest;
 import org.apache.hudi.avro.model.HoodieVectorIndexCentroids;
 import org.apache.hudi.avro.model.HoodieVectorIndexClusterStats;
 import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.avro.model.HoodieVectorIndexPostingBlock;
 import org.apache.hudi.avro.model.HoodieVectorIndexPostingDelta;
 import org.apache.hudi.avro.model.HoodieVectorIndexQuantizer;
+import org.apache.hudi.avro.model.HoodieVectorIndexSourceInstantMarker;
 import org.apache.hudi.avro.model.HoodieVectorIndexTombstone;
 import org.apache.hudi.common.avro.AvroSchemaCache;
 import org.apache.hudi.common.fs.FSUtils;
@@ -306,31 +308,42 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   /**
+   * Create the singleton reader-visible generation pointer.
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexActiveManifestRecord(
+      Integer activeGeneration, String metadataPartitionPath) {
+    String recordKey = VectorIndexMetadataKey.activeManifest();
+    HoodieVectorIndexActiveManifest manifest = new HoodieVectorIndexActiveManifest(1, activeGeneration);
+    return new HoodieAvroRecord<>(
+        new HoodieKey(recordKey, metadataPartitionPath),
+        new HoodieMetadataPayload(recordKey, manifest));
+  }
+
+  /**
    * Create the generation-one centroid record for the given index partition.
    */
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexCentroidsRecord(
       ByteBuffer centroidBytes, String partitionPath) {
     HoodieVectorIndexCentroids centroids = new HoodieVectorIndexCentroids(
-        0L,
         ByteBuffer.allocate(0),
         centroidBytes,
         ByteBuffer.allocate(0));
-    HoodieMetadataPayload payload = new HoodieMetadataPayload(VectorIndexMetadataKey.centroids(1, 0L, 0), centroids);
-    HoodieKey key = new HoodieKey(VectorIndexMetadataKey.centroids(1, 0L, 0), partitionPath);
+    String recordKey = VectorIndexMetadataKey.centroids(1, 0);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey, centroids);
+    HoodieKey key = new HoodieKey(recordKey, partitionPath);
     return new HoodieAvroRecord<>(key, payload);
   }
 
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexCentroidsRecord(
       int generation,
-      long centroidEpoch,
       int chunk,
       ByteBuffer clusterIds,
       ByteBuffer centroidBytes,
       ByteBuffer clusterRadii,
       String partitionPath) {
-    String recordKey = VectorIndexMetadataKey.centroids(generation, centroidEpoch, chunk);
+    String recordKey = VectorIndexMetadataKey.centroids(generation, chunk);
     HoodieVectorIndexCentroids centroids = new HoodieVectorIndexCentroids(
-        centroidEpoch, clusterIds, centroidBytes, clusterRadii);
+        clusterIds, centroidBytes, clusterRadii);
     return new HoodieAvroRecord<>(
         new HoodieKey(recordKey, partitionPath),
         new HoodieMetadataPayload(recordKey, centroids));
@@ -425,7 +438,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         0,
         0,
         0,
-        0L,
+        null,
+        null,
         lastUpdatedTs,
         metadataPartitionPath);
   }
@@ -449,7 +463,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       int vectorsPerBlock,
       int splitLimit,
       int mergeFloor,
-      long centroidEpoch,
+      String bootstrapInstant,
+      String verifiedFrontier,
       long createdTs,
       String metadataPartitionPath) {
     String recordKey = VectorIndexMetadataKey.manifest(generation);
@@ -472,7 +487,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         vectorsPerBlock,
         splitLimit,
         mergeFloor,
-        centroidEpoch,
+        bootstrapInstant,
+        verifiedFrontier,
         createdTs);
     return new HoodieAvroRecord<>(
         new HoodieKey(recordKey, metadataPartitionPath),
@@ -526,10 +542,25 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       long vectorCount,
       long lastUpdatedTs,
       String metadataPartitionPath) {
+    return createVectorIndexClusterManifestRecord(
+        generation, clusterId, 0, shardCount, fileGroupIds, vectorCount, lastUpdatedTs, metadataPartitionPath);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexClusterManifestRecord(
+      int generation,
+      int clusterId,
+      int routingVersion,
+      int shardCount,
+      Collection<String> fileGroupIds,
+      long vectorCount,
+      long lastUpdatedTs,
+      String metadataPartitionPath) {
     String recordKey = VectorIndexMetadataKey.clusterStats(generation, clusterId);
     HoodieVectorIndexClusterStats stats = new HoodieVectorIndexClusterStats(
+        routingVersion,
+        shardCount,
+        fileGroupIds == null ? java.util.Collections.emptyList() : fileGroupIds.stream().collect(Collectors.toList()),
         vectorCount,
-        0L,
         0L,
         0L,
         null,
@@ -548,15 +579,28 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       String metadataPartitionPath) {
     String recordKey = VectorIndexMetadataKey.clusterStats(generation, clusterId);
     HoodieVectorIndexClusterStats stats = new HoodieVectorIndexClusterStats(
+        0,
+        1,
+        java.util.Collections.emptyList(),
         liveCount,
         deltaCount,
         tombstoneCount,
-        0L,
         null,
         0L);
     return new HoodieAvroRecord<>(
         new HoodieKey(recordKey, metadataPartitionPath),
         new HoodieMetadataPayload(recordKey, stats));
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexSourceInstantMarkerRecord(
+      int generation,
+      String dataInstant,
+      String metadataPartitionPath) {
+    String recordKey = VectorIndexMetadataKey.sourceInstantMarker(generation, dataInstant);
+    HoodieVectorIndexSourceInstantMarker marker = new HoodieVectorIndexSourceInstantMarker(dataInstant);
+    return new HoodieAvroRecord<>(
+        new HoodieKey(recordKey, metadataPartitionPath),
+        new HoodieMetadataPayload(recordKey, marker));
   }
 
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexPostingRecord(
