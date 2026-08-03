@@ -3918,8 +3918,9 @@ public class HoodieWriteConfig extends HoodieConfig {
           }
         case FLINK:
         case JAVA:
-          // Timeline-server-based markers are not the default for Flink and Java, but they do work when
-          // hoodie.write.markers.type is set explicitly and an embedded timeline server is running.
+          // Timeline-server-based markers are not the default for Flink and Java, but they are not
+          // unsupported either: setting hoodie.write.markers.type explicitly selects them, subject to the
+          // same gates WriteMarkersFactory applies to every engine.
           return MarkerType.DIRECT.toString();
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);

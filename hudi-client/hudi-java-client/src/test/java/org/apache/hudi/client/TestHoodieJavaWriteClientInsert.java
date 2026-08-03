@@ -28,9 +28,11 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
+import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -143,17 +145,24 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
   }
 
   /**
-   * HUDI-5011: exercises the Java write client against both marker types with the embedded timeline
-   * server running. {@code HoodieWriteConfig.Builder} defaults the Java engine to
-   * {@link MarkerType#DIRECT}, so the timeline-server-based path is only reached when
-   * {@code hoodie.write.markers.type} is set explicitly, and nothing covered that combination.
+   * HUDI-5011: exercises a Java-engine write config against both marker types with the embedded timeline
+   * server. {@code HoodieWriteConfig.Builder} defaults {@link MarkerType#DIRECT} for
+   * {@link EngineType#JAVA}, so the timeline-server-based path is only reached when
+   * {@code hoodie.write.markers.type} is set explicitly. Note the default applies to the config's engine
+   * type, not to the client: {@code HoodieJavaWriteClient} never inspects it, so a config left on the
+   * builder's SPARK default would resolve to TIMELINE_SERVER_BASED on its own.
+   *
+   * <p>Backup for the remote file system view is disabled so that a timeline-server failure fails the test
+   * rather than silently falling back to a local view, matching
+   * {@code HoodieJavaClientTestHarness#getConfigBuilder}.
    */
   @ParameterizedTest
   @EnumSource(MarkerType.class)
   public void testInsertWithEmbeddedTimelineServerAndMarkerType(MarkerType markerType) throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder(basePath)
-        .withEmbeddedTimelineServerEnabled(true)
         .withMarkersType(markerType.name())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withEnableBackupForRemoteFileSystemView(false).build())
         .build();
 
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
@@ -166,7 +175,22 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
 
     String commitTime = makeNewCommitTime(1, "%09d");
     WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
-    writeClient.commit(commitTime, writeClient.insert(records, commitTime));
+    List<WriteStatus> statuses = writeClient.insert(records, commitTime);
+
+    // Inspect the markers before commit removes them. Only the timeline-server path writes MARKERS.type,
+    // so this is what would notice a silent fallback to DirectWriteMarkers.
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    StoragePath markerDir = new StoragePath(metaClient.getMarkerFolderPath(commitTime));
+    boolean markerTypeFileExists = MarkerUtils.doesMarkerTypeFileExist(metaClient.getStorage(), markerDir);
+    if (markerType == MarkerType.TIMELINE_SERVER_BASED) {
+      assertTrue(markerTypeFileExists,
+          "Timeline-server-based markers should have written " + MarkerUtils.MARKER_TYPE_FILENAME);
+    } else {
+      assertFalse(markerTypeFileExists,
+          "Direct markers should not have written " + MarkerUtils.MARKER_TYPE_FILENAME);
+    }
+
+    writeClient.commit(commitTime, statuses);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     assertTrue(metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent(),
