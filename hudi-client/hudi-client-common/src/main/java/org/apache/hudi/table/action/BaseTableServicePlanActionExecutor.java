@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
@@ -82,7 +83,10 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
         if (lastCompleteTableServiceInstant.isPresent()) {
           if (!incrementalPartitions.isEmpty()) {
             log.info("Fetched incremental partitions for {}. {}. Instant {}", type, incrementalPartitions, instantTime);
-            return new ArrayList<>(incrementalPartitions);
+            // Incremental partitions come from write stats, which are already physical for a
+            // bucketed MDT. The expansion is idempotent, so this is a no-op there; it only matters
+            // if a write stat ever carries a logical path.
+            return expandToPhysicalMDTPartitions(new ArrayList<>(incrementalPartitions));
           } else {
             // handle the case the writer just commits the empty commits continuously
             // the incremental partition list is empty we just skip the scheduling
@@ -100,7 +104,21 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
 
     // get all partitions
     log.info("Start to fetch all partitions for {}. Instant {}", type, instantTime);
-    return FSUtils.getAllPartitionPaths(context, table.getMetaClient(), config.getMetadataConfig());
+    return expandToPhysicalMDTPartitions(
+        FSUtils.getAllPartitionPaths(context, table.getMetaClient(), config.getMetadataConfig()));
+  }
+
+  /**
+   * Expand logical MDT partitions to the physical sub-paths that actually hold file groups.
+   *
+   * <p>Partition discovery on a bucketed MDT returns logical names (the single
+   * {@code .hoodie_partition_metadata} lives at the logical partition root), but the MDT write path
+   * keys its file system view by physical bucket sub-paths. Planning against logical names would
+   * produce a plan whose file group ids never match the write side's, so the pending-compaction
+   * bookkeeping silently misses. No-op for data tables and for MDTs on the flat default layout.
+   */
+  private List<String> expandToPhysicalMDTPartitions(List<String> partitions) {
+    return HoodieTableMetadataUtil.expandToPhysicalPartitions(table.getMetaClient(), partitions);
   }
 
   public Pair<Option<HoodieInstant>, Set<String>> getIncrementalPartitions(TableServiceType type) {

@@ -55,6 +55,7 @@ import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
@@ -228,11 +229,20 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         writeStatus.getStat().setPrevCommit(HoodieWriteStat.NULL_COMMIT);
       }
 
-      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
-          new StoragePath(config.getBasePath()),
-          FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
-          hoodieTable.getPartitionMetafileFormat());
-      partitionMetadata.trySave();
+      // Mirrors the guard in HoodieAppendHandle#init. Now that compaction plans carry physical MDT
+      // partitions, this partitionPath can be a layout sub-path (e.g. "record_index/000004") under
+      // a non-flat layout. The single marker belongs at the logical partition root and is written
+      // once at MDT initialization; writing one inside a bucket directory would make partition
+      // discovery return physical sub-paths, breaking the cleaner and rollback globally. No-op for
+      // the flat default and for the data table.
+      if (!HoodieTableMetadataUtil.isMDTBucketSubPath(
+          hoodieTable.getMetaClient().getTableConfig(), hoodieTable.isMetadataTable(), partitionPath)) {
+        HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
+            new StoragePath(config.getBasePath()),
+            FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
+            hoodieTable.getPartitionMetafileFormat());
+        partitionMetadata.trySave();
+      }
 
       String oldFileName = latestValidFilePath.isPresent() ? latestValidFilePath.get() : null;
       String newFileName = createNewFileName(oldFileName);

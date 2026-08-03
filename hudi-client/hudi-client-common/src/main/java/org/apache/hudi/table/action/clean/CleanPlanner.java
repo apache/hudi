@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -309,7 +310,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
     // Return early if no partition filter is configured
     if (StringUtils.isNullOrEmpty(partitionSelected) && StringUtils.isNullOrEmpty(partitionRegex)) {
-      return allPartitionPaths;
+      return expandToPhysicalMDTPartitions(allPartitionPaths);
     }
 
     // Partition filter cannot be used with incremental cleaning mode
@@ -331,7 +332,23 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           .collect(Collectors.toList());
       log.info("Restricting partitions to clean using regex '{}'. Partitions to clean: {}", partitionRegex, filteredPartitions);
     }
-    return filteredPartitions;
+    // Expand after filtering so the user-facing partition filters keep matching logical MDT
+    // partition names rather than physical bucket sub-paths.
+    return expandToPhysicalMDTPartitions(filteredPartitions);
+  }
+
+  /**
+   * Expand logical MDT partitions to their physical sub-paths under a non-flat layout.
+   *
+   * <p>Full cleaning enumerates partitions from marker discovery, which on a bucketed MDT yields
+   * logical names only (the single {@code .hoodie_partition_metadata} sits at the logical root).
+   * Those names are later joined against the pending-compaction map, which is keyed physically by
+   * the write side. Without this expansion the join misses, so the cleaner fails to preserve the
+   * file slices an in-flight compaction still needs and deletes log files out from under it,
+   * wedging the MDT. No-op for data tables and for MDTs on the flat default layout.
+   */
+  private List<String> expandToPhysicalMDTPartitions(List<String> partitions) {
+    return HoodieTableMetadataUtil.expandToPhysicalPartitions(hoodieTable.getMetaClient(), partitions);
   }
 
   /**
@@ -520,11 +537,20 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private boolean hasPendingFiles(String partitionPath) {
     try {
       HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
-      StoragePath fullPartitionPath = new StoragePath(hoodieTable.getMetaClient().getBasePath(), partitionPath);
-      fsView.addFilesToView(partitionPath, FSUtils.getAllDataFilesInPartition(
-          hoodieTable.getStorage(), fullPartitionPath));
-      // use #getAllFileGroups(partitionPath) instead of #getAllFileGroups() to exclude the replaced file groups.
-      return fsView.getAllFileGroups(partitionPath).findAny().isPresent();
+      // Under a non-flat MDT layout the data files live in bucket sub-directories, so a direct
+      // listing of the logical partition root finds nothing and this would always report "no
+      // pending files" — allowing a partition with live pending files to be dropped wholesale.
+      // Expansion is idempotent, so an already-physical path lists itself.
+      for (String physicalPartition : expandToPhysicalMDTPartitions(Collections.singletonList(partitionPath))) {
+        StoragePath fullPartitionPath = new StoragePath(hoodieTable.getMetaClient().getBasePath(), physicalPartition);
+        fsView.addFilesToView(physicalPartition, FSUtils.getAllDataFilesInPartition(
+            hoodieTable.getStorage(), fullPartitionPath));
+        // use #getAllFileGroups(partitionPath) instead of #getAllFileGroups() to exclude the replaced file groups.
+        if (fsView.getAllFileGroups(physicalPartition).findAny().isPresent()) {
+          return true;
+        }
+      }
+      return false;
     } catch (Exception ex) {
       // if any exception throws, assume there are existing pending files
       log.warn("Error while checking the pending files under partition: {}, we will assume that pending files exist", partitionPath, ex);

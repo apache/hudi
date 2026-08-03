@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
@@ -98,8 +99,13 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     try {
       HoodieTableMetaClient metaClient = table.getMetaClient();
       boolean isTableVersionLessThanEight = metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT);
-      List<String> partitionPaths =
-          FSUtils.getAllPartitionPaths(context, table.getMetaClient(), false);
+      // Expand logical MDT partitions to physical bucket sub-paths. The MDT always takes the
+      // listing-based strategy (DIRECT markers + rollback-using-markers disabled), and the listing
+      // below is non-recursive, so on a bucketed MDT an un-expanded logical root yields zero files:
+      // rollback of a failed MDT compaction would "succeed" while the orphan base file survives.
+      // No-op for data tables and for MDTs on the flat default layout.
+      List<String> partitionPaths = HoodieTableMetadataUtil.expandToPhysicalPartitions(
+          metaClient, FSUtils.getAllPartitionPaths(context, table.getMetaClient(), false));
       int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan: " + config.getTableName());

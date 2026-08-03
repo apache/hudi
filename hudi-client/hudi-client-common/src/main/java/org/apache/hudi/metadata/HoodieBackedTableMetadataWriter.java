@@ -2174,7 +2174,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
               String.format("Partition %s should be part of inflight metadata partitions here %s", partitionPath, dataMetaClient.getTableConfig().getMetadataPartitionsInflight()));
           fileSlices = getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionPath);
         }
-        hoodieFileGroupIdList.addAll(fileSlices.stream().map(fileSlice -> new HoodieFileGroupId(partitionPath, fileSlice.getFileId())).collect(Collectors.toList()));
+        // Use the slice's own file group id so the partition matches the slice's physical path
+        // under a non-flat layout. Building it from the logical partitionPath here would disagree
+        // with the physical partition the records are tagged with (see getRecordTagger) and with
+        // the streaming path's equivalent in #tagRecordsWithLocationForStreamingWrites, which
+        // already uses fileSlice.getFileGroupId(). Identical under the flat default layout.
+        hoodieFileGroupIdList.addAll(fileSlices.stream().map(FileSlice::getFileGroupId).collect(Collectors.toList()));
         SerializableFunction<HoodieRecord, HoodieRecord> recordTagger = getRecordTagger(partitionPath, fileSlices);
         allPartitionRecords = allPartitionRecords.union(records.map(recordTagger));
       }

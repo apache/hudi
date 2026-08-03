@@ -149,6 +149,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -1547,6 +1548,48 @@ public class HoodieTableMetadataUtil {
         fsView.close();
       }
     }
+  }
+
+  /**
+   * Expand a list of MDT partitions from logical to physical form for the configured layout.
+   *
+   * <p>This is the shared boundary helper for table-service planners (compaction, log compaction,
+   * cleaning, rollback). The MDT write path is already keyed by <em>physical</em> partition paths:
+   * {@link #getPartitionFileSlices} expands before querying the file system view, and
+   * {@code HoodieBackedTableMetadataWriter#getRecordTagger} realigns each record's partition path
+   * to its file slice's physical path. Planners that enumerate partitions from marker discovery or
+   * {@code FSUtils.getAllPartitionPaths} produce <em>logical</em> names, so without this expansion
+   * the plan key space and the write-side key space diverge — which silently corrupts the file
+   * system view's pending-compaction bookkeeping (appends land in a slice being compacted, and
+   * merged reads drop pre-compaction log files).
+   *
+   * <p>Idempotent for already-physical input: a physical sub-path such as
+   * {@code record_index/000003} has no entry in the persisted per-partition file-group counts, so
+   * {@code fileGroupCount} resolves to 0 and the layout returns the input unchanged. This matters
+   * because the incremental table-service branch sources partitions from write stats, which are
+   * already physical. Non-MDT tables and MDTs on the flat default layout are returned unchanged.
+   *
+   * @param metaClient the MDT's meta client (for a data table this is a no-op passthrough).
+   * @param partitions logical (or already-physical) partition paths.
+   * @return the expanded list, de-duplicated and order-stable.
+   */
+  public static List<String> expandToPhysicalPartitions(HoodieTableMetaClient metaClient, List<String> partitions) {
+    if (partitions == null || partitions.isEmpty() || !metaClient.isMetadataTable()) {
+      return partitions;
+    }
+    HoodieMetadataTableLayout layout = HoodieMetadataTableLayouts.load(metaClient.getTableConfig());
+    if (layout instanceof FlatMDTLayout) {
+      // Fast path: preserve bit-identical behavior for every pre-existing MDT.
+      return partitions;
+    }
+    Map<String, Integer> fgCounts = metaClient.getTableConfig().getMetadataLayoutPartitionFileGroupCounts();
+    // LinkedHashSet: stable ordering for deterministic plans, and de-duplication in case a caller
+    // passes a mix of logical and already-physical paths for the same partition.
+    Set<String> expanded = new LinkedHashSet<>();
+    for (String partition : partitions) {
+      expanded.addAll(layout.getPhysicalPartitions(partition, fgCounts.getOrDefault(partition, 0)));
+    }
+    return new ArrayList<>(expanded);
   }
 
   /**

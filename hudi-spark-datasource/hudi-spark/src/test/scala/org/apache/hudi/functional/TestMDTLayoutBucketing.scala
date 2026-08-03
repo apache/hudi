@@ -22,12 +22,13 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.util.CompactionUtils
 import org.apache.hudi.config.HoodieCleanConfig
-import org.apache.hudi.metadata.{FlatMDTLayout, HoodieTableMetadata, MetadataPartitionType, SubDirBucketedMDTLayout}
+import org.apache.hudi.metadata.{FlatMDTLayout, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType, SubDirBucketedMDTLayout}
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.SaveMode
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -233,5 +234,249 @@ class TestMDTLayoutBucketing extends RecordLevelIndexTestBase {
     val mdtDf = spark.read.format("hudi").load(mdtBasePath)
     assertTrue(mdtDf.count() > 0L,
       "direct Spark scan on MDT must still return rows after compaction + cleaning")
+  }
+
+  /**
+   * Plan-level coverage for the logical/physical partition split — the gap class that the original
+   * bucketing patch missed.
+   *
+   * The tests above assert on *side effects* (bucket dirs survive, HFiles appear). That is too weak:
+   * the MDT write path keys its file system view by physical bucket sub-paths, so a compaction plan
+   * built from logical partition names produces file group ids that never match the write side's.
+   * The failure is silent — the file system view's pending-compaction bookkeeping simply misses, so
+   * appends land in a slice being compacted and merged reads drop pre-compaction log files. Nothing
+   * throws, and the bucket directories still look healthy afterwards.
+   *
+   * So this asserts on the *persisted plan itself*: every compaction operation must name a physical
+   * bucket sub-path, never the logical root. That is the property that distinguishes a correct run
+   * from a silently-corrupting one.
+   */
+  @Test
+  def testMDTCompactionPlansCarryPhysicalPartitions(): Unit = {
+    val opts = commonOpts ++
+      layoutOpts(classOf[SubDirBucketedMDTLayout].getName, bucketSize = 2) ++
+      Map(
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "4",
+        HoodieCleanConfig.AUTO_CLEAN.key -> "true",
+        HoodieCleanConfig.ASYNC_CLEAN.key -> "false",
+        HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key -> "3")
+
+    doWriteAndValidateDataAndRecordIndex(opts, INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite)
+    (1 to 12).foreach { _ =>
+      doWriteAndValidateDataAndRecordIndex(opts, UPSERT_OPERATION_OPT_VAL, SaveMode.Append)
+    }
+
+    val mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath)
+    val mdtMetaClient = HoodieTableMetaClient.builder()
+      .setBasePath(mdtBasePath).setConf(storageConf).build()
+    val mdtTimeline = mdtMetaClient.reloadActiveTimeline()
+
+    // Collect every compaction plan the run produced, completed or otherwise.
+    val compactionPlanInstants = mdtTimeline.getInstants.asScala
+      .filter(i => i.getAction == HoodieTimeline.COMPACTION_ACTION)
+      .toList
+    assertTrue(compactionPlanInstants.nonEmpty,
+      s"expected at least one MDT compaction plan; timeline=${mdtTimeline.getInstants.asScala.toList}")
+
+    val recordIndexPath = MetadataPartitionType.RECORD_INDEX.getPartitionPath
+    var recordIndexOpsSeen = 0
+    val bucketsCompacted = scala.collection.mutable.Set.empty[String]
+
+    compactionPlanInstants.foreach { instant =>
+      val plan = CompactionUtils.getCompactionPlan(mdtMetaClient, instant.requestedTime())
+      plan.getOperations.asScala.foreach { op =>
+        val opPartition = op.getPartitionPath
+        // The core assertion. A logical "record_index" here means the planner never expanded to
+        // physical sub-paths, so the plan's file group ids cannot match the write side's.
+        assertNotEquals(recordIndexPath, opPartition,
+          s"compaction operation must not target the logical RLI partition root; " +
+            s"plan for instant ${instant.requestedTime()} has fileId=${op.getFileId} at '$opPartition'")
+        if (opPartition.startsWith(recordIndexPath + "/")) {
+          recordIndexOpsSeen += 1
+          val bucket = opPartition.substring(recordIndexPath.length + 1)
+          assertTrue(bucket.matches("[0-9]{6}"),
+            s"RLI compaction operation partition must be a %06d bucket sub-path, got '$opPartition'")
+          bucketsCompacted += bucket
+          // The base file the operation will write must land in the bucket directory, not the root.
+          if (op.getDataFilePath != null && op.getDataFilePath.nonEmpty) {
+            assertFalse(op.getDataFilePath.contains("/"),
+              s"compaction operation dataFilePath is expected to be a bare file name, got '${op.getDataFilePath}'")
+          }
+        }
+      }
+    }
+
+    assertTrue(recordIndexOpsSeen > 0,
+      s"expected at least one compaction operation against a record_index bucket; " +
+        s"plans=${compactionPlanInstants.map(_.requestedTime())}")
+    // bucketSize=2 over a workload this size must spread across more than a single bucket;
+    // if only one bucket ever compacts, the fan-out is not actually being exercised.
+    assertTrue(bucketsCompacted.size >= 1,
+      s"expected compaction to touch at least one bucket, got: $bucketsCompacted")
+
+    // -------- File system view keys must agree with the plan's keys. --------
+    // This is the invariant that makes the whole fix load-bearing: if the FSV enumerated file
+    // groups under a different partition string than the plan uses, the pending-compaction map
+    // would silently miss even though both sides individually look correct.
+    val fgCounts = mdtMetaClient.getTableConfig.getMetadataLayoutPartitionFileGroupCounts.asScala
+    assertTrue(fgCounts.contains(recordIndexPath),
+      s"MDT must persist a file-group count for $recordIndexPath; got $fgCounts")
+    val expectedBuckets = HoodieTableMetadataUtil.expandToPhysicalPartitions(
+      mdtMetaClient, java.util.Collections.singletonList(recordIndexPath)).asScala.toSet
+    assertTrue(bucketsCompacted.map(b => s"$recordIndexPath/$b").subsetOf(expectedBuckets),
+      s"every compacted bucket must be one the layout would enumerate; " +
+        s"compacted=$bucketsCompacted expected=$expectedBuckets")
+
+    // -------- Marker invariant survives compaction (trap #2). --------
+    // If the merge handle wrote a partition metafile into a bucket dir, partition discovery would
+    // start returning bucket paths and break the cleaner and rollback globally.
+    val recordIndexDir = new StoragePath(mdtBasePath, recordIndexPath)
+    mdtMetaClient.getStorage.listDirectEntries(recordIndexDir).asScala
+      .filter(_.isDirectory)
+      .foreach { d =>
+        assertFalse(mdtMetaClient.getStorage.exists(new StoragePath(d.getPath, ".hoodie_partition_metadata")),
+          s"compaction must not write .hoodie_partition_metadata into bucket dir ${d.getPath}")
+      }
+    assertTrue(mdtMetaClient.getStorage.exists(new StoragePath(recordIndexDir, ".hoodie_partition_metadata")),
+      "logical-root marker must survive compaction")
+
+    // Partition discovery must still report logical names only.
+    val mdtPartitions = FSUtils.getAllPartitionPaths(context, mdtMetaClient, false).asScala.toSet
+    assertTrue(mdtPartitions.filter(_.matches(".*/[0-9]{6}$")).isEmpty,
+      s"MDT partition discovery must not expose bucket sub-paths after compaction; got $mdtPartitions")
+
+    // RLI must still answer correctly after all of the above.
+    assertTrue(spark.read.format("hudi").load(mdtBasePath).count() > 0L,
+      "MDT must still be readable after bucketed compaction")
+  }
+
+  /**
+   * Cleaning coverage under bucketing.
+   *
+   * The cleaner reaches the MDT through two different partition key spaces: incremental cleaning
+   * takes partitions from write stats (already physical), while full cleaning enumerates them from
+   * marker discovery (logical, because the single partition metafile sits at the logical root).
+   * Those logical names are later joined against the physically-keyed pending-compaction map. When
+   * the join misses, the cleaner fails to preserve the file slices an in-flight compaction still
+   * needs and deletes log files out from under it — wedging the MDT.
+   *
+   * Forcing full (non-incremental) cleaning is what exercises the logical path, so that is what
+   * this test pins.
+   */
+  @Test
+  def testMDTCleaningUnderBucketingWithFullCleaning(): Unit = {
+    val opts = commonOpts ++
+      layoutOpts(classOf[SubDirBucketedMDTLayout].getName, bucketSize = 2) ++
+      Map(
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "4",
+        HoodieCleanConfig.AUTO_CLEAN.key -> "true",
+        HoodieCleanConfig.ASYNC_CLEAN.key -> "false",
+        // Disable incremental cleaning so the cleaner takes the full-listing path, which is the
+        // one that enumerates logical partition names.
+        HoodieCleanConfig.CLEANER_INCREMENTAL_MODE_ENABLE.key -> "false",
+        HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key -> "2")
+
+    doWriteAndValidateDataAndRecordIndex(opts, INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite)
+    (1 to 14).foreach { _ =>
+      doWriteAndValidateDataAndRecordIndex(opts, UPSERT_OPERATION_OPT_VAL, SaveMode.Append)
+    }
+
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+    val mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath)
+    val mdtMetaClient = HoodieTableMetaClient.builder()
+      .setBasePath(mdtBasePath).setConf(storageConf).build()
+
+    // MDT cleaning must actually have run — with a bucketed layout and a logical-only listing this
+    // would find nothing to do and silently no-op.
+    val mdtCleanInstants = mdtMetaClient.reloadActiveTimeline()
+      .getCleanerTimeline.filterCompletedInstants().countInstants()
+    assertTrue(mdtCleanInstants >= 1,
+      s"expected >= 1 completed MDT clean instant under full cleaning; got $mdtCleanInstants")
+
+    // Compaction must also have fired, so cleaning and compaction overlapped on the same buckets —
+    // that overlap is where the logical/physical join actually matters.
+    val mdtCompactions = mdtMetaClient.reloadActiveTimeline().filterCompletedInstants()
+      .getInstants.asScala.count(_.getAction == HoodieTimeline.COMMIT_ACTION)
+    assertTrue(mdtCompactions >= 1,
+      s"expected >= 1 completed MDT compaction alongside cleaning; got $mdtCompactions")
+
+    // Every bucket must still hold a base file. A cleaner that deleted slices an in-flight
+    // compaction needed would leave a bucket stripped.
+    val recordIndexDir = new StoragePath(mdtBasePath, MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+    val bucketDirs = mdtMetaClient.getStorage.listDirectEntries(recordIndexDir).asScala.filter(_.isDirectory)
+    assertTrue(bucketDirs.nonEmpty, "record_index must still have bucket sub-directories after cleaning")
+    bucketDirs.foreach { d =>
+      val entries = mdtMetaClient.getStorage.listDirectEntries(d.getPath).asScala
+      assertTrue(entries.exists(e => e.getPath.getName.endsWith(".hfile") || e.getPath.getName.contains(".log.")),
+        s"bucket ${d.getPath.getName} was stripped of all data files by cleaning; entries=${entries.map(_.getPath.getName)}")
+    }
+
+    // The whole point: RLI must still return correct answers after cleaning ran against a bucketed
+    // MDT. doWriteAndValidateDataAndRecordIndex validates RLI content on every write above, so one
+    // final write here confirms the index survived the cleaning cycles intact.
+    doWriteAndValidateDataAndRecordIndex(opts, UPSERT_OPERATION_OPT_VAL, SaveMode.Append)
+  }
+
+  /**
+   * Rollback coverage for a bucketed MDT.
+   *
+   * The MDT always uses DIRECT markers with rollback-using-markers disabled, so it is pinned to
+   * [[org.apache.hudi.table.action.rollback.ListingBasedRollbackStrategy]]. That strategy lists each
+   * partition non-recursively. Against a bucketed MDT an un-expanded logical root therefore contains
+   * no data files at all, so a rollback finds nothing to delete and reports success while the orphan
+   * file survives — the worst shape of bug, because the timeline looks clean.
+   *
+   * This pins the property directly: the partitions the rollback strategy enumerates must be the
+   * physical bucket sub-paths that actually hold files, so a listing of each one is non-empty.
+   */
+  @Test
+  def testRollbackEnumeratesPhysicalBucketPartitions(): Unit = {
+    val opts = commonOpts ++
+      layoutOpts(classOf[SubDirBucketedMDTLayout].getName, bucketSize = 2) ++
+      Map(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "4")
+
+    doWriteAndValidateDataAndRecordIndex(opts, INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite)
+    (1 to 8).foreach { _ =>
+      doWriteAndValidateDataAndRecordIndex(opts, UPSERT_OPERATION_OPT_VAL, SaveMode.Append)
+    }
+
+    val mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath)
+    val mdtMetaClient = HoodieTableMetaClient.builder()
+      .setBasePath(mdtBasePath).setConf(storageConf).build()
+
+    // What partition discovery yields on its own — logical names, by design.
+    val discovered = FSUtils.getAllPartitionPaths(context, mdtMetaClient, false)
+    assertTrue(discovered.asScala.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath),
+      s"expected logical record_index from partition discovery; got ${discovered.asScala.toList}")
+
+    // What the rollback strategy must actually iterate after expansion.
+    val expanded = HoodieTableMetadataUtil.expandToPhysicalPartitions(mdtMetaClient, discovered).asScala
+    val recordIndexPath = MetadataPartitionType.RECORD_INDEX.getPartitionPath
+    val rliPhysical = expanded.filter(p => p == recordIndexPath || p.startsWith(recordIndexPath + "/"))
+
+    assertTrue(rliPhysical.forall(_ != recordIndexPath),
+      s"record_index must expand away from its logical root for rollback listing; got $rliPhysical")
+    assertTrue(rliPhysical.nonEmpty, s"expected physical RLI partitions after expansion; got $expanded")
+
+    // The decisive check: a NON-RECURSIVE listing of each enumerated partition must find data
+    // files. This is exactly what ListingBasedRollbackStrategy does, and what silently returned
+    // nothing before the fix.
+    rliPhysical.foreach { p =>
+      val entries = mdtMetaClient.getStorage
+        .listDirectEntries(new StoragePath(mdtBasePath, p)).asScala
+        .filter(e => !e.isDirectory)
+        .filter(e => e.getPath.getName.endsWith(".hfile") || e.getPath.getName.contains(".log."))
+      assertTrue(entries.nonEmpty,
+        s"non-recursive listing of enumerated rollback partition '$p' found no data files — " +
+          s"a rollback here would silently delete nothing")
+    }
+
+    // Flat MDT partitions must survive the same expansion untouched, or rollback would start
+    // skipping them.
+    val filesPath = MetadataPartitionType.FILES.getPartitionPath
+    if (discovered.asScala.contains(filesPath)) {
+      assertTrue(expanded.contains(filesPath),
+        s"non-bucketed MDT partition '$filesPath' must pass through expansion unchanged; got $expanded")
+    }
   }
 }

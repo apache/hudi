@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
@@ -233,5 +234,103 @@ class TestHoodieMetadataTableLayout {
     assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/00000"));
     assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/0000000"));
     assertTrue(!HoodieTableMetadataUtil.isMDTBucketSubPath(cfg, true, "record_index/abcdef"));
+  }
+
+  // ---- expandToPhysicalPartitions -------------------------------------------
+  //
+  // This is the shared boundary helper used by the compaction, cleaning and rollback planners to
+  // bring their partition key space in line with the already-physical MDT write path. The
+  // properties below are what those call sites rely on.
+
+  private static HoodieTableMetaClient mockMdtMetaClient(boolean isMetadataTable,
+                                                         String layoutClass,
+                                                         String fileGroupCounts) {
+    org.apache.hudi.common.table.HoodieTableConfig cfg =
+        new org.apache.hudi.common.table.HoodieTableConfig();
+    if (layoutClass != null) {
+      cfg.setValue(org.apache.hudi.common.table.HoodieTableConfig.METADATA_LAYOUT_CLASS, layoutClass);
+    }
+    if (fileGroupCounts != null) {
+      cfg.setValue(org.apache.hudi.common.table.HoodieTableConfig.METADATA_LAYOUT_PARTITION_FILE_GROUP_COUNTS,
+          fileGroupCounts);
+    }
+    HoodieTableMetaClient metaClient = org.mockito.Mockito.mock(HoodieTableMetaClient.class);
+    org.mockito.Mockito.when(metaClient.isMetadataTable()).thenReturn(isMetadataTable);
+    org.mockito.Mockito.when(metaClient.getTableConfig()).thenReturn(cfg);
+    return metaClient;
+  }
+
+  @Test
+  void expandToPhysicalPartitions_fansOutLogicalPartitionToBuckets() {
+    // 2500 file groups at the default bucket size of 1000 => 3 bucket directories.
+    HoodieTableMetaClient metaClient =
+        mockMdtMetaClient(true, SubDirBucketedMDTLayout.class.getName(), "record_index=2500");
+    assertEquals(
+        java.util.Arrays.asList("record_index/000000", "record_index/000001", "record_index/000002"),
+        HoodieTableMetadataUtil.expandToPhysicalPartitions(
+            metaClient, java.util.Collections.singletonList("record_index")));
+  }
+
+  @Test
+  void expandToPhysicalPartitions_isIdempotentForAlreadyPhysicalInput() {
+    // The incremental table-service branch sources partitions from write stats, which are already
+    // physical. Those have no entry in the file-group-count map, so they must pass through
+    // untouched rather than being re-expanded or dropped.
+    HoodieTableMetaClient metaClient =
+        mockMdtMetaClient(true, SubDirBucketedMDTLayout.class.getName(), "record_index=2500");
+    List<String> physical =
+        java.util.Arrays.asList("record_index/000000", "record_index/000001", "record_index/000002");
+    assertEquals(physical, HoodieTableMetadataUtil.expandToPhysicalPartitions(metaClient, physical));
+  }
+
+  @Test
+  void expandToPhysicalPartitions_deduplicatesMixedLogicalAndPhysicalInput() {
+    // A caller may hand us a mix (e.g. marker-discovered logical names unioned with write-stat
+    // physical paths). The result must not contain duplicates, or the planner would emit two
+    // operations for the same file group.
+    HoodieTableMetaClient metaClient =
+        mockMdtMetaClient(true, SubDirBucketedMDTLayout.class.getName(), "record_index=1500");
+    assertEquals(
+        java.util.Arrays.asList("record_index/000000", "record_index/000001"),
+        HoodieTableMetadataUtil.expandToPhysicalPartitions(
+            metaClient, java.util.Arrays.asList("record_index", "record_index/000001")));
+  }
+
+  @Test
+  void expandToPhysicalPartitions_leavesFlatLayoutAndNonMdtUnchanged() {
+    List<String> partitions = java.util.Arrays.asList("record_index", "files");
+    // Flat layout (the default every pre-existing MDT uses) must be bit-identical passthrough.
+    HoodieTableMetaClient flatMdt =
+        mockMdtMetaClient(true, FlatMDTLayout.class.getName(), "record_index=2500");
+    assertEquals(partitions, HoodieTableMetadataUtil.expandToPhysicalPartitions(flatMdt, partitions));
+    // An MDT that never stamped a layout class at all also stays flat.
+    HoodieTableMetaClient unstampedMdt = mockMdtMetaClient(true, null, null);
+    assertEquals(partitions, HoodieTableMetadataUtil.expandToPhysicalPartitions(unstampedMdt, partitions));
+    // A data table is never expanded, whatever its partition values look like.
+    HoodieTableMetaClient dataTable =
+        mockMdtMetaClient(false, SubDirBucketedMDTLayout.class.getName(), "record_index=2500");
+    assertEquals(partitions, HoodieTableMetadataUtil.expandToPhysicalPartitions(dataTable, partitions));
+  }
+
+  @Test
+  void expandToPhysicalPartitions_uncountedPartitionFallsBackToLogicalRoot() {
+    // Flat MDT partitions (files, column_stats, secondary_index_*) carry no file-group count under
+    // a bucketed layout, since bucketing is opt-in per partition. They must degrade to the logical
+    // root rather than vanishing from the plan.
+    HoodieTableMetaClient metaClient =
+        mockMdtMetaClient(true, SubDirBucketedMDTLayout.class.getName(), "record_index=1500");
+    assertEquals(
+        java.util.Arrays.asList("record_index/000000", "record_index/000001", "files", "column_stats"),
+        HoodieTableMetadataUtil.expandToPhysicalPartitions(
+            metaClient, java.util.Arrays.asList("record_index", "files", "column_stats")));
+  }
+
+  @Test
+  void expandToPhysicalPartitions_handlesNullAndEmptyInput() {
+    HoodieTableMetaClient metaClient =
+        mockMdtMetaClient(true, SubDirBucketedMDTLayout.class.getName(), "record_index=2500");
+    assertEquals(null, HoodieTableMetadataUtil.expandToPhysicalPartitions(metaClient, null));
+    assertEquals(java.util.Collections.emptyList(),
+        HoodieTableMetadataUtil.expandToPhysicalPartitions(metaClient, java.util.Collections.emptyList()));
   }
 }
