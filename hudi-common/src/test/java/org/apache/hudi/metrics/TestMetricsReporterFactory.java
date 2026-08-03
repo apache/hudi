@@ -182,7 +182,8 @@ class TestMetricsReporterFactory {
       HoodieException exception = assertThrows(HoodieException.class,
           () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
       assertEquals("Unable to instantiate class " + MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS,
-          exception.getMessage(), "A failure that is neither cause must not be rewritten");
+          exception.getMessage(),
+          "A failure that is neither a missing class nor a missing constructor must not be rewritten");
     }
   }
 
