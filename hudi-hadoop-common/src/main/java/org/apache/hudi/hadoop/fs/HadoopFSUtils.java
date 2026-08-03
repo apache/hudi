@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -295,17 +296,31 @@ public class HadoopFSUtils {
    * {@link UnsupportedOperationException}, and proxy implementations such as Presto's
    * {@code PrestoS3FileSystem} do not override it, so calling it unguarded turns an unrelated read into
    * "Not implemented by the PrestoS3FileSystem FileSystem implementation" (HUDI-4602).
-   * {@link FileSystem#getUri()} is abstract, so every implementation supplies it, and its scheme is what
-   * {@code getScheme()} returns wherever both are present.
+   * {@link FileSystem#getUri()} is abstract, so every implementation supplies one to fall back on.
+   *
+   * <p>The two are not interchangeable, which is why {@code getScheme()} is tried first:
+   * {@code InLineFileSystem} returns {@code "inlinefs"} from {@code getScheme()} while its
+   * {@code getUri()} is {@code URI.create("inlinefs")}, which has no colon and so carries no scheme at all.
+   * A URI with no scheme is therefore a resolution failure rather than a value to pass on - returning null
+   * would surface much later as {@code does not support scheme null} or {@code Unsupported scheme :null},
+   * with the original {@code UnsupportedOperationException} discarded.
    *
    * @param fs instance of {@link FileSystem} in use.
-   * @return the scheme of {@code fs}, or null if its URI carries none.
+   * @return the scheme of {@code fs}, never null.
+   * @throws HoodieException if {@code getScheme()} is unimplemented and the URI carries no scheme.
    */
   public static String getScheme(FileSystem fs) {
     try {
       return fs.getScheme();
     } catch (UnsupportedOperationException e) {
-      return fs.getUri().getScheme();
+      String scheme = fs.getUri().getScheme();
+      if (scheme == null) {
+        // HoodieException rather than HoodieIOException: the latter only accepts an IOException cause, and
+        // discarding the UnsupportedOperationException is the thing being fixed here.
+        throw new HoodieException("Cannot resolve the scheme of " + fs.getClass().getName()
+            + ": getScheme() is unimplemented and its URI " + fs.getUri() + " carries no scheme", e);
+      }
+      return scheme;
     }
   }
 
