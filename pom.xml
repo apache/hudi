@@ -706,7 +706,9 @@
               <exclude>**/banner.txt</exclude>
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
-              <exclude>.mvn/**</exclude>
+              <!-- .mvn at any depth: nested ones are tracked without an ASF header
+                   (hudi-trino/.mvn/modernizer/*.xml) and the source release strips .gitignore. -->
+              <exclude>**/.mvn/**</exclude>
             </excludes>
           </configuration>
           <executions>
