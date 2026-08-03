@@ -84,12 +84,14 @@ public class TestHadoopFSUtils {
   public void testGetSchemeFallsBackToTheUriWhenUnimplemented() throws IOException {
     try (FileSystem localFs = FileSystem.newInstanceLocal(new Configuration())) {
       assertEquals("file", HadoopFSUtils.getScheme(localFs),
-          "An implementation that overrides getScheme() should still be used directly");
+          "LocalFileSystem overrides getScheme(), so the helper should return what it reports "
+              + "rather than falling back to getUri()");
 
       try (FileSystem noScheme = new FilterFileSystem(localFs)) {
         assertThrows(UnsupportedOperationException.class, noScheme::getScheme);
         assertEquals("file", HadoopFSUtils.getScheme(noScheme),
-            "The scheme should come from getUri() when getScheme() is unimplemented");
+            "FilterFileSystem does not override getScheme(), so the helper should fall back to "
+                + "getUri().getScheme()");
       }
     }
   }
