@@ -34,7 +34,6 @@ set -e
 #
 # Example:
 #   ./build_and_publish_docker_images.sh                       # build for this machine, publish nothing
-#   ./build_and_publish_docker_images.sh --spark-version 4.0.1 # build against Spark 4.0.1 (Java 17 base)
 #   ./build_and_publish_docker_images.sh --multi-arch true     # build amd64 + arm64
 #   ./build_and_publish_docker_images.sh --publish true        # build and publish (maintainers)
 #
