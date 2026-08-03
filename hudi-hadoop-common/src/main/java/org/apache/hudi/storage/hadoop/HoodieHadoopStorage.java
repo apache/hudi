@@ -111,7 +111,7 @@ public class HoodieHadoopStorage extends HoodieStorage {
 
   @Override
   public String getScheme() {
-    return fs.getScheme();
+    return HadoopFSUtils.getScheme(fs);
   }
 
   @Override

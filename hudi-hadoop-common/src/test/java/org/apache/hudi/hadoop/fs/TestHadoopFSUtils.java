@@ -22,22 +22,78 @@ package org.apache.hudi.hadoop.fs;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FilterFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopFileStatus;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePathInfo;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests {@link HadoopFSUtils}
  */
 public class TestHadoopFSUtils {
+  /**
+   * HUDI-4602: {@link FileSystem#getScheme()} is optional in Hadoop -- the base implementation throws
+   * {@link UnsupportedOperationException} -- and proxy implementations such as Presto's
+   * {@code PrestoS3FileSystem} do not override it. Opening a log file went straight through
+   * {@code isGCSFileSystem}, so a MOR {@code _rt} query on Presto failed with
+   * "Not implemented by the PrestoS3FileSystem FileSystem implementation" rather than reading anything.
+   *
+   * <p>{@link FilterFileSystem} has the same shape: it leaves {@code getScheme()} to the throwing base
+   * implementation while overriding {@code getUri()}.
+   */
+  @Test
+  public void testGetFSDataInputStreamWhenGetSchemeIsUnimplemented(@TempDir File tempDir) throws IOException {
+    File file = new File(tempDir, "log.file");
+    byte[] contents = new byte[] {1, 2, 3, 4};
+    Files.write(file.toPath(), contents);
+    // newInstanceLocal rather than getLocal, so closing this does not evict a cached FileSystem that
+    // other tests in the same JVM share.
+    try (FileSystem fs = new FilterFileSystem(FileSystem.newInstanceLocal(new Configuration()))) {
+      // The premise: this is the call the read path used to make unguarded.
+      assertThrows(UnsupportedOperationException.class, fs::getScheme);
+
+      try (FSDataInputStream stream =
+               HadoopFSUtils.getFSDataInputStream(fs, new StoragePath(file.toURI()), 1024, true)) {
+        byte[] read = new byte[contents.length];
+        stream.readFully(read);
+        assertArrayEquals(contents, read, "The read path should not depend on the optional getScheme()");
+      }
+    }
+  }
+
+  @Test
+  public void testGetSchemeFallsBackToTheUriWhenUnimplemented() throws IOException {
+    try (FileSystem localFs = FileSystem.newInstanceLocal(new Configuration())) {
+      assertEquals("file", HadoopFSUtils.getScheme(localFs),
+          "An implementation that overrides getScheme() should still be used directly");
+
+      try (FileSystem noScheme = new FilterFileSystem(localFs)) {
+        assertThrows(UnsupportedOperationException.class, noScheme::getScheme);
+        assertEquals("file", HadoopFSUtils.getScheme(noScheme),
+            "The scheme should come from getUri() when getScheme() is unimplemented");
+      }
+    }
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {
       "/a/b/c",

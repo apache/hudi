@@ -277,7 +277,7 @@ public class HadoopFSUtils {
    * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
    */
   public static boolean isGCSFileSystem(FileSystem fs) {
-    return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
+    return StorageSchemes.GCS.getScheme().equals(getScheme(fs));
   }
 
   /**
@@ -285,7 +285,28 @@ public class HadoopFSUtils {
    * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
    */
   public static boolean isCHDFileSystem(FileSystem fs) {
-    return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
+    return StorageSchemes.CHDFS.getScheme().equals(getScheme(fs));
+  }
+
+  /**
+   * Resolves the scheme of {@code fs} without depending on {@link FileSystem#getScheme()}.
+   *
+   * <p>{@code getScheme()} is optional in Hadoop: {@link FileSystem}'s own implementation throws
+   * {@link UnsupportedOperationException}, and proxy implementations such as Presto's
+   * {@code PrestoS3FileSystem} do not override it, so calling it unguarded turns an unrelated read into
+   * "Not implemented by the PrestoS3FileSystem FileSystem implementation" (HUDI-4602).
+   * {@link FileSystem#getUri()} is abstract, so every implementation supplies it, and its scheme is what
+   * {@code getScheme()} returns wherever both are present.
+   *
+   * @param fs instance of {@link FileSystem} in use.
+   * @return the scheme of {@code fs}, or null if its URI carries none.
+   */
+  public static String getScheme(FileSystem fs) {
+    try {
+      return fs.getScheme();
+    } catch (UnsupportedOperationException e) {
+      return fs.getUri().getScheme();
+    }
   }
 
   private static StorageConfiguration<Configuration> getStorageConf(Configuration conf, boolean copy) {
@@ -294,7 +315,7 @@ public class HadoopFSUtils {
 
   public static Configuration registerFileSystem(StoragePath file, Configuration conf) {
     Configuration returnConf = new Configuration(conf);
-    String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
+    String scheme = getScheme(HadoopFSUtils.getFs(file.toString(), conf));
     returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
         HoodieWrapperFileSystem.class.getName());
     return returnConf;
