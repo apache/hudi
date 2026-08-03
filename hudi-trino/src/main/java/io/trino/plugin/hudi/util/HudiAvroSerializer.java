@@ -42,6 +42,7 @@ import io.trino.spi.type.Type;
 import io.trino.spi.type.VarbinaryType;
 import io.trino.spi.type.VarcharType;
 import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -59,6 +60,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
@@ -118,6 +120,11 @@ public class HudiAvroSerializer
     // constructor, which maps page channel i to record position channelToFieldPosition[i].
     private final Schema schema;
     private final int[] channelToFieldPosition;
+    // Single-entry cache for buildRecordInPage: all records of a split share one schema instance,
+    // so an identity check makes the per-record, per-column field-name lookup a one-time cost.
+    // Prefilled (hidden/synthesized) columns are not fields of the record schema; they get -1.
+    private Schema positionsCacheSchema;
+    private int[] positionsCache;
 
     public HudiAvroSerializer(List<HiveColumnHandle> columnHandles, PrefilledColumnValues prefilledColumnValues)
     {
@@ -170,19 +177,34 @@ public class HudiAvroSerializer
     public void buildRecordInPage(PageBuilder pageBuilder, IndexedRecord record)
     {
         pageBuilder.declarePosition();
-        int blockSeq = 0;
-        for (int channel = 0; channel < columnTypes.size(); channel++, blockSeq++) {
-            BlockBuilder output = pageBuilder.getBlockBuilder(blockSeq);
-            HiveColumnHandle columnHandle = columnHandles.get(channel);
-            if (prefilledColumnValues.isPrefilled(columnHandle)) {
-                prefilledColumnValues.appendTo(columnHandle, output);
+        // Record may not be projected, get field positions from its own schema
+        int[] fieldPositions = fieldPositionsFor(record.getSchema());
+        for (int channel = 0; channel < columnTypes.size(); channel++) {
+            BlockBuilder output = pageBuilder.getBlockBuilder(channel);
+            int fieldPosition = fieldPositions[channel];
+            if (fieldPosition < 0) {
+                prefilledColumnValues.appendTo(columnHandles.get(channel), output);
             }
             else {
-                // Record may not be projected, get index from it
-                int fieldPosInSchema = getFieldFromSchema(columnHandle.getName(), record.getSchema()).pos();
-                appendTo(columnTypes.get(channel), record.get(fieldPosInSchema), output);
+                appendTo(columnTypes.get(channel), record.get(fieldPosition), output);
             }
         }
+    }
+
+    private int[] fieldPositionsFor(Schema recordSchema)
+    {
+        if (positionsCacheSchema != recordSchema) {
+            int[] positions = new int[columnHandles.size()];
+            for (int channel = 0; channel < columnHandles.size(); channel++) {
+                HiveColumnHandle columnHandle = columnHandles.get(channel);
+                positions[channel] = prefilledColumnValues.isPrefilled(columnHandle)
+                        ? -1
+                        : getFieldFromSchema(columnHandle.getName(), recordSchema).pos();
+            }
+            positionsCache = positions;
+            positionsCacheSchema = recordSchema;
+        }
+        return positionsCache;
     }
 
     public static void appendTo(Type type, Object value, BlockBuilder output)
@@ -493,7 +515,9 @@ public class HudiAvroSerializer
         output.buildEntry(fieldBuilders -> {
             for (int index = 0; index < fields.size(); index++) {
                 RowType.Field field = fields.get(index);
-                appendTo(field.getType(), record.get(field.getName().orElse("field" + index)), fieldBuilders.get(index));
+                int fieldIndex = index;
+                String fieldName = field.getName().orElseGet(() -> "field" + fieldIndex);
+                appendTo(field.getType(), record.get(fieldName), fieldBuilders.get(index));
             }
         });
     }
@@ -524,10 +548,17 @@ public class HudiAvroSerializer
     static class AvroDecimalConverter
     {
         private static final Conversions.DecimalConversion AVRO_DECIMAL_CONVERSION = new Conversions.DecimalConversion();
+        // convert() runs once per decimal cell on the record read path, and building a Schema costs
+        // orders of magnitude more than the conversion itself. The (precision, scale) space is tiny
+        // and fixed per column, so cache the schemas globally.
+        private static final Map<Integer, Schema> DECIMAL_SCHEMAS = new ConcurrentHashMap<>();
 
         BigDecimal convert(int precision, int scale, byte[] bytes)
         {
-            Schema schema = new Schema.Parser().parse(format("{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":%d,\"scale\":%d}", precision, scale));
+            // The key is unique because precision and scale are at most 38
+            Schema schema = DECIMAL_SCHEMAS.computeIfAbsent(
+                    precision * 100 + scale,
+                    key -> LogicalTypes.decimal(precision, scale).addToSchema(Schema.create(Schema.Type.BYTES)));
             return AVRO_DECIMAL_CONVERSION.fromBytes(ByteBuffer.wrap(bytes), schema, schema.getLogicalType());
         }
     }
