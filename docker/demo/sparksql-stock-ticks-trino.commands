@@ -53,7 +53,8 @@ println("STOCK_TICKS_COW_SETUP_SUCCESS")
 
 // MOR variant: identical schema and seed row. 'type' = 'mor' makes hive sync
 // register stock_ticks_mor_ro / stock_ticks_mor_rt; the initial insert writes
-// parquet base files, so the _ro view already sees the row.
+// parquet base files, and the follow-up UPDATE below adds a log-only delta so
+// the _ro and _rt views actually diverge.
 spark.sql("""
   CREATE TABLE stock_ticks_mor (
     symbol STRING,
@@ -82,6 +83,13 @@ spark.sql("""
 """)
 
 spark.sql("INSERT INTO stock_ticks_mor VALUES ('GOOG', '2018-08-31 10:29:00', 6330, 1230.5, 1230.5, '2018-08-31')")
+
+// Log-only delta on the same key: UPDATE routes through upsert, so the existing
+// file group gains a log file that _ro must ignore (base row: 10:29:00) and
+// _rt must merge (10:59:00). One delta commit stays far below the inline
+// compaction threshold, so the log survives for the read-path split to matter.
+// open/close use .25/.5 so the double renders exactly in Trino's CSV output.
+spark.sql("UPDATE stock_ticks_mor SET ts = '2018-08-31 10:59:00', volume = 9021, open = 1227.25, close = 1227.5 WHERE symbol = 'GOOG'")
 spark.sql("select symbol, ts, volume, open, close from stock_ticks_mor").show(10, false)
 println("STOCK_TICKS_MOR_SETUP_SUCCESS")
 

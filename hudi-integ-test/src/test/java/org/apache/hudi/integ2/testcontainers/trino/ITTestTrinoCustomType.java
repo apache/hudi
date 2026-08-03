@@ -90,6 +90,11 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
 
   @AfterAll
   public void clean() throws Exception {
+    // JUnit runs @AfterAll even when the @BeforeAll assumption aborted setupOnce()
+    // before initializeServices(); nothing was seeded then, so nothing to clean.
+    if (sparkAdhoc1 == null) {
+      return;
+    }
     // -f silently skips non-existent paths so the variant_test cleanup is safe
     // even on Spark 3.5 runs where the table was never created.
     sparkAdhoc1.executeShellCommand("hdfs dfs -rm -R -f "
@@ -148,15 +153,16 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
   }
 
   @Test
-  public void testTrinoBlobBothPartitionsVisible() throws Exception {
+  public void testTrinoBlobEmptiedPartitionInvisible() throws Exception {
     // MERGE created dt=2024-01-02 (id=3), then DELETE emptied it. The native
-    // trino-hudi connector filters to partitions with files, so the empty
-    // partition is invisible to Trino - we only verify the data-bearing
-    // partition's row count here. Catches regressions in partition pruning or
-    // GROUP BY against partition columns.
+    // trino-hudi connector filters to partitions with files, so the emptied
+    // partition must stay invisible while the data-bearing partition keeps its
+    // row count. Catches regressions in partition pruning or GROUP BY against
+    // partition columns.
     trino.execute("SELECT dt, count(*) FROM blob_test GROUP BY dt ORDER BY dt")
         .expectToSucceed()
-        .assertStdOutContains("2024-01-01,2");
+        .assertStdOutContains("2024-01-01,2")
+        .assertStdOutContains("2024-01-02", 0);
   }
 
   // ---------- BLOB INLINE (blob_test_df) ----------
@@ -357,13 +363,14 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
   }
 
   @Test
-  public void testTrinoVariantBothPartitionsVisible() throws Exception {
+  public void testTrinoVariantEmptiedPartitionInvisible() throws Exception {
     assumeSpark4Compose();
-    // Same partition-pruning behavior as the BLOB variant: dt=2024-01-02 is
-    // invisible after its only row was deleted. Verify the data-bearing
+    // Same partition-pruning behavior as the BLOB table: dt=2024-01-02 must be
+    // invisible after its only row was deleted, while the data-bearing
     // partition's row count surfaces correctly.
     trino.execute("SELECT dt, count(*) FROM variant_test GROUP BY dt ORDER BY dt")
         .expectToSucceed()
-        .assertStdOutContains("2024-01-01,2");
+        .assertStdOutContains("2024-01-01,2")
+        .assertStdOutContains("2024-01-02", 0);
   }
 }

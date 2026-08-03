@@ -58,6 +58,11 @@ public class ITTestTrinoStockTicks extends ITTestBaseTestcontainers {
 
   @AfterAll
   public void clean() throws Exception {
+    // JUnit runs @AfterAll even when the @BeforeAll assumption aborted setupOnce()
+    // before initializeServices(); nothing was seeded then, so nothing to clean.
+    if (sparkAdhoc1 == null) {
+      return;
+    }
     sparkAdhoc1.executeShellCommand("hdfs dfs -rm -R -f "
         + STOCK_TICKS_COW_PATH + " " + STOCK_TICKS_MOR_PATH).expectToSucceed();
   }
@@ -75,12 +80,14 @@ public class ITTestTrinoStockTicks extends ITTestBaseTestcontainers {
 
   @Test
   public void testTrinoReadsMorRoMaxTs() throws Exception {
-    // Hive sync produces stock_ticks_mor_ro (RO view of base files). Trino reads it
-    // through the same hudi connector path; this catches MOR-specific regressions.
+    // Hive sync produces stock_ticks_mor_ro (RO view of base files). The fixture's
+    // UPDATE (ts 10:59:00) lives only in a log file, so _ro must keep serving the
+    // 10:29:00 base row - a 10:59:00 here means log records leaked into the RO view.
     trino.execute("SELECT symbol, max(ts) FROM stock_ticks_mor_ro GROUP BY symbol HAVING symbol = 'GOOG'")
         .expectToSucceed()
         .assertStdOutContains("GOOG")
-        .assertStdOutContains("2018-08-31 10:29:00");
+        .assertStdOutContains("2018-08-31 10:29:00")
+        .assertStdOutContains("2018-08-31 10:59:00", 0);
   }
 
   @Test
@@ -96,5 +103,26 @@ public class ITTestTrinoStockTicks extends ITTestBaseTestcontainers {
     trino.execute("SELECT symbol, ts, volume, open, close FROM stock_ticks_mor_ro WHERE symbol = 'GOOG'")
         .expectToSucceed()
         .assertStdOutContains("GOOG,2018-08-31 10:29:00,6330,1230.5,1230.5");
+  }
+
+  @Test
+  public void testTrinoReadsMorRtMergedMaxTs() throws Exception {
+    // The fixture's UPDATE lands as a log-only delta; the _rt view must merge it
+    // on read. Pairs with testTrinoReadsMorRoMaxTs pinning _ro to the base row,
+    // so together they prove the connector takes different read paths for the
+    // two views instead of serving base files for both.
+    trino.execute("SELECT symbol, max(ts) FROM stock_ticks_mor_rt GROUP BY symbol HAVING symbol = 'GOOG'")
+        .expectToSucceed()
+        .assertStdOutContains("GOOG")
+        .assertStdOutContains("2018-08-31 10:59:00");
+  }
+
+  @Test
+  public void testTrinoReadsMorRtMergedProjectedColumns() throws Exception {
+    // Full merged row: every non-key column must come from the log record, and
+    // exactly one GOOG row may survive the merge (times=1 is the assert default).
+    trino.execute("SELECT symbol, ts, volume, open, close FROM stock_ticks_mor_rt WHERE symbol = 'GOOG'")
+        .expectToSucceed()
+        .assertStdOutContains("GOOG,2018-08-31 10:59:00,9021,1227.25,1227.5");
   }
 }
