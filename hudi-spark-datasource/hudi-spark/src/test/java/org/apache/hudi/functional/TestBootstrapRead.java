@@ -19,11 +19,14 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -95,5 +98,45 @@ public class TestBootstrapRead extends TestBootstrapReadBase {
     doInsert(options, "002");
     compareTables();
     verifyMetaColOnlyRead(2);
+  }
+
+  /**
+   * Same metadata-bootstrap COW scenario as {@link #testBootstrapFunctional}, but pinned to the legacy
+   * {@link HoodieWriteMergeHandle}. That handle is the only one routed through
+   * {@code HoodieMergeHelper#runMerge}, so this is what exercises the bootstrap arm of the merge helper
+   * (it stitches the skeleton file and the bootstrap base file together via a bootstrap file reader).
+   * The default merge handle is {@code FileGroupReaderBasedMergeHandle}, which overrides {@code doMerge}
+   * and never reaches the merge helper.
+   */
+  @Test
+  public void testBootstrapUpsertWithLegacyMergeHandle() {
+    this.bootstrapType = "metadata";
+    this.dashPartitions = true;
+    this.tableType = COPY_ON_WRITE;
+    this.nPartitions = 0;
+    setupDirs();
+
+    // do bootstrap
+    Map<String, String> options = withLegacyMergeHandle(setBootstrapOptions());
+    Dataset<Row> bootstrapDf = sparkSession.emptyDataFrame();
+    bootstrapDf.write().format("hudi")
+        .options(options)
+        .mode(SaveMode.Overwrite)
+        .save(bootstrapTargetPath);
+    compareTables();
+    verifyMetaColOnlyRead(0);
+
+    // upsert into the bootstrapped file groups, so their base files get merged
+    options = withLegacyMergeHandle(basicOptions());
+    doUpdate(options, "001");
+    compareTables();
+    verifyMetaColOnlyRead(1);
+  }
+
+  private static Map<String, String> withLegacyMergeHandle(Map<String, String> options) {
+    options.put(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), HoodieWriteMergeHandle.class.getName());
+    // do not silently fall back to the default merge handle if the legacy one cannot be instantiated
+    options.put(HoodieWriteConfig.MERGE_HANDLE_PERFORM_FALLBACK.key(), "false");
+    return options;
   }
 }
