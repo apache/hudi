@@ -23,6 +23,7 @@ import org.apache.hudi.aws.testutils.GlueTestUtil;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
@@ -82,6 +83,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -95,6 +97,9 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -251,6 +256,89 @@ class TestAWSGlueSyncClient {
     assertEquals("age", fields.get(1).getName(), "glue table second column should be age");
     assertEquals("int", fields.get(1).getType(), "glue table second column type should be int");
     assertEquals("person's age", fields.get(1).getComment().get(), "glue table second column comment should person's age");
+  }
+
+  /**
+   * The bug this covers: {@code setComments} built a {@code Column} and dropped the result, so no comment
+   * was ever applied and {@code updateTableComments} always reported no change. AWS SDK v2 model classes are
+   * immutable, so the column has to be rebuilt and put back.
+   */
+  @Test
+  void testWithCommentsAppliesTheStorageComment() {
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", null),
+        GlueTestUtil.getColumn("age", "int", "stale comment"));
+    Map<String, Option<String>> comments = new HashMap<>();
+    comments.put("name", Option.of("person's name"));
+    comments.put("age", Option.of("person's age"));
+
+    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, comments);
+
+    assertEquals("person's name", updated.get(0).comment(), "a missing comment should be applied");
+    assertEquals("person's age", updated.get(1).comment(), "an out-of-date comment should be replaced");
+    assertNull(columns.get(0).comment(), "the input columns must not be mutated");
+    assertEquals("stale comment", columns.get(1).comment(), "the input columns must not be mutated");
+  }
+
+  @Test
+  void testWithCommentsClearsTheCommentOfAKnownColumnWithoutADoc() {
+    List<Column> columns = Collections.singletonList(GlueTestUtil.getColumn("name", "string", "old comment"));
+    Map<String, Option<String>> comments = new HashMap<>();
+    comments.put("name", Option.empty());
+
+    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, comments);
+
+    assertNull(updated.get(0).comment(),
+        "the storage schema is authoritative for a column it knows, so its comment should be cleared");
+  }
+
+  /**
+   * A column the storage schema says nothing about is left alone rather than cleared - the storage field
+   * names keep the Avro schema's case while a catalog may hold them lowercased, so a name that fails to
+   * match must not silently wipe a comment. Matches {@code HMSDDLExecutor.applyFieldComments}.
+   */
+  @Test
+  void testWithCommentsLeavesColumnsTheStorageSchemaDoesNotKnowAlone() {
+    List<Column> columns = Collections.singletonList(GlueTestUtil.getColumn("myCol", "string", "keep me"));
+
+    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, Collections.emptyMap());
+
+    assertEquals("keep me", updated.get(0).comment(), "an unknown column's comment must be preserved");
+    assertSame(columns.get(0), updated.get(0), "and the column should be returned as-is");
+  }
+
+  @Test
+  void testWithCommentsLeavesAnUpToDateColumnAlone() {
+    List<Column> columns = Collections.singletonList(GlueTestUtil.getColumn("name", "string", "person's name"));
+    Map<String, Option<String>> comments = new HashMap<>();
+    comments.put("name", Option.of("person's name"));
+
+    List<Column> updated = AWSGlueCatalogSyncClient.withComments(columns, comments);
+
+    assertSame(columns.get(0), updated.get(0), "an unchanged column should be returned as-is");
+  }
+
+  /**
+   * Why the storage descriptor itself has to be rebuilt, not just the column list: its {@code columns()} is
+   * unmodifiable, and a descriptor built with new columns is a different object. Editing a copy of the list
+   * and then sending the original descriptor would silently drop the comments.
+   */
+  @Test
+  void testRebuildingColumnsRequiresRebuildingTheStorageDescriptor() {
+    Column column = GlueTestUtil.getColumn("name", "string", null);
+    StorageDescriptor original = StorageDescriptor.builder().columns(Collections.singletonList(column)).build();
+
+    assertThrows(UnsupportedOperationException.class,
+        () -> original.columns().set(0, column.toBuilder().comment("person's name").build()),
+        "SDK v2 returns an unmodifiable column list, so comments cannot be applied in place");
+
+    Map<String, Option<String>> comments = new HashMap<>();
+    comments.put("name", Option.of("person's name"));
+    StorageDescriptor updated =
+        original.toBuilder().columns(AWSGlueCatalogSyncClient.withComments(original.columns(), comments)).build();
+
+    assertNull(original.columns().get(0).comment(), "the original descriptor stays untouched");
+    assertEquals("person's name", updated.columns().get(0).comment(), "the rebuilt descriptor carries the comment");
+    assertNotEquals(original, updated, "the rebuilt descriptor must differ, which is what signals a change");
   }
 
   @Test
