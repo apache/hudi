@@ -747,19 +747,19 @@ object TestDataSkippingUtils {
     java.util.stream.Stream.of(
       // to_date(B) is replaced with Cast(B as date), which the Cast whitelist arm handles
       arguments("to_date(B) > '2022-03-06'", input, Seq("file_1")),
-      // to_date(B, fmt) is replaced with Cast(GetTimestamp(B, fmt) as date); GetTimestamp is
-      // not matched by the order-preserving whitelist, so data skipping silently no-ops (#19446)
-      arguments("to_date(B, 'yyyy-MM-dd') > '2022-03-06'", input, Seq("file_1", "file_2")),
-      arguments("to_date(B, 'yyyy-MM-dd') = '2022-03-08'", input, Seq("file_1", "file_2")),
+      // to_date(B, fmt) is replaced with Cast(GetTimestamp(B, fmt) as date); the GetTimestamp
+      // whitelist arm recurses through it back to B
+      arguments("to_date(B, 'yyyy-MM-dd') > '2022-03-06'", input, Seq("file_1")),
+      arguments("to_date(B, 'yyyy-MM-dd') = '2022-03-08'", input, Seq("file_1")),
       // to_timestamp(B) is replaced with Cast(B as timestamp), which the Cast whitelist arm handles
       arguments("to_timestamp(B) > '2022-03-06 12:00:00'", input, Seq("file_1")),
-      // to_timestamp(B, fmt) is replaced with a bare GetTimestamp(B, fmt): same no-op as above
-      arguments("to_timestamp(B, 'yyyy-MM-dd') > '2022-03-06 12:00:00'", input, Seq("file_1", "file_2")),
+      // to_timestamp(B, fmt) is replaced with a bare GetTimestamp(B, fmt)
+      arguments("to_timestamp(B, 'yyyy-MM-dd') > '2022-03-06 12:00:00'", input, Seq("file_1")),
       // Same composite as in testCompositeFilterExpressionsSource, but under the real optimizer
       // ReplaceExpressions rewrites to_timestamp and OptimizeIn turns the single-element NOT IN
-      // into Not(EqualTo(...)): the pruning seen there is silently lost on the real read path
+      // into Not(EqualTo(...)); pruning must match the OptimizeIn-only variant above
       arguments("date_format(to_timestamp(B, 'yyyy-MM-dd'), 'MM/dd/yyyy') NOT IN ('03/06/2022')",
-        input, Seq("file_1", "file_2"))
+        input, Seq("file_1"))
     )
   }
 }

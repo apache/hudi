@@ -17,9 +17,9 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, ShiftLeft, Sqrt, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateSub, Divide, Exp, Expression, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, Sqrt, Upper}
 import org.apache.spark.sql.types.{DateType, DoubleType, IntegerType, LongType, StringType}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
 /**
@@ -76,6 +76,24 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // through the per-version unapplyOrderPreservingDateParsing hook. The 1-arg auxiliary
     // constructor is stable on all profiles, letting this pin that hook everywhere.
     assertEquals(Some(strAttr), matched(new ParseToDate(strAttr)))
+  }
+
+  @Test
+  def testDateParsingReplacementShapesPreserveOrdering(): Unit = {
+    // ParseToDate/ParseToTimestamp are RuntimeReplaceable (SPARK-38240): on the real read path
+    // the optimizer's ReplaceExpressions rewrites them before data skipping sees the filter, so
+    // the matcher must also recover the source attribute from the replacement shapes. They are
+    // built here via replacement() because GetTimestamp's constructor arity differs across
+    // Spark versions while the 2-arg ParseTo* auxiliary constructors are stable everywhere.
+    val toTimestampReplacement = new ParseToTimestamp(strAttr, Literal("yyyy-MM-dd")).replacement
+    assertTrue(toTimestampReplacement.isInstanceOf[GetTimestamp])
+    assertEquals(Some(strAttr), matched(toTimestampReplacement))
+
+    // to_date's replacement wraps GetTimestamp in a cast to date; the matcher must recurse
+    // through both
+    val toDateReplacement = new ParseToDate(strAttr, Literal("yyyy-MM-dd")).replacement
+    assertTrue(toDateReplacement.collectFirst { case gt: GetTimestamp => gt }.isDefined)
+    assertEquals(Some(strAttr), matched(toDateReplacement))
   }
 
   @Test

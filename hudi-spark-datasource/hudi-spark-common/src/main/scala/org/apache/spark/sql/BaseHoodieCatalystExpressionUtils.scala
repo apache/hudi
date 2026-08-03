@@ -18,7 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
-import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Log, Log10, Log1p, Log2, Lower, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, GetTimestamp, Log, Log10, Log1p, Log2, Lower, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp, Upper}
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
 import org.apache.spark.sql.types.DataType
 
@@ -53,7 +53,11 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
    * Matches order-preserving date/time parsing expressions whose case-class shapes differ across
    * Spark versions (currently [[org.apache.spark.sql.catalyst.expressions.ParseToDate]] and
    * [[org.apache.spark.sql.catalyst.expressions.ParseToTimestamp]]), returning the source child
-   * expression that the order-preserving transformation matching should recurse into
+   * expression that the order-preserving transformation matching should recurse into.
+   *
+   * These are the pre-ReplaceExpressions (analysis-time) shapes, still inspected by the
+   * expression-index and partition-stats paths; the post-replacement [[GetTimestamp]] shape
+   * seen on the read path is matched directly in [[OrderPreservingTransformation]]
    */
   protected def unapplyOrderPreservingDateParsing(expr: Expression): Option[Expression]
 
@@ -70,6 +74,12 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
         case FromUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
         case ToUnixTimestamp(OrderPreservingTransformation(attrRef), _, _, _) => Some(attrRef)
         case ToUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+        // Post-ReplaceExpressions shape of to_date/to_timestamp with an explicit format:
+        // since SPARK-38240 the optimizer rewrites those RuntimeReplaceable nodes into
+        // GetTimestamp(source, fmt) (Cast-wrapped to date for to_date) before filters
+        // reach file pruning. GetTimestamp's constructor arity differs across Spark
+        // versions but its left() accessor is stable, hence the typed match
+        case gt: GetTimestamp => unapply(gt.left)
 
         // String Expressions
         case Lower(OrderPreservingTransformation(attrRef)) => Some(attrRef)
