@@ -1656,6 +1656,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
     TestHelpers.waitTillCondition(condition, dsFuture, 360);
     if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
+      // If the streamer died, waitTillCondition returns as soon as the future completes. Surface that
+      // failure here rather than letting awaitDeltaStreamerShutdown time out and report the misleading
+      // "Deltastreamer should have shutdown by now" two minutes later.
+      if (dsFuture.isDone()) {
+        dsFuture.get();
+      }
       awaitDeltaStreamerShutdown(ds);
     } else {
       ds.shutdownGracefully();
