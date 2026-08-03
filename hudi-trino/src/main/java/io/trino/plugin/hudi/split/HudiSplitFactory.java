@@ -127,7 +127,10 @@ public class HudiSplitFactory
         }
 
         ImmutableList.Builder<HudiSplit> splits = ImmutableList.builder();
-        long targetSplitSizeInBytes = Math.max(targetSplitSize.toBytes(), baseFile.getPathInfo().getBlockSize());
+        // Slicing is governed solely by the target split size; the block size reported by
+        // storage is not meaningful on object stores and must not influence split sizing.
+        long targetSplitSizeInBytes = targetSplitSize.toBytes();
+        checkArgument(targetSplitSizeInBytes > 0, "targetSplitSize must be positive: %s", targetSplitSize);
 
         long bytesRemaining = fileSize;
         while (((double) bytesRemaining) / targetSplitSizeInBytes > SPLIT_SLOP) {

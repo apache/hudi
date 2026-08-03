@@ -35,6 +35,7 @@ import java.util.OptionalLong;
 
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class TestHudiSplitFactory
 {
@@ -101,19 +102,65 @@ public class TestHudiSplitFactory
     }
 
     @Test
-    public void testCreateHudiSplitsWithLargerBlockSize()
+    public void testCreateHudiSplitsIgnoresBlockSize()
     {
-        // Test with 1MB target split size and 32MB base file
-        // - should create 4 splits because the block size of 8MB is larger than the target split size
+        // Test with 2MB target and 8MB base file whose reported block size is 8MB
+        // - the block size must be ignored, so 4 splits of the 2MB target size are expected
+        //   (previously the 8MB block size beat the target and produced 1 split of 8MB)
         testSplitCreation(
-                DataSize.of(1, MEGABYTE),
-                DataSize.of(32, MEGABYTE),
+                DataSize.of(2, MEGABYTE),
+                DataSize.of(8, MEGABYTE),
                 Option.empty(),
                 ImmutableList.of(
-                        Pair.of(0L, DataSize.of(8, MEGABYTE)),
-                        Pair.of(DataSize.of(8, MEGABYTE).toBytes(), DataSize.of(8, MEGABYTE)),
-                        Pair.of(DataSize.of(16, MEGABYTE).toBytes(), DataSize.of(8, MEGABYTE)),
-                        Pair.of(DataSize.of(24, MEGABYTE).toBytes(), DataSize.of(8, MEGABYTE))));
+                        Pair.of(0L, DataSize.of(2, MEGABYTE)),
+                        Pair.of(DataSize.of(2, MEGABYTE).toBytes(), DataSize.of(2, MEGABYTE)),
+                        Pair.of(DataSize.of(4, MEGABYTE).toBytes(), DataSize.of(2, MEGABYTE)),
+                        Pair.of(DataSize.of(6, MEGABYTE).toBytes(), DataSize.of(2, MEGABYTE))));
+    }
+
+    @Test
+    public void testCreateHudiSplitsWithFileSmallerThanDefaultTarget()
+    {
+        // Regression test for the split inflation reported in trinodb/trino#29842 (hudi#19231):
+        // a ~120MB file with the default 128MB target must produce exactly 1 split
+        testSplitCreation(
+                DataSize.of(128, MEGABYTE),
+                DataSize.of(120, MEGABYTE),
+                Option.empty(),
+                ImmutableList.of(
+                        Pair.of(0L, DataSize.of(120, MEGABYTE))));
+    }
+
+    @Test
+    public void testCreateHudiSplitsWithFileLargerThanDefaultTarget()
+    {
+        // Test with 128MB target and 500MB base file
+        // - should be sliced at target boundaries into 3 x 128MB + 116MB remainder,
+        //   even though the reported block size (8MB in the fixture) says otherwise
+        testSplitCreation(
+                DataSize.of(128, MEGABYTE),
+                DataSize.of(500, MEGABYTE),
+                Option.empty(),
+                ImmutableList.of(
+                        Pair.of(0L, DataSize.of(128, MEGABYTE)),
+                        Pair.of(DataSize.of(128, MEGABYTE).toBytes(), DataSize.of(128, MEGABYTE)),
+                        Pair.of(DataSize.of(256, MEGABYTE).toBytes(), DataSize.of(128, MEGABYTE)),
+                        Pair.of(DataSize.of(384, MEGABYTE).toBytes(), DataSize.of(116, MEGABYTE))));
+    }
+
+    @Test
+    public void testCreateHudiSplitsWithZeroTargetSplitSize()
+    {
+        // A zero target split size must fail fast instead of looping forever in split generation
+        assertThatThrownBy(() -> HudiSplitFactory.createHudiSplits(
+                createTableHandle(),
+                PARTITION_KEYS,
+                createFileSlice(DataSize.of(10, MEGABYTE), Option.empty()),
+                COMMIT_TIME,
+                new SizeBasedSplitWeightProvider(0.05, DataSize.of(128, MEGABYTE)),
+                DataSize.ofBytes(0)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("targetSplitSize");
     }
 
     @Test
@@ -192,6 +239,7 @@ public class TestHudiSplitFactory
     {
         String fileId = "5a4f6a70-0306-40a8-952b-045b0d8ff0d4-0";
         HoodieFileGroupId fileGroupId = new HoodieFileGroupId("partition", fileId);
+        // Deliberately nonzero: split generation must ignore the reported block size
         long blockSize = 8L * 1024 * 1024;
         String baseFilePath = "/test/path/" + fileGroupId + "_4-19-0_" + COMMIT_TIME + ".parquet";
         String logFilePath = "/test/path/." + fileId + "_2025062515374131546.log.1_0-53-80";
