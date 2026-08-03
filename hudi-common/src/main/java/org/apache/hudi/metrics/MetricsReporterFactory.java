@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
@@ -40,7 +41,8 @@ import java.util.Properties;
 @Slf4j
 public class MetricsReporterFactory {
 
-  private static final String CLOUDWATCH_REPORTER_CLASS =
+  @VisibleForTesting
+  static final String CLOUDWATCH_REPORTER_CLASS =
       "org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter";
 
   public static Option<MetricsReporter> createReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
@@ -104,9 +106,8 @@ public class MetricsReporterFactory {
 
   /**
    * The CloudWatch reporter ships in the optional {@code hudi-aws} module and so is loaded reflectively.
-   * Not every engine bundle shades that module (notably {@code hudi-spark-bundle} does not), in which
-   * case class loading fails with a message that names neither the missing class nor a remedy. Translate
-   * that into an actionable error.
+   * Not every engine bundle shades that module, in which case class loading fails without pointing at a
+   * remedy. Translate that into an actionable error.
    */
   private static MetricsReporter createCloudWatchReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
     try {
@@ -116,9 +117,9 @@ public class MetricsReporterFactory {
       if (e.getCause() instanceof ClassNotFoundException) {
         throw new HoodieException(String.format(
             "Cannot report metrics to CloudWatch: %s was not found on the classpath. It ships in the "
-                + "optional hudi-aws module, which is not included in every engine bundle (for example "
-                + "hudi-spark-bundle does not bundle it). Add the hudi-aws-bundle jar matching your Hudi "
-                + "version to the classpath, or set %s to a different reporter type.",
+                + "optional hudi-aws module, which not every engine bundle includes. Add the "
+                + "hudi-aws-bundle jar matching your Hudi version to the classpath, or set %s to a "
+                + "different reporter type.",
             CLOUDWATCH_REPORTER_CLASS, HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()), e);
       }
       throw e;

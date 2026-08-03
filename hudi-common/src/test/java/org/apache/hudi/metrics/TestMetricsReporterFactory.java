@@ -82,7 +82,7 @@ class TestMetricsReporterFactory {
     try (MockedStatic<ReflectionUtils> mockedStatic = Mockito.mockStatic(ReflectionUtils.class)) {
       mockedStatic.when(() ->
           ReflectionUtils.loadClass(
-              eq("org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter"),
+              eq(MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS),
               any(Class[].class),
               eq(metricsConfig),
               eq(registry)
@@ -108,12 +108,52 @@ class TestMetricsReporterFactory {
         () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
 
     String message = exception.getMessage();
-    assertTrue(message.contains("org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter"),
+    assertTrue(message.contains(MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS),
         () -> "The failure should name the missing reporter class, but was: " + message);
     assertTrue(message.contains("hudi-aws-bundle"),
         () -> "The failure should name the bundle that provides the reporter, but was: " + message);
     assertTrue(message.contains(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()),
         () -> "The failure should name the config to change, but was: " + message);
+  }
+
+  /**
+   * The classpath-based test above exercises the real failure but passes for any resolution failure.
+   * This pins the mapping itself: a ClassNotFoundException cause is what triggers the rewrite.
+   */
+  @Test
+  void metricsReporterFactoryRewritesClassNotFoundIntoAnActionableMessage() {
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
+    try (MockedStatic<ReflectionUtils> mockedStatic = Mockito.mockStatic(ReflectionUtils.class)) {
+      mockedStatic.when(() -> ReflectionUtils.loadClass(
+          eq(MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS), any(Class[].class), eq(metricsConfig), eq(registry)))
+          .thenThrow(new HoodieException("Unable to load class " + MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS,
+              new ClassNotFoundException(MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS)));
+
+      HoodieException exception = assertThrows(HoodieException.class,
+          () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
+      assertTrue(exception.getMessage().contains("hudi-aws-bundle"),
+          () -> "Expected the remedy to be named, but was: " + exception.getMessage());
+    }
+  }
+
+  /**
+   * The other direction, and the branch most likely to regress: a failure that is not a missing class must
+   * pass through untouched, so an unrelated instantiation error is never rewritten into "add hudi-aws-bundle".
+   */
+  @Test
+  void metricsReporterFactoryLeavesNonClassNotFoundFailuresUntouched() {
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
+    try (MockedStatic<ReflectionUtils> mockedStatic = Mockito.mockStatic(ReflectionUtils.class)) {
+      mockedStatic.when(() -> ReflectionUtils.loadClass(
+          eq(MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS), any(Class[].class), eq(metricsConfig), eq(registry)))
+          .thenThrow(new HoodieException("Unable to instantiate class " + MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS,
+              new NoSuchMethodException("<init>")));
+
+      HoodieException exception = assertThrows(HoodieException.class,
+          () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
+      assertEquals("Unable to instantiate class " + MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS,
+          exception.getMessage(), "A non-ClassNotFound failure must not be rewritten");
+    }
   }
 
   @Test
