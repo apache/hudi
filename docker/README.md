@@ -27,22 +27,15 @@ docker demo environment.
 The `/hoodie` folder contains all the configs for assembling necessary docker images. The name and repository of each
 docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-prestobase_0.232`, is defined in the maven configuration file `pom.xml`.
 
-### Base images by Java version
+### Base image
 
-`build_and_publish_docker_images.sh` auto-selects one of the two supported base images from the Spark version it is
-building:
-
-| Base module   | JDK     | Used for   |
-|---------------|---------|------------|
-| `base_java11` | Java 11 | Spark 3.x  |
-| `base_java17` | Java 17 | Spark 4.0+ |
+`build_and_publish_docker_images.sh` builds the `base_java11` module, which is what Spark 3.x needs.
 
 The legacy Java 8 `base` module under `/hoodie/hadoop/base` is retained for historical reference only; Spark 2.x is no
 longer supported and `build_and_publish_docker_images.sh` never selects it.
 
 Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `prestobase`) pick the base via the
-`BASE_IMAGE_TAG` build arg (default `java11`). `build_and_publish_docker_images.sh` sets it automatically; bare
-`docker build` invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=java17`.
+`BASE_IMAGE_TAG` build arg, which `build_and_publish_docker_images.sh` sets automatically.
 
 `spark_base` additionally takes `HADOOP_AWS_VERSION`, `AWS_SDK_VERSION` and `ANALYTICS_ACCELERATOR_VERSION` for the
 S3A jars it adds to the Spark classpath. `build_docker_images.sh` derives all three from `--spark-version`, matching
@@ -85,8 +78,7 @@ SPARK_VERSION="3.5.3"
 HIVE_VERSION="3.1.3"
 ```
 
-The base image follows from `SPARK_VERSION`, so setting it to a 4.x release also switches the set to the Java 17
-base. If you plan to use `setup_demo.sh`, build the image set matching its compose file first.
+If you plan to use `setup_demo.sh`, build the image set matching its compose file first.
 
 `setup_demo.sh` currently defaults to `docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml`. If you build a
 different image set for the demo flow, update `COMPOSE_FILE_NAME` in `setup_demo.sh` to point to the matching compose
@@ -224,7 +216,7 @@ Then run the script from under `<HUDI_REPO_DIR>/docker`:
 ./build_and_publish_docker_images.sh --multi-arch true --publish true
 
 # Example with explicit component versions
-./build_and_publish_docker_images.sh --hadoop-version 3.4.0 --spark-version 4.0.1 --hive-version 3.1.3 \
+./build_and_publish_docker_images.sh --hadoop-version 3.3.4 --spark-version 3.5.3 --hive-version 3.1.3 \
   --multi-arch true --publish true
 ```
 
