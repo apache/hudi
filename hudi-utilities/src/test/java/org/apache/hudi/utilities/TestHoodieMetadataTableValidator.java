@@ -576,7 +576,128 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
 
     // validate that all 3 partitions are returned
-    assertEquals(mdtPartitions, validator.validatePartitions(engineContext, new StoragePath(basePath), metaClient));
+    assertEquals(mdtPartitions, validator.validatePartitions(engineContext, new StoragePath(basePath), metaClient, Collections.emptySet()));
+  }
+
+  /**
+   * The comparison of the common partitions is supplementary, so it must never mask the mismatch that
+   * triggered it. Here the table is mocked and no metadata validation context can be opened against it,
+   * which is the same shape as that comparison failing in the field. The partition list difference still
+   * has to surface as the reported cause, with the failure to compare noted rather than thrown.
+   * See HUDI-3880.
+   */
+  @Test
+  void testPartitionMismatchSurvivesFailureToCompareCommonPartitions() throws IOException {
+    String common1 = "PARTITION1";
+    String common2 = "PARTITION2";
+    // present in FS listing only, and non-empty, so it is a genuine mismatch rather than a stale empty dir
+    String onlyInFs = "PARTITION3";
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    when(metaClient.getStorage()).thenReturn(storage);
+    // every partition holds a data file, so none of them is written off as empty
+    mockPartitionWithFiles(Arrays.asList(common1, common2, onlyInFs), storage);
+
+    validator.setMetadataPartitionsToReturn(Arrays.asList(common1, common2));
+    validator.setFsPartitionsToReturn(Arrays.asList(common1, common2, onlyInFs));
+
+    HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
+    HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
+    when(metaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
+    when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
+
+    HoodieValidationException exception = assertThrows(HoodieValidationException.class,
+        () -> validator.validatePartitions(engineContext, new StoragePath(basePath), metaClient, Collections.emptySet()));
+
+    String message = exception.getMessage();
+    // the partition list difference stays the reported cause
+    assertTrue(message.contains("Compare Partitions Failed!"), message);
+    assertTrue(message.contains("PARTITION3"), message);
+    // the comparison could not run, and says so instead of claiming the common partitions are fine
+    assertTrue(message.contains("2 partitions common to FS listing and MDT could not be compared"), message);
+    assertFalse(message.contains("File listings match for all"), message);
+  }
+
+  /**
+   * Nothing overlaps, so there are no file listings to compare. The mismatch is still reported and the
+   * validator must not claim to have checked anything. See HUDI-3880.
+   */
+  @Test
+  void testDisjointPartitionsOnMismatch() throws IOException {
+    String onlyInMdt = "PARTITION1";
+    String onlyInFs = "PARTITION2";
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    when(metaClient.getStorage()).thenReturn(storage);
+    // both hold data, so neither is written off as empty
+    mockPartitionWithFiles(Arrays.asList(onlyInMdt, onlyInFs), storage);
+    when(storage.exists(new StoragePath(basePath + "/" + onlyInMdt))).thenReturn(true);
+
+    validator.setMetadataPartitionsToReturn(Collections.singletonList(onlyInMdt));
+    validator.setFsPartitionsToReturn(Collections.singletonList(onlyInFs));
+
+    HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
+    HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
+    when(metaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
+    when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
+
+    HoodieValidationException exception = assertThrows(HoodieValidationException.class,
+        () -> validator.validatePartitions(engineContext, new StoragePath(basePath), metaClient, Collections.emptySet()));
+
+    String message = exception.getMessage();
+    assertTrue(message.contains("Compare Partitions Failed!"), message);
+    assertTrue(message.contains("No partitions are common to FS listing and MDT"), message);
+    // must not imply anything was verified
+    assertFalse(message.contains("File listings match for all"), message);
+  }
+
+  /**
+   * The partitions the two sides agree on must still be reported as matching when the only difference
+   * is an extra empty partition on the FS side, which is not a mismatch at all. Guards against the
+   * common partition check firing on runs that should pass. See HUDI-3880.
+   */
+  @Test
+  void testCommonPartitionsNotValidatedWhenNoMismatch() throws IOException {
+    String partition1 = "PARTITION1";
+    String partition2 = "PARTITION2";
+    String emptyExtraOnFs = "PARTITION3";
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    when(metaClient.getStorage()).thenReturn(storage);
+    mockPartitionWithFiles(Arrays.asList(partition1, partition2), storage);
+    // the extra FS partition holds only the partition marker, so it is empty and forgiven
+    StoragePathInfo markerOnly = mock(StoragePathInfo.class);
+    when(markerOnly.isFile()).thenReturn(true);
+    when(markerOnly.getPath()).thenReturn(new StoragePath(basePath, emptyExtraOnFs + "/.hoodie_partition_metadata"));
+    when(storage.listFiles(new StoragePath(basePath, emptyExtraOnFs))).thenReturn(Collections.singletonList(markerOnly));
+
+    List<String> mdtPartitions = Arrays.asList(partition1, partition2);
+    validator.setMetadataPartitionsToReturn(mdtPartitions);
+    validator.setFsPartitionsToReturn(Arrays.asList(partition1, partition2, emptyExtraOnFs));
+
+    HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
+    HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
+    when(metaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
+    when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
+
+    // returns normally, so the common partition check never runs and the caller does the file validation
+    assertEquals(mdtPartitions,
+        validator.validatePartitions(engineContext, new StoragePath(basePath), metaClient, Collections.emptySet()));
   }
 
   @ParameterizedTest
@@ -646,7 +767,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       validator.setPartitionCreationTime(Option.of(partition3CreationTime));
       // validate that exception is thrown since MDT has one additional partition.
       assertThrows(HoodieValidationException.class, () -> {
-        validator.validatePartitions(engineContext, baseStoragePath, metaClient);
+        validator.validatePartitions(engineContext, baseStoragePath, metaClient, Collections.emptySet());
       });
     } else {
       // 3rd partition creation time is > last completed instant
@@ -657,7 +778,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       validator.setPartitionCreationTime(Option.of(TimelineUtils.generateInstantTime(true, timeGenerator)));
 
       // validate that all 3 partitions are returned
-      assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath, metaClient));
+      assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath, metaClient, Collections.emptySet()));
     }
   }
 
@@ -836,6 +957,55 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       } else {
         assertThrows(HoodieValidationException.class, localValidator::run);
       }
+    });
+  }
+
+  /**
+   * End-to-end counterpart of the mocked partition mismatch tests, running against a real table so the
+   * file listings for the common partitions are genuinely compared rather than short circuited. One of
+   * the three partitions is removed from the file system, so the partition lists disagree while the two
+   * surviving partitions still match. The reported failure has to cover both. See HUDI-3880.
+   */
+  @Test
+  void testCommonPartitionsAreValidatedOnPartitionMismatchEndToEnd() throws Exception {
+    SparkRDDValidationUtils.withRDDPersistenceValidation(sparkSession, () -> {
+      Map<String, String> writeOptions = new HashMap<>();
+      writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+      writeOptions.put("hoodie.table.name", "test_table");
+      writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
+      writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+      writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
+      writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
+
+      Dataset<Row> inserts = makeInsertDf("000", 100).cache();
+      inserts.write().format("hudi").options(writeOptions)
+          .mode(SaveMode.Overwrite)
+          .save(basePath);
+      inserts.unpersist(true);
+
+      HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+      config.basePath = "file:" + basePath;
+      config.validateLatestFileSlices = true;
+      config.validateAllFileGroups = true;
+      new HoodieMetadataTableValidator(jsc, config).run();
+
+      // drop one of the three partitions from the file system, leaving two that both sides still agree on
+      FileSystem fs = HadoopFSUtils.getFs(basePath, new Configuration(false));
+      fs.delete(new Path(basePath + "/" + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH), true);
+
+      config = new HoodieMetadataTableValidator.Config();
+      config.basePath = "file:" + basePath;
+      config.validateLatestFileSlices = true;
+
+      HoodieMetadataTableValidator localValidator = new HoodieMetadataTableValidator(jsc, config);
+      HoodieValidationException exception =
+          assertThrows(HoodieValidationException.class, localValidator::run);
+
+      String message = exception.getMessage();
+      // the partition list difference stays the reported cause
+      assertTrue(message.contains("Compare Partitions Failed!"), message);
+      // and the two partitions both sides agree on were really compared, not just counted
+      assertTrue(message.contains("File listings match for all 2 partitions common to FS listing and MDT."), message);
     });
   }
 
@@ -1606,7 +1776,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
     // Test validation with truncation
     HoodieValidationException exception = assertThrows(HoodieValidationException.class, () -> {
-      validator.validatePartitions(engineContext, new StoragePath(basePath), metaClient);
+      validator.validatePartitions(engineContext, new StoragePath(basePath), metaClient, Collections.emptySet());
     });
     
     // Verify truncation in error message
