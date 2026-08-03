@@ -96,9 +96,9 @@ class TestMetricsReporterFactory {
 
   /**
    * {@code hudi-aws} is deliberately absent from this module's test classpath, which is exactly the
-   * situation a user hits with {@code hudi-spark-bundle}: that bundle does not shade {@code hudi-aws},
-   * so the reflectively loaded CloudWatch reporter cannot be found. The failure must name the missing
-   * class and how to fix it, not just report that some class could not be loaded.
+   * situation a user hits on an engine bundle that does not shade that module: the reflectively loaded
+   * CloudWatch reporter cannot be found. The failure must name the missing class and how to fix it,
+   * not just report that some class could not be loaded.
    */
   @Test
   void metricsReporterFactoryShouldExplainHowToEnableCloudWatchWhenHudiAwsIsMissing() {
