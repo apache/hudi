@@ -18,35 +18,99 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+/**
+ * Version 9 cannot interpret {@code hoodie.meta.fields.mode}, so the downgrade deletes it and writes
+ * {@code hoodie.populate.meta.fields} back from it. The write-back is the load-bearing part:
+ * {@code POPULATE_META_FIELDS} defaults to {@code true}, so deleting the mode without restating the
+ * boolean would silently downgrade the table to {@code ALL}.
+ */
 class TestTenToNineDowngradeHandler {
 
+  private static SupportsUpgradeDowngrade helperFor(MetaFieldsMode resolvedMode) {
+    HoodieTable table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getMetaFieldsMode()).thenReturn(resolvedMode);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(table.getMetaClient()).thenReturn(metaClient);
+
+    SupportsUpgradeDowngrade helper = mock(SupportsUpgradeDowngrade.class);
+    when(helper.getTable(any(HoodieWriteConfig.class), any(HoodieEngineContext.class))).thenReturn(table);
+    return helper;
+  }
+
+  private static UpgradeDowngrade.TableConfigChangeSet downgradeWith(MetaFieldsMode mode) {
+    return new TenToNineDowngradeHandler().downgrade(
+        mock(HoodieWriteConfig.class), mock(HoodieEngineContext.class), "001", helperFor(mode));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      // Only ALL populates every meta column, so it is the only mode that maps back to true.
+      "ALL,                       true",
+      "NONE,                      false",
+      // Selective modes cannot be expressed in version 9. They degrade to false, i.e. the table
+      // under-claims rather than asserting meta columns a version 9 reader would then trust.
+      "COMMIT_TIME_ONLY,          false",
+      "FILE_NAME_ONLY,            false",
+      "COMMIT_TIME_AND_FILE_NAME, false"
+  })
+  void downgradeWritesTheLegacyBooleanDerivedFromTheMode(String modeName, boolean expectedBoolean) {
+    UpgradeDowngrade.TableConfigChangeSet changeSet =
+        downgradeWith(MetaFieldsMode.valueOf(modeName));
+
+    assertEquals(String.valueOf(expectedBoolean),
+        changeSet.propertiesToUpdate().get(HoodieTableConfig.POPULATE_META_FIELDS),
+        "version 9 only understands the boolean, so it must be restated from the mode");
+    // The mode itself goes away; the boolean must not, or the table resolves to the `true` default.
+    assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.META_FIELDS_MODE));
+    assertFalse(changeSet.propertiesToDelete().contains(HoodieTableConfig.POPULATE_META_FIELDS));
+  }
+
   @Test
-  void testDowngradeRemovesStorageLayoutAndMetaFieldsMode() {
+  void downgradeRemovesStorageLayoutAndMetaFieldsMode() {
+    UpgradeDowngrade.TableConfigChangeSet changeSet = downgradeWith(MetaFieldsMode.ALL);
+
+    assertEquals(2, changeSet.propertiesToDelete().size());
+    assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
+    assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.META_FIELDS_MODE));
+  }
+
+  @Test
+  void downgradeWithoutHelperLeavesTheLegacyBooleanUntouched() {
+    // Some callers drive the change set without a helper, so the table config is unreachable and the
+    // mode cannot be read. Deleting the mode is still right, but the boolean must not be guessed —
+    // writing a value derived from an assumed mode is how a table ends up claiming absent columns.
     UpgradeDowngrade.TableConfigChangeSet changeSet =
         new TenToNineDowngradeHandler().downgrade(null, null, null, null);
 
     assertTrue(changeSet.propertiesToUpdate().isEmpty());
-    assertEquals(2, changeSet.propertiesToDelete().size());
-    assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
-    // Version 9 does not understand hoodie.meta.fields.mode, so it is dropped...
     assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.META_FIELDS_MODE));
-    // ...while hoodie.populate.meta.fields is deliberately left in place, so ALL and NONE tables
-    // round-trip unchanged — those are exactly the two states the legacy boolean can express.
     assertFalse(changeSet.propertiesToDelete().contains(HoodieTableConfig.POPULATE_META_FIELDS));
-    assertFalse(changeSet.propertiesToUpdate().containsKey(HoodieTableConfig.POPULATE_META_FIELDS));
   }
 
   @Test
-  void testTenToNineDowngradeRouteIsSupported() {
+  void tenToNineDowngradeRouteIsSupported() {
     UpgradeDowngrade.TableConfigChangeSet changeSet =
         new UpgradeDowngrade(null, null, null, null)
             .downgrade(HoodieTableVersion.TEN, HoodieTableVersion.NINE, "001");
@@ -54,5 +118,21 @@ class TestTenToNineDowngradeHandler {
     assertEquals(2, changeSet.propertiesToDelete().size());
     assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
     assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.META_FIELDS_MODE));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"ALL", "NONE"})
+  void upgradeDowngradeRoundTripIsLosslessForNonSelectiveModes(String modeName) {
+    MetaFieldsMode mode = MetaFieldsMode.valueOf(modeName);
+
+    UpgradeDowngrade.TableConfigChangeSet up = new NineToTenUpgradeHandler().upgrade(
+        mock(HoodieWriteConfig.class), mock(HoodieEngineContext.class), "001", helperFor(mode));
+    UpgradeDowngrade.TableConfigChangeSet down = downgradeWith(mode);
+
+    // Up records the mode and leaves the boolean; down restores the boolean and drops the mode. A
+    // v9 table therefore reads back the same meta-field layout it started with.
+    assertEquals(mode.name(), up.propertiesToUpdate().get(HoodieTableConfig.META_FIELDS_MODE));
+    assertEquals(String.valueOf(mode.toLegacyPopulateMetaFields()),
+        down.propertiesToUpdate().get(HoodieTableConfig.POPULATE_META_FIELDS));
   }
 }

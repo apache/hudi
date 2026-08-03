@@ -30,6 +30,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
@@ -71,15 +72,16 @@ class TestNineToTenUpgradeHandler {
   }
 
   @Test
-  void upgradeLeavesTheLegacyBooleanAlone() {
-    // The boolean stays authoritative for any reader that has not learned about the mode yet, and
-    // the two must agree — so the upgrade only adds the mode, never rewrites populate.meta.fields.
+  void upgradeNeitherRewritesNorDeletesTheLegacyBoolean() {
+    // Unlike EightToNineUpgradeHandler, which removes the legacy property it translates, the boolean
+    // must survive here: POPULATE_META_FIELDS defaults to true, so a table left carrying only the
+    // mode resolves to ALL as soon as TenToNineDowngradeHandler deletes it. Assert the absence
+    // explicitly on both sides of the change set — the parameterized test above only pins the mode.
     UpgradeDowngrade.TableConfigChangeSet changeSet = new NineToTenUpgradeHandler().upgrade(
         mock(HoodieWriteConfig.class), mock(HoodieEngineContext.class), "001",
         helperFor(MetaFieldsMode.NONE));
 
-    assertTrue(changeSet.propertiesToDelete().isEmpty());
-    assertEquals(1, changeSet.propertiesToUpdate().size());
-    assertTrue(changeSet.propertiesToUpdate().containsKey(HoodieTableConfig.META_FIELDS_MODE));
+    assertFalse(changeSet.propertiesToUpdate().containsKey(HoodieTableConfig.POPULATE_META_FIELDS));
+    assertFalse(changeSet.propertiesToDelete().contains(HoodieTableConfig.POPULATE_META_FIELDS));
   }
 }
