@@ -27,8 +27,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -36,10 +37,17 @@ import java.util.Set;
  * full compaction of native data/delete logs before the downgrade completes.
  *
  * <p>Version 10 also introduced {@code hoodie.meta.fields.mode}. Version 9 does not understand it,
- * so the property is dropped here while {@code hoodie.populate.meta.fields} is left exactly as it
- * stands — {@code ALL} and {@code NONE} tables round-trip unchanged because those are precisely the
- * two states the legacy boolean can express. Selective modes cannot be expressed in version 9, so
- * the table degrades to what its legacy boolean says (which is {@code false}, i.e. NONE) and we warn.
+ * so the property is dropped here and {@code hoodie.populate.meta.fields} is written back from it
+ * ({@code ALL -> true}, every other mode {@code -> false}), mirroring how
+ * {@link NineToEightDowngradeHandler} restores {@code hoodie.table.payload.class}. Writing the
+ * derived boolean explicitly is what makes the round trip safe: {@code POPULATE_META_FIELDS}
+ * defaults to {@code true}, so a table carrying only the mode would otherwise downgrade to
+ * {@code ALL} and claim {@code _hoodie_record_key} is populated on files where it is null.
+ *
+ * <p>{@code ALL} and {@code NONE} round-trip losslessly, since those are precisely the two states
+ * the legacy boolean can express. Selective modes cannot be, so such a table degrades to
+ * {@code NONE} for version 9 readers and we warn — under-claiming rather than over-claiming, which
+ * is the safe direction.
  */
 public class TenToNineDowngradeHandler implements DowngradeHandler {
 
@@ -53,26 +61,36 @@ public class TenToNineDowngradeHandler implements DowngradeHandler {
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     Set<ConfigProperty> propertiesToDelete = new HashSet<>();
     propertiesToDelete.add(HoodieTableConfig.TABLE_STORAGE_LAYOUT);
-
-    // The warning is best-effort: dropping the property is what matters, and the helper is not
-    // always available (some callers drive the change set directly).
-    MetaFieldsMode metaFieldsMode = upgradeDowngradeHelper == null
-        ? MetaFieldsMode.ALL
-        : upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig().getMetaFieldsMode();
-    if (metaFieldsMode.isSelective()) {
-      LOG.warn("Table is using {}={}, which table version 9 cannot express. The property is being "
-              + "removed and the table will behave as {}=false (no meta columns) to version 9 readers. "
-              + "Already-written files keep their populated meta columns, but incremental queries that "
-              + "relied on {} will stop returning rows. Recreate the table if you need that behavior back.",
-          HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
-          HoodieTableConfig.POPULATE_META_FIELDS.key(), metaFieldsMode);
-    }
-    // hoodie.populate.meta.fields is deliberately left untouched: whatever the table recorded before
-    // the downgrade stays, so ALL and NONE tables are bit-identical afterwards.
     propertiesToDelete.add(HoodieTableConfig.META_FIELDS_MODE);
 
+    Map<ConfigProperty, String> propertiesToUpdate = new HashMap<>();
+    if (upgradeDowngradeHelper != null) {
+      MetaFieldsMode metaFieldsMode =
+          upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig().getMetaFieldsMode();
+      // Write the legacy boolean back from the mode so version 9 readers, which only understand that
+      // property, see the table's real meta-column layout. Without this the mode is deleted and
+      // POPULATE_META_FIELDS falls back to its `true` default, i.e. the table silently downgrades to
+      // ALL. For ALL / NONE tables this is a no-op that just restates what was already there.
+      propertiesToUpdate.put(HoodieTableConfig.POPULATE_META_FIELDS,
+          String.valueOf(metaFieldsMode.toLegacyPopulateMetaFields()));
+      if (metaFieldsMode.isSelective()) {
+        LOG.warn("Table is using {}={}, which table version 9 cannot express. The property is being "
+                + "removed and {} is set to false, so the table presents as having no meta columns to "
+                + "version 9 readers. Already-written files keep their populated meta columns, but "
+                + "incremental queries that relied on {} will stop returning rows, and re-upgrading "
+                + "will not restore the mode — it resolves to NONE and widening it back is rejected. "
+                + "Recreate the table if you need that behavior back.",
+            HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
+            HoodieTableConfig.POPULATE_META_FIELDS.key(), metaFieldsMode);
+      }
+    }
+    // No helper means the table config is unreachable, so the mode cannot be read. Deleting the
+    // property is still correct (version 9 cannot interpret it), but the legacy boolean is left
+    // alone rather than guessed at — writing a derived value from an assumed mode is how a table
+    // would end up claiming meta columns it does not have.
+
     return new UpgradeDowngrade.TableConfigChangeSet(
-        Collections.emptyMap(),
+        propertiesToUpdate,
         propertiesToDelete);
   }
 }
