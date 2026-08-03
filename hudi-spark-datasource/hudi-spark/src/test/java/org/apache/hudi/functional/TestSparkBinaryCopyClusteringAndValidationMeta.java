@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.run.strategy.SparkBinaryCopyClusteringExecutionStrategy;
+import org.apache.hudi.client.clustering.run.strategy.SparkStreamCopyClusteringExecutionStrategy;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -87,6 +89,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHE
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA;
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -146,6 +149,18 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     client.commit(newCommitTime2, statuses2);
     List<WriteStatus> statusList2 = statuses2.collect();
 
+    Set<String> commitTimeSet = new HashSet();
+    commitTimeSet.add(newCommitTime1);
+    commitTimeSet.add(newCommitTime2);
+    checkClusteredFilesAgainstReplaceCommit(partitionPath, allRecord, commitTimeSet);
+  }
+
+  /**
+   * Finds all parquet files created as part of clustering, verifies they match what is found in the replace commit
+   * metadata and that their footers describe the given records. Returns the clustered files, relative to the base path.
+   */
+  private List<String> checkClusteredFilesAgainstReplaceCommit(String partitionPath, List<HoodieRecord> allRecord,
+                                                               Set<String> commitTimeSet) throws IOException {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieInstant replaceCommitInstant = metaClient.getActiveTimeline()
         .getCompletedReplaceTimeline().firstInstant().get();
@@ -156,25 +171,18 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     replaceCommitMetadata.getPartitionToWriteStats()
         .forEach((k, v) -> v.forEach(entry -> filesFromReplaceCommit.add(entry.getPath())));
 
-    // find all parquet files created as part of clustering. Verify it matces w/ whats found in replace commit metadata.
     FileStatus[] fileStatuses = fs.listStatus(new Path(basePath + "/" + partitionPath));
-    List<String> replacedFiles = new ArrayList<>();
     List<String> clusteredFiles = new ArrayList<>();
     String clusteredFileName = "";
     for (FileStatus status : fileStatuses) {
       if (status.getPath().getName().contains(replaceCommitInstant.requestedTime())) {
         clusteredFiles.add(partitionPath + "/" + status.getPath().getName());
         clusteredFileName = status.getPath().getName();
-      } else if (!status.getPath().getName().startsWith(".")) {
-        replacedFiles.add(partitionPath + "/" + status.getPath().getName());
       }
     }
     assertEquals(clusteredFiles, filesFromReplaceCommit);
-    // clusteredFiles check
-    Set<String> commitTimeSet = new HashSet();
-    commitTimeSet.add(newCommitTime1);
-    commitTimeSet.add(newCommitTime2);
     checkFileFooter(clusteredFiles, allRecord, commitTimeSet, clusteredFileName);
+    return clusteredFiles;
   }
 
   private void checkFileFooter(List<String> clusteredFiles, List<HoodieRecord> allRecord,
@@ -258,6 +266,115 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     table = HoodieSparkTable.create(writeConfig, engineContext, metaClient);
     strategy = new SparkBinaryCopyClusteringExecutionStrategy(table, engineContext, writeConfig);
     Assertions.assertFalse(strategy.supportBinaryStreamCopy(groups, new HashMap<>()));
+  }
+
+  @Test
+  public void testSupportStreamCopy() throws IOException {
+    HoodieWriteConfig writeConfig = new HoodieWriteConfig.Builder()
+        .withPath(basePath)
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext, metaClient);
+    SparkStreamCopyClusteringExecutionStrategy strategy =
+        new SparkStreamCopyClusteringExecutionStrategy(table, engineContext, writeConfig);
+
+    MessageType legacySchema = new AvroSchemaConverter().convert(AVRO_SCHEMA);
+    Configuration conf = new Configuration();
+    conf.set("parquet.avro.write-old-list-structure", "false");
+    MessageType standardSchema = new AvroSchemaConverter(conf).convert(AVRO_SCHEMA);
+
+    BloomFilter simpleBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, SIMPLE.name());
+    BloomFilter dynmicBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, DYNAMIC_V0.name());
+    // differs from the others in both bloom filter type code and list structure
+    String file1 = makeTestFile("stream-copy-1.parquet", HOODIE_SCHEMA, legacySchema, simpleBloomFilter);
+    String file2 = makeTestFile("stream-copy-2.parquet", HOODIE_SCHEMA, standardSchema, dynmicBloomFilter);
+    String file3 = makeTestFile("stream-copy-3.parquet", HOODIE_SCHEMA, standardSchema, dynmicBloomFilter);
+    List<ClusteringGroupInfo> incompatibleGroups = makeClusteringGroup(file1, file2);
+    List<ClusteringGroupInfo> compatibleGroups = makeClusteringGroup(file2, file3);
+
+    // schema evolution is disabled by default, so the files are never scanned and even a mismatch is accepted
+    Assertions.assertTrue(strategy.supportBinaryStreamCopy(incompatibleGroups, new HashMap<>()));
+
+    // sorting is not supported by binary copy
+    Map<String, String> sortParams = new HashMap<>();
+    sortParams.put(PLAN_STRATEGY_SORT_COLUMNS.key(), "rider");
+    Assertions.assertFalse(strategy.supportBinaryStreamCopy(compatibleGroups, sortParams));
+
+    // with schema evolution enabled the files are scanned for real
+    HoodieWriteConfig evolutionConfig = new HoodieWriteConfig.Builder()
+        .withPath(basePath)
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withFileStitchingBinaryCopySchemaEvolutionEnabled(true)
+            .build())
+        .build();
+    SparkStreamCopyClusteringExecutionStrategy evolutionStrategy =
+        new SparkStreamCopyClusteringExecutionStrategy(table, engineContext, evolutionConfig);
+    Assertions.assertTrue(evolutionStrategy.supportBinaryStreamCopy(compatibleGroups, new HashMap<>()));
+    Assertions.assertFalse(evolutionStrategy.supportBinaryStreamCopy(incompatibleGroups, new HashMap<>()));
+
+    // only parquet base files are supported
+    metaClient = HoodieTestUtils.init(basePath, HoodieFileFormat.ORC);
+    HoodieTable orcTable = HoodieSparkTable.create(writeConfig, engineContext, metaClient);
+    Assertions.assertFalse(new SparkStreamCopyClusteringExecutionStrategy(orcTable, engineContext, writeConfig)
+        .supportBinaryStreamCopy(compatibleGroups, new HashMap<>()));
+
+    // only COW tables are supported
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTable morTable = HoodieSparkTable.create(writeConfig, engineContext, metaClient);
+    Assertions.assertFalse(new SparkStreamCopyClusteringExecutionStrategy(morTable, engineContext, writeConfig)
+        .supportBinaryStreamCopy(compatibleGroups, new HashMap<>()));
+  }
+
+  @Test
+  public void testStreamCopyClusteringEndToEnd() throws IOException {
+    String partitionPath = "2015/03/16";
+    Properties properties = new Properties();
+    properties.setProperty("hoodie.parquet.small.file.limit", "-1");
+    HoodieWriteConfig.Builder cfgBuilder = new HoodieWriteConfig.Builder()
+        .withPath(basePath)
+        .withSchema(TRIP_NESTED_EXAMPLE_SCHEMA)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withClusteringConfig(
+            HoodieClusteringConfig
+                .newBuilder()
+                .withInlineClustering(true)
+                .withAsyncClustering(false)
+                .withInlineClusteringNumCommits(2)
+                // the execution strategy is picked from the write config rather than from the plan, so set both
+                .withClusteringPlanStrategyClass(HoodieClusteringConfig.SPARK_STREAM_COPY_CLUSTERING_PLAN_STRATEGY)
+                .withClusteringExecutionStrategyClass(HoodieClusteringConfig.SPARK_STREAM_COPY_CLUSTERING_EXECUTION_STRATEGY)
+                .withFileStitchingBinaryCopySchemaEvolutionEnabled(false)
+                .build()).withProps(properties);
+    SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA,
+        0xDEED, new String[] {partitionPath}, new HashMap<>());
+
+    List<HoodieRecord> allRecord = new ArrayList<>();
+    Set<String> commitTimeSet = new HashSet();
+    // the second commit triggers the inline clustering of both base files
+    for (int i = 0; i < 2; i++) {
+      String newCommitTime = client.startCommit("commit");
+      commitTimeSet.add(newCommitTime);
+      List<HoodieRecord> hoodieRecords = dataGen.generateInsertsNestedExample(newCommitTime, 30);
+      allRecord.addAll(hoodieRecords);
+      JavaRDD<WriteStatus> statuses = client.insert(jsc.parallelize(hoodieRecords, 1), newCommitTime);
+      client.commit(newCommitTime, statuses);
+    }
+
+    List<String> clusteredFiles = checkClusteredFilesAgainstReplaceCommit(partitionPath, allRecord, commitTimeSet);
+
+    // every input record has to survive the binary stream copy, exactly once
+    List<String> clusteredKeys = sqlContext.read().format("parquet")
+        .load(basePath + "/" + clusteredFiles.get(0))
+        .select("_hoodie_record_key").collectAsList()
+        .stream().map(row -> row.getString(0)).collect(Collectors.toList());
+    assertEquals(allRecord.size(), clusteredKeys.size());
+    assertEquals(allRecord.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet()),
+        new HashSet<>(clusteredKeys));
   }
 
   private String makeTestFile(String fileName, HoodieSchema schema, MessageType messageType, BloomFilter filter) throws IOException {
