@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.RecordMergeMode.CUSTOM
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, MetaFieldsMode, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
@@ -355,19 +355,30 @@ object HoodieWriterUtils {
 
         // hoodie.meta.fields.mode is a physical-storage decision baked into files at write time.
         // Changing it at runtime would silently produce mixed-mode files whose incremental / file
-        // pruning behavior differs between old and new commits. The default loop above only flags
-        // the mismatch when the on-disk value is non-null, so an older table with the property
-        // absent from hoodie.properties would let a null → non-empty transition slip through
-        // (silent-drop risk on pre-enablement commits). Guard the null → selective-mode case
-        // explicitly here. Set it only at table creation, via the hudi-cli, or during table upgrade;
-        // otherwise the only way to change it is to recreate the table.
+        // pruning behavior differs between old and new commits. The generic loop above cannot catch
+        // this on its own: it only flags a key when the on-disk value is non-null, so a table
+        // predating the property would let a null → selective transition slip through.
+        //
+        // Compare *resolved* modes rather than raw presence. A table with only the legacy boolean
+        // resolves to ALL or NONE, so null → COMMIT_TIME_ONLY is still rejected, while a write that
+        // restates the mode the table already has (mode=ALL against a default table, or mode=NONE
+        // against populate.meta.fields=false) is no longer a spurious conflict. That case matters
+        // because the property is backfilled only by NineToTenUpgradeHandler and current() is
+        // already TEN — a table at v10 without it will never be upgraded again, so rejecting an
+        // explicit restatement would leave it no way to adopt the property at all.
         val paramsMetaFieldsMode = params.getOrElse(HoodieTableConfig.META_FIELDS_MODE.key(), "")
-        val onDiskMetaFieldsMode = tableConfig.getString(HoodieTableConfig.META_FIELDS_MODE)
-        if (paramsMetaFieldsMode.nonEmpty && (onDiskMetaFieldsMode == null || onDiskMetaFieldsMode.isEmpty)) {
-          diffConfigs.append(
-            s"${HoodieTableConfig.META_FIELDS_MODE.key()}:\t$paramsMetaFieldsMode\t${if (onDiskMetaFieldsMode == null) "null" else "\"\""}"
-              + " (immutable at runtime; set only at table creation / hudi-cli / upgrade; "
-              + "existing tables must be recreated to change this)\n")
+        if (paramsMetaFieldsMode.nonEmpty) {
+          val requestedMode = MetaFieldsMode.parse(paramsMetaFieldsMode)
+          // resolve(HoodieConfig) rather than a cast to HoodieTableConfig: HoodieCatalogTable passes
+          // a plain HoodieConfig built from a map (convertMapToHoodieConfig), so a cast would throw
+          // ClassCastException on the Spark SQL path. The overload reads the same two properties.
+          val resolvedTableMode = MetaFieldsMode.resolve(tableConfig)
+          if (requestedMode != resolvedTableMode) {
+            diffConfigs.append(
+              s"${HoodieTableConfig.META_FIELDS_MODE.key()}:\t$requestedMode\t$resolvedTableMode"
+                + " (immutable at runtime; set only at table creation / hudi-cli / upgrade; "
+                + "existing tables must be recreated to change this)\n")
+          }
         }
       }
 
