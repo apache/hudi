@@ -66,11 +66,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   /**
    * Guards this provider's lock-file operations.
    *
-   * <p>These blocks used to synchronize on {@link #LOCK_FILE_NAME}. That is a compile-time String
-   * constant, so it is interned and shared JVM-wide with every other {@code "lock"} literal - including
-   * {@code FileSystemBasedLockProviderTestClass}, which declares its own {@code static final String LOCK =
-   * "lock"} and therefore contends on the very same monitor. Any unrelated code doing the same silently
-   * couples itself to Hudi's lock acquisition. A private object cannot be aliased that way.
+   * <p>These blocks used to synchronize on {@link #LOCK_FILE_NAME}. That is a compile-time String constant,
+   * so it is interned: any class anywhere in the JVM that synchronizes on the same {@code "lock"} literal
+   * contends on the very same monitor and silently couples itself to Hudi's lock acquisition. A private
+   * object cannot be aliased that way.
    *
    * <p>Kept static so the mutual-exclusion scope is unchanged by this fix.
    */
