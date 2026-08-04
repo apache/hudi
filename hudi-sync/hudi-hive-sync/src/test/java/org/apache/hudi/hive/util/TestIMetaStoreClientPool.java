@@ -30,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -214,6 +215,46 @@ class TestIMetaStoreClientPool {
       assertFalse(applied.contains("AFTER_FAIL_2"),
           "Batches queued behind a failure must not be applied while an earlier "
               + "batch on another client is still running");
+    } finally {
+      pool.close();
+    }
+  }
+
+  @Test
+  void firstErrorIsTheFailureThatAbortedTheBatch() throws Exception {
+    List<IMetaStoreClient> clients = mockClients(2);
+    AtomicReference<ParallelDispatch> dispatchRef = new AtomicReference<>();
+    IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 2);
+    try {
+      // Given a slow batch submitted first that fails only after a later batch has
+      // already failed and tripped the abort. Selecting the error by submission order
+      // would report "slow-later"; the batch was actually stopped by "fast-first".
+      //
+      // The slow batch waits on the abort flag itself rather than on a latch counted
+      // down before the throw: only the flag proves fast-first has already reached
+      // abort(), so this pins the interleaving instead of merely making it likely.
+      List<String> batches = Arrays.asList("SLOW_LATER", "FAST_FIRST");
+      ParallelDispatch dispatch = pool.dispatchAll(batches, (client, batch) -> {
+        if (batch.equals("FAST_FIRST")) {
+          throw new IllegalStateException("fast-first");
+        }
+        ParallelDispatch inFlight;
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while ((inFlight = dispatchRef.get()) == null || !inFlight.aborted()) {
+          if (System.nanoTime() > deadline) {
+            throw new IllegalStateException("timed-out-waiting-for-abort");
+          }
+          Thread.sleep(1);
+        }
+        throw new IllegalStateException("slow-later");
+      });
+      dispatchRef.set(dispatch);
+
+      Exception thrown = assertThrows(Exception.class, () -> pool.awaitAll(dispatch, "test"));
+
+      assertEquals("fast-first", thrown.getMessage(),
+          "The reported root cause must be the failure that aborted the batch, "
+              + "not whichever failure was submitted earliest");
     } finally {
       pool.close();
     }

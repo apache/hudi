@@ -29,6 +29,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Handle to one fan-out batch of partition work: the submitted futures plus the shared
@@ -49,6 +50,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  *       queue at any moment.</li>
  * </ul>
  *
+ * <p>The failing task also records its own throwable as it aborts, so the reported root
+ * cause is the failure that stopped the batch. Picking the error by scanning futures in
+ * submission order would instead surface whichever failure happens to sit earliest in the
+ * list, which is not necessarily the one that aborted the run.
+ *
  * <p>Shared by {@link HiveDriverPool} (Hive {@code Driver} statements) and
  * {@link IMetaStoreClientPool} (Thrift {@code dropPartition} batches), which fan out over
  * different execution models but need identical abort-on-first-error semantics.
@@ -59,6 +65,7 @@ public final class ParallelDispatch {
   private final int total;
   private final AtomicInteger settled = new AtomicInteger(0);
   private final AtomicBoolean aborted = new AtomicBoolean(false);
+  private final AtomicReference<Throwable> abortCause = new AtomicReference<>();
   private final CountDownLatch done = new CountDownLatch(1);
   private volatile boolean sealed;
 
@@ -85,6 +92,15 @@ public final class ParallelDispatch {
   void abort() {
     aborted.set(true);
     done.countDown();
+  }
+
+  // Records the failure that triggered the abort, first writer wins. Selecting the error
+  // by walking futures in submission order instead would report whichever failure sits
+  // earliest in the list, not the one that actually stopped the batch: a fast failure at
+  // index 1 aborts the run, and a slow index 0 that fails later would take its place.
+  void abort(Throwable cause) {
+    abortCause.compareAndSet(null, cause);
+    abort();
   }
 
   void taskSettled() {
@@ -140,7 +156,7 @@ public final class ParallelDispatch {
       try {
         return body.call();
       } catch (Throwable t) {
-        abort();
+        abort(t);
         throw t;
       } finally {
         taskSettled();
@@ -158,7 +174,9 @@ public final class ParallelDispatch {
     awaitSettledOrAborted();
     int cancelled = cancelPending();
 
-    Exception firstError = null;
+    // Seeded from the task that tripped the abort, so the reported root cause is the
+    // failure that actually stopped the batch rather than the lowest-indexed one.
+    Exception firstError = asException(abortCause.get());
     int completed = 0;
     List<Exception> suppressed = new ArrayList<>();
     for (Future<?> f : futures) {
@@ -180,12 +198,21 @@ public final class ParallelDispatch {
           cancelled++;
         } else if (firstError == null) {
           firstError = cause;
-        } else {
+        } else if (cause != firstError) {
+          // Identity, not equality: the aborting task's own failure comes back through
+          // here too, and it must not land in its own suppressed list.
           suppressed.add(cause);
         }
       }
     }
     return new Outcome(firstError, completed, cancelled, suppressed);
+  }
+
+  private static Exception asException(Throwable t) {
+    if (t == null) {
+      return null;
+    }
+    return (t instanceof Exception) ? (Exception) t : new RuntimeException(t);
   }
 
   private static Exception unwrap(ExecutionException ee) {
