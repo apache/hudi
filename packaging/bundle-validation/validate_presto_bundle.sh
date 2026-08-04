@@ -42,6 +42,17 @@ if [ ! -f "$JAR" ]; then
   exit 1
 fi
 
+# Only the main artifact carries the shaded classes. The sources and javadoc jars do not, and a glob picks
+# them up ahead of it because "-" sorts before "." - which is how this script first failed in CI, reporting
+# a missing class against hudi-presto-bundle-<version>-javadoc.jar. Refuse them rather than mislead.
+case "$(basename "$JAR")" in
+  *-sources.jar|*-javadoc.jar|*-tests.jar)
+    echo "::error::$(basename "$JAR") is not the main artifact. Pass"
+    echo "::error::packaging/hudi-presto-bundle/target/hudi-presto-bundle-<version>.jar instead."
+    exit 1
+    ;;
+esac
+
 # The class the bundle exists to provide, and the one lost in the regression this guards against.
 REQUIRED_CLASSES=(
   "org/apache/hudi/hadoop/HoodieParquetInputFormat.class"

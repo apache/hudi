@@ -1281,8 +1281,11 @@ jobs:
             -pl packaging/hudi-hadoop-mr-bundle -am
           mvn package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS \
             -pl packaging/hudi-presto-bundle
+          # Name the jar exactly rather than globbing: this job builds sources and javadoc jars too, and
+          # "-" sorts before "." so a glob picks up hudi-presto-bundle-<version>-javadoc.jar first.
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/validate_presto_bundle.sh \
-            "$(ls packaging/hudi-presto-bundle/target/hudi-presto-bundle-*.jar | grep -v sources | head -1)"
+            "packaging/hudi-presto-bundle/target/hudi-presto-bundle-${HUDI_VERSION}.jar"
       - name: IT - Bundle Validation - OpenJDK 11
         if: needs.changes.outputs.relevant == 'true'
         env:
