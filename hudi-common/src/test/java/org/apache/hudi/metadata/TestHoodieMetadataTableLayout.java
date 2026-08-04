@@ -314,15 +314,29 @@ class TestHoodieMetadataTableLayout {
 
   @Test
   void expandToPhysicalPartitions_uncountedPartitionFallsBackToLogicalRoot() {
-    // Flat MDT partitions (files, column_stats, secondary_index_*) carry no file-group count under
-    // a bucketed layout, since bucketing is opt-in per partition. They must degrade to the logical
-    // root rather than vanishing from the plan.
+    // A partition with no recorded file-group count (not yet initialized, or read by an early-init
+    // code path) must degrade to its logical root rather than vanishing from the plan — a dropped
+    // partition would silently exclude it from compaction, cleaning and rollback.
     HoodieTableMetaClient metaClient =
         mockMdtMetaClient(true, SubDirBucketedMDTLayout.class.getName(), "record_index=1500");
     assertEquals(
-        java.util.Arrays.asList("record_index/000000", "record_index/000001", "files", "column_stats"),
+        java.util.Arrays.asList("record_index/000000", "record_index/000001", "column_stats"),
         HoodieTableMetadataUtil.expandToPhysicalPartitions(
-            metaClient, java.util.Arrays.asList("record_index", "files", "column_stats")));
+            metaClient, java.util.Arrays.asList("record_index", "column_stats")));
+  }
+
+  @Test
+  void expandToPhysicalPartitions_bucketsSmallPartitionsIntoASingleBucket() {
+    // SubDirBucketedMDTLayout buckets every MDT partition, not only the RLI. A partition small
+    // enough to fit in one bucket still lives in a bucket directory (files/000000), so planners
+    // must target that directory rather than the logical root — otherwise a non-recursive listing
+    // finds nothing there.
+    HoodieTableMetaClient metaClient =
+        mockMdtMetaClient(true, SubDirBucketedMDTLayout.class.getName(), "files=1,record_index=1500");
+    assertEquals(
+        java.util.Arrays.asList("files/000000", "record_index/000000", "record_index/000001"),
+        HoodieTableMetadataUtil.expandToPhysicalPartitions(
+            metaClient, java.util.Arrays.asList("files", "record_index")));
   }
 
   @Test

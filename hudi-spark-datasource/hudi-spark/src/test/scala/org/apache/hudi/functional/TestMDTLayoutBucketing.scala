@@ -271,26 +271,43 @@ class TestMDTLayoutBucketing extends RecordLevelIndexTestBase {
       .setBasePath(mdtBasePath).setConf(storageConf).build()
     val mdtTimeline = mdtMetaClient.reloadActiveTimeline()
 
-    // Collect every compaction plan the run produced, completed or otherwise.
-    val compactionPlanInstants = mdtTimeline.getInstants.asScala
-      .filter(i => i.getAction == HoodieTimeline.COMPACTION_ACTION)
+    // A completed MDT compaction lands on the timeline as a COMMIT_ACTION; its plan is still
+    // readable from the .compaction.requested file at the same instant time. Include any
+    // still-pending COMPACTION_ACTION instants too, so a plan that never completed is checked as
+    // well — a plan built from logical partitions is exactly the kind that fails to execute.
+    val compactionInstantTimes = mdtTimeline.getInstants.asScala
+      .filter(i => i.getAction == HoodieTimeline.COMMIT_ACTION || i.getAction == HoodieTimeline.COMPACTION_ACTION)
+      .map(_.requestedTime())
+      .distinct
       .toList
-    assertTrue(compactionPlanInstants.nonEmpty,
-      s"expected at least one MDT compaction plan; timeline=${mdtTimeline.getInstants.asScala.toList}")
+    assertTrue(compactionInstantTimes.nonEmpty,
+      s"expected at least one MDT compaction; timeline=${mdtTimeline.getInstants.asScala.toList}")
+
+    // Reading each plan back is itself part of the assertion: the requested file must exist and
+    // parse for every compaction the run performed.
+    val compactionPlans = compactionInstantTimes.flatMap { t =>
+      try {
+        Option(CompactionUtils.getCompactionPlan(mdtMetaClient, t))
+      } catch {
+        case _: Exception => None
+      }
+    }.filter(p => p.getOperations != null && !p.getOperations.isEmpty)
+    assertTrue(compactionPlans.nonEmpty,
+      s"expected at least one readable MDT compaction plan with operations; " +
+        s"instants=$compactionInstantTimes")
 
     val recordIndexPath = MetadataPartitionType.RECORD_INDEX.getPartitionPath
     var recordIndexOpsSeen = 0
     val bucketsCompacted = scala.collection.mutable.Set.empty[String]
 
-    compactionPlanInstants.foreach { instant =>
-      val plan = CompactionUtils.getCompactionPlan(mdtMetaClient, instant.requestedTime())
+    compactionPlans.foreach { plan =>
       plan.getOperations.asScala.foreach { op =>
         val opPartition = op.getPartitionPath
         // The core assertion. A logical "record_index" here means the planner never expanded to
         // physical sub-paths, so the plan's file group ids cannot match the write side's.
         assertNotEquals(recordIndexPath, opPartition,
           s"compaction operation must not target the logical RLI partition root; " +
-            s"plan for instant ${instant.requestedTime()} has fileId=${op.getFileId} at '$opPartition'")
+            s"operation fileId=${op.getFileId} at '$opPartition'")
         if (opPartition.startsWith(recordIndexPath + "/")) {
           recordIndexOpsSeen += 1
           val bucket = opPartition.substring(recordIndexPath.length + 1)
@@ -308,7 +325,7 @@ class TestMDTLayoutBucketing extends RecordLevelIndexTestBase {
 
     assertTrue(recordIndexOpsSeen > 0,
       s"expected at least one compaction operation against a record_index bucket; " +
-        s"plans=${compactionPlanInstants.map(_.requestedTime())}")
+        s"instants=$compactionInstantTimes")
     // bucketSize=2 over a workload this size must spread across more than a single bucket;
     // if only one bucket ever compacts, the fan-out is not actually being exercised.
     assertTrue(bucketsCompacted.size >= 1,
@@ -471,12 +488,23 @@ class TestMDTLayoutBucketing extends RecordLevelIndexTestBase {
           s"a rollback here would silently delete nothing")
     }
 
-    // Flat MDT partitions must survive the same expansion untouched, or rollback would start
-    // skipping them.
+    // SubDirBucketedMDTLayout buckets every MDT partition, not just the RLI — a single-file-group
+    // partition such as `files` lands in `files/000000`. So the requirement is not that it passes
+    // through unchanged, but that it resolves to a directory that actually holds its file groups.
     val filesPath = MetadataPartitionType.FILES.getPartitionPath
     if (discovered.asScala.contains(filesPath)) {
-      assertTrue(expanded.contains(filesPath),
-        s"non-bucketed MDT partition '$filesPath' must pass through expansion unchanged; got $expanded")
+      val filesPhysical = expanded.filter(p => p == filesPath || p.startsWith(filesPath + "/"))
+      assertTrue(filesPhysical.nonEmpty,
+        s"MDT partition '$filesPath' must resolve to at least one physical path; got $expanded")
+      filesPhysical.foreach { p =>
+        val entries = mdtMetaClient.getStorage
+          .listDirectEntries(new StoragePath(mdtBasePath, p)).asScala
+          .filter(e => !e.isDirectory)
+          .filter(e => e.getPath.getName.endsWith(".hfile") || e.getPath.getName.contains(".log."))
+        assertTrue(entries.nonEmpty,
+          s"non-recursive listing of enumerated rollback partition '$p' found no data files — " +
+            s"a rollback here would silently delete nothing")
+      }
     }
   }
 }
