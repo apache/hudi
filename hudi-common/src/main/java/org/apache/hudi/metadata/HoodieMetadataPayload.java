@@ -393,59 +393,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexManifestRecord(
       int generation,
-      String quantizerType,
-      int quantizedCodeBytes,
-      long randomSeed,
-      boolean assumeNormalized,
-      long lastUpdatedTs,
-      String metadataPartitionPath) {
-    return createVectorIndexManifestRecord(
-        generation,
-        quantizerType,
-        quantizedCodeBytes,
-        1,
-        randomSeed,
-        assumeNormalized,
-        lastUpdatedTs,
-        metadataPartitionPath);
-  }
-
-  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexManifestRecord(
-      int generation,
-      String quantizerType,
-      int quantizedCodeBytes,
-      int rabitqBits,
-      long randomSeed,
-      boolean assumeNormalized,
-      long lastUpdatedTs,
-      String metadataPartitionPath) {
-    return createVectorIndexManifestRecord(
-        generation,
-        String.valueOf(generation),
-        "ACTIVE",
-        0,
-        0,
-        quantizedCodeBytes,
-        rabitqBits,
-        Math.max(0, rabitqBits - 1),
-        0,
-        0,
-        "COSINE",
-        assumeNormalized,
-        false,
-        "",
-        524288,
-        0,
-        0,
-        0,
-        null,
-        null,
-        lastUpdatedTs,
-        metadataPartitionPath);
-  }
-
-  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexManifestRecord(
-      int generation,
       String generationOrdinalText,
       String state,
       int dim,
@@ -455,12 +402,21 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       int numExPlanes,
       int numClusters,
       int shardCount,
+      int fileGroupCount,
       String metric,
       boolean assumeNormalized,
       boolean residualEncoding,
       String vectorColumn,
       int targetBlockBytes,
       int vectorsPerBlock,
+      int blockFormatVersion,
+      int factorVersion,
+      double kappa,
+      double gMin,
+      double eps1Max,
+      double epsNRel,
+      int centroidChunkCount,
+      String centroidChecksum,
       int splitLimit,
       int mergeFloor,
       String bootstrapInstant,
@@ -479,12 +435,21 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         numExPlanes,
         numClusters,
         shardCount,
+        fileGroupCount,
         metric,
         assumeNormalized,
         residualEncoding,
         vectorColumn == null ? "" : vectorColumn,
         targetBlockBytes,
         vectorsPerBlock,
+        blockFormatVersion,
+        factorVersion,
+        kappa,
+        gMin,
+        eps1Max,
+        epsNRel,
+        centroidChunkCount,
+        centroidChecksum,
         splitLimit,
         mergeFloor,
         bootstrapInstant,
@@ -493,45 +458,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return new HoodieAvroRecord<>(
         new HoodieKey(recordKey, metadataPartitionPath),
         new HoodieMetadataPayload(recordKey, manifest));
-  }
-
-  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexGenerationManifestRecord(
-      int generation,
-      String quantizerType,
-      int quantizedCodeBytes,
-      long randomSeed,
-      boolean assumeNormalized,
-      long lastUpdatedTs,
-      String metadataPartitionPath) {
-    return createVectorIndexGenerationManifestRecord(
-        generation,
-        quantizerType,
-        quantizedCodeBytes,
-        1,
-        randomSeed,
-        assumeNormalized,
-        lastUpdatedTs,
-        metadataPartitionPath);
-  }
-
-  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexGenerationManifestRecord(
-      int generation,
-      String quantizerType,
-      int quantizedCodeBytes,
-      int rabitqBits,
-      long randomSeed,
-      boolean assumeNormalized,
-      long lastUpdatedTs,
-      String metadataPartitionPath) {
-    return createVectorIndexManifestRecord(
-        generation,
-        quantizerType,
-        quantizedCodeBytes,
-        rabitqBits,
-        randomSeed,
-        assumeNormalized,
-        lastUpdatedTs,
-        metadataPartitionPath);
   }
 
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexClusterManifestRecord(
