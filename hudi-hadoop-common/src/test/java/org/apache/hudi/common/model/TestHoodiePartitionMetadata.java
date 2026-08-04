@@ -43,13 +43,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 
@@ -156,6 +159,41 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
     assertTrue(elapsedMs < 1000,
         "trySave should not retry when the metafile already exists, but it took " + elapsedMs + " ms");
     assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(storage, partitionPath));
+  }
+
+  @Test
+  public void testTrySaveKeepsWriteFailureWhenExistenceRecheckFails() throws IOException {
+    final StoragePath partitionPath = new StoragePath(basePath, "a/b/recheck-fails");
+    storage.createDirectory(partitionPath);
+    final StoragePath metaPath = new StoragePath(
+        partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
+
+    // a peer has the metafile, so the write below fails the way a lost race does
+    new HoodiePartitionMetadata(storage, "000000000001", new StoragePath(basePath), partitionPath, Option.empty()).trySave();
+
+    IOException recheckFailure = new IOException("storage unavailable");
+    HoodieStorage flakyStorage = directCreateStorage();
+    // Each attempt checks twice: once before writing, once after the write fails. Slip through the
+    // first so the write is reached, then fail the second. The write failure is retryable, so this
+    // has to hold for every attempt rather than only the first.
+    AtomicInteger checks = new AtomicInteger();
+    doAnswer(invocation -> {
+      if (checks.getAndIncrement() % 2 == 0) {
+        return false;
+      }
+      throw recheckFailure;
+    }).when(flakyStorage).exists(metaPath);
+
+    // The re-check only exists to recognise a lost race. When it cannot answer, the failure the
+    // caller gets has to remain the write failure: that is what RetryHelper classifies as
+    // retryable, whereas a bare IOException from the check is not in its retry list.
+    Exception thrown = assertThrows(Exception.class, () -> new HoodiePartitionMetadata(
+        flakyStorage, "000000000002", new StoragePath(basePath), partitionPath, Option.empty()).trySave());
+
+    assertNotSame(recheckFailure, thrown, "the check failure must not replace the write failure");
+    assertTrue(Arrays.stream(thrown.getSuppressed()).anyMatch(s -> s == recheckFailure),
+        "the check failure must be kept as suppressed rather than dropped, got: "
+            + Arrays.toString(thrown.getSuppressed()));
   }
 
   @Test
