@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.functional;
 
-import org.apache.hudi.callback.HoodieWriteCommitCallback;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
@@ -38,6 +37,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
+import org.apache.hudi.testutils.RecordingCommitCallback;
 
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +46,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -193,7 +192,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
 
   @Test
   public void testWriteCommitCallbackFiresOnCompaction() throws Exception {
-    RecordingCommitCallback.MESSAGES.clear();
+    RecordingCommitCallback.reset();
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
         HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
@@ -215,7 +214,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
         false, false, 5, 100, 2, config.populateMetaFields(), INSTANT_GENERATOR);
 
     // The callback must fire for the auto-committed delta commits with the deltacommit action.
-    assertTrue(RecordingCommitCallback.MESSAGES.stream().anyMatch(m ->
+    assertTrue(RecordingCommitCallback.messages().stream().anyMatch(m ->
             HoodieTimeline.DELTA_COMMIT_ACTION.equals(m.getCommitActionType().orElse(null))),
         "callback must fire for delta commits");
 
@@ -228,7 +227,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
 
     // The callback must fire exactly once for the compaction completion, reporting the completed
     // timeline action (commit).
-    List<HoodieWriteCommitCallbackMessage> compactionMessages = RecordingCommitCallback.MESSAGES.stream()
+    List<HoodieWriteCommitCallbackMessage> compactionMessages = RecordingCommitCallback.messages().stream()
         .filter(m -> m.getCommitTime().equals(compactionTime.get()))
         .collect(Collectors.toList());
     assertEquals(1, compactionMessages.size(), "callback must fire once for the compaction commit");
@@ -238,7 +237,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
 
   @Test
   public void testWriteCommitCallbackFiresOnClustering() throws Exception {
-    RecordingCommitCallback.MESSAGES.clear();
+    RecordingCommitCallback.reset();
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder()
         .withClusteringMaxNumGroups(10)
         .withClusteringSortColumns("_row_key")
@@ -272,32 +271,13 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
 
     // The callback must fire exactly once for the clustering completion, reporting the completed
     // timeline action (replacecommit).
-    List<HoodieWriteCommitCallbackMessage> clusteringMessages = RecordingCommitCallback.MESSAGES.stream()
+    List<HoodieWriteCommitCallbackMessage> clusteringMessages = RecordingCommitCallback.messages().stream()
         .filter(m -> m.getCommitTime().equals(clusteringTime.get()))
         .collect(Collectors.toList());
     assertEquals(1, clusteringMessages.size(), "callback must fire once for the clustering commit");
     assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringMessages.get(0).getCommitActionType().orElse(null));
-    assertNotNull(clusteringMessages.get(0).getPrevFilePaths(), "prevFilePaths must never be null");
-  }
-
-  /**
-   * A recording {@link HoodieWriteCommitCallback} that captures every fired message so tests can
-   * assert the callback fires for table-service (compaction/clustering) commits with the expected
-   * action type. Loaded reflectively from the write config, so it needs a public
-   * {@code (HoodieWriteConfig)} constructor.
-   */
-  public static class RecordingCommitCallback implements HoodieWriteCommitCallback {
-
-    static final List<HoodieWriteCommitCallbackMessage> MESSAGES = new CopyOnWriteArrayList<>();
-
-    public RecordingCommitCallback(HoodieWriteConfig config) {
-      // config arg required for reflective instantiation
-    }
-
-    @Override
-    public void call(HoodieWriteCommitCallbackMessage callbackMessage) {
-      MESSAGES.add(callbackMessage);
-    }
+    // Clustering writes new file groups, so every stat carries NULL_COMMIT and no prev path resolves.
+    assertTrue(clusteringMessages.get(0).getPrevFilePaths().isEmpty());
   }
 
 }

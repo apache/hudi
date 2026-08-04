@@ -126,9 +126,9 @@ public class ClusteringUtils {
    *         from the inflight action: a {@code clustering} inflight instant completes as
    *         {@code replacecommit}.
    */
-  public static <T> HoodieInstant transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
-                                                                                  HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline,
-                                                                                  TableFormatCompletionAction tableFormatCompletionAction) {
+  public static HoodieInstant transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
+                                                                              HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline,
+                                                                              TableFormatCompletionAction tableFormatCompletionAction) {
     if (clusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
       return activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, metadata, tableFormatCompletionAction);
     } else {

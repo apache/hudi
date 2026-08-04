@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.callback.HoodieWriteCommitCallback;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -46,6 +45,7 @@ import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
+import org.apache.hudi.testutils.RecordingCommitCallback;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,7 +57,6 @@ import org.mockito.Mockito;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -225,13 +224,13 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
 
   @Test
   void testCompleteClusteringCommitsAndCleansMarkers() {
-    ClusteringCallback.MESSAGES.clear();
+    RecordingCommitCallback.reset();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(metaClient.getBasePath())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withCallbackConfig(HoodieWriteCommitCallbackConfig.newBuilder()
             .writeCommitCallbackOn("true")
-            .withCallbackClass(ClusteringCallback.class.getName())
+            .withCallbackClass(RecordingCommitCallback.class.getName())
             .build())
         .build();
     HoodieFlinkTable table = mock(HoodieFlinkTable.class);
@@ -240,7 +239,10 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
     when(table.getInstantGenerator()).thenReturn(metaClient.getInstantGenerator());
     HoodieInstant clusteringInstant = mock(HoodieInstant.class);
     // The inflight instant is a clustering instant on timeline v2; the completed one is always a
-    // replacecommit, and it is the completed action the callback must report.
+    // replacecommit, and it is the completed action the callback must report. The inflight action is
+    // stubbed so that a revert to reporting it fails on the action assertion below, rather than on
+    // the message count after Option.of(null) throws inside the callback.
+    when(clusteringInstant.getAction()).thenReturn(HoodieTimeline.CLUSTERING_ACTION);
     HoodieInstant completedInstant = mock(HoodieInstant.class);
     when(completedInstant.getAction()).thenReturn(HoodieTimeline.REPLACE_COMMIT_ACTION);
     HoodieReplaceCommitMetadata metadata = new HoodieReplaceCommitMetadata();
@@ -263,23 +265,9 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
     }
 
     verify(writeMarkers).quietDeleteMarkerDir(any(), any(Integer.class));
-    assertEquals(1, ClusteringCallback.MESSAGES.size(), "callback must fire once for the clustering commit");
-    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION,
-        ClusteringCallback.MESSAGES.get(0).getCommitActionType().orElse(null));
-  }
-
-  public static class ClusteringCallback implements HoodieWriteCommitCallback {
-
-    static final List<HoodieWriteCommitCallbackMessage> MESSAGES = new CopyOnWriteArrayList<>();
-
-    public ClusteringCallback(HoodieWriteConfig config) {
-      // config arg required for reflective instantiation
-    }
-
-    @Override
-    public void call(HoodieWriteCommitCallbackMessage callbackMessage) {
-      MESSAGES.add(callbackMessage);
-    }
+    List<HoodieWriteCommitCallbackMessage> messages = RecordingCommitCallback.messages();
+    assertEquals(1, messages.size(), "callback must fire once for the clustering commit");
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, messages.get(0).getCommitActionType().orElse(null));
   }
 
   private static class TestableHoodieFlinkTableServiceClient extends HoodieFlinkTableServiceClient<Object> {
