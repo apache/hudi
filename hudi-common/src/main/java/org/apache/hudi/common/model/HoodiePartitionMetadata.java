@@ -113,7 +113,7 @@ public class HoodiePartitionMetadata {
               // to create it and all but the winner fail with an 'already exists' error. Losing that
               // race means the metafile is in place, which is what the caller asked for: retrying
               // would only re-observe the same file, and warning about it is pure noise.
-              if (!storage.exists(metaPath)) {
+              if (!metafileExistsAfterFailedWrite(metaPath, e)) {
                 throw e;
               }
               log.debug("Partition metafile {} was concurrently created by another task.", metaPath);
@@ -122,6 +122,28 @@ public class HoodiePartitionMetadata {
           return null;
         });
     retryHelper.start();
+  }
+
+  /**
+   * Whether the metafile is there after a write that failed, which is how a lost creation race is
+   * recognised.
+   * <p>
+   * The check is only ever used to soften the failure that was just caught, so it must not replace
+   * it. If storage cannot answer, report the metafile as absent and let the original failure be
+   * thrown: that keeps the caller's exception, and with it the retry classification the write
+   * failure was entitled to, rather than substituting a fresh {@link IOException} that
+   * {@link RetryHelper} would not retry.
+   *
+   * @param metaPath    the metafile being written.
+   * @param writeFailure the failure to attach the check failure to, should the check itself fail.
+   */
+  private boolean metafileExistsAfterFailedWrite(StoragePath metaPath, Exception writeFailure) {
+    try {
+      return storage.exists(metaPath);
+    } catch (IOException checkFailure) {
+      writeFailure.addSuppressed(checkFailure);
+      return false;
+    }
   }
 
   private void writeMetafile(StoragePath metaPath) throws IOException {

@@ -96,7 +96,7 @@ public class TestRetryHelper {
   }
 
   @Test
-  public void testSummariseKeepsRootCauseOnASingleLine() {
+  public void testSummarizeKeepsRootCauseOnASingleLine() {
     // a wrapped exception keeps both layers, so the warning stays actionable without a stack trace
     IOException wrapped = new IOException("Failed to create file /a/b/.hoodie_partition_metadata",
         new FileAlreadyExistsException("File already exists: /a/b/.hoodie_partition_metadata"));
