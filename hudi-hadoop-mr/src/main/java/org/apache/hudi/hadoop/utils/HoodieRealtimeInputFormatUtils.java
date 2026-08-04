@@ -128,16 +128,33 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
   }
 
   /**
-   * Hive will append read columns' ids to old columns' ids during getRecordReader. In some cases, e.g. SELECT COUNT(*),
-   * the read columns' id is an empty string and Hive will combine it with Hoodie required projection ids and becomes
-   * e.g. ",2,0,3" and will cause an error. Actually this method is a temporary solution because the real bug is from
-   * Hive. Hive has fixed this bug after 3.0.0, but the version before that would still face this problem. (HIVE-22438)
+   * Drops blank entries from the read-column id list held in {@code conf}.
+   *
+   * <p>For {@code SELECT COUNT(*)} on Hive before 3.0.0 the read-column ids arrive empty and Hive combines
+   * them into e.g. {@code ",2,0,3"} (HIVE-22438). Every consumer parses those ids with
+   * {@code Integer#parseInt}, so a blank entry fails with a bare {@code NumberFormatException} that carries
+   * none of the projection lists: {@code SchemaEvolutionContext#setColumnTypeList},
+   * {@code HoodieColumnProjectionUtils#getReadColumnIDs} and
+   * {@code HoodieRealtimeRecordReaderUtils#orderFields} all do this. Cleaning the conf once here covers all
+   * of them, including the bootstrap path that never reaches {@code orderFields}.
+   *
+   * <p>This is a workaround: the underlying bug is in Hive, fixed after 3.0.0, but earlier versions still
+   * hit it. Stripping a single leading comma is not enough. Hive prepends ids while appending names, so repeated
+   * empty appends give {@code ",,2,0"}, and an id prepended after an empty one gives {@code "3,,2,0"} where
+   * the blank is interior and no amount of leading-comma stripping reaches it.
    */
   public static void cleanProjectionColumnIds(Configuration conf) {
-    String columnIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
-    if (!columnIds.isEmpty() && columnIds.charAt(0) == ',') {
-      conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, columnIds.substring(1));
-      LOG.debug("The projection Ids: {{}} start with ','. First comma is removed", columnIds);
+    String columnIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "");
+    if (columnIds.isEmpty()) {
+      return;
+    }
+    String cleanedColumnIds = Arrays.stream(columnIds.split(","))
+        .map(String::trim)
+        .filter(id -> !id.isEmpty())
+        .collect(Collectors.joining(","));
+    if (!cleanedColumnIds.equals(columnIds)) {
+      conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, cleanedColumnIds);
+      LOG.debug("The projection Ids: {{}} contained blank entries. Cleaned to: {{}}", columnIds, cleanedColumnIds);
     }
   }
 }
