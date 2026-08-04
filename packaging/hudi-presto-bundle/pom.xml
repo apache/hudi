@@ -78,7 +78,6 @@
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
-                  <include>org.codehaus.jackson:*</include>
                   <include>org.apache.commons:commons-lang3</include>
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>commons-io:commons-io</include>
@@ -189,11 +188,6 @@
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hadoop-mr-bundle</artifactId>
       <version>${project.version}</version>
     </dependency>
     <!-- Both are shaded in by the artifactSet above. Declared directly rather than relying on
