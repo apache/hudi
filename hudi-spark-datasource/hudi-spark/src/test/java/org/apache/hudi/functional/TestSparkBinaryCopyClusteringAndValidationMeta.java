@@ -149,7 +149,7 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     client.commit(newCommitTime2, statuses2);
     List<WriteStatus> statusList2 = statuses2.collect();
 
-    Set<String> commitTimeSet = new HashSet();
+    Set<String> commitTimeSet = new HashSet<>();
     commitTimeSet.add(newCommitTime1);
     commitTimeSet.add(newCommitTime2);
     checkClusteredFilesAgainstReplaceCommit(partitionPath, allRecord, commitTimeSet);
@@ -244,11 +244,11 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     MessageType standardSchema = new AvroSchemaConverter(conf).convert(AVRO_SCHEMA);
 
     BloomFilter simpleBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, SIMPLE.name());
-    BloomFilter dynmicBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, DYNAMIC_V0.name());
+    BloomFilter dynamicBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, DYNAMIC_V0.name());
     String file1 = makeTestFile("file-1.parquet", HOODIE_SCHEMA, legacySchema, simpleBloomFilter);
-    String file2 = makeTestFile("file-2.parquet", HOODIE_SCHEMA, legacySchema, dynmicBloomFilter);
-    String file3 = makeTestFile("file-3.parquet", HOODIE_SCHEMA, standardSchema, dynmicBloomFilter);
-    String file4 = makeTestFile("file-4.parquet", HOODIE_SCHEMA, standardSchema, dynmicBloomFilter);
+    String file2 = makeTestFile("file-2.parquet", HOODIE_SCHEMA, legacySchema, dynamicBloomFilter);
+    String file3 = makeTestFile("file-3.parquet", HOODIE_SCHEMA, standardSchema, dynamicBloomFilter);
+    String file4 = makeTestFile("file-4.parquet", HOODIE_SCHEMA, standardSchema, dynamicBloomFilter);
 
     // input file contains multiple bloom filter code type, should return false
     List<ClusteringGroupInfo> groups = makeClusteringGroup(file1, file2);
@@ -286,11 +286,11 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     MessageType standardSchema = new AvroSchemaConverter(conf).convert(AVRO_SCHEMA);
 
     BloomFilter simpleBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, SIMPLE.name());
-    BloomFilter dynmicBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, DYNAMIC_V0.name());
+    BloomFilter dynamicBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, DYNAMIC_V0.name());
     // differs from the others in both bloom filter type code and list structure
     String file1 = makeTestFile("stream-copy-1.parquet", HOODIE_SCHEMA, legacySchema, simpleBloomFilter);
-    String file2 = makeTestFile("stream-copy-2.parquet", HOODIE_SCHEMA, standardSchema, dynmicBloomFilter);
-    String file3 = makeTestFile("stream-copy-3.parquet", HOODIE_SCHEMA, standardSchema, dynmicBloomFilter);
+    String file2 = makeTestFile("stream-copy-2.parquet", HOODIE_SCHEMA, standardSchema, dynamicBloomFilter);
+    String file3 = makeTestFile("stream-copy-3.parquet", HOODIE_SCHEMA, standardSchema, dynamicBloomFilter);
     List<ClusteringGroupInfo> incompatibleGroups = makeClusteringGroup(file1, file2);
     List<ClusteringGroupInfo> compatibleGroups = makeClusteringGroup(file2, file3);
 
@@ -354,7 +354,7 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
         0xDEED, new String[] {partitionPath}, new HashMap<>());
 
     List<HoodieRecord> allRecord = new ArrayList<>();
-    Set<String> commitTimeSet = new HashSet();
+    Set<String> commitTimeSet = new HashSet<>();
     // the second commit triggers the inline clustering of both base files
     for (int i = 0; i < 2; i++) {
       String newCommitTime = client.startCommit("commit");
