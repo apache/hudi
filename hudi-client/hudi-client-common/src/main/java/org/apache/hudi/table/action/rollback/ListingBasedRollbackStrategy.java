@@ -105,7 +105,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       // rollback of a failed MDT compaction would "succeed" while the orphan base file survives.
       // No-op for data tables and for MDTs on the flat default layout.
       List<String> partitionPaths = HoodieTableMetadataUtil.expandToPhysicalPartitions(
-          metaClient, FSUtils.getAllPartitionPaths(context, table.getMetaClient(), false));
+          metaClient, FSUtils.getAllPartitionPaths(context, metaClient, false));
       int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan: " + config.getTableName());

@@ -535,8 +535,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * file listing must be used instead.
    */
   private boolean hasPendingFiles(String partitionPath) {
-    try {
-      HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
+    try (HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(
+        context, hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline())) {
       // Under a non-flat MDT layout the data files live in bucket sub-directories, so a direct
       // listing of the logical partition root finds nothing and this would always report "no
       // pending files" — allowing a partition with live pending files to be dropped wholesale.

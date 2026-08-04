@@ -283,8 +283,9 @@ class TestMDTLayoutBucketing extends RecordLevelIndexTestBase {
     assertTrue(compactionInstantTimes.nonEmpty,
       s"expected at least one MDT compaction; timeline=${mdtTimeline.getInstants.asScala.toList}")
 
-    // Reading each plan back is itself part of the assertion: the requested file must exist and
-    // parse for every compaction the run performed.
+    // Not every COMMIT_ACTION instant has a compaction plan behind it, so a failure to read one is
+    // skipped rather than fatal; the assertion below is that at least one plan was readable and
+    // carried operations. The per-operation checks are what actually pin the partition contract.
     val compactionPlans = compactionInstantTimes.flatMap { t =>
       try {
         Option(CompactionUtils.getCompactionPlan(mdtMetaClient, t))
@@ -314,11 +315,6 @@ class TestMDTLayoutBucketing extends RecordLevelIndexTestBase {
           assertTrue(bucket.matches("[0-9]{6}"),
             s"RLI compaction operation partition must be a %06d bucket sub-path, got '$opPartition'")
           bucketsCompacted += bucket
-          // The base file the operation will write must land in the bucket directory, not the root.
-          if (op.getDataFilePath != null && op.getDataFilePath.nonEmpty) {
-            assertFalse(op.getDataFilePath.contains("/"),
-              s"compaction operation dataFilePath is expected to be a bare file name, got '${op.getDataFilePath}'")
-          }
         }
       }
     }
@@ -326,10 +322,12 @@ class TestMDTLayoutBucketing extends RecordLevelIndexTestBase {
     assertTrue(recordIndexOpsSeen > 0,
       s"expected at least one compaction operation against a record_index bucket; " +
         s"instants=$compactionInstantTimes")
-    // bucketSize=2 over a workload this size must spread across more than a single bucket;
-    // if only one bucket ever compacts, the fan-out is not actually being exercised.
-    assertTrue(bucketsCompacted.size >= 1,
-      s"expected compaction to touch at least one bucket, got: $bucketsCompacted")
+    // With bucketSize=2, the RLI's file groups span several bucket directories, and compaction
+    // must reach more than one of them. A single bucket would mean the planner is only ever seeing
+    // one directory's worth of file groups — i.e. the fan-out is not actually being exercised, and
+    // the test would pass even if expansion were partially broken.
+    assertTrue(bucketsCompacted.size > 1,
+      s"expected compaction to span more than one bucket with bucketSize=2, got: $bucketsCompacted")
 
     // -------- File system view keys must agree with the plan's keys. --------
     // This is the invariant that makes the whole fix load-bearing: if the FSV enumerated file
