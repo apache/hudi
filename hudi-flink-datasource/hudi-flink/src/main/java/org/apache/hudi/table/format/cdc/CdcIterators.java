@@ -146,12 +146,14 @@ public final class CdcIterators {
 
     @Override
     public void close() {
-      if (recordIterator != null) {
-        recordIterator.close();
-      }
-      if (imageManager != null) {
-        imageManager.close();
-        imageManager = null;
+      ClosableIterator<RowData> iterator = recordIterator;
+      recordIterator = null;
+      CdcImageManager manager = imageManager;
+      imageManager = null;
+      try (CdcImageManager ignored = manager) {
+        if (iterator != null) {
+          iterator.close();
+        }
       }
     }
   }
@@ -347,12 +349,7 @@ public final class CdcIterators {
 
     @Override
     public void close() {
-      // Closing the shared image manager here is required for correctness: this iterator
-      // destructively updates cached before-images, and LOG_FILE slices from the same instant
-      // share a cache key. Closing forces the next split to reload its own before-images.
-      try (CdcImageManager ignored = imageManager) {
-        logRecordIterator.close();
-      }
+      logRecordIterator.close();
     }
 
     @SuppressWarnings("unchecked")
