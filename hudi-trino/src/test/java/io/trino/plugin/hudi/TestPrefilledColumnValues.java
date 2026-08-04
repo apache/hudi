@@ -86,8 +86,8 @@ class TestPrefilledColumnValues
         Block block = singleValueBlock(values, handle);
         assertThat(block.isNull(0)).isTrue();
 
-        // Resolved values are memoized per column, and null is a legitimate resolved value, so a second
-        // read of the same column has to stay null rather than fall through and re-resolve.
+        // Values are resolved once per column and reused, so both read paths have to keep returning null
+        // for a hive-null column after the first read has populated the memo.
         BlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 2);
         values.appendTo(handle, blockBuilder);
         values.appendTo(handle, blockBuilder);

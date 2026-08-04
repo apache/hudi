@@ -25,6 +25,8 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.DecimalType;
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
@@ -34,6 +36,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -56,11 +59,9 @@ class TestHudiAvroSerializer
     public void testAppendShortDecimalFromAvroFixed(int precision, int scale, String value, long expectedUnscaled)
     {
         DecimalType type = DecimalType.createDecimalType(precision, scale);
-        byte[] bytes = unscaledBytes(value);
-        GenericData.Fixed fixed = new GenericData.Fixed(Schema.createFixed("fix", null, null, bytes.length), bytes);
 
         BlockBuilder blockBuilder = type.createBlockBuilder(null, 1);
-        HudiAvroSerializer.appendTo(type, fixed, blockBuilder);
+        HudiAvroSerializer.appendTo(type, avroDecimalFixed(precision, scale, value), blockBuilder);
         Block block = blockBuilder.build();
 
         assertThat(type.getLong(block, 0)).isEqualTo(expectedUnscaled);
@@ -107,9 +108,25 @@ class TestHudiAvroSerializer
         assertThat(VARCHAR.getSlice(page.getBlock(1), 2).toStringUtf8()).isEqualTo("three");
     }
 
-    private static byte[] unscaledBytes(String decimal)
+    /**
+     * Encodes the value the way an Avro writer does, via Avro's own conversion: a fixed sized from the
+     * precision, holding the unscaled value left-padded to that width with the sign byte (0xFF for
+     * negatives). Building the fixed from the minimal two's-complement encoding instead would leave the
+     * padding bytes, and so sign extension across them, untested.
+     */
+    private static GenericData.Fixed avroDecimalFixed(int precision, int scale, String value)
     {
-        return new BigDecimal(decimal).unscaledValue().toByteArray();
+        LogicalTypes.Decimal decimalType = LogicalTypes.decimal(precision, scale);
+        Schema fixedSchema = decimalType.addToSchema(
+                Schema.createFixed("fix", null, null, decimalFixedSize(precision)));
+        return (GenericData.Fixed) new Conversions.DecimalConversion()
+                .toFixed(new BigDecimal(value), fixedSchema, decimalType);
+    }
+
+    /** Bytes needed to hold the widest unscaled value at this precision, i.e. the fixed size Avro sizes a decimal to. */
+    private static int decimalFixedSize(int precision)
+    {
+        return BigInteger.TEN.pow(precision).subtract(BigInteger.ONE).toByteArray().length;
     }
 
     private static Schema recordSchema(String name)
