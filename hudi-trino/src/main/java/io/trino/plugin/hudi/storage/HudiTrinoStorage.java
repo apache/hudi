@@ -71,7 +71,7 @@ public class HudiTrinoStorage
                 fileEntry.length(),
                 false,
                 (short) 0,
-                0,
+                fileEntry.length(),
                 fileEntry.lastModified().toEpochMilli());
     }
 
@@ -170,7 +170,8 @@ public class HudiTrinoStorage
         if (!inputFile.exists()) {
             throw new FileNotFoundException("Path " + path + " does not exist");
         }
-        return new StoragePathInfo(path, inputFile.length(), false, (short) 0, 0, inputFile.lastModified().toEpochMilli());
+        long length = inputFile.length();
+        return new StoragePathInfo(path, length, false, (short) 0, length, inputFile.lastModified().toEpochMilli());
     }
 
     @Override
