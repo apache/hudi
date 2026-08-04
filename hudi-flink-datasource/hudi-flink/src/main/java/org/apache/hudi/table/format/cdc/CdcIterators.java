@@ -146,14 +146,13 @@ public final class CdcIterators {
 
     @Override
     public void close() {
-      ClosableIterator<RowData> iterator = recordIterator;
-      recordIterator = null;
-      CdcImageManager manager = imageManager;
-      imageManager = null;
-      try (CdcImageManager ignored = manager) {
-        if (iterator != null) {
-          iterator.close();
+      try (CdcImageManager ignored = imageManager) {
+        if (recordIterator != null) {
+          recordIterator.close();
         }
+      } finally {
+        recordIterator = null;
+        imageManager = null;
       }
     }
   }
