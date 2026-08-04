@@ -133,6 +133,11 @@ In the absence of static AWS credentials being configured, `DefaultAWSCredential
 credentials by checking environment properties. Additional Amazon CloudWatch reporter specific properties that can be 
 tuned are in the `HoodieMetricsCloudWatchConfig` class.
 
+The reporter class ships in the optional `hudi-aws` module, which not every engine bundle shades:
+`hudi-spark-bundle` does not. If setting the reporter type to "CLOUDWATCH" fails because
+`org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter` cannot be loaded, add the
+`hudi-aws-bundle` jar matching your Hudi version to the classpath.
+
 ### UserDefinedMetricsReporter
 
 Allows users to define a custom metrics reporter.
