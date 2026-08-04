@@ -37,12 +37,14 @@ import static org.apache.hudi.integ2.testcontainers.TestcontainersConfig.Paths;
  * here.
  *
  * <p>This test reuses the same {@code sparksql-*-sql.commands} fixtures that
- * {@code ITTestCustomTypeHiveSync} drives, so the two tests can run in either
- * order without cross-contamination (each has its own {@code @BeforeAll} that
- * re-seeds, and an {@code @AfterAll} that cleans up).
+ * {@code ITTestCustomTypeHiveSync} drives. The two run in either order without
+ * cross-contamination because {@code tearDownDockerCompose} drops the whole
+ * stack between classes, so each starts against a fresh HDFS and metastore and
+ * re-seeds its own fixtures.
  *
- * <p>VARIANT seeding and tests only fire on a Spark 4.x compose; on Spark 3.5
- * the BLOB and VECTOR coverage still runs.
+ * <p>The {@code trinocoordinator} service exists only in the spark402 compose
+ * pair, so this class always runs on a Spark 4.x stack and the VARIANT coverage
+ * is unconditional.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
@@ -78,13 +80,9 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
     sparkAdhoc1.executeSQLFile(SPARKSQL_VECTOR_TYPE_SQL_COMMANDS)
         .expectToSucceed()
         .assertStdOutContainsLine("VECTOR_SQL_TEST_SUCCESS");
-    if (isSpark4Compose()) {
-      // VARIANT type is Spark 4.x only - guard the seed so the BLOB/VECTOR
-      // coverage still runs on a Spark 3.5 stack.
-      sparkAdhoc1.executeSQLFile(SPARKSQL_VARIANT_TYPE_SQL_COMMANDS)
-          .expectToSucceed()
-          .assertStdOutContainsLine("VARIANT_SQL_TEST_SUCCESS");
-    }
+    sparkAdhoc1.executeSQLFile(SPARKSQL_VARIANT_TYPE_SQL_COMMANDS)
+        .expectToSucceed()
+        .assertStdOutContainsLine("VARIANT_SQL_TEST_SUCCESS");
     trino.waitUntilReady();
   }
 
@@ -95,8 +93,8 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
     if (sparkAdhoc1 == null) {
       return;
     }
-    // -f silently skips non-existent paths so the variant_test cleanup is safe
-    // even on Spark 3.5 runs where the table was never created.
+    // -f silently skips non-existent paths so cleanup is safe even when seeding
+    // failed partway and some of these tables were never created.
     sparkAdhoc1.executeShellCommand("hdfs dfs -rm -R -f "
         + BLOB_TEST_PATH + " " + BLOB_TEST_DF_PATH + " "
         + VECTOR_TEST_PATH + " " + VARIANT_TEST_PATH).expectToSucceed();
@@ -154,11 +152,13 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
 
   @Test
   public void testTrinoBlobEmptiedPartitionInvisible() throws Exception {
-    // MERGE created dt=2024-01-02 (id=3), then DELETE emptied it. The native
-    // trino-hudi connector filters to partitions with files, so the emptied
-    // partition must stay invisible while the data-bearing partition keeps its
-    // row count. Catches regressions in partition pruning or GROUP BY against
-    // partition columns.
+    // MERGE created dt=2024-01-02 (id=3), then DELETE emptied it. Grouping by the
+    // partition column must return exactly the data-bearing partition with its
+    // full row count. Not a partition-pruning assertion: GROUP BY only emits
+    // groups for partitions that still hold rows, and dt=2024-01-02 stays
+    // registered in the metastore either way (see ITTestCustomTypeHiveSync).
+    // What it does catch is a mis-decoded partition column, or a deleted row
+    // resurfacing under its old partition.
     trino.execute("SELECT dt, count(*) FROM blob_test GROUP BY dt ORDER BY dt")
         .expectToSucceed()
         .assertStdOutContains("2024-01-01,2")
@@ -282,11 +282,10 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
         .assertStdOutContains("1,12,12");
   }
 
-  // ---------- VARIANT (Spark 4.x only) ----------
+  // ---------- VARIANT (variant_test) ----------
 
   @Test
   public void testTrinoCountVariant() throws Exception {
-    assumeSpark4Compose();
     // Post-DELETE state of sparksql-variant-type-sql.commands is 2 rows (id=1
     // updated, id=2 merged, id=3 inserted then deleted) - parity with the Hive
     // count assertion in ITTestCustomTypeHiveSync#testVariantTypeWithHiveSyncSQL.
@@ -299,7 +298,6 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
 
   @Test
   public void testTrinoIntrospectsVariantColumn() throws Exception {
-    assumeSpark4Compose();
     // Schema-level smoke: the variant_data column must surface in Trino's view of
     // the table. Catches metastore-side regressions where Hive sync drops or
     // mistypes the variant column entirely, separately from the
@@ -311,7 +309,6 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
 
   @Test
   public void testTrinoProjectsVariantValue() throws Exception {
-    assumeSpark4Compose();
     // The native trino-hudi plugin exposes VARIANT as ROW(metadata VARBINARY,
     // value VARBINARY) with no top-level JSON/string decoding. But Spark's
     // Variant binary format stores leaf string values as UTF-8 bytes inside
@@ -328,7 +325,6 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
 
   @Test
   public void testTrinoProjectsVariantMergedRow() throws Exception {
-    assumeSpark4Compose();
     // Same content-level round-trip for the MERGE-rewritten row. id=2's seed
     // is {"key":"value2-merged"}; verifying that exact payload survives the
     // MERGE write path -> hive sync -> Trino read end-to-end.
@@ -340,7 +336,6 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
 
   @Test
   public void testTrinoVariantValuesDifferAcrossRows() throws Exception {
-    assumeSpark4Compose();
     // Invariant: id=1 ({"key":"value1-updated"}) and id=2 ({"key":"value2-merged"})
     // must produce different value bytes. Trino's count(DISTINCT ...) supports
     // VARBINARY natively, so no base64 wrapping is needed. Catches the
@@ -353,7 +348,6 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
 
   @Test
   public void testTrinoVariantDeletedRowAbsent() throws Exception {
-    assumeSpark4Compose();
     // id=3 was MERGE-inserted into dt=2024-01-02 then DELETEd. Mirrors
     // testTrinoBlobDeletedRowAbsent for the variant table - catches the case
     // where DELETE silently no-ops on a Variant-bearing row.
@@ -364,10 +358,9 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
 
   @Test
   public void testTrinoVariantEmptiedPartitionInvisible() throws Exception {
-    assumeSpark4Compose();
-    // Same partition-pruning behavior as the BLOB table: dt=2024-01-02 must be
-    // invisible after its only row was deleted, while the data-bearing
-    // partition's row count surfaces correctly.
+    // Same shape as the BLOB table: dt=2024-01-02 held only id=3, so after the
+    // DELETE the grouped read must return the data-bearing partition alone. As
+    // above this asserts per-partition row visibility, not partition pruning.
     trino.execute("SELECT dt, count(*) FROM variant_test GROUP BY dt ORDER BY dt")
         .expectToSucceed()
         .assertStdOutContains("2024-01-01,2")

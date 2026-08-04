@@ -169,9 +169,7 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
 
   /**
    * Non-assumption variant of {@link #assumeSpark4Compose()}: returns {@code true} when the
-   * active compose prefix points at a Spark 4.x stack. Use in {@code @BeforeAll} seeding
-   * to conditionally run Spark 4-only fixtures (e.g. VARIANT) without aborting the whole
-   * test class on a Spark 3.5 run.
+   * active compose prefix points at a Spark 4.x stack, without aborting the caller.
    */
   protected static boolean isSpark4Compose() {
     String composePrefix = System.getProperty(SystemProps.COMPOSE_PREFIX, SystemProps.DEFAULT_COMPOSE_PREFIX);
