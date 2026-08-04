@@ -33,9 +33,11 @@ concurrency:
   cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'release-') }}
 
 env:
-  # The wagon retry flags mirror bot.yml's MVN_ARGS: the JDK 17 step below is a
-  # cold-cache full-reactor build, exactly what those were added for.
-  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5
+  # The aether.connector.http.* retry/timeout knobs are copied verbatim from bot.yml's
+  # MVN_ARGS: the JDK 17 step below is a cold-cache full-reactor build, exactly what
+  # those were added for. They are maven-resolver properties -- Maven 3.9 resolves through
+  # the native resolver HTTP transport, which ignores the older maven.wagon.* names.
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Daether.connector.http.retryHandler.count=5 -Daether.connector.http.retryHandler.interval=3000 -Daether.connector.http.retryHandler.intervalMax=30000 -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504 -Daether.connector.http.connectionMaxTtl=25
   SCALA_PROFILE: -Dscala-2.13 -Dscala.binary.version=2.13
   COMPOSE_PREFIX: docker-compose_hadoop340_hive2310_spark402
 

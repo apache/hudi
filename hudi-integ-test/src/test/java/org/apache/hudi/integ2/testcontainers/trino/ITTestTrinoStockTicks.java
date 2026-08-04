@@ -101,9 +101,12 @@ public class ITTestTrinoStockTicks extends ITTestBaseTestcontainers {
 
   @Test
   public void testTrinoReadsMorRoProjectedColumns() throws Exception {
+    // Same symbol-count pin as the _rt case below: the base row assert on its own
+    // would still pass with the log row returned next to it.
     trino.execute("SELECT symbol, ts, volume, open, close FROM stock_ticks_mor_ro WHERE symbol = 'GOOG'")
         .expectToSucceed()
-        .assertStdOutContains("GOOG,2018-08-31 10:29:00,6330,1230.5,1230.5");
+        .assertStdOutContains("GOOG,2018-08-31 10:29:00,6330,1230.5,1230.5")
+        .assertStdOutContains("GOOG", 1);
   }
 
   @Test
@@ -120,10 +123,12 @@ public class ITTestTrinoStockTicks extends ITTestBaseTestcontainers {
 
   @Test
   public void testTrinoReadsMorRtMergedProjectedColumns() throws Exception {
-    // Full merged row: every non-key column must come from the log record, and
-    // exactly one GOOG row may survive the merge (times=1 is the assert default).
+    // Full merged row: every non-key column must come from the log record. The row
+    // assert alone would still pass if the base row came back alongside it, so pin
+    // the symbol count too - exactly one GOOG row may survive the merge.
     trino.execute("SELECT symbol, ts, volume, open, close FROM stock_ticks_mor_rt WHERE symbol = 'GOOG'")
         .expectToSucceed()
-        .assertStdOutContains("GOOG,2018-08-31 10:59:00,9021,1227.25,1227.5");
+        .assertStdOutContains("GOOG,2018-08-31 10:59:00,9021,1227.25,1227.5")
+        .assertStdOutContains("GOOG", 1);
   }
 }
