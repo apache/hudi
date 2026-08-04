@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestLogAppender;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.exception.HoodieException;
@@ -26,10 +27,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.Logger;
-import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +38,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -134,10 +130,7 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
     doReturn(false).doCallRealMethod().when(racingStorage).exists(metaPath);
 
     // watch what the retry helper logs while the race is being lost
-    TestLogAppender appender = new TestLogAppender();
-    Logger retryLogger = (Logger) LogManager.getLogger(RetryHelper.class);
-    appender.start();
-    retryLogger.addAppender(appender);
+    HoodieTestLogAppender appender = new HoodieTestLogAppender().attachTo(RetryHelper.class);
 
     long elapsedMs;
     try {
@@ -146,8 +139,7 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
           racingStorage, "000000000002", new StoragePath(basePath), partitionPath, Option.empty()).trySave());
       elapsedMs = System.currentTimeMillis() - startMs;
     } finally {
-      retryLogger.removeAppender(appender);
-      appender.stop();
+      appender.detach();
     }
 
     // the symptom from HUDI-9095: losing the race used to be reported as a warning with a full
@@ -164,23 +156,6 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
     assertTrue(elapsedMs < 1000,
         "trySave should not retry when the metafile already exists, but it took " + elapsedMs + " ms");
     assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(storage, partitionPath));
-  }
-
-  static class TestLogAppender extends AbstractAppender {
-    private final List<LogEvent> log = new ArrayList<>();
-
-    protected TestLogAppender() {
-      super(UUID.randomUUID().toString(), null, null, false, null);
-    }
-
-    @Override
-    public void append(LogEvent event) {
-      log.add(event.toImmutable());
-    }
-
-    List<LogEvent> getLog() {
-      return new ArrayList<>(log);
-    }
   }
 
   @Test

@@ -18,19 +18,16 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.testutils.HoodieTestLogAppender;
+
 import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.Logger;
-import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.FileAlreadyExistsException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -70,10 +67,7 @@ public class TestRetryHelper {
    */
   @Test
   public void testRetryWarningCarriesNoStackTrace() {
-    TestLogAppender appender = new TestLogAppender();
-    Logger logger = (Logger) LogManager.getLogger(RetryHelper.class);
-    appender.start();
-    logger.addAppender(appender);
+    HoodieTestLogAppender appender = new HoodieTestLogAppender().attachTo(RetryHelper.class);
     try {
       AtomicInteger attempts = new AtomicInteger(0);
       RetryHelper retryHelper = new RetryHelper(INTERVAL_TIME, 3, INTERVAL_TIME, (String) null, "save partition metafile");
@@ -97,8 +91,7 @@ public class TestRetryHelper {
         assertTrue(message.contains("FileAlreadyExistsException"), "the root cause must survive: " + message);
       }
     } finally {
-      logger.removeAppender(appender);
-      appender.stop();
+      appender.detach();
     }
   }
 
@@ -107,14 +100,14 @@ public class TestRetryHelper {
     // a wrapped exception keeps both layers, so the warning stays actionable without a stack trace
     IOException wrapped = new IOException("Failed to create file /a/b/.hoodie_partition_metadata",
         new FileAlreadyExistsException("File already exists: /a/b/.hoodie_partition_metadata"));
-    String summary = RetryHelper.summarise(wrapped);
+    String summary = RetryHelper.summarize(wrapped);
     assertTrue(summary.contains("java.io.IOException: Failed to create file /a/b/.hoodie_partition_metadata"), summary);
     assertTrue(summary.contains("caused by java.nio.file.FileAlreadyExistsException"), summary);
     assertFalse(summary.contains("\n"), "the summary must stay on a single line: " + summary);
     assertFalse(summary.contains("\tat "), "the summary must not carry a stack trace: " + summary);
 
     // an exception with no cause is rendered as-is
-    assertEquals("java.io.IOException: plain", RetryHelper.summarise(new IOException("plain")));
+    assertEquals("java.io.IOException: plain", RetryHelper.summarize(new IOException("plain")));
   }
 
   @Test
@@ -132,20 +125,4 @@ public class TestRetryHelper {
     });
   }
 
-  static class TestLogAppender extends AbstractAppender {
-    private final List<LogEvent> log = new ArrayList<>();
-
-    protected TestLogAppender() {
-      super(UUID.randomUUID().toString(), null, null, false, null);
-    }
-
-    @Override
-    public void append(LogEvent event) {
-      log.add(event.toImmutable());
-    }
-
-    List<LogEvent> getLog() {
-      return new ArrayList<>(log);
-    }
-  }
 }
