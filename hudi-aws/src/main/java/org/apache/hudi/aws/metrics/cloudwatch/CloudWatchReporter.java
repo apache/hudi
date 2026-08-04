@@ -20,6 +20,7 @@ package org.apache.hudi.aws.metrics.cloudwatch;
 
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import com.codahale.metrics.Clock;
 import com.codahale.metrics.Counter;
@@ -279,15 +280,21 @@ public class CloudWatchReporter extends ScheduledReporter {
                                 long timestampMilliSec,
                                 List<MetricDatum> metricData) {
     String[] metricNameParts = metricName.split("\\.", 2);
-    if (metricNameParts.length < 2) {
-      // The table dimension comes from the part before the first dot, so a name without one cannot be
-      // mapped. Skip just this metric rather than throwing: ScheduledReporter suppresses whatever
-      // report() throws, so failing here dropped every metric staged in the same interval and left no
-      // metrics in CloudWatch at all.
+    if (metricNameParts.length < 2 || StringUtils.isNullOrEmpty(metricNameParts[0])) {
+      // The table dimension comes from the part before the first dot, so a name without one, or one whose
+      // first segment is empty, cannot be mapped. An empty first segment is reachable:
+      // hoodie.metrics.reporter.metricsname.prefix defaults to "" and Metrics#registerGauges still joins it
+      // with a dot, producing ".foo" - and CloudWatch rejects a whole PutMetricData request whose dimension
+      // value is empty, which would lose the batch again.
+      //
+      // Skip just this metric rather than throwing: ScheduledReporter suppresses whatever report() throws,
+      // so failing here dropped every metric staged in the same interval and left no metrics in CloudWatch
+      // at all.
       if (unmappableMetricNames.add(metricName)) {
-        log.warn("Not reporting metric \"{}\" to CloudWatch: it contains no dot, so there is no table name "
-            + "to report it under. Metrics are expected to be named <table>.<metric>. Other metrics in this "
-            + "batch are unaffected, and this is logged once per metric name.", metricName);
+        log.warn("Not reporting metric \"{}\" to CloudWatch: no table name can be derived for the Table "
+            + "dimension. Metric names normally carry hoodie.metrics.reporter.metricsname.prefix, but some "
+            + "Hudi-internal metadata metrics do not (see HUDI issue #19507). Other metrics in this batch "
+            + "are unaffected, and this is logged once per metric name.", metricName);
       }
       return;
     }
