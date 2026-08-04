@@ -45,6 +45,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
 
 /**
@@ -110,16 +111,6 @@ public class CdcImageManager implements AutoCloseable {
       throw e;
     }
     return imageRecordsMap;
-  }
-
-  private static void closeSuppressing(
-      ExternalSpillableMap<String, byte[]> spillableMap,
-      Throwable primary) {
-    try {
-      spillableMap.close();
-    } catch (RuntimeException | Error closeError) {
-      primary.addSuppressed(closeError);
-    }
   }
 
   public RowData getImageRecord(

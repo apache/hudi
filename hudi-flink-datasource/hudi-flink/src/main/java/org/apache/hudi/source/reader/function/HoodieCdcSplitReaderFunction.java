@@ -66,6 +66,8 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
+
 /**
  * CDC reader function for source V2. Reads CDC splits ({@link HoodieCdcSourceSplit}) and
  * emits change-log {@link RowData} records tagged with the appropriate {@link org.apache.flink.types.RowKind}.
@@ -240,14 +242,6 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
       }
       default:
         throw new AssertionError("Unexpected CDC file split infer case: " + fileSplit.getCdcInferCase());
-    }
-  }
-
-  private static void closeSuppressing(ClosableIterator<?> iterator, Throwable primary) {
-    try {
-      iterator.close();
-    } catch (RuntimeException | Error closeError) {
-      primary.addSuppressed(closeError);
     }
   }
 

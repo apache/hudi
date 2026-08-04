@@ -48,6 +48,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
+
 /**
  * The base InputFormat class to read Hoodie data set as change logs.
  */
@@ -173,14 +175,6 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
             maxCompactionMemoryInBytes, fileSplit, this::getFileSliceIterator);
       default:
         throw new AssertionError("Unexpected cdc file split infer case: " + fileSplit.getCdcInferCase());
-    }
-  }
-
-  private static void closeSuppressing(ClosableIterator<?> iterator, Throwable primary) {
-    try {
-      iterator.close();
-    } catch (RuntimeException | Error closeError) {
-      primary.addSuppressed(closeError);
     }
   }
 

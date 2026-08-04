@@ -83,6 +83,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 
 /**
@@ -730,14 +731,6 @@ public final class CdcIterators {
       RowData row = imageManager.getImageRecord(recordKey, beforeImages, rowKind);
       row.setRowKind(rowKind);
       return projection.project(row);
-    }
-  }
-
-  private static void closeSuppressing(ClosableIterator<?> iterator, Throwable primary) {
-    try {
-      iterator.close();
-    } catch (RuntimeException | Error closeError) {
-      primary.addSuppressed(closeError);
     }
   }
 
