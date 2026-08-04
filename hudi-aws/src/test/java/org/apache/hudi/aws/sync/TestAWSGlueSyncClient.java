@@ -70,6 +70,7 @@ import software.amazon.awssdk.services.glue.model.PartitionError;
 import software.amazon.awssdk.services.glue.model.SerDeInfo;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
+import software.amazon.awssdk.services.glue.model.TableInput;
 import software.amazon.awssdk.services.glue.model.TagResourceRequest;
 import software.amazon.awssdk.services.glue.model.TagResourceResponse;
 import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
@@ -256,6 +257,62 @@ class TestAWSGlueSyncClient {
     assertEquals("age", fields.get(1).getName(), "glue table second column should be age");
     assertEquals("int", fields.get(1).getType(), "glue table second column type should be int");
     assertEquals("person's age", fields.get(1).getComment().get(), "glue table second column comment should person's age");
+  }
+
+  /**
+   * End to end through {@code updateTableComments}: the Glue table holds no comments, the storage schema has
+   * them, so it must apply them and report that it changed something. This is the path the bug actually broke
+   * - {@code setComments} discarded its rebuilt {@code Column}, so nothing was applied and the method always
+   * returned false. It also pins the second half of the fix: {@code StorageDescriptor} is immutable too, so
+   * rebuilding only the column list would still have sent a descriptor carrying no comments.
+   */
+  @Test
+  void testUpdateTableCommentsAppliesThemToColumnsAndPartitionKeys() throws Exception {
+    String tableName = "testTable";
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", null),
+        GlueTestUtil.getColumn("age", "int", null));
+    List<Column> partitionKeys = Collections.singletonList(GlueTestUtil.getColumn("city", "string", null));
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(getTableWithDefaultProps(tableName, columns, partitionKeys));
+    Mockito.when(mockAwsGlue.updateTable(any(UpdateTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
+
+    List<FieldSchema> fromStorage = Arrays.asList(
+        new FieldSchema("name", "string", "person's name"),
+        new FieldSchema("age", "int", "person's age"),
+        new FieldSchema("city", "string", "person's city"));
+
+    assertTrue(awsGlueSyncClient.updateTableComments(tableName, Collections.emptyList(), fromStorage),
+        "applying comments the table does not have should report a change");
+
+    ArgumentCaptor<UpdateTableRequest> captor = ArgumentCaptor.forClass(UpdateTableRequest.class);
+    verify(mockAwsGlue, times(1)).updateTable(captor.capture());
+    TableInput sent = captor.getValue().tableInput();
+    assertEquals("person's name", sent.storageDescriptor().columns().get(0).comment(),
+        "the rebuilt storage descriptor must be the one sent, carrying the column comment");
+    assertEquals("person's age", sent.storageDescriptor().columns().get(1).comment());
+    assertEquals("person's city", sent.partitionKeys().get(0).comment(),
+        "partition column comments must be sent too");
+  }
+
+  /** The other direction: comments already matching the storage schema must not trigger an update call. */
+  @Test
+  void testUpdateTableCommentsIsANoOpWhenNothingChanges() throws Exception {
+    String tableName = "testTable";
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", "person's name"),
+        GlueTestUtil.getColumn("age", "int", "person's age"));
+    List<Column> partitionKeys = Collections.singletonList(GlueTestUtil.getColumn("city", "string", "person's city"));
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(getTableWithDefaultProps(tableName, columns, partitionKeys));
+
+    List<FieldSchema> fromStorage = Arrays.asList(
+        new FieldSchema("name", "string", "person's name"),
+        new FieldSchema("age", "int", "person's age"),
+        new FieldSchema("city", "string", "person's city"));
+
+    assertFalse(awsGlueSyncClient.updateTableComments(tableName, Collections.emptyList(), fromStorage),
+        "comments already matching the storage schema should not report a change");
+    verify(mockAwsGlue, never()).updateTable(any(UpdateTableRequest.class));
   }
 
   /**
