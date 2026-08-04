@@ -1557,14 +1557,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     //
     //  - Widening is always rejected. Enabling a column now would leave earlier commits without it,
     //    and readers cannot tell the two apart.
-    //  - Any disagreement is rejected when the writer *explicitly* sets hoodie.meta.fields.mode.
-    //    That covers narrowing too, e.g. an explicit NONE against a COMMIT_TIME_ONLY table, which
-    //    would write null commit times while the table still advertises COMMIT_TIME_ONLY and make
-    //    incremental queries silently miss those rows.
+    //  - Any disagreement is rejected when the writer *explicitly* sets hoodie.meta.fields.mode, or
+    //    when the table is on a selective mode. An explicit NONE against a COMMIT_TIME_ONLY table
+    //    would write null commit times while the table still advertises COMMIT_TIME_ONLY, making
+    //    incremental queries silently miss those rows — and so would an *unstated* writer that
+    //    resolves to NONE, which is how the StreamSync-restart case slipped through.
     //
-    // A writer that never mentions the mode is left alone: resolving to NONE against an ALL table
-    // is long-standing behavior for callers that build a write config without restating the table's
-    // settings, and writing fewer meta columns cannot make a reader believe in absent data.
+    // The narrowing carve-out is therefore limited to non-selective tables: resolving to NONE
+    // against an ALL table is long-standing behavior for callers that build a write config without
+    // restating the table's settings (see d5026e9a2485 / HUDI-2161), and there writing fewer meta
+    // columns cannot make a reader believe in absent data — nothing keys off a partially populated
+    // ALL table. A selective table has no such guarantee, because the mode it advertises is exactly
+    // what the read path trusts.
     MetaFieldsMode tableMetaFieldsMode = tableConfig.getMetaFieldsMode();
     MetaFieldsMode writeMetaFieldsMode = writeConfig.getMetaFieldsMode();
     boolean writerStatedMode = writeConfig.contains(HoodieTableConfig.META_FIELDS_MODE)
@@ -1576,11 +1580,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
               + "Set %s=%s on the writer, or recreate the table to change it.",
           HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode, writeMetaFieldsMode,
           HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode));
-    } else if (writerStatedMode && writeMetaFieldsMode != tableMetaFieldsMode) {
+    } else if (writeMetaFieldsMode != tableMetaFieldsMode
+        && (writerStatedMode || tableMetaFieldsMode.isSelective())) {
       throw new HoodieException(String.format(
-          "%s mismatch: table is %s but the writer explicitly requests %s. Meta columns are physical, "
-              + "so the writer must match the table. Set %s=%s on the writer, or recreate the table.",
+          "%s mismatch: table is %s but the writer resolves to %s%s. Meta columns are physical, so the "
+              + "writer must match the table — writing fewer of them leaves rows the table still "
+              + "advertises as populated, which incremental queries then silently skip. Set %s=%s on "
+              + "the writer, or recreate the table.",
           HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode, writeMetaFieldsMode,
+          writerStatedMode ? " (explicitly set)"
+              : " (not set on the writer; it defaults from " + HoodieTableConfig.POPULATE_META_FIELDS.key() + ")",
           HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode));
     }
 
