@@ -141,6 +141,88 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
   }
 
   @Test
+  void validateAgainstTablePropertiesRejectsUnstatedWriterNarrowingASelectiveTable() throws IOException {
+    initMetaClient();
+    // The StreamSync-restart case. A writer that sets only populate.meta.fields=false resolves to
+    // NONE without ever naming a mode, so neither the widening check (NONE is not wider than
+    // COMMIT_TIME_ONLY) nor the stated-mode check catches it. It would then write base files with a
+    // null _hoodie_commit_time while hoodie.properties still says COMMIT_TIME_ONLY, and incremental
+    // queries — which the table is still deemed to support — would silently drop those rows.
+    //
+    // Distinct from validateAgainstTablePropertiesAllowsUnstatedWriterToNarrow above: there the
+    // table is ALL, where narrowing remains legal. The carve-out is scoped to non-selective tables.
+    HoodieWriteConfig unstated = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withPopulateMetaFields(false)
+        .build();
+    assertEquals(MetaFieldsMode.NONE, unstated.getMetaFieldsMode());
+
+    HoodieException ex = assertThrows(HoodieException.class, () ->
+        validatorClient(unstated).validateAgainstTableProperties(
+            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), unstated));
+    assertTrue(ex.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()), ex.getMessage());
+    assertTrue(ex.getMessage().contains("COMMIT_TIME_ONLY") && ex.getMessage().contains("NONE"),
+        "error must name both modes: " + ex.getMessage());
+    // The writer never set the mode, so the message must not claim it did.
+    assertFalse(ex.getMessage().contains("explicitly set"), ex.getMessage());
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsSelectiveToSelectiveNarrowingWhenUnstated() throws IOException {
+    initMetaClient();
+    // Same shape one step in: an unstated writer against COMMIT_TIME_AND_FILE_NAME. Nothing in this
+    // suite previously mentioned that mode, so the isRecordKeyPopulated clause of isWiderThan was
+    // mutation-survivable here.
+    HoodieWriteConfig unstated = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withPopulateMetaFields(false)
+        .build();
+
+    assertThrows(HoodieException.class, () ->
+        validatorClient(unstated).validateAgainstTableProperties(
+            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME), unstated));
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsSiblingSelectiveModesBothWays() throws IOException {
+    initMetaClient();
+    // COMMIT_TIME_ONLY and FILE_NAME_ONLY are each wider than the other, so neither can stand in for
+    // the other. Nothing tested this before, and it is the case that makes "narrowing is allowed"
+    // subtle: there is no narrowing direction between them at all.
+    HoodieWriteConfig commitTimeOnly = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY).build();
+    HoodieWriteConfig fileNameOnly = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withMetaFieldsMode(MetaFieldsMode.FILE_NAME_ONLY).build();
+
+    assertThrows(HoodieException.class, () -> validatorClient(commitTimeOnly)
+        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.FILE_NAME_ONLY), commitTimeOnly));
+    assertThrows(HoodieException.class, () -> validatorClient(fileNameOnly)
+        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), fileNameOnly));
+  }
+
+  @Test
+  void validateAgainstTablePropertiesAllowsSelectiveWriterToNarrowAnAllTable() throws IOException {
+    initMetaClient();
+    // COMMIT_TIME_AND_FILE_NAME against ALL populates strictly fewer columns (no record key), so it
+    // is a narrowing and stays allowed. Pins the one pair the isRecordKeyPopulated clause decides.
+    HoodieWriteConfig selective = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME)
+        .build();
+
+    // Rejected in this direction only because the writer stated the mode explicitly.
+    assertThrows(HoodieException.class, () -> validatorClient(selective)
+        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.ALL), selective));
+    // ...but never as a *widening*: the reverse direction is what isWiderThan must catch.
+    HoodieWriteConfig allWriter = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withMetaFieldsMode(MetaFieldsMode.ALL).build();
+    HoodieException ex = assertThrows(HoodieException.class, () -> validatorClient(allWriter)
+        .validateAgainstTableProperties(
+            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME), allWriter));
+    assertTrue(ex.getMessage().contains("cannot be widened"), ex.getMessage());
+  }
+
+  @Test
   void validateAgainstTablePropertiesRejectsWideningEvenWhenUnstated() throws IOException {
     initMetaClient();
     // Widening is rejected regardless of whether the writer named a mode: a default writer resolves
