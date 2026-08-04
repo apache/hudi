@@ -482,6 +482,16 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     }
   }
 
+  private static int decimalFixedLen(HoodieSchema resolvedSchema, int precision) {
+    if (resolvedSchema instanceof HoodieSchema.Decimal) {
+      HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) resolvedSchema;
+      if (decimalSchema.isFixed()) {
+        return decimalSchema.getFixedSize();
+      }
+    }
+    return Decimal.minBytesForPrecision()[precision];
+  }
+
   private ValueWriter makeWriter(HoodieSchema schema, DataType dataType) {
     HoodieSchema resolvedSchema = schema == null ? null : schema.getNonNullType();
 
@@ -550,26 +560,31 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
         consumeGroup(() -> variantWriter.accept(row, ordinal));
       };
     } else if (dataType instanceof DecimalType) {
+      int precision = ((DecimalType) dataType).precision();
+      ValidationUtils.checkArgument(precision <= DecimalType.MAX_PRECISION(),
+          () -> String.format("Decimal precision %s exceeds max precision %s", precision, DecimalType.MAX_PRECISION()));
+      int scale = ((DecimalType) dataType).scale();
+      // Honor the declared Avro `fixed` size so the row/bulk-insert/clustering/compaction write
+      // path preserves the schema width instead of narrowing to the precision-minimal one.
+      int numBytes = decimalFixedLen(resolvedSchema, precision);
+      // Padding buffer resolved once per column, not per record: reuse the shared decimalBuffer when
+      // it is wide enough, otherwise allocate one dedicated buffer here (an over-allocated Avro fixed
+      // size can exceed the shared buffer's capacity).
+      byte[] paddingBuffer = numBytes <= decimalBuffer.length ? decimalBuffer : new byte[numBytes];
       return (row, ordinal) -> {
-        int precision = ((DecimalType) dataType).precision();
-        ValidationUtils.checkArgument(precision <= DecimalType.MAX_PRECISION(),
-            () -> String.format("Decimal precision %s exceeds max precision %s", precision, DecimalType.MAX_PRECISION()));
-        int scale = ((DecimalType) dataType).scale();
         byte[] bytes = row.getDecimal(ordinal, precision, scale).toJavaBigDecimal().unscaledValue().toByteArray();
-        int numBytes = Decimal.minBytesForPrecision()[precision];
         byte[] fixedLengthBytes;
         if (bytes.length == numBytes) {
           // If the length of the underlying byte array of the unscaled `BigInteger` happens to be
-          // `numBytes`, just reuse it, so that we don't bother copying it to `decimalBuffer`.
+          // `numBytes`, just reuse it, so that we don't bother copying it to a buffer.
           fixedLengthBytes = bytes;
         } else {
-          // Otherwise, the length must be less than `numBytes`.  In this case we copy contents of
-          // the underlying bytes with padding sign bytes to `decimalBuffer` to form the result
-          // fixed-length byte array.
+          // Otherwise left-pad the unscaled bytes with sign bytes to reach `numBytes` (Avro validates
+          // the fixed size covers the precision, so the unscaled magnitude always fits).
           byte signByte = (bytes[0] < 0) ? (byte) -1 : (byte) 0;
-          Arrays.fill(decimalBuffer, 0, numBytes - bytes.length, signByte);
-          System.arraycopy(bytes, 0, decimalBuffer, numBytes - bytes.length, bytes.length);
-          fixedLengthBytes = decimalBuffer;
+          Arrays.fill(paddingBuffer, 0, numBytes - bytes.length, signByte);
+          System.arraycopy(bytes, 0, paddingBuffer, numBytes - bytes.length, bytes.length);
+          fixedLengthBytes = paddingBuffer;
         }
         recordConsumer.addBinary(Binary.fromReusedByteArray(fixedLengthBytes, 0, numBytes));
       };
@@ -830,7 +845,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       return Types
           .primitive(FIXED_LEN_BYTE_ARRAY, repetition)
           .as(LogicalTypeAnnotation.decimalType(scale, precision))
-          .length(Decimal.minBytesForPrecision()[precision])
+          .length(decimalFixedLen(resolvedSchema, precision))
           .named(structField.name());
     } else if (dataType instanceof ArrayType
             && resolvedSchema != null
