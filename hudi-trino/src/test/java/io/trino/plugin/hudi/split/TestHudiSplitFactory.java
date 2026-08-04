@@ -135,8 +135,8 @@ public class TestHudiSplitFactory
     public void testCreateHudiSplitsWithFileLargerThanDefaultTarget()
     {
         // Test with 128MB target and 500MB base file
-        // - should be sliced at target boundaries into 3 x 128MB + 116MB remainder,
-        //   even though the reported block size (8MB in the fixture) says otherwise
+        // - should be sliced at target boundaries into 3 x 128MB + 116MB remainder, even though the
+        //   reported block size (500MB, the file length) would otherwise force a single split
         testSplitCreation(
                 DataSize.of(128, MEGABYTE),
                 DataSize.of(500, MEGABYTE),
@@ -151,12 +151,10 @@ public class TestHudiSplitFactory
     @Test
     public void testCreateHudiSplitsWithZeroTargetSplitSize()
     {
-        // A zero target split size must fail fast instead of looping forever in split generation
-        assertThatThrownBy(() -> HudiSplitFactory.createHudiSplits(
+        // A zero target split size must be rejected on construction, before any file slice is seen,
+        // instead of looping forever once split generation reaches a non-empty base file
+        assertThatThrownBy(() -> new HudiSplitFactory(
                 createTableHandle(),
-                PARTITION_KEYS,
-                createFileSlice(DataSize.of(10, MEGABYTE), Option.empty()),
-                COMMIT_TIME,
                 new SizeBasedSplitWeightProvider(0.05, DataSize.of(128, MEGABYTE)),
                 DataSize.ofBytes(0)))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -198,8 +196,8 @@ public class TestHudiSplitFactory
 
         FileSlice fileSlice = createFileSlice(baseFileSize, logFileSize);
 
-        List<HudiSplit> splits = HudiSplitFactory.createHudiSplits(
-                tableHandle, PARTITION_KEYS, fileSlice, COMMIT_TIME, weightProvider, targetSplitSize);
+        List<HudiSplit> splits = new HudiSplitFactory(tableHandle, weightProvider, targetSplitSize)
+                .createSplits(PARTITION_KEYS, fileSlice, COMMIT_TIME);
 
         assertThat(splits).hasSize(expectedSplitInfo.size());
 
@@ -239,15 +237,17 @@ public class TestHudiSplitFactory
     {
         String fileId = "5a4f6a70-0306-40a8-952b-045b0d8ff0d4-0";
         HoodieFileGroupId fileGroupId = new HoodieFileGroupId("partition", fileId);
-        // Deliberately nonzero: split generation must ignore the reported block size
-        long blockSize = 8L * 1024 * 1024;
+        // Block size mirrors the file length, which is what HudiTrinoStorage now reports. Split
+        // generation must ignore it, so every multi-split expectation below would collapse to a
+        // single whole-file split if the block size were allowed back into the sizing decision.
         String baseFilePath = "/test/path/" + fileGroupId + "_4-19-0_" + COMMIT_TIME + ".parquet";
         String logFilePath = "/test/path/." + fileId + "_2025062515374131546.log.1_0-53-80";
+        long logFileSizeInBytes = logFileSize.isPresent() ? logFileSize.get().toBytes() : 0L;
         StoragePathInfo baseFileInfo = new StoragePathInfo(
-                new StoragePath(baseFilePath), baseFileSize.toBytes(), false, (short) 0, blockSize, System.currentTimeMillis());
+                new StoragePath(baseFilePath), baseFileSize.toBytes(), false, (short) 0, baseFileSize.toBytes(), System.currentTimeMillis());
         StoragePathInfo logFileInfo = new StoragePathInfo(
-                new StoragePath(logFilePath), logFileSize.isPresent() ? logFileSize.get().toBytes() : 0L,
-                false, (short) 0, blockSize, System.currentTimeMillis());
+                new StoragePath(logFilePath), logFileSizeInBytes,
+                false, (short) 0, logFileSizeInBytes, System.currentTimeMillis());
         HoodieBaseFile baseFile = new HoodieBaseFile(baseFileInfo);
         return new FileSlice(fileGroupId, COMMIT_TIME, baseFile,
                 logFileSize.isPresent() ? ImmutableList.of(new HoodieLogFile(logFileInfo)) : ImmutableList.of());
