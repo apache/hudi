@@ -25,14 +25,21 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.DecimalType;
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.IntegerType.INTEGER;
@@ -41,32 +48,37 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class TestHudiAvroSerializer
 {
-    @Test
-    public void testDecimalConverter()
+    /**
+     * A short decimal is stored in Trino as the unscaled value, which is exactly what Avro writes into the
+     * fixed bytes, so the read is a plain big-endian two's complement decode. The cases below pin the parts
+     * that decode gets wrong if it is ever rewritten: sign extension for negatives, scale 0, and the
+     * full-width value at the maximum short-decimal precision.
+     */
+    @ParameterizedTest
+    @MethodSource("shortDecimals")
+    public void testAppendShortDecimalFromAvroFixed(int precision, int scale, String value, long expectedUnscaled)
     {
-        HudiAvroSerializer.AvroDecimalConverter converter = new HudiAvroSerializer.AvroDecimalConverter();
-
-        assertThat(converter.convert(10, 2, unscaledBytes("123.45"))).isEqualTo(new BigDecimal("123.45"));
-        // Same (precision, scale) again: served from the cached schema
-        assertThat(converter.convert(10, 2, unscaledBytes("-0.07"))).isEqualTo(new BigDecimal("-0.07"));
-        // Same precision, different scale, and vice versa: must not collide in the cache
-        assertThat(converter.convert(10, 4, unscaledBytes("123.4567"))).isEqualTo(new BigDecimal("123.4567"));
-        assertThat(converter.convert(18, 2, unscaledBytes("9999999999999999.99"))).isEqualTo(new BigDecimal("9999999999999999.99"));
-        assertThat(converter.convert(5, 0, unscaledBytes("42"))).isEqualTo(new BigDecimal("42"));
-    }
-
-    @Test
-    public void testAppendShortDecimalFromAvroFixed()
-    {
-        DecimalType type = DecimalType.createDecimalType(10, 2);
-        byte[] bytes = unscaledBytes("123.45");
-        GenericData.Fixed fixed = new GenericData.Fixed(Schema.createFixed("fix", null, null, bytes.length), bytes);
+        DecimalType type = DecimalType.createDecimalType(precision, scale);
 
         BlockBuilder blockBuilder = type.createBlockBuilder(null, 1);
-        HudiAvroSerializer.appendTo(type, fixed, blockBuilder);
+        HudiAvroSerializer.appendTo(type, avroDecimalFixed(precision, scale, value), blockBuilder);
         Block block = blockBuilder.build();
 
-        assertThat(type.getLong(block, 0)).isEqualTo(12345L);
+        assertThat(type.getLong(block, 0)).isEqualTo(expectedUnscaled);
+    }
+
+    private static Stream<Arguments> shortDecimals()
+    {
+        return Stream.of(
+                Arguments.of(10, 2, "123.45", 12345L),
+                Arguments.of(10, 2, "-0.07", -7L),
+                Arguments.of(10, 2, "0.00", 0L),
+                Arguments.of(10, 4, "123.4567", 1234567L),
+                Arguments.of(5, 0, "42", 42L),
+                Arguments.of(5, 0, "-42", -42L),
+                // Widest short decimal: 18 digits, both signs
+                Arguments.of(18, 2, "9999999999999999.99", 999999999999999999L),
+                Arguments.of(18, 2, "-9999999999999999.99", -999999999999999999L));
     }
 
     @Test
@@ -96,9 +108,25 @@ class TestHudiAvroSerializer
         assertThat(VARCHAR.getSlice(page.getBlock(1), 2).toStringUtf8()).isEqualTo("three");
     }
 
-    private static byte[] unscaledBytes(String decimal)
+    /**
+     * Encodes the value the way an Avro writer does, via Avro's own conversion: a fixed sized from the
+     * precision, holding the unscaled value left-padded to that width with the sign byte (0xFF for
+     * negatives). Building the fixed from the minimal two's-complement encoding instead would leave the
+     * padding bytes, and so sign extension across them, untested.
+     */
+    private static GenericData.Fixed avroDecimalFixed(int precision, int scale, String value)
     {
-        return new BigDecimal(decimal).unscaledValue().toByteArray();
+        LogicalTypes.Decimal decimalType = LogicalTypes.decimal(precision, scale);
+        Schema fixedSchema = decimalType.addToSchema(
+                Schema.createFixed("fix", null, null, decimalFixedSize(precision)));
+        return (GenericData.Fixed) new Conversions.DecimalConversion()
+                .toFixed(new BigDecimal(value), fixedSchema, decimalType);
+    }
+
+    /** Bytes needed to hold the widest unscaled value at this precision, i.e. the fixed size Avro sizes a decimal to. */
+    private static int decimalFixedSize(int precision)
+    {
+        return BigInteger.TEN.pow(precision).subtract(BigInteger.ONE).toByteArray().length;
     }
 
     private static Schema recordSchema(String name)

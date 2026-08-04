@@ -41,8 +41,6 @@ import io.trino.spi.type.SqlVarbinary;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarbinaryType;
 import io.trino.spi.type.VarcharType;
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -50,6 +48,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.Utf8;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.time.DateTimeException;
 import java.time.Instant;
@@ -60,7 +59,6 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
@@ -70,7 +68,6 @@ import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.DateType.DATE;
-import static io.trino.spi.type.Decimals.encodeShortScaledValue;
 import static io.trino.spi.type.Decimals.writeBigDecimal;
 import static io.trino.spi.type.Decimals.writeShortDecimal;
 import static io.trino.spi.type.IntegerType.INTEGER;
@@ -108,7 +105,6 @@ public class HudiAvroSerializer
             1, // 9 digits after the dot
     };
 
-    private static final AvroDecimalConverter DECIMAL_CONVERTER = new AvroDecimalConverter();
     private final PrefilledColumnValues prefilledColumnValues;
 
     private final List<HiveColumnHandle> columnHandles;
@@ -262,8 +258,13 @@ public class HudiAvroSerializer
                     }
                     else if (value instanceof GenericData.Fixed fixed) {
                         verify(decimalType.isShort(), "The type should be short decimal");
-                        BigDecimal decimal = DECIMAL_CONVERTER.convert(decimalType.getPrecision(), decimalType.getScale(), fixed.bytes());
-                        type.writeLong(output, encodeShortScaledValue(decimal, decimalType.getScale()));
+                        // Avro stores a decimal as its unscaled value in big-endian two's complement, which is
+                        // exactly what Trino's short decimal holds. Going through Avro's DecimalConversion and
+                        // Decimals.encodeShortScaledValue is a no-op round trip: DecimalConversion.fromBytes reads
+                        // only the scale (it ignores precision, and its schema argument entirely) to build
+                        // BigDecimal(unscaled, scale), and encodeShortScaledValue then calls setScale to that same
+                        // scale, which returns the BigDecimal unchanged, before taking the unscaled value back out.
+                        type.writeLong(output, new BigInteger(fixed.bytes()).longValueExact());
                     }
                     else {
                         throw new TrinoException(GENERIC_INTERNAL_ERROR,
@@ -543,23 +544,5 @@ public class HudiAvroSerializer
                 appendTo(valueType, entry.getValue(), valueBuilder);
             }
         });
-    }
-
-    static class AvroDecimalConverter
-    {
-        private static final Conversions.DecimalConversion AVRO_DECIMAL_CONVERSION = new Conversions.DecimalConversion();
-        // convert() runs once per decimal cell on the record read path, and building a Schema costs
-        // orders of magnitude more than the conversion itself. The (precision, scale) space is tiny
-        // and fixed per column, so cache the schemas globally.
-        private static final Map<Integer, Schema> DECIMAL_SCHEMAS = new ConcurrentHashMap<>();
-
-        BigDecimal convert(int precision, int scale, byte[] bytes)
-        {
-            // The key is unique because precision and scale are at most 38
-            Schema schema = DECIMAL_SCHEMAS.computeIfAbsent(
-                    precision * 100 + scale,
-                    key -> LogicalTypes.decimal(precision, scale).addToSchema(Schema.create(Schema.Type.BYTES)));
-            return AVRO_DECIMAL_CONVERSION.fromBytes(ByteBuffer.wrap(bytes), schema, schema.getLogicalType());
-        }
     }
 }
