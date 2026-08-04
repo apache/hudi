@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -44,6 +45,18 @@ public class NonSortPartitioner<T>
    * Default constructor without enforcing the number of output partitions.
    */
   public NonSortPartitioner() {
+    this(false);
+  }
+
+  /**
+   * Constructor taking the write config, so this partitioner can also be named through
+   * {@code HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME}, which is
+   * instantiated by reflection with only the write config. Nothing here is configurable, so
+   * this behaves as the default constructor does.
+   *
+   * @param config Write config, unused.
+   */
+  public NonSortPartitioner(HoodieWriteConfig config) {
     this(false);
   }
 
