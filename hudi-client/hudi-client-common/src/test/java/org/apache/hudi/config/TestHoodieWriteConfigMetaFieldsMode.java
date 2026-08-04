@@ -128,6 +128,49 @@ class TestHoodieWriteConfigMetaFieldsMode {
         .build();
     assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, cfg.getMetaFieldsMode());
     assertFalse(cfg.populateMetaFields());
+    // The *raw* property must also be rewritten in this order, not just the resolved answer.
+    // withPopulateMetaFields does not re-derive the mode, so deriving only inside
+    // withMetaFieldsMode left this order carrying a selective mode next to populate=true — a
+    // contradiction that resolves correctly here but reaches hoodie.properties on any path that
+    // copies raw write-config props.
+    assertEquals("false", cfg.getStringOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
+  }
+
+  @Test
+  void legacyBooleanIsDerivedFromModeInBothCallOrders() {
+    // Same assertion across every mode and both orders, so the invariant is pinned by construction
+    // rather than by two hand-picked cases.
+    for (MetaFieldsMode mode : MetaFieldsMode.values()) {
+      String expected = Boolean.toString(mode.toLegacyPopulateMetaFields());
+
+      HoodieWriteConfig modeLast = baseBuilder()
+          .withPopulateMetaFields(!mode.toLegacyPopulateMetaFields())
+          .withMetaFieldsMode(mode)
+          .build();
+      assertEquals(expected, modeLast.getStringOrDefault(HoodieTableConfig.POPULATE_META_FIELDS),
+          "mode set last should win for " + mode);
+      assertEquals(mode, modeLast.getMetaFieldsMode());
+
+      HoodieWriteConfig modeFirst = baseBuilder()
+          .withMetaFieldsMode(mode)
+          .withPopulateMetaFields(!mode.toLegacyPopulateMetaFields())
+          .build();
+      assertEquals(expected, modeFirst.getStringOrDefault(HoodieTableConfig.POPULATE_META_FIELDS),
+          "mode set first should still win for " + mode);
+      assertEquals(mode, modeFirst.getMetaFieldsMode());
+    }
+  }
+
+  @Test
+  void unsetModeLeavesTheLegacyBooleanAlone() {
+    // The derivation must only fire when a mode is actually set, or it would clobber the legacy
+    // boolean for the many callers that never mention the mode at all.
+    HoodieWriteConfig cfg = baseBuilder().withPopulateMetaFields(false).build();
+    assertEquals("false", cfg.getStringOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
+    assertEquals(MetaFieldsMode.NONE, cfg.getMetaFieldsMode());
+
+    HoodieWriteConfig dflt = baseBuilder().build();
+    assertEquals(MetaFieldsMode.ALL, dflt.getMetaFieldsMode());
   }
 
   @Test
