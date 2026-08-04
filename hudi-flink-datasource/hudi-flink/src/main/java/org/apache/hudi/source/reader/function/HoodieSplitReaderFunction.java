@@ -44,6 +44,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
+
 /**
  * Default reader function implementation for both MOR and COW tables.
  */
@@ -86,15 +88,6 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
     } catch (RuntimeException | Error e) {
       closeSuppressing(fileGroupReader, e);
       throw e;
-    }
-  }
-
-  /** Closes {@code reader}, attaching any close failure to {@code primary} as a suppressed exception. */
-  private static void closeSuppressing(HoodieFileGroupReader<RowData> reader, Throwable primary) {
-    try {
-      reader.close();
-    } catch (Exception closeError) {
-      primary.addSuppressed(closeError);
     }
   }
 

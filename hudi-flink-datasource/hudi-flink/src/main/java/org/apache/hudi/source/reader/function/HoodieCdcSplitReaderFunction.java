@@ -65,6 +65,8 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
+
 /**
  * CDC reader function for source V2. Reads CDC splits ({@link HoodieCdcSourceSplit}) and
  * emits change-log {@link RowData} records tagged with the appropriate {@link org.apache.flink.types.RowKind}.
@@ -222,10 +224,15 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
         String logFilePath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
         MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(tablePath, logFilePath, maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getFileSliceHoodieRecordIterator(split);
-        return new CdcIterators.DataLogFileIterator(
-            maxCompactionMemoryInBytes, imageManager, fileSplit, tableSchema,
-            tableState.getRequiredRowType(), tableState.getRequiredPositions(),
-            recordIterator, getMetaClient(), getWriteConfig());
+        try {
+          return new CdcIterators.DataLogFileIterator(
+              maxCompactionMemoryInBytes, imageManager, fileSplit, tableSchema,
+              tableState.getRequiredRowType(), tableState.getRequiredPositions(),
+              recordIterator, getMetaClient(), getWriteConfig());
+        } catch (IOException | RuntimeException | Error e) {
+          closeSuppressing(recordIterator, e);
+          throw e;
+        }
       }
       case REPLACE_COMMIT: {
         return new CdcIterators.ReplaceCommitIterator(
