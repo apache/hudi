@@ -29,7 +29,9 @@ docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-prestobase_0.232`, is defined 
 
 ### Base image
 
-`build_and_publish_docker_images.sh` builds the `base_java11` module, which is what Spark 3.x needs.
+`build_and_publish_docker_images.sh` picks the base module from `--spark-version`: `base_java11` for Spark 3.x, which
+is the default and what the compose files under `/compose` use, and `base_java17` for a 4.x version. The demo compose
+files are all Spark 3.x, so the Java 17 base is only reached if you ask for a 4.x `--spark-version` explicitly.
 
 The legacy Java 8 `base` module under `/hoodie/hadoop/base` is retained for historical reference only; Spark 2.x is no
 longer supported and `build_and_publish_docker_images.sh` never selects it.
@@ -62,13 +64,11 @@ To build the Docker demo images with `docker` directly, rather than through the 
 ./build_and_publish_docker_images.sh
 ```
 
-To build one of the other version combinations under `docker/compose`, edit the version block near the top of the
-script before running it:
+To build one of the other version combinations under `docker/compose`, pass the versions as flags. They default to
+Hadoop 3.3.4, Spark 3.5.3 and Hive 3.1.3, and each can be set on its own:
 
 ```shell
-HADOOP_VERSION="3.3.4"
-SPARK_VERSION="3.5.3"
-HIVE_VERSION="3.1.3"
+./build_and_publish_docker_images.sh --hadoop-version 3.3.4 --spark-version 3.5.3 --hive-version 3.1.3
 ```
 
 If you plan to use `setup_demo.sh`, build the image set matching its compose file first.
@@ -78,11 +78,13 @@ different image set for the demo flow, update `COMPOSE_FILE_NAME` in `setup_demo
 file before running the script. Run `./setup_demo.sh dev` to use your locally built images; a plain run pulls the
 Docker Hub images over them.
 
-The script builds images for the current machine architecture and tags each one `:latest` plus the Hudi version
-taken from the root `pom.xml`. Export `VERSION_TAG` to use a different second tag:
+The script builds images for the current machine architecture and tags each one `:latest` plus a version tag. That
+second tag is resolved in this order: the `--version-tag` flag, then an exported `VERSION_TAG`, then the Hudi version
+read from the root `pom.xml`. Both forms work and the flag wins:
 
 ```shell
-VERSION_TAG=my-test ./build_and_publish_docker_images.sh
+./build_and_publish_docker_images.sh --version-tag my-test   # flag
+VERSION_TAG=my-test ./build_and_publish_docker_images.sh     # environment variable
 ```
 
 Nothing is pushed to any registry unless you pass `--publish true`; see
