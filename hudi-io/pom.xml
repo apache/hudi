@@ -116,10 +116,9 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <!-- shadedArtifactAttached publishes the shaded jar under the "shaded" classifier while the
-                   primary jar stays unshaded, so the published POM must still declare protobuf-java;
-                   reducing it would strip a real runtime dependency. False is correct iff the shaded jar is
-                   attached under a classifier, which is why the packaging bundles differ. -->
+              <!-- The shaded jar is attached under the "shaded" classifier and the primary jar stays
+                   unshaded, so the published POM must keep declaring protobuf-java: reducing it would strip
+                   a dependency the primary jar really needs. -->
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <shadedArtifactAttached>true</shadedArtifactAttached>
               <shadedClassifierName>shaded</shadedClassifierName>
