@@ -97,8 +97,9 @@ additions, so treat it as the minimum set.
 
 What follows is the shape of `77f5851a5d53 feat(spark): add Spark 4.2 support (#18621)`, which
 touched 47 files. Snippets show the current state of those files rather than the exact original
-commit, since Spark 4.2 has moved from a preview build to `4.2.0` since. Substitute your own
-versions, and read the real files before copying: they drift.
+commit, since `e5452c6ff38d feat(spark): upgrade Spark 4.2 dependency to GA 4.2.0 (#19365)` has
+moved Spark 4.2 from `4.2.0-preview4` to `4.2.0` since. Substitute your own versions, and read the
+real files before copying: they drift.
 
 ### 1. Create the version module
 
@@ -206,7 +207,7 @@ combination:
 
 ```bash
 elif [[ ${SPARK_RUNTIME} == 'spark4.2.0' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
-  HADOOP_VERSION=3.4.3
+  HADOOP_VERSION=3.5.0
   SPARK_VERSION=4.2.0
   IMAGE_TAG=flink1200hive313spark420scala213
   ...
@@ -222,9 +223,13 @@ elif [[ ${SPARK_PROFILE} == 'spark4.2' && ${SCALA_PROFILE} == 'scala-2.13' ]]; t
 
 `validate.sh` usually needs nothing: it branches on `[[ "$SPARK_VERSION" == 4.* ]]` rather than on
 individual versions, so a new 4.x release is picked up automatically. It only needs attention if the
-new version needs handling the existing globs do not cover. Earlier versions were listed explicitly
-there and had to be edited each time, which is worth knowing if you are reading an older commit as a
-template.
+new version needs handling the existing globs do not cover.
+
+That is recent. Those branches listed versions explicitly and had to be edited every time until
+`e5452c6ff38d feat(spark): upgrade Spark 4.2 dependency to GA 4.2.0 (#19365)` replaced them with the
+globs, so an older commit read as a template will show the explicit form and imply an edit that is
+no longer needed. `grep -n 'SPARK_VERSION' packaging/bundle-validation/validate.sh` settles which
+form the tree is on.
 
 The release scripts under `scripts/release/` need the profile added so the staged bundles are built
 and checked.
