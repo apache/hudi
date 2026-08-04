@@ -86,12 +86,7 @@ public class CdcImageManager implements AutoCloseable {
       cache.remove(oldest).close();
     }
     ExternalSpillableMap<String, byte[]> images = loadImageRecords(maxCompactionMemoryInBytes, fileSlice);
-    try {
-      cache.put(instant, images);
-    } catch (RuntimeException | Error e) {
-      closeSuppressing(images, e);
-      throw e;
-    }
+    cache.put(instant, images);
     return images;
   }
 
@@ -118,10 +113,10 @@ public class CdcImageManager implements AutoCloseable {
   }
 
   private static void closeSuppressing(
-      ExternalSpillableMap<String, byte[]> imageRecordsMap,
+      ExternalSpillableMap<String, byte[]> spillableMap,
       Throwable primary) {
     try {
-      imageRecordsMap.close();
+      spillableMap.close();
     } catch (RuntimeException | Error closeError) {
       primary.addSuppressed(closeError);
     }
@@ -172,8 +167,25 @@ public class CdcImageManager implements AutoCloseable {
 
   @Override
   public void close() {
-    cache.values().forEach(ExternalSpillableMap::close);
-    cache.clear();
+    RuntimeException failure = null;
+    try {
+      for (ExternalSpillableMap<String, byte[]> spillableMap : cache.values()) {
+        try {
+          spillableMap.close();
+        } catch (RuntimeException e) {
+          if (failure == null) {
+            failure = e;
+          } else {
+            failure.addSuppressed(e);
+          }
+        }
+      }
+    } finally {
+      cache.clear();
+    }
+    if (failure != null) {
+      throw failure;
+    }
   }
 
   // -------------------------------------------------------------------------

@@ -347,6 +347,9 @@ public final class CdcIterators {
 
     @Override
     public void close() {
+      // Closing the shared image manager here is required for correctness: this iterator
+      // destructively updates cached before-images, and LOG_FILE slices from the same instant
+      // share a cache key. Closing forces the next split to reload its own before-images.
       try (CdcImageManager ignored = imageManager) {
         logRecordIterator.close();
       }
@@ -663,7 +666,12 @@ public final class CdcIterators {
       this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
       this.projection = RowDataProjection.instance(requiredRowType, requiredPositions);
       this.imageManager = imageManager;
-      initImages(fileSplit);
+      try {
+        initImages(fileSplit);
+      } catch (IOException | RuntimeException | Error e) {
+        closeSuppressing(this, e);
+        throw e;
+      }
     }
 
     protected void initImages(HoodieCDCFileSplit fileSplit) throws IOException {
@@ -726,6 +734,14 @@ public final class CdcIterators {
       RowData row = imageManager.getImageRecord(recordKey, beforeImages, rowKind);
       row.setRowKind(rowKind);
       return projection.project(row);
+    }
+  }
+
+  private static void closeSuppressing(ClosableIterator<?> iterator, Throwable primary) {
+    try {
+      iterator.close();
+    } catch (RuntimeException | Error closeError) {
+      primary.addSuppressed(closeError);
     }
   }
 

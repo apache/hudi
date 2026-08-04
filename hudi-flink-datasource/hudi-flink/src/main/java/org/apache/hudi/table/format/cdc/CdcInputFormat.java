@@ -157,17 +157,30 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         String logFilepath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
         MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(tablePath, logFilepath, maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getSplitRecordIterator(split);
-        return new CdcIterators.DataLogFileIterator(
-            maxCompactionMemoryInBytes, imageManager, fileSplit,
-            HoodieSchema.parse(tableState.getTableSchema()),
-            tableState.getRequiredRowType(), tableState.getRequiredPositions(),
-            recordIterator, metaClient, imageManager.getWriteConfig());
+        try {
+          return new CdcIterators.DataLogFileIterator(
+              maxCompactionMemoryInBytes, imageManager, fileSplit,
+              HoodieSchema.parse(tableState.getTableSchema()),
+              tableState.getRequiredRowType(), tableState.getRequiredPositions(),
+              recordIterator, metaClient, imageManager.getWriteConfig());
+        } catch (IOException | RuntimeException | Error e) {
+          closeSuppressing(recordIterator, e);
+          throw e;
+        }
       case REPLACE_COMMIT:
         return new CdcIterators.ReplaceCommitIterator(
             tablePath, tableState.getRequiredRowType(), tableState.getRequiredPositions(),
             maxCompactionMemoryInBytes, fileSplit, this::getFileSliceIterator);
       default:
         throw new AssertionError("Unexpected cdc file split infer case: " + fileSplit.getCdcInferCase());
+    }
+  }
+
+  private static void closeSuppressing(ClosableIterator<?> iterator, Throwable primary) {
+    try {
+      iterator.close();
+    } catch (RuntimeException | Error closeError) {
+      primary.addSuppressed(closeError);
     }
   }
 
