@@ -480,9 +480,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
    * one the schema carries, clearing it when the schema has none.
    *
    * <p>Columns the schema says nothing about are left untouched rather than cleared. The pre-SDK-v2 code
-   * cleared them, but it was a no-op for three years so nothing depends on that, and clearing is the more
-   * dangerous reading: the storage field names keep the Avro schema's case while a catalog may hold them
-   * lowercased, and a name that fails to match would silently wipe a comment. This also matches
+   * cleared them, but only nominally: it built a {@code Column} and discarded it, so no comment was ever
+   * applied and nothing can depend on that behaviour. Clearing is also the more dangerous reading - the
+   * storage field names keep the Avro schema's case while a catalog may hold them lowercased, and a name
+   * that fails to match would silently wipe a comment. This matches
    * {@code HMSDDLExecutor.applyFieldComments} on the Hive side, which only touches known columns.
    *
    * <p>SDK v2 model classes are immutable and their getters return unmodifiable lists, so the columns cannot
