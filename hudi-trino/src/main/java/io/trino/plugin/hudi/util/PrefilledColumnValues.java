@@ -46,6 +46,9 @@ import static io.trino.spi.type.TypeUtils.writeNativeValue;
  */
 public class PrefilledColumnValues
 {
+    // Absent-marker for the memo, so a not-yet-resolved column is distinguishable from one resolved to null
+    private static final Object UNRESOLVED = new Object();
+
     private final Map<String, HivePartitionKey> partitionKeysByName;
     private final String partitionName;
     private final String filePath;
@@ -119,14 +122,15 @@ public class PrefilledColumnValues
         // ($file_modified_time even formats a timestamp and parses it straight back). Memoize per column so
         // each one is resolved once per split. Keyed on the name rather than the handle because
         // HiveColumnHandle.hashCode hashes seven fields through a varargs array, whereas a String caches
-        // its hash. containsKey rather than a null check: null is a legitimate resolved value, both for
-        // the hive-null convention and for the lenient fallback below.
+        // its hash. A sentinel rather than a null check, because null is a legitimate resolved value -- both
+        // for the hive-null convention and for the lenient fallback below -- and getOrDefault keeps the hit
+        // path, the one taken per record, to a single hash lookup.
         String name = columnHandle.getName();
-        if (resolvedValues.containsKey(name)) {
-            return resolvedValues.get(name);
+        Object value = resolvedValues.getOrDefault(name, UNRESOLVED);
+        if (value == UNRESOLVED) {
+            value = computeNativeValue(columnHandle);
+            resolvedValues.put(name, value);
         }
-        Object value = computeNativeValue(columnHandle);
-        resolvedValues.put(name, value);
         return value;
     }
 
