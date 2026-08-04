@@ -41,7 +41,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -116,6 +115,10 @@ class TestMetricsReporterFactory {
         () -> "The failure should name the bundle that provides the reporter, but was: " + message);
     assertTrue(message.contains(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()),
         () -> "The failure should name the config to change, but was: " + message);
+    // Every string above also appears in the constructor-mismatch message, so without this the two branches
+    // could be merged or reordered and both tests would still pass.
+    assertTrue(message.contains("was not found on the classpath"),
+        () -> "A missing class must not be reported as a constructor mismatch, but was: " + message);
   }
 
   /**
@@ -135,33 +138,85 @@ class TestMetricsReporterFactory {
           () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
       assertTrue(exception.getMessage().contains("hudi-aws-bundle"),
           () -> "Expected the remedy to be named, but was: " + exception.getMessage());
+      assertTrue(exception.getMessage().contains("was not found on the classpath"),
+          () -> "Expected this branch's own phrase, not one shared with the mismatch branch, but was: "
+              + exception.getMessage());
     }
   }
 
   /**
-   * A missing constructor means hudi-aws resolved but was built against a different Hudi version, which is
-   * a mismatch rather than something absent. Reflection reports it as the same opaque HoodieException as a
-   * missing class, and the bare "Unable to instantiate class" that resulted took a maintainer reading the
-   * buried NoSuchMethodException to explain (#12902).
+   * A jar built against an older Hudi does not reach this branch - resolving its constructors fails first
+   * with {@link NoClassDefFoundError}, covered below. What reaches here is a classpath carrying a stale or
+   * duplicate copy, so that is the remedy the message has to give.
    */
   @Test
   void metricsReporterFactoryExplainsAConstructorMismatch() {
-    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
-    try (MockedStatic<ReflectionUtils> mockedStatic = Mockito.mockStatic(ReflectionUtils.class)) {
-      mockedStatic.when(() -> ReflectionUtils.loadClass(
-          eq(MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS), any(Class[].class), eq(metricsConfig), eq(registry)))
-          .thenThrow(new HoodieException("Unable to instantiate class " + MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS,
-              new NoSuchMethodException("<init>")));
+    HoodieException exception = captureCloudWatchFailure(
+        new HoodieException("Unable to instantiate class " + MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS,
+            new NoSuchMethodException("<init>")));
 
-      HoodieException exception = assertThrows(HoodieException.class,
-          () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
-      String message = exception.getMessage();
-      assertTrue(message.contains("constructor"),
-          () -> "The failure should say the constructor did not match, but was: " + message);
-      assertTrue(message.contains("different Hudi version"),
-          () -> "The failure should name version skew as the likely cause, but was: " + message);
-      assertFalse(message.contains("was not found on the classpath"),
-          () -> "A class that resolved must not be reported as missing, but was: " + message);
+    String message = exception.getMessage();
+    assertTrue(message.contains("constructor"),
+        () -> "The failure should say the constructor did not match, but was: " + message);
+    assertTrue(message.contains("stale or duplicate copy"),
+        () -> "The failure should name a stale duplicate as the cause, but was: " + message);
+    assertTrue(message.contains(MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS),
+        () -> "The failure should name the reporter class, but was: " + message);
+    assertTrue(message.contains(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()),
+        () -> "The failure should name the config to change, but was: " + message);
+    assertTrue(message.contains(HoodieMetricsConfig.class.getName())
+            && message.contains(MetricRegistry.class.getName()),
+        () -> "Fully qualified parameter types are what distinguish the requested constructor from the "
+            + "declared one, but was: " + message);
+    // Positive rather than an assertFalse on the other branch's prose: a vacuous assertFalse never fails.
+    assertTrue(message.contains("was found on the classpath but"),
+        () -> "A class that resolved must not be reported as missing, but was: " + message);
+    assertEquals(NoSuchMethodException.class, exception.getCause().getCause().getClass(),
+        "The original NoSuchMethodException must stay in the chain - it is the evidence #12902 needed");
+  }
+
+  /**
+   * The clean version-skew case, and the one the mismatch message used to claim. {@code getConstructor}
+   * resolves the parameter types of every public constructor, so a jar built against an older Hudi dies on a
+   * type that has since moved. That is an {@link Error}, so {@code ReflectionUtils} never wraps it and it
+   * reaches the factory uncaught.
+   */
+  @Test
+  void metricsReporterFactoryExplainsAVanishedParameterType() {
+    HoodieException exception = captureCloudWatchFailure(
+        new NoClassDefFoundError("org/apache/hudi/config/metrics/HoodieMetricsConfig"));
+
+    String message = exception.getMessage();
+    assertTrue(message.contains("built against a different Hudi version"),
+        () -> "The failure should name version skew, but was: " + message);
+    assertTrue(message.contains("org/apache/hudi/config/metrics/HoodieMetricsConfig"),
+        () -> "The failure should name the type that vanished, but was: " + message);
+    assertEquals(NoClassDefFoundError.class, exception.getCause().getClass(),
+        "The Error must stay in the chain - its message is the evidence of skew");
+  }
+
+  /**
+   * The gap every mocked test above shares: none of them proves that real reflection produces the shapes the
+   * production code branches on. This drives the translation through the real {@code ReflectionUtils} with a
+   * fixture whose only public constructor does not match, and asserts on the actual throwable.
+   */
+  @Test
+  void metricsReporterFactoryTranslatesARealReflectionFailure() {
+    HoodieException exception = assertThrows(HoodieException.class,
+        () -> MetricsReporterFactory.createCloudWatchReporter(
+            MismatchedReporter.class.getName(), metricsConfig, registry));
+
+    String message = exception.getMessage();
+    assertTrue(message.contains("stale or duplicate copy"),
+        () -> "A real non-matching constructor should reach the mismatch branch, but was: " + message);
+    assertEquals(NoSuchMethodException.class, exception.getCause().getCause().getClass(),
+        "and the real NoSuchMethodException should be chained");
+  }
+
+  /** Public, with a single constructor that deliberately does not match (HoodieMetricsConfig, MetricRegistry). */
+  public static class MismatchedReporter {
+    public MismatchedReporter(String somethingElse) {
+      // never called; exists so getConstructor has a public constructor to reject
     }
   }
 
@@ -206,6 +261,17 @@ class TestMetricsReporterFactory {
     when(metricsConfig.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
     when(metricsConfig.getProps()).thenReturn(new TypedProperties());
     assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
+  }
+
+  private HoodieException captureCloudWatchFailure(Throwable reflectionFailure) {
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
+    try (MockedStatic<ReflectionUtils> mockedStatic = Mockito.mockStatic(ReflectionUtils.class)) {
+      mockedStatic.when(() -> ReflectionUtils.loadClass(
+          eq(MetricsReporterFactory.CLOUDWATCH_REPORTER_CLASS), any(Class[].class), eq(metricsConfig), eq(registry)))
+          .thenThrow(reflectionFailure);
+      return assertThrows(HoodieException.class,
+          () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
+    }
   }
 
   public static class DummyMetricsReporter extends CustomizableMetricsReporter {
