@@ -102,11 +102,11 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
           log.error(message, e);
           throw e;
         }
-        // Only summarise the cause here: a retry that goes on to succeed does not warrant a stack
+        // Only summarize the cause here: a retry that goes on to succeed does not warrant a stack
         // trace, and printing one per attempt buries the genuine failures. The full trace is still
         // logged at DEBUG, and at ERROR below once the retries are exhausted.
         log.warn("Task [{}] failed with {}. current retry number {}, will retry after {} ms.",
-            taskInfo, summarise(e), retries, waitTime);
+            taskInfo, summarize(e), retries, waitTime);
         log.debug("Task [{}] failed, attempt {}.", taskInfo, retries, e);
         try {
           Thread.sleep(waitTime);
@@ -132,7 +132,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
    * actionable without the whole stack trace.
    */
   @VisibleForTesting
-  static String summarise(Throwable t) {
+  static String summarize(Throwable t) {
     Throwable rootCause = t;
     while (rootCause.getCause() != null && rootCause.getCause() != rootCause) {
       rootCause = rootCause.getCause();
