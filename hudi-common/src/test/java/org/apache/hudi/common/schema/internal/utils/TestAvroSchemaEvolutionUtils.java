@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -839,5 +840,104 @@ public class TestAvroSchemaEvolutionUtils {
     Schema stillWorks = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(localMillis, localMicros,
         SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-millis")).toAvroSchema();
     Assertions.assertEquals("local-timestamp-millis", stillWorks.getField("ts").schema().getLogicalType().getName());
+  }
+
+  @Test
+  void testLongToUtcTimestampGatedInBothReconcilePaths() {
+    // Bare long to a UTC timestamp is override-gated exactly like the local-timestamp case: rejected
+    // without a per-field override and applied with one, in both reconcile paths. The non-reconcile
+    // guard previously skipped this and let it through silently on the default write path.
+    HoodieSchema tableBareLong = HoodieSchema.fromAvroSchema(tripAvro(Schema.create(Schema.Type.LONG)));
+    HoodieSchema incomingMicros = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
+
+    // No override: rejected in both paths with the exact actionable error.
+    Map<String, Type> noOverride = SchemaChangeUtils.parseTimestampLogicalTypeOverrides("");
+    String expectedError = AvroSchemaEvolutionUtils.timestampPrecisionChangeError(
+        "ts", Types.LongType.get(), Types.TimestampType.get()).getMessage();
+    SchemaCompatibilityException reconcileError = assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(incomingMicros, tableBareLong, false, noOverride));
+    assertEquals(expectedError, reconcileError.getMessage());
+    SchemaCompatibilityException guardError = assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(incomingMicros, tableBareLong, noOverride));
+    assertEquals(expectedError, guardError.getMessage());
+
+    // With the override: the promotion is applied in both paths.
+    Schema viaReconcile = AvroSchemaEvolutionUtils.reconcileSchema(incomingMicros, tableBareLong, false,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-micros")).toAvroSchema();
+    assertEquals("timestamp-micros", viaReconcile.getField("ts").schema().getLogicalType().getName());
+    Schema viaGuard = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(incomingMicros, tableBareLong,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-micros")).toAvroSchema();
+    assertEquals("timestamp-micros", viaGuard.getField("ts").schema().getLogicalType().getName());
+  }
+
+  @Test
+  void testLongToLocalTimestampGatedInBothReconcilePaths() {
+    // Bare long to local timestamp is override-gated (not forbidden): rejected without an override
+    // and applied with one, and the non-reconcile guard must agree with reconcileSchema.
+    HoodieSchema tableBareLong = HoodieSchema.fromAvroSchema(tripAvro(Schema.create(Schema.Type.LONG)));
+    HoodieSchema incomingLocalMicros = HoodieSchema.fromAvroSchema(tripAvro(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
+
+    // No override: rejected in both paths with the exact actionable error.
+    Map<String, Type> noOverride = SchemaChangeUtils.parseTimestampLogicalTypeOverrides("");
+    String expectedError = AvroSchemaEvolutionUtils.timestampPrecisionChangeError(
+        "ts", Types.LongType.get(), Types.LocalTimestampMicrosType.get()).getMessage();
+    SchemaCompatibilityException reconcileError = assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileSchema(incomingLocalMicros, tableBareLong, false, noOverride));
+    assertEquals(expectedError, reconcileError.getMessage());
+    SchemaCompatibilityException guardError = assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(incomingLocalMicros, tableBareLong, noOverride));
+    assertEquals(expectedError, guardError.getMessage());
+    Schema repaired = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(incomingLocalMicros, tableBareLong,
+        SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:local-timestamp-micros")).toAvroSchema();
+    assertEquals("local-timestamp-micros", repaired.getField("ts").schema().getLogicalType().getName());
+  }
+
+  @Test
+  void testNestedLongToTimestampGated() {
+    // The gate resolves fully-qualified column names, so it applies to nested fields too. A nested
+    // long -> timestamp (UTC or local) is override-gated via the dotted-key override.
+    for (String token : new String[] {"timestamp-micros", "local-timestamp-millis"}) {
+      HoodieSchema tableNested = HoodieSchema.fromAvroSchema(nestedTrip(Schema.create(Schema.Type.LONG)));
+      HoodieSchema incoming = HoodieSchema.fromAvroSchema(nestedTrip(logicalLong(token)));
+      // No override: rejected in both paths with the exact actionable error.
+      Map<String, Type> noOverride = SchemaChangeUtils.parseTimestampLogicalTypeOverrides("");
+      String expectedError = AvroSchemaEvolutionUtils.timestampPrecisionChangeError("payload.event_ts", Types.LongType.get(),
+          SchemaChangeUtils.parseTimestampLogicalTypeOverrides("field:" + token).get("field")).getMessage();
+      SchemaCompatibilityException reconcileError = assertThrows(SchemaCompatibilityException.class,
+          () -> AvroSchemaEvolutionUtils.reconcileSchema(incoming, tableNested, false, noOverride));
+      assertEquals(expectedError, reconcileError.getMessage());
+      SchemaCompatibilityException guardError = assertThrows(SchemaCompatibilityException.class,
+          () -> AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(incoming, tableNested, noOverride));
+      assertEquals(expectedError, guardError.getMessage());
+      // The dotted-key override authorizes the nested promotion.
+      Schema repairedNested = AvroSchemaEvolutionUtils.reconcileTimestampLogicalType(incoming, tableNested,
+          SchemaChangeUtils.parseTimestampLogicalTypeOverrides("payload.event_ts:" + token)).toAvroSchema();
+      assertEquals(token,
+          repairedNested.getField("payload").schema().getField("event_ts").schema().getLogicalType().getName());
+    }
+  }
+
+  private static Schema nestedTrip(Schema eventTsType) {
+    Schema payload = Schema.createRecord("payloadrec", null, null, false, Arrays.asList(
+        new Schema.Field("event_ts", eventTsType, null, null)));
+    return Schema.createRecord("trip", null, null, false, Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
+        new Schema.Field("payload", payload, null, null)));
+  }
+
+  private static Schema logicalLong(String token) {
+    Schema longSchema = Schema.create(Schema.Type.LONG);
+    switch (token) {
+      case "timestamp-micros":
+        return LogicalTypes.timestampMicros().addToSchema(longSchema);
+      case "timestamp-millis":
+        return LogicalTypes.timestampMillis().addToSchema(longSchema);
+      case "local-timestamp-micros":
+        return LogicalTypes.localTimestampMicros().addToSchema(longSchema);
+      case "local-timestamp-millis":
+        return LogicalTypes.localTimestampMillis().addToSchema(longSchema);
+      default:
+        throw new IllegalArgumentException(token);
+    }
   }
 }
