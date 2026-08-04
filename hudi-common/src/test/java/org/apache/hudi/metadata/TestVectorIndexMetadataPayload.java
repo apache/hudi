@@ -99,7 +99,7 @@ class TestVectorIndexMetadataPayload {
     HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createVectorIndexManifestRecord(
         2, "build-2", "BUILDING", 128, 128, 16, 2, 1, 64, 1, 8,
         "COSINE", true, true, "embedding", 524288, 2048,
-        1, 2, 1.9, 1.0e-3, 1.0, 1.0e-3, 4, "sha256:centroids",
+        1, 1, 1.9, 1.0e-3, 1.0, 1.0e-3, 4, "sha256:centroids",
         4096, 1024, "20260724000000", "20260724010101", 123L, "vector_index_demo");
 
     HoodieVectorIndexManifest manifest =
@@ -108,7 +108,7 @@ class TestVectorIndexMetadataPayload {
     assertEquals("20260724010101", manifest.getVerifiedFrontier());
     assertEquals(8, manifest.getFileGroupCount());
     assertEquals(1, manifest.getBlockFormatVersion());
-    assertEquals(2, manifest.getFactorVersion());
+    assertEquals(1, manifest.getFactorVersion());
     assertEquals(1.9, manifest.getKappa());
     assertEquals(1.0e-3, manifest.getGMin());
     assertEquals(1.0, manifest.getEps1Max());
