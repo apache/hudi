@@ -254,13 +254,29 @@ public class SchemaEvolutionContext {
     }
   }
 
+  /**
+   * Reads {@code hive.io.file.readcolumn.ids} as its non-blank, trimmed tokens. The key is unset until
+   * something projects a column, and {@code HoodieRealtimeInputFormatUtils#cleanProjectionColumnIds} drops
+   * the blank ids HIVE-22438 leaves in it before any reader runs; this keeps both callers below safe if
+   * either ever reaches them anyway.
+   */
+  private static List<String> parseReadColumnIds(JobConf job) {
+    return Arrays.stream(job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "").split(","))
+        .map(String::trim)
+        .filter(id -> !id.isEmpty())
+        .collect(Collectors.toList());
+  }
+
   public void setColumnTypeList(JobConf job, List<Types.Field> fields) {
     List<TypeInfo> fullTypeInfos = TypeInfoUtils.getTypeInfosFromTypeString(job.get(serdeConstants.LIST_COLUMN_TYPES));
-    List<Integer> tmpColIdList = Arrays.stream(job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR).split(","))
+    // Blank ids are dropped rather than parsed: HIVE-22438 puts them in this conf value, and the key is
+    // unset until something projects a column. Either way the size check below reports the id list instead
+    // of failing with a bare NumberFormatException or an NPE.
+    List<Integer> tmpColIdList = parseReadColumnIds(job).stream()
         .map(Integer::parseInt).collect(Collectors.toList());
     if (tmpColIdList.size() != fields.size()) {
       throw new HoodieException(String.format("The size of hive.io.file.readcolumn.ids: %s is not equal to projection columns: %s",
-          job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR), fields.stream().map(Types.Field::name).collect(Collectors.joining(","))));
+          job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, ""), fields.stream().map(Types.Field::name).collect(Collectors.joining(","))));
     }
     List<TypeInfo> fieldTypes = new ArrayList<>();
     for (int i = 0; i < tmpColIdList.size(); i++) {
@@ -389,7 +405,7 @@ public class SchemaEvolutionContext {
     if (fields == null) {
       return;
     }
-    List<String> tmpColIdList = Arrays.asList(job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR).split(","));
+    List<String> tmpColIdList = parseReadColumnIds(job);
     if (fields.size() != tmpColIdList.size()) {
       return;
     }
