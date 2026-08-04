@@ -145,6 +145,27 @@ public class PartitionPathEncodeUtils {
   }
 
   /**
+   * Validates that the given (relative) partition path does not contain a directory-traversal
+   * segment, throwing {@link HoodieKeyException} if it does. This is enforced regardless of the
+   * {@code hoodie.datasource.write.partitionpath.urlencode} setting, since url-encoding is opt-in
+   * (disabled by default) and does not escape {@code '.'}, so it never neutralizes {@code ".."}.
+   *
+   * @param partitionPath the relative partition path (or a single partition field value).
+   * @return the same {@code partitionPath} if it is safe.
+   * @throws HoodieKeyException if the partition path contains a {@code ".."} traversal segment.
+   */
+  public static String validateNoPathTraversal(String partitionPath) {
+    if (hasPathTraversal(partitionPath)) {
+      throw new HoodieKeyException("Invalid partition path \"" + partitionPath + "\": partition paths "
+          + "must not contain \"..\" path-traversal segments, which could let a record write Hudi files "
+          + "outside the table base path. This is most often caused by an unsanitized data field being "
+          + "used as the partition path; sanitize or remap the offending value in the upstream source "
+          + "or via a transformer before ingesting it.");
+    }
+    return partitionPath;
+  }
+
+  /**
    * Returns {@code true} if the given (relative) partition path contains a directory-traversal
    * segment (a path segment equal to {@code ".."}). Such a partition path, once resolved against
    * the table base path, can escape the base path and write Hudi-managed files into arbitrary
@@ -158,27 +179,6 @@ public class PartitionPathEncodeUtils {
    * @param partitionPath the relative partition path (or a single partition field value).
    * @return {@code true} if a {@code ".."} traversal segment is present, {@code false} otherwise.
    */
-  /**
-   * Validates that the given (relative) partition path does not contain a directory-traversal
-   * segment, throwing {@link HoodieKeyException} if it does. This is enforced regardless of the
-   * {@code hoodie.datasource.write.partitionpath.urlencode} setting, since url-encoding is opt-in
-   * (disabled by default) and never rejects {@code ".."}.
-   *
-   * @param partitionPath the relative partition path (or a single partition field value).
-   * @return the same {@code partitionPath} if it is safe.
-   * @throws HoodieKeyException if the partition path contains a {@code ".."} traversal segment.
-   */
-  public static String validateNoPathTraversal(String partitionPath) {
-    if (hasPathTraversal(partitionPath)) {
-      throw new HoodieKeyException("Invalid partition path \"" + partitionPath + "\": partition paths "
-          + "must not contain \"..\" path-traversal segments, which could let a record write Hudi files "
-          + "outside the table base path. This is most often caused by an unsanitized data field being "
-          + "used as the partition path. If \"..\" is a legitimate value in your data, enable "
-          + "hoodie.datasource.write.partitionpath.urlencode so partition values are escaped.");
-    }
-    return partitionPath;
-  }
-
   public static boolean hasPathTraversal(String partitionPath) {
     if (partitionPath == null || partitionPath.isEmpty()) {
       return false;

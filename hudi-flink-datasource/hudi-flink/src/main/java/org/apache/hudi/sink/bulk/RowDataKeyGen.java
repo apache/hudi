@@ -44,7 +44,6 @@ import java.util.List;
 
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName;
-import static org.apache.hudi.common.util.PartitionPathEncodeUtils.validateNoPathTraversal;
 import static org.apache.hudi.keygen.KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR;
 
 /**
@@ -173,14 +172,13 @@ public class RowDataKeyGen implements Serializable {
 
   public String getPartitionPath(RowData rowData) {
     if (this.simplePartitionPath) {
-      return validateNoPathTraversal(getPartitionPath(partitionPathFieldGetter.getFieldOrNull(rowData),
-          this.partitionPathFields[0], this.hiveStylePartitioning, this.encodePartitionPath, this.keyGenOpt));
+      return getPartitionPath(partitionPathFieldGetter.getFieldOrNull(rowData),
+          this.partitionPathFields[0], this.hiveStylePartitioning, this.encodePartitionPath, this.keyGenOpt);
     } else if (this.nonPartitioned) {
       return EMPTY_PARTITION;
     } else {
       Object[] partValues = this.partitionPathProjection.projectAsValues(rowData);
-      return validateNoPathTraversal(
-          getRecordPartitionPath(partValues, this.partitionPathFields, this.hiveStylePartitioning, this.encodePartitionPath));
+      return getRecordPartitionPath(partValues, this.partitionPathFields, this.hiveStylePartitioning, this.encodePartitionPath);
     }
   }
 
