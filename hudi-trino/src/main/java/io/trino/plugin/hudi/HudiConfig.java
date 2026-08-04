@@ -19,6 +19,7 @@ import io.airlift.configuration.ConfigDescription;
 import io.airlift.configuration.DefunctConfig;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
+import io.airlift.units.MinDataSize;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
@@ -220,6 +221,7 @@ public class HudiConfig
     }
 
     @NotNull
+    @MinDataSize("1B")
     public DataSize getTargetSplitSize()
     {
         return targetSplitSize;

@@ -51,6 +51,8 @@ public class HudiSplitFactory
         this.hudiTableHandle = requireNonNull(hudiTableHandle, "hudiTableHandle is null");
         this.hudiSplitWeightProvider = requireNonNull(hudiSplitWeightProvider, "hudiSplitWeightProvider is null");
         this.targetSplitSize = requireNonNull(targetSplitSize, "targetSplitSize is null");
+        // A non-positive target would make split generation loop forever, so reject it here rather than mid-scan
+        checkArgument(targetSplitSize.toBytes() > 0, "targetSplitSize must be positive: %s", targetSplitSize);
     }
 
     public List<HudiSplit> createSplits(List<HivePartitionKey> partitionKeys, FileSlice fileSlice, String commitTime)
@@ -65,7 +67,7 @@ public class HudiSplitFactory
      * <p>
      * For regular MOR tables, a single split is created for the combination of the base file and its log files.
      */
-    public static List<HudiSplit> createHudiSplits(
+    private static List<HudiSplit> createHudiSplits(
             HudiTableHandle hudiTableHandle,
             List<HivePartitionKey> partitionKeys,
             FileSlice fileSlice,
@@ -127,7 +129,9 @@ public class HudiSplitFactory
         }
 
         ImmutableList.Builder<HudiSplit> splits = ImmutableList.builder();
-        long targetSplitSizeInBytes = Math.max(targetSplitSize.toBytes(), baseFile.getPathInfo().getBlockSize());
+        // Slicing is governed solely by the target split size; the block size reported by
+        // storage is not meaningful on object stores and must not influence split sizing.
+        long targetSplitSizeInBytes = targetSplitSize.toBytes();
 
         long bytesRemaining = fileSize;
         while (((double) bytesRemaining) / targetSplitSizeInBytes > SPLIT_SLOP) {
