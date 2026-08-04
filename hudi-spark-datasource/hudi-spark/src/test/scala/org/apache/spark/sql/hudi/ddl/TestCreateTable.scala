@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.keygen.SimpleKeyGenerator
-import org.apache.hudi.testutils.Assertions
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -34,7 +33,6 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
-import org.junit.jupiter.api.function.Executable
 
 import scala.collection.JavaConverters._
 
@@ -969,6 +967,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(
             HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key,
             encodeSingleKeyFieldValue.toString)
+          // Disable auto-deduction so the explicitly configured encoding takes effect on this new table
+          .option(HoodieWriteConfig.COMPLEX_KEYGEN_AUTO_DEDUCE_ENCODING.key, "false")
           .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .mode(SaveMode.Overwrite)
           .save(tablePath)
@@ -1576,18 +1576,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
                                               query: String)
                                              (expectedRowsBefore: Seq[Any]*)
                                              (expectedRowsAfter: Seq[Any]*): Unit = {
-    // By default, the complex key generator validation is enabled and should throw exception on DML
-    Assertions.assertComplexKeyGeneratorValidationThrows(new Executable() {
-      override def execute(): Unit = {
-        spark.sql(dmlToWrite)
-      }
-    }, "ingestion")
-    // Query should still succeed
+    // With auto-deduction enabled by default, single-field ComplexKeyGenerator writes are
+    // self-healing: the DML succeeds without manually configuring the encoding.
     checkAnswer(query)(expectedRowsBefore: _*)
-    // Disabling the complex key generator validation should let write succeed
-    spark.sql(s"set ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()}=false")
     spark.sql(dmlToWrite)
-    spark.sql(s"set ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()}=true")
     checkAnswer(query)(expectedRowsAfter: _*)
   }
 }
