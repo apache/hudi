@@ -113,6 +113,8 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import org.apache.hudi.keygen.KeyGenUtils;
+
 import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
@@ -1315,6 +1317,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     doInitTable(operationType, metaClient, instantTime);
+    // Handle complex key generator encoding before table creation (HUDI-9666 / HUDI-7001)
+    handleComplexKeygenEncoding(metaClient);
     HoodieTable table = createTable(config, hadoopConf, metaClient);
 
     // Validate table properties
@@ -1410,7 +1414,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
       }
     }
-    if (config.enableComplexKeygenValidation()
+    // Complex keygen single-field validation is handled in handleComplexKeygenEncoding (called earlier
+    // in initTable). Only fall through to the hard throw if auto-deduce is disabled and validation is on.
+    if (!config.autoDeduceComplexKeygenEncoding()
+        && config.enableComplexKeygenValidation()
         && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
       throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
     }
@@ -1422,6 +1429,43 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         String bucketEngine = properties.getProperty("hoodie.index.bucket.engine");
         if (bucketEngine != null && bucketEngine.equals("CONSISTENT_HASHING")) {
           throw new HoodieException("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table.");
+        }
+      }
+    }
+  }
+
+  private void handleComplexKeygenEncoding(HoodieTableMetaClient metaClient) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (!KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
+      return;
+    }
+    if (config.autoDeduceComplexKeygenEncoding()) {
+      if (!tableConfig.populateMetaFields()) {
+        LOG.warn("Skipping complex key encoding auto-deduction for table {} because meta fields are "
+            + "disabled (virtual keys); relying on the configured {}.", metaClient.getBasePath(),
+            HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key());
+        return;
+      }
+      Option<Boolean> cachedEncoding = KeyGenUtils.readComplexKeyEncodingFromAuxFile(
+          metaClient.getStorage(), metaClient.getBasePath());
+      if (cachedEncoding.isPresent()) {
+        config.setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING, String.valueOf(cachedEncoding.get()));
+        LOG.info("Using cached complex key encoding from aux file: {}", cachedEncoding.get());
+      } else {
+        String recordKeyField = tableConfig.getRecordKeyFields().get()[0];
+        Option<Boolean> deducedEncoding = KeyGenUtils.deduceComplexKeyEncodingFromData(metaClient, recordKeyField);
+        if (deducedEncoding.isPresent()) {
+          KeyGenUtils.writeComplexKeyEncodingToAuxFile(metaClient.getStorage(), metaClient.getBasePath(), deducedEncoding.get());
+          config.setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING, String.valueOf(deducedEncoding.get()));
+          LOG.info("Deduced and cached complex key encoding: {}", deducedEncoding.get());
+        } else {
+          // Encoding could not be determined from data (new/empty table, or no readable base file yet,
+          // e.g. a MoR table with only log files). Apply the new-table default WITHOUT caching it, so a
+          // later write re-deduces once a readable base file exists rather than pinning a wrong guess.
+          config.setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING,
+              String.valueOf(KeyGenUtils.DEFAULT_NEW_ENCODING_FOR_NEW_TABLE));
+          LOG.info("Could not deduce complex key encoding for table {}; using new-table default {} without caching.",
+              metaClient.getBasePath(), KeyGenUtils.DEFAULT_NEW_ENCODING_FOR_NEW_TABLE);
         }
       }
     }
