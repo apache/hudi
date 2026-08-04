@@ -277,7 +277,12 @@ public class AvroSchemaEvolutionUtils {
         col, from, to, HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key()));
   }
 
-  private static SchemaCompatibilityException timestampPrecisionChangeError(String col, Type from, Type to) {
+  /**
+   * Builds the actionable error for a gated timestamp logical-type change with no per-field override
+   * in {@code hoodie.write.timestamp.logical.type.overrides}. Public so tests can assert the exact
+   * message without duplicating its format.
+   */
+  public static SchemaCompatibilityException timestampPrecisionChangeError(String col, Type from, Type to) {
     return new SchemaCompatibilityException(String.format(
         "Refusing to change the timestamp logical type of column '%s' from '%s' to '%s' without an explicit "
             + "verdict. This precision change is not applied automatically because the correct target depends "
