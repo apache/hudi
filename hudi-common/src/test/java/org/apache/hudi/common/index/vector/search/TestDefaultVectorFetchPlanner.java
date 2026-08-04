@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Verifies {@link DefaultVectorFetchPlanner} (RFC-104 v3 §8): grouping by live file, positional row
+ * Verifies {@link DefaultVectorFetchPlanner} (RFC-109 §8): grouping by live file, positional row
  * preservation for SERVE, key-fallback ({@code rowPosition = -1}) for STALE, and exclusion of DELETED.
  */
 public class TestDefaultVectorFetchPlanner {

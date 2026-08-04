@@ -22,7 +22,7 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * Per-request resource and continuation budget for a vector search (RFC-104 v3 §1).
+ * Per-request resource and continuation budget for a vector search (RFC-109 §1).
  *
  * <p>Continuation semantics: the candidate scan retains one ordered pool of at most
  * {@link #maxRerankCandidates} in a single MDT scan; exact rerank consumes it in batches of
@@ -38,7 +38,7 @@ public final class VectorSearchBudget implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  /** Default local-vs-distributed candidate threshold (RFC-104 v3 §11A). */
+  /** Default local-vs-distributed candidate threshold (RFC-109 §11A). */
   public static final int DEFAULT_LOCAL_EXECUTION_THRESHOLD = 8192;
   public static final int DEFAULT_INITIAL_RERANK_CANDIDATES = 256;
   public static final int DEFAULT_RERANK_BATCH_SIZE = 128;

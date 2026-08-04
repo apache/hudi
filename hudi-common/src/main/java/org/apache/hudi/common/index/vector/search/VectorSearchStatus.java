@@ -19,7 +19,7 @@
 package org.apache.hudi.common.index.vector.search;
 
 /**
- * Terminal status of a vector search request (RFC-104 v3 §1).
+ * Terminal status of a vector search request (RFC-109 §1).
  *
  * <ul>
  *   <li>{@code COMPLETED}: K live exact results returned.</li>

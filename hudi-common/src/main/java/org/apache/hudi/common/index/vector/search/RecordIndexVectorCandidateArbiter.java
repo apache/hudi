@@ -21,10 +21,14 @@ package org.apache.hudi.common.index.vector.search;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.index.vector.VectorIndexArbiter;
+import org.apache.hudi.common.index.vector.VectorStalePolicy;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.exception.HoodieException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,7 +36,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Snapshot-aware RLI candidate arbiter (RFC-104 v3 §7). Wraps the pure decision core
+ * Snapshot-aware RLI candidate arbiter (RFC-109 §7). Wraps the pure decision core
  * {@link VectorIndexArbiter#classify} with a batched, snapshot-pinned {@link RecordIndexLookup}:
  * per partition it collects candidate keys, performs a single batched RLI lookup, and classifies
  * each candidate against its current live location.
@@ -50,52 +54,95 @@ import java.util.Set;
 public final class RecordIndexVectorCandidateArbiter implements VectorCandidateArbiter {
 
   private static final long serialVersionUID = 1L;
+  private static final Logger LOG = LoggerFactory.getLogger(RecordIndexVectorCandidateArbiter.class);
+  private static final int DEFAULT_LOOKUP_BATCH_SIZE = 1024;
 
   private final RecordIndexLookup lookup;
+  private final int lookupBatchSize;
 
   public RecordIndexVectorCandidateArbiter(RecordIndexLookup lookup) {
+    this(lookup, DEFAULT_LOOKUP_BATCH_SIZE);
+  }
+
+  public RecordIndexVectorCandidateArbiter(RecordIndexLookup lookup, int lookupBatchSize) {
+    if (lookupBatchSize <= 0) {
+      throw new IllegalArgumentException("lookupBatchSize must be positive");
+    }
     this.lookup = lookup;
+    this.lookupBatchSize = lookupBatchSize;
   }
 
   @Override
   public HoodieData<ArbitratedVectorCandidate> arbitrate(HoodieData<VectorCandidate> candidates,
+                                                         VectorSearchRequest request,
                                                          VectorSearchSnapshot snapshot,
                                                          HoodieEngineContext engineContext) {
     RecordIndexLookup rli = this.lookup;
-    return candidates.mapPartitions(it -> arbitratePartition(it, rli), true);
+    int batchSize = this.lookupBatchSize;
+    return candidates.mapPartitions(
+        it -> arbitratePartition(it, rli, snapshot.getTableInstant(), request.getStalePolicy(), batchSize), true);
   }
 
-  private static Iterator<ArbitratedVectorCandidate> arbitratePartition(Iterator<VectorCandidate> it,
-                                                                        RecordIndexLookup rli) {
-    List<VectorCandidate> buffered = new ArrayList<>();
-    Set<String> keys = new LinkedHashSet<>();
-    while (it.hasNext()) {
-      VectorCandidate c = it.next();
-      buffered.add(c);
-      keys.add(c.getRecordKey());
-    }
-    if (buffered.isEmpty()) {
-      return Collections.emptyIterator();
-    }
-
-    Map<String, HoodieRecordGlobalLocation> current = rli.lookup(new ArrayList<>(keys));
-
-    List<ArbitratedVectorCandidate> out = new ArrayList<>(buffered.size());
-    for (VectorCandidate c : buffered) {
-      HoodieRecordGlobalLocation live = current.get(c.getRecordKey());
-      VectorPostingLocator loc = c.getPostingLocator();
-      VectorIndexArbiter.Decision decision = VectorIndexArbiter.classify(
-          loc == null ? null : loc.getPartitionPath(),
-          loc == null ? null : loc.getFileId(),
-          loc == null ? null : loc.getBaseInstant(),
-          live);
-      VectorCandidateState state = toState(decision);
-      if (state == VectorCandidateState.DELETED) {
-        continue; // drop deleted finalists
+  private static Iterator<ArbitratedVectorCandidate> arbitratePartition(
+      Iterator<VectorCandidate> candidates,
+      RecordIndexLookup rli,
+      String tableInstant,
+      VectorStalePolicy stalePolicy,
+      int batchSize) {
+    List<ArbitratedVectorCandidate> out = new ArrayList<>();
+    List<VectorCandidate> batch = new ArrayList<>(batchSize);
+    int staleCount = 0;
+    while (candidates.hasNext()) {
+      batch.add(candidates.next());
+      if (batch.size() == batchSize) {
+        staleCount += arbitrateBatch(batch, rli, tableInstant, stalePolicy, out);
+        batch.clear();
       }
-      out.add(new ArbitratedVectorCandidate(c, state, live));
+    }
+    if (!batch.isEmpty()) {
+      staleCount += arbitrateBatch(batch, rli, tableInstant, stalePolicy, out);
+    }
+    if (staleCount > 0 && stalePolicy == VectorStalePolicy.WARN) {
+      LOG.warn("Vector index contained {} stale candidates at table instant {}; using RLI fallback locations",
+          staleCount, tableInstant);
     }
     return out.iterator();
+  }
+
+  private static int arbitrateBatch(
+      List<VectorCandidate> batch,
+      RecordIndexLookup rli,
+      String tableInstant,
+      VectorStalePolicy stalePolicy,
+      List<ArbitratedVectorCandidate> out) {
+    Set<String> keys = new LinkedHashSet<>();
+    for (VectorCandidate candidate : batch) {
+      keys.add(candidate.getRecordKey());
+    }
+    Map<String, HoodieRecordGlobalLocation> current =
+        rli.lookup(new ArrayList<>(keys), tableInstant);
+    int staleCount = 0;
+    for (VectorCandidate candidate : batch) {
+      HoodieRecordGlobalLocation live = current.get(candidate.getRecordKey());
+      VectorPostingLocator locator = candidate.getPostingLocator();
+      VectorCandidateState state = toState(VectorIndexArbiter.classify(
+          locator == null ? null : locator.getPartitionPath(),
+          locator == null ? null : locator.getFileId(),
+          locator == null ? null : locator.getBaseInstant(),
+          live));
+      if (state == VectorCandidateState.DELETED) {
+        continue;
+      }
+      if (state == VectorCandidateState.STALE) {
+        staleCount++;
+        if (stalePolicy == VectorStalePolicy.FAIL) {
+          throw new HoodieException("Stale vector candidate '" + candidate.getRecordKey()
+              + "' at table instant " + tableInstant);
+        }
+      }
+      out.add(new ArbitratedVectorCandidate(candidate, state, live));
+    }
+    return staleCount;
   }
 
   private static VectorCandidateState toState(VectorIndexArbiter.Decision decision) {

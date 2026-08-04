@@ -19,7 +19,7 @@
 package org.apache.hudi.common.index.vector.search;
 
 /**
- * Normative candidate-threshold execution selector (RFC-104 v3 §11A, selector version
+ * Normative candidate-threshold execution selector (RFC-109 §11A, selector version
  * {@code candidate-threshold-v1}). Pure function of the request's requested mode and budget;
  * no engine or runtime state, so LOCAL/DISTRIBUTED selection is deterministic and reproducible.
  */

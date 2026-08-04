@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Verifies the default exact scorer (RFC-104 v3 §10): squared-L2 for L2 (order-preserving vs the
+ * Verifies the default exact scorer (RFC-109 §10): squared-L2 for L2 (order-preserving vs the
  * true metric), negated dot for DOT_PRODUCT, and 1-cos for COSINE, all in float64.
  */
 public class TestDefaultExactVectorScorer {

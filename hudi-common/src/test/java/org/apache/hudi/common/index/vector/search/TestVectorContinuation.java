@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Verifies the continuation core (RFC-104 v3 §10): windowing the retained ordered pool into batches
+ * Verifies the continuation core (RFC-109 §10): windowing the retained ordered pool into batches
  * without rescanning, and accumulating K live exact results with dedup. Simulates stale/deleted
  * crowding that forces the reranker to draw additional batches.
  */

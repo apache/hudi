@@ -19,12 +19,13 @@
 package org.apache.hudi.common.index.vector.search;
 
 import org.apache.hudi.common.index.vector.VectorDistanceMetric;
+import org.apache.hudi.common.index.vector.VectorStalePolicy;
 
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * Engine-neutral vector search request (RFC-104 v3 §1). Carries only the query intent and budget;
+ * Engine-neutral vector search request (RFC-109 §1). Carries only the query intent and budget;
  * no engine, storage, or SQL types. Adapters (Spark/Flink/Java) translate their inputs into this.
  *
  * <p>{@code queryInstant} pins the table snapshot for the entire request; when null the executor
@@ -41,6 +42,7 @@ public final class VectorSearchRequest implements Serializable {
   private final int nprobe;
   private final int refineFactor;
   private final boolean exactRerank;
+  private final VectorStalePolicy stalePolicy;
   private final String queryInstant;
   private final VectorSearchBudget budget;
 
@@ -53,6 +55,20 @@ public final class VectorSearchRequest implements Serializable {
                              boolean exactRerank,
                              String queryInstant,
                              VectorSearchBudget budget) {
+    this(vectorColumn, queryVector, metric, topK, nprobe, refineFactor, exactRerank,
+        VectorStalePolicy.FAIL, queryInstant, budget);
+  }
+
+  public VectorSearchRequest(String vectorColumn,
+                             float[] queryVector,
+                             VectorDistanceMetric metric,
+                             int topK,
+                             int nprobe,
+                             int refineFactor,
+                             boolean exactRerank,
+                             VectorStalePolicy stalePolicy,
+                             String queryInstant,
+                             VectorSearchBudget budget) {
     this.vectorColumn = Objects.requireNonNull(vectorColumn, "vectorColumn");
     this.queryVector = Objects.requireNonNull(queryVector, "queryVector");
     this.metric = Objects.requireNonNull(metric, "metric");
@@ -60,6 +76,7 @@ public final class VectorSearchRequest implements Serializable {
     this.nprobe = nprobe;
     this.refineFactor = refineFactor;
     this.exactRerank = exactRerank;
+    this.stalePolicy = Objects.requireNonNull(stalePolicy, "stalePolicy");
     this.queryInstant = queryInstant;
     this.budget = Objects.requireNonNull(budget, "budget");
   }
@@ -90,6 +107,10 @@ public final class VectorSearchRequest implements Serializable {
 
   public boolean isExactRerank() {
     return exactRerank;
+  }
+
+  public VectorStalePolicy getStalePolicy() {
+    return stalePolicy;
   }
 
   /** Pinned table instant for the request, or null to resolve the latest completed instant. */

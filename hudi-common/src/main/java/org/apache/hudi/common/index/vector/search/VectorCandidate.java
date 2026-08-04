@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector.search;
 import java.io.Serializable;
 
 /**
- * A retained ANN candidate emitted by a {@link VectorCandidateSource} (RFC-104 v3 §4): the logical
+ * A retained ANN candidate emitted by a {@link VectorCandidateSource} (RFC-109 §4): the logical
  * record key, its cluster/shard, the approximate (squared L2) distance from RaBitQ scoring, and the
  * posting locator hint. Record keys and locators are decoded only for retained candidates, never
  * for rejected posting rows.

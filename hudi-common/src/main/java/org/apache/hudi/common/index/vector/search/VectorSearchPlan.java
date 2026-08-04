@@ -25,7 +25,7 @@ import java.util.Objects;
  * The resolved, engine-neutral plan for a single vector search: the immutable request, the pinned
  * {@link VectorSearchSnapshot}, and the {@link VectorExecutionDecision} chosen by the selector.
  * Built once by the orchestrator and threaded through every stage so all stages share one snapshot
- * and one execution decision (RFC-104 v3 §11).
+ * and one execution decision (RFC-109 §11).
  */
 public final class VectorSearchPlan implements Serializable {
 

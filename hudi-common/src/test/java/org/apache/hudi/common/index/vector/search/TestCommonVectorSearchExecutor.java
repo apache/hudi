@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * End-to-end wiring test for {@link CommonVectorSearchExecutor} (RFC-104 v3 §11): drives the full
+ * End-to-end wiring test for {@link CommonVectorSearchExecutor} (RFC-109 §11): drives the full
  * stage pipeline with a fake candidate source and reranker but the real
  * {@link RecordIndexVectorCandidateArbiter} and {@link DefaultVectorFetchPlanner}, asserting the
  * snapshot is resolved once, DELETED candidates are dropped end-to-end, and results flow through.
@@ -63,14 +63,14 @@ public class TestCommonVectorSearchExecutor {
     VectorSnapshotResolver resolver = req -> {
       snapshotResolved.set(true);
       return new VectorSearchSnapshot("001",
-          new VectorIndexSnapshot(1, 0L, 2, 1, "rot-v1", "quant-v1"));
+          new VectorIndexSnapshot(1, 1, 1, "rot-v1", "quant-v1"));
     };
 
     // Real arbiter with a fake RLI: k1/k2 live & matching (SERVE), k3 absent (DELETED).
     Map<String, HoodieRecordGlobalLocation> rli = new HashMap<>();
     rli.put("k1", new HoodieRecordGlobalLocation("p", "001", "fileA"));
     rli.put("k2", new HoodieRecordGlobalLocation("p", "001", "fileA"));
-    RecordIndexLookup lookup = keys -> {
+    RecordIndexLookup lookup = (keys, tableInstant) -> {
       Map<String, HoodieRecordGlobalLocation> out = new HashMap<>();
       for (String k : keys) {
         if (rli.containsKey(k)) {
@@ -80,7 +80,7 @@ public class TestCommonVectorSearchExecutor {
       return out;
     };
 
-    VectorCandidateSource source = (plan, ec) -> HoodieListData.eager(scanned);
+    VectorCandidateSource source = (plan, ec) -> new ListVectorCandidatePool(scanned, plan.getRequest().getBudget());
     VectorCandidateArbiter arbiter = new RecordIndexVectorCandidateArbiter(lookup);
     VectorFetchPlanner planner = new DefaultVectorFetchPlanner();
     // Fake reranker: emit one result per fetched row (distance = approx), preserving live location.

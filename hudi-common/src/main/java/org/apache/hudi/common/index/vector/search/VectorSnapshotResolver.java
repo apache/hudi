@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector.search;
 import java.io.Serializable;
 
 /**
- * Resolves the single pinned {@link VectorSearchSnapshot} for a request (RFC-104 v3 §7, §11):
+ * Resolves the single pinned {@link VectorSearchSnapshot} for a request (RFC-109 §7, §11):
  * the table instant (from {@code request.queryInstant} or the latest completed instant) plus the
  * active {@link VectorIndexSnapshot} generation identity. Injected so the common executor stays
  * engine-neutral — engine adapters provide the metadata-backed implementation.

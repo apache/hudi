@@ -20,7 +20,10 @@ package org.apache.hudi.common.index.vector.search;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.index.vector.VectorDistanceMetric;
+import org.apache.hudi.common.index.vector.VectorStalePolicy;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.Test;
 
@@ -28,13 +31,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Verifies {@link RecordIndexVectorCandidateArbiter} (RFC-104 v3 §7): SERVE when the current RLI
+ * Verifies {@link RecordIndexVectorCandidateArbiter} (RFC-109 §7): SERVE when the current RLI
  * location matches the posting locator, STALE (preserved) when it differs, DELETED (dropped) on an
  * RLI miss, using a fake snapshot-pinned {@link RecordIndexLookup}.
  */
@@ -44,6 +49,15 @@ public class TestRecordIndexVectorCandidateArbiter {
     VectorPostingLocator loc = new VectorPostingLocator(
         1, 0, 0, 0L, 0, partition, fileId, instant, 42L);
     return new VectorCandidate(key, 0, 0, 1.0, loc);
+  }
+
+  private static VectorSearchRequest request(VectorStalePolicy stalePolicy) {
+    return new VectorSearchRequest("embedding", new float[] {1f}, VectorDistanceMetric.L2,
+        2, 1, 1, true, stalePolicy, "001", VectorSearchBudget.defaults(2, 1000));
+  }
+
+  private static VectorSearchSnapshot snapshot() {
+    return new VectorSearchSnapshot("001", new VectorIndexSnapshot(1, 1, 1, "rot-v1", "quant-v1"));
   }
 
   @Test
@@ -57,7 +71,7 @@ public class TestRecordIndexVectorCandidateArbiter {
     Map<String, HoodieRecordGlobalLocation> rli = new HashMap<>();
     rli.put("serveKey", new HoodieRecordGlobalLocation("p", "001", "fileA"));
     rli.put("staleKey", new HoodieRecordGlobalLocation("p", "002", "fileB"));
-    RecordIndexLookup lookup = keys -> {
+    RecordIndexLookup lookup = (keys, tableInstant) -> {
       Map<String, HoodieRecordGlobalLocation> out = new HashMap<>();
       for (String k : keys) {
         if (rli.containsKey(k)) {
@@ -69,7 +83,8 @@ public class TestRecordIndexVectorCandidateArbiter {
 
     HoodieData<VectorCandidate> data = HoodieListData.eager(input);
     List<ArbitratedVectorCandidate> result =
-        new RecordIndexVectorCandidateArbiter(lookup).arbitrate(data, null, null).collectAsList();
+        new RecordIndexVectorCandidateArbiter(lookup)
+            .arbitrate(data, request(VectorStalePolicy.FALLBACK), snapshot(), null).collectAsList();
 
     Map<String, ArbitratedVectorCandidate> byKey = new HashMap<>();
     for (ArbitratedVectorCandidate a : result) {
@@ -92,14 +107,51 @@ public class TestRecordIndexVectorCandidateArbiter {
   }
 
   @Test
+  void failPolicyRejectsStaleCandidate() {
+    HoodieData<VectorCandidate> data = HoodieListData.eager(
+        java.util.Collections.singletonList(candidate("stale", "p", "old", "001")));
+    RecordIndexLookup lookup = (keys, tableInstant) -> java.util.Collections.singletonMap(
+        "stale", new HoodieRecordGlobalLocation("p", "002", "new"));
+
+    assertThrows(HoodieException.class, () -> new RecordIndexVectorCandidateArbiter(lookup)
+        .arbitrate(data, request(VectorStalePolicy.FAIL), snapshot(), null).collectAsList());
+  }
+
+  @Test
+  void batchesLookupsAtPinnedInstant() {
+    List<VectorCandidate> input = new ArrayList<>();
+    for (int i = 0; i < 5; i++) {
+      input.add(candidate("k" + i, "p", "f", "001"));
+    }
+    AtomicInteger calls = new AtomicInteger();
+    RecordIndexLookup lookup = (keys, tableInstant) -> {
+      assertEquals("001", tableInstant);
+      calls.incrementAndGet();
+      Map<String, HoodieRecordGlobalLocation> result = new HashMap<>();
+      for (String key : keys) {
+        result.put(key, new HoodieRecordGlobalLocation("p", "001", "f"));
+      }
+      return result;
+    };
+
+    List<ArbitratedVectorCandidate> result = new RecordIndexVectorCandidateArbiter(lookup, 2)
+        .arbitrate(HoodieListData.eager(input), request(VectorStalePolicy.FALLBACK), snapshot(), null)
+        .collectAsList();
+
+    assertEquals(5, result.size());
+    assertEquals(3, calls.get(), "five keys with batch size two require three RLI calls");
+  }
+
+  @Test
   void allDeletedProducesEmptyOutput() {
     List<VectorCandidate> input = new ArrayList<>();
     input.add(candidate("k1", "p", "f", "001"));
     input.add(candidate("k2", "p", "f", "001"));
-    RecordIndexLookup emptyLookup = keys -> new HashMap<>();
+    RecordIndexLookup emptyLookup = (keys, tableInstant) -> new HashMap<>();
     HoodieData<VectorCandidate> data = HoodieListData.eager(input);
     List<ArbitratedVectorCandidate> result =
-        new RecordIndexVectorCandidateArbiter(emptyLookup).arbitrate(data, null, null).collectAsList();
+        new RecordIndexVectorCandidateArbiter(emptyLookup)
+            .arbitrate(data, request(VectorStalePolicy.FALLBACK), snapshot(), null).collectAsList();
     assertEquals(0, result.size(), "all RLI misses -> all DELETED -> empty");
   }
 }

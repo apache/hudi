@@ -24,7 +24,7 @@ import java.io.Serializable;
 
 /**
  * A decoded record read back from the base table by a {@link org.apache.hudi.common.index.vector.search}
- * read handle (RFC-104 v3 §9): the logical record key, its full-precision vector, and the live
+ * read handle (RFC-109 §9): the logical record key, its full-precision vector, and the live
  * location it was read from. Only the record-key and vector columns are decoded — no full-row
  * materialization.
  */

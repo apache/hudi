@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector.search;
 import java.io.Serializable;
 
 /**
- * Immutable identity of the active vector-index generation used to serve a query (RFC-104 v3 §1).
+ * Immutable identity of the active vector-index generation used to serve a query (RFC-109).
  * Every field is versioned through the manifest so readers can reject unsupported or mismatched
  * encodings rather than silently mis-scoring. Pinned for the whole request alongside the table
  * instant in {@link VectorSearchSnapshot}.
@@ -31,20 +31,17 @@ public final class VectorIndexSnapshot implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private final int generationId;
-  private final long centroidEpoch;
   private final int factorVersion;
   private final int blockFormatVersion;
   private final String rotationVersion;
   private final String quantizerVersion;
 
   public VectorIndexSnapshot(int generationId,
-                             long centroidEpoch,
                              int factorVersion,
                              int blockFormatVersion,
                              String rotationVersion,
                              String quantizerVersion) {
     this.generationId = generationId;
-    this.centroidEpoch = centroidEpoch;
     this.factorVersion = factorVersion;
     this.blockFormatVersion = blockFormatVersion;
     this.rotationVersion = rotationVersion;
@@ -53,10 +50,6 @@ public final class VectorIndexSnapshot implements Serializable {
 
   public int getGenerationId() {
     return generationId;
-  }
-
-  public long getCentroidEpoch() {
-    return centroidEpoch;
   }
 
   public int getFactorVersion() {

@@ -24,7 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import java.io.Serializable;
 
 /**
- * The single engine-neutral entry point for vector search (RFC-104 v3 §11). Pins one snapshot,
+ * The single engine-neutral entry point for vector search (RFC-109 §11). Pins one snapshot,
  * probes IVF clusters, scans MDT postings, reduces the candidate pool, RLI-arbitrates, plans
  * file-slice fetches, chooses LOCAL/DISTRIBUTED execution, performs projected positional/key reads,
  * scores exactly, and reduces to top-K — all under one request deadline. Never invokes

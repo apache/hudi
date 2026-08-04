@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Verifies the normative execution-locality rule (RFC-104 v3 §11A) for selector version
+ * Verifies the normative execution-locality rule (RFC-109 §11A) for selector version
  * {@code candidate-threshold-v1}: explicit modes are honored, and AUTO selects LOCAL iff
  * {@code maxRerankCandidates <= localExecutionThreshold} (boundary inclusive).
  */

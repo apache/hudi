@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector.search;
 import org.apache.hudi.common.index.vector.VectorDistanceMetric;
 
 /**
- * Default exact scorer (RFC-104 v3 §10). Accumulates in float64 and returns an order-preserving
+ * Default exact scorer (RFC-109 §10). Accumulates in float64 and returns an order-preserving
  * ranking distance (smaller = more similar), consistent with the approximate path:
  *
  * <ul>

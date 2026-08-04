@@ -34,7 +34,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Verifies {@link DefaultVectorExactReranker} (RFC-104 v3 §10): reads via the injected handle,
+ * Verifies {@link DefaultVectorExactReranker} (RFC-109 §10): reads via the injected handle,
  * scores with {@link DefaultExactVectorScorer}, and returns the global exact top-K in ascending
  * distance order, using an in-memory fake read handle.
  */

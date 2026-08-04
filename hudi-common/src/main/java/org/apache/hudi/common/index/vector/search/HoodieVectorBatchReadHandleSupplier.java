@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector.search;
 import java.io.Serializable;
 
 /**
- * Serializable factory for a {@link HoodieVectorBatchReadHandle} (RFC-104 v3 §9, §10). The reranker
+ * Serializable factory for a {@link HoodieVectorBatchReadHandle} (RFC-109 §9, §10). The reranker
  * creates one handle per partition/task-runner via this supplier, so the concrete (Parquet) handle
  * — which lives in an engine/format module — is constructed on the executor without the common
  * reranker depending on it. Engine adapters provide the implementation.

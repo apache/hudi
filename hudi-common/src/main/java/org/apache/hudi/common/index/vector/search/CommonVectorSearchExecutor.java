@@ -19,12 +19,13 @@
 package org.apache.hudi.common.index.vector.search;
 
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 
 import java.util.Objects;
 
 /**
- * The engine-neutral vector-search orchestrator (RFC-104 v3 §11). Pins one snapshot, chooses the
+ * The engine-neutral vector-search orchestrator (RFC-109 §11). Pins one snapshot, chooses the
  * execution mode, and drives the stages in order — candidate scan, RLI arbitration, fetch planning,
  * exact rerank — returning the top-K results. It never invokes {@code spark.sql(...)} and never
  * reconstructs SQL/DataFrames; each stage is an injected engine-neutral implementation.
@@ -73,11 +74,19 @@ public final class CommonVectorSearchExecutor implements VectorSearchExecutor {
     VectorExecutionDecision decision = executionModeSelector.select(request);
     VectorSearchPlan plan = new VectorSearchPlan(request, snapshot, decision);
 
-    // 3-6. Stage pipeline, all on the pinned snapshot.
-    HoodieData<VectorCandidate> candidates = candidateSource.scan(plan, engineContext);
-    HoodieData<ArbitratedVectorCandidate> arbitrated =
-        candidateArbiter.arbitrate(candidates, snapshot, engineContext);
-    HoodieData<VectorFetchTask> tasks = fetchPlanner.plan(arbitrated, snapshot, engineContext);
-    return exactReranker.rerank(tasks, request, snapshot, engineContext);
+    // 3-6. Consume ordered windows from one retained pool. Continuation never rescans MDT.
+    VectorCandidatePool pool = candidateSource.scan(plan, engineContext);
+    VectorTopKAccumulator results = new VectorTopKAccumulator(request.getTopK());
+    while (results.needsMore() && pool.hasMore()) {
+      HoodieData<VectorCandidate> candidates = pool.nextBatch();
+      HoodieData<ArbitratedVectorCandidate> arbitrated =
+          candidateArbiter.arbitrate(candidates, request, snapshot, engineContext);
+      HoodieData<VectorFetchTask> tasks = fetchPlanner.plan(arbitrated, snapshot, engineContext);
+      for (VectorSearchResult result : exactReranker.rerank(
+          tasks, request, snapshot, engineContext).collectAsList()) {
+        results.offer(result.getRecordKey(), result.getDistance(), result.getLocation());
+      }
+    }
+    return HoodieListData.eager(results.topK());
   }
 }

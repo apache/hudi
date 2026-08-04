@@ -24,7 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import java.io.Serializable;
 
 /**
- * Reads candidate vectors through Hudi read handles and produces exact top-K results (RFC-104 v3 §10).
+ * Reads candidate vectors through Hudi read handles and produces exact top-K results (RFC-109 §10).
  *
  * <p>Continuation: the candidate scan already retained one ordered pool of at most
  * {@code maxRerankCandidates}. The reranker starts with the initial rerank batch, and continues to

@@ -21,7 +21,7 @@ package org.apache.hudi.common.index.vector.search;
 import java.io.Serializable;
 
 /**
- * Physical hint for where a candidate's packed posting row lives (RFC-104 v3 §4). It combines the
+ * Physical hint for where a candidate's packed posting row lives (RFC-109 §4). It combines the
  * logical index coordinates (generation/cluster/shard/block/ordinal) with an optional data-table
  * location hint (partition/file/rowPosition) decoded from the posting.
  *
