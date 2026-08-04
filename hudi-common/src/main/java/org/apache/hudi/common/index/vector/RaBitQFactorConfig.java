@@ -11,8 +11,8 @@ import java.io.Serializable;
  * Generation-scoped configuration for RaBitQ neutral-factor computation (RFC-109 §3).
  *
  * <p>Replaces the previously static constants ({@code ERR_KAPPA}, absolute {@code EPS_IP}) with
- * explicit thresholds. Factor-layout compatibility is owned by
- * {@link PostingBlockBuilder#BLOCK_FORMAT_VERSION}; readers reject unsupported block versions.
+ * explicit, versioned thresholds. Readers reject factor versions they do not support instead of
+ * interpreting persisted factors with current-code constants.
  *
  * <ul>
  *   <li>{@code kappa} — pass-1 error scale (was {@code ERR_KAPPA}).</li>
@@ -32,26 +32,37 @@ public final class RaBitQFactorConfig implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
+  public static final int FACTOR_VERSION = 1;
   public static final double DEFAULT_KAPPA = 1.9;
   public static final double DEFAULT_GMIN = 1.0e-3;
   public static final double DEFAULT_EPS1_MAX = 1.0;
   public static final double DEFAULT_EPS_N_REL = 1.0e-3;
 
+  private final int factorVersion;
   private final double kappa;
   private final double gMin;
   private final double eps1Max;
   private final double epsNRel;
 
-  public RaBitQFactorConfig(double kappa, double gMin, double eps1Max, double epsNRel) {
+  public RaBitQFactorConfig(int factorVersion, double kappa, double gMin, double eps1Max, double epsNRel) {
+    if (factorVersion != FACTOR_VERSION) {
+      throw new IllegalArgumentException("Unsupported RaBitQ factor version: " + factorVersion);
+    }
+    this.factorVersion = factorVersion;
     this.kappa = kappa;
     this.gMin = gMin;
     this.eps1Max = eps1Max;
     this.epsNRel = epsNRel;
   }
 
-  /** The normative defaults for the current posting-block format (RFC-109 §3). */
+  /** The defaults for the first persisted factor format (RFC-109 §3). */
   public static RaBitQFactorConfig defaults() {
-    return new RaBitQFactorConfig(DEFAULT_KAPPA, DEFAULT_GMIN, DEFAULT_EPS1_MAX, DEFAULT_EPS_N_REL);
+    return new RaBitQFactorConfig(
+        FACTOR_VERSION, DEFAULT_KAPPA, DEFAULT_GMIN, DEFAULT_EPS1_MAX, DEFAULT_EPS_N_REL);
+  }
+
+  public int getFactorVersion() {
+    return factorVersion;
   }
 
   public double getKappa() {

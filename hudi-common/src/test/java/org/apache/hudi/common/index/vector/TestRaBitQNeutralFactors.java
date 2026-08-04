@@ -8,6 +8,7 @@ package org.apache.hudi.common.index.vector;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -39,11 +40,20 @@ public class TestRaBitQNeutralFactors {
   }
 
   @Test
+  void defaultsUseFirstPersistedFactorVersion() {
+    assertEquals(1, RaBitQFactorConfig.FACTOR_VERSION);
+    assertEquals(RaBitQFactorConfig.FACTOR_VERSION, CFG.getFactorVersion());
+    assertThrows(IllegalArgumentException.class,
+        () -> new RaBitQFactorConfig(2, 1.9, 1.0e-3, 1.0, 1.0e-3));
+  }
+
+  @Test
   void exactZeroResidualUsesZeroError() {
     float[] r = {0f, 0f, 0f, 0f};
     float[] x = {5f, 0f, 0f, 0f};
     RaBitQNeutralFactors.Factors f =
         RaBitQNeutralFactors.compute(r, new float[D], x, 0.0, 0.0, D, CFG);
+    assertEquals(RaBitQFactorConfig.FACTOR_VERSION, f.factorVersion);
     assertEquals(0f, f.residualNorm, 0f);
     assertEquals(0f, f.err1, 0f, "only an exact-zero residual may report ERR_1 = 0");
     assertEquals(0f, f.fRescale1, 0f);
@@ -77,7 +87,7 @@ public class TestRaBitQNeutralFactors {
   @Test
   void largeRelativeErrorDisablesEstimatorInsteadOfClamping() {
     // r=[1,0,0,0]: gHat1 = 0.5 -> eps1 = 1.9*sqrt(0.75/0.75) = 1.9 > eps1Max(1.0).
-    // Old code clamped to min(1,eps1)=1 (invalid); v3 disables the estimator.
+    // Old code clamped to min(1,eps1)=1 (invalid); the corrected implementation disables the estimator.
     float[] r = {1f, 0f, 0f, 0f};
     float[] x = {1f, 0f, 0f, 0f};
     double ip1 = dot(r, signCode(r)); // = 0.5

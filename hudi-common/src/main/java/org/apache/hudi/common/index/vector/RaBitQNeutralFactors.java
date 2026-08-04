@@ -44,6 +44,7 @@ public final class RaBitQNeutralFactors {
 
   /** Immutable per-vector factor set in posting-block scalar-array order. */
   public static final class Factors {
+    public final int factorVersion;
     public final float centerRip;
     public final float fRescale1;
     public final float err1;
@@ -51,8 +52,9 @@ public final class RaBitQNeutralFactors {
     public final float residualNorm;
     public final float vectorNorm;     // consumed only for raw-cosine generations
 
-    Factors(float centerRip, float fRescale1, float err1, float fRescaleEx,
+    Factors(int factorVersion, float centerRip, float fRescale1, float err1, float fRescaleEx,
             float residualNorm, float vectorNorm) {
+      this.factorVersion = factorVersion;
       this.centerRip = centerRip;
       this.fRescale1 = fRescale1;
       this.err1 = err1;
@@ -74,6 +76,7 @@ public final class RaBitQNeutralFactors {
   public static Factors compute(float[] residual, float[] rotatedCenter, float[] rotatedVector,
                                 double ipResidual1, double ipResidualEx, int dimPadded,
                                 RaBitQFactorConfig config) {
+    int factorVersion = config.getFactorVersion();
     double nSq = 0.0;
     double centerRip = 0.0;
     double vSq = 0.0;
@@ -87,11 +90,11 @@ public final class RaBitQNeutralFactors {
     // Residual-norm tiers (RFC-109 §3).
     if (n == 0.0) {
       // Vector coincides with centroid exactly: composition is exact; ERR_1 = 0 is legitimate.
-      return new Factors((float) centerRip, 0f, 0f, 0f, 0f, vectorNorm);
+      return new Factors(factorVersion, (float) centerRip, 0f, 0f, 0f, 0f, vectorNorm);
     }
     if (n <= config.getEpsNRel() * vectorNorm) {
       // Tiny but nonzero residual: disable the estimator, ERR_1 = residualNorm (maximal valid bound).
-      return new Factors((float) centerRip, 0f, (float) n, 0f, (float) n, vectorNorm);
+      return new Factors(factorVersion, (float) centerRip, 0f, (float) n, 0f, (float) n, vectorNorm);
     }
 
     // Normalized alignment of the residual with the sign code; ||code1|| = 0.5 * sqrt(dimPadded).
@@ -125,6 +128,6 @@ public final class RaBitQNeutralFactors {
     float fRescaleEx = Math.abs(ipResidualEx) <= EPS_NORM * Math.max(1.0, nSq)
         ? 0f : (float) (nSq / ipResidualEx);
 
-    return new Factors((float) centerRip, fRescale1, err1, fRescaleEx, (float) n, vectorNorm);
+    return new Factors(factorVersion, (float) centerRip, fRescale1, err1, fRescaleEx, (float) n, vectorNorm);
   }
 }
