@@ -3630,18 +3630,32 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
-      // Leaving the mode unset defers to the deprecated populate.meta.fields boolean. Setting it
-      // also rewrites that boolean from the mode, so the two can never disagree — a config carrying
-      // a selective mode alongside populate.meta.fields=true would otherwise create a table whose
-      // hoodie.properties misleads pre-1.3.0 readers into treating it as ALL.
-      if (metaFieldsMode == null) {
-        writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, "");
-      } else {
-        writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
-        writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
-            Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
-      }
+      // Leaving the mode unset defers to the deprecated populate.meta.fields boolean. The legacy
+      // boolean is derived from the mode in build() rather than here, so the two cannot be made to
+      // disagree by calling the setters in either order.
+      writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE,
+          metaFieldsMode == null ? "" : metaFieldsMode.name());
       return this;
+    }
+
+    /**
+     * Rewrite the deprecated {@code populate.meta.fields} boolean from {@code meta.fields.mode}
+     * whenever a mode is set, so the two can never disagree on the resulting config.
+     *
+     * <p>Done at build time, not in the setter: {@code withPopulateMetaFields} does not re-derive
+     * the mode, so deriving in {@link #withMetaFieldsMode} alone would make the invariant depend on
+     * call order. {@code withMetaFieldsMode(COMMIT_TIME_ONLY).withPopulateMetaFields(true)} would
+     * leave a selective mode sitting next to {@code populate.meta.fields=true} — a config that
+     * resolves correctly (the mode wins) but carries the contradiction to disk on any path that
+     * copies raw write-config props into {@code hoodie.properties}, misleading pre-1.3.0 readers
+     * into treating the table as ALL.
+     */
+    private void deriveLegacyPopulateMetaFieldsFromMode() {
+      String rawMode = writeConfig.getString(HoodieTableConfig.META_FIELDS_MODE);
+      if (!StringUtils.isNullOrEmpty(rawMode)) {
+        writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+            Boolean.toString(MetaFieldsMode.parse(rawMode).toLegacyPopulateMetaFields()));
+      }
     }
 
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
@@ -3971,6 +3985,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     @VisibleForTesting
     public HoodieWriteConfig build(boolean shouldValidate) {
       setDefaults();
+      // Before validate(), so the MoR / engine-type checks see the same mode the built config will.
+      deriveLegacyPopulateMetaFieldsFromMode();
       if (shouldValidate) {
         validate();
       }
