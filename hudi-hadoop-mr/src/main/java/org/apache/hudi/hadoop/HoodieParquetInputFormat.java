@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
@@ -210,10 +211,10 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
     LOG.info("colNameWithTypes ={}, Num Entries ={}", colNameWithTypes, colNameWithTypes.size());
 
-    if (hoodieColsProjected.isEmpty()) {
-      return getRecordReaderInternal(eSplit.getBootstrapFileSplit(), job, reporter);
-    } else if (externalColsProjected.isEmpty()) {
-      return getRecordReaderInternal(split, job, reporter);
+    Option<FileSplit> singleSplit = resolveSingleFileSplit(eSplit, !hoodieColsProjected.isEmpty(),
+        !externalColsProjected.isEmpty());
+    if (singleSplit.isPresent()) {
+      return getRecordReaderInternal(singleSplit.get(), job, reporter);
     } else {
       FileSplit rightSplit = eSplit.getBootstrapFileSplit();
       // Hive PPD works at row-group level and only enabled when hive.optimize.index.filter=true;
@@ -231,6 +232,36 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
           getRecordReaderInternal(rightSplit, jobConfCopy, reporter),
           colNamesWithTypesForExternal.size(),
           true);
+    }
+  }
+
+  /**
+   * The single file backing this read, or empty when both files are needed and have to be stitched.
+   *
+   * <p>A bootstrap split carries two paths: the split itself is the skeleton file, which lives inside the
+   * table root, and {@code getBootstrapFileSplit()} is the external source file, which does not.
+   *
+   * <p>The two "only one file is needed" cases both apply when a query projects no columns at all, as
+   * {@code SELECT COUNT(*)} does, so the order they are tested in decides which file is read. Prefer the
+   * skeleton: it is inside the table root, and bootstrap keeps a one-to-one row correspondence with the
+   * external file, so a count over it is identical. Handing Hive a path outside the table root breaks its
+   * vectorized reader, which derives partition values by looking the split path up in
+   * {@code pathToPartitionInfo} (HUDI-5526).
+   *
+   * @param split                  the bootstrap split.
+   * @param anyHoodieColProjected  whether the query projects any Hudi meta column.
+   * @param anyExternalColProjected whether the query projects any column from the external file.
+   */
+  @VisibleForTesting
+  static Option<FileSplit> resolveSingleFileSplit(BootstrapBaseFileSplit split,
+                                                  boolean anyHoodieColProjected,
+                                                  boolean anyExternalColProjected) {
+    if (!anyExternalColProjected) {
+      return Option.of(split);
+    } else if (!anyHoodieColProjected) {
+      return Option.of(split.getBootstrapFileSplit());
+    } else {
+      return Option.empty();
     }
   }
 }
