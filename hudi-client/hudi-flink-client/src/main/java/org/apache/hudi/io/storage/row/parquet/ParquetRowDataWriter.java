@@ -431,7 +431,7 @@ public class ParquetRowDataWriter {
         "Decimal precision %s exceeds max precision %s",
         precision,
         DecimalType.MAX_PRECISION);
-    int numBytes = ParquetSchemaConverter.decimalFixedLen(fieldSchema, precision);
+    int numBytes = ParquetSchemaConverter.resolveDecimalByteLength(fieldSchema, precision);
 
     /*
      * This is optimizer for UnscaledBytesWriter.
