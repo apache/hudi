@@ -61,11 +61,11 @@ import org.apache.hudi.metadata.SparkVectorIndexBootstrap;
 import org.apache.hudi.metadata.SparkVectorIndexUpdater;
 import org.apache.hudi.metadata.VectorIndexMetadataKey;
 import org.apache.hudi.metadata.VectorMetadataRawKey;
+import org.apache.hudi.metadata.VectorRoutingArtifacts;
 import org.apache.hudi.metadata.index.vector.VectorIndexFileGroupUpdate;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
-import org.apache.hudi.spark.index.vector.TwoLevelKMeansBootstrap$;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -327,25 +327,19 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
           HoodieVectorIndexCentroids.class));
     }
 
-    if (manifest.getRoutingVersion() != 1
-        || !Float.isFinite(manifest.getRoutingExpandRatio())
-        || manifest.getRoutingExpandRatio() < 1.0f
-        || manifest.getShardCount() <= 0) {
-      throw new HoodieMetadataException("ACTIVE vector generation has unsupported routing or shard geometry");
+    if (manifest.getShardCount() <= 0) {
+      throw new HoodieMetadataException("ACTIVE vector generation has invalid shard geometry");
     }
     float[][] centroids = decodeCentroids(
         centroidChunks, manifest.getNumClusters(), manifest.getDim(),
         vectorSchema.getVectorElementType());
-    float[][] coarseCentroids = decodeFloatMatrix(
-        manifest.getRoutingCoarseCentroids(), manifest.getDim(), "routing coarse centroids");
-    int[] leafOffsets = decodeIntArray(manifest.getRoutingLeafOffsets(), "routing leaf offsets");
-    Object routingModel;
-    try {
-      routingModel = TwoLevelKMeansBootstrap$.MODULE$.restoreModelForJava(
-          coarseCentroids, centroids, leafOffsets);
-    } catch (IllegalArgumentException exception) {
-      throw new HoodieMetadataException("ACTIVE vector generation has invalid routing artifacts", exception);
-    }
+    Object routingModel = VectorRoutingArtifacts.restore(
+        manifest.getRoutingVersion(),
+        manifest.getRoutingCoarseCentroids(),
+        manifest.getRoutingLeafOffsets(),
+        manifest.getRoutingExpandRatio(),
+        manifest.getDim(),
+        centroids);
     String metricName = manifest.getMetric().toString();
     VectorDistanceMetric metric = "DOT".equalsIgnoreCase(metricName)
         ? VectorDistanceMetric.DOT_PRODUCT
@@ -370,37 +364,6 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
       throw new HoodieMetadataException("ACTIVE vector generation artifact is missing: " + key);
     }
     return artifactClass.cast(value);
-  }
-
-  private static float[][] decodeFloatMatrix(ByteBuffer source, int columns, String name) {
-    ByteBuffer values = source.duplicate().order(ByteOrder.LITTLE_ENDIAN);
-    int rowBytes = columns * Float.BYTES;
-    if (columns <= 0 || values.remaining() == 0 || values.remaining() % rowBytes != 0) {
-      throw new HoodieMetadataException("Invalid " + name + " payload size");
-    }
-    float[][] result = new float[values.remaining() / rowBytes][columns];
-    for (int row = 0; row < result.length; row++) {
-      for (int column = 0; column < columns; column++) {
-        float value = values.getFloat();
-        if (!Float.isFinite(value)) {
-          throw new HoodieMetadataException(name + " contains a non-finite value");
-        }
-        result[row][column] = value;
-      }
-    }
-    return result;
-  }
-
-  private static int[] decodeIntArray(ByteBuffer source, String name) {
-    ByteBuffer values = source.duplicate().order(ByteOrder.LITTLE_ENDIAN);
-    if (values.remaining() == 0 || values.remaining() % Integer.BYTES != 0) {
-      throw new HoodieMetadataException("Invalid " + name + " payload size");
-    }
-    int[] result = new int[values.remaining() / Integer.BYTES];
-    for (int index = 0; index < result.length; index++) {
-      result[index] = values.getInt();
-    }
-    return result;
   }
 
   private static float[][] decodeCentroids(

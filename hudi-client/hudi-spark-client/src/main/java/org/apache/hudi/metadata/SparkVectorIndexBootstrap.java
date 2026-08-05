@@ -258,9 +258,9 @@ public final class SparkVectorIndexBootstrap {
               rabitqBits,
               Math.max(0, rabitqBits - 1),
               actualK,
-              1,
-              serializeFloatMatrix(coarseCentroids),
-              serializeIntArray(leafOffsets),
+              VectorRoutingArtifacts.ROUTING_VERSION,
+              VectorRoutingArtifacts.serializeFloatMatrix(coarseCentroids),
+              VectorRoutingArtifacts.serializeIntArray(leafOffsets),
               assignmentExpandRatio,
               generationShardCount,
               Math.max(1, actualK),
@@ -601,33 +601,6 @@ public final class SparkVectorIndexBootstrap {
   }
 
   // ---- Utilities ----
-
-  private static ByteBuffer serializeFloatMatrix(float[][] values) {
-    int columns = values.length == 0 ? 0 : values[0].length;
-    ByteBuffer buffer = ByteBuffer.allocate(values.length * columns * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-    for (float[] row : values) {
-      if (row.length != columns) {
-        throw new IllegalArgumentException("Routing centroid rows must have a consistent dimension");
-      }
-      for (float value : row) {
-        if (!Float.isFinite(value)) {
-          throw new IllegalArgumentException("Routing centroids must contain only finite values");
-        }
-        buffer.putFloat(value);
-      }
-    }
-    buffer.flip();
-    return buffer;
-  }
-
-  private static ByteBuffer serializeIntArray(int[] values) {
-    ByteBuffer buffer = ByteBuffer.allocate(values.length * Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-    for (int value : values) {
-      buffer.putInt(value);
-    }
-    buffer.flip();
-    return buffer;
-  }
 
   private static String manifestMetricName(VectorDistanceMetric metric) {
     return metric == VectorDistanceMetric.DOT_PRODUCT ? "DOT" : metric.name();
