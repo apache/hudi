@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.functional.SparkCoreFlow
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.keygen.constant.KeyGeneratorType
@@ -48,7 +49,7 @@ import scala.collection.JavaConverters._
 
 class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelpers {
 
-  test("Test Create Managed Hoodie Table") {
+  test("Test Create Managed Hoodie Table", SparkCoreFlow) {
     val databaseName = "hudi_database"
     spark.sql(s"create database if not exists $databaseName")
     spark.sql(s"use $databaseName")
@@ -102,7 +103,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     spark.sql("use default")
   }
 
-  test("Test Create Hoodie Table With Options") {
+  test("Test Create Hoodie Table With Options", SparkCoreFlow) {
     val tableName = generateTableName
     spark.sql(
       s"""
@@ -155,7 +156,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     assertFalse(tableConfig.contains(OPERATION.key()))
   }
 
-  test("Test Create External Hoodie Table") {
+  test("Test Create External Hoodie Table", SparkCoreFlow) {
     withTempDir { tmp =>
       // Test create cow table.
       val tableName = generateTableName
@@ -237,7 +238,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     }
   }
 
-  test("Test Create External Hoodie Table with data") {
+  test("Test Create External Hoodie Table with data", SparkCoreFlow) {
     withTempDir { tmp =>
       val options = Map(DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
         HoodieTableConfig.ORDERING_FIELDS.key -> "ordering",

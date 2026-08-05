@@ -47,7 +47,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
@@ -104,6 +104,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
 
+  @Tag("core")
   @ParameterizedTest
   @CsvSource(Array(
     // Inferred as COMMIT_TIME_ORDERING
@@ -494,6 +495,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION)
   }
 
+  @Tag("core")
   @ParameterizedTest
   @CsvSource(value = Array("AVRO,6", "AVRO,8", "SPARK,6", "SPARK,8"))
   def testPayloadDelete(recordType: HoodieRecordType, tableVersion: Int) {
@@ -573,6 +575,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(0, hudiSnapshotDF3.count()) // 100 records were deleted, 0 record to load
   }
 
+  @Tag("core")
   @ParameterizedTest
   @CsvSource(value = Array("AVRO,6", "AVRO,8", "SPARK,6", "SPARK,8"))
   def testPrunedFiltered(recordType: HoodieRecordType, tableVersion: Int) {
@@ -683,6 +686,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(0, hudiSnapshotDF3.filter("rider = 'rider-003'").count())
   }
 
+  @Tag("core")
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testVectorizedReader(recordType: HoodieRecordType) {
@@ -992,6 +996,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(partitionCounts("2021/03/03"), count7)
   }
 
+  @Tag("core")
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testReadLogOnlyMergeOnReadTable(recordType: HoodieRecordType): Unit = {
@@ -1311,6 +1316,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
    *
    * The read-optimized query should read `fg1_dc1.parquet` only in this case.
    */
+  @Tag("core")
   @Test
   def testReadOptimizedQueryAfterInflightCompactionAndCompletedDeltaCommit(): Unit = {
     val (tableName, tablePath) = ("hoodie_mor_ro_read_test_table", s"${basePath}_mor_test_table")
@@ -1406,6 +1412,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       roDf.where(col(recordKeyField) === 0).select(dataField).collect()(0).getLong(0))
   }
 
+  @Tag("core")
   @ParameterizedTest
   @ValueSource(ints = Array(6, 8))
   def testSnapshotQueryAfterInflightDeltaCommit(tableVersion: Int): Unit = {
