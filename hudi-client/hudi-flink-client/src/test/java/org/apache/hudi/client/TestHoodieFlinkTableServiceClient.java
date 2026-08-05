@@ -64,7 +64,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -238,13 +237,7 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
     when(table.getActiveTimeline()).thenReturn(activeTimeline);
     when(table.getInstantGenerator()).thenReturn(metaClient.getInstantGenerator());
     HoodieInstant clusteringInstant = mock(HoodieInstant.class);
-    // The inflight instant is a clustering instant on timeline v2; the completed one is always a
-    // replacecommit, and it is the completed action the callback must report. The inflight action is
-    // stubbed so that a revert to reporting it fails on the action assertion below, rather than on
-    // the message count after Option.of(null) throws inside the callback.
     when(clusteringInstant.getAction()).thenReturn(HoodieTimeline.CLUSTERING_ACTION);
-    HoodieInstant completedInstant = mock(HoodieInstant.class);
-    when(completedInstant.getAction()).thenReturn(HoodieTimeline.REPLACE_COMMIT_ACTION);
     HoodieReplaceCommitMetadata metadata = new HoodieReplaceCommitMetadata();
     TestableHoodieFlinkTableServiceClient client =
         new TestableHoodieFlinkTableServiceClient(context, writeConfig, Option.empty(), table);
@@ -255,9 +248,6 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
       clusteringUtils.when(() -> ClusteringUtils.getInflightClusteringInstant(
           "20260723120000001", activeTimeline, metaClient.getInstantGenerator()))
           .thenReturn(Option.of(clusteringInstant));
-      clusteringUtils.when(() -> ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
-          anyBoolean(), any(), any(), any(), any()))
-          .thenReturn(completedInstant);
       markersFactory.when(() -> WriteMarkersFactory.get(any(), any(), any())).thenReturn(writeMarkers);
       client.callCompleteClustering(metadata, table, "20260723120000001");
     } finally {

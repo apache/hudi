@@ -122,7 +122,6 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
           + writeStats.stream().filter(s -> s.getTotalWriteErrors() > 0L).map(HoodieWriteStat::getFileId).collect(Collectors.joining(",")));
     }
 
-    final HoodieInstant completedClusteringInstant;
     try {
       this.txnManager.beginStateChange(Option.of(clusteringInstant), Option.empty());
       finalizeWrite(table, clusteringCommitTime, writeStats);
@@ -137,7 +136,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       writeTableMetadata(table, clusteringCommitTime, metadata);
 
       log.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
-      completedClusteringInstant = ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
+      ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
           false,
           clusteringInstant,
           metadata,
@@ -163,7 +162,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       }
     }
     log.info("Clustering successfully on commit {}", clusteringCommitTime);
-    fireCommitCallbackIfNecessary(clusteringCommitTime, completedClusteringInstant.getAction(),
+    fireCommitCallbackIfNecessary(clusteringCommitTime, HoodieActiveTimeline.REPLACE_COMMIT_ACTION,
         writeStats, table::getBaseFileOnlyView, Option.empty());
   }
 

@@ -269,8 +269,8 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     client.cluster(clusteringTime.get(), true);
     assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(clusteringTime.get()));
 
-    // The callback must fire exactly once for the clustering completion, reporting the completed
-    // timeline action (replacecommit).
+    // The callback must fire once for the clustering completion, reporting the action actually on
+    // the timeline (replacecommit).
     List<HoodieWriteCommitCallbackMessage> clusteringMessages = RecordingCommitCallback.messages().stream()
         .filter(m -> m.getCommitTime().equals(clusteringTime.get()))
         .collect(Collectors.toList());

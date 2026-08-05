@@ -56,7 +56,6 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -131,49 +130,45 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
   }
 
   /**
-   * A clustering commit lands on the timeline as a {@code replacecommit} whichever action its
-   * inflight instant carried, and {@link ClusteringUtils#transitionClusteringOrReplaceInflightToComplete}
-   * returns that completed instant. Callers rely on this to report the completed action rather than
-   * the inflight one - see the write commit callback in {@code BaseHoodieTableServiceClient}.
-   *
-   * <p>Both branches are covered: a {@code clustering} inflight, written since HUDI-7905 on table
-   * version 8+, and a {@code replacecommit} inflight, written by table version 7 and older writers
-   * and by insert_overwrite on any version.
+   * A clustering commit completes as a {@code replacecommit} whichever action its inflight instant
+   * carried, {@code clustering} on table version 8+ or {@code replacecommit} before that.
    */
   @Test
-  public void testTransitionInflightToCompleteReturnsCompletedReplaceCommit() throws Exception {
+  public void testClusteringAndReplaceInflightBothCompleteAsReplaceCommit() throws Exception {
     List<String> fileIds = new ArrayList<>();
     fileIds.add(UUID.randomUUID().toString());
-    List<HoodieInstant> tableFormatInstants = new ArrayList<>();
+    List<HoodieInstant> completed = new ArrayList<>();
 
     HoodieInstant clusterRequested = createRequestedClusterInstant("partition1", "1", fileIds);
     HoodieInstant clusterInflight = metaClient.getActiveTimeline()
         .transitionClusterRequestedToInflight(clusterRequested, Option.empty());
     assertEquals(HoodieTimeline.CLUSTERING_ACTION, clusterInflight.getAction());
-    HoodieInstant clusterComplete = ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
+    ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
         false, clusterInflight, new HoodieReplaceCommitMetadata(), metaClient.getActiveTimeline(),
-        tableFormatInstants::add);
-    assertEquals(HoodieInstant.State.COMPLETED, clusterComplete.getState());
-    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, clusterComplete.getAction(),
+        completed::add);
+    assertEquals(1, completed.size());
+    assertEquals(HoodieInstant.State.COMPLETED, completed.get(0).getState());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, completed.get(0).getAction(),
         "a clustering inflight instant must complete as replacecommit");
-    assertEquals(1, tableFormatInstants.size());
-    assertSame(clusterComplete, tableFormatInstants.get(0),
-        "the table format hook must see the instant that is returned");
 
-    tableFormatInstants.clear();
+    completed.clear();
     HoodieInstant replaceRequested = createRequestedReplaceInstantNotClustering("2");
     HoodieInstant replaceInflight = metaClient.getActiveTimeline()
         .transitionReplaceRequestedToInflight(replaceRequested, Option.empty());
     assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, replaceInflight.getAction());
-    HoodieInstant replaceComplete = ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
+    ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
         false, replaceInflight, new HoodieReplaceCommitMetadata(), metaClient.getActiveTimeline(),
-        tableFormatInstants::add);
-    assertEquals(HoodieInstant.State.COMPLETED, replaceComplete.getState());
-    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, replaceComplete.getAction(),
+        completed::add);
+    assertEquals(1, completed.size());
+    assertEquals(HoodieInstant.State.COMPLETED, completed.get(0).getState());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, completed.get(0).getAction(),
         "a replacecommit inflight instant must complete as replacecommit");
-    assertEquals(1, tableFormatInstants.size());
-    assertSame(replaceComplete, tableFormatInstants.get(0),
-        "the table format hook must see the instant that is returned");
+
+    List<HoodieInstant> completedInstants =
+        metaClient.reloadActiveTimeline().filterCompletedInstants().getInstants();
+    assertEquals(2, completedInstants.size());
+    completedInstants.forEach(instant ->
+        assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, instant.getAction()));
   }
 
   // replacecommit.inflight doesn't have clustering plan.

@@ -27,13 +27,11 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * A {@link HoodieWriteCommitCallback} that records every fired message, so tests can assert that
- * the callback fires for a commit and with which action type. Register it with
- * {@code HoodieWriteCommitCallbackConfig.withCallbackClass(RecordingCommitCallback.class.getName())}.
- *
- * <p>The write client loads the callback reflectively from the config, so the recorded messages
- * have to live in static state; call {@link #reset()} at the start of every test that asserts on
- * them.
+ * A recording {@link HoodieWriteCommitCallback} that captures every fired message so tests can
+ * assert the callback fires for table-service (compaction/clustering) commits with the expected
+ * action type. Loaded reflectively from the write config, so it needs a public
+ * {@code (HoodieWriteConfig)} constructor, and the messages have to live in static state; call
+ * {@link #reset()} at the start of every test that asserts on them.
  */
 public class RecordingCommitCallback implements HoodieWriteCommitCallback {
 
@@ -48,16 +46,10 @@ public class RecordingCommitCallback implements HoodieWriteCommitCallback {
     MESSAGES.add(callbackMessage);
   }
 
-  /**
-   * Snapshot of the messages recorded since the last {@link #reset()}, in the order they fired.
-   */
   public static List<HoodieWriteCommitCallbackMessage> messages() {
     return new ArrayList<>(MESSAGES);
   }
 
-  /**
-   * Drops every recorded message.
-   */
   public static void reset() {
     MESSAGES.clear();
   }
