@@ -22,10 +22,6 @@ import org.apache.hudi.common.util.hash.Hash;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.UUID;
 
@@ -228,11 +224,8 @@ public class TestInternalDynamicBloomFilter {
     }
     assertTrue(original.getMatrixLength() > 1);
 
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    original.write(new DataOutputStream(baos));
-
     InternalDynamicBloomFilter deserialized = new InternalDynamicBloomFilter();
-    deserialized.readFields(new DataInputStream(new ByteArrayInputStream(baos.toByteArray())));
+    deserialized.readFields(BloomSerDeTestUtils.asDataInput(BloomSerDeTestUtils.serialize(original::write)));
 
     assertEquals(original.getMatrixLength(), deserialized.getMatrixLength());
     for (int i = 0; i < 10; i++) {

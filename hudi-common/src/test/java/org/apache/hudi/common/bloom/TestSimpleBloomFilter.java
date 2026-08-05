@@ -30,19 +30,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link SimpleBloomFilter}.
+ * Tests the {@link SimpleBloomFilter} behaviour that the parameterized {@code TestBloomFilter}
+ * suite does not already cover for {@link BloomFilterTypeCode#SIMPLE}: negative lookups, null
+ * handling, the {@link java.nio.ByteBuffer} constructor and {@code or()} type enforcement.
  */
 public class TestSimpleBloomFilter {
-
-  @Test
-  public void testAddAndMightContain() {
-    SimpleBloomFilter filter = new SimpleBloomFilter(1000, 0.000001, Hash.MURMUR_HASH);
-    filter.add("key1");
-    filter.add("key2");
-
-    assertTrue(filter.mightContain("key1"));
-    assertTrue(filter.mightContain("key2"));
-  }
 
   @Test
   public void testMightContainReturnsFalseForKeyNeverAdded() {
@@ -65,19 +57,6 @@ public class TestSimpleBloomFilter {
   }
 
   @Test
-  public void testSerializeToStringRoundTrip() {
-    SimpleBloomFilter filter = new SimpleBloomFilter(1000, 0.000001, Hash.MURMUR_HASH);
-    filter.add("key1");
-    filter.add("key2");
-
-    String serialized = filter.serializeToString();
-    SimpleBloomFilter deserialized = new SimpleBloomFilter(serialized);
-
-    assertTrue(deserialized.mightContain("key1"));
-    assertTrue(deserialized.mightContain("key2"));
-  }
-
-  @Test
   public void testByteBufferConstructorRoundTrip() {
     SimpleBloomFilter filter = new SimpleBloomFilter(1000, 0.000001, Hash.MURMUR_HASH);
     filter.add("key1");
@@ -93,19 +72,6 @@ public class TestSimpleBloomFilter {
   public void testGetBloomFilterTypeCode() {
     SimpleBloomFilter filter = new SimpleBloomFilter(1000, 0.000001, Hash.MURMUR_HASH);
     assertEquals(BloomFilterTypeCode.SIMPLE, filter.getBloomFilterTypeCode());
-  }
-
-  @Test
-  public void testOrMergesTwoFilters() {
-    SimpleBloomFilter filter1 = new SimpleBloomFilter(1000, 0.000001, Hash.MURMUR_HASH);
-    filter1.add("key1");
-    SimpleBloomFilter filter2 = new SimpleBloomFilter(1000, 0.000001, Hash.MURMUR_HASH);
-    filter2.add("key2");
-
-    filter1.or(filter2);
-
-    assertTrue(filter1.mightContain("key1"));
-    assertTrue(filter1.mightContain("key2"));
   }
 
   @Test

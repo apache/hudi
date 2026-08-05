@@ -20,10 +20,6 @@ package org.apache.hudi.common.bloom;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -131,11 +127,9 @@ public class TestKey {
   @Test
   public void testWriteAndReadFieldsRoundTrip() throws IOException {
     Key original = new Key("hello-world".getBytes(), 3.5);
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    original.write(new DataOutputStream(baos));
 
     Key deserialized = new Key();
-    deserialized.readFields(new DataInputStream(new ByteArrayInputStream(baos.toByteArray())));
+    deserialized.readFields(BloomSerDeTestUtils.asDataInput(BloomSerDeTestUtils.serialize(original::write)));
 
     assertArrayEquals(original.getBytes(), deserialized.getBytes());
     assertEquals(original.getWeight(), deserialized.getWeight());

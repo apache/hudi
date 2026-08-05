@@ -69,12 +69,6 @@ public class TestHoodieSecondaryIndex {
   }
 
   @Test
-  public void testLuceneIndexWithSingleColumnIsValid() {
-    HoodieSecondaryIndex index = SecondaryIndexTestUtils.newLuceneIndex("idx_name", "name");
-    assertEquals(1, index.getColumns().size());
-  }
-
-  @Test
   public void testLuceneIndexWithMultipleColumnsThrows() {
     LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
     columns.put("name", Collections.emptyMap());

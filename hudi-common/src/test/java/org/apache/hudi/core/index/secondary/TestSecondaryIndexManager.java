@@ -41,6 +41,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -99,6 +100,11 @@ public class TestSecondaryIndexManager {
   @AfterEach
   public void tearDown() {
     tableConfigStatic.close();
+  }
+
+  @Test
+  public void testGetInstanceReturnsSingleton() {
+    assertSame(SecondaryIndexManager.getInstance(), SecondaryIndexManager.getInstance());
   }
 
   @Test
