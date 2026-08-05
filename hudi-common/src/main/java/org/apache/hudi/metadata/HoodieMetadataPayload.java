@@ -401,6 +401,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       int bitsTotal,
       int numExPlanes,
       int numClusters,
+      int routingVersion,
+      ByteBuffer routingCoarseCentroids,
+      ByteBuffer routingLeafOffsets,
+      float routingExpandRatio,
       int shardCount,
       int fileGroupCount,
       String metric,
@@ -434,6 +438,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         bitsTotal,
         numExPlanes,
         numClusters,
+        routingVersion,
+        routingCoarseCentroids,
+        routingLeafOffsets,
+        routingExpandRatio,
         shardCount,
         fileGroupCount,
         metric,
@@ -463,20 +471,18 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexClusterManifestRecord(
       int generation,
       int clusterId,
-      int shardCount,
       Collection<String> fileGroupIds,
       long vectorCount,
       long lastUpdatedTs,
       String metadataPartitionPath) {
     return createVectorIndexClusterManifestRecord(
-        generation, clusterId, 0, shardCount, fileGroupIds, vectorCount, lastUpdatedTs, metadataPartitionPath);
+        generation, clusterId, 0, fileGroupIds, vectorCount, lastUpdatedTs, metadataPartitionPath);
   }
 
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexClusterManifestRecord(
       int generation,
       int clusterId,
       int routingVersion,
-      int shardCount,
       Collection<String> fileGroupIds,
       long vectorCount,
       long lastUpdatedTs,
@@ -484,7 +490,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     String recordKey = VectorIndexMetadataKey.clusterStats(generation, clusterId);
     HoodieVectorIndexClusterStats stats = new HoodieVectorIndexClusterStats(
         routingVersion,
-        shardCount,
         fileGroupIds == null ? java.util.Collections.emptyList() : fileGroupIds.stream().collect(Collectors.toList()),
         vectorCount,
         0L,
@@ -506,7 +511,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     String recordKey = VectorIndexMetadataKey.clusterStats(generation, clusterId);
     HoodieVectorIndexClusterStats stats = new HoodieVectorIndexClusterStats(
         0,
-        1,
         java.util.Collections.emptyList(),
         liveCount,
         deltaCount,

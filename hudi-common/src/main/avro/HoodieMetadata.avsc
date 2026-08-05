@@ -582,7 +582,11 @@
                         {"name": "bitsTotal", "type": "int", "doc": "B = 1 + numExPlanes."},
                         {"name": "numExPlanes", "type": "int"},
                         {"name": "numClusters", "type": "int"},
-                        {"name": "shardCount", "type": "int", "doc": "Initial per-cluster posting shard geometry frozen for this generation."},
+                        {"name": "routingVersion", "type": "int", "doc": "Two-level assignment kernel version."},
+                        {"name": "routingCoarseCentroids", "type": "bytes", "doc": "Coarse centroids as row-major float32 LE values in assignment space."},
+                        {"name": "routingLeafOffsets", "type": "bytes", "doc": "One u32 LE boundary per coarse cell plus the terminal leaf-count boundary."},
+                        {"name": "routingExpandRatio", "type": "float", "doc": "Persisted coarse-neighbor expansion ratio used by every writer."},
+                        {"name": "shardCount", "type": "int", "doc": "Generation-wide posting shard geometry frozen for all clusters."},
                         {"name": "fileGroupCount", "type": "int", "doc": "MDT file-group geometry frozen for this generation; readers and writers never re-derive it."},
                         {"name": "metric", "type": "string", "doc": "L2 | DOT | COSINE."},
                         {"name": "assumeNormalized", "type": "boolean"},
@@ -612,10 +616,10 @@
                     "type": "record",
                     "name": "HoodieVectorIndexQuantizer",
                     "fields": [
-                        {"name": "quantizerType", "type": "string", "doc": "rb-rotation-explicit | rb-rotation-hadamard."},
-                        {"name": "randomSeed", "type": "long"},
+                        {"name": "quantizerType", "type": "string", "doc": "Seeded orthogonal rotation used by RaBitQ encoding."},
+                        {"name": "randomSeed", "type": "long", "doc": "Deterministically reconstructs the orthogonal rotation when rotationBytes is null."},
                         {"name": "rotationBytes", "type": ["null", "bytes"], "default": null,
-                         "doc": "Explicit path: rows of the D x D float32 LE orthogonal matrix. Null for hadamard."}
+                         "doc": "Optional explicit row-major float32 LE orthogonal matrix; null selects seeded reconstruction."}
                     ]
                 },
                 {
@@ -669,7 +673,6 @@
                     "name": "HoodieVectorIndexClusterStats",
                     "fields": [
                         {"name": "routingVersion", "type": "int", "doc": "Cache invalidation version for atomically published cluster routing changes."},
-                        {"name": "shardCount", "type": "int"},
                         {"name": "fileGroupIds", "type": {"type": "array", "items": "string"}, "doc": "Candidate base-table file groups for this cluster."},
                         {"name": "liveCount", "type": "long"},
                         {"name": "deltaCount", "type": "long"},

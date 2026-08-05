@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieVectorIndexTombstone;
 import org.apache.hudi.common.index.vector.VectorDistanceMetric;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.spark.index.vector.TwoLevelKMeansBootstrap$;
 
 import org.junit.jupiter.api.Test;
 
@@ -45,7 +46,13 @@ class TestSparkVectorIndexUpdater {
   private static final String INDEX_PARTITION = "vector_index_embedding";
   private static final SparkVectorIndexUpdater.Artifacts ARTIFACTS =
       new SparkVectorIndexUpdater.Artifacts(
-          new float[][] {{0.0f, 0.0f}}, Collections.singletonMap(0, 1),
+          new float[][] {{0.0f, 0.0f}},
+          TwoLevelKMeansBootstrap$.MODULE$.restoreModelForJava(
+              new float[][] {{0.0f, 0.0f}},
+              new float[][] {{0.0f, 0.0f}},
+              new int[] {0, 1}),
+          1.1f,
+          1,
           VectorDistanceMetric.L2, 2, 1, 42L, false, false);
 
   @Test
@@ -112,6 +119,41 @@ class TestSparkVectorIndexUpdater {
   }
 
   @Test
+  void testUpdaterUsesPersistedTwoLevelPlacementInsteadOfFlatArgmin() {
+    float[][] leaves = {{100.0f, 0.0f}, {11.0f, 0.0f}};
+    Object routingModel = TwoLevelKMeansBootstrap$.MODULE$.restoreModelForJava(
+        new float[][] {{0.0f, 0.0f}, {10.0f, 0.0f}}, leaves, new int[] {0, 1, 2});
+    SparkVectorIndexUpdater.Artifacts artifacts = new SparkVectorIndexUpdater.Artifacts(
+        leaves, routingModel, 1.1f, 1,
+        VectorDistanceMetric.L2, 2, 1, 42L, false, false);
+    SparkVectorIndexBootstrap.VectorRow deleted = row(
+        "id-boundary", "p1", "file-1", "001", floats(0.0f, 0.0f), 5L);
+
+    List<HoodieRecord> records = classify(rows(deleted), Collections.emptyMap(), artifacts);
+
+    assertEquals(1, records.size());
+    assertEquals(
+        VectorIndexMetadataKey.postingDelta(GENERATION, 0, 0, "id-boundary"),
+        records.get(0).getRecordKey());
+  }
+
+  @Test
+  void testInvalidCurrentVectorIsNotIndexed() {
+    SparkVectorIndexBootstrap.VectorRow invalid = row(
+        "id-invalid", "p1", "file-1", "001", floats(Float.NaN, 1.0f), 5L);
+
+    assertTrue(classify(Collections.emptyMap(), rows(invalid)).isEmpty());
+  }
+
+  @Test
+  void testInvalidPreviousVectorSkipsDerivedTombstone() {
+    SparkVectorIndexBootstrap.VectorRow invalid = row(
+        "id-invalid", "p1", "file-1", "001", new byte[] {1, 2}, 5L);
+
+    assertTrue(classify(rows(invalid), Collections.emptyMap()).isEmpty());
+  }
+
+  @Test
   void testExactNoOpEmitsNothing() {
     SparkVectorIndexBootstrap.VectorRow previous = row(
         "id-1", "p1", "file-1", "001", floats(1.0f, 2.0f), 5L);
@@ -124,9 +166,16 @@ class TestSparkVectorIndexUpdater {
   private static List<HoodieRecord> classify(
       Map<String, SparkVectorIndexBootstrap.VectorRow> previous,
       Map<String, SparkVectorIndexBootstrap.VectorRow> current) {
+    return classify(previous, current, ARTIFACTS);
+  }
+
+  private static List<HoodieRecord> classify(
+      Map<String, SparkVectorIndexBootstrap.VectorRow> previous,
+      Map<String, SparkVectorIndexBootstrap.VectorRow> current,
+      SparkVectorIndexUpdater.Artifacts artifacts) {
     return SparkVectorIndexUpdater.classifyPostingRecords(
         new SparkVectorIndexUpdater.FileGroupRows(previous, current),
-        ARTIFACTS, FLOAT, GENERATION, INSTANT, INDEX_PARTITION);
+        artifacts, FLOAT, GENERATION, INSTANT, INDEX_PARTITION);
   }
 
   private static Map<String, SparkVectorIndexBootstrap.VectorRow> rows(

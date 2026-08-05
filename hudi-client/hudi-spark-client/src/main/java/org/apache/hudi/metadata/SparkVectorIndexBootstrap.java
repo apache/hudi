@@ -45,7 +45,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -139,6 +138,8 @@ public final class SparkVectorIndexBootstrap {
 
     // ---- Phase 1: Sample → Train centroids with Spark ML KMeans ----
 
+    // Invalid vector values are not indexable and must not fail the source-table operation.
+    vectorRows = vectorRows.filter(row -> isValidVectorPayload(row.vectorBytes, dimension, vectorType));
     vectorRows.persist(org.apache.spark.storage.StorageLevel.MEMORY_AND_DISK());
     try {
       long totalVectors = vectorRows.count();
@@ -166,6 +167,12 @@ public final class SparkVectorIndexBootstrap {
           resolvedOptions.maxIterations, quantizerSeed, indexName);
       float[][] centroids = trainingArtifacts.centroids;
       Object routingModel = trainingArtifacts.routingModel;
+      if (routingModel == null) {
+        throw new IllegalStateException(
+            "Vector bootstrap did not produce the required two-level routing model for metric " + metric);
+      }
+      float[][] coarseCentroids = TwoLevelKMeansBootstrap$.MODULE$.coarseCentroidsForJava(routingModel);
+      int[] leafOffsets = TwoLevelKMeansBootstrap$.MODULE$.leafOffsetsForJava(routingModel);
       double[][] centroidsDouble = toDoubleCentroids(centroids);
       int actualK = centroids.length;
 
@@ -177,15 +184,14 @@ public final class SparkVectorIndexBootstrap {
       Broadcast<VectorDistanceMetric> bMetric = jsc.broadcast(metric);
       Broadcast<Integer> bDimension = jsc.broadcast(dimension);
       Broadcast<HoodieSchema.Vector.VectorElementType> bVectorType = jsc.broadcast(vectorType);
-      Broadcast<Object> bRoutingModel = routingModel == null ? null : jsc.broadcast(routingModel);
+      Broadcast<Object> bRoutingModel = jsc.broadcast(routingModel);
       final float assignmentExpandRatio = 1.1f;
 
       // Assign cluster IDs and collect (clusterId -> count) and (clusterId -> set of fileGroupIds)
       JavaPairRDD<Integer, VectorRow> assignedRows = vectorRows.mapToPair(row -> {
         float[] vector = toFloatArrayFromBytes(row.vectorBytes, bDimension.value(), bVectorType.value());
-        int clusterId = bRoutingModel != null
-            ? TwoLevelKMeansBootstrap$.MODULE$.assignOneForJava(bRoutingModel.value(), vector, assignmentExpandRatio)
-            : findNearestCentroid(vector, bCentroids.value(), bMetric.value());
+        int clusterId = TwoLevelKMeansBootstrap$.MODULE$.assignOneForJava(
+            bRoutingModel.value(), vector, assignmentExpandRatio);
         return new Tuple2<>(clusterId, row);
       });
 
@@ -195,24 +201,25 @@ public final class SparkVectorIndexBootstrap {
         vectorRows.unpersist();
 
         Map<Integer, Long> clusterVectorCounts = assignedRows.countByKey();
-        Map<Integer, Integer> clusterShardCounts = new HashMap<>();
-        for (Map.Entry<Integer, Long> entry : clusterVectorCounts.entrySet()) {
-          clusterShardCounts.put(entry.getKey(),
-              computeShardCount(entry.getValue(), targetRowsPerShard, maxShardsPerCluster));
-        }
+        long largestClusterPopulation = clusterVectorCounts.values().stream()
+            .mapToLong(Long::longValue)
+            .max()
+            .orElse(0L);
+        int generationShardCount = computeShardCount(
+            largestClusterPopulation, targetRowsPerShard, maxShardsPerCluster);
 
         log.info("Cluster stats collected: {} clusters, total {} vectors", clusterVectorCounts.size(), totalVectors);
 
         // ---- Phase 2b: Single-pass encode + emit canonical posting records ----
 
-        Broadcast<Map<Integer, Integer>> bShardCounts = jsc.broadcast(clusterShardCounts);
+        Broadcast<Integer> bShardCount = jsc.broadcast(generationShardCount);
         boolean residualEncoding = true;
 
         JavaRDD<HoodieRecord> dataRecords;
         if (storeInMdt) {
           dataRecords = buildPostingRecords(
               assignedRows, bDimension, bVectorType, bCentroids,
-              bShardCounts, quantizerSeed, rabitqBits, assumeNormalized, residualEncoding,
+              bShardCount, quantizerSeed, rabitqBits, assumeNormalized, residualEncoding,
               metric, vectorsPerBlock, generation, lastUpdatedTs, indexName);
         } else {
           dataRecords = jsc.emptyRDD();
@@ -251,7 +258,11 @@ public final class SparkVectorIndexBootstrap {
               rabitqBits,
               Math.max(0, rabitqBits - 1),
               actualK,
-              maxShardCount(clusterShardCounts),
+              1,
+              serializeFloatMatrix(coarseCentroids),
+              serializeIntArray(leafOffsets),
+              assignmentExpandRatio,
+              generationShardCount,
               Math.max(1, actualK),
               manifestMetricName(metric),
               assumeNormalized,
@@ -282,7 +293,6 @@ public final class SparkVectorIndexBootstrap {
             driverRecords.add(HoodieMetadataPayload.createVectorIndexClusterManifestRecord(
                 generation,
                 clusterId,
-                clusterShardCounts.getOrDefault(clusterId, 1),
                 // Exact rerank uses per-candidate posting locators, not cluster-wide file-group sets.
                 // Keep this reserved metadata empty to avoid stale routing state and driver-side collection.
                 Collections.emptySet(),
@@ -375,7 +385,7 @@ public final class SparkVectorIndexBootstrap {
       Broadcast<Integer> bDimension,
       Broadcast<HoodieSchema.Vector.VectorElementType> bVectorType,
       Broadcast<float[][]> bCentroids,
-      Broadcast<Map<Integer, Integer>> bShardCounts,
+      Broadcast<Integer> bShardCount,
       long quantizerSeed,
       int rabitqBits,
       boolean assumeNormalized,
@@ -390,8 +400,7 @@ public final class SparkVectorIndexBootstrap {
       RaBitQEncoder encoder = new RaBitQEncoder(bDimension.value(), rabitqBits, quantizerSeed, assumeNormalized);
       int clusterId = entry._1;
       VectorRow row = entry._2;
-      int shardCount = bShardCounts.value().getOrDefault(clusterId, 1);
-      int shardId = computeShardId(row.recordKey, shardCount);
+      int shardId = computeShardId(row.recordKey, bShardCount.value());
       if (row.rowPosition < 0) {
         throw new IllegalStateException("Vector index bootstrap requires file-absolute rowPosition for record "
             + row.recordKey + "; enable parquet row-index extraction before packed MDT block emission");
@@ -485,6 +494,12 @@ public final class SparkVectorIndexBootstrap {
    */
   static float[] toFloatArrayFromBytes(byte[] vectorBytes, int dimension,
                                        HoodieSchema.Vector.VectorElementType elementType) {
+    int expectedBytes = Math.multiplyExact(dimension, elementType.getElementSize());
+    if (vectorBytes == null || vectorBytes.length != expectedBytes) {
+      throw new IllegalArgumentException(
+          "Expected vector payload of " + expectedBytes + " bytes, got "
+              + (vectorBytes == null ? "null" : vectorBytes.length));
+    }
     ByteBuffer buffer = ByteBuffer.wrap(vectorBytes).order(HoodieSchema.VectorLogicalType.VECTOR_BYTE_ORDER);
     float[] result = new float[dimension];
     switch (elementType) {
@@ -492,11 +507,13 @@ public final class SparkVectorIndexBootstrap {
         for (int i = 0; i < dimension; i++) {
           result[i] = buffer.getFloat();
         }
+        validateFinite(result);
         return result;
       case DOUBLE:
         for (int i = 0; i < dimension; i++) {
           result[i] = (float) buffer.getDouble();
         }
+        validateFinite(result);
         return result;
       case INT8:
         for (int i = 0; i < dimension; i++) {
@@ -505,6 +522,27 @@ public final class SparkVectorIndexBootstrap {
         return result;
       default:
         throw new IllegalArgumentException("Unsupported vector element type: " + elementType);
+    }
+  }
+
+  private static boolean isValidVectorPayload(
+      byte[] vectorBytes,
+      int dimension,
+      HoodieSchema.Vector.VectorElementType elementType) {
+    try {
+      toFloatArrayFromBytes(vectorBytes, dimension, elementType);
+      return true;
+    } catch (IllegalArgumentException exception) {
+      return false;
+    }
+  }
+
+  private static void validateFinite(float[] vector) {
+    for (int dimension = 0; dimension < vector.length; dimension++) {
+      if (!Float.isFinite(vector[dimension])) {
+        throw new IllegalArgumentException(
+            "Vector contains a non-finite value at dimension " + dimension);
+      }
     }
   }
 
@@ -564,12 +602,31 @@ public final class SparkVectorIndexBootstrap {
 
   // ---- Utilities ----
 
-  private static int maxShardCount(Map<Integer, Integer> shardCounts) {
-    int max = 1;
-    for (Integer shardCount : shardCounts.values()) {
-      max = Math.max(max, shardCount == null ? 1 : shardCount);
+  private static ByteBuffer serializeFloatMatrix(float[][] values) {
+    int columns = values.length == 0 ? 0 : values[0].length;
+    ByteBuffer buffer = ByteBuffer.allocate(values.length * columns * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+    for (float[] row : values) {
+      if (row.length != columns) {
+        throw new IllegalArgumentException("Routing centroid rows must have a consistent dimension");
+      }
+      for (float value : row) {
+        if (!Float.isFinite(value)) {
+          throw new IllegalArgumentException("Routing centroids must contain only finite values");
+        }
+        buffer.putFloat(value);
+      }
     }
-    return max;
+    buffer.flip();
+    return buffer;
+  }
+
+  private static ByteBuffer serializeIntArray(int[] values) {
+    ByteBuffer buffer = ByteBuffer.allocate(values.length * Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+    for (int value : values) {
+      buffer.putInt(value);
+    }
+    buffer.flip();
+    return buffer;
   }
 
   private static String manifestMetricName(VectorDistanceMetric metric) {

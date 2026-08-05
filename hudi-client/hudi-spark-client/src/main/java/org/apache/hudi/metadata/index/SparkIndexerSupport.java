@@ -20,7 +20,6 @@
 package org.apache.hudi.metadata.index;
 
 import org.apache.hudi.avro.model.HoodieVectorIndexCentroids;
-import org.apache.hudi.avro.model.HoodieVectorIndexClusterStats;
 import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.avro.model.HoodieVectorIndexQuantizer;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -46,6 +45,7 @@ import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -65,6 +65,7 @@ import org.apache.hudi.metadata.index.vector.VectorIndexFileGroupUpdate;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.spark.index.vector.TwoLevelKMeansBootstrap$;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -79,10 +80,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -259,20 +262,29 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
         .withShouldUseRecordPosition(true)
         .withAllowInflightInstants(allowInflightInstants)
         .withProps(readerProps)
-        .build();
-         ClosableIterator<InternalRow> iterator = reader.getClosableIterator()) {
-      while (iterator.hasNext()) {
-        InternalRow record = iterator.next();
-        Object vector = readerContext.getRecordContext().getValue(record, requestedSchema, vectorColumn);
-        if (vector == null) {
-          continue;
+        .build()) {
+      Set<String> logRecordKeys = new HashSet<>();
+      if (fileSlice.getLogFiles().findAny().isPresent()) {
+        ClosableIterator<BufferedRecord<InternalRow>> logIterator = reader.getLogRecordsOnly();
+        while (logIterator.hasNext()) {
+          logRecordKeys.add(logIterator.next().getRecordKey());
         }
-        String recordKey = readerContext.getRecordContext().getRecordKey(record, requestedSchema);
-        long rowPosition = readerContext.getRecordContext().extractRecordPosition(
-            record, requestedSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME, -1L);
-        rows.put(recordKey, new SparkVectorIndexBootstrap.VectorRow(
-            recordKey, partitionPath, fileSlice.getFileId(), fileSlice.getBaseInstantTime(),
-            vectorBytes(vector, vectorType), rowPosition));
+      }
+      try (ClosableIterator<InternalRow> iterator = reader.getClosableIterator()) {
+        while (iterator.hasNext()) {
+          InternalRow record = iterator.next();
+          Object vector = readerContext.getRecordContext().getValue(record, requestedSchema, vectorColumn);
+          if (vector == null) {
+            continue;
+          }
+          String recordKey = readerContext.getRecordContext().getRecordKey(record, requestedSchema);
+          long rowPosition = logRecordKeys.contains(recordKey) ? -1L
+              : readerContext.getRecordContext().extractRecordPosition(
+                  record, requestedSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME, -1L);
+          rows.put(recordKey, new SparkVectorIndexBootstrap.VectorRow(
+              recordKey, partitionPath, fileSlice.getFileId(), fileSlice.getBaseInstantTime(),
+              vectorBytes(vector, vectorType), rowPosition));
+        }
       }
     } catch (Exception e) {
       throw new HoodieMetadataException(
@@ -315,30 +327,34 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
           HoodieVectorIndexCentroids.class));
     }
 
-    List<VectorMetadataRawKey> statKeys = new ArrayList<>(manifest.getNumClusters());
-    for (int clusterId = 0; clusterId < manifest.getNumClusters(); clusterId++) {
-      statKeys.add(new VectorMetadataRawKey(VectorIndexMetadataKey.clusterStats(generation, clusterId)));
+    if (manifest.getRoutingVersion() != 1
+        || !Float.isFinite(manifest.getRoutingExpandRatio())
+        || manifest.getRoutingExpandRatio() < 1.0f
+        || manifest.getShardCount() <= 0) {
+      throw new HoodieMetadataException("ACTIVE vector generation has unsupported routing or shard geometry");
     }
-    Map<String, Object> stats = new HashMap<>();
-    tableMetadata.getRecordsByKeyPrefixes(HoodieListData.eager(statKeys), indexPartition, true)
-        .collectAsList().forEach(record -> ((HoodieMetadataPayload) record.getData())
-            .getVectorIndexMetadata().ifPresent(value -> stats.put(record.getRecordKey(), value)));
-    Map<Integer, Integer> shardCounts = new HashMap<>();
-    for (int clusterId = 0; clusterId < manifest.getNumClusters(); clusterId++) {
-      HoodieVectorIndexClusterStats clusterStats = requireArtifact(
-          stats, VectorIndexMetadataKey.clusterStats(generation, clusterId),
-          HoodieVectorIndexClusterStats.class);
-      shardCounts.put(clusterId, clusterStats.getShardCount());
+    float[][] centroids = decodeCentroids(
+        centroidChunks, manifest.getNumClusters(), manifest.getDim(),
+        vectorSchema.getVectorElementType());
+    float[][] coarseCentroids = decodeFloatMatrix(
+        manifest.getRoutingCoarseCentroids(), manifest.getDim(), "routing coarse centroids");
+    int[] leafOffsets = decodeIntArray(manifest.getRoutingLeafOffsets(), "routing leaf offsets");
+    Object routingModel;
+    try {
+      routingModel = TwoLevelKMeansBootstrap$.MODULE$.restoreModelForJava(
+          coarseCentroids, centroids, leafOffsets);
+    } catch (IllegalArgumentException exception) {
+      throw new HoodieMetadataException("ACTIVE vector generation has invalid routing artifacts", exception);
     }
     String metricName = manifest.getMetric().toString();
     VectorDistanceMetric metric = "DOT".equalsIgnoreCase(metricName)
         ? VectorDistanceMetric.DOT_PRODUCT
         : VectorDistanceMetric.valueOf(metricName.toUpperCase());
     return new SparkVectorIndexUpdater.Artifacts(
-        decodeCentroids(
-            centroidChunks, manifest.getNumClusters(), manifest.getDim(),
-            vectorSchema.getVectorElementType()),
-        shardCounts,
+        centroids,
+        routingModel,
+        manifest.getRoutingExpandRatio(),
+        manifest.getShardCount(),
         metric,
         manifest.getDim(),
         manifest.getBitsTotal(),
@@ -354,6 +370,37 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
       throw new HoodieMetadataException("ACTIVE vector generation artifact is missing: " + key);
     }
     return artifactClass.cast(value);
+  }
+
+  private static float[][] decodeFloatMatrix(ByteBuffer source, int columns, String name) {
+    ByteBuffer values = source.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+    int rowBytes = columns * Float.BYTES;
+    if (columns <= 0 || values.remaining() == 0 || values.remaining() % rowBytes != 0) {
+      throw new HoodieMetadataException("Invalid " + name + " payload size");
+    }
+    float[][] result = new float[values.remaining() / rowBytes][columns];
+    for (int row = 0; row < result.length; row++) {
+      for (int column = 0; column < columns; column++) {
+        float value = values.getFloat();
+        if (!Float.isFinite(value)) {
+          throw new HoodieMetadataException(name + " contains a non-finite value");
+        }
+        result[row][column] = value;
+      }
+    }
+    return result;
+  }
+
+  private static int[] decodeIntArray(ByteBuffer source, String name) {
+    ByteBuffer values = source.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+    if (values.remaining() == 0 || values.remaining() % Integer.BYTES != 0) {
+      throw new HoodieMetadataException("Invalid " + name + " payload size");
+    }
+    int[] result = new int[values.remaining() / Integer.BYTES];
+    for (int index = 0; index < result.length; index++) {
+      result[index] = values.getInt();
+    }
+    return result;
   }
 
   private static float[][] decodeCentroids(

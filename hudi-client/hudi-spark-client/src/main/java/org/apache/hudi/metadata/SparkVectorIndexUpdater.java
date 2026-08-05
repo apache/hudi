@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.spark.index.vector.TwoLevelKMeansBootstrap$;
 
 import org.apache.spark.api.java.JavaRDD;
 
@@ -96,35 +97,77 @@ public final class SparkVectorIndexUpdater {
       SparkVectorIndexBootstrap.VectorRow previous = fileGroup.previousRows.get(recordKey);
       SparkVectorIndexBootstrap.VectorRow current = fileGroup.currentRows.get(recordKey);
       if (previous == null) {
-        changes.add(new Change(null, encode(current, artifacts, vectorType), ChangeType.INSERT));
+        EncodedRow encoded = tryEncode(current, artifacts, vectorType);
+        if (encoded != null) {
+          changes.add(new Change(null, encoded, ChangeType.INSERT));
+        }
       } else if (current == null) {
-        changes.add(new Change(encode(previous, artifacts, vectorType), null, ChangeType.DELETE));
+        EncodedRow routed = tryRoute(previous, artifacts, vectorType);
+        if (routed != null) {
+          changes.add(new Change(routed, null, ChangeType.DELETE));
+        }
       } else if (!Arrays.equals(previous.vectorBytes, current.vectorBytes)) {
-        changes.add(new Change(
-            encode(previous, artifacts, vectorType),
-            encode(current, artifacts, vectorType),
-            ChangeType.VECTOR_UPDATE));
+        EncodedRow routed = tryRoute(previous, artifacts, vectorType);
+        EncodedRow encoded = tryEncode(current, artifacts, vectorType);
+        if (routed != null || encoded != null) {
+          changes.add(new Change(routed, encoded, ChangeType.VECTOR_UPDATE));
+        }
       } else if (!sameLocator(previous, current)) {
-        changes.add(new Change(null, encode(current, artifacts, vectorType), ChangeType.LOCATOR_UPDATE));
+        EncodedRow encoded = tryEncode(current, artifacts, vectorType);
+        if (encoded != null) {
+          changes.add(new Change(null, encoded, ChangeType.LOCATOR_UPDATE));
+        }
       }
     }
     return changes;
+  }
+
+  private static EncodedRow tryEncode(
+      SparkVectorIndexBootstrap.VectorRow row,
+      Artifacts artifacts,
+      HoodieSchema.Vector.VectorElementType vectorType) {
+    try {
+      return encode(row, artifacts, vectorType);
+    } catch (IllegalArgumentException exception) {
+      return null;
+    }
+  }
+
+  private static EncodedRow tryRoute(
+      SparkVectorIndexBootstrap.VectorRow row,
+      Artifacts artifacts,
+      HoodieSchema.Vector.VectorElementType vectorType) {
+    try {
+      return route(row, artifacts, vectorType);
+    } catch (IllegalArgumentException exception) {
+      return null;
+    }
   }
 
   private static EncodedRow encode(
       SparkVectorIndexBootstrap.VectorRow row,
       Artifacts artifacts,
       HoodieSchema.Vector.VectorElementType vectorType) {
+    EncodedRow routed = route(row, artifacts, vectorType);
     float[] vector = SparkVectorIndexBootstrap.toFloatArrayFromBytes(
         row.vectorBytes, artifacts.dimension, vectorType);
-    int clusterId = SparkVectorIndexBootstrap.findNearestCentroid(
-        vector, artifacts.centroids, artifacts.metric);
-    int shardId = SparkVectorIndexBootstrap.computeShardId(
-        row.recordKey, artifacts.shardCounts.getOrDefault(clusterId, 1));
     QuantizedVector quantized = new RaBitQEncoder(
         artifacts.dimension, artifacts.bits, artifacts.seed, artifacts.assumeNormalized)
-        .encodeResidual(vector, artifacts.residualEncoding ? artifacts.centroids[clusterId] : null);
-    return new EncodedRow(row, clusterId, shardId, quantized);
+        .encodeResidual(vector, artifacts.residualEncoding ? artifacts.centroids[routed.clusterId] : null);
+    return new EncodedRow(row, routed.clusterId, routed.shardId, quantized);
+  }
+
+  private static EncodedRow route(
+      SparkVectorIndexBootstrap.VectorRow row,
+      Artifacts artifacts,
+      HoodieSchema.Vector.VectorElementType vectorType) {
+    float[] vector = SparkVectorIndexBootstrap.toFloatArrayFromBytes(
+        row.vectorBytes, artifacts.dimension, vectorType);
+    int clusterId = TwoLevelKMeansBootstrap$.MODULE$.assignOneForJava(
+        artifacts.routingModel, vector, artifacts.routingExpandRatio);
+    int shardId = SparkVectorIndexBootstrap.computeShardId(
+        row.recordKey, artifacts.shardCount);
+    return new EncodedRow(row, clusterId, shardId, null);
   }
 
   private static boolean sameLocator(
@@ -154,7 +197,9 @@ public final class SparkVectorIndexUpdater {
   public static final class Artifacts implements Serializable {
     private static final long serialVersionUID = 1L;
     private final float[][] centroids;
-    private final Map<Integer, Integer> shardCounts;
+    private final Object routingModel;
+    private final float routingExpandRatio;
+    private final int shardCount;
     private final VectorDistanceMetric metric;
     private final int dimension;
     private final int bits;
@@ -164,7 +209,9 @@ public final class SparkVectorIndexUpdater {
 
     public Artifacts(
         float[][] centroids,
-        Map<Integer, Integer> shardCounts,
+        Object routingModel,
+        float routingExpandRatio,
+        int shardCount,
         VectorDistanceMetric metric,
         int dimension,
         int bits,
@@ -172,7 +219,9 @@ public final class SparkVectorIndexUpdater {
         boolean assumeNormalized,
         boolean residualEncoding) {
       this.centroids = centroids;
-      this.shardCounts = shardCounts;
+      this.routingModel = routingModel;
+      this.routingExpandRatio = routingExpandRatio;
+      this.shardCount = shardCount;
       this.metric = metric;
       this.dimension = dimension;
       this.bits = bits;
@@ -251,6 +300,14 @@ public final class SparkVectorIndexUpdater {
       if (type == ChangeType.LOCATOR_UPDATE) {
         return Collections.singletonList(
             new Tuple2<>(current.clusterId, new ClusterDelta(0, 1, 0)));
+      }
+      if (previous == null) {
+        return Collections.singletonList(
+            new Tuple2<>(current.clusterId, new ClusterDelta(1, 1, 0)));
+      }
+      if (current == null) {
+        return Collections.singletonList(
+            new Tuple2<>(previous.clusterId, new ClusterDelta(-1, 0, 1)));
       }
       if (previous.clusterId == current.clusterId) {
         return Collections.singletonList(

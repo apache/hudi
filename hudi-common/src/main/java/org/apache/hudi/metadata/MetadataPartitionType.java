@@ -298,7 +298,6 @@ public enum MetadataPartitionType {
       checkState(liveCount >= 0, "Vector cluster live count cannot become negative");
       HoodieVectorIndexClusterStats merged = new HoodieVectorIndexClusterStats(
           previous.getRoutingVersion(),
-          previous.getShardCount(),
           previous.getFileGroupIds(),
           liveCount,
           previous.getDeltaCount() + delta.getDeltaCount(),

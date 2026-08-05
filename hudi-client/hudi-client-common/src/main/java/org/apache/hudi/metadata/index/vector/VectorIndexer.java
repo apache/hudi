@@ -245,11 +245,19 @@ public class VectorIndexer extends BaseIndexer {
       return current;
     }
 
+    List<HoodieLogFile> newLogFiles = writeStats.stream()
+        .map(stat -> new HoodieLogFile(new StoragePathInfo(
+            new StoragePath(basePath, stat.getPath()), stat.getFileSizeInBytes(),
+            false, (short) 0, 0, 0)))
+        .collect(Collectors.toList());
+    String baseInstant = previous.map(FileSlice::getBaseInstantTime)
+        .orElseGet(() -> newLogFiles.get(0).getDeltaCommitTime());
+    ValidationUtils.checkArgument(newLogFiles.stream()
+            .allMatch(logFile -> baseInstant.equals(logFile.getDeltaCommitTime())),
+        "All log files in a vector-index update must belong to the same base file slice");
     FileSlice current = previous.map(FileSlice::new)
-        .orElseGet(() -> new FileSlice(partition, instantTime, fileId));
-    writeStats.forEach(stat -> current.addLogFile(new HoodieLogFile(new StoragePathInfo(
-        new StoragePath(basePath, stat.getPath()), stat.getFileSizeInBytes(),
-        false, (short) 0, 0, 0))));
+        .orElseGet(() -> new FileSlice(partition, baseInstant, fileId));
+    newLogFiles.forEach(current::addLogFile);
     return current;
   }
 
