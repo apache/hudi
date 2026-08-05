@@ -62,7 +62,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  'preCombineField'='dt',
            |  'hoodie.index.type' = 'BUCKET',
            |  'hoodie.bucket.index.hash.field' = 'id',
-           |  'hoodie.bucket.index.num.buckets'=512
+           |  'hoodie.bucket.index.num.buckets'=512,
+           |   ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
            | )
              partitioned by (`day`,`hour`)
              location '${tablePath}'
@@ -115,7 +116,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  'hoodie.index.type' = 'BUCKET',
            |  'hoodie.bucket.index.hash.field' = 'id',
            |  'hoodie.bucket.index.num.buckets'=12,
-           |  'hoodie.datasource.write.payload.class'='org.apache.hudi.common.model.FirstValueAvroPayload'
+           |  'hoodie.datasource.write.payload.class'='org.apache.hudi.common.model.FirstValueAvroPayload',
+           |   ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
            | )
            partitioned by (`day`,`hour`)
            location '${tablePath}'
@@ -302,7 +304,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  ht string,
            |  ts long
            |) using hudi
-           | tblproperties (primaryKey = 'id')
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
+           |)
            | partitioned by (dt, ht)
            | location '${tmp.getCanonicalPath}'
        """.stripMargin)
@@ -630,7 +635,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                |) using hudi
                | tblproperties (
                |  type = '$tableType',
-               |  primaryKey = 'id'
+               |  primaryKey = 'id',
+               |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
                | )
                | partitioned by (dt, hh)
           """.stripMargin
@@ -939,7 +945,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  |) using hudi
                  | tblproperties (
                  |  type = '$tableType',
-                 |  primaryKey = 'id'
+                 |  primaryKey = 'id',
+                 |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
                  | )
                  | partitioned by (dt, hh)
                  | location '${tmp.getCanonicalPath}/$tableMultiPartition'
@@ -1314,6 +1321,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
@@ -2393,7 +2401,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  string_field STRING,
            |  timestamp_field TIMESTAMP
            |) USING hudi
-           | TBLPROPERTIES (primaryKey = 'id')
+           | TBLPROPERTIES (
+           | primaryKey = 'id',
+           | ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
+           |)
            | PARTITIONED BY (boolean_field, float_field, byte_field, short_field, decimal_field, date_field, string_field, timestamp_field)
            |LOCATION '${tmp.getCanonicalPath}'
      """.stripMargin)

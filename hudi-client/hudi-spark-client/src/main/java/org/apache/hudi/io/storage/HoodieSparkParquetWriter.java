@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
-import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
+import org.apache.hudi.io.storage.row.HoodieParquetWriteSupport;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -45,7 +45,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
 
   private final boolean populateMetaFields;
 
-  private final HoodieRowParquetWriteSupport writeSupport;
+  private final HoodieParquetWriteSupport writeSupport;
 
   private final Function<Long, String> seqIdGenerator;
 

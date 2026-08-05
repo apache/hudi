@@ -74,6 +74,8 @@ import org.apache.flink.types.Row;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.HashMap;
@@ -535,6 +537,101 @@ public class ITTestHoodieFlinkClustering {
     // wait for the asynchronous commit to finish
     TimeUnit.SECONDS.sleep(3);
 
+    runCluster(rowType);
+
+    // test output
+    final Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1100001,par1, id2,par1,id2,Stephen,33,2100001,par1]");
+    expected.put("par2", "[id3,par2,id3,Julian,53,3100001,par2, id4,par2,id4,Fabian,31,4100001,par2]");
+    expected.put("par3", "[id5,par3,id5,Sophia,18,5100001,par3, id6,par3,id6,Emma,20,6100001,par3]");
+    expected.put("par4", "[id7,par4,id7,Bob,44,7100001,par4, id8,par4,id8,Han,56,8100001,par4]");
+    TestData.checkWrittenData(tempFile, expected, 4);
+  }
+
+  @Test
+  public void testOfflineClusterFailoverAfterCommit() throws Exception {
+    StreamTableEnvironment tableEnv = prepareEnvAndTable();
+
+    FlinkClusteringConfig cfg = new FlinkClusteringConfig();
+    cfg.path = tempFile.getAbsolutePath();
+    cfg.targetPartitions = 4;
+    Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
+    assertDoesNotThrow(() -> runOfflineCluster(tableEnv, conf));
+
+    Table result = tableEnv.sqlQuery("select count(*) from t1");
+    assertEquals(16L, tableEnv.toDataStream(result, Row.class).executeAndCollect(1).get(0).getField(0));
+  }
+
+  private StreamTableEnvironment prepareEnvAndTable() {
+    // Create hoodie table and insert into data.
+    Configuration conf = new org.apache.flink.configuration.Configuration();
+    conf.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.BATCH);
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(conf);
+    StreamTableEnvironment tEnv = StreamTableEnvironment.create(env);
+    tEnv.getConfig().getConfiguration().setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+    tEnv.getConfig().getConfiguration().set(TableConfigOptions.TABLE_DML_SYNC, true);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+
+    // use append mode
+    options.put(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
+    options.put(FlinkOptions.INSERT_CLUSTER.key(), "false");
+    options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
+
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tEnv.executeSql(hoodieTableDDL);
+    tEnv.executeSql(TestSQL.INSERT_T1);
+    return tEnv;
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testInsertWithDifferentRecordKeyNullabilityAndClustering(boolean withPk) throws Exception {
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    tableEnv.getConfig().getConfiguration()
+        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+
+    // if create a table without primary key, the nullability of the record key field is nullable
+    // otherwise, the nullability is not nullable.
+    String pkConstraint = withPk ? ",  primary key (uuid) not enforced\n" : "";
+    String tblWithoutPkDDL = "create table t1(\n"
+        + "  `uuid` VARCHAR(20)\n"
+        + ",  `name` VARCHAR(10)\n"
+        + ",  `age` INT\n"
+        + ",  `ts` TIMESTAMP(3)\n"
+        + ",  `partition` VARCHAR(10)\n"
+        + pkConstraint
+        + ")\n"
+        + "PARTITIONED BY (`partition`)\n"
+        + "with (\n"
+        + "  'connector' = 'hudi',\n"
+        + "  'hoodie.datasource.write.recordkey.field' = 'uuid',\n"
+        + "  'path' = '" + tempFile.getAbsolutePath() + "'\n"
+        + ")";
+    tableEnv.executeSql(tblWithoutPkDDL);
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+
+    final RowType rowType = (RowType) DataTypes.ROW(
+            DataTypes.FIELD("uuid", DataTypes.VARCHAR(20).notNull()), // primary key set as not null
+            DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+            DataTypes.FIELD("age", DataTypes.INT()),
+            DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)),
+            DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+        .notNull().getLogicalType();
+
+    // run cluster with row type
+    runCluster(rowType);
+
+    final Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1000,par1, id2,par1,id2,Stephen,33,2000,par1]");
+    expected.put("par2", "[id3,par2,id3,Julian,53,3000,par2, id4,par2,id4,Fabian,31,4000,par2]");
+    expected.put("par3", "[id5,par3,id5,Sophia,18,5000,par3, id6,par3,id6,Emma,20,6000,par3]");
+    expected.put("par4", "[id7,par4,id7,Bob,44,7000,par4, id8,par4,id8,Han,56,8000,par4]");
+    TestData.checkWrittenData(tempFile, expected, 4);
+  }
+
+  private void runCluster(RowType rowType) throws Exception {
     // make configuration and setAvroSchema.
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
     FlinkClusteringConfig cfg = new FlinkClusteringConfig();
@@ -606,51 +703,7 @@ public class ITTestHoodieFlinkClustering {
           .setParallelism(1);
 
       env.execute("flink_hudi_clustering");
-
-      // test output
-      final Map<String, String> expected = new HashMap<>();
-      expected.put("par1", "[id1,par1,id1,Danny,23,1100001,par1, id2,par1,id2,Stephen,33,2100001,par1]");
-      expected.put("par2", "[id3,par2,id3,Julian,53,3100001,par2, id4,par2,id4,Fabian,31,4100001,par2]");
-      expected.put("par3", "[id5,par3,id5,Sophia,18,5100001,par3, id6,par3,id6,Emma,20,6100001,par3]");
-      expected.put("par4", "[id7,par4,id7,Bob,44,7100001,par4, id8,par4,id8,Han,56,8100001,par4]");
-      TestData.checkWrittenData(tempFile, expected, 4);
     }
-  }
-
-  @Test
-  public void testOfflineClusterFailoverAfterCommit() throws Exception {
-    StreamTableEnvironment tableEnv = prepareEnvAndTable();
-
-    FlinkClusteringConfig cfg = new FlinkClusteringConfig();
-    cfg.path = tempFile.getAbsolutePath();
-    cfg.targetPartitions = 4;
-    Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
-    assertDoesNotThrow(() -> runOfflineCluster(tableEnv, conf));
-
-    Table result = tableEnv.sqlQuery("select count(*) from t1");
-    assertEquals(16L, tableEnv.toDataStream(result, Row.class).executeAndCollect(1).get(0).getField(0));
-  }
-
-  private StreamTableEnvironment prepareEnvAndTable() {
-    // Create hoodie table and insert into data.
-    Configuration conf = new org.apache.flink.configuration.Configuration();
-    conf.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.BATCH);
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(conf);
-    StreamTableEnvironment tEnv = StreamTableEnvironment.create(env);
-    tEnv.getConfig().getConfiguration().setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
-    tEnv.getConfig().getConfiguration().set(TableConfigOptions.TABLE_DML_SYNC, true);
-    Map<String, String> options = new HashMap<>();
-    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
-
-    // use append mode
-    options.put(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
-    options.put(FlinkOptions.INSERT_CLUSTER.key(), "false");
-    options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
-
-    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
-    tEnv.executeSql(hoodieTableDDL);
-    tEnv.executeSql(TestSQL.INSERT_T1);
-    return tEnv;
   }
 
   /**

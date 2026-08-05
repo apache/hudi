@@ -20,10 +20,13 @@ package org.apache.hudi.keygen.constant;
 
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
+import org.apache.hudi.common.config.HoodieConfig;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
 
 /**
  * Types of {@link org.apache.hudi.keygen.KeyGenerator}.
@@ -59,5 +62,19 @@ public enum KeyGeneratorType {
     Arrays.stream(KeyGeneratorType.values())
         .forEach(x -> names.add(x.name()));
     return names;
+  }
+
+  public static boolean isComplexKeyGenerator(HoodieConfig config) {
+    if (config.contains(KEY_GENERATOR_CLASS_NAME)) {
+      try {
+        String keyGeneratorClass = config.getString(KEY_GENERATOR_CLASS_NAME).trim();
+        return keyGeneratorClass.equals("org.apache.hudi.keygen.ComplexAvroKeyGenerator")
+            || keyGeneratorClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator");
+      } catch (IllegalArgumentException e) {
+        return false;
+      }
+    } else {
+      return false;
+    }
   }
 }

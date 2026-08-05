@@ -54,5 +54,11 @@ ENV HDFS_SECONDARYNAMENODE_USER root
 ENV YARN_RESOURCEMANAGER_USER root
 ENV YARN_NODEMANAGER_USER root
 
+# JDK 8u272+ backported cgroup v2 container detection from JDK 11 but has a NPE bug
+# (JDK-8278725) when running in Docker containers on hosts with cgroup v2 (GitHub Actions).
+# Disable container support for all JVM processes in this image to avoid the NPE.
+# This affects Derby, HiveServer2, Spark, Hadoop daemons, etc.
+ENV JAVA_TOOL_OPTIONS="-XX:-UseContainerSupport"
+
 # for RocksDb
 RUN apk add --no-cache libstdc++

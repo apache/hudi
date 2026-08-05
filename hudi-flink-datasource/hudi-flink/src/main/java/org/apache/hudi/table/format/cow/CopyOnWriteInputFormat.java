@@ -210,10 +210,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       if (this.minSplitSize <= blockSize) {
         minSplitSize = this.minSplitSize;
       } else {
-        if (LOG.isWarnEnabled()) {
-          LOG.warn("Minimal split size of " + this.minSplitSize + " is larger than the block size of "
-              + blockSize + ". Decreasing minimal split size to block size.");
-        }
+        LOG.warn("Minimal split size of {} is larger than the block size of {}."
+            + " Decreasing minimal split size to block size.", this.minSplitSize, blockSize);
         minSplitSize = blockSize;
       }
 

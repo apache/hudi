@@ -22,10 +22,11 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.config.{TimestampKeyGeneratorConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -35,20 +36,23 @@ import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroK
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
 
+import org.apache.avro.Schema
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
+import org.apache.spark.unsafe.types.UTF8String
+import org.slf4j.LoggerFactory
 
+import java.lang.reflect.{Array => JArray}
 import java.util.Collections
 import javax.annotation.concurrent.NotThreadSafe
-
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 import scala.util.{Success, Try}
@@ -94,15 +98,19 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * Get the schema of the table.
    */
   lazy val schema: StructType = if (shouldFastBootstrap) {
-      StructType(rawSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
+      StructType(rawStructSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
     } else {
-      rawSchema
+      rawStructSchema
     }
 
-  private lazy val rawSchema: StructType = schemaSpec.getOrElse({
-      val schemaUtil = new TableSchemaResolver(metaClient)
-      AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
-    })
+  lazy val rawAvroSchema: Schema = {
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    schemaUtil.getTableAvroSchema
+  }
+
+  private lazy val rawStructSchema: StructType = schemaSpec.getOrElse {
+    AvroConversionUtils.convertAvroSchemaToStructType(rawAvroSchema)
+  }
 
   protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
 
@@ -243,7 +251,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       //       the whole table
       if (haveProperPartitionValues(partitionPaths.toSeq) && partitionSchema.nonEmpty) {
         val predicate = partitionPruningPredicates.reduce(expressions.And)
-        val boundPredicate = InterpretedPredicate(predicate.transform {
+        val boundPredicate = sparkAdapter.createInterpretedPredicate(predicate.transform {
           case a: AttributeReference =>
             val index = partitionSchema.indexWhere(a.name == _.name)
             BoundReference(index, partitionSchema(index).dataType, nullable = true)
@@ -400,9 +408,21 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   protected def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
-    HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema,
-      configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-      sparkParsePartitionUtil, shouldValidatePartitionColumns(spark))
+    val tableConfig = metaClient.getTableConfig
+    if (null != tableConfig.getKeyGeneratorClassName
+      && tableConfig.getKeyGeneratorClassName.equals(classOf[org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator].getName)
+      && tableConfig.propsMap.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
+      .matches("SCALAR|UNIX_TIMESTAMP|EPOCHMILLISECONDS|EPOCHMICROSECONDS")) {
+      // For TIMESTAMP key generator when TYPE is SCALAR, UNIX_TIMESTAMP,
+      // EPOCHMILLISECONDS, or EPOCHMICROSECONDS,
+      // we couldn't reconstruct initial partition column values from partition paths due to lost data after formatting in most cases.
+      // But the output for these cases is in a string format, so we can pass partitionPath as UTF8String
+      Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
+    } else {
+      HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema,
+        configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
+        sparkParsePartitionUtil, shouldValidatePartitionColumns(spark))
+    }
   }
 
   private def arePartitionPathsUrlEncoded: Boolean =
@@ -410,6 +430,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 }
 
 object SparkHoodieTableFileIndex extends SparkAdapterSupport {
+  private val LOG = LoggerFactory.getLogger(classOf[SparkHoodieTableFileIndex])
+  private val PUT_LEAF_FILES_METHOD_NAME = "putLeafFiles"
 
   private def haveProperPartitionValues(partitionPaths: Seq[PartitionPath]) = {
     partitionPaths.forall(_.values.length > 0)
@@ -491,17 +513,27 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
   }
 
   private def adapt(cache: FileStatusCache): BaseHoodieTableFileIndex.FileStatusCache = {
-    new BaseHoodieTableFileIndex.FileStatusCache {
-      override def get(path: StoragePath): org.apache.hudi.common.util.Option[java.util.List[StoragePathInfo]] =
-        toJavaOption(cache.getLeafFiles(new Path(path.toUri)).map(opt => opt.map(
-          e => HadoopFSUtils.convertToStoragePathInfo(e)).toList.asJava
-        ))
+    // Certain Spark runtime like Databricks Spark has changed the FileStatusCache APIs
+    // so we need to check the API to avoid NoSuchMethodError
+    if (ReflectionUtils.getMethod(
+      classOf[FileStatusCache], PUT_LEAF_FILES_METHOD_NAME, classOf[Path],
+      JArray.newInstance(classOf[FileStatus], 0).getClass).isPresent) {
+      new BaseHoodieTableFileIndex.FileStatusCache {
+        override def get(path: StoragePath): org.apache.hudi.common.util.Option[java.util.List[StoragePathInfo]] =
+          toJavaOption(cache.getLeafFiles(new Path(path.toUri)).map(opt => opt.map(
+            e => HadoopFSUtils.convertToStoragePathInfo(e)).toList.asJava
+          ))
 
-      override def put(path: StoragePath, leafFiles: java.util.List[StoragePathInfo]): Unit =
-        cache.putLeafFiles(new Path(path.toUri), leafFiles.asScala.map(e => new FileStatus(
-          e.getLength, e.isDirectory, 0, e.getBlockSize, e.getModificationTime, new Path(e.getPath.toUri))).toArray)
+        override def put(path: StoragePath, leafFiles: java.util.List[StoragePathInfo]): Unit =
+          cache.putLeafFiles(new Path(path.toUri), leafFiles.asScala.map(e => new FileStatus(
+            e.getLength, e.isDirectory, 0, e.getBlockSize, e.getModificationTime, new Path(e.getPath.toUri))).toArray)
 
-      override def invalidate(): Unit = cache.invalidateAll()
+        override def invalidate(): Unit = cache.invalidateAll()
+      }
+    } else {
+      LOG.warn("Use no-op file status cache instead because the FileStatusCache APIs at runtime "
+        + "are different from open-source Spark")
+      new BaseHoodieTableFileIndex.NoopCache
     }
   }
 

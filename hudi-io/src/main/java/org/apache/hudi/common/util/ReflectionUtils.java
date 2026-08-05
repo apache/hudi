@@ -53,6 +53,8 @@ public class ReflectionUtils {
         return Class.forName(c);
       } catch (ClassNotFoundException e) {
         throw new HoodieException("Unable to load class", e);
+      } catch (NoClassDefFoundError e) {
+        throw new HoodieException("Unable to load class due to missing dependency", e);
       }
     });
   }
@@ -106,6 +108,15 @@ public class ReflectionUtils {
       return true;
     } catch (NoSuchMethodException e) {
       String message = "Unable to instantiate class " + clazz;
+      if (silenceWarning) {
+        LOG.debug(message, e);
+      } else {
+        LOG.warn(message, e);
+      }
+      return false;
+    } catch (HoodieException e) {
+      // Class cannot be loaded (e.g., ClassNotFoundException or NoClassDefFoundError)
+      String message = "Unable to load class " + clazz;
       if (silenceWarning) {
         LOG.debug(message, e);
       } else {
@@ -204,6 +215,22 @@ public class ReflectionUtils {
       throw new HoodieException(String.format("Unable to find the method %s of the class %s ",  methodName, clazz), e);
     } catch (InvocationTargetException | IllegalAccessException e) {
       throw new HoodieException(String.format("Unable to invoke the method %s of the class %s ", methodName, clazz), e);
+    }
+  }
+
+  /**
+   * Gets a method based on the method name and type of parameters through reflection.
+   *
+   * @param clazz          {@link Class} object
+   * @param methodName     method name
+   * @param parametersType type of parameters
+   * @return {@link Option} of the method if found; {@code Option.empty()} if not found or error out
+   */
+  public static Option<Method> getMethod(Class<?> clazz, String methodName, Class<?>... parametersType) {
+    try {
+      return Option.of(clazz.getMethod(methodName, parametersType));
+    } catch (Throwable e) {
+      return Option.empty();
     }
   }
 

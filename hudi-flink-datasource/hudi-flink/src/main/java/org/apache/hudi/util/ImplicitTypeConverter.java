@@ -127,7 +127,7 @@ public class ImplicitTypeConverter {
           return literal;
       }
     } catch (RuntimeException e) {
-      LOG.warn("Failed to convert literal [{}] to type [{}]. Use its original type", literal, literalType);
+      LOG.warn("Failed to convert literal [{}] to type [{}]. Will use its original type", literal, literalType);
       return literal;
     }
   }

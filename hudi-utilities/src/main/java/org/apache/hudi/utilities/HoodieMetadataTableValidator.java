@@ -572,7 +572,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         LOG.info("Metadata table validation succeeded ({}).", taskLabels);
         return true;
       } else {
-        LOG.warn("Metadata table validation failed ({}).", taskLabels);
+        LOG.error("Metadata table validation failed ({}).", taskLabels);
         return false;
       }
     } catch (Exception e) {
@@ -1140,7 +1140,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           mismatch = true;
           break;
         } else {
-          LOG.warn("There are uncommitted log files in the latest file slices but the committed log files match: {} {}", fileSlice1, fileSlice2);
+          LOG.info("There are uncommitted log files in the latest file slices but the committed log files match: {} {}", fileSlice1, fileSlice2);
         }
       }
     }

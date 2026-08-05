@@ -322,6 +322,27 @@ object HoodieSparkSqlTestBase {
     storage.createNewFile(filePath)
   }
 
+
+  def enableComplexKeygenValidation(spark: SparkSession,
+                                    tableName: String): Unit = {
+    setComplexKeygenValidation(spark, tableName, value = true)
+  }
+
+  def disableComplexKeygenValidation(spark: SparkSession,
+                                     tableName: String): Unit = {
+    setComplexKeygenValidation(spark, tableName, value = false)
+  }
+
+  private def setComplexKeygenValidation(spark: SparkSession,
+                                         tableName: String,
+                                         value: Boolean): Unit = {
+    spark.sql(
+      s"""
+         |ALTER TABLE $tableName
+         |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = '$value')
+         |""".stripMargin)
+  }
+
   private def checkMessageContains(e: Throwable, text: String): Boolean =
     e.getMessage.trim.contains(text.trim)
 

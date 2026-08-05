@@ -17,34 +17,44 @@
 
 package org.apache.spark.sql.adapter
 
+import org.apache.hudi.avro.AvroSchemaUtils
+import org.apache.hudi.{Spark35HoodieFileScanRDD, SparkAdapterSupport$}
+import org.apache.hudi.io.storage.HoodieFileReader
+import org.apache.hudi.storage.HoodieStorage
+import org.apache.hudi.util.JFunction
+
 import org.apache.avro.Schema
-import org.apache.hadoop.fs.FileStatus
-import org.apache.hudi.Spark35HoodieFileScanRDD
+import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
+import org.apache.parquet.schema.{MessageType, SchemaRepair}
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.types.DataTypeUtils
-import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
+import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark35LegacyHoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetReadSupport, ParquetFileFormat, ParquetReadSupport, ParquetToSparkSchemaConverter, Spark35LegacyHoodieParquetFileFormat, SparkBasicSchemaEvolution}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
+import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_5ExtendedSqlParser}
-import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
+import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.sql._
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.internal.LegacyBehaviorPolicy
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
+import java.time.ZoneId
+
 /**
- * Implementation of [[SparkAdapter]] for Spark 3.5.x branch
+ * Implementation of [[org.apache.spark.sql.hudi.SparkAdapter]] for Spark 3.5.x branch
  */
 class Spark3_5Adapter extends BaseSpark3Adapter {
 
@@ -88,8 +98,8 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_5ExtendedSqlParser(spark, delegate)
 
-  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark35LegacyHoodieParquetFileFormat(appendPartitionValues))
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableSchema: Schema, hasTimestampMillisFieldInTableSchema: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark35LegacyHoodieParquetFileFormat(appendPartitionValues, tableSchema, hasTimestampMillisFieldInTableSchema))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,
@@ -126,5 +136,55 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
     case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
+  }
+
+  override def getParquetReadSupport(storage: HoodieStorage,
+                                     messageSchema: org.apache.hudi.common.util.Option[MessageType]): ParquetReadSupport = {
+    val enableTimestampFieldRepair = AvroSchemaUtils.isLogicalTimestampRepairNeeded(storage.getConf, JFunction.toJavaSupplier(() => true))
+    new HoodieParquetReadSupport(
+      Option.empty[ZoneId],
+      enableVectorizedReader = true,
+      enableTimestampFieldRepair,
+      RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName("CORRECTED")),
+      RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName("LEGACY")),
+      messageSchema
+    )
+  }
+
+  override def repairSchemaIfSpecified(shouldRepair: Boolean,
+                                       fileSchema: MessageType,
+                                       tableSchemaOpt: org.apache.hudi.common.util.Option[MessageType]): MessageType = {
+    if (shouldRepair) {
+      SchemaRepair.repairLogicalTypes(fileSchema, tableSchemaOpt)
+    } else {
+      fileSchema
+    }
+  }
+
+  override def getReaderSchemas(storage: HoodieStorage, readerSchema: Schema, requestedSchema: Schema, fileSchema: MessageType):
+  org.apache.hudi.common.util.collection.Pair[StructType, StructType] = {
+    val nonNullRequestedSchema = AvroSchemaUtils.getNonNullTypeFromUnion(requestedSchema)
+    val cachedRequestedSchema = HoodieInternalRowUtils.getCachedSchema(nonNullRequestedSchema)
+    val requestedSchemaInMessageType = org.apache.hudi.common.util.Option.of(getAvroSchemaConverter(storage.getConf.unwrapAs(classOf[Configuration])).convert(nonNullRequestedSchema))
+    val enableTimestampFieldRepair = AvroSchemaUtils.isLogicalTimestampRepairNeeded(storage.getConf, JFunction.toJavaSupplier(() => true))
+    val repairedRequestedSchema = repairSchemaIfSpecified(enableTimestampFieldRepair, fileSchema, requestedSchemaInMessageType)
+    val repairedRequestedStructType = new ParquetToSparkSchemaConverter(storage.getConf.unwrapAs(classOf[Configuration])).convert(repairedRequestedSchema)
+    val evolution = new SparkBasicSchemaEvolution(repairedRequestedStructType, cachedRequestedSchema, SQLConf.get.sessionLocalTimeZone)
+    val readerStructType = evolution.getRequestSchema
+    org.apache.hudi.common.util.collection.Pair.of(
+      readerStructType, readerStructType
+    )
+  }
+
+  override def getDateTimeRebaseMode(): LegacyBehaviorPolicy.Value = {
+    LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE))
+  }
+
+  override def isLegacyBehaviorPolicy(value: Object): Boolean = {
+    value == LegacyBehaviorPolicy.LEGACY
+  }
+
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    dataType == DataTypes.TimestampNTZType
   }
 }

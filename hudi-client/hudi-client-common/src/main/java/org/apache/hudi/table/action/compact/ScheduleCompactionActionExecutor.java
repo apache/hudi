@@ -94,7 +94,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
         // if there are inflight writes, their instantTime must not be less than that of compaction instant time
         Option<HoodieInstant> earliestInflightOpt = table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction().firstInstant();
         if (earliestInflightOpt.isPresent() && !HoodieTimeline.compareTimestamps(earliestInflightOpt.get().getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime)) {
-          LOG.warn("Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflightOpt.get()
+          LOG.info("Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflightOpt.get()
               + ", Compaction scheduled at " + instantTime + ". Hence skipping to schedule compaction");
           return Option.empty();
         }

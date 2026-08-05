@@ -17,6 +17,10 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{GlobPattern, Path}
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME
 import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
@@ -34,11 +38,13 @@ import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFound
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
+import org.apache.hudi.io.storage.HoodieFileReader
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.table.HoodieSparkTable
-
 import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.GlobPattern
+import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat
@@ -110,7 +116,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   // use schema from a file produced in the end/latest instant
 
-  val (usedSchema, internalSchema) = {
+  val (usedSchema, internalSchema, tableAvroSchema) = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
     val iSchema : InternalSchema = if (!isSchemaEvolutionEnabledOnRead(optParams, sqlContext.sparkSession)) {
@@ -129,14 +135,14 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
     if (tableSchema.getType == Schema.Type.NULL) {
       // if there is only one commit in the table and is an empty commit without schema, return empty RDD here
-      (StructType(Nil), InternalSchema.getEmptyInternalSchema)
+      (StructType(Nil), InternalSchema.getEmptyInternalSchema, tableSchema)
     } else {
       val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
       if (iSchema != null && !iSchema.isEmptySchema) {
         // if internalSchema is ready, dataSchema will contains skeletonSchema
-        (dataSchema, iSchema)
+        (dataSchema, iSchema, tableSchema)
       } else {
-        (StructType(skeletonSchema.fields ++ dataSchema.fields), InternalSchema.getEmptyInternalSchema)
+        (StructType(skeletonSchema.fields ++ dataSchema.fields), InternalSchema.getEmptyInternalSchema, tableSchema)
       }
     }
   }
@@ -203,9 +209,16 @@ class IncrementalRelation(val sqlContext: SQLContext,
       // pass internalSchema to hadoopConf, so it can be used in executors.
       val validCommits = metaClient
         .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+      val conf = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
+      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
+      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
+      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+      // Pass table Avro schema to hadoopConf so supportBatch() can find it (supportBatch does not receive options).
+      if (tableAvroSchema.getType != Schema.Type.NULL) {
+        LegacyHoodieParquetFileFormat.setTableAvroSchemaInConf(conf, tableAvroSchema)
+        AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(conf,
+          JFunction.toJavaSupplier(() => AvroSchemaUtils.hasTimestampMillisField(tableAvroSchema).asInstanceOf[java.lang.Boolean]))
+      }
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
         case HoodieFileFormat.PARQUET => LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
         case HoodieFileFormat.ORC => "orc"
@@ -245,7 +258,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
             val timer = HoodieTimer.start
 
             val allFilesToCheck = filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths
-            val storageConf = HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration)
+            val storageConf = HadoopFSUtils.getStorageConfWithCopy(conf)
             val localBasePathStr = basePath.toString
             val firstNotFoundPath = sqlContext.sparkContext.parallelize(allFilesToCheck.toSeq, allFilesToCheck.size)
               .map(path => {
@@ -276,7 +289,12 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
             if (regularFileIdToFullPath.nonEmpty) {
               try {
-                df = df.union(sqlContext.read.options(sOpts)
+                val optionsWithSchema = if (tableAvroSchema.getType != Schema.Type.NULL) {
+                  sOpts + (LegacyHoodieParquetFileFormat.HOODIE_TABLE_AVRO_SCHEMA -> tableAvroSchema.toString)
+                } else {
+                  sOpts
+                }
+                df = df.union(sqlContext.read.options(optionsWithSchema)
                   .schema(usedSchema).format(formatClassName)
                   // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
                   .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)

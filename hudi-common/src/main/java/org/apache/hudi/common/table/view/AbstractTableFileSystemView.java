@@ -637,6 +637,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  public final List<String> getPartitionNames() {
+    try {
+      readLock.lock();
+      return fetchAllStoredFileGroups()
+          .filter(fg -> !isFileGroupReplaced(fg))
+          .map(HoodieFileGroup::getPartitionPath)
+          .distinct()
+          .collect(Collectors.toList());
+    } finally {
+      readLock.unlock();
+    }
+  }
+
   @Override
   public final Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations() {
     try {
@@ -1452,7 +1465,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param maxInstantTime The max instant time
    */
   private Option<FileSlice> fetchAllLogsMergedFileSlice(HoodieFileGroup fileGroup, String maxInstantTime) {
-    List<FileSlice> fileSlices = fileGroup.getAllFileSlicesBeforeOn(maxInstantTime).collect(Collectors.toList());
+    List<FileSlice> fileSlices = fileGroup.getAllRawFileSlices().collect(Collectors.toList());
+    fileSlices = fileSlices.stream()
+        .filter(slice -> HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime))
+        .collect(Collectors.toList());
     if (fileSlices.size() == 0) {
       return Option.empty();
     }

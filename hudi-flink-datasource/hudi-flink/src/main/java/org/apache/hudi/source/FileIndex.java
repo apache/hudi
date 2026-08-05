@@ -312,7 +312,7 @@ public class FileIndex {
       if (metadataConfig.isEnabled()) {
         return true;
       } else {
-        LOG.warn("Data skipping requires Metadata Table to be enabled! Disable the data skipping");
+        LOG.warn("Data skipping requires Metadata Table to be enabled! Disable the data skipping or enable the metadata table.");
       }
     }
     return false;

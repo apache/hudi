@@ -320,7 +320,7 @@ public class HoodieRepairTool {
             try {
               success = fs.delete(new Path(basePath, relativeFilePath), false);
             } catch (IOException e) {
-              LOG.warn("Failed to delete file " + relativeFilePath);
+              LOG.error("Failed to delete file {}", relativeFilePath);
             } finally {
               results.add(success);
             }
@@ -501,12 +501,11 @@ public class HoodieRepairTool {
   private void printRepairInfo(
       List<String> instantTimesToRepair, List<ImmutablePair<String, List<String>>> instantsWithDanglingFiles) {
     int numInstantsToRepair = instantsWithDanglingFiles.size();
-    LOG.warn("Number of instants verified based on the base and log files: "
-        + instantTimesToRepair.size());
-    LOG.warn("Instant timestamps: " + instantTimesToRepair);
-    LOG.warn("Number of instants to repair: " + numInstantsToRepair);
+    LOG.info("Number of instants verified based on the base and log files: {}", instantTimesToRepair.size());
+    LOG.info("Instant timestamps: {}", instantTimesToRepair);
+    LOG.info("Number of instants to repair: {}", numInstantsToRepair);
     if (numInstantsToRepair > 0) {
-      instantsWithDanglingFiles.forEach(e -> LOG.warn("   ** Removing files: " + e.getValue()));
+      instantsWithDanglingFiles.forEach(e -> LOG.info("   ** Removing files: {}", e.getValue()));
     }
   }
 

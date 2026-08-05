@@ -104,9 +104,16 @@ public class HoodieClientTestUtils {
       sparkConf.set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
     }
 
-    if (canLoadClass("org.apache.spark.sql.hudi.catalog.HoodieCatalog") && HoodieSparkUtils.gteqSpark3_2()) {
-      sparkConf.set("spark.sql.catalog.spark_catalog",
-          "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
+    try {
+      if (canLoadClass("org.apache.spark.sql.hudi.catalog.HoodieCatalog") && HoodieSparkUtils.gteqSpark3_2()) {
+        sparkConf.set("spark.sql.catalog.spark_catalog",
+            "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
+      }
+    } catch (LinkageError e) {
+      // Handle Scala version compatibility issues (e.g., Scala 2.12 vs 2.13)
+      // If we can't determine the Spark version, skip setting the catalog
+      // This can happen when Scala code compiled with 2.12 references types removed in 2.13
+      // LinkageError catches both NoClassDefFoundError and other linkage errors
     }
 
     String evlogDir = System.getProperty("SPARK_EVLOG_DIR");
@@ -340,6 +347,12 @@ public class HoodieClientTestUtils {
     try {
       return ReflectionUtils.getClass(className) != null;
     } catch (Exception e) {
+      return false;
+    } catch (NoClassDefFoundError e) {
+      // Handle cases where class exists but dependencies are missing (e.g., Scala 2.12 vs 2.13 compatibility)
+      return false;
+    } catch (Throwable e) {
+      // Catch any other errors (LinkageError, etc.) that might occur during class loading
       return false;
     }
   }

@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.dml
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -74,7 +75,8 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey = 'id',
              |  preCombineField = 'ts',
-             |  hoodie.datasource.write.hive_style_partitioning = '$hiveStylePartitionEnable'
+             |  hoodie.datasource.write.hive_style_partitioning = '$hiveStylePartitionEnable',
+             |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
              | )
         """.stripMargin)
         val table = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
@@ -87,6 +89,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt,hh")
           .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
           .mode(SaveMode.Append)
           .save(basePath)
 
@@ -112,6 +115,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt,hh")
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
           .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
           .mode(SaveMode.Append)
           .save(basePath)

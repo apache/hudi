@@ -288,7 +288,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
                                                    HoodieInstant instantToBeDeleted) {
     // Remove the rolled back inflight commits
     if (deleteInstant) {
-      LOG.info("Deleting instant=" + instantToBeDeleted);
+      LOG.info("Deleting instant={}", instantToBeDeleted);
       activeTimeline.deletePending(instantToBeDeleted);
       if (instantToBeDeleted.isInflight() && !table.getMetaClient().getTimelineLayoutVersion().isNullVersion()) {
         // Delete corresponding requested instant
@@ -296,9 +296,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
             instantToBeDeleted.getTimestamp());
         activeTimeline.deletePending(instantToBeDeleted);
       }
-      LOG.info("Deleted pending commit " + instantToBeDeleted);
+      LOG.info("Deleted pending commit {}", instantToBeDeleted);
     } else {
-      LOG.warn("Rollback finished without deleting inflight instant file. Instant=" + instantToBeDeleted);
+      LOG.info("Rollback finished without deleting inflight instant file. Instant={}", instantToBeDeleted);
     }
   }
 

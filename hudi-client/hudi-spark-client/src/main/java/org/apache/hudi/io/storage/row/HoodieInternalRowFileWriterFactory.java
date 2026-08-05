@@ -70,8 +70,16 @@ public class HoodieInternalRowFileWriterFactory {
                                                                              Option<BloomFilter> bloomFilterOpt
   )
       throws IOException {
-    HoodieRowParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport
+    HoodieParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport
         .getHoodieRowParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), structType, bloomFilterOpt, writeConfig);
+
+    // Use reflection to call getHadoopConf() since the concrete class may not be available at compile time
+    Configuration hadoopConf;
+    try {
+      hadoopConf = (Configuration) writeSupport.getClass().getMethod("getHadoopConf").invoke(writeSupport);
+    } catch (Exception e) {
+      throw new IllegalStateException("Failed to get Hadoop configuration from WriteSupport: " + writeSupport.getClass().getName(), e);
+    }
 
     return new HoodieInternalRowParquetWriter(
         path,
@@ -81,7 +89,7 @@ public class HoodieInternalRowFileWriterFactory {
             writeConfig.getParquetBlockSize(),
             writeConfig.getParquetPageSize(),
             writeConfig.getParquetMaxFileSize(),
-            new HadoopStorageConfiguration(writeSupport.getHadoopConf()),
+            new HadoopStorageConfiguration(hadoopConf),
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled()
         ));

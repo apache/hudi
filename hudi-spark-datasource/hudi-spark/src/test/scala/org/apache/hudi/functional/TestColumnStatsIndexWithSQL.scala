@@ -19,23 +19,23 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.MetadataConversionUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
+import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
 import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JavaConversions
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
-
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, Literal}
+import org.apache.spark.sql.test.LastOptions.saveMode
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
@@ -89,12 +89,12 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       HoodieIndexConfig.INDEX_TYPE.key() -> INMEMORY.name()
     ) ++ metadataOpts
 
-    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      shouldValidate = false)
+      shouldValidate = false))
 
     assertEquals(4, getLatestDataFilesCount(commonOpts))
     assertEquals(0, getLatestDataFilesCount(commonOpts, includeLogFiles = false))
@@ -134,12 +134,12 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     verifyFileIndexAndSQLQueries(commonOpts, isTableDataSameAsAfterSecondInstant = true)
 
     // Add the last df back and verify the queries
-    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",
       expectedColStatsSourcePath = "",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false)
+      shouldValidate = false))
     verifyFileIndexAndSQLQueries(commonOpts, verifyFileCount = false)
   }
 
@@ -196,27 +196,35 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     writeClient.scheduleCompaction(org.apache.hudi.common.util.Option.empty())
     writeClient.close()
 
-    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",
       expectedColStatsSourcePath = "",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false)
+      shouldValidate = false))
     verifyFileIndexAndSQLQueries(commonOpts)
   }
 
-  private def setupTable(testCase: ColumnStatsTestCase, metadataOpts: Map[String, String], commonOpts: Map[String, String], shouldValidate: Boolean): Unit = {
-    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+  private def setupTable(testCase: ColumnStatsTestCase, metadataOpts: Map[String, String], commonOpts: Map[String, String],
+                         shouldValidate: Boolean, useShortSchema: Boolean = false,
+                         validationSortColumns : Seq[String] = Seq("c1_maxValue", "c1_minValue", "c2_maxValue",
+                           "c2_minValue", "c3_maxValue", "c3_minValue", "c5_maxValue", "c5_minValue")): Unit = {
+    val filePostfix = if (useShortSchema) {
+      "-short-schema"
+    } else {
+      ""
+    }
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
-      expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
+      expectedColStatsSourcePath = s"index/colstats/column-stats-index-table${filePostfix}.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
+      saveMode = SaveMode.Overwrite))
 
-    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",
-      expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
+      expectedColStatsSourcePath = s"index/colstats/updated-column-stats-index-table${filePostfix}.json",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
+      saveMode = SaveMode.Append))
 
     // NOTE: MOR and COW have different fixtures since MOR is bearing delta-log files (holding
     //       deferred updates), diverging from COW
@@ -226,12 +234,12 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       "index/colstats/mor-updated2-column-stats-index-table.json"
     }
 
-    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate)
+      shouldValidate))
   }
 
   def verifyFileIndexAndSQLQueries(opts: Map[String, String], isTableDataSameAsAfterSecondInstant: Boolean = false, verifyFileCount: Boolean = true): Unit = {

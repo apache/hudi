@@ -106,7 +106,7 @@ public abstract class DirectMarkerBasedDetectionStrategy implements EarlyConflic
     }).count();
 
     if (res != 0L) {
-      LOG.warn("Detected conflict marker files: " + partitionPath + "/" + fileId + " for " + instantTime);
+      LOG.warn("Detected conflict marker files: {}/{} for {}", partitionPath, fileId, instantTime);
       return true;
     }
     return false;

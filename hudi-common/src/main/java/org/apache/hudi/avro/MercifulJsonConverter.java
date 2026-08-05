@@ -301,12 +301,27 @@ public class MercifulJsonConverter {
     return new JsonToAvroFieldProcessor() {
       @Override
       public Pair<Boolean, Object> convert(Object value, String name, Schema schema, boolean shouldSanitize, String invalidCharMask) {
+        byte[] src;
         // The ObjectMapper use List to represent FixedType
         // eg: "decimal_val": [0, 0, 14, -63, -52] will convert to ArrayList<Integer>
-        List<Integer> converval = (List<Integer>) value;
-        byte[] src = new byte[converval.size()];
-        for (int i = 0; i < converval.size(); i++) {
-          src[i] = converval.get(i).byteValue();
+        if (value instanceof List) {
+          List<Integer> converval = (List<Integer>) value;
+          src = new byte[converval.size()];
+          for (int i = 0; i < converval.size(); i++) {
+            src[i] = converval.get(i).byteValue();
+          }
+        } else if (value instanceof ByteBuffer) {
+          // Handle ByteBuffer when reading from existing records
+          ByteBuffer buffer = (ByteBuffer) value;
+          int start = buffer.position();
+          int length = buffer.limit() - start;
+          src = new byte[length];
+          buffer.get(src, 0, length);
+          buffer.position(start);
+        } else if (value instanceof byte[]) {
+          src = (byte[]) value;
+        } else {
+          return Pair.of(false, null);
         }
         byte[] dst = new byte[schema.getFixedSize()];
         System.arraycopy(src, 0, dst, 0, Math.min(schema.getFixedSize(), src.length));
