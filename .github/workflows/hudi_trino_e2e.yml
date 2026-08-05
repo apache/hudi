@@ -6,31 +6,40 @@ on:
       - master
       - 'release-*'
     paths:
-      # docker/demo/** is deliberately broad: the ITs drive several demo fixture
-      # scripts (sparksql-*.commands, setup_demo_container.sh), so any demo edit
-      # must re-run this pipeline.
+      # Several entries are deliberately broad -- keep them that way:
+      #   docker/demo/**        the ITs drive demo fixture scripts
+      #                         (sparksql-*.commands, setup_demo_container.sh).
+      #   docker/compose/hadoop.env
+      #                         copied into the generated compose dir and loaded
+      #                         by every service in the stack.
+      #   hudi-integ-test/**    the IT step runs `mvn verify -pl hudi-integ-test`,
+      #                         which compiles the whole module, so a break
+      #                         anywhere in it fails this pipeline -- not just
+      #                         under integ2/.
+      #   pom.xml               owns trino.version, which the shim pom's parent,
+      #                         the Dockerfile TRINO_VERSION arg and the
+      #                         hardcoded 481 paths below all track by hand.
       - 'hudi-trino/**'
       - 'docker/trino/**'
       - 'docker/compose/docker-compose_hadoop340_hive2310_spark402*'
-      # hadoop.env is copied into the generated compose dir and loaded by every
-      # service in the stack, so it is as load-bearing as the YAMLs themselves.
       - 'docker/compose/hadoop.env'
       - 'docker/demo/**'
-      - 'hudi-integ-test/src/test/java/org/apache/hudi/integ2/**'
+      - 'hudi-integ-test/**'
+      - 'pom.xml'
       - '.github/workflows/hudi_trino_e2e.yml'
   pull_request:
     branches:
       - master
       - 'release-*'
+    # Keep in sync with the push paths above; see the rationale there.
     paths:
       - 'hudi-trino/**'
       - 'docker/trino/**'
       - 'docker/compose/docker-compose_hadoop340_hive2310_spark402*'
-      # hadoop.env is copied into the generated compose dir and loaded by every
-      # service in the stack, so it is as load-bearing as the YAMLs themselves.
       - 'docker/compose/hadoop.env'
       - 'docker/demo/**'
-      - 'hudi-integ-test/src/test/java/org/apache/hudi/integ2/**'
+      - 'hudi-integ-test/**'
+      - 'pom.xml'
       - '.github/workflows/hudi_trino_e2e.yml'
   workflow_dispatch:
 
