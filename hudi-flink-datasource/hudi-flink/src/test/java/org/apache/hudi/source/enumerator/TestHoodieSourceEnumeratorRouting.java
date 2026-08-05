@@ -64,8 +64,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -105,27 +107,48 @@ public class TestHoodieSourceEnumeratorRouting {
   /**
    * The bounded query modes {@code HoodieSource.createBatchHoodieSplits()} covers. All of them are
    * routed to the shared pool, so all of them are exercised here.
+   *
+   * <p>Incremental appears three times on purpose. {@code IncrementalInputSplits.inputSplits()}
+   * branches on {@code fullTableScan}, which is true when the query consumes from the earliest
+   * instant, and the two sides build their file slice set differently: the full scan lists the
+   * table directly, while the other side derives partitions and files from the commit metadata of
+   * the instants in range (and, when CDC is on, leaves through the CDC extractor entirely). Only
+   * covering {@code earliest} would leave the metadata-driven branch untested.
    */
   private enum BoundedMode {
-    COW_SNAPSHOT(HoodieTableType.COPY_ON_WRITE, FlinkOptions.QUERY_TYPE_SNAPSHOT, false),
-    MOR_SNAPSHOT(HoodieTableType.MERGE_ON_READ, FlinkOptions.QUERY_TYPE_SNAPSHOT, false),
-    MOR_READ_OPTIMIZED(HoodieTableType.MERGE_ON_READ, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED, false),
-    COW_INCREMENTAL(HoodieTableType.COPY_ON_WRITE, FlinkOptions.QUERY_TYPE_INCREMENTAL, false),
-    COW_INCREMENTAL_CDC(HoodieTableType.COPY_ON_WRITE, FlinkOptions.QUERY_TYPE_INCREMENTAL, true);
+    COW_SNAPSHOT(HoodieTableType.COPY_ON_WRITE, FlinkOptions.QUERY_TYPE_SNAPSHOT, false, IncrementalStart.NOT_INCREMENTAL),
+    MOR_SNAPSHOT(HoodieTableType.MERGE_ON_READ, FlinkOptions.QUERY_TYPE_SNAPSHOT, false, IncrementalStart.NOT_INCREMENTAL),
+    MOR_READ_OPTIMIZED(HoodieTableType.MERGE_ON_READ, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED, false, IncrementalStart.NOT_INCREMENTAL),
+    COW_INCREMENTAL(HoodieTableType.COPY_ON_WRITE, FlinkOptions.QUERY_TYPE_INCREMENTAL, false, IncrementalStart.LAST_COMMIT),
+    COW_INCREMENTAL_FROM_EARLIEST(HoodieTableType.COPY_ON_WRITE, FlinkOptions.QUERY_TYPE_INCREMENTAL, false, IncrementalStart.EARLIEST),
+    COW_INCREMENTAL_CDC(HoodieTableType.COPY_ON_WRITE, FlinkOptions.QUERY_TYPE_INCREMENTAL, true, IncrementalStart.LAST_COMMIT);
 
     private final HoodieTableType tableType;
     private final String queryType;
     private final boolean cdcEnabled;
+    private final IncrementalStart incrementalStart;
 
-    BoundedMode(HoodieTableType tableType, String queryType, boolean cdcEnabled) {
+    BoundedMode(HoodieTableType tableType, String queryType, boolean cdcEnabled, IncrementalStart incrementalStart) {
       this.tableType = tableType;
       this.queryType = queryType;
       this.cdcEnabled = cdcEnabled;
+      this.incrementalStart = incrementalStart;
     }
 
     boolean isIncremental() {
-      return FlinkOptions.QUERY_TYPE_INCREMENTAL.equals(queryType);
+      return incrementalStart != IncrementalStart.NOT_INCREMENTAL;
     }
+  }
+
+  /**
+   * Where an incremental mode starts reading, which is what decides the {@code fullTableScan}
+   * branch: {@code earliest} leaves {@code startInstant} empty and takes the full scan,
+   * a real completion time takes the metadata-driven branch.
+   */
+  private enum IncrementalStart {
+    NOT_INCREMENTAL,
+    EARLIEST,
+    LAST_COMMIT
   }
 
   @BeforeEach
@@ -149,9 +172,17 @@ public class TestHoodieSourceEnumeratorRouting {
         "Bounded read should use the shared work-stealing pool for mode " + mode);
     List<HoodieSourceSplit> splits = pendingSplits(enumerator);
     assertOneSplitPerFileGroup(splits, mode);
+    if (mode.incrementalStart == IncrementalStart.LAST_COMMIT) {
+      // Guards the parameterization: if the start commit stopped making fullTableScan false, these
+      // splits would come from a full table listing and cover par1 through par6, and this mode
+      // would silently stop exercising the metadata-driven branch.
+      assertEquals(new HashSet<>(Arrays.asList("par5", "par6")),
+          splits.stream().map(HoodieSourceSplit::getPartitionPath).collect(Collectors.toSet()),
+          "Mode " + mode + " should read only the partitions written by the start commit, "
+              + "which is what distinguishes the incremental branch from a full table scan");
+    }
     if (mode.cdcEnabled) {
-      // Guards the parameterization itself: reading from earliest would fall back to a plain file
-      // slice scan, and this mode would silently stop covering the CDC branch.
+      // Likewise, a full table scan would bypass the CDC extractor and yield plain splits.
       splits.forEach(split -> assertInstanceOf(HoodieCdcSourceSplit.class, split,
           "CDC mode should produce CDC splits"));
     }
@@ -295,14 +326,19 @@ public class TestHoodieSourceEnumeratorRouting {
       conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
     }
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+    if (mode.incrementalStart == IncrementalStart.LAST_COMMIT) {
+      // A last commit that only touches par5 and par6, so the partitions of the resulting splits
+      // show which branch produced them: the metadata-driven branch derives its read partitions
+      // from this commit alone, a full table scan would list par1 through par6.
+      TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
+    }
     metaClient = StreamerUtil.createMetaClient(conf);
 
     conf.set(FlinkOptions.QUERY_TYPE, mode.queryType);
-    if (mode.isIncremental()) {
-      // Reading from earliest triggers a full table scan, which bypasses the CDC branch, so the
-      // CDC mode starts from the last completed commit instead.
-      conf.set(FlinkOptions.READ_START_COMMIT,
-          mode.cdcEnabled ? lastCompletionTime() : FlinkOptions.START_COMMIT_EARLIEST);
+    if (mode.incrementalStart == IncrementalStart.EARLIEST) {
+      conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    } else if (mode.incrementalStart == IncrementalStart.LAST_COMMIT) {
+      conf.set(FlinkOptions.READ_START_COMMIT, lastCompletionTime());
     }
     return createSource();
   }
