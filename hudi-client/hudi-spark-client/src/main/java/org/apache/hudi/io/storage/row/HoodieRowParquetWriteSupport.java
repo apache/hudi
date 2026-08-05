@@ -486,7 +486,11 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     if (resolvedSchema instanceof HoodieSchema.Decimal) {
       HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) resolvedSchema;
       if (decimalSchema.isFixed()) {
-        return decimalSchema.getFixedSize();
+        int fixedSize = decimalSchema.getFixedSize();
+        ValidationUtils.checkArgument(fixedSize >= Decimal.minBytesForPrecision()[precision],
+            () -> String.format("Avro fixed size %s is too small for decimal precision %s (need >= %s bytes)",
+                fixedSize, precision, Decimal.minBytesForPrecision()[precision]));
+        return fixedSize;
       }
     }
     return Decimal.minBytesForPrecision()[precision];
