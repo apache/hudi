@@ -238,7 +238,7 @@
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.8.3</snappy.version>
     <heapfork.label>0.15.0-heap-fork</heapfork.label>
-    <heapfork.version>0.2-SNAPSHOT</heapfork.version>
+    <heapfork.version>0.2</heapfork.version>
   </properties>
 
   <scm>
