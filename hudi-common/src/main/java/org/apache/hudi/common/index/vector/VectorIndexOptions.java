@@ -61,6 +61,32 @@ public final class VectorIndexOptions {
   public static final VectorQueryMode DEFAULT_QUERY_MODE = VectorQueryMode.EXACT_RERANK;
   public static final VectorStalePolicy DEFAULT_STALE_POLICY = VectorStalePolicy.FAIL;
 
+  /** Parsed immutable view used by bootstrap and maintenance after aggregate validation. */
+  public static final class ResolvedOptions {
+    public final VectorDistanceMetric metric;
+    public final VectorQuantizer quantizer;
+    public final int numClusters;
+    public final int maxIterations;
+    public final int rabitqBits;
+    public final long rabitqSeed;
+    public final boolean assumeNormalized;
+
+    private ResolvedOptions(Map<String, String> options) {
+      this.metric = getMetric(options);
+      this.quantizer = getQuantizer(options);
+      this.numClusters = getNumClusters(options);
+      this.maxIterations = getMaxIter(options);
+      this.rabitqBits = getRaBitQBits(options);
+      this.rabitqSeed = getRaBitQSeed(options);
+      this.assumeNormalized = shouldAssumeNormalizedVectors(options);
+    }
+  }
+
+  /** Validates the complete map before exposing parsed writer-side settings. */
+  public static ResolvedOptions resolve(Map<String, String> options) {
+    return new ResolvedOptions(validateAndNormalize(options));
+  }
+
   private static final Set<String> SUPPORTED_OPTIONS = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
           METRIC,
