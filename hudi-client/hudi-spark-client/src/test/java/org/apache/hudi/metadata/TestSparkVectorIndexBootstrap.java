@@ -23,16 +23,15 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -106,7 +105,7 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
     SparkIndexerSupport indexerSupport = new SparkIndexerSupport(context(), writeConfig);
     List<HoodieRecord> records = HoodieJavaRDD.getJavaRDD(
         indexerSupport.generateVectorIndexRecords(indexDefinition, metaClient, fileSlices, tableSchema, 1)).collect();
-List<String> recordKeys = records.stream()
+    List<String> recordKeys = records.stream()
         .map(record -> record.getKey().getRecordKey())
         .collect(Collectors.toList());
     List<Integer> families = recordKeys.stream().map(TestSparkVectorIndexBootstrap::family).collect(Collectors.toList());

@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.index.vector.VectorIndexFileGroupUpdate;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
@@ -93,5 +94,17 @@ public class UnsupportedEngineIndexerSupport implements EngineIndexerSupport {
       HoodieSchema tableSchema,
       int generation) {
     throw new HoodieNotSupportedException(engineType + " engine does not support building vector index yet");
+  }
+
+  @Override
+  public HoodieData<HoodieRecord> generateVectorIndexUpdateRecords(
+      HoodieIndexDefinition indexDefinition,
+      HoodieTableMetaClient dataMetaClient,
+      HoodieTableMetadata tableMetadata,
+      List<VectorIndexFileGroupUpdate> fileGroupUpdates,
+      HoodieSchema tableSchema,
+      int generation,
+      String instantTime) {
+    throw new HoodieNotSupportedException(engineType + " engine does not support updating vector index yet");
   }
 }

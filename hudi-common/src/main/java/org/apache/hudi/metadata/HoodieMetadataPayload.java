@@ -639,6 +639,34 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       Float error1,
       long lastUpdatedTs,
       String metadataPartitionPath) {
+    return createVectorIndexPostingRecord(
+        generation, recordKey, clusterId, shardId, fileGroupId, dataPartitionPath,
+        baseInstantTime, binaryCode, extendedCode, scalar, additiveFactor, rescaleFactor,
+        additiveFactor1, rescaleFactor1, error1, null, -1L, lastUpdatedTs,
+        metadataPartitionPath);
+  }
+
+  /** Creates an incremental posting delta with its authoritative row locator. */
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexPostingRecord(
+      int generation,
+      String recordKey,
+      int clusterId,
+      int shardId,
+      String fileGroupId,
+      String dataPartitionPath,
+      String baseInstantTime,
+      byte[] binaryCode,
+      byte[] extendedCode,
+      Float scalar,
+      Float additiveFactor,
+      Float rescaleFactor,
+      Float additiveFactor1,
+      Float rescaleFactor1,
+      Float error1,
+      Float vectorNorm,
+      long rowPosition,
+      long lastUpdatedTs,
+      String metadataPartitionPath) {
     String metadataRecordKey = VectorIndexMetadataKey.postingDelta(generation, clusterId, shardId, recordKey);
     byte[] code = mergeCodeRows(binaryCode, extendedCode);
     HoodieVectorIndexPostingDelta delta = new HoodieVectorIndexPostingDelta(
@@ -650,11 +678,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         additiveFactor == null ? 0.0f : additiveFactor,
         rescaleFactor == null ? 0.0f : rescaleFactor,
         scalar == null ? 0.0f : scalar,
-        null,
+        vectorNorm,
         fileGroupId == null ? "" : fileGroupId,
         dataPartitionPath == null ? "" : dataPartitionPath,
         baseInstantTime == null ? "" : baseInstantTime,
-        -1L);
+        rowPosition);
     HoodieMetadataPayload payload = new HoodieMetadataPayload(metadataRecordKey, delta);
     HoodieKey key = new HoodieKey(metadataRecordKey, metadataPartitionPath);
     return new HoodieAvroRecord<>(key, payload);
@@ -682,8 +710,19 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       int clusterId,
       int shardId,
       String metadataPartitionPath) {
+    return createVectorIndexPostingDeleteRecord(
+        generation, recordKey, clusterId, shardId, "", metadataPartitionPath);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexPostingDeleteRecord(
+      int generation,
+      String recordKey,
+      int clusterId,
+      int shardId,
+      String deleteInstant,
+      String metadataPartitionPath) {
     String metadataRecordKey = VectorIndexMetadataKey.postingDelta(generation, clusterId, shardId, recordKey);
-    HoodieVectorIndexTombstone tombstone = new HoodieVectorIndexTombstone("", "MANUAL");
+    HoodieVectorIndexTombstone tombstone = new HoodieVectorIndexTombstone(deleteInstant, "MANUAL");
     HoodieMetadataPayload payload = new HoodieMetadataPayload(metadataRecordKey, tombstone);
     HoodieKey key = new HoodieKey(metadataRecordKey, metadataPartitionPath);
     return new HoodieAvroRecord<>(key, payload);

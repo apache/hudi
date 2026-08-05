@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
+import org.apache.hudi.avro.model.HoodieVectorIndexClusterStats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -279,6 +280,32 @@ public enum MetadataPartitionType {
     @Override
     public SerializableBiFunction<String, Integer, Integer> getFileGroupMappingFunction(HoodieIndexVersion indexVersion) {
       return HoodieTableMetadataUtil::mapVectorPostingKeyToFileGroupIndex;
+    }
+
+    @Override
+    public HoodieMetadataPayload combineMetadataPayloads(
+        HoodieMetadataPayload older, HoodieMetadataPayload newer) {
+      if (older.getVectorIndexMetadata().isEmpty() || newer.getVectorIndexMetadata().isEmpty()
+          || !(older.getVectorIndexMetadata().get() instanceof HoodieVectorIndexClusterStats)
+          || !(newer.getVectorIndexMetadata().get() instanceof HoodieVectorIndexClusterStats)) {
+        return newer;
+      }
+      HoodieVectorIndexClusterStats previous =
+          (HoodieVectorIndexClusterStats) older.getVectorIndexMetadata().get();
+      HoodieVectorIndexClusterStats delta =
+          (HoodieVectorIndexClusterStats) newer.getVectorIndexMetadata().get();
+      long liveCount = previous.getLiveCount() + delta.getLiveCount();
+      checkState(liveCount >= 0, "Vector cluster live count cannot become negative");
+      HoodieVectorIndexClusterStats merged = new HoodieVectorIndexClusterStats(
+          previous.getRoutingVersion(),
+          previous.getShardCount(),
+          previous.getFileGroupIds(),
+          liveCount,
+          previous.getDeltaCount() + delta.getDeltaCount(),
+          previous.getTombstoneCount() + delta.getTombstoneCount(),
+          previous.getLastRebalanceInstant(),
+          Math.max(previous.getLastUpdatedTs(), delta.getLastUpdatedTs()));
+      return new HoodieMetadataPayload(newer.key, merged);
     }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {

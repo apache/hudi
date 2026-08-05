@@ -26,7 +26,6 @@ import org.apache.hudi.common.index.vector.RaBitQEncoder;
 import org.apache.hudi.common.index.vector.VectorDistanceMetric;
 import org.apache.hudi.common.index.vector.VectorIndexBootstrapUtils;
 import org.apache.hudi.common.index.vector.VectorIndexOptions;
-import org.apache.hudi.common.index.vector.VectorQuantizer;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -34,11 +33,11 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.spark.index.vector.TwoLevelKMeansBootstrap$;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
-import org.apache.spark.Partitioner;
 import org.apache.spark.sql.SparkSession;
 
 import java.io.Serializable;
