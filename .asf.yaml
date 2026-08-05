@@ -51,6 +51,7 @@ github:
           # is what made every change to the CI matrix in .github/workflows/bot.yml a
           # two-sided edit, and a context left without a job to report it blocks merges
           # indefinitely. Reviewers gate on the checks the PR shows.
+          - validate-ci-baseline
           - validate-source
           - validate-pr
           - validate-pr-title
