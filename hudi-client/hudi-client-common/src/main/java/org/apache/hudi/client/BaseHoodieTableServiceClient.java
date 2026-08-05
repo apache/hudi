@@ -42,6 +42,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -60,6 +61,9 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.clean.CleanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -72,12 +76,15 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -744,6 +751,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       return null;
     }
 
+    if (config.getCleanerPlanPartitionsBatchSize() > 0) {
+      return cleanInBatches(cleanInstantTime, timerContext);
+    }
+
     HoodieTable table = createTable(config, hadoopConf);
     if (config.allowMultipleCleans() || !table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
       LOG.info("Cleaner started");
@@ -770,6 +781,217 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
     releaseResources(cleanInstantTime);
     return metadata;
+  }
+
+  // Extra-metadata keys tagging each batch's clean instant. Kept in sync
+  // across every batch of one logical paginated clean run so a re-invoked
+  // (post-crash) job can identify which batch indices have already
+  // completed by scanning completed .clean instants.
+  static final String BATCH_TARGET_EARLIEST_COMMIT_KEY = "hoodie.clean.batch.targetEarliestCommitToRetain";
+  static final String BATCH_TOTAL_BATCHES_KEY = "hoodie.clean.batch.totalBatches";
+  static final String BATCH_INDEX_KEY = "hoodie.clean.batch.batchIndex";
+
+  /**
+   * Paginated variant of {@link #clean(String, boolean)}, active when
+   * {@code hoodie.clean.plan.partitions.batch.size > 0}. Splits the full
+   * partition list into deterministic chunks and drives each chunk through
+   * an independent request/inflight/complete clean-instant lifecycle. All
+   * chunks in one run share the same {@code earliestCommitToRetain} so that
+   * per-partition delete decisions in {@link CleanPlanner#getDeletePaths}
+   * stay consistent across batches (see {@link CleanPlanActionExecutor.BatchOverride}).
+   * <p>
+   * Resume: if a prior invocation crashed partway, completed batches for the
+   * same {@code targetEarliestCommitToRetain}+{@code totalBatches} are
+   * detected from the completed clean timeline's extraMetadata and skipped;
+   * any straggling pending/inflight clean instant is finished first via
+   * {@link CleanActionExecutor} before the resumed loop begins.
+   */
+  @Nullable
+  private HoodieCleanMetadata cleanInBatches(String cleanInstantTime, Timer.Context timerContext) throws HoodieIOException {
+    HoodieTable table = createTable(config, hadoopConf);
+
+    // If a prior crashed run left any pending .clean.requested/.clean.inflight
+    // behind, finish them first so their completions land on the timeline and
+    // are visible to the resume-detection scan below.
+    if (table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
+      LOG.info("Finishing pending clean instants from a prior run before starting batched clean.");
+      @SuppressWarnings({"rawtypes", "unchecked"})
+      CleanActionExecutor finishPending = new CleanActionExecutor(context, config, table, cleanInstantTime);
+      finishPending.execute();
+      table.getMetaClient().reloadActiveTimeline();
+    }
+
+    // Compute the retention boundary and full partition list ONCE. Both are
+    // pinned across every batch in this run (BatchOverride) so per-partition
+    // delete decisions stay consistent.
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    CleanPlanner planner = new CleanPlanner(context, table, config);
+    Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
+    List<String> fullPartitionList;
+    try {
+      @SuppressWarnings("unchecked")
+      List<String> raw = planner.getPartitionPathsToClean(earliestInstant);
+      fullPartitionList = new ArrayList<>(raw);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to list partitions for batched clean", e);
+    }
+
+    if (fullPartitionList.isEmpty()) {
+      LOG.info("Batched clean: nothing to clean. Table is already clean.");
+      releaseResources(cleanInstantTime);
+      return null;
+    }
+
+    int batchSize = config.getCleanerPlanPartitionsBatchSize();
+    List<List<String>> chunks = chunkForBatchedClean(fullPartitionList, batchSize);
+    int totalBatches = chunks.size();
+    String targetEarliestCommit = earliestInstant.map(HoodieInstant::getTimestamp).orElse("");
+
+    LOG.info("Batched clean: {} partitions -> {} batches of up to {}, targetEarliestCommitToRetain={}",
+        fullPartitionList.size(), totalBatches, batchSize, targetEarliestCommit);
+
+    Set<Integer> alreadyDone = findCompletedBatchIndices(table, targetEarliestCommit, totalBatches);
+    if (!alreadyDone.isEmpty()) {
+      LOG.info("Batched clean: resuming; {} batches already complete: {}",
+          alreadyDone.size(), new TreeSet<>(alreadyDone));
+    }
+
+    HoodieCleanMetadata lastMetadata = null;
+    for (int i = 0; i < totalBatches; i++) {
+      if (alreadyDone.contains(i)) {
+        continue;
+      }
+      Map<String, String> batchMeta = new HashMap<>();
+      batchMeta.put(BATCH_TARGET_EARLIEST_COMMIT_KEY, targetEarliestCommit);
+      batchMeta.put(BATCH_TOTAL_BATCHES_KEY, String.valueOf(totalBatches));
+      batchMeta.put(BATCH_INDEX_KEY, String.valueOf(i));
+
+      String batchInstantTime = HoodieActiveTimeline.createNewInstantTime();
+      LOG.info("Batched clean: batch {}/{} (instantTime={}, partitions={})",
+          i + 1, totalBatches, batchInstantTime, chunks.get(i).size());
+
+      @SuppressWarnings({"rawtypes", "unchecked"})
+      CleanPlanActionExecutor<?, ?, ?, ?> planExecutor = new CleanPlanActionExecutor(
+          context, config, table, batchInstantTime, Option.of(batchMeta),
+          Option.of(new CleanPlanActionExecutor.BatchOverride(chunks.get(i), earliestInstant)));
+      // Call requestClean directly (bypassing execute()) so per-batch invocations skip
+      // the numCommits-since-last-clean trigger gate, which would return false for
+      // batches 2..N (the just-completed batch 1 is itself the "last clean").
+      Option<HoodieCleanerPlan> plan = planExecutor.requestClean(batchInstantTime);
+      if (!plan.isPresent()) {
+        // No files to delete in this chunk. Still record it as "done" for this
+        // logical run so resume doesn't retry it. Cheapest way: skip and let
+        // the next run's completed-scan see it missing; the batch will be
+        // re-attempted and again produce nothing. Not worth a synthetic
+        // instant just to record the no-op.
+        LOG.info("Batched clean: batch {}/{} produced no plan (nothing to delete in these partitions).",
+            i + 1, totalBatches);
+        continue;
+      }
+
+      table.getMetaClient().reloadActiveTimeline();
+      @SuppressWarnings({"rawtypes", "unchecked"})
+      CleanActionExecutor batchExecutor = new CleanActionExecutor(context, config, table, batchInstantTime);
+      HoodieCleanMetadata metadata = (HoodieCleanMetadata) batchExecutor.execute();
+      table.getMetaClient().reloadActiveTimeline();
+      if (metadata != null) {
+        lastMetadata = metadata;
+        if (timerContext != null) {
+          long durationMs = metrics.getDurationInMs(timerContext.stop());
+          metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
+        }
+        LOG.info("Batched clean: batch {}/{} complete. filesDeleted={} earliestCommitToRetain={}",
+            i + 1, totalBatches, metadata.getTotalFilesDeleted(), metadata.getEarliestCommitToRetain());
+      }
+    }
+
+    releaseResources(cleanInstantTime);
+    return lastMetadata;
+  }
+
+  /**
+   * Scans completed .clean instants and collects the {@link #BATCH_INDEX_KEY}
+   * values whose extraMetadata matches the given targetEarliestCommitToRetain
+   * and totalBatches. Batches whose extraMetadata does not identify them as
+   * part of this logical run are ignored (they belong to a different run or
+   * to the legacy non-batched path).
+   */
+  private Set<Integer> findCompletedBatchIndices(HoodieTable table, String targetEarliestCommit, int totalBatches) {
+    Set<Integer> done = new HashSet<>();
+    List<HoodieInstant> completed = table.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().getInstants();
+    for (HoodieInstant instant : completed) {
+      try {
+        Option<byte[]> details = table.getActiveTimeline().getInstantDetails(instant);
+        if (!details.isPresent()) {
+          continue;
+        }
+        HoodieCleanMetadata meta = TimelineMetadataUtils.deserializeHoodieCleanMetadata(details.get());
+        Option<Integer> idx = parseCompletedBatchIndex(meta.getExtraMetadata(), targetEarliestCommit, totalBatches);
+        if (idx.isPresent()) {
+          done.add(idx.get());
+        }
+      } catch (Exception e) {
+        LOG.warn("Batched clean: failed to inspect completed clean instant {} for resume; ignoring.", instant, e);
+      }
+    }
+    return done;
+  }
+
+  /**
+   * Deterministically chunk the partition list into batches of at most
+   * {@code batchSize}. Sorts by natural string order so a re-invoked
+   * (post-crash) job produces the same chunks and can align on
+   * {@code batchIndex} against earlier completions.
+   *
+   * <p>Package-private for unit testing.
+   *
+   * @throws IllegalArgumentException if batchSize is not positive.
+   */
+  static List<List<String>> chunkForBatchedClean(List<String> partitions, int batchSize) {
+    if (batchSize <= 0) {
+      throw new IllegalArgumentException("batchSize must be positive, got " + batchSize);
+    }
+    List<String> sorted = new ArrayList<>(partitions);
+    Collections.sort(sorted);
+    List<List<String>> chunks = new ArrayList<>();
+    for (int i = 0; i < sorted.size(); i += batchSize) {
+      chunks.add(new ArrayList<>(sorted.subList(i, Math.min(i + batchSize, sorted.size()))));
+    }
+    return chunks;
+  }
+
+  /**
+   * Parse a completed clean instant's extraMetadata to determine whether it
+   * belongs to a paginated run identified by {@code targetEarliestCommit} +
+   * {@code totalBatches}, and if so return its {@code batchIndex}. Returns
+   * empty for legacy (non-batched) instants, instants from other runs, and
+   * instants whose bookkeeping keys don't parse.
+   *
+   * <p>Package-private for unit testing.
+   */
+  static Option<Integer> parseCompletedBatchIndex(Map<String, String> extra,
+                                                  String targetEarliestCommit,
+                                                  int totalBatches) {
+    if (extra == null) {
+      return Option.empty();
+    }
+    String tgt = extra.get(BATCH_TARGET_EARLIEST_COMMIT_KEY);
+    String tot = extra.get(BATCH_TOTAL_BATCHES_KEY);
+    String idx = extra.get(BATCH_INDEX_KEY);
+    if (tgt == null || tot == null || idx == null) {
+      return Option.empty();
+    }
+    if (!tgt.equals(targetEarliestCommit)) {
+      return Option.empty();
+    }
+    try {
+      if (Integer.parseInt(tot) != totalBatches) {
+        return Option.empty();
+      }
+      return Option.of(Integer.parseInt(idx));
+    } catch (NumberFormatException e) {
+      return Option.empty();
+    }
   }
 
   /**

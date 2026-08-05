@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -53,18 +54,22 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -706,5 +711,162 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       assertFalse(testTable.baseFileExists(p0, firstCommitTs, file1P0C0));
       assertFalse(testTable.baseFileExists(p1, firstCommitTs, file1P1C0));
     }
+  }
+
+  /**
+   * With batch.size=-1 (default, disabled) the cleaner must still take the
+   * legacy single-instant path: exactly one .clean instant on the timeline,
+   * carrying none of the batching extraMetadata keys.
+   */
+  @Test
+  public void testCleanInBatchesDisabledPreservesLegacyPath() throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .retainFileVersions(1)
+            .build())
+        .build();
+    seedTwoVersionsPerPartition(config, makePartitions(4));
+
+    runCleaner(config, 2, true);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    List<HoodieInstant> completed = metaClient.getActiveTimeline().getCleanerTimeline()
+        .filterCompletedInstants().getInstants();
+    assertEquals(1, completed.size(),
+        "Legacy (non-batched) clean must produce exactly one clean instant.");
+
+    Map<String, String> extra = CleanerUtils.getCleanerMetadata(metaClient, completed.get(0)).getExtraMetadata();
+    if (extra != null) {
+      assertNull(extra.get("hoodie.clean.batch.batchIndex"),
+          "Legacy path must not tag instants with batching extraMetadata.");
+      assertNull(extra.get("hoodie.clean.batch.totalBatches"),
+          "Legacy path must not tag instants with batching extraMetadata.");
+    }
+  }
+
+  /**
+   * With batch.size configured, one logical clean paginates into multiple
+   * .clean instants. All must record the same targetEarliestCommitToRetain
+   * (the correctness invariant that lets per-partition delete decisions
+   * stay consistent across batches) and cover every batchIndex in
+   * {@code [0, totalBatches)} exactly once.
+   */
+  @Test
+  public void testCleanInBatchesProducesMultipleInstants() throws Exception {
+    int partitionCount = 5;
+    int batchSize = 2;
+    int expectedBatches = (partitionCount + batchSize - 1) / batchSize;
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .retainFileVersions(1)
+            .withCleanerPlanPartitionsBatchSize(batchSize)
+            .build())
+        .build();
+    seedTwoVersionsPerPartition(config, makePartitions(partitionCount));
+
+    runCleaner(config, 2, true);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    List<HoodieInstant> completed = metaClient.getActiveTimeline().getCleanerTimeline()
+        .filterCompletedInstants().getInstants();
+    assertEquals(expectedBatches, completed.size(),
+        "Batched clean must produce one .clean instant per batch.");
+
+    String sharedTarget = null;
+    Set<String> indicesSeen = new HashSet<>();
+    for (HoodieInstant instant : completed) {
+      Map<String, String> extra = CleanerUtils.getCleanerMetadata(metaClient, instant).getExtraMetadata();
+      assertNotNull(extra, "Batched .clean instant is missing extraMetadata.");
+      assertEquals(String.valueOf(expectedBatches), extra.get("hoodie.clean.batch.totalBatches"),
+          "Every batch must record totalBatches=" + expectedBatches + ".");
+      String target = extra.get("hoodie.clean.batch.targetEarliestCommitToRetain");
+      assertNotNull(target, "Batched .clean instant is missing targetEarliestCommitToRetain.");
+      if (sharedTarget == null) {
+        sharedTarget = target;
+      } else {
+        assertEquals(sharedTarget, target,
+            "All batches in one logical run must share targetEarliestCommitToRetain.");
+      }
+      indicesSeen.add(extra.get("hoodie.clean.batch.batchIndex"));
+    }
+    Set<String> expectedIndices = new HashSet<>();
+    for (int i = 0; i < expectedBatches; i++) {
+      expectedIndices.add(String.valueOf(i));
+    }
+    assertEquals(expectedIndices, indicesSeen,
+        "Every batchIndex in [0, totalBatches) must appear exactly once.");
+  }
+
+  /**
+   * Re-invoking a batched clean when every batch of that logical run has
+   * already completed must be a no-op: the resume-detection scan sees each
+   * batchIndex tagged on the timeline for the same targetEarliestCommit and
+   * skips them. No new .clean instants land. This is the core guarantee
+   * that a crashed-then-resumed run does not reprocess completed batches.
+   */
+  @Test
+  public void testCleanInBatchesResumeSkipsCompletedBatches() throws Exception {
+    int partitionCount = 5;
+    int batchSize = 2;
+    int expectedBatches = (partitionCount + batchSize - 1) / batchSize;
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .retainFileVersions(1)
+            .withCleanerPlanPartitionsBatchSize(batchSize)
+            .build())
+        .build();
+    seedTwoVersionsPerPartition(config, makePartitions(partitionCount));
+
+    runCleaner(config, 2, true);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    int completedAfterFirstRun = metaClient.getActiveTimeline().getCleanerTimeline()
+        .filterCompletedInstants().getInstants().size();
+    assertEquals(expectedBatches, completedAfterFirstRun,
+        "First batched run must land all batches on the timeline.");
+
+    runCleaner(config, 4, true);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    int completedAfterSecondRun = metaClient.getActiveTimeline().getCleanerTimeline()
+        .filterCompletedInstants().getInstants().size();
+    assertEquals(completedAfterFirstRun, completedAfterSecondRun,
+        "Re-invoking clean when all batches are already complete must not create new .clean instants.");
+  }
+
+  private List<String> makePartitions(int count) {
+    List<String> partitions = new ArrayList<>();
+    for (int i = 0; i < count; i++) {
+      partitions.add(String.format("2020/01/%02d", i + 1));
+    }
+    return partitions;
+  }
+
+  private void seedTwoVersionsPerPartition(HoodieWriteConfig config, List<String> partitions) throws Exception {
+    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context)) {
+      HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
+
+      Map<String, String> fileIdPerPartition = new HashMap<>();
+      Map<String, List<Pair<String, Integer>>> c1 = new HashMap<>();
+      for (String p : partitions) {
+        String fileId = UUID.randomUUID().toString();
+        fileIdPerPartition.put(p, fileId);
+        c1.put(p, Collections.singletonList(Pair.of(fileId, 100)));
+      }
+      testTable.doWriteOperation("00000000000001", WriteOperationType.INSERT, partitions, c1, false, false);
+
+      Map<String, List<Pair<String, Integer>>> c2 = new HashMap<>();
+      for (Map.Entry<String, String> entry : fileIdPerPartition.entrySet()) {
+        c2.put(entry.getKey(), Collections.singletonList(Pair.of(entry.getValue(), 200)));
+      }
+      testTable.doWriteOperation("00000000000003", WriteOperationType.UPSERT, Collections.emptyList(), c2, false, false);
+    }
+    metaClient = HoodieTableMetaClient.reload(metaClient);
   }
 }

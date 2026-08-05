@@ -1547,6 +1547,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCleanConfig.CLEANER_PARALLELISM_VALUE);
   }
 
+  public int getCleanerPlanPartitionsBatchSize() {
+    return getInt(HoodieCleanConfig.CLEANER_PLAN_PARTITIONS_BATCH_SIZE);
+  }
+
   public int getCleaningMaxCommits() {
     return getInt(HoodieCleanConfig.CLEAN_MAX_COMMITS);
   }
