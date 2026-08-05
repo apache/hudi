@@ -103,10 +103,14 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.gateway = new MockOperatorEventGateway();
     this.conf = conf;
     this.rowType = (RowType) HoodieSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
-    this.rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
+    boolean isNonBlockingConcurrencyControl =
+        OptionsResolver.isNonBlockingConcurrencyControl(conf);
+    this.rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(
+        rowType, isNonBlockingConcurrencyControl);
     this.lsmSortInput = OptionsResolver.isLsmTreeStorageLayout(conf);
     this.sortInputRowType = lsmSortInput
-        ? LsmBucketBulkInsertWriterHelper.rowTypeWithFileIdAndKey(rowType)
+        ? LsmBucketBulkInsertWriterHelper.rowTypeWithFileIdAndKey(
+            rowType, isNonBlockingConcurrencyControl)
         : rowTypeWithFileId;
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
@@ -245,8 +249,10 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
         .setExecutionConfig(new ExecutionConfig().enableObjectReuse())
         .build();
     SortOperatorGen sortOperatorGen = lsmSortInput
-        ? LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(sortInputRowType)
-        : BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
+        ? LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(
+            sortInputRowType, OptionsResolver.isNonBlockingConcurrencyControl(conf))
+        : BucketBulkInsertWriterHelper.getFileIdSorterGen(
+            rowTypeWithFileId, OptionsResolver.isNonBlockingConcurrencyControl(conf));
     this.sortOperator = (SortOperator) sortOperatorGen.createSortOperator(conf);
     this.sortOperator.setProcessingTimeService(new TestProcessingTimeService());
     this.output = new CollectOutputAdapter<>();
