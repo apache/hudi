@@ -80,8 +80,7 @@ public class BulkInsertWriterHelper implements AutoCloseable {
   private String lastKnownPartitionPath = null;
   private final String fileIdPrefix;
   private int numFilesWritten = 0;
-  // String keys are used by existing paths; NBCC bucket writes use HoodieFileGroupId keys.
-  protected final Map<Object, HoodieRowDataCreateHandle> handles = new HashMap<>();
+  protected final Map<String, HoodieRowDataCreateHandle> handles = new HashMap<>();
   @Nullable
   protected final RowDataKeyGen keyGen;
 

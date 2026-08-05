@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.bucket;
 
-import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
@@ -97,8 +96,8 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
   }
 
   private HoodieRowDataCreateHandle getRowCreateHandle(String partitionPath, String fileId) throws IOException {
-    Object handleKey = isNonBlockingConcurrencyControl
-        ? new HoodieFileGroupId(partitionPath, fileId)
+    String handleKey = isNonBlockingConcurrencyControl
+        ? partitionPath + "/" + fileId
         : fileId;
     if (!handles.containsKey(handleKey)) { // if there is no handle corresponding to the file group
       if (this.isInputSorted) {

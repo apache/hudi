@@ -239,6 +239,8 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   private void setupSortOperator() throws Exception {
+    boolean isNonBlockingConcurrencyControl =
+        OptionsResolver.isNonBlockingConcurrencyControl(conf);
     MockEnvironment environment = new MockEnvironmentBuilder()
         .setTaskName("mockTask")
         .setManagedMemorySize(12 * MemoryManager.DEFAULT_PAGE_SIZE)
@@ -250,9 +252,9 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
         .build();
     SortOperatorGen sortOperatorGen = lsmSortInput
         ? LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(
-            sortInputRowType, OptionsResolver.isNonBlockingConcurrencyControl(conf))
+            sortInputRowType, isNonBlockingConcurrencyControl)
         : BucketBulkInsertWriterHelper.getFileIdSorterGen(
-            rowTypeWithFileId, OptionsResolver.isNonBlockingConcurrencyControl(conf));
+            rowTypeWithFileId, isNonBlockingConcurrencyControl);
     this.sortOperator = (SortOperator) sortOperatorGen.createSortOperator(conf);
     this.sortOperator.setProcessingTimeService(new TestProcessingTimeService());
     this.output = new CollectOutputAdapter<>();
