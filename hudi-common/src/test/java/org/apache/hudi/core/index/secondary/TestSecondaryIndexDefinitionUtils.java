@@ -40,9 +40,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests {@link SecondaryIndexUtils}.
+ * Tests {@link SecondaryIndexDefinitionUtils}.
  */
-public class TestSecondaryIndexUtils {
+public class TestSecondaryIndexDefinitionUtils {
 
   private static HoodieSecondaryIndex newIndex(String name) {
     return SecondaryIndexTestUtils.newLuceneIndex(name, "name", Collections.singletonMap("k", "v"));
@@ -57,9 +57,9 @@ public class TestSecondaryIndexUtils {
   @Test
   public void testToJsonStringAndFromJsonStringRoundTrip() {
     List<HoodieSecondaryIndex> original = Arrays.asList(newIndex("idx_1"), newIndex("idx_2"));
-    String json = SecondaryIndexUtils.toJsonString(original);
+    String json = SecondaryIndexDefinitionUtils.toJsonString(original);
 
-    List<HoodieSecondaryIndex> parsed = SecondaryIndexUtils.fromJsonString(json);
+    List<HoodieSecondaryIndex> parsed = SecondaryIndexDefinitionUtils.fromJsonString(json);
     assertEquals(2, parsed.size());
     assertEquals("idx_1", parsed.get(0).getIndexName());
     assertEquals(SecondaryIndexType.LUCENE, parsed.get(0).getIndexType());
@@ -70,14 +70,14 @@ public class TestSecondaryIndexUtils {
   @Test
   public void testFromJsonStringThrowsOnMalformedJson() {
     HoodieSecondaryIndexException e = assertThrows(HoodieSecondaryIndexException.class,
-        () -> SecondaryIndexUtils.fromJsonString("not a valid json"));
+        () -> SecondaryIndexDefinitionUtils.fromJsonString("not a valid json"));
     assertTrue(e.getMessage().contains("Fail to get secondary indexes"));
   }
 
   @Test
   public void testFromJsonStringWithTypeReferenceReturnsNullForEmptyInput() throws Exception {
-    assertNull(SecondaryIndexUtils.fromJsonString(null, new TypeReference<List<HoodieSecondaryIndex>>() { }));
-    assertNull(SecondaryIndexUtils.fromJsonString("", new TypeReference<List<HoodieSecondaryIndex>>() { }));
+    assertNull(SecondaryIndexDefinitionUtils.fromJsonString(null, new TypeReference<List<HoodieSecondaryIndex>>() { }));
+    assertNull(SecondaryIndexDefinitionUtils.fromJsonString("", new TypeReference<List<HoodieSecondaryIndex>>() { }));
   }
 
   @Test
@@ -85,7 +85,7 @@ public class TestSecondaryIndexUtils {
     String jsonWithUnknownField = "[{\"indexName\":\"idx_1\",\"indexType\":\"LUCENE\","
         + "\"columns\":{\"name\":{}},\"options\":{},\"unknownField\":\"shouldBeIgnored\"}]";
 
-    List<HoodieSecondaryIndex> parsed = SecondaryIndexUtils.fromJsonString(jsonWithUnknownField);
+    List<HoodieSecondaryIndex> parsed = SecondaryIndexDefinitionUtils.fromJsonString(jsonWithUnknownField);
     assertEquals(1, parsed.size());
     assertEquals("idx_1", parsed.get(0).getIndexName());
   }
@@ -93,17 +93,17 @@ public class TestSecondaryIndexUtils {
   @Test
   public void testGetSecondaryIndexesReturnsEmptyWhenNotSet() {
     HoodieTableMetaClient metaClient = metaClientWithTableConfig(new HoodieTableConfig());
-    assertFalse(SecondaryIndexUtils.getSecondaryIndexes(metaClient).isPresent());
+    assertFalse(SecondaryIndexDefinitionUtils.getSecondaryIndexes(metaClient).isPresent());
   }
 
   @Test
   public void testGetSecondaryIndexesReturnsParsedListWhenSet() {
     List<HoodieSecondaryIndex> original = Collections.singletonList(newIndex("idx_1"));
     HoodieTableConfig tableConfig = new HoodieTableConfig();
-    tableConfig.setValue(HoodieTableConfig.SECONDARY_INDEXES_METADATA, SecondaryIndexUtils.toJsonString(original));
+    tableConfig.setValue(HoodieTableConfig.SECONDARY_INDEXES_METADATA, SecondaryIndexDefinitionUtils.toJsonString(original));
     HoodieTableMetaClient metaClient = metaClientWithTableConfig(tableConfig);
 
-    Option<List<HoodieSecondaryIndex>> indexes = SecondaryIndexUtils.getSecondaryIndexes(metaClient);
+    Option<List<HoodieSecondaryIndex>> indexes = SecondaryIndexDefinitionUtils.getSecondaryIndexes(metaClient);
     assertTrue(indexes.isPresent());
     assertEquals("idx_1", indexes.get().get(0).getIndexName());
   }
