@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.index.vector.PostingBlockBuilder;
+import org.apache.hudi.common.index.vector.QuantizedVector;
 import org.apache.hudi.common.index.vector.RaBitQEncoder;
 import org.apache.hudi.common.index.vector.VectorDistanceMetric;
 import org.apache.hudi.common.index.vector.VectorIndexBootstrapUtils;
@@ -109,23 +110,23 @@ public final class SparkVectorIndexBootstrap {
                                              JavaRDD<VectorRow> vectorRows,
                                              HoodieIndexDefinition indexDef,
                                              HoodieSchema.Vector.VectorElementType vectorType,
+                                             int dimension,
                                              int generation,
                                              long lastUpdatedTs) {
     Map<String, String> options = indexDef.getIndexOptions();
     String indexName = indexDef.getIndexName();
     String vectorColumn = indexDef.getSourceFields().isEmpty() ? "" : indexDef.getSourceFields().get(0);
-    int dimension = VectorIndexOptions.getDimension(options);
-    int numClusters = Math.max(1, VectorIndexOptions.getNumClusters(options));
-    VectorDistanceMetric metric = VectorIndexOptions.getMetric(options);
+    VectorIndexOptions.ResolvedOptions resolvedOptions = VectorIndexOptions.resolve(options);
+    int numClusters = resolvedOptions.numClusters;
+    VectorDistanceMetric metric = resolvedOptions.metric;
 
-    String quantizerType = VectorIndexOptions.getQuantizer(options);
-    long quantizerSeed = VectorIndexOptions.getRaBitQSeed(options);
-    int rabitqBits = VectorIndexOptions.getRaBitQBits(options);
-    boolean assumeNormalized = VectorIndexOptions.isRaBitQAssumeNormalized(options);
-    boolean storeInMdt = "IVF_RABITQ".equals(quantizerType)
-        && VectorIndexOptions.shouldStoreRaBitQCodesInMdt(options);
-    int targetRowsPerShard = Math.max(1, VectorIndexOptions.getRaBitQPostingTargetRowsPerShard(options));
-    int maxShardsPerCluster = Math.max(1, VectorIndexOptions.getRaBitQPostingMaxShardsPerCluster(options));
+    String quantizerType = resolvedOptions.quantizer.name();
+    long quantizerSeed = resolvedOptions.rabitqSeed;
+    int rabitqBits = resolvedOptions.rabitqBits;
+    boolean assumeNormalized = resolvedOptions.assumeNormalized;
+    boolean storeInMdt = true;
+    int targetRowsPerShard = 100_000;
+    int maxShardsPerCluster = 64;
     if ("IVF_RABITQ".equals(quantizerType) && rabitqBits > 1 && metric != VectorDistanceMetric.L2) {
       throw new IllegalArgumentException("Multibit RaBitQ currently supports L2 metric only. Requested: " + metric);
     }
@@ -133,7 +134,7 @@ public final class SparkVectorIndexBootstrap {
         ? new RaBitQEncoder(dimension, rabitqBits, quantizerSeed, assumeNormalized).totalCodeBytes()
         : 0;
     int codeRowBytes = ((dimension + 63) / 64) * Long.BYTES;
-    int targetBlockBytes = VectorIndexOptions.getRaBitQPostingTargetBlockBytes(options);
+    int targetBlockBytes = 64 * 1024;
     int vectorsPerBlock = PostingBlockBuilder.deriveVectorsPerBlock(targetBlockBytes, dimension, rabitqBits, 36,
         metric == VectorDistanceMetric.COSINE && !assumeNormalized);
 
@@ -163,7 +164,7 @@ public final class SparkVectorIndexBootstrap {
 
       BootstrapTrainingArtifacts trainingArtifacts = trainCentroidsWithSparkMl(
           jsc, vectorRows, dimension, numClusters, sampleFraction, totalVectors, vectorType, metric,
-          VectorIndexOptions.getMaxIter(options), quantizerSeed, indexName);
+          resolvedOptions.maxIterations, quantizerSeed, indexName);
       float[][] centroids = trainingArtifacts.centroids;
       Object routingModel = trainingArtifacts.routingModel;
       double[][] centroidsDouble = toDoubleCentroids(centroids);
@@ -206,7 +207,7 @@ public final class SparkVectorIndexBootstrap {
         // ---- Phase 2b: Single-pass encode + emit canonical posting records ----
 
         Broadcast<Map<Integer, Integer>> bShardCounts = jsc.broadcast(clusterShardCounts);
-        boolean residualEncoding = VectorIndexOptions.isRaBitQResidualEncoding(options);
+        boolean residualEncoding = true;
 
         JavaRDD<HoodieRecord> dataRecords;
         if (storeInMdt) {
@@ -229,7 +230,6 @@ public final class SparkVectorIndexBootstrap {
         clusterIds.flip();
         driverRecords.add(HoodieMetadataPayload.createVectorIndexCentroidsRecord(
             generation,
-            0L,
             0,
             clusterIds,
             VectorIndexBootstrapUtils.serializeCentroids(centroidsDouble, vectorType),
@@ -253,17 +253,29 @@ public final class SparkVectorIndexBootstrap {
               Math.max(0, rabitqBits - 1),
               actualK,
               maxShardCount(clusterShardCounts),
+              Math.max(1, actualK),
               manifestMetricName(metric),
               assumeNormalized,
               residualEncoding,
               vectorColumn,
               targetBlockBytes,
               vectorsPerBlock,
+              1,
+              1,
+              0.0d,
+              0.0d,
+              0.0d,
+              0.0d,
+              1,
+              "",
               0,
               0,
-              0L,
+              "",
+              "",
               lastUpdatedTs,
               indexName));
+          driverRecords.add(HoodieMetadataPayload.createVectorIndexActiveManifestRecord(
+              generation, indexName));
 
           // Cluster manifests
           for (Map.Entry<Integer, Long> entry : clusterVectorCounts.entrySet()) {
@@ -332,13 +344,9 @@ public final class SparkVectorIndexBootstrap {
         List<double[]> sampleVectors = trainingRows
             .map(row -> toDoubleArray(row.vectorBytes, dimension, vectorType))
             .collect();
-        Map<String, String> trainingOptions = new HashMap<>();
-        trainingOptions.put(VectorIndexOptions.DIMENSION, String.valueOf(dimension));
-        trainingOptions.put(VectorIndexOptions.NUM_CLUSTERS, String.valueOf(actualK));
-        trainingOptions.put(VectorIndexOptions.MAX_ITER, String.valueOf(maxIter));
-        trainingOptions.put(VectorIndexOptions.METRIC, metric.name().toLowerCase());
         return new BootstrapTrainingArtifacts(
-            toFloatCentroids(VectorIndexBootstrapUtils.trainCentroids(sampleVectors, trainingOptions)),
+            toFloatCentroids(VectorIndexBootstrapUtils.trainCentroids(
+                sampleVectors, dimension, actualK, maxIter, metric)),
             null);
       }
 
@@ -391,7 +399,7 @@ public final class SparkVectorIndexBootstrap {
       }
 
       float[] vector = toFloatArrayFromBytes(row.vectorBytes, bDimension.value(), bVectorType.value());
-      VectorQuantizer.QuantizedVector quantized;
+      QuantizedVector quantized;
       if (rabitqBits > 1 || residualEncoding) {
         float[] center = residualEncoding ? bCentroids.value()[clusterId] : null;
         quantized = encoder.encodeResidual(vector, center);
@@ -406,15 +414,15 @@ public final class SparkVectorIndexBootstrap {
           row.partitionPath,
           row.baseInstantTime,
           row.rowPosition,
-          VectorIndexBootstrapUtils.padToRow(quantized.code, codeRowBytes),
-          VectorIndexBootstrapUtils.splitExPlanes(quantized.extendedCode, Math.max(0, rabitqBits - 1), bDimension.value(), codeRowBytes),
-          quantized.additiveFactor1 == null ? 0.0f : quantized.additiveFactor1,
-          quantized.rescaleFactor1 == null ? 0.0f : quantized.rescaleFactor1,
-          quantized.error1 == null ? 0.0f : quantized.error1,
-          quantized.additiveFactor == null ? 0.0f : quantized.additiveFactor,
-          quantized.rescaleFactor == null ? 0.0f : quantized.rescaleFactor,
-          quantized.scalar,
-          includeVectorNorm ? quantized.vectorNorm : null);
+          VectorIndexBootstrapUtils.padToRow(quantized.getCode(), codeRowBytes),
+          VectorIndexBootstrapUtils.splitExPlanes(quantized.getExtendedCode(), Math.max(0, rabitqBits - 1), bDimension.value(), codeRowBytes),
+          quantized.getAdditiveFactor1() == null ? 0.0f : quantized.getAdditiveFactor1(),
+          quantized.getRescaleFactor1() == null ? 0.0f : quantized.getRescaleFactor1(),
+          quantized.getError1() == null ? 0.0f : quantized.getError1(),
+          quantized.getAdditiveFactor() == null ? 0.0f : quantized.getAdditiveFactor(),
+          quantized.getRescaleFactor() == null ? 0.0f : quantized.getRescaleFactor(),
+          quantized.getScalar(),
+          includeVectorNorm ? quantized.getVectorNorm() : null);
       return new Tuple2<>(new ClusterShardSortKey(clusterId, shardId, row.fileId, row.rowPosition, row.recordKey), encoded);
     });
 

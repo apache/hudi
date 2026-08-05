@@ -45,10 +45,9 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getVectorIndexPartitionsToInit;
 import static org.apache.hudi.metadata.MetadataPartitionType.VECTOR_INDEX;
 
 /**
@@ -83,7 +82,14 @@ public class VectorIndexer extends BaseIndexer {
 
   @Override
   public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
-    Set<String> vectorIndexPartitionsToInit = getVectorIndexPartitionsToInit(VECTOR_INDEX, dataTableMetaClient);
+    Set<String> completedPartitions = dataTableMetaClient.getTableConfig().getMetadataPartitions();
+    Set<String> vectorIndexPartitionsToInit = dataTableMetaClient.getIndexMetadata()
+        .map(metadata -> metadata.getIndexDefinitions().values().stream()
+            .map(HoodieIndexDefinition::getIndexName)
+            .filter(name -> name.startsWith(VECTOR_INDEX.getPartitionPath()))
+            .filter(name -> !completedPartitions.contains(name))
+            .collect(Collectors.toSet()))
+        .orElse(Collections.emptySet());
     if (vectorIndexPartitionsToInit.size() != 1) {
       if (vectorIndexPartitionsToInit.size() > 1) {
         log.warn("Skipping vector index initialization as only one vector index bootstrap at a time "
@@ -117,15 +123,15 @@ public class VectorIndexer extends BaseIndexer {
    * value.
    */
   private int resolveFileGroupCount(HoodieIndexDefinition indexDefinition) {
-    Map<String, String> vectorOptions = indexDefinition.getIndexOptions();
-    int numClusters = Math.max(1, VectorIndexOptions.getNumClusters(vectorOptions));
-    int clustersPerFileGroup = Math.max(1, VectorIndexOptions.getClustersPerFileGroup(vectorOptions));
+    VectorIndexOptions.ResolvedOptions resolvedOptions = VectorIndexOptions.resolve(indexDefinition.getIndexOptions());
+    int numClusters = resolvedOptions.numClusters;
+    int clustersPerFileGroup = 1;
     int configuredFileGroupCount = dataTableWriteConfig.getMetadataConfig().getVectorIndexFileGroupCount();
     int fileGroupCount = configuredFileGroupCount > 0
         ? configuredFileGroupCount
         : Math.max(1, (int) Math.ceil((double) numClusters / clustersPerFileGroup));
 
-    long targetBlockBytes = Math.max(1L, VectorIndexOptions.getRaBitQPostingTargetBlockBytes(vectorOptions));
+    long targetBlockBytes = 64L * 1024L;
     long projectedIndexBytes = Math.max(1L, (long) numClusters * targetBlockBytes);
     if ((long) fileGroupCount * TARGET_FILE_GROUP_BYTES > projectedIndexBytes * 10L) {
       log.warn("Vector index {} is initializing with {} file groups for projected index size {} bytes. "
