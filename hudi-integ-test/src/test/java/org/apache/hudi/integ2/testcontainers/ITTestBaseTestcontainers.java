@@ -88,8 +88,8 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
         // Stream the coordinator's log into the test output. When Trino dies during
         // startup (plugin load or config errors) the container is torn down with the
         // stack, so this stream is the only place the root cause survives.
-        environment.withLogConsumer(Containers.TRINOCOORDINATOR,
-            new Slf4jLogConsumer(log).withPrefix(Containers.TRINOCOORDINATOR));
+        environment.withLogConsumer(Containers.TRINO_COORDINATOR,
+            new Slf4jLogConsumer(log).withPrefix(Containers.TRINO_COORDINATOR));
       }
     }
     // Point the compose stack at a host-built Trino plugin dir when supplied. The compose

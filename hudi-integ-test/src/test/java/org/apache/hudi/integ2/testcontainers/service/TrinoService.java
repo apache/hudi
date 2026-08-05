@@ -52,7 +52,7 @@ public class TrinoService {
   private final ContainerState container;
 
   public TrinoService(ContainerProvider provider) {
-    this.container = provider.getContainer(TestcontainersConfig.Containers.TRINOCOORDINATOR);
+    this.container = provider.getContainer(TestcontainersConfig.Containers.TRINO_COORDINATOR);
     this.executor = new CommandExecutor(container);
   }
 

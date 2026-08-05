@@ -12,6 +12,9 @@ on:
       - 'hudi-trino/**'
       - 'docker/trino/**'
       - 'docker/compose/docker-compose_hadoop340_hive2310_spark402*'
+      # hadoop.env is copied into the generated compose dir and loaded by every
+      # service in the stack, so it is as load-bearing as the YAMLs themselves.
+      - 'docker/compose/hadoop.env'
       - 'docker/demo/**'
       - 'hudi-integ-test/src/test/java/org/apache/hudi/integ2/**'
       - '.github/workflows/hudi_trino_e2e.yml'
@@ -23,6 +26,9 @@ on:
       - 'hudi-trino/**'
       - 'docker/trino/**'
       - 'docker/compose/docker-compose_hadoop340_hive2310_spark402*'
+      # hadoop.env is copied into the generated compose dir and loaded by every
+      # service in the stack, so it is as load-bearing as the YAMLs themselves.
+      - 'docker/compose/hadoop.env'
       - 'docker/demo/**'
       - 'hudi-integ-test/src/test/java/org/apache/hudi/integ2/**'
       - '.github/workflows/hudi_trino_e2e.yml'

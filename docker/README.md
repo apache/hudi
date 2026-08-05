@@ -210,7 +210,10 @@ at `docker/trino/shim/` (see `hudi-trino/README.md` for the full build-and-run f
 
 ```
 # JDK 25; hudi-trino must already be installed into the local m2
-mvn -f docker/trino/shim/pom.xml clean package -DskipTests
+# dep.hudi.version comes from the reactor pom -- the shim is outside the reactor, so
+# cut_release_branch.sh cannot bump the literal default in its own pom.
+HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
+mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
 docker/trino/build_image.sh --plugin-dir docker/trino/shim/target/trino-hudi-481
 ```
 

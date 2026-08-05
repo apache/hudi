@@ -43,7 +43,7 @@ public final class TestcontainersConfig {
     public static final String SPARK_MASTER = "sparkmaster";
     // Testcontainers appends the replica index, so the adhoc services resolve as "<name>-1".
     public static final String ADHOC_1 = "adhoc-1-1";
-    public static final String TRINOCOORDINATOR = "trinocoordinator";
+    public static final String TRINO_COORDINATOR = "trinocoordinator";
 
     private Containers() {
     }

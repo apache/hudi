@@ -66,8 +66,11 @@ mvn clean install -T 2 -Dscala-2.13 -Dscala.binary.version=2.13 -Dspark4.0 -Dfli
 mvn -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
 
 # 3. JDK 25: assemble the plugin dir (package, NOT install -- installing would
-#    shadow the real io.trino:trino-hudi release coordinates in the local m2)
-mvn -f docker/trino/shim/pom.xml clean package -DskipTests
+#    shadow the real io.trino:trino-hudi release coordinates in the local m2).
+#    dep.hudi.version comes from the reactor pom: the shim sits outside the
+#    reactor, so cut_release_branch.sh cannot bump its literal default.
+HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
+mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
 
 # 4. Build the Trino image (locally tagged; never published)
 docker/trino/build_image.sh --plugin-dir docker/trino/shim/target/trino-hudi-481
