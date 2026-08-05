@@ -63,6 +63,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -87,8 +89,7 @@ import static org.apache.hudi.utils.TestData.assertRowsEqualsUnordered;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
 import static org.apache.hudi.utils.TestData.map;
 import static org.apache.hudi.utils.TestData.row;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * IT cases for Hoodie table source and sink.
@@ -2263,6 +2264,85 @@ public class ITTestHoodieDataSource {
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
+  /**
+   * Test that Flink can write and read a Hudi table when hadoop.conf.dir is explicitly set.
+   * This simulates cross-cluster access by pointing hadoop.conf.dir to a local conf directory
+   * containing core-site.xml with fs.defaultFS=file:///.
+   */
+  @Test
+  void testBatchWriteAndReadWithHadoopConfDir() throws IOException {
+    // Prepare a hadoop conf dir with core-site.xml pointing to local filesystem
+    File hadoopConfDir = new File(tempFile.getParentFile(), "hadoop-conf");
+    hadoopConfDir.mkdirs();
+    String coreSiteXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            + "<configuration>\n"
+            + "  <property><name>fs.defaultFS</name><value>file:///</value></property>\n"
+            + "</configuration>";
+    try (FileWriter w = new FileWriter(new File(hadoopConfDir, "core-site.xml"))) {
+      w.write(coreSiteXml);
+    }
+
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+            .option(FlinkOptions.PATH, tempFile.toURI().toString())
+            // specify hadoop.conf.dir to simulate cross-cluster configuration
+            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath().replace('\\', '/'))
+            .option(FlinkOptions.METADATA_ENABLED, false)
+            .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    List<Row> result = CollectionUtil.iterableToList(
+            () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  /**
+   * Test incremental read with hadoop.conf.dir set.
+   * Verifies that the hadoop.conf.dir option is correctly propagated to the
+   * incremental read path (HoodieTableSource -> HadoopConfigurations.getHadoopConf).
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testIncrementalReadWithHadoopConfDir(HoodieTableType tableType) throws Exception {
+    // Prepare a hadoop conf dir with core-site.xml
+    File hadoopConfDir = new File(tempFile.getParentFile(), "hadoop-conf-incr");
+    hadoopConfDir.mkdirs();
+    String coreSiteXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            + "<configuration>\n"
+            + "  <property><name>fs.defaultFS</name><value>file:///</value></property>\n"
+            + "</configuration>";
+    try (FileWriter w = new FileWriter(new File(hadoopConfDir, "core-site.xml"))) {
+      w.write(coreSiteXml);
+    }
+    String tablePath = tempFile.toURI().toString();
+    // Step 1: write first batch
+    Configuration conf = TestConfigurations.getDefaultConf(tablePath);
+    conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    String firstCommit = TestUtils.getFirstCompleteInstant(tablePath);
+
+    // Step 2: write second batch
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+
+    // Step 3: incremental read from firstCommit with hadoop.conf.dir set
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+            .option(FlinkOptions.PATH, tablePath)
+            .option(FlinkOptions.TABLE_TYPE, tableType)
+            .option(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL)
+            .option(FlinkOptions.READ_START_COMMIT, firstCommit)
+            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath().replace('\\', '/'))
+            .option(FlinkOptions.METADATA_ENABLED, false)
+            .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result = CollectionUtil.iterableToList(
+            () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    // incremental read should return the second batch (update/insert records)
+    assertFalse(result.isEmpty(), "Incremental read should return records after firstCommit");
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   void testWriteWithTimelineServerBasedMarker(HoodieTableType tableType) {
