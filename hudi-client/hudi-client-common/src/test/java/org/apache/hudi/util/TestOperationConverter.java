@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.model.WriteOperationType;
 
 import org.junit.jupiter.api.Test;
