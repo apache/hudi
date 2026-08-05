@@ -482,7 +482,18 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     }
   }
 
-  private static int decimalFixedLen(HoodieSchema resolvedSchema, int precision) {
+  /**
+   * Fixed-length byte width for a decimal column. A Spark {@link DecimalType} carries only
+   * precision/scale, so on its own it yields the precision-minimal width. When the resolved schema
+   * is a {@link HoodieSchema.Decimal} backed by an Avro {@code fixed} type it declares the width
+   * explicitly (which may be wider than the minimum), and that declared size is honored so the
+   * Spark write path matches the Avro write path and stays consistent with base files written on
+   * insert. Falls back to the precision-minimal width otherwise.
+   *
+   * <p>Package-private so it can be unit-tested directly (constructing the full write support
+   * from this module is not possible: it needs a Spark adapter that lives in a sibling module).
+   */
+  static int decimalFixedLen(HoodieSchema resolvedSchema, int precision) {
     if (resolvedSchema instanceof HoodieSchema.Decimal) {
       HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) resolvedSchema;
       if (decimalSchema.isFixed()) {

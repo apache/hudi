@@ -18,8 +18,11 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.spark.sql.types.Decimal;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -41,6 +44,21 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 class TestHoodieRowParquetWriteSupport extends HoodieClientTestBase {
 
   private static final String SESSION_LOCAL_TIME_ZONE_KEY = "spark.sql.session.timeZone";
+
+  @Test
+  void testDecimalFixedLen() {
+    int minWidth = Decimal.minBytesForPrecision()[20];
+    // A non-decimal schema falls back to the precision-minimal width.
+    assertEquals(minWidth,
+        HoodieRowParquetWriteSupport.decimalFixedLen(HoodieSchema.create(HoodieSchemaType.STRING), 20));
+    // A bytes-backed decimal (no declared fixed size) also falls back to the minimum.
+    assertEquals(minWidth,
+        HoodieRowParquetWriteSupport.decimalFixedLen(HoodieSchema.createDecimal(20, 2), 20));
+    // An Avro fixed decimal wider than the minimum is honored.
+    assertEquals(10,
+        HoodieRowParquetWriteSupport.decimalFixedLen(
+            HoodieSchema.createDecimal("dec", null, null, 20, 2, 10), 20));
+  }
 
   @Test
   void testResolveSessionLocalTimeZoneWithoutOverride() {
