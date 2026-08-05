@@ -424,7 +424,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       int splitLimit,
       int mergeFloor,
       String bootstrapInstant,
-      String verifiedFrontier,
       long createdTs,
       String metadataPartitionPath) {
     String recordKey = VectorIndexMetadataKey.manifest(generation);
@@ -461,7 +460,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         splitLimit,
         mergeFloor,
         bootstrapInstant,
-        verifiedFrontier,
         createdTs);
     return new HoodieAvroRecord<>(
         new HoodieKey(recordKey, metadataPartitionPath),

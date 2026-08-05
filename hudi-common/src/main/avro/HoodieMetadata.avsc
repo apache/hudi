@@ -607,8 +607,6 @@
                         {"name": "mergeFloor", "type": "int"},
                         {"name": "bootstrapInstant", "type": ["null", "string"], "default": null,
                          "doc": "Source data-write instant included by the generation bootstrap baseline."},
-                        {"name": "verifiedFrontier", "type": ["null", "string"], "default": null,
-                         "doc": "Latest source data-write instant with verified contiguous marker coverage from the bootstrap baseline."},
                         {"name": "createdTs", "type": "long"}
                     ]
                 },
