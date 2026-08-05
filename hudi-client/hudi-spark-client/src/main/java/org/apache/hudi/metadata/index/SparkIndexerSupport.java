@@ -155,10 +155,7 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
           "Vector index can only be bootstrapped from VECTOR columns: " + vectorColumn);
 
       HoodieSchema.Vector resolvedVectorType = (HoodieSchema.Vector) vectorSchema;
-      int configuredDimension = VectorIndexOptions.getDimension(indexDefinition.getIndexOptions());
-      ValidationUtils.checkState(resolvedVectorType.getDimension() == configuredDimension,
-          String.format("Vector dimension mismatch for %s: schema=%s, configured=%s",
-              vectorColumn, resolvedVectorType.getDimension(), configuredDimension));
+      int dimension = resolvedVectorType.getDimension();
 
       JavaRDD<SparkVectorIndexBootstrap.VectorRow> vectorRows = buildVectorRowsRDD(
           dataMetaClient, tableSchema, vectorColumn, indexDefinition.getIndexName(), fileSlices);
@@ -167,7 +164,7 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
       long lastUpdatedTs = System.currentTimeMillis();
       return SparkVectorIndexBootstrap.bootstrap(
           jsc, vectorRows, indexDefinition, resolvedVectorType.getVectorElementType(),
-          generation, lastUpdatedTs);
+          dimension, generation, lastUpdatedTs);
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to bootstrap vector index records", e);
     }
