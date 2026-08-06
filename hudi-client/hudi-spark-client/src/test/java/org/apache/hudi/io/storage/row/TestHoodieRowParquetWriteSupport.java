@@ -29,8 +29,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.TimeZone;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
  * Coverage for {@link HoodieRowParquetWriteSupport#resolveSessionLocalTimeZone()}.
@@ -58,6 +60,21 @@ class TestHoodieRowParquetWriteSupport extends HoodieClientTestBase {
     assertEquals(10,
         HoodieRowParquetWriteSupport.decimalFixedLen(
             HoodieSchema.createDecimal("dec", null, null, 20, 2, 10), 20));
+  }
+
+  @Test
+  void testPadDecimalToFixedLength() {
+    byte[] buffer = new byte[16];
+    // Already the full width: returned as-is, no copy into the buffer.
+    byte[] exact = new byte[] {1, 2, 3, 4};
+    assertSame(exact, HoodieRowParquetWriteSupport.padDecimalToFixedLength(exact, 4, buffer));
+    // Positive magnitude: left-padded with zero sign bytes.
+    byte[] positive = HoodieRowParquetWriteSupport.padDecimalToFixedLength(new byte[] {0x12, 0x34}, 4, buffer);
+    assertArrayEquals(new byte[] {0, 0, 0x12, 0x34}, Arrays.copyOf(positive, 4));
+    // Negative magnitude: left-padded with 0xFF sign bytes.
+    byte[] negative = HoodieRowParquetWriteSupport.padDecimalToFixedLength(
+        new byte[] {(byte) 0xFF, (byte) 0x80}, 4, buffer);
+    assertArrayEquals(new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0x80}, Arrays.copyOf(negative, 4));
   }
 
   @Test

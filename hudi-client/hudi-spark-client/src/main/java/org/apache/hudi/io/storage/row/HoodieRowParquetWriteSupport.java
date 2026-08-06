@@ -507,6 +507,24 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     return Decimal.minBytesForPrecision()[precision];
   }
 
+  /**
+   * Left-pads the unscaled decimal bytes with sign-extension bytes to exactly {@code numBytes},
+   * writing into {@code paddingBuffer} when a copy is needed and returning {@code unscaledBytes}
+   * directly when it already spans the full width (Avro validates the fixed size covers the
+   * precision, so the unscaled magnitude always fits).
+   *
+   * <p>Package-private so it can be unit-tested directly (see {@link #decimalFixedLen}).
+   */
+  static byte[] padDecimalToFixedLength(byte[] unscaledBytes, int numBytes, byte[] paddingBuffer) {
+    if (unscaledBytes.length == numBytes) {
+      return unscaledBytes;
+    }
+    byte signByte = (unscaledBytes[0] < 0) ? (byte) -1 : (byte) 0;
+    Arrays.fill(paddingBuffer, 0, numBytes - unscaledBytes.length, signByte);
+    System.arraycopy(unscaledBytes, 0, paddingBuffer, numBytes - unscaledBytes.length, unscaledBytes.length);
+    return paddingBuffer;
+  }
+
   private ValueWriter makeWriter(HoodieSchema schema, DataType dataType) {
     HoodieSchema resolvedSchema = schema == null ? null : schema.getNonNullType();
 
@@ -588,20 +606,8 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       byte[] paddingBuffer = numBytes <= decimalBuffer.length ? decimalBuffer : new byte[numBytes];
       return (row, ordinal) -> {
         byte[] bytes = row.getDecimal(ordinal, precision, scale).toJavaBigDecimal().unscaledValue().toByteArray();
-        byte[] fixedLengthBytes;
-        if (bytes.length == numBytes) {
-          // If the length of the underlying byte array of the unscaled `BigInteger` happens to be
-          // `numBytes`, just reuse it, so that we don't bother copying it to a buffer.
-          fixedLengthBytes = bytes;
-        } else {
-          // Otherwise left-pad the unscaled bytes with sign bytes to reach `numBytes` (Avro validates
-          // the fixed size covers the precision, so the unscaled magnitude always fits).
-          byte signByte = (bytes[0] < 0) ? (byte) -1 : (byte) 0;
-          Arrays.fill(paddingBuffer, 0, numBytes - bytes.length, signByte);
-          System.arraycopy(bytes, 0, paddingBuffer, numBytes - bytes.length, bytes.length);
-          fixedLengthBytes = paddingBuffer;
-        }
-        recordConsumer.addBinary(Binary.fromReusedByteArray(fixedLengthBytes, 0, numBytes));
+        recordConsumer.addBinary(Binary.fromReusedByteArray(
+            padDecimalToFixedLength(bytes, numBytes, paddingBuffer), 0, numBytes));
       };
     } else if (dataType instanceof ArrayType
             && resolvedSchema != null
