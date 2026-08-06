@@ -40,6 +40,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -98,7 +99,26 @@ class TestHoodieLookupFunction {
     }
   }
 
-  private HoodieLookupFunction newLookupFunction(CountingLookupTableReader reader, Configuration conf) {
+  @Test
+  void testReaderIsClosedWhenCacheReloadFails() throws Exception {
+    Configuration conf = getConf();
+    TestData.writeData(TestData.DATA_SET_SINGLE_INSERT, conf);
+
+    FailingLookupTableReader reader = new FailingLookupTableReader(conf);
+    HoodieLookupFunction function = newLookupFunction(reader, conf);
+    function.open(null);
+
+    Thread.currentThread().interrupt();
+    try {
+      assertThrows(RuntimeException.class, () -> function.lookup(lookupKey()));
+      assertEquals(1, reader.closeCount, "The failed reload attempt should close the reader");
+    } finally {
+      Thread.interrupted();
+      function.close();
+    }
+  }
+
+  private HoodieLookupFunction newLookupFunction(HoodieLookupTableReader reader, Configuration conf) {
     return new HoodieLookupFunction(
         reader,
         TestConfigurations.ROW_TYPE,
@@ -156,6 +176,29 @@ class TestHoodieLookupFunction {
     @Override
     public void close() throws IOException {
       // no-op
+    }
+  }
+
+  private static class FailingLookupTableReader extends HoodieLookupTableReader {
+    private int closeCount;
+
+    private FailingLookupTableReader(Configuration conf) {
+      super(() -> null, conf);
+    }
+
+    @Override
+    public void open() {
+      // no-op
+    }
+
+    @Override
+    public RowData read(RowData reuse) throws IOException {
+      throw new IOException("expected");
+    }
+
+    @Override
+    public void close() {
+      closeCount++;
     }
   }
 }
