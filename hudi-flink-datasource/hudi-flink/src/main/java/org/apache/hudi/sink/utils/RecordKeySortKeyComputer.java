@@ -20,7 +20,6 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 
-import org.apache.flink.api.common.typeutils.base.StringComparator;
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
@@ -28,10 +27,9 @@ import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
 /**
  * Computes a normalized prefix for sorting rows by their encoded Hudi record key.
  *
- * <p>The common LSM reader compares encoded record keys with {@link String#compareTo(String)},
- * whose order is based on UTF-16 code units. This computer therefore uses Flink's normalized-key
- * encoding for Java strings, which preserves that order while still using only one byte for the
- * common ASCII case.
+ * <p>The common LSM reader compares encoded record keys by their unsigned UTF-8 byte
+ * representation. This computer copies a prefix of those bytes into the normalized key so its
+ * ordering is consistent with the reader.
  *
  * <p>The normalized prefix is eight bytes for one record-key field and sixteen bytes for two or
  * more fields. It is packed into one or two big-endian {@code long}s so the sort hot path can
@@ -47,7 +45,6 @@ public class RecordKeySortKeyComputer implements NormalizedKeyComputer {
 
   private final RowDataKeyGen keyGen;
   private final int numKeyBytes;
-  private final StringComparator stringComparator = new StringComparator(true);
 
   /**
    * Creates a normalized-key computer using up to sixteen bytes of the encoded record-key prefix.
@@ -62,8 +59,65 @@ public class RecordKeySortKeyComputer implements NormalizedKeyComputer {
 
   @Override
   public void putKey(RowData record, MemorySegment target, int offset) {
-    stringComparator.putNormalizedKey(
+    int bytesWritten = putUtf8Prefix(
         keyGen.getRecordKeyForComparison(record), target, offset, numKeyBytes);
+    for (int i = bytesWritten; i < numKeyBytes; i++) {
+      target.put(offset + i, (byte) 0);
+    }
+  }
+
+  /**
+   * Encodes at most {@code maxBytes} of the UTF-8 prefix directly into the target segment.
+   *
+   * <p>This writes the exact first {@code maxBytes} UTF-8 bytes, including a partial multi-byte
+   * sequence at the prefix boundary, without materializing the complete encoded record key.
+   *
+   * <p>Production record keys contain well-formed UTF-16 because they are derived from UTF-8 input.
+   * An unpaired surrogate is encoded with the same replacement byte used by
+   * {@link String#getBytes(java.nio.charset.Charset)}.
+   */
+  private static int putUtf8Prefix(
+      String value, MemorySegment target, int offset, int maxBytes) {
+    int bytesWritten = 0;
+    for (int i = 0; i < value.length() && bytesWritten < maxBytes; i++) {
+      char current = value.charAt(i);
+      int encoded;
+      int encodedBytes;
+      // Pack the encoded bytes in big-endian order into the least-significant encodedBytes bytes.
+      if (current < 0x80) {
+        encoded = current;
+        encodedBytes = 1;
+      } else if (current < 0x800) {
+        encoded = (0xC0 | current >>> 6) << 8
+            | (0x80 | current & 0x3F);
+        encodedBytes = 2;
+      } else if (Character.isHighSurrogate(current)
+          && i + 1 < value.length()
+          && Character.isLowSurrogate(value.charAt(i + 1))) {
+        int codePoint = Character.toCodePoint(current, value.charAt(++i));
+        encoded = (0xF0 | codePoint >>> 18) << 24
+            | (0x80 | codePoint >>> 12 & 0x3F) << 16
+            | (0x80 | codePoint >>> 6 & 0x3F) << 8
+            | (0x80 | codePoint & 0x3F);
+        encodedBytes = 4;
+      } else if (Character.isSurrogate(current)) {
+        encoded = '?';
+        encodedBytes = 1;
+      } else {
+        encoded = (0xE0 | current >>> 12) << 16
+            | (0x80 | current >>> 6 & 0x3F) << 8
+            | (0x80 | current & 0x3F);
+        encodedBytes = 3;
+      }
+
+      // Writing byte by byte is intentional: the normalized prefix may end inside this sequence.
+      for (int shift = (encodedBytes - 1) * Byte.SIZE;
+           shift >= 0 && bytesWritten < maxBytes;
+           shift -= Byte.SIZE) {
+        target.put(offset + bytesWritten++, (byte) (encoded >>> shift));
+      }
+    }
+    return bytesWritten;
   }
 
   @Override

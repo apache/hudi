@@ -198,17 +198,18 @@ class TestLsmFileGroupRecordIterator {
 
   @Test
   void testLoserTreeUsesUtf8Ordering() {
-    String bmpPrivateUseKey = new String(Character.toChars(0xE000));
-    String supplementaryKey = new String(Character.toChars(0x20000));
+    String fullWidthExclamationKey = "！";
+    String emojiKey = "😀";
 
     LsmFileGroupRecordIterator.LoserTree<String> loserTree =
         new LsmFileGroupRecordIterator.LoserTree<>(
             Arrays.asList(
-                sortedRunReader(0, record(bmpPrivateUseKey, "bmp")),
-                sortedRunReader(1, record(supplementaryKey, "supplementary"))));
+                sortedRunReader(0, record(fullWidthExclamationKey, "full-width-exclamation")),
+                sortedRunReader(1, record(emojiKey, "emoji"))));
+    // UTF-16 orders the emoji first, while UTF-8 bytes order the full-width character first.
     assertEquals(Arrays.asList(
-        bmpPrivateUseKey + ":bmp",
-        supplementaryKey + ":supplementary"), drain(loserTree));
+        fullWidthExclamationKey + ":full-width-exclamation",
+        emojiKey + ":emoji"), drain(loserTree));
   }
 
   @Test
