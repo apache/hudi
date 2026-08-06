@@ -280,7 +280,8 @@ public class TestAvroOrcUtils extends HoodieCommonTestHarness {
 
     HoodieSchema dateSchema = HoodieSchema.create(HoodieSchemaType.INT);
     assertEquals(1, roundTrip(TypeDescription.createDate(), dateSchema, Date.valueOf("1970-01-02")));
-    assertEquals(2, roundTrip(TypeDescription.createDate(), dateSchema, new java.util.Date(2L * 86_400_000L)));
+    java.util.Date utilDate = new java.util.Date(Date.valueOf("1970-01-03").getTime());
+    assertEquals(2, roundTrip(TypeDescription.createDate(), dateSchema, utilDate));
 
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     assertThrows(IllegalStateException.class,
