@@ -114,17 +114,17 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   protected long insertRecordsWritten = 0;
 
   public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                MergeContext<T> mergeContext, String partitionPath, String fileId,
                                 TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    this(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier,
+    this(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier,
         getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt);
   }
 
   public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                MergeContext<T> mergeContext, String partitionPath, String fileId,
                                 TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt, false);
-    populateIncomingRecordsMap(recordItr);
+    super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt, false);
+    populateIncomingRecordsMap(mergeContext.getRecordItr());
     initMarkerFileAndFileWriter(fileId, partitionPath);
     this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
     this.orderingFields = ConfigUtils.getOrderingFields(config.getProps());
@@ -137,7 +137,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
                                 Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
                                 HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier,
                                 Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, dataFileToBeMerged, keyGeneratorOpt,
+    super(config, instantTime, hoodieTable, MergeContext.create(Collections.emptyIterator()), partitionPath, fileId, taskContextSupplier, dataFileToBeMerged, keyGeneratorOpt,
         // preserveMetadata is disabled by default for MDT but enabled otherwise
         !HoodieTableMetadata.isMetadataTable(config.getBasePath()));
     this.keyToNewRecords = keyToNewRecords;

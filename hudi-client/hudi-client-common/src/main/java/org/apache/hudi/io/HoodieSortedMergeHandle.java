@@ -33,7 +33,6 @@ import org.apache.hudi.table.HoodieTable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -51,9 +50,9 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<
   private final Queue<String> newRecordKeysSorted = new PriorityQueue<>(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
 
   public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                 Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
-                                 Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+                                 MergeContext<T> mergeContext, String partitionPath, String fileId,
+                                 TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     newRecordKeysSorted.addAll(keyToNewRecords.keySet());
   }
 

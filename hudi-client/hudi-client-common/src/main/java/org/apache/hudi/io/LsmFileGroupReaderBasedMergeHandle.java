@@ -48,23 +48,23 @@ import java.util.stream.Stream;
 public class LsmFileGroupReaderBasedMergeHandle<T, I, K, O> extends FileGroupReaderBasedMergeHandle<T, I, K, O> {
 
   public LsmFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                            MergeContext<T> mergeContext, String partitionPath, String fileId,
                                             TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+    super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
   }
 
   public LsmFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                            MergeContext<T> mergeContext, String partitionPath, String fileId,
                                             TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt);
+    super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt);
   }
 
   public LsmFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                             Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
                                             HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier,
                                             Option<BaseKeyGenerator> keyGeneratorOpt) {
-    this(config, instantTime, hoodieTable, keyToNewRecords.values().stream()
-        .sorted(Comparator.comparing(HoodieRecord::getRecordKey)).iterator(), partitionPath, fileId,
+    this(config, instantTime, hoodieTable, MergeContext.create(keyToNewRecords.values().stream()
+        .sorted(Comparator.comparing(HoodieRecord::getRecordKey)).iterator()), partitionPath, fileId,
         taskContextSupplier, dataFileToBeMerged, keyGeneratorOpt);
   }
 
