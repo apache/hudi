@@ -3105,7 +3105,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.write(HoodieLogFormat.MAGIC);
     outputStream.writeLong(474);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    outputStream.writeInt(HoodieLogFormat.INLINE_LOG_FORMAT_VERSION);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     outputStream.writeLong(400);
     outputStream.write(getUTF8Bytes("truncated-block-content"));
     outputStream.flush();
