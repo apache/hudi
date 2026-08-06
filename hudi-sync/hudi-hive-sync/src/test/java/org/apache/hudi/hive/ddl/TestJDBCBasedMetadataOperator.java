@@ -19,6 +19,7 @@
 package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
@@ -34,6 +35,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -102,6 +104,19 @@ class TestJDBCBasedMetadataOperator {
   }
 
   @Test
+  void testGetFieldSchemasHandlesMissingType() throws Exception {
+    when(mockStatement.executeQuery(anyString())).thenReturn(mockResultSet);
+    when(mockResultSet.next()).thenReturn(true, false);
+    when(mockResultSet.getString(1)).thenReturn("mystery");
+    when(mockResultSet.getString(2)).thenReturn(null);
+
+    List<FieldSchema> fields = operator.getFieldSchemas("my_table");
+
+    assertEquals(1, fields.size());
+    assertEquals("", fields.get(0).getType());
+  }
+
+  @Test
   void testGetTableProperty() throws Exception {
     ResultSetMetaData metaData = mock(ResultSetMetaData.class);
     when(metaData.getColumnCount()).thenReturn(2);
@@ -163,6 +178,15 @@ class TestJDBCBasedMetadataOperator {
 
     String location = operator.getTableLocation("my_table");
     assertEquals("s3a://bucket/warehouse/table", location);
+  }
+
+  @Test
+  void testGetTableLocationFailsWhenDescribeHasNoLocation() throws Exception {
+    when(mockStatement.executeQuery(anyString())).thenReturn(mockResultSet);
+    when(mockResultSet.next()).thenReturn(true, false);
+    when(mockResultSet.getString(1)).thenReturn("# Detailed Table Information");
+
+    assertThrows(HoodieHiveSyncException.class, () -> operator.getTableLocation("my_table"));
   }
 
   @Test
