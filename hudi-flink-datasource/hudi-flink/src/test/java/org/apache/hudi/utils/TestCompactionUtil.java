@@ -55,6 +55,8 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -169,6 +171,27 @@ public class TestCompactionUtil {
     CompactionUtil.inferMetadataConf(this.conf, this.metaClient);
     assertThat("Metadata table should be disabled after inference",
         this.conf.get(FlinkOptions.METADATA_ENABLED), is(metadataEnabled));
+  }
+
+  @Test
+  void testInferTableConfiguration() throws Exception {
+    beforeEach();
+    Configuration inferred = new Configuration();
+
+    CompactionUtil.setOrderingFields(inferred, metaClient);
+    CompactionUtil.setPartitionField(inferred, metaClient);
+
+    assertEquals("ts", inferred.get(FlinkOptions.ORDERING_FIELDS));
+    assertEquals("partition", inferred.get(FlinkOptions.PARTITION_PATH_FIELD));
+  }
+
+  @Test
+  void testCompactionSequence() {
+    assertNotNull(new CompactionUtil());
+    CompactionUtil.scheduleMetadataCompaction(null, false);
+    assertTrue(CompactionUtil.isLIFO("lifo"));
+    assertTrue(CompactionUtil.isLIFO("LIFO"));
+    assertFalse(CompactionUtil.isLIFO("fifo"));
   }
 
   /**
@@ -307,4 +330,3 @@ public class TestCompactionUtil {
     return instantTime;
   }
 }
-
