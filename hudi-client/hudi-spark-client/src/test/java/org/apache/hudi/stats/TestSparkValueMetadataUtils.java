@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.metadata.stats;
+package org.apache.hudi.stats;
 
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
