@@ -104,7 +104,8 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
     List<FileSliceAndPartition> fileSlices = collectLatestFileSlices(metaClient, writeConfig);
     SparkIndexerSupport indexerSupport = new SparkIndexerSupport(context(), writeConfig);
     List<HoodieRecord> records = HoodieJavaRDD.getJavaRDD(
-        indexerSupport.generateVectorIndexRecords(indexDefinition, metaClient, fileSlices, tableSchema, 1)).collect();
+        indexerSupport.generateVectorIndexRecords(
+            indexDefinition, metaClient, fileSlices, tableSchema, 1, instantTime)).collect();
     List<String> recordKeys = records.stream()
         .map(record -> record.getKey().getRecordKey())
         .collect(Collectors.toList());

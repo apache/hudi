@@ -163,7 +163,8 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
       HoodieTableMetaClient dataMetaClient,
       List<FileSliceAndPartition> fileSlices,
       HoodieSchema tableSchema,
-      int generation) {
+      int generation,
+      String sourceInstant) {
     try {
       String vectorColumn = indexDefinition.getSourceFields().get(0);
       HoodieSchemaField fieldSchema = HoodieSchemaUtils.getNestedField(tableSchema, vectorColumn)
@@ -183,7 +184,7 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
       long lastUpdatedTs = System.currentTimeMillis();
       return SparkVectorIndexBootstrap.bootstrap(
           jsc, vectorRows, indexDefinition, resolvedVectorType.getVectorElementType(),
-          dimension, generation, lastUpdatedTs);
+          dimension, generation, sourceInstant, lastUpdatedTs);
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to bootstrap vector index records", e);
     }

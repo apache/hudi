@@ -85,7 +85,19 @@ class TestVectorIndexMetadataKey {
         VectorIndexMetadataKey.quantizer(1, 0),
         VectorIndexMetadataKey.centroids(1, 0),
         VectorIndexMetadataKey.clusterStats(1, 7),
+        VectorIndexMetadataKey.sourceInstantMarker(1, "20260806120000000"),
         VectorIndexMetadataKey.postingBlock(1, 7, 0, 0));
+  }
+
+  @Test
+  void testSourceInstantMarkersSortByGenerationAndInstant() {
+    assertOrdered(
+        VectorIndexMetadataKey.sourceInstantMarker(1, "20260806120000000"),
+        VectorIndexMetadataKey.sourceInstantMarker(1, "20260806120000001"),
+        VectorIndexMetadataKey.sourceInstantMarker(2, "20260806110000000"));
+    assertEquals(
+        VectorIndexMetadataKey.sourceInstantMarkerPrefix(1),
+        VectorIndexMetadataKey.sourceInstantMarker(1, "").substring(0, 5));
   }
 
   @Test

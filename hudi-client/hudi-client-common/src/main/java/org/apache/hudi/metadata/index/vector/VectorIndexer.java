@@ -129,7 +129,7 @@ public class VectorIndexer extends BaseIndexer {
 
     // Initial bootstrap always allocates generation 1 (no pre-existing MDT partition to advance).
     HoodieData<HoodieRecord> records = engineIndexerSupport.generateVectorIndexRecords(
-        indexDefinition, dataTableMetaClient, fileSlices, tableSchema, 1);
+        indexDefinition, dataTableMetaClient, fileSlices, tableSchema, 1, context.dataInstantTime());
 
     return Collections.singletonList(IndexInitializationPlan.of(fileGroupCount, indexName, records));
   }
@@ -183,6 +183,9 @@ public class VectorIndexer extends BaseIndexer {
         HoodieData<HoodieRecord> records = engineIndexerSupport.generateVectorIndexUpdateRecords(
             indexDefinition, dataTableMetaClient, context.tableMetadata(), updates,
             tableSchema, generation, context.instantTime());
+        HoodieRecord marker = HoodieMetadataPayload.createVectorIndexSourceInstantMarkerRecord(
+            generation, context.instantTime(), System.currentTimeMillis(), indexPartition);
+        records = records.union(engineContext.parallelize(Collections.singletonList(marker), 1));
         partitionUpdates.add(IndexPartitionAndRecords.of(indexPartition, records));
       } catch (Exception e) {
         throw new HoodieMetadataException(

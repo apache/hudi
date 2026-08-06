@@ -31,6 +31,7 @@ import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.avro.model.HoodieVectorIndexPostingBlock;
 import org.apache.hudi.avro.model.HoodieVectorIndexPostingDelta;
 import org.apache.hudi.avro.model.HoodieVectorIndexQuantizer;
+import org.apache.hudi.avro.model.HoodieVectorIndexSourceInstantMarker;
 import org.apache.hudi.avro.model.HoodieVectorIndexTombstone;
 import org.apache.hudi.common.avro.AvroSchemaCache;
 import org.apache.hudi.common.fs.FSUtils;
@@ -422,6 +423,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       String centroidChecksum,
       int splitLimit,
       int mergeFloor,
+      String lastContiguousSourceInstant,
       long createdTs,
       String metadataPartitionPath) {
     String recordKey = VectorIndexMetadataKey.manifest(generation);
@@ -457,10 +459,25 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         centroidChecksum,
         splitLimit,
         mergeFloor,
+        lastContiguousSourceInstant,
         createdTs);
     return new HoodieAvroRecord<>(
         new HoodieKey(recordKey, metadataPartitionPath),
         new HoodieMetadataPayload(recordKey, manifest));
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexSourceInstantMarkerRecord(
+      int generation,
+      String sourceInstant,
+      long createdTs,
+      String metadataPartitionPath) {
+    checkArgument(sourceInstant != null && !sourceInstant.isEmpty(), "Source instant must not be empty");
+    String recordKey = VectorIndexMetadataKey.sourceInstantMarker(generation, sourceInstant);
+    HoodieVectorIndexSourceInstantMarker marker = new HoodieVectorIndexSourceInstantMarker(
+        generation, sourceInstant, createdTs);
+    return new HoodieAvroRecord<>(
+        new HoodieKey(recordKey, metadataPartitionPath),
+        new HoodieMetadataPayload(recordKey, marker));
   }
 
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexClusterManifestRecord(

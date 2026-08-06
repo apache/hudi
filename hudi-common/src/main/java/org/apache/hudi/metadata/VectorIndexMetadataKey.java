@@ -37,6 +37,7 @@ public final class VectorIndexMetadataKey {
   public static final int FAMILY_QUANTIZER = 0x02;
   public static final int FAMILY_CENTROIDS = 0x03;
   public static final int FAMILY_CLUSTER_STATS = 0x04;
+  public static final int FAMILY_SOURCE_INSTANT_MARKER = 0x05;
   public static final int FAMILY_POSTING = 0x10;
 
   public static final long MAX_PACKED_BLOCK_ID = 0xFFFDFFFFL;
@@ -76,6 +77,22 @@ public final class VectorIndexMetadataKey {
     buffer.put((byte) FAMILY_CLUSTER_STATS);
     putUnsignedInt(buffer, Integer.toUnsignedLong(generation));
     putUnsignedInt(buffer, Integer.toUnsignedLong(clusterId));
+    return encode(buffer);
+  }
+
+  public static String sourceInstantMarker(int generation, String sourceInstant) {
+    byte[] instantBytes = sourceInstant.getBytes(StandardCharsets.UTF_8);
+    ByteBuffer buffer = ByteBuffer.allocate(5 + instantBytes.length).order(ByteOrder.BIG_ENDIAN);
+    buffer.put((byte) FAMILY_SOURCE_INSTANT_MARKER);
+    putUnsignedInt(buffer, Integer.toUnsignedLong(generation));
+    buffer.put(instantBytes);
+    return encode(buffer);
+  }
+
+  public static String sourceInstantMarkerPrefix(int generation) {
+    ByteBuffer buffer = ByteBuffer.allocate(5).order(ByteOrder.BIG_ENDIAN);
+    buffer.put((byte) FAMILY_SOURCE_INSTANT_MARKER);
+    putUnsignedInt(buffer, Integer.toUnsignedLong(generation));
     return encode(buffer);
   }
 

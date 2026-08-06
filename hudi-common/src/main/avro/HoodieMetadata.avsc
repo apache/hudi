@@ -605,6 +605,8 @@
                          "doc": "Checksum of the canonical centroid payload used to reject incomplete or mismatched builds."},
                         {"name": "splitLimit", "type": "int"},
                         {"name": "mergeFloor", "type": "int"},
+                        {"name": "lastContiguousSourceInstant", "type": ["null", "string"], "default": null,
+                         "doc": "Latest source instant for which every required earlier source instant is covered by this generation."},
                         {"name": "createdTs", "type": "long"}
                     ]
                 },
@@ -674,6 +676,15 @@
                         {"name": "tombstoneCount", "type": "long"},
                         {"name": "lastRebalanceInstant", "type": ["null", "string"], "default": null},
                         {"name": "lastUpdatedTs", "type": "long"}
+                    ]
+                },
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexSourceInstantMarker",
+                    "fields": [
+                        {"name": "generation", "type": "int"},
+                        {"name": "sourceInstant", "type": "string"},
+                        {"name": "createdTs", "type": "long"}
                     ]
                 },
                 {
