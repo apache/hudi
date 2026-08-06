@@ -228,9 +228,6 @@ class TestParquetStatisticsDomains
 
     private static PrimitiveType plain(PrimitiveTypeName primitiveTypeName)
     {
-        if (primitiveTypeName == INT96) {
-            return Types.primitive(primitiveTypeName, OPTIONAL).named("c");
-        }
         if (primitiveTypeName == FIXED_LEN_BYTE_ARRAY) {
             return Types.primitive(primitiveTypeName, OPTIONAL).length(16).named("c");
         }
