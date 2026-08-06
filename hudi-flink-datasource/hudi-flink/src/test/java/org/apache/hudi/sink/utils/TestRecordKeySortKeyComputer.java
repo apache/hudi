@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.buffer.HeapMemorySegmentPool;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
@@ -40,12 +41,13 @@ import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.flink.util.MutableObjectIterator;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -85,7 +87,7 @@ class TestRecordKeySortKeyComputer {
   }
 
   @Test
-  void testNormalizedKeyPreservesJavaStringOrder() {
+  void testNormalizedKeyPreservesUtf8Order() {
     RowType rowType = rowType(new String[] {"key"}, new LogicalType[] {new VarCharType()});
     RowDataKeyGen keyGen = keyGen(rowType, "key");
     RecordKeySortKeyComputer computer = new RecordKeySortKeyComputer(keyGen, 1);
@@ -94,15 +96,44 @@ class TestRecordKeySortKeyComputer {
     assertComparison(computer, comparator, stringRow("10"), stringRow("2"), false);
     assertComparison(computer, comparator, stringRow("abc"), stringRow("abcd"), false);
     assertComparison(computer, comparator, stringRow("\u0000a"), stringRow("\u0000b"), false);
-    String supplementaryCharacter = new String(Character.toChars(0x1F600));
-    String privateUseCharacter = String.valueOf((char) 0xE000);
+    String supplementaryCharacter = new String(Character.toChars(0x20000));
+    String privateUseCharacter = new String(Character.toChars(0xE000));
+    assertTrue(StringUtils.compareUtf8Bytes(privateUseCharacter, supplementaryCharacter) < 0);
     assertComparison(computer, comparator,
-        stringRow(supplementaryCharacter), stringRow(privateUseCharacter), false);
+        stringRow(privateUseCharacter), stringRow(supplementaryCharacter), false);
     assertComparison(computer, comparator, stringRow("abcdefgh1"), stringRow("abcdefgh2"), true);
   }
 
   @Test
-  void testNormalizedKeyCompareMatchesStringCompareToAtEncodingBoundaries() {
+  void testNormalizedKeyContainsExactUtf8Prefix() {
+    RowType rowType = rowType(new String[] {"key"}, new LogicalType[] {new VarCharType()});
+    RowDataKeyGen keyGen = keyGen(rowType, "key");
+    RecordKeySortKeyComputer computer = new RecordKeySortKeyComputer(keyGen, 1);
+    List<String> values = Arrays.asList(
+        "ascii",
+        "12345678suffix",
+        "1234567" + new String(Character.toChars(0x20000)),
+        "123456" + new String(Character.toChars(0x20000)),
+        stringFromCodeUnits(0x007F, 0x0080, 0x07FF, 0x0800),
+        new String(Character.toChars(0xE000)),
+        new String(Character.toChars(0x10FFFF)));
+
+    for (String value : values) {
+      MemorySegment normalizedKey =
+          MemorySegmentFactory.allocateUnpooledSegment(computer.getNumKeyBytes());
+      computer.putKey(stringRow(value), normalizedKey, 0);
+
+      byte[] expected = Arrays.copyOf(
+          keyGen.getRecordKeyForComparison(stringRow(value)).getBytes(StandardCharsets.UTF_8),
+          computer.getNumKeyBytes());
+      byte[] actual = new byte[computer.getNumKeyBytes()];
+      normalizedKey.get(0, actual);
+      assertArrayEquals(expected, actual, () -> "Unexpected UTF-8 prefix for " + printable(value));
+    }
+  }
+
+  @Test
+  void testNormalizedKeyCompareMatchesUtf8OrderAtEncodingBoundaries() {
     List<String> values = Arrays.asList(
         stringFromCodeUnits(0x0000),
         stringFromCodeUnits(0x0000) + "a",
@@ -116,26 +147,29 @@ class TestRecordKeySortKeyComputer {
         stringFromCodeUnits(0x1FFF),
         stringFromCodeUnits(0x2000),
         stringFromCodeUnits(0xD7FF),
-        stringFromCodeUnits(0xD800),
         stringFromCodeUnits(0xD800, 0xDC00),
         stringFromCodeUnits(0xD83D, 0xDE00),
         stringFromCodeUnits(0xE000),
         stringFromCodeUnits(0xFFFF));
 
-    assertNormalizedKeyComparisonsMatchStringCompareTo(values);
+    assertNormalizedKeyComparisonsMatchUtf8Order(values);
   }
 
   @Test
-  void testNormalizedKeyCompareMatchesStringCompareToForRandomUtf16Strings() {
+  void testNormalizedKeyCompareMatchesUtf8OrderForRandomStrings() {
     Random random = new Random(42);
     List<String> values = new ArrayList<>();
     for (int i = 0; i < 1_000; i++) {
       int length = random.nextInt(23) + 1;
-      char[] chars = new char[length];
+      StringBuilder builder = new StringBuilder();
       for (int j = 0; j < length; j++) {
-        chars[j] = (char) random.nextInt(Character.MAX_VALUE + 1);
+        int codePoint;
+        do {
+          codePoint = random.nextInt(Character.MAX_CODE_POINT + 1);
+        } while (codePoint >= Character.MIN_SURROGATE && codePoint <= Character.MAX_SURROGATE);
+        builder.appendCodePoint(codePoint);
       }
-      values.add(new String(chars));
+      values.add(builder.toString());
     }
 
     RowType rowType = rowType(new String[] {"key"}, new LogicalType[] {new VarCharType()});
@@ -145,7 +179,7 @@ class TestRecordKeySortKeyComputer {
     for (int i = 0; i < values.size(); i++) {
       String left = values.get(i);
       String right = values.get((i * 31 + 17) % values.size());
-      assertNormalizedComparisonMatchesStringCompareTo(
+      assertNormalizedComparisonMatchesUtf8Order(
           computer, comparator, keyGen, left, right);
     }
   }
@@ -161,14 +195,17 @@ class TestRecordKeySortKeyComputer {
         stringRow("aa", "a"),
         stringRow("a,b", "c"),
         stringRow("a", "b,c"),
+        stringRow(new String(Character.toChars(0xE000)), "a"),
+        stringRow(new String(Character.toChars(0x20000)), "a"),
         stringRow("", "a"),
         GenericRowData.of(null, StringData.fromString("a")));
 
     for (RowData left : rows) {
       for (RowData right : rows) {
-        int recordKeyResult = keyGen.getRecordKey(left).compareTo(keyGen.getRecordKey(right));
-        int comparisonKeyResult = keyGen.getRecordKeyForComparison(left)
-            .compareTo(keyGen.getRecordKeyForComparison(right));
+        int recordKeyResult = StringUtils.compareUtf8Bytes(
+            keyGen.getRecordKey(left), keyGen.getRecordKey(right));
+        int comparisonKeyResult = StringUtils.compareUtf8Bytes(
+            keyGen.getRecordKeyForComparison(left), keyGen.getRecordKeyForComparison(right));
         assertEquals(Integer.signum(recordKeyResult), Integer.signum(comparisonKeyResult));
       }
     }
@@ -186,7 +223,9 @@ class TestRecordKeySortKeyComputer {
     assertBufferSort(complexRowType, "key1,key2", Arrays.asList(
         stringRow("same-prefix-2", "a"),
         stringRow("same-prefix-1", "z"),
-        stringRow("same-prefix-1", "a")));
+        stringRow("same-prefix-1", "a"),
+        stringRow(new String(Character.toChars(0xE000)), "a"),
+        stringRow(new String(Character.toChars(0x20000)), "a")));
   }
 
   private static void assertComparison(
@@ -207,20 +246,20 @@ class TestRecordKeySortKeyComputer {
     assertEquals(Integer.signum(comparator.compare(left, right)), Integer.signum(result));
   }
 
-  private static void assertNormalizedKeyComparisonsMatchStringCompareTo(List<String> values) {
+  private static void assertNormalizedKeyComparisonsMatchUtf8Order(List<String> values) {
     RowType rowType = rowType(new String[] {"key"}, new LogicalType[] {new VarCharType()});
     RowDataKeyGen keyGen = keyGen(rowType, "key");
     RecordKeySortKeyComputer computer = new RecordKeySortKeyComputer(keyGen, 1);
     RecordKeySortComparator comparator = new RecordKeySortComparator(keyGen);
     for (String left : values) {
       for (String right : values) {
-        assertNormalizedComparisonMatchesStringCompareTo(
+        assertNormalizedComparisonMatchesUtf8Order(
             computer, comparator, keyGen, left, right);
       }
     }
   }
 
-  private static void assertNormalizedComparisonMatchesStringCompareTo(
+  private static void assertNormalizedComparisonMatchesUtf8Order(
       RecordKeySortKeyComputer computer,
       RecordKeySortComparator comparator,
       RowDataKeyGen keyGen,
@@ -234,8 +273,9 @@ class TestRecordKeySortKeyComputer {
     computer.putKey(leftRow, leftKey, 0);
     computer.putKey(rightRow, rightKey, 0);
 
-    int expected = keyGen.getRecordKeyForComparison(leftRow)
-        .compareTo(keyGen.getRecordKeyForComparison(rightRow));
+    int expected = StringUtils.compareUtf8Bytes(
+        keyGen.getRecordKeyForComparison(leftRow),
+        keyGen.getRecordKeyForComparison(rightRow));
     int normalizedResult = computer.compareKey(leftKey, 0, rightKey, 0);
     if (normalizedResult != 0) {
       assertEquals(Integer.signum(expected), Integer.signum(normalizedResult),
@@ -279,7 +319,7 @@ class TestRecordKeySortKeyComputer {
         assertTrue(buffer.write(row));
         expected.add(keyGen.getRecordKey(row));
       }
-      Collections.sort(expected);
+      expected.sort(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
 
       new QuickSort().sort(buffer);
       MutableObjectIterator<BinaryRowData> iterator = buffer.getIterator();
