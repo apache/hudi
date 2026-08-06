@@ -121,6 +121,13 @@ Here are the basic configs that control bootstrapping.
 By default, with only `hoodie.bootstrap.base.path` being provided METADATA_ONLY mode is selected. For other options, please refer [bootstrap configs](https://hudi.apache.org/docs/next/configurations#Bootstrap-Configs) for more details.
 
 ## Related Resources
+<h3>Step-by-step migration guides</h3>
+
+* [Migrating from Parquet to Apache Hudi](https://hudi.apache.org/blog/2026/07/29/migrating-from-parquet-to-hudi)
+* [Migrating from Apache Hive Tables to Apache Hudi](https://hudi.apache.org/blog/2026/07/30/migrating-from-hive-to-hudi)
+* [Migrating from Delta Lake to Apache Hudi](https://hudi.apache.org/blog/2026/08/04/migrating-from-delta-lake-to-hudi)
+* [Migrating from Apache Iceberg to Apache Hudi](https://hudi.apache.org/blog/2026/08/05/migrating-from-apache-iceberg-to-hudi)
+
 <h3>Videos</h3>
 
 * [Bootstrapping in Apache Hudi on EMR Serverless with Lab](https://www.youtube.com/watch?v=iTNLqbW3YYA)
