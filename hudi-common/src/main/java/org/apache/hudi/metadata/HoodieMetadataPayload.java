@@ -470,21 +470,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       long vectorCount,
       long lastUpdatedTs,
       String metadataPartitionPath) {
-    return createVectorIndexClusterManifestRecord(
-        generation, clusterId, 0, fileGroupIds, vectorCount, lastUpdatedTs, metadataPartitionPath);
-  }
-
-  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexClusterManifestRecord(
-      int generation,
-      int clusterId,
-      int routingVersion,
-      Collection<String> fileGroupIds,
-      long vectorCount,
-      long lastUpdatedTs,
-      String metadataPartitionPath) {
     String recordKey = VectorIndexMetadataKey.clusterStats(generation, clusterId);
     HoodieVectorIndexClusterStats stats = new HoodieVectorIndexClusterStats(
-        routingVersion,
         fileGroupIds == null ? java.util.Collections.emptyList() : fileGroupIds.stream().collect(Collectors.toList()),
         vectorCount,
         0L,
@@ -505,7 +492,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       String metadataPartitionPath) {
     String recordKey = VectorIndexMetadataKey.clusterStats(generation, clusterId);
     HoodieVectorIndexClusterStats stats = new HoodieVectorIndexClusterStats(
-        0,
         java.util.Collections.emptyList(),
         liveCount,
         deltaCount,

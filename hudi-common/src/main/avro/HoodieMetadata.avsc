@@ -668,7 +668,6 @@
                     "type": "record",
                     "name": "HoodieVectorIndexClusterStats",
                     "fields": [
-                        {"name": "routingVersion", "type": "int", "doc": "Cache invalidation version for atomically published cluster routing changes."},
                         {"name": "fileGroupIds", "type": {"type": "array", "items": "string"}, "doc": "Candidate base-table file groups for this cluster."},
                         {"name": "liveCount", "type": "long"},
                         {"name": "deltaCount", "type": "long"},

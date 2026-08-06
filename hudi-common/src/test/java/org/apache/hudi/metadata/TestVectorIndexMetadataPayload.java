@@ -120,13 +120,13 @@ class TestVectorIndexMetadataPayload {
   }
 
   @Test
-  void testClusterManifestPersistsRoutingFields() {
+  void testClusterManifestPersistsStatistics() {
     HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createVectorIndexClusterManifestRecord(
         2, 9, Arrays.asList("fg-a", "fg-b"), 17L, 123L, "vector_index_demo");
 
     HoodieVectorIndexClusterStats stats =
         (HoodieVectorIndexClusterStats) record.getData().getVectorIndexMetadata().get();
-    assertEquals(0, stats.getRoutingVersion());
+    assertNull(HoodieVectorIndexClusterStats.getClassSchema().getField("routingVersion"));
     assertNull(HoodieVectorIndexClusterStats.getClassSchema().getField("shardCount"));
     assertEquals(Arrays.asList("fg-a", "fg-b"), stats.getFileGroupIds());
     assertEquals(17L, stats.getLiveCount());
