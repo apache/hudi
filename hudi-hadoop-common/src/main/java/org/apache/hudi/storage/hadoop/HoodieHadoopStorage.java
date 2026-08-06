@@ -20,7 +20,6 @@
 package org.apache.hudi.storage.hadoop;
 
 import org.apache.hudi.common.fs.ConsistencyGuard;
-import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieRetryWrapperFileSystem;
@@ -32,6 +31,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
