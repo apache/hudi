@@ -645,7 +645,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       heartbeatClient.stop(clusteringCommitTime);
     }
     log.info("Clustering successfully on commit {} for table {}", clusteringCommitTime, table.getConfig().getBasePath());
-    fireCommitCallbackIfNecessary(clusteringCommitTime, clusteringInstant.getAction(),
+    fireCommitCallbackIfNecessary(clusteringCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION,
         writeStats, table::getBaseFileOnlyView, Option.empty());
   }
 
