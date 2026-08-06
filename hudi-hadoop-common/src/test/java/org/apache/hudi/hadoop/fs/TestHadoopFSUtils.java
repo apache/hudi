@@ -63,6 +63,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -293,15 +294,15 @@ public class TestHadoopFSUtils {
     Path path = new Path("s3://bucket/table/file.parquet");
     HoodiePath hoodiePath = HadoopFSUtils.fromPath(path);
     assertEquals(path, HadoopFSUtils.toPath(hoodiePath));
-    assertEquals(null, HadoopFSUtils.toPath(null));
-    assertEquals(null, HadoopFSUtils.fromPath(null));
+    assertNull(HadoopFSUtils.toPath(null));
+    assertNull(HadoopFSUtils.fromPath(null));
 
     FsPermission permission = new FsPermission(
         FsAction.ALL, FsAction.READ_EXECUTE, FsAction.READ, true);
     HoodieFSPermission hoodiePermission = HadoopFSUtils.fromFSPermission(permission);
     assertEquals(permission, HadoopFSUtils.toFSPermission(hoodiePermission));
-    assertEquals(null, HadoopFSUtils.toFSPermission(null));
-    assertEquals(null, HadoopFSUtils.fromFSPermission(null));
+    assertNull(HadoopFSUtils.toFSPermission(null));
+    assertNull(HadoopFSUtils.fromFSPermission(null));
 
     FileStatus status = new FileStatus(123, false, 2, 4096, 1000, 900,
         permission, "owner", "group", path);
@@ -311,7 +312,7 @@ public class TestHadoopFSUtils {
     assertEquals("owner", converted.getOwner());
     assertEquals("group", converted.getGroup());
     assertEquals(permission, HadoopFSUtils.toFSPermission(converted.getPermission()));
-    assertEquals(null, HadoopFSUtils.fromFileStatus(null));
+    assertNull(HadoopFSUtils.fromFileStatus(null));
   }
 
   @Test

@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -90,7 +91,7 @@ class TestCachingPath {
   @Test
   void testRelativePathAndSchemeRemoval() {
     CachingPath relative = CachingPath.createRelativePathUnsafe("partition%2Fvalue/file.parquet");
-    assertTrue(!relative.toUri().isAbsolute());
+    assertFalse(relative.toUri().isAbsolute());
     assertEquals("partition%2Fvalue/file.parquet", relative.toString());
 
     Path absolute = new Path("s3://bucket/table/file.parquet");

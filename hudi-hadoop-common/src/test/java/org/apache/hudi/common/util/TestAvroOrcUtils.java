@@ -139,7 +139,7 @@ public class TestAvroOrcUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testPrimitiveValuesRoundTripThroughColumnVectors() {
-    assertEquals(true, roundTrip(HoodieSchema.create(HoodieSchemaType.BOOLEAN), true));
+    assertTrue((Boolean) roundTrip(HoodieSchema.create(HoodieSchemaType.BOOLEAN), true));
     assertEquals(12, roundTrip(HoodieSchema.create(HoodieSchemaType.INT), 12));
     assertEquals(34L, roundTrip(HoodieSchema.create(HoodieSchemaType.LONG), 34L));
     assertEquals(1.25f, roundTrip(HoodieSchema.create(HoodieSchemaType.FLOAT), 1.25f));
@@ -314,7 +314,7 @@ public class TestAvroOrcUtils extends HoodieCommonTestHarness {
         .addUnionChild(TypeDescription.createString())
         .addUnionChild(TypeDescription.createBinary());
 
-    assertEquals(true, roundTrip(type, schema, true));
+    assertTrue((Boolean) roundTrip(type, schema, true));
     assertEquals(17, roundTrip(type, schema, 17));
     assertEquals(23L, roundTrip(type, schema, 23L));
     assertEquals(1.5f, roundTrip(type, schema, 1.5f));
