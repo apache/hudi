@@ -67,7 +67,6 @@ import org.apache.hudi.utilities.streamer.HoodieStreamerMetrics;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
-import com.codahale.metrics.MetricRegistry;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
