@@ -196,3 +196,30 @@ When `--multi-arch` is enabled, the script builds and pushes the amd64 and arm64
 Note that `--multi-arch` uses `docker buildx build --push` and the image names in the script are hardcoded to the
 `apachehudi/...` Docker Hub repositories, so this flow requires push access to those repositories. No Dockerfile
 changes are needed for the current amd64 plus arm64 image set in this repository.
+
+## Trino E2E image - `/trino`
+
+The Trino E2E stack does not use the `hoodie/hadoop` image tree. `docker/trino/` builds
+`apachehudi/hudi-trino_<trino-version>` directly on top of the official `trinodb/trino`
+image, baking in a locally-assembled native `trino-hudi` plugin directory and the E2E
+catalog config (`connector.name=hudi`, metastore at `thrift://hivemetastore:9083`).
+
+This image is built locally on demand (also by the `hudi_trino_e2e.yml` CI workflow) and
+is NOT published to Docker Hub. The plugin directory comes from the in-repo shim project
+at `docker/trino/shim/` (see `hudi-trino/README.md` for the full build-and-run flow):
+
+```
+# JDK 25; hudi-trino must already be installed into the local m2
+# dep.hudi.version comes from the reactor pom -- the shim is outside the reactor, so
+# cut_release_branch.sh cannot bump the literal default in its own pom.
+HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
+mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
+docker/trino/build_image.sh --plugin-dir docker/trino/shim/target/trino-hudi-481
+```
+
+The `trinocoordinator` compose service exists only in the
+`docker-compose_hadoop340_hive2310_spark402_{amd64,arm64}.yml` pair, behind the `trino`
+compose profile, so the default hive-sync flows never start it. For fast plugin
+iteration the container supports a bind-mounted overlay: point `TRINO_PLUGIN_DIR` (or
+the `-Dtrino.plugin.dir` test property) at a freshly built plugin dir and restart the
+container instead of rebuilding the image.
