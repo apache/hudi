@@ -22,8 +22,10 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
+import org.apache.hudi.io.util.IOUtils;
 
-import lombok.extern.slf4j.Slf4j;
+import com.google.protobuf.CodedOutputStream;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hbase.CellComparatorImpl;
@@ -32,9 +34,15 @@ import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
+import org.apache.hadoop.io.DataOutputBuffer;
+import org.apache.hadoop.io.WritableUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -44,23 +52,32 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.io.hfile.HFileBlock.HFILEBLOCK_HEADER_SIZE;
 import static org.apache.hudi.io.hfile.HFileBlockType.DATA;
+import static org.apache.hudi.io.hfile.HFileBlockType.FILE_INFO;
+import static org.apache.hudi.io.hfile.HFileBlockType.META;
+import static org.apache.hudi.io.hfile.HFileBlockType.ROOT_INDEX;
 import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
 import static org.apache.hudi.io.hfile.HFileInfo.AVG_KEY_LEN;
 import static org.apache.hudi.io.hfile.HFileInfo.AVG_VALUE_LEN;
 import static org.apache.hudi.io.hfile.HFileInfo.KEY_VALUE_VERSION;
 import static org.apache.hudi.io.hfile.HFileInfo.LAST_KEY;
 import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
+import static org.apache.hudi.io.hfile.HFileTrailer.TRAILER_SIZE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Slf4j
 class TestHFileWriter {
+  private static final Logger LOG = LoggerFactory.getLogger(TestHFileWriter.class);
   private static final String TEST_FILE = "test.hfile";
   private static final HFileContext CONTEXT = HFileContext.builder().build();
   // Golden bytes (NONE compression, fixed input) that lock the on-disk encoding of the data block
@@ -73,6 +90,20 @@ class TestHFileWriter {
   private static final String GOLDEN_ROOT_INDEX_BLOCK_HEX =
       "494458524f4f5432000000210000001dffffffffffffffff00000040000000003e000000000000000000000082100004"
           + "6b657931007fffffffffffffff0400000000";
+  // Golden for a single block holding keys of different lengths whose first key (116 chars) lands in
+  // the multi-byte vint range (keyLength 128). Pinned for both the native and HBase writers.
+  private static final String GOLDEN_VARLEN_DATA_REGION_HEX =
+      "44415441424c4b2a000000d1000000cdffffffffffffffff0000004000000000ee000000800000000200746161616161"
+          + "616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
+          + "616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
+          + "616161616161616161616161616161007fffffffffffffff04763000000000140000000200086262626262626262007f"
+          + "ffffffffffffff047631000000001800000002000c636363636363636363636363007fffffffffffffff047632000000"
+          + "0000";
+  private static final String GOLDEN_VARLEN_ROOT_INDEX_BLOCK_HEX =
+      "494458524f4f5432000000920000008effffffffffffffff0000004000000000af0000000000000000000000f28f8000"
+          + "746161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
+          + "616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
+          + "616161616161616161616161616161616161616161007fffffffffffffff0400000000";
 
   @AfterEach
   public void tearDown() throws IOException {
@@ -89,7 +120,7 @@ class TestHFileWriter {
     validateHFileStructure();
     // 4. Validate consistency with HFileReader.
     validateConsistencyWithHFileReader();
-    log.info("All validations passed!");
+    LOG.info("All validations passed!");
   }
 
   @Test
@@ -200,84 +231,124 @@ class TestHFileWriter {
         );
         reader.next();
       }
-    }
-  }
 
-  @Test
-  void testLongKeys() throws IOException {
-    // Test that HFile blocks with long keys (>= 126 chars) can be written and read correctly.
-    // This verifies the fix for the varint encoding mismatch in the root index block.
-    HFileContext context = new HFileContext.Builder().blockSize(100).build();
-    String testFile = TEST_FILE;
-    int numRecords = 10;
-    // Generate keys longer than 126 characters to trigger multi-byte Hadoop VarInt encoding
-    // in the root index block. The varint encodes (key_content_length + 2), so content >= 126
-    // produces a value >= 128 which requires 2+ bytes in Hadoop VarInt format.
-    char[] chars = new char[200];
-    Arrays.fill(chars, 'a');
-    String longPrefix = new String(chars);
-    try (DataOutputStream outputStream =
-             new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
-         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
-      for (int i = 0; i < numRecords; i++) {
-        String key = longPrefix + String.format("%04d", i);
-        writer.append(key, String.format("value%04d", i).getBytes());
-      }
-    }
-
-    // Validate that all records can be read back correctly.
-    try (FileChannel channel = FileChannel.open(Paths.get(testFile), StandardOpenOption.READ)) {
-      ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
-      SeekableDataInputStream inputStream =
-          new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buf));
-      HFileReaderImpl reader = new HFileReaderImpl(inputStream, channel.size());
-      reader.initializeMetadata();
-      assertEquals(numRecords, reader.getNumKeyValueEntries());
-      reader.seekTo();
-      for (int i = 0; i < numRecords; i++) {
-        KeyValue kv = reader.getKeyValue().get();
-        String expectedKey = longPrefix + String.format("%04d", i);
-        assertEquals(expectedKey, kv.getKey().getContentInString());
-        assertArrayEquals(
-            String.format("value%04d", i).getBytes(),
-            Arrays.copyOfRange(
-                kv.getBytes(),
-                kv.getValueOffset(),
-                kv.getValueOffset() + kv.getValueLength())
-        );
-        reader.next();
+      // Each data block's previous-block-offset header (8 bytes at offset 16) must chain back to
+      // the prior block, and -1 for the first, so an HBase reader's seekBefore can step back across
+      // blocks. The writer once set it to the block's own offset; this guards that regression.
+      byte[] file = Files.readAllBytes(Paths.get(testFile));
+      List<IndexEntry> dataIndex = parseIndexBlock(
+          file, (int) trailer.getLoadOnOpenDataOffset(), trailer.getDataIndexCount());
+      assertTrue(dataIndex.size() > 1, "test setup: expected multiple data blocks");
+      for (int i = 0; i < dataIndex.size(); i++) {
+        long prevOffset = readLongBE(file, (int) dataIndex.get(i).offset + 16);
+        long expected = i == 0 ? -1L : dataIndex.get(i - 1).offset;
+        assertEquals(expected, prevOffset, "data block " + i + " previous-block offset");
       }
     }
   }
 
   /**
-   * Format lock: with NONE compression and a fixed input the data block and root block-index block
-   * are deterministic, so their raw bytes are asserted against a golden. The same records written
-   * by the HBase HFile writer (NONE compression, NULL checksum, latest timestamp, Put type) must
-   * produce the same two block byte regions, proving the native and HBase writers agree on the
-   * on-disk encoding. Any change to the encoding (dropping the KeyValue suffix, ts/type, or
-   * framing) fails here. Neither block holds the file-creation timestamp, so the bytes are stable.
+   * Format lock for the native writer's on-disk bytes. Single-block inputs are checked against the
+   * HBase writer (proving the writers agree on the encoding): short keys (single-byte index
+   * keyLength) and the 116-char boundary (keyLength 128, where Protobuf and Hadoop VInt diverge) are
+   * also pinned to a golden; 500- and 2000-char first keys (3-byte keyLength) are checked against
+   * HBase without a golden. The golden cases also validate the trailer and file info bytes. A single
+   * block is deliberate for cross-writer checks: across blocks HBase stores shortened index separator
+   * keys, so only a single full-key entry is byte-comparable. A multi-block native file then covers
+   * the meta block and the rest of the section byte layout and round-trips.
    */
   @Test
   void writerBlockBytesAreStableFormatLock() throws Exception {
-    writeTestFile();
-    String[] nativeBlocks = dataAndRootIndexBlockHex(Files.readAllBytes(Paths.get(TEST_FILE)));
-    // Logged so the golden can be regenerated intentionally.
-    log.info("GOLDEN_DATA_REGION_HEX={}", nativeBlocks[0]);
-    log.info("GOLDEN_ROOT_INDEX_BLOCK_HEX={}", nativeBlocks[1]);
-    assertEquals(GOLDEN_DATA_REGION_HEX, nativeBlocks[0],
-        "native data block bytes changed (storage-format change); review HBase compatibility");
-    assertEquals(GOLDEN_ROOT_INDEX_BLOCK_HEX, nativeBlocks[1],
-        "native root block-index bytes changed (storage-format change); review HBase compatibility");
+    byte[][] vals = {bytes("v0"), bytes("v1"), bytes("v2")};
+    assertSingleBlockBytesMatchGoldenAndHBase(
+        new String[] {"key1", "key2", "key3"},
+        new byte[][] {bytes("value1"), bytes("value2"), bytes("value3")},
+        GOLDEN_DATA_REGION_HEX, GOLDEN_ROOT_INDEX_BLOCK_HEX);
+    assertSingleBlockBytesMatchGoldenAndHBase(
+        new String[] {rep('a', 116), rep('b', 8), rep('c', 12)}, vals,
+        GOLDEN_VARLEN_DATA_REGION_HEX, GOLDEN_VARLEN_ROOT_INDEX_BLOCK_HEX);
+    // Larger first keys (3-byte index keyLength) checked against the HBase writer without a golden,
+    // which for multi-KB key bytes would add no signal.
+    assertSingleBlockBytesMatchHBase(new String[] {rep('a', 500), rep('b', 8), rep('c', 12)}, vals, null, null);
+    assertSingleBlockBytesMatchHBase(new String[] {rep('a', 2000), rep('b', 8), rep('c', 12)}, vals, null, null);
+    assertAllSectionsValidOnMultiBlockFile();
+  }
 
-    // The HBase writer, given the same records, must produce the same two block byte regions.
-    String[] hbaseBlocks = dataAndRootIndexBlockHex(writeFixedHBaseFile());
-    log.info("HBASE_DATA_REGION_HEX={}", hbaseBlocks[0]);
-    log.info("HBASE_ROOT_INDEX_BLOCK_HEX={}", hbaseBlocks[1]);
-    assertEquals(GOLDEN_DATA_REGION_HEX, hbaseBlocks[0],
-        "HBase writer data block bytes differ from the native writer");
-    assertEquals(GOLDEN_ROOT_INDEX_BLOCK_HEX, hbaseBlocks[1],
-        "HBase writer root block-index bytes differ from the native writer");
+  @Test
+  void getVarIntBytesRoundTripsThroughReadVarLong() {
+    // HFileIndexBlock.getVarIntBytes output must decode back via the reader's IOUtils.readVarLong.
+    int[] testValues = {0, 1, 127, 128, 146, 200, 255, 256, 300, 1000, 32080, 65535, 100000,
+        2034958, 632492350, Integer.MAX_VALUE};
+    for (int value : testValues) {
+      byte[] encoded = HFileIndexBlock.getVarIntBytes(value);
+      int size = IOUtils.decodeVarLongSizeOnDisk(encoded, 0);
+      assertEquals(encoded.length, size, "Size mismatch for value " + value);
+      long decoded = IOUtils.readVarLong(encoded, 0, size);
+      assertEquals(value, decoded, "Round-trip mismatch for value " + value);
+    }
+  }
+
+  @Test
+  void getVarIntBytesMatchesKnownHadoopVectors() {
+    // Cross-check HFileIndexBlock.getVarIntBytes against known Hadoop WritableUtils VInt encodings.
+    assertEquals(1, HFileIndexBlock.getVarIntBytes(0).length);
+    assertEquals(0, HFileIndexBlock.getVarIntBytes(0)[0]);
+    assertEquals(1, HFileIndexBlock.getVarIntBytes(98).length);
+    assertEquals(98, HFileIndexBlock.getVarIntBytes(98)[0]);
+
+    // Value 208 requires 2 bytes.
+    byte[] enc208 = HFileIndexBlock.getVarIntBytes(208);
+    assertEquals(2, enc208.length);
+    assertEquals(208, IOUtils.readVarLong(enc208, 0));
+
+    // Value 32080 requires 3 bytes.
+    byte[] enc32080 = HFileIndexBlock.getVarIntBytes(32080);
+    assertEquals(3, enc32080.length);
+    assertEquals(32080, IOUtils.readVarLong(enc32080, 0));
+  }
+
+  /**
+   * Pins a single-block file's data block and root index block bytes to a golden the HBase writer
+   * must also reproduce, and validates the remaining sections of the native file (trailer, file
+   * info, and the empty meta index). The file has no meta block: a meta block would shift the data
+   * region and HBase serializes it differently, breaking the byte-parity (the meta block is covered
+   * by {@link #assertAllSectionsValidOnMultiBlockFile()}).
+   */
+  private static void assertSingleBlockBytesMatchGoldenAndHBase(
+      String[] keys, byte[][] values, String dataGolden, String rootGolden) throws Exception {
+    assertSingleBlockBytesMatchHBase(keys, values, dataGolden, rootGolden);
+    byte[] nativeFile = Files.readAllBytes(Paths.get(TEST_FILE));
+    HFileProtos.TrailerProto trailer = validateTrailerSection(nativeFile, keys.length, 0);
+    int loadOnOpen = (int) trailer.getLoadOnOpenDataOffset();
+    int metaIndexOffset = loadOnOpen + HFILEBLOCK_HEADER_SIZE + readIntBE(nativeFile, loadOnOpen + 8);
+    assertBytesEqual("empty meta index magic", ROOT_INDEX.getMagic(),
+        Arrays.copyOfRange(nativeFile, metaIndexOffset, metaIndexOffset + 8));
+    validateFileInfoSection(
+        nativeFile, metaIndexOffset, (int) trailer.getFileInfoOffset(), keys[keys.length - 1]);
+  }
+
+  /**
+   * Asserts the native and HBase writers produce identical single-block data and root index bytes
+   * (optionally also matching a pinned golden), and the root-index keyLength is Hadoop VInt. Used
+   * without a golden for large keys, where a hardcoded golden of multi-KB key bytes adds no signal.
+   */
+  private static void assertSingleBlockBytesMatchHBase(
+      String[] keys, byte[][] values, String dataGolden, String rootGolden) throws Exception {
+    writeNativeFile(TEST_FILE, HFileContext.builder().build(), keys, values, null, null);
+    byte[] nativeFile = Files.readAllBytes(Paths.get(TEST_FILE));
+    String[] nativeBlocks = dataAndRootIndexBlockHex(nativeFile);
+    String[] hbaseBlocks = dataAndRootIndexBlockHex(writeHBaseFile(keys, values));
+    assertEquals(hbaseBlocks[0], nativeBlocks[0], "native vs HBase data block bytes");
+    assertEquals(hbaseBlocks[1], nativeBlocks[1], "native vs HBase root index bytes");
+    if (dataGolden != null) {
+      LOG.info("DATA_REGION_HEX={}", nativeBlocks[0]);
+      LOG.info("ROOT_INDEX_BLOCK_HEX={}", nativeBlocks[1]);
+      assertEquals(dataGolden, nativeBlocks[0], "data block bytes changed (storage-format change)");
+      assertEquals(rootGolden, nativeBlocks[1], "root index bytes changed (storage-format change)");
+    }
+    IndexEntry first =
+        parseIndexBlock(nativeFile, indexOf(nativeFile, ROOT_INDEX.getMagic()), 1).get(0);
+    assertVarIntIsHadoopNotProtobuf("root index keyLength", first);
   }
 
   /** Returns {@code [dataRegionHex, rootIndexBlockHex]} for an HFile's raw bytes. */
@@ -292,8 +363,8 @@ class TestHFileWriter {
     };
   }
 
-  /** Writes key1/key2/key3 with the HBase HFile writer, matching the native writer's settings. */
-  private static byte[] writeFixedHBaseFile() throws IOException {
+  /** Writes the given records with the HBase HFile writer, matching the native writer's settings. */
+  private static byte[] writeHBaseFile(String[] keys, byte[][] values) throws IOException {
     Configuration conf = new Configuration();
     FileSystem fs = FileSystem.getLocal(conf);
     org.apache.hadoop.fs.Path path =
@@ -307,13 +378,268 @@ class TestHFileWriter {
         .build();
     try (HFile.Writer writer = HFile.getWriterFactory(conf, new CacheConfig(conf))
         .withPath(fs, path).withFileContext(context).create()) {
-      for (int i = 1; i <= 3; i++) {
+      for (int i = 0; i < keys.length; i++) {
         writer.append(new org.apache.hadoop.hbase.KeyValue(
-            ("key" + i).getBytes(StandardCharsets.UTF_8), new byte[0], new byte[0],
-            HConstants.LATEST_TIMESTAMP, ("value" + i).getBytes(StandardCharsets.UTF_8)));
+            keys[i].getBytes(StandardCharsets.UTF_8), new byte[0], new byte[0],
+            HConstants.LATEST_TIMESTAMP, values[i]));
       }
     }
     return Files.readAllBytes(Paths.get(path.toString()));
+  }
+
+  /**
+   * Validates the raw bytes of every HFile section on a multi-block native file with one meta block:
+   * scanned data blocks, the non-scanned meta block, the load-on-open root data index / meta index /
+   * file info, and the trailer, then reads every record back. Index keyLengths are asserted Hadoop
+   * {@code WritableUtils} VInt; the file info and trailer length prefixes protobuf-delimited. Each
+   * section is checked in its own helper so callers stay under the per-test assertion limit.
+   */
+  private static void assertAllSectionsValidOnMultiBlockFile() throws IOException {
+    int numRecords = 8;
+    String[] keys = new String[numRecords];
+    byte[][] values = new byte[numRecords][];
+    for (int i = 0; i < numRecords; i++) {
+      keys[i] = makeKey(200, i);
+      values[i] = bytes("v" + i);
+    }
+    String metaKey = makeKey(200, 9999);
+    byte[] metaValue = bytes("bloom-filter-payload-bytes");
+    // Small block size forces one record per block, so the root index has multiple entries.
+    writeNativeFile(
+        TEST_FILE, new HFileContext.Builder().blockSize(100).build(), keys, values, metaKey, metaValue);
+    byte[] file = Files.readAllBytes(Paths.get(TEST_FILE));
+
+    HFileProtos.TrailerProto trailer = validateTrailerSection(file, numRecords, 1);
+    int loadOnOpen = (int) trailer.getLoadOnOpenDataOffset();
+    validateRootDataIndexSection(file, loadOnOpen, trailer.getDataIndexCount(), keys[0]);
+    int metaIndexOffset = loadOnOpen + HFILEBLOCK_HEADER_SIZE + readIntBE(file, loadOnOpen + 8);
+    validateMetaIndexAndBlock(file, metaIndexOffset, metaKey, metaValue);
+    validateFileInfoSection(file, metaIndexOffset, (int) trailer.getFileInfoOffset(), keys[numRecords - 1]);
+    assertAllRecordsReadBack(numRecords, keys);
+  }
+
+  /** Validates the trailer magic, protobuf framing, fields, and HFile version; returns the proto. */
+  private static HFileProtos.TrailerProto validateTrailerSection(
+      byte[] file, int numRecords, int metaIndexCount) throws IOException {
+    int trailerStart = file.length - TRAILER_SIZE;
+    assertBytesEqual("trailer magic",
+        TRAILER.getMagic(), Arrays.copyOfRange(file, trailerStart, trailerStart + 8));
+    HFileProtos.TrailerProto trailer = HFileProtos.TrailerProto.parseDelimitedFrom(
+        new ByteArrayInputStream(file, trailerStart + 8, TRAILER_SIZE - 8));
+    assertProtobufDelimitedFraming("trailer", file, trailerStart + 8, trailer.getSerializedSize());
+    assertEquals(numRecords, trailer.getEntryCount());
+    assertEquals(metaIndexCount, trailer.getMetaIndexCount());
+    assertEquals(1, trailer.getNumDataIndexLevels());
+    assertEquals(2, trailer.getCompressionCodec(), "compression codec must be NONE (2)");
+    assertEquals("org.apache.hudi.io.storage.HoodieHBaseKVComparator",
+        trailer.getComparatorClassName());
+    assertEquals(0, trailer.getFirstDataBlockOffset(), "scanned section starts at offset 0");
+    // HFile version: last 4 bytes hold the major version (3).
+    assertEquals(3, readIntBE(file, file.length - 4), "HFile major version");
+    return trailer;
+  }
+
+  /** Validates the scanned-section start and every root data index entry. */
+  private static void validateRootDataIndexSection(
+      byte[] file, int loadOnOpen, int dataIndexCount, String firstKey) throws IOException {
+    assertBytesEqual("first data block magic", DATA.getMagic(), Arrays.copyOfRange(file, 0, 8));
+    assertBytesEqual("root index magic",
+        ROOT_INDEX.getMagic(), Arrays.copyOfRange(file, loadOnOpen, loadOnOpen + 8));
+    List<IndexEntry> dataIndex = parseIndexBlock(file, loadOnOpen, dataIndexCount);
+    assertEquals(dataIndexCount, dataIndex.size(), "root index entry count");
+    for (IndexEntry e : dataIndex) {
+      // keyLength must be Hadoop WritableUtils VInt (never protobuf varint), and each entry must
+      // point at a real DATA block whose on-disk size matches the entry's size.
+      assertVarIntIsHadoopNotProtobuf("data index keyLength", e);
+      assertBytesEqual("data block magic at index offset",
+          DATA.getMagic(), Arrays.copyOfRange(file, (int) e.offset, (int) e.offset + 8));
+      assertEquals(HFILEBLOCK_HEADER_SIZE + readIntBE(file, (int) e.offset + 8), e.size,
+          "data index entry size must equal the on-disk size of the referenced block");
+    }
+    assertEquals(firstKey, keyContentString(dataIndex.get(0).key), "first index entry key content");
+  }
+
+  /** Validates the meta index entry and the meta block it points at. */
+  private static void validateMetaIndexAndBlock(
+      byte[] file, int metaIndexOffset, String metaKey, byte[] metaValue) throws IOException {
+    assertBytesEqual("meta index magic",
+        ROOT_INDEX.getMagic(), Arrays.copyOfRange(file, metaIndexOffset, metaIndexOffset + 8));
+    IndexEntry metaEntry = parseIndexBlock(file, metaIndexOffset, 1).get(0);
+    assertVarIntIsHadoopNotProtobuf("meta index keyLength", metaEntry);
+    assertBytesEqual("meta index key bytes", metaKey.getBytes(StandardCharsets.UTF_8), metaEntry.key);
+    assertBytesEqual("meta block magic",
+        META.getMagic(), Arrays.copyOfRange(file, (int) metaEntry.offset, (int) metaEntry.offset + 8));
+    int metaPayload = (int) metaEntry.offset + HFILEBLOCK_HEADER_SIZE;
+    assertBytesEqual("meta block payload == meta value",
+        metaValue, Arrays.copyOfRange(file, metaPayload, metaPayload + metaValue.length));
+  }
+
+  /** Validates the file info block offset, magic, PBUF framing, and decoded entries. */
+  private static void validateFileInfoSection(
+      byte[] file, int metaIndexOffset, int fileInfoOffset, String lastKey) throws IOException {
+    int metaIndexBlockSize = HFILEBLOCK_HEADER_SIZE + readIntBE(file, metaIndexOffset + 8);
+    assertEquals(metaIndexOffset + metaIndexBlockSize, fileInfoOffset,
+        "trailer fileInfoOffset must point right after the meta index block");
+    assertBytesEqual("file info magic",
+        FILE_INFO.getMagic(), Arrays.copyOfRange(file, fileInfoOffset, fileInfoOffset + 8));
+    int pbufStart = fileInfoOffset + HFILEBLOCK_HEADER_SIZE;
+    assertBytesEqual("file info PBUF magic",
+        "PBUF".getBytes(StandardCharsets.UTF_8), Arrays.copyOfRange(file, pbufStart, pbufStart + 4));
+    HFileProtos.InfoProto info = HFileProtos.InfoProto.parseDelimitedFrom(
+        new ByteArrayInputStream(file, pbufStart + 4, file.length - (pbufStart + 4)));
+    // File info uses protobuf-delimited framing (correct here, unlike the index keyLength fields).
+    assertProtobufDelimitedFraming("file info", file, pbufStart + 4, info.getSerializedSize());
+    Map<String, byte[]> infoMap = new LinkedHashMap<>();
+    for (HFileProtos.BytesBytesPair pair : info.getMapEntryList()) {
+      infoMap.put(new String(pair.getFirst().toByteArray(), StandardCharsets.UTF_8),
+          pair.getSecond().toByteArray());
+    }
+    for (UTF8StringKey required : new UTF8StringKey[] {
+        LAST_KEY, KEY_VALUE_VERSION, MAX_MVCC_TS_KEY, AVG_KEY_LEN, AVG_VALUE_LEN}) {
+      assertTrue(infoMap.containsKey(utf8(required)), "file info must contain " + utf8(required));
+    }
+    assertEquals(lastKey, keyContentString(infoMap.get(utf8(LAST_KEY))),
+        "LASTKEY content must be the last appended key");
+  }
+
+  /** Reads every record back through the native reader. */
+  private static void assertAllRecordsReadBack(int numRecords, String[] keys) throws IOException {
+    try (FileChannel channel = FileChannel.open(Paths.get(TEST_FILE), StandardOpenOption.READ)) {
+      ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+      HFileReaderImpl reader = new HFileReaderImpl(
+          new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buf)), channel.size());
+      reader.initializeMetadata();
+      assertEquals(numRecords, reader.getNumKeyValueEntries());
+      reader.seekTo();
+      for (int i = 0; i < numRecords; i++) {
+        assertEquals(keys[i], reader.getKeyValue().get().getKey().getContentInString());
+        reader.next();
+      }
+    }
+  }
+
+  /** Writes the given records (and an optional single meta block) with the native HFile writer. */
+  private static void writeNativeFile(String testFile, HFileContext context, String[] keys,
+                                      byte[][] values, String metaKey, byte[] metaValue)
+      throws IOException {
+    try (DataOutputStream outputStream =
+             new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
+         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
+      for (int i = 0; i < keys.length; i++) {
+        writer.append(keys[i], values[i]);
+      }
+      if (metaKey != null) {
+        writer.appendMetaInfo(metaKey, metaValue);
+      }
+    }
+  }
+
+  /** A parsed block index entry: block offset, on-disk size, raw keyLength vint bytes, and key. */
+  private static final class IndexEntry {
+    long offset;
+    int size;
+    byte[] keyLengthVarIntBytes;
+    int keyLen;
+    byte[] key;
+  }
+
+  /** Parses {@code numEntries} block index entries starting at the given index block offset. */
+  private static List<IndexEntry> parseIndexBlock(byte[] file, int blockStart, int numEntries) {
+    List<IndexEntry> entries = new ArrayList<>();
+    int p = blockStart + HFILEBLOCK_HEADER_SIZE;
+    for (int i = 0; i < numEntries; i++) {
+      IndexEntry e = new IndexEntry();
+      e.offset = readLongBE(file, p);
+      e.size = readIntBE(file, p + 8);
+      int varIntSize = IOUtils.decodeVarLongSizeOnDisk(file, p + 12);
+      e.keyLen = (int) IOUtils.readVarLong(file, p + 12, varIntSize);
+      e.keyLengthVarIntBytes = Arrays.copyOfRange(file, p + 12, p + 12 + varIntSize);
+      e.key = Arrays.copyOfRange(file, p + 12 + varIntSize, p + 12 + varIntSize + e.keyLen);
+      entries.add(e);
+      p += 12 + varIntSize + e.keyLen;
+    }
+    return entries;
+  }
+
+  /**
+   * Asserts that an index entry's keyLength bytes equal Hadoop {@code WritableUtils} VInt (the
+   * encoding the reader and HBase decode), and for values >= 128, that they are NOT protobuf
+   * varint (the pre-fix encoding that produced negative key lengths in HBase's reader).
+   */
+  private static void assertVarIntIsHadoopNotProtobuf(String message, IndexEntry e)
+      throws IOException {
+    assertBytesEqual(message + " must be Hadoop WritableUtils VInt",
+        hadoopWritableUtilsVInt(e.keyLen), e.keyLengthVarIntBytes);
+    if (e.keyLen >= 128) {
+      assertNotEquals(hex(protobufVarInt(e.keyLen)), hex(e.keyLengthVarIntBytes),
+          message + " must NOT be protobuf varint for values >= 128 (the original bug)");
+    }
+  }
+
+  /** Asserts the on-disk length prefix at {@code offset} is a protobuf varint of {@code size}. */
+  private static void assertProtobufDelimitedFraming(String section, byte[] file, int offset,
+                                                     int serializedSize) throws IOException {
+    byte[] expectedPrefix = protobufVarInt(serializedSize);
+    assertBytesEqual(section + " must use protobuf-delimited framing",
+        expectedPrefix, Arrays.copyOfRange(file, offset, offset + expectedPrefix.length));
+  }
+
+  /** Reference Hadoop {@code WritableUtils} VInt encoder (the encoding HBase's reader expects). */
+  private static byte[] hadoopWritableUtilsVInt(long value) throws IOException {
+    DataOutputBuffer out = new DataOutputBuffer();
+    WritableUtils.writeVInt(out, (int) value);
+    return Arrays.copyOf(out.getData(), out.getLength());
+  }
+
+  /** Reference protobuf varint encoder (the pre-fix, HBase-incompatible encoding for the index). */
+  private static byte[] protobufVarInt(int value) throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    CodedOutputStream cos = CodedOutputStream.newInstance(baos);
+    cos.writeUInt32NoTag(value);
+    cos.flush();
+    return baos.toByteArray();
+  }
+
+  /** Extracts the row (key content) bytes from a serialized HBase KeyValue key, as a String. */
+  private static String keyContentString(byte[] keyValueKey) {
+    int rowLength = ((keyValueKey[0] & 0xff) << 8) | (keyValueKey[1] & 0xff);
+    return new String(keyValueKey, 2, rowLength, StandardCharsets.UTF_8);
+  }
+
+  /** Builds a length-{@code len} key that sorts by {@code i} and is unique. */
+  private static String makeKey(int len, int i) {
+    String suffix = String.format("%04d", i);
+    StringBuilder sb = new StringBuilder(len);
+    for (int k = 0; k < len - suffix.length(); k++) {
+      sb.append('a');
+    }
+    return sb.append(suffix).toString();
+  }
+
+  private static String utf8(UTF8StringKey key) {
+    return new String(key.getBytes(), StandardCharsets.UTF_8);
+  }
+
+  private static void assertBytesEqual(String message, byte[] expected, byte[] actual) {
+    assertEquals(hex(expected), hex(actual), message);
+  }
+
+  private static String rep(char c, int n) {
+    char[] a = new char[n];
+    Arrays.fill(a, c);
+    return new String(a);
+  }
+
+  private static byte[] bytes(String s) {
+    return s.getBytes(StandardCharsets.UTF_8);
+  }
+
+  private static long readLongBE(byte[] b, int off) {
+    long v = 0;
+    for (int i = 0; i < 8; i++) {
+      v = (v << 8) | (b[off + i] & 0xffL);
+    }
+    return v;
   }
 
   private static void writeTestFile() throws Exception {
