@@ -106,13 +106,33 @@ public class MetricsReporterFactory {
 
   /**
    * The CloudWatch reporter ships in the optional {@code hudi-aws} module and so is loaded reflectively.
-   * Not every engine bundle shades that module, in which case class loading fails without pointing at a
-   * remedy. Translate that into an actionable error.
+   * Reflection collapses several unrelated failures into the same opaque {@link HoodieException}. Three of
+   * them have distinct remedies - the module is absent, it was built against a Hudi that has since moved a
+   * class, or the classpath carries a stale duplicate - so translate those three, and leave every other
+   * failure untouched.
    */
   private static MetricsReporter createCloudWatchReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
+    return createCloudWatchReporter(CLOUDWATCH_REPORTER_CLASS, metricsConfig, registry);
+  }
+
+  @VisibleForTesting
+  static MetricsReporter createCloudWatchReporter(String reporterClass, HoodieMetricsConfig metricsConfig,
+                                                 MetricRegistry registry) {
     try {
-      return (MetricsReporter) ReflectionUtils.loadClass(CLOUDWATCH_REPORTER_CLASS,
+      return (MetricsReporter) ReflectionUtils.loadClass(reporterClass,
           new Class[] {HoodieMetricsConfig.class, MetricRegistry.class}, metricsConfig, registry);
+    } catch (NoClassDefFoundError e) {
+      // Class#getConstructor resolves the parameter types of every public constructor, not just the one
+      // asked for, so a jar built against an older Hudi fails here on a type that has since moved - not
+      // with a missing-constructor error. NoClassDefFoundError is an Error, so ReflectionUtils never wraps
+      // it and it arrives here uncaught. Its message names the type that vanished, which is the strongest
+      // evidence of skew available.
+      throw new HoodieException(String.format(
+          "Cannot report metrics to CloudWatch: %s was found on the classpath but was built against a "
+              + "different Hudi version - resolving its constructors needs %s, which this Hudi no longer "
+              + "provides. Use a hudi-aws-bundle of the same version as the engine bundle, or set %s to a "
+              + "different reporter type.",
+          reporterClass, e.getMessage(), HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()), e);
     } catch (HoodieException e) {
       if (e.getCause() instanceof ClassNotFoundException) {
         throw new HoodieException(String.format(
@@ -120,7 +140,24 @@ public class MetricsReporterFactory {
                 + "optional hudi-aws module, which not every engine bundle includes. Add the "
                 + "hudi-aws-bundle jar matching your Hudi version to the classpath, or set %s to a "
                 + "different reporter type.",
-            CLOUDWATCH_REPORTER_CLASS, HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()), e);
+            reporterClass, HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()), e);
+      }
+      if (e.getCause() instanceof NoSuchMethodException) {
+        // The class resolved and so did every constructor's parameter types, yet none matched. A jar built
+        // against an older Hudi fails earlier, in the NoClassDefFoundError branch above, so what reaches
+        // here is a classpath carrying a stale or duplicate copy of this class or of its parameter types.
+        // Fully qualified names, because the package move and the shaded-codahale relocation are exactly
+        // what distinguishes the declared constructor from the requested one - under simple names both read
+        // as (HoodieMetricsConfig, MetricRegistry) and the error looks wrong.
+        throw new HoodieException(String.format(
+            "Cannot report metrics to CloudWatch: %s was found on the classpath but does not declare a "
+                + "(%s, %s) constructor. Some jar on the classpath is supplying a stale or duplicate copy "
+                + "of this class or of its parameter types. Check for more than one Hudi version on the "
+                + "classpath - a leftover hudi-common or hudi-client-common is the usual culprit - and "
+                + "align every Hudi artifact, including the engine bundle, to one version. Or set %s to a "
+                + "different reporter type.",
+            reporterClass, HoodieMetricsConfig.class.getName(),
+            MetricRegistry.class.getName(), HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()), e);
       }
       throw e;
     }
