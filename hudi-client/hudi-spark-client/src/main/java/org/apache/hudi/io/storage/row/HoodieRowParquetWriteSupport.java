@@ -483,15 +483,8 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   }
 
   /**
-   * Fixed-length byte width for a decimal column. A Spark {@link DecimalType} carries only
-   * precision/scale, so on its own it yields the precision-minimal width. When the resolved schema
-   * is a {@link HoodieSchema.Decimal} backed by an Avro {@code fixed} type it declares the width
-   * explicitly (which may be wider than the minimum), and that declared size is honored so the
-   * Spark write path matches the Avro write path and stays consistent with base files written on
-   * insert. Falls back to the precision-minimal width otherwise.
-   *
-   * <p>Package-private so it can be unit-tested directly (constructing the full write support
-   * from this module is not possible: it needs a Spark adapter that lives in a sibling module).
+   * Fixed-length byte width for a decimal column: honor the declared Avro {@code fixed} size when
+   * present (it may be wider than the precision-minimal width), otherwise the precision-minimal width.
    */
   static int decimalFixedLen(HoodieSchema resolvedSchema, int precision) {
     if (resolvedSchema instanceof HoodieSchema.Decimal) {
@@ -507,14 +500,6 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     return Decimal.minBytesForPrecision()[precision];
   }
 
-  /**
-   * Left-pads the unscaled decimal bytes with sign-extension bytes to exactly {@code numBytes},
-   * writing into {@code paddingBuffer} when a copy is needed and returning {@code unscaledBytes}
-   * directly when it already spans the full width (Avro validates the fixed size covers the
-   * precision, so the unscaled magnitude always fits).
-   *
-   * <p>Package-private so it can be unit-tested directly (see {@link #decimalFixedLen}).
-   */
   static byte[] padDecimalToFixedLength(byte[] unscaledBytes, int numBytes, byte[] paddingBuffer) {
     if (unscaledBytes.length == numBytes) {
       return unscaledBytes;
