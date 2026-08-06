@@ -40,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -147,7 +148,7 @@ public class TestDataTypeUtils {
         DataTypeUtils.resolvePartition("2026-08-06T12:30:00", DataTypes.TIMESTAMP()));
     assertEquals(new BigDecimal("12.30"),
         DataTypeUtils.resolvePartition("12.30", DataTypes.DECIMAL(10, 2)));
-    assertEquals(null, DataTypeUtils.resolvePartition(null, DataTypes.STRING()));
+    assertNull(DataTypeUtils.resolvePartition(null, DataTypes.STRING()));
     assertThrows(RuntimeException.class,
         () -> DataTypeUtils.resolvePartition("00:00:00", DataTypes.TIME()));
   }

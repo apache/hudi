@@ -54,6 +54,7 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -186,9 +187,17 @@ public class TestCompactionUtil {
   }
 
   @Test
-  void testCompactionSequence() {
+  void testCompactionUtilConstructor() {
     assertNotNull(new CompactionUtil());
-    CompactionUtil.scheduleMetadataCompaction(null, false);
+  }
+
+  @Test
+  void testScheduleMetadataCompactionWhenDisabled() {
+    assertDoesNotThrow(() -> CompactionUtil.scheduleMetadataCompaction(null, false));
+  }
+
+  @Test
+  void testIsLIFOCaseInsensitive() {
     assertTrue(CompactionUtil.isLIFO("lifo"));
     assertTrue(CompactionUtil.isLIFO("LIFO"));
     assertFalse(CompactionUtil.isLIFO("fifo"));
