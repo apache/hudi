@@ -605,8 +605,6 @@
                          "doc": "Checksum of the canonical centroid payload used to reject incomplete or mismatched builds."},
                         {"name": "splitLimit", "type": "int"},
                         {"name": "mergeFloor", "type": "int"},
-                        {"name": "bootstrapInstant", "type": ["null", "string"], "default": null,
-                         "doc": "Source data-write instant included by the generation bootstrap baseline."},
                         {"name": "createdTs", "type": "long"}
                     ]
                 },

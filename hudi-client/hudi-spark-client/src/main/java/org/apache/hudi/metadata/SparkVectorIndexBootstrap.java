@@ -280,7 +280,6 @@ public final class SparkVectorIndexBootstrap {
               "",
               0,
               0,
-              "",
               lastUpdatedTs,
               indexName));
           driverRecords.add(HoodieMetadataPayload.createVectorIndexActiveManifestRecord(
