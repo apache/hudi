@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodieVectorIndexClusterStats;
 import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.avro.model.HoodieVectorIndexPostingDelta;
 import org.apache.hudi.avro.model.HoodieVectorIndexQuantizer;
-import org.apache.hudi.avro.model.HoodieVectorIndexSourceInstantMarker;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.junit.jupiter.api.Test;
@@ -132,17 +131,6 @@ class TestVectorIndexMetadataPayload {
     assertEquals(Arrays.asList("fg-a", "fg-b"), stats.getFileGroupIds());
     assertEquals(17L, stats.getLiveCount());
     assertNull(HoodieVectorIndexClusterStats.getClassSchema().getField("centroidEpoch"));
-  }
-
-  @Test
-  void testSourceInstantMarkerCarriesSourceIdentity() {
-    HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createVectorIndexSourceInstantMarkerRecord(
-        2, "20260724010101", "vector_index_demo");
-
-    HoodieVectorIndexSourceInstantMarker marker =
-        (HoodieVectorIndexSourceInstantMarker) record.getData().getVectorIndexMetadata().get();
-    assertEquals(VectorIndexMetadataKey.sourceInstantMarker(2, "20260724010101"), record.getRecordKey());
-    assertEquals("20260724010101", marker.getDataInstant().toString());
   }
 
   @Test

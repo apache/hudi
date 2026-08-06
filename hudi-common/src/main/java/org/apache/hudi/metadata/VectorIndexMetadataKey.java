@@ -38,7 +38,6 @@ public final class VectorIndexMetadataKey {
   public static final int FAMILY_CENTROIDS = 0x03;
   public static final int FAMILY_CLUSTER_STATS = 0x04;
   public static final int FAMILY_POSTING = 0x10;
-  public static final int FAMILY_SOURCE_INSTANT_MARKER = 0x20;
 
   public static final long MAX_PACKED_BLOCK_ID = 0xFFFDFFFFL;
   public static final long FIRST_RESERVED_BLOCK_ID = 0xFFFE0000L;
@@ -97,33 +96,6 @@ public final class VectorIndexMetadataKey {
 
   public static String postingPrefix(int generation, int clusterId, int shard) {
     return encode(postingPrefixBuffer(generation, clusterId, shard, 0));
-  }
-
-  public static String sourceInstantMarker(int generation, String dataInstant) {
-    if (dataInstant == null || dataInstant.isEmpty()) {
-      throw new IllegalArgumentException("dataInstant must not be empty");
-    }
-    byte[] instantBytes = dataInstant.getBytes(StandardCharsets.UTF_8);
-    ByteBuffer buffer = ByteBuffer.allocate(5 + instantBytes.length).order(ByteOrder.BIG_ENDIAN);
-    buffer.put((byte) FAMILY_SOURCE_INSTANT_MARKER);
-    putUnsignedInt(buffer, Integer.toUnsignedLong(generation));
-    buffer.put(instantBytes);
-    return encode(buffer);
-  }
-
-  public static String sourceInstantMarkerPrefix(int generation) {
-    ByteBuffer buffer = ByteBuffer.allocate(5).order(ByteOrder.BIG_ENDIAN);
-    buffer.put((byte) FAMILY_SOURCE_INSTANT_MARKER);
-    putUnsignedInt(buffer, Integer.toUnsignedLong(generation));
-    return encode(buffer);
-  }
-
-  public static String sourceInstant(String key) {
-    byte[] bytes = decode(key);
-    if (bytes.length <= 5 || Byte.toUnsignedInt(bytes[0]) != FAMILY_SOURCE_INSTANT_MARKER) {
-      return null;
-    }
-    return new String(bytes, 5, bytes.length - 5, StandardCharsets.UTF_8);
   }
 
   public static String exclusiveEnd(String prefix) {

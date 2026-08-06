@@ -173,11 +173,6 @@ public class VectorIndexer extends BaseIndexer {
     List<IndexPartitionAndRecords> partitionUpdates = new ArrayList<>();
     for (String indexPartition : vectorIndexPartitions()) {
       int generation = activeGeneration(context, indexPartition);
-      if (hasMarker(context, indexPartition, generation)) {
-        log.info("Skipping vector index update already marked for source instant {} in {}",
-            context.instantTime(), indexPartition);
-        continue;
-      }
       try {
         HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(
             indexPartition, dataTableMetaClient);
@@ -188,11 +183,7 @@ public class VectorIndexer extends BaseIndexer {
         HoodieData<HoodieRecord> records = engineIndexerSupport.generateVectorIndexUpdateRecords(
             indexDefinition, dataTableMetaClient, context.tableMetadata(), updates,
             tableSchema, generation, context.instantTime());
-        HoodieRecord marker = HoodieMetadataPayload.createVectorIndexSourceInstantMarkerRecord(
-            generation, context.instantTime(), indexPartition);
-        partitionUpdates.add(IndexPartitionAndRecords.of(
-            indexPartition,
-            records.union(HoodieListData.eager(Collections.singletonList(marker)))));
+        partitionUpdates.add(IndexPartitionAndRecords.of(indexPartition, records));
       } catch (Exception e) {
         throw new HoodieMetadataException(
             "Failed to update vector index " + indexPartition + " for " + context.instantTime(), e);
@@ -272,14 +263,6 @@ public class VectorIndexer extends BaseIndexer {
     ValidationUtils.checkState(generation != null,
         "Vector index has no ACTIVE generation for " + indexPartition);
     return generation;
-  }
-
-  private boolean hasMarker(
-      IndexUpdateContext context, String indexPartition, int generation) {
-    return readExactMetadata(
-        context,
-        indexPartition,
-        VectorIndexMetadataKey.sourceInstantMarker(generation, context.instantTime())).isPresent();
   }
 
   private Option<Object> readExactMetadata(

@@ -679,13 +679,6 @@
                 },
                 {
                     "type": "record",
-                    "name": "HoodieVectorIndexSourceInstantMarker",
-                    "fields": [
-                        {"name": "dataInstant", "type": "string", "doc": "Completed source data-write instant incorporated by this generation."}
-                    ]
-                },
-                {
-                    "type": "record",
                     "name": "HoodieVectorIndexTombstone",
                     "fields": [
                         {"name": "deleteInstant", "type": "string"},
