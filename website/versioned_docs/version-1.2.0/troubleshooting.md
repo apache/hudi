@@ -3,7 +3,7 @@ title: Troubleshooting
 keywords: [hudi, troubleshooting]
 toc_min_heading_level: 2
 toc_max_heading_level: 5
-last_modified_at: 2021-08-18T15:59:57-04:00
+last_modified_at: 2026-08-06T11:50:06+05:30
 ---
 
 For performance related issues, please refer to the [tuning guide](https://hudi.apache.org/docs/tuning-guide)
@@ -186,6 +186,15 @@ This will usually happen when you are trying to add a new column to existing hiv
 
 ```plain
 set hive.metastore.disallow.incompatible.col.type.changes=false;
+```
+
+The metastore evaluates this check against its own configuration, so the `set` above only takes effect when the
+metastore is embedded in the same session. Against a remote Hive metastore service, either set the property in the
+metastore's `hive-site.xml` and restart the service, or override it for a single connection with the `metaconf:`
+prefix, which pushes the value to the metastore:
+
+```sql
+set metaconf:hive.metastore.disallow.incompatible.col.type.changes=false;
 ```
 
 #### HoodieHiveSyncException: Could not convert field Type from `<type1>` to `<type2>` for field col1
