@@ -48,17 +48,17 @@ class TestHoodieRowParquetWriteSupport extends HoodieClientTestBase {
   private static final String SESSION_LOCAL_TIME_ZONE_KEY = "spark.sql.session.timeZone";
 
   @Test
-  void testDecimalFixedLen() {
+  void testResolveDecimalByteLength() {
     int minWidth = Decimal.minBytesForPrecision()[20];
     // A non-decimal schema falls back to the precision-minimal width.
     assertEquals(minWidth,
-        HoodieRowParquetWriteSupport.decimalFixedLen(HoodieSchema.create(HoodieSchemaType.STRING), 20));
+        HoodieRowParquetWriteSupport.resolveDecimalByteLength(HoodieSchema.create(HoodieSchemaType.STRING), 20));
     // A bytes-backed decimal (no declared fixed size) also falls back to the minimum.
     assertEquals(minWidth,
-        HoodieRowParquetWriteSupport.decimalFixedLen(HoodieSchema.createDecimal(20, 2), 20));
+        HoodieRowParquetWriteSupport.resolveDecimalByteLength(HoodieSchema.createDecimal(20, 2), 20));
     // An Avro fixed decimal wider than the minimum is honored.
     assertEquals(10,
-        HoodieRowParquetWriteSupport.decimalFixedLen(
+        HoodieRowParquetWriteSupport.resolveDecimalByteLength(
             HoodieSchema.createDecimal("dec", null, null, 20, 2, 10), 20));
   }
 

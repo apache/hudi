@@ -102,6 +102,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -548,7 +549,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     String clusteringInstant = (String) client.scheduleClustering(Option.empty()).get();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusterMetadata = client.cluster(clusteringInstant, true);
     List<HoodieWriteStat> clusterStats = clusterMetadata.getWriteStats().get();
-    assertTrue(!clusterStats.isEmpty(), "clustering should write at least one base file");
+    assertFalse(clusterStats.isEmpty(), "clustering should write at least one base file");
     for (HoodieWriteStat stat : clusterStats) {
       assertDecimalFixedLen(new StoragePath(metaClient.getBasePath(), stat.getPath()),
           EXPECTED_DECIMAL_FIXED_LEN);

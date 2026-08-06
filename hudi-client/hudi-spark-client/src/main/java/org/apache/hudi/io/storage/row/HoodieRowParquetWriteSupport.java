@@ -486,7 +486,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
    * Fixed-length byte width for a decimal column: honor the declared Avro {@code fixed} size when
    * present (it may be wider than the precision-minimal width), otherwise the precision-minimal width.
    */
-  static int decimalFixedLen(HoodieSchema resolvedSchema, int precision) {
+  static int resolveDecimalByteLength(HoodieSchema resolvedSchema, int precision) {
     if (resolvedSchema instanceof HoodieSchema.Decimal) {
       HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) resolvedSchema;
       if (decimalSchema.isFixed()) {
@@ -584,7 +584,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       int scale = ((DecimalType) dataType).scale();
       // Honor the declared Avro `fixed` size so the row/bulk-insert/clustering/compaction write
       // path preserves the schema width instead of narrowing to the precision-minimal one.
-      int numBytes = decimalFixedLen(resolvedSchema, precision);
+      int numBytes = resolveDecimalByteLength(resolvedSchema, precision);
       // Padding buffer resolved once per column, not per record: reuse the shared decimalBuffer when
       // it is wide enough, otherwise allocate one dedicated buffer here (an over-allocated Avro fixed
       // size can exceed the shared buffer's capacity).
@@ -851,7 +851,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       return Types
           .primitive(FIXED_LEN_BYTE_ARRAY, repetition)
           .as(LogicalTypeAnnotation.decimalType(scale, precision))
-          .length(decimalFixedLen(resolvedSchema, precision))
+          .length(resolveDecimalByteLength(resolvedSchema, precision))
           .named(structField.name());
     } else if (dataType instanceof ArrayType
             && resolvedSchema != null
