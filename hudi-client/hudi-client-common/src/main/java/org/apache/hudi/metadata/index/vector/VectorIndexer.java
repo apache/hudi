@@ -20,6 +20,7 @@
 package org.apache.hudi.metadata.index.vector;
 
 import org.apache.hudi.avro.model.HoodieVectorIndexActiveManifest;
+import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -61,12 +63,15 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.metadata.MetadataPartitionType.VECTOR_INDEX;
 
 /**
@@ -186,6 +191,12 @@ public class VectorIndexer extends BaseIndexer {
         HoodieRecord marker = HoodieMetadataPayload.createVectorIndexSourceInstantMarkerRecord(
             generation, context.instantTime(), System.currentTimeMillis(), indexPartition);
         records = records.union(engineContext.parallelize(Collections.singletonList(marker), 1));
+        Option<HoodieRecord> advancedManifest = advanceManifestCoverage(
+            context, indexPartition, generation);
+        if (advancedManifest.isPresent()) {
+          records = records.union(engineContext.parallelize(
+              Collections.singletonList(advancedManifest.get()), 1));
+        }
         partitionUpdates.add(IndexPartitionAndRecords.of(indexPartition, records));
       } catch (Exception e) {
         throw new HoodieMetadataException(
@@ -253,6 +264,64 @@ public class VectorIndexer extends BaseIndexer {
         .orElseGet(() -> new FileSlice(partition, baseInstant, fileId));
     newLogFiles.forEach(current::addLogFile);
     return current;
+  }
+
+  private Option<HoodieRecord> advanceManifestCoverage(
+      IndexUpdateContext context, String indexPartition, int generation) {
+    Object metadata = readExactMetadata(
+        context, indexPartition, VectorIndexMetadataKey.manifest(generation))
+        .orElseThrow(() -> new HoodieMetadataException(
+            "Vector generation manifest is missing for " + indexPartition));
+    ValidationUtils.checkState(metadata instanceof HoodieVectorIndexManifest,
+        "Unexpected vector generation manifest payload for " + indexPartition);
+    HoodieVectorIndexManifest manifest = (HoodieVectorIndexManifest) metadata;
+    String lastCovered = manifest.getLastContiguousSourceInstant();
+    if (lastCovered == null || lastCovered.equals(context.instantTime())) {
+      return Option.empty();
+    }
+
+    HoodieTimeline completedWrites = dataTableMetaClient.getActiveTimeline()
+        .getWriteTimeline().filterCompletedInstants();
+    if (completedWrites.isBeforeTimelineStarts(lastCovered)) {
+      log.warn("Cannot advance vector index {} coverage from archived instant {} using only the active timeline",
+          indexPartition, lastCovered);
+      return Option.empty();
+    }
+    List<String> requiredInstants = completedWrites
+        .findInstantsAfter(lastCovered)
+        .getInstantsAsStream()
+        .map(instant -> instant.requestedTime())
+        .filter(instant -> !compareTimestamps(context.instantTime(), LESSER_THAN, instant))
+        .collect(Collectors.toList());
+    if (requiredInstants.isEmpty()
+        || !requiredInstants.get(requiredInstants.size() - 1).equals(context.instantTime())) {
+      return Option.empty();
+    }
+
+    List<VectorMetadataRawKey> markerKeys = requiredInstants.stream()
+        .filter(instant -> !instant.equals(context.instantTime()))
+        .map(instant -> new VectorMetadataRawKey(
+            VectorIndexMetadataKey.sourceInstantMarker(generation, instant)))
+        .collect(Collectors.toList());
+    Set<String> persistedMarkers = markerKeys.isEmpty()
+        ? Collections.emptySet()
+        : context.tableMetadata().getRecordsByKeyPrefixes(
+            HoodieListData.eager(markerKeys), indexPartition, true)
+            .collectAsList().stream()
+            .map(HoodieRecord::getRecordKey)
+            .collect(Collectors.toCollection(HashSet::new));
+    boolean allCovered = markerKeys.stream()
+        .map(VectorMetadataRawKey::encode)
+        .allMatch(persistedMarkers::contains);
+    if (!allCovered) {
+      return Option.empty();
+    }
+
+    HoodieVectorIndexManifest advanced = HoodieVectorIndexManifest.newBuilder(manifest)
+        .setLastContiguousSourceInstant(context.instantTime())
+        .build();
+    return Option.of(HoodieMetadataPayload.createVectorIndexManifestRecord(
+        advanced, generation, indexPartition));
   }
 
   private int activeGeneration(IndexUpdateContext context, String indexPartition) {

@@ -392,6 +392,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexManifestRecord(
+      HoodieVectorIndexManifest manifest,
+      int generation,
+      String metadataPartitionPath) {
+    String recordKey = VectorIndexMetadataKey.manifest(generation);
+    return new HoodieAvroRecord<>(
+        new HoodieKey(recordKey, metadataPartitionPath),
+        new HoodieMetadataPayload(recordKey, manifest));
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexManifestRecord(
       int generation,
       String generationOrdinalText,
       String state,
@@ -426,7 +436,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       String lastContiguousSourceInstant,
       long createdTs,
       String metadataPartitionPath) {
-    String recordKey = VectorIndexMetadataKey.manifest(generation);
     HoodieVectorIndexManifest manifest = new HoodieVectorIndexManifest(
         1,
         generationOrdinalText,
@@ -461,9 +470,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         mergeFloor,
         lastContiguousSourceInstant,
         createdTs);
-    return new HoodieAvroRecord<>(
-        new HoodieKey(recordKey, metadataPartitionPath),
-        new HoodieMetadataPayload(recordKey, manifest));
+    return createVectorIndexManifestRecord(manifest, generation, metadataPartitionPath);
   }
 
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexSourceInstantMarkerRecord(
