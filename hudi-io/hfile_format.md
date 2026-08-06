@@ -197,7 +197,10 @@ Key:
 
 - **Key Content Size**: 2 byte, short, size of the key content.
 - **Key Content**: key content in byte array. In Hudi, we serialize the String into byte array using UTF-8.
-- **Other Information**: other information of the key, which is not used by Hudi.
+- **Other Information**: the remaining fields that complete the KeyValue key, so it parses as a
+  standard KeyValue key (and is readable by an HBase HFile reader): 1-byte column-family length
+  (`0`), 8-byte timestamp (`Long.MAX_VALUE`, the "latest" sentinel), and 1-byte key type (`Put` = 4).
+  Hudi's reader ignores these fields.
 
 Value:
 
@@ -286,7 +289,10 @@ For Data Index, the "Key Bytes" part has the following format (same as the key f
 
 - **Key Content Size**: 2 byte, short, size of the key content.
 - **Key Content**: key content in byte array. In Hudi, we encode the String into bytes using UTF-8.
-- **Other Information**: other information of the key, which is not used by Hudi.
+- **Other Information**: the remaining fields that complete the KeyValue key, so it parses as a
+  standard KeyValue key (and is readable by an HBase HFile reader): 1-byte column-family length
+  (`0`), 8-byte timestamp (`Long.MAX_VALUE`, the "latest" sentinel), and 1-byte key type (`Put` = 4).
+  Hudi's reader ignores these fields.
 
 For Meta Index, the "Key Bytes" part is the byte array of the key of the Meta Block.
 
