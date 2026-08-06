@@ -244,7 +244,7 @@ public class TestMergeHandle extends BaseTestHandle {
     // Merge the UTF-8-larger key in directly via HoodieSortedMergeHandle.
     List<HoodieRecord> newRecords = withRowKey(dataGenerator.generateInserts("001", 1), supplementaryKey, partitionPath);
     HoodieSortedMergeHandle mergeHandle = new HoodieSortedMergeHandle(
-        config, "001", table, MergeContext.create(newRecords.iterator()), partitionPath, fileId, new LocalTaskContextSupplier(), Option.empty());
+        config, "001", table, MergeContext.create((Iterator) newRecords.iterator()), partitionPath, fileId, new LocalTaskContextSupplier(), Option.empty());
     mergeHandle.doMerge();
     WriteStatus writeStatus = (WriteStatus) mergeHandle.close().get(0);
 

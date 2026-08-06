@@ -339,7 +339,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     HoodieSparkTable table = HoodieSparkTable.create(config, context);
     List<String> mergedFilePaths = jsc.parallelize(Arrays.asList(1)).map(x -> {
       HoodieWriteMergeHandle mergeHandle = new HoodieWriteMergeHandle(config, "101", table,
-          MergeContext.create(updateRecords.iterator()), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
+          MergeContext.create((Iterator) updateRecords.iterator()), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
       // `doMerge` is the only entry point into HoodieMergeHelper: it reads the base file and feeds the handle
       mergeHandle.doMerge();
       return ((WriteStatus) mergeHandle.close().get(0)).getStat().getPath();
