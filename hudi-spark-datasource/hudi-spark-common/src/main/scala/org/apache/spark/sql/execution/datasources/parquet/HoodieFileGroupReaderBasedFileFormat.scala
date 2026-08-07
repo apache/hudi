@@ -318,7 +318,6 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
               val reader: HoodieRecordReader[InternalRow] =
                 if (LsmReaderUtils.shouldUseLsmReader(
                   metaClient.getTableConfig,
-                  fileSlice.getLogFiles,
                   ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true))) {
                   HoodieLsmFileGroupReader.builder[InternalRow]()
                     .withReaderContext(readerContext)

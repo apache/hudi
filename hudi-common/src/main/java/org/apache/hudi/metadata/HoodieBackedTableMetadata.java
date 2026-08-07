@@ -577,7 +577,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     boolean shouldReuse = reuse && isFullScanAllowedForPartition(fileSlice.getPartitionPath());
     boolean useLsmReader = !shouldReuse
         && LsmReaderUtils.shouldUseLsmReader(
-            metadataMetaClient.getTableConfig(), fileSlice.getLogFiles(), HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE);
+            metadataMetaClient.getTableConfig(), HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE);
     Map<StoragePath, HoodieAvroFileReader> baseFileReaders = Collections.emptyMap();
     ReusableFileGroupRecordBufferLoader<IndexedRecord> recordBufferLoader = null;
     TypedProperties fileGroupReaderProps = ConfigUtils.buildFileGroupReaderProperties(metadataConfig, shouldReuse);

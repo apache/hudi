@@ -19,43 +19,25 @@
 package org.apache.hudi.common.table.read.lsm;
 
 import org.apache.hudi.common.config.HoodieReaderConfig;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
-
-import java.io.IOException;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestLsmReaderUtils {
 
-  private static final String INLINE_LOG_PATH = ".file-id_100.log.1_1-0-1";
-  private static final String NATIVE_LOG_PATH = "file-id_1-0-1_100_1.log.parquet";
-
   @Test
-  void testShouldUseLsmReader() throws IOException {
+  void testShouldUseLsmReader() {
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     assertFalse(LsmReaderUtils.shouldUseLsmReader(
-        tableConfig, Stream.of(logFile(NATIVE_LOG_PATH)), HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE));
+        tableConfig, HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE));
 
     tableConfig.setValue(HoodieTableConfig.TABLE_STORAGE_LAYOUT, HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
     assertTrue(LsmReaderUtils.shouldUseLsmReader(
-        tableConfig, Stream.empty(), HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE));
-    assertTrue(LsmReaderUtils.shouldUseLsmReader(
-        tableConfig, Stream.of(logFile(NATIVE_LOG_PATH)), HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE));
+        tableConfig, HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE));
     assertFalse(LsmReaderUtils.shouldUseLsmReader(
-        tableConfig,
-        Stream.of(logFile(INLINE_LOG_PATH), logFile(NATIVE_LOG_PATH)),
-        HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE));
-    assertFalse(LsmReaderUtils.shouldUseLsmReader(
-        tableConfig, Stream.of(logFile(NATIVE_LOG_PATH)), HoodieReaderConfig.REALTIME_SKIP_MERGE));
-  }
-
-  private static HoodieLogFile logFile(String fileName) {
-    return new HoodieLogFile(new StoragePath("/tmp/" + fileName), 10);
+        tableConfig, HoodieReaderConfig.REALTIME_SKIP_MERGE));
   }
 }

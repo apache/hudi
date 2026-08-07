@@ -125,9 +125,8 @@ public class FormatUtils {
   /**
    * Creates the record reader matching the physical layout of the file slice.
    *
-   * <p>Pure native-log file slices in an LSM-tree table use the sorted LSM reader. Mixed file
-   * slices containing legacy inline logs continue to use the general file-group reader so table
-   * upgrades remain readable.</p>
+   * <p>LSM-tree tables use the sorted LSM reader, except for skip-merge queries which use the
+   * general file-group reader to expose record versions independently.</p>
    */
   public static HoodieRecordReader<RowData> createRecordReader(
       HoodieTableMetaClient metaClient,
@@ -141,7 +140,7 @@ public class FormatUtils {
       boolean emitDelete,
       List<ExpressionPredicates.Predicate> predicates,
       Option<InstantRange> instantRangeOption) {
-    if (!LsmReaderUtils.shouldUseLsmReader(metaClient.getTableConfig(), fileSlice.getLogFiles(), mergeType)) {
+    if (!LsmReaderUtils.shouldUseLsmReader(metaClient.getTableConfig(), mergeType)) {
       return createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
           tableSchema, requiredSchema, latestInstant, mergeType, emitDelete, predicates, instantRangeOption);
     }
