@@ -91,10 +91,10 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
 
   if (!metaClient.getTableConfig.isCommitTimePopulated()) {
     throw new HoodieException("Incremental queries are not supported when _hoodie_commit_time is not populated. "
-      + "hoodie.meta.fields.mode is a physical-storage decision baked into files at write time and cannot be "
-      + "changed by flipping write options — setting it only takes effect at table creation. To enable incremental "
-      + "queries on this table, recreate it with hoodie.populate.meta.fields=true or hoodie.meta.fields.mode=COMMIT_TIME_ONLY "
-      + "(or COMMIT_TIME_AND_FILE_NAME).")
+      + "hoodie.meta.fields.mode is a physical-storage decision baked into files at write time, so it cannot be "
+      + "changed by flipping write options, and it cannot be widened afterwards either — hudi-cli may only narrow a "
+      + "mode, since existing files are never rewritten. Recreating the table is the only way to enable incremental "
+      + "queries on it: create it with hoodie.meta.fields.mode=COMMIT_TIME_ONLY (or COMMIT_TIME_AND_FILE_NAME, or ALL).")
   }
 
   private val useEndInstantSchema = optParams.getOrElse(INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
