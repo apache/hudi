@@ -30,6 +30,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -39,6 +40,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex;
@@ -291,6 +293,24 @@ public class TestFlinkWriteClients {
     assertEquals(directMetadataConfig.isEnabled(), writeConfig.isMetadataTableEnabled());
     assertEquals(directMetadataConfig.enableBloomFilter(), writeConfig.getMetadataConfig().enableBloomFilter());
     assertEquals(directMetadataConfig.getBloomFilterType(), writeConfig.getMetadataConfig().getBloomFilterType());
+  }
+
+  @Test
+  void testCoreCleanAndArchivalConfigsPropagateToWriteConfig() throws Exception {
+    conf.set(FlinkOptions.CLEAN_POLICY, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS.name());
+    conf.set(FlinkOptions.CLEAN_RETAIN_HOURS, 48);
+    conf.setString(HoodieCleanConfig.MAX_COMMITS_TO_CLEAN.key(), "7");
+    conf.setString(HoodieCleanConfig.INTERVAL_TO_CREATE_EMPTY_CLEAN_HOURS.key(), "2");
+    conf.setString(HoodieArchivalConfig.BLOCK_ARCHIVAL_ON_LATEST_CLEAN_ECTR.key(), "true");
+    StreamerUtil.initTableIfNotExists(conf);
+
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+
+    assertEquals(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, writeConfig.getCleanerPolicy());
+    assertEquals(48, writeConfig.getCleanerHoursRetained());
+    assertEquals(7L, writeConfig.getMaxCommitsToClean());
+    assertEquals(2L, writeConfig.getIntervalToCreateEmptyCleanHours());
+    assertTrue(writeConfig.shouldBlockArchivalOnCleanECTR());
   }
 
   @Test

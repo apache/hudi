@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -238,6 +240,148 @@ class TestCleanerUtils {
     assertEquals(timestamps.get(10), result.get().requestedTime());
   }
 
+  @Test
+  void testGetEarliestCommitToRetainByHoursUsesEarliestCommitAfterCutoff() {
+    ZonedDateTime nowUtc = ZonedDateTime.of(2026, 6, 19, 6, 30, 0, 0, ZoneId.of("UTC"));
+    List<String> timestamps = new ArrayList<>();
+    timestamps.add(formatInstant(nowUtc.minusHours(4).minusMinutes(30)));
+    timestamps.add(formatInstant(nowUtc.minusHours(2).minusMinutes(30)));
+    timestamps.add(formatInstant(nowUtc.minusHours(1).minusMinutes(30)));
+
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithTimestamps(timestamps),
+        HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS,
+        12,
+        nowUtc.toInstant(),
+        2,
+        HoodieTimelineTimeZone.UTC,
+        Option.empty(),
+        Long.MAX_VALUE);
+
+    assertTrue(result.isPresent());
+    assertEquals(timestamps.get(2), result.get().requestedTime());
+  }
+
+  @Test
+  void testGetEarliestCommitToRetainByHoursUsesCompletionTimeForCutoff() {
+    ZonedDateTime nowUtc = ZonedDateTime.of(2026, 6, 19, 6, 30, 0, 0, ZoneId.of("UTC"));
+    List<String> requestedTimestamps = new ArrayList<>();
+    requestedTimestamps.add(formatInstant(nowUtc.minusHours(5)));
+    requestedTimestamps.add(formatInstant(nowUtc.minusHours(4)));
+    requestedTimestamps.add(formatInstant(nowUtc.minusHours(1)));
+
+    List<String> completionTimestamps = new ArrayList<>();
+    completionTimestamps.add(formatInstant(nowUtc.minusHours(3)));
+    completionTimestamps.add(formatInstant(nowUtc.minusHours(1).minusMinutes(30)));
+    completionTimestamps.add(formatInstant(nowUtc.minusMinutes(45)));
+
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithCompletionTimestamps(requestedTimestamps, completionTimestamps),
+        HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS,
+        12,
+        nowUtc.toInstant(),
+        2,
+        HoodieTimelineTimeZone.UTC,
+        Option.empty(),
+        Long.MAX_VALUE);
+
+    assertTrue(result.isPresent());
+    assertEquals(requestedTimestamps.get(1), result.get().requestedTime());
+  }
+
+  @Test
+  void testGetEarliestCommitToRetainByHoursUsesEarliestRequestedInstantInCompletionWindow() {
+    ZonedDateTime nowUtc = ZonedDateTime.of(2026, 6, 19, 6, 30, 0, 0, ZoneId.of("UTC"));
+    List<String> requestedTimestamps = new ArrayList<>();
+    requestedTimestamps.add(formatInstant(nowUtc.minusHours(5)));
+    requestedTimestamps.add(formatInstant(nowUtc.minusHours(4)));
+    requestedTimestamps.add(formatInstant(nowUtc.minusHours(3)));
+
+    List<String> completionTimestamps = new ArrayList<>();
+    completionTimestamps.add(formatInstant(nowUtc.minusHours(1)));
+    completionTimestamps.add(formatInstant(nowUtc.minusHours(1).minusMinutes(45)));
+    completionTimestamps.add(formatInstant(nowUtc.minusHours(1).minusMinutes(30)));
+
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithCompletionTimestamps(requestedTimestamps, completionTimestamps),
+        HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS,
+        12,
+        nowUtc.toInstant(),
+        2,
+        HoodieTimelineTimeZone.UTC,
+        Option.empty(),
+        Long.MAX_VALUE);
+
+    assertTrue(result.isPresent());
+    assertEquals(requestedTimestamps.get(0), result.get().requestedTime());
+  }
+
+  @Test
+  void testGetEarliestCommitToRetainByHoursIgnoresEarliestPendingInstant() {
+    ZonedDateTime nowUtc = ZonedDateTime.of(2026, 6, 19, 6, 30, 0, 0, ZoneId.of("UTC"));
+    List<String> completedTimestamps = new ArrayList<>();
+    completedTimestamps.add(formatInstant(nowUtc.minusHours(4).minusMinutes(30)));
+    completedTimestamps.add(formatInstant(nowUtc.minusHours(2).minusMinutes(30)));
+    completedTimestamps.add(formatInstant(nowUtc.minusHours(1).minusMinutes(30)));
+    String pendingTimestamp = formatInstant(nowUtc.minusHours(3));
+
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithTimestamps(completedTimestamps, Collections.singletonList(pendingTimestamp)),
+        HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS,
+        12,
+        nowUtc.toInstant(),
+        2,
+        HoodieTimelineTimeZone.UTC,
+        Option.empty(),
+        Long.MAX_VALUE);
+
+    assertTrue(result.isPresent());
+    assertEquals(completedTimestamps.get(2), result.get().requestedTime());
+  }
+
+  @Test
+  void testGetEarliestCommitToRetainByHoursDoesNotUsePendingWhenNoCompletedInstantAfterCutoff() {
+    ZonedDateTime nowUtc = ZonedDateTime.of(2026, 6, 19, 6, 30, 0, 0, ZoneId.of("UTC"));
+    List<String> completedTimestamps = new ArrayList<>();
+    completedTimestamps.add(formatInstant(nowUtc.minusHours(5)));
+    completedTimestamps.add(formatInstant(nowUtc.minusHours(4)));
+    String pendingTimestamp = formatInstant(nowUtc.minusHours(3));
+
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithTimestamps(completedTimestamps, Collections.singletonList(pendingTimestamp)),
+        HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS,
+        12,
+        nowUtc.toInstant(),
+        2,
+        HoodieTimelineTimeZone.UTC,
+        Option.empty(),
+        Long.MAX_VALUE);
+
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  void testGetEarliestCommitToRetainByHoursIgnoresPendingPrecedingAllCompletedInstants() {
+    ZonedDateTime nowUtc = ZonedDateTime.of(2026, 6, 19, 6, 30, 0, 0, ZoneId.of("UTC"));
+    List<String> completedTimestamps = new ArrayList<>();
+    completedTimestamps.add(formatInstant(nowUtc.minusHours(1).minusMinutes(30)));
+    completedTimestamps.add(formatInstant(nowUtc.minusHours(1)));
+    String pendingTimestamp = formatInstant(nowUtc.minusHours(3));
+
+    Option<HoodieInstant> result = CleanerUtils.getEarliestCommitToRetain(
+        createMockTimelineWithTimestamps(completedTimestamps, Collections.singletonList(pendingTimestamp)),
+        HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS,
+        12,
+        nowUtc.toInstant(),
+        2,
+        HoodieTimelineTimeZone.UTC,
+        Option.empty(),
+        Long.MAX_VALUE);
+
+    assertTrue(result.isPresent());
+    assertEquals(completedTimestamps.get(0), result.get().requestedTime());
+  }
+
   /**
    * Helper method to create a mock timeline with specified number of commits.
    * Commits are named as "20000000000000", "20000000000001", etc.
@@ -250,24 +394,47 @@ class TestCleanerUtils {
     return createMockTimelineWithTimestamps(timestamps);
   }
 
+  private static String formatInstant(ZonedDateTime dateTime) {
+    return TimelineUtils.formatDate(Date.from(dateTime.toInstant()));
+  }
+
   /**
    * Helper method to create a mock timeline with specified timestamps.
    */
   private HoodieTimeline createMockTimelineWithTimestamps(List<String> timestamps) {
+    return createMockTimelineWithTimestamps(timestamps, Collections.emptyList());
+  }
+
+  private HoodieTimeline createMockTimelineWithTimestamps(List<String> timestamps, List<String> pendingTimestamps) {
+    return createMockTimelineWithTimestamps(timestamps, timestamps, pendingTimestamps);
+  }
+
+  private HoodieTimeline createMockTimelineWithCompletionTimestamps(List<String> timestamps, List<String> completionTimestamps) {
+    return createMockTimelineWithTimestamps(timestamps, completionTimestamps, Collections.emptyList());
+  }
+
+  private HoodieTimeline createMockTimelineWithTimestamps(
+      List<String> timestamps, List<String> completionTimestamps, List<String> pendingTimestamps) {
     int numCommits = timestamps.size();
     HoodieTimeline timeline = mock(HoodieTimeline.class);
     HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
 
     List<HoodieInstant> instants = new ArrayList<>();
-    for (String timestamp : timestamps) {
+    for (int i = 0; i < timestamps.size(); i++) {
       HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED,
-          HoodieTimeline.COMMIT_ACTION, timestamp, InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+          HoodieTimeline.COMMIT_ACTION, timestamps.get(i), completionTimestamps.get(i), InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
       instants.add(instant);
     }
 
     when(timeline.filterCompletedInstants()).thenReturn(completedTimeline);
     when(completedTimeline.countInstants()).thenReturn(numCommits);
     when(completedTimeline.getInstantsAsStream()).thenAnswer(invocation -> instants.stream());
+    when(completedTimeline.getReverseOrderedInstants()).thenAnswer(invocation -> {
+      List<HoodieInstant> reverseInstants = new ArrayList<>(instants);
+      Collections.reverse(reverseInstants);
+      return reverseInstants.stream();
+    });
+    when(completedTimeline.firstInstant()).thenReturn(instants.isEmpty() ? Option.empty() : Option.of(instants.get(0)));
 
     // Mock nthInstant to return the nth instant from the list
     for (int i = 0; i < numCommits; i++) {
@@ -284,13 +451,21 @@ class TestCleanerUtils {
               .filter(i -> i.requestedTime().compareTo(timestamp) < 0)
               .collect(Collectors.toList());
           when(beforeTimeline.getInstantsAsStream()).thenAnswer(inv -> beforeInstants.stream());
+          when(beforeTimeline.lastInstant()).thenReturn(beforeInstants.isEmpty()
+              ? Option.empty()
+              : Option.of(beforeInstants.get(beforeInstants.size() - 1)));
           return beforeTimeline;
         });
 
-    // Mock filter for pending commits (empty for this test)
-    HoodieTimeline emptyTimeline = mock(HoodieTimeline.class);
-    when(emptyTimeline.firstInstant()).thenReturn(Option.empty());
-    when(timeline.filter(org.mockito.ArgumentMatchers.any())).thenReturn(emptyTimeline);
+    List<HoodieInstant> pendingInstants = pendingTimestamps.stream()
+        .map(timestamp -> new HoodieInstant(HoodieInstant.State.INFLIGHT,
+            HoodieTimeline.COMMIT_ACTION, timestamp, InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR))
+        .collect(Collectors.toList());
+    HoodieTimeline pendingTimeline = mock(HoodieTimeline.class);
+    when(pendingTimeline.firstInstant()).thenReturn(pendingInstants.isEmpty()
+        ? Option.empty()
+        : Option.of(pendingInstants.get(0)));
+    when(timeline.filter(org.mockito.ArgumentMatchers.any())).thenReturn(pendingTimeline);
 
     return timeline;
   }
