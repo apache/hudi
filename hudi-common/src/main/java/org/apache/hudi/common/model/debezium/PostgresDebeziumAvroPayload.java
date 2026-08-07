@@ -29,7 +29,6 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.Properties;
 
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
@@ -83,7 +82,7 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     Option<IndexedRecord> insertOrDeleteRecord = super.combineAndGetUpdateValue(currentValue, schema, properties);
 
     if (insertOrDeleteRecord.isPresent()) {
-      mergeToastedValuesIfPresent(insertOrDeleteRecord.get(), currentValue);
+      return Option.of(mergeToastedValuesIfPresent(insertOrDeleteRecord.get(), currentValue));
     }
     return insertOrDeleteRecord;
   }
@@ -96,22 +95,31 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     Option<IndexedRecord> insertOrDeleteRecord = super.combineAndGetUpdateValue(currentValue, schema);
 
     if (insertOrDeleteRecord.isPresent()) {
-      mergeToastedValuesIfPresent(insertOrDeleteRecord.get(), currentValue);
+      return Option.of(mergeToastedValuesIfPresent(insertOrDeleteRecord.get(), currentValue));
     }
     return insertOrDeleteRecord;
   }
 
-  private void mergeToastedValuesIfPresent(IndexedRecord incomingRecord, IndexedRecord currentRecord) {
-    List<Schema.Field> fields = incomingRecord.getSchema().getFields();
-
-    fields.forEach(field -> {
+  /**
+   * Fills any TOASTed sentinel columns in {@code incomingRecord} with the value from
+   * {@code currentRecord}. Returns a NEW record when a fill occurs, so a caller (e.g. the record
+   * merger) does not mistake the result for the unchanged incoming record and discard the fill;
+   * returns {@code incomingRecord} unchanged when there is nothing to fill.
+   */
+  private IndexedRecord mergeToastedValuesIfPresent(IndexedRecord incomingRecord, IndexedRecord currentRecord) {
+    GenericData.Record filled = null;
+    for (Schema.Field field : incomingRecord.getSchema().getFields()) {
       // There are only four avro data types that have unconstrained sizes, which are
       // NON-NULLABLE STRING, NULLABLE STRING, NON-NULLABLE BYTES, NULLABLE BYTES
       if (((GenericRecord) incomingRecord).get(field.name()) != null
           && (containsStringToastedValues(incomingRecord, field) || containsBytesToastedValues(incomingRecord, field))) {
-        ((GenericRecord) incomingRecord).put(field.name(), ((GenericData.Record) currentRecord).get(field.name()));
+        if (filled == null) {
+          filled = new GenericData.Record((GenericData.Record) incomingRecord, false);
+        }
+        filled.put(field.name(), ((GenericData.Record) currentRecord).get(field.name()));
       }
-    });
+    }
+    return filled != null ? filled : incomingRecord;
   }
 
   /**
