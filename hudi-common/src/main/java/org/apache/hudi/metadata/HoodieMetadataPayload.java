@@ -390,6 +390,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return MetadataPartitionType.get(type).combineMetadataPayloads(previousRecord, this);
   }
 
+  private static boolean isHoodieMetadataRecordSchema(Schema schema) {
+    return schema.getType() == Schema.Type.RECORD
+        && "HoodieMetadataRecord".equals(schema.getName())
+        && "org.apache.hudi.avro.model".equals(schema.getNamespace());
+  }
+
   private static String getBloomFilterRecordKey(String partitionName, String fileName) {
     return new PartitionIndexID(getBloomFilterIndexPartitionIdentifier(partitionName)).asBase64EncodedString()
         .concat(new FileIndexID(fileName).asBase64EncodedString());
@@ -426,8 +432,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     // TODO: feature(schema): Swap this over to HOODIE_METADATA_SCHEMA after HoodieRecordPayload implementations are using HoodieSchema
     // Uses cached Avro schema reference for O(1) equality check.
-    if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA) {
-      // If the schema is same or none is provided, we can return the record directly
+    if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA || isHoodieMetadataRecordSchema(schema)) {
+      // If the schema is same/none, or is an older-version HoodieMetadataRecord schema written by a
+      // previous Hudi release (e.g. missing SecondaryIndexMetadata), return the current-schema record
+      // directly. This handles backward compatibility when a 1.x reader reads MDT data written by an
+      // older Hudi version whose HoodieMetadataRecord schema had fewer fields.
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
           columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
       return Option.of(record);

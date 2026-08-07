@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.metadata.stats.ValueMetadata;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +36,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
@@ -376,5 +379,26 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     // Case with only escape characters but no actual separator
     assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey("part\\one"));
     assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey("part\\one"));
+  }
+
+  @Test
+  public void testGetInsertValueWithOldMetadataSchema() throws IOException {
+    // Regression: when a 1.x reader reads MDT data written by an older Hudi release whose
+    // HoodieMetadataRecord schema had fewer fields (e.g. no SecondaryIndexMetadata), the identity
+    // check `schema == HOODIE_METADATA_AVRO_SCHEMA` fails. The else-branch then calls
+    // record.put(TYPE_FIELD_OFFSET=6, ...) on a schema with only 6 fields -> AIOOBE.
+    Schema currentSchema = HoodieMetadataRecord.getClassSchema();
+    List<Schema.Field> oldFields = currentSchema.getFields().subList(0, currentSchema.getFields().size() - 1)
+        .stream()
+        .map(f -> new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal()))
+        .collect(Collectors.toList());
+    Schema oldMetadataSchema = Schema.createRecord(
+        currentSchema.getName(), currentSchema.getDoc(), currentSchema.getNamespace(), false, oldFields);
+
+    HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createPartitionFilesRecord(
+        PARTITION_NAME, createImmutableMap(Pair.of("file1.parquet", 1000L)), Collections.emptyList());
+    Option<IndexedRecord> result = record.getData().getInsertValue(oldMetadataSchema);
+    assertTrue(result.isPresent());
+    assertEquals(currentSchema, result.get().getSchema());
   }
 }
