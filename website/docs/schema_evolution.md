@@ -204,6 +204,12 @@ for that connection:
 set metaconf:hive.metastore.disallow.incompatible.col.type.changes=false;
 ```
 
+:::note
+Hive's SQL processor handles the `metaconf:` prefix, so this form works from Hive or Beeline only. Spark SQL accepts the
+same statement and echoes the value back, but stores it as an ordinary session property that never reaches the
+metastore. On a remote metastore, use the `hive-site.xml` option above instead.
+:::
+
 ## Schema Evolution in Action 
 
 Let us walk through an example to demonstrate the schema evolution support in Hudi. In the below example, we are going to add a new string field and change the datatype of a field from int to long.
