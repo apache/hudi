@@ -197,17 +197,18 @@ in the metastore's `hive-site.xml` and restart the service:
 </property>
 ```
 
-or override it for a single Hive or Beeline session with the `metaconf:` prefix, which pushes the value to the metastore
-for that connection:
+or override it for a single Beeline session with the `metaconf:` prefix, which pushes the value to the metastore for
+that connection:
 
 ```sql
 set metaconf:hive.metastore.disallow.incompatible.col.type.changes=false;
 ```
 
 :::note
-Hive's SQL processor handles the `metaconf:` prefix, so this form works from Hive or Beeline only. Spark SQL accepts the
-same statement and echoes the value back, but stores it as an ordinary session property that never reaches the
-metastore. On a remote metastore, use the `hive-site.xml` option above instead.
+Only Hive's SQL processor handles the `metaconf:` prefix, and the override applies over HiveServer2. Spark SQL accepts
+the same statement and echoes the value back, but stores it as an ordinary session property that never reaches the
+metastore. The legacy Hive CLI does send the value to the metastore, but not on the connection that runs the
+`ALTER`. In both cases, use the `hive-site.xml` option above instead.
 :::
 
 ## Schema Evolution in Action 
