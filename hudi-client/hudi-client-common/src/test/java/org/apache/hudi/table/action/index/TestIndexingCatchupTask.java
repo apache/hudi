@@ -360,7 +360,6 @@ public class TestIndexingCatchupTask {
     @Override
     public void updateIndexForWriteAction(HoodieInstant instant) {
       writeActionsUpdated.incrementAndGet();
-      currentCaughtupInstant = instant.requestedTime();
     }
   }
 

@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -206,7 +207,7 @@ class TestIndexActionExecutors {
   }
 
   @Test
-  void testRunInitializesFilesPartitionAndCompletesIndexInstant() throws IOException {
+  void testRunInitializesFilesPartitionAndCompletesIndexInstant() throws Exception {
     HoodieWriteConfig config = multiWriterConfig();
     HoodieInstant requested = requestedIndexInstant();
     stubRequestedIndexInstant(requested);
@@ -228,6 +229,7 @@ class TestIndexActionExecutors {
     verify(activeTimeline).transitionIndexRequestedToInflight(requested);
     verify(tableConfig).setMetadataPartitionState(metaClient, MetadataPartitionType.FILES.getPartitionPath(), true);
     verify(activeTimeline).saveAsComplete(any(Boolean.class), any(HoodieInstant.class), any(Option.class));
+    verify(writer).close();
   }
 
   @Test
@@ -247,14 +249,19 @@ class TestIndexActionExecutors {
     when(emptyTimeline.filterInflightsAndRequested()).thenReturn(emptyTimeline);
     when(emptyTimeline.findInstantsBefore("001")).thenReturn(emptyTimeline);
     when(emptyTimeline.firstInstant()).thenReturn(Option.empty());
-    when(emptyTimeline.findInstantsAfter(any())).thenReturn(emptyTimeline);
     when(emptyTimeline.filterCompletedInstants()).thenReturn(emptyTimeline);
     when(emptyTimeline.getInstantsAsStream()).thenAnswer(ignored -> java.util.stream.Stream.empty());
     when(activeTimeline.getTimelineOfActions(any())).thenReturn(emptyTimeline);
-    when(activeTimeline.findInstantsAfter("001")).thenReturn(emptyTimeline);
+    HoodieInstant completedCommit = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "002");
+    HoodieTimeline catchupTimeline = mock(HoodieTimeline.class);
+    when(catchupTimeline.getInstantsAsStream()).thenAnswer(ignored -> java.util.stream.Stream.of(completedCommit));
+    when(activeTimeline.findInstantsAfter("001")).thenReturn(catchupTimeline);
     HoodieArchivedTimeline archivedTimeline = mock(HoodieArchivedTimeline.class);
     when(archivedTimeline.getInstantsAsStream()).thenAnswer(ignored -> java.util.stream.Stream.empty());
     when(metaClient.getArchivedTimeline()).thenReturn(archivedTimeline);
+    HoodieCommitMetadata commitMetadata = mock(HoodieCommitMetadata.class);
+    when(activeTimeline.readCommitMetadata(completedCommit)).thenReturn(commitMetadata);
 
     HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
     HoodieArchivedTimeline metadataArchivedTimeline = mock(HoodieArchivedTimeline.class);
@@ -266,38 +273,38 @@ class TestIndexActionExecutors {
     when(metadataActiveTimeline.filterCompletedInstants()).thenReturn(metadataActiveTimeline);
     when(metadataActiveTimeline.findInstantsAfter("001")).thenReturn(metadataActiveTimeline);
     when(metadataActiveTimeline.getInstantsAsStream()).thenAnswer(ignored -> java.util.stream.Stream.empty());
+    when(metadataActiveTimeline.filter(any())).thenReturn(metadataActiveTimeline);
+    when(metadataActiveTimeline.firstInstant()).thenReturn(Option.empty());
     when(metadataMetaClient.reloadActiveTimeline()).thenReturn(metadataActiveTimeline);
     HoodieTableMetaClient.Builder builder = mock(HoodieTableMetaClient.Builder.class, Mockito.RETURNS_SELF);
     when(builder.build()).thenReturn(metadataMetaClient);
-    IndexingCatchupTask catchupTask = mock(IndexingCatchupTask.class);
 
     Option<HoodieIndexCommitMetadata> result;
     try (MockedStatic<HoodieTableMetaClient> metaClientStatic = mockStatic(HoodieTableMetaClient.class);
-         MockedStatic<IndexingCatchupTaskFactory> catchupFactory = mockStatic(IndexingCatchupTaskFactory.class);
          MockedConstruction<TransactionManager> ignoredTxn = mockConstruction(TransactionManager.class);
          MockedConstruction<HoodieHeartbeatClient> ignoredHeartbeat = mockConstruction(HoodieHeartbeatClient.class)) {
       metaClientStatic.when(HoodieTableMetaClient::builder).thenReturn(builder);
-      catchupFactory.when(() -> IndexingCatchupTaskFactory.createCatchupTask(
-          any(), any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(catchupTask);
 
       result = new RunIndexActionExecutor(context, config, table, "002").execute();
     }
 
     assertTrue(result.isPresent());
+    assertEquals("002", result.get().getIndexPartitionInfos().get(0).getIndexUptoInstant());
     verify(writer).buildMetadataPartitions(context, Collections.singletonList(info), "002");
-    verify(catchupTask).run();
+    verify(writer).update(commitMetadata, "002");
     verify(writer).close();
   }
 
   @Test
-  void testRunAbortsAndCleansPartialIndexOnTimelineFailure() throws IOException {
+  void testRunAbortsAndCleansPartialIndexOnTimelineFailure() throws Exception {
     HoodieWriteConfig config = multiWriterConfig();
     HoodieInstant requested = requestedIndexInstant();
     stubRequestedIndexInstant(requested);
     String partition = MetadataPartitionType.FILES.getPartitionPath();
     HoodieIndexPartitionInfo info = new HoodieIndexPartitionInfo(1, partition, "001", Collections.emptyMap());
     when(activeTimeline.readIndexPlan(requested)).thenReturn(new HoodieIndexPlan(1, Collections.singletonList(info)));
-    when(table.getIndexingMetadataWriter("002")).thenReturn(Option.of(mock(HoodieTableMetadataWriter.class)));
+    HoodieTableMetadataWriter writer = mock(HoodieTableMetadataWriter.class);
+    when(table.getIndexingMetadataWriter("002")).thenReturn(Option.of(writer));
     doAnswer(ignored -> {
       throw new IOException("timeline failure");
     })
@@ -318,6 +325,7 @@ class TestIndexActionExecutors {
       metadataUtil.verify(() -> HoodieTableMetadataUtil.deleteMetadataPartition(metaClient.getBasePath(), context, partition));
       tableConfigStatic.verify(() -> HoodieTableConfig.update(storage, metaClient.getMetaPath(), tableConfig.getProps()));
     }
+    verify(writer).close();
     verify(activeTimeline).deleteInstantFileIfExists(INSTANT_GENERATOR.getIndexInflightInstant("002"));
   }
 

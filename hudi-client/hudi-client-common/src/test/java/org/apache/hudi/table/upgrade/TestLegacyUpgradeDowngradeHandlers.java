@@ -66,11 +66,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -86,8 +88,8 @@ class TestLegacyUpgradeDowngradeHandlers {
     when(helper.getTable(config, context)).thenReturn(table);
     when(config.getMarkersDeleteParallelism()).thenReturn(3);
 
-    ZeroToOneUpgradeHandler handler = org.mockito.Mockito.spy(new ZeroToOneUpgradeHandler());
-    org.mockito.Mockito.doNothing().when(handler).recreateMarkers(anyString(), eq(table), eq(context), anyInt());
+    ZeroToOneUpgradeHandler handler = spy(new ZeroToOneUpgradeHandler());
+    doNothing().when(handler).recreateMarkers(anyString(), eq(table), eq(context), anyInt());
 
     handler.upgrade(config, context, "002", helper);
 
