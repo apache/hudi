@@ -18,9 +18,9 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.HFileUtils;
-import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.core.io.storage.HoodieIOFactory;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 

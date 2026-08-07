@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 
 import java.util.List;
 import java.util.Map;

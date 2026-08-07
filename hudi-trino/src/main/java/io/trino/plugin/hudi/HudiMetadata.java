@@ -57,7 +57,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.util.Lazy;
 
 import java.util.Collection;
 import java.util.Collections;

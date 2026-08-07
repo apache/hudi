@@ -75,7 +75,7 @@ import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.util.Lazy;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

@@ -47,7 +47,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.util.HoodieStorageUtils;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -327,8 +327,10 @@ public class UncompactedMetadataHudiTablesInitializer
                 // writeTable.
                 .withMetadataConfig(HoodieMetadataConfig.newBuilder()
                         .enable(metadataEnabled)
+                        // Partition stats follow the column stats config on this branch, so the
+                        // line above enables both. hoodie.metadata.index.partition.stats.enable is
+                        // deprecated here and has no builder setter.
                         .withMetadataIndexColumnStats(metadataEnabled)
-                        .withMetadataIndexPartitionStats(metadataEnabled)
                         .withMaxNumDeltaCommitsBeforeCompaction(100)
                         .build())
                 .build();

@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.util.Lazy;
 
 import java.util.ArrayList;
 import java.util.Arrays;

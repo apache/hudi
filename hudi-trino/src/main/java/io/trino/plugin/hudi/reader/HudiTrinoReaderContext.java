@@ -23,7 +23,7 @@ import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.SourcePage;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.avro.AvroRecordContext;
+import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;

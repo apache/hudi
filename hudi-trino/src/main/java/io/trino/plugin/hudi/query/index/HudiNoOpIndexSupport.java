@@ -17,7 +17,7 @@ import io.airlift.log.Logger;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.TupleDomain;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.util.Lazy;
 
 /**
  * Noop index support to ensure that MDT enabled split generation is entered.

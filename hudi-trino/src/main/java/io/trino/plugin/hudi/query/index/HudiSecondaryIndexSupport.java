@@ -28,7 +28,7 @@ import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.util.Lazy;
 
 import java.util.List;
 import java.util.Map;

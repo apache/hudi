@@ -33,7 +33,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieIndexVersion;
-import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 

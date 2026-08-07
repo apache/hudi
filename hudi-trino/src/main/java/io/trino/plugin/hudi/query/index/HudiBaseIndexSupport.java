@@ -18,7 +18,7 @@ import io.trino.spi.connector.SchemaTableName;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.util.Lazy;
 
 import java.util.List;
 import java.util.Map;

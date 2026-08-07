@@ -45,7 +45,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.NativeTableMetadataFactory;
-import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.util.Lazy;
 
 import java.util.HashMap;
 import java.util.List;

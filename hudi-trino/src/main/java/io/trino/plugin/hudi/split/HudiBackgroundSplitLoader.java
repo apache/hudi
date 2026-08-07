@@ -43,7 +43,7 @@ import org.apache.hudi.hive.NonPartitionedExtractor;
 import org.apache.hudi.hive.SinglePartPartitionValueExtractor;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
-import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.util.Lazy;
 
 import java.util.ArrayList;
 import java.util.Collections;

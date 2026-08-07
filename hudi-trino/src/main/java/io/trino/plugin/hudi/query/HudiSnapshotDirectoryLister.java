@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.util.Lazy;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import java.util.List;

@@ -34,7 +34,7 @@ import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.connector.TableNotFoundException;
 import io.trino.spi.security.ConnectorIdentity;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.util.Lazy;
 
 import java.util.List;
 import java.util.Map;
