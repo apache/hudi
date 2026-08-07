@@ -85,6 +85,7 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -1512,6 +1513,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     doInitTable(operationType, metaClient, instantTime);
+    // Handle complex key generator encoding before table creation (HUDI-9666 / HUDI-7001)
+    handleComplexKeygenEncoding(metaClient);
     HoodieTable table = createTable(config, metaClient);
 
     // Validate table properties
@@ -1543,6 +1546,36 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return true;
   }
 
+  private void handleComplexKeygenEncoding(HoodieTableMetaClient metaClient) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (!tableConfig.getTableVersion().lesserThan(org.apache.hudi.common.table.HoodieTableVersion.NINE)) {
+      return; // table version 9+ uses fixed encoding; no deduction needed
+    }
+    if (!KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
+      return;
+    }
+    if (config.autoDeduceComplexKeygenEncoding()) {
+      if (!tableConfig.populateMetaFields()) {
+        LOG.warn("Skipping complex key encoding auto-deduction for table {} because meta fields are "
+            + "disabled (virtual keys); relying on the configured {}.", metaClient.getBasePath(),
+            HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key());
+        return;
+      }
+      org.apache.hudi.common.util.Option<Boolean> cachedEncoding = KeyGenUtils.readComplexKeyEncodingFromAuxFile(
+          metaClient.getStorage(), metaClient.getBasePath());
+      if (cachedEncoding.isPresent()) {
+        config.setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING, String.valueOf(cachedEncoding.get()));
+        LOG.info("Using cached complex key encoding from aux file: {}", cachedEncoding.get());
+      } else {
+        String recordKeyField = tableConfig.getRecordKeyFields().get()[0];
+        boolean deducedEncoding = KeyGenUtils.deduceComplexKeyEncodingFromData(metaClient, recordKeyField);
+        KeyGenUtils.writeComplexKeyEncodingToAuxFile(metaClient.getStorage(), metaClient.getBasePath(), deducedEncoding);
+        config.setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING, String.valueOf(deducedEncoding));
+        LOG.info("Deduced and cached complex key encoding: {}", deducedEncoding);
+      }
+    }
+  }
+
   public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
@@ -1563,7 +1596,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
       }
     }
+    // Complex keygen validation is handled by handleComplexKeygenEncoding (called earlier in initTable).
+    // Only hard-throw if auto-deduce is disabled AND validation is still on.
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
+            && !config.autoDeduceComplexKeygenEncoding()
             && config.enableComplexKeygenValidation()
             && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
       throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
