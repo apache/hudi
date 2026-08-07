@@ -33,11 +33,7 @@ import org.apache.hudi.storage.StoragePath;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
-import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
-import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-import static org.apache.hudi.common.model.HoodieFileFormat.VORTEX;
+import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 
 public class HoodieFileWriterFactory {
   protected final HoodieStorage storage;
@@ -64,22 +60,8 @@ public class HoodieFileWriterFactory {
   protected <T, I, K, O> HoodieFileWriter getFileWriterByFormat(
       String extension, String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetFileWriter(instantTime, path, config, schema, taskContextSupplier);
-    }
-    if (HFILE.getFileExtension().equals(extension)) {
-      return newHFileFileWriter(instantTime, path, config, schema, taskContextSupplier);
-    }
-    if (ORC.getFileExtension().equals(extension)) {
-      return newOrcFileWriter(instantTime, path, config, schema, taskContextSupplier);
-    }
-    if (LANCE.getFileExtension().equals(extension)) {
-      return newLanceFileWriter(instantTime, path, config, schema, taskContextSupplier);
-    }
-    if (VORTEX.getFileExtension().equals(extension)) {
-      return newVortexFileWriter(instantTime, path, config, schema, taskContextSupplier);
-    }
-    throw new UnsupportedOperationException(extension + " format not supported yet.");
+    return newWriterByFormat(getFormatByFileExtension(extension), instantTime, path, config, schema,
+        taskContextSupplier);
   }
 
   protected <T, I, K, O> HoodieFileWriter getFileWriterByFormat(HoodieFileFormat format, OutputStream outputStream,
@@ -90,6 +72,58 @@ public class HoodieFileWriterFactory {
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }
+  }
+
+  /**
+   * Single dispatch point mapping a {@link HoodieFileFormat} to the corresponding writer creation hook.
+   *
+   * <p>Support for a new file format must be added HERE, and only here, by adding a case that calls
+   * the corresponding {@code newXxxFileWriter} hook; the path-based {@code getFileWriter} entry
+   * points funnel through this switch. The only dispatch outside this method is the
+   * {@link OutputStream}-based entry point, which only supports Parquet.
+   *
+   * @param format              the base file format to create a writer for.
+   * @param instantTime         instant time of the write.
+   * @param path                the file path.
+   * @param config              Hudi configs.
+   * @param schema              schema to write the file with.
+   * @param taskContextSupplier task context supplier.
+   * @return a new file writer for the given format.
+   * @throws IOException upon writer creation error.
+   */
+  private HoodieFileWriter newWriterByFormat(
+      HoodieFileFormat format, String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
+      TaskContextSupplier taskContextSupplier) throws IOException {
+    switch (format) {
+      case PARQUET:
+        return newParquetFileWriter(instantTime, path, config, schema, taskContextSupplier);
+      case HFILE:
+        return newHFileFileWriter(instantTime, path, config, schema, taskContextSupplier);
+      case ORC:
+        return newOrcFileWriter(instantTime, path, config, schema, taskContextSupplier);
+      case LANCE:
+        return newLanceFileWriter(instantTime, path, config, schema, taskContextSupplier);
+      case VORTEX:
+        return newVortexFileWriter(instantTime, path, config, schema, taskContextSupplier);
+      default:
+        throw new UnsupportedOperationException(format + " format not supported yet.");
+    }
+  }
+
+  /**
+   * Maps a base file extension to its {@link HoodieFileFormat}. This mapping is format-agnostic,
+   * so new formats do not require any change here.
+   *
+   * @param extension the file extension including the leading dot, e.g. ".parquet".
+   * @return the matching base file format.
+   */
+  private static HoodieFileFormat getFormatByFileExtension(String extension) {
+    for (HoodieFileFormat format : HoodieFileFormat.values()) {
+      if (format != HOODIE_LOG && format.getFileExtension().equals(extension)) {
+        return format;
+      }
+    }
+    throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
   protected HoodieFileWriter newParquetFileWriter(
