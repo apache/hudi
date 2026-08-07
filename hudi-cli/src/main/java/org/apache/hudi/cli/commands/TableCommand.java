@@ -270,10 +270,11 @@ public class TableCommand {
           help = "One of ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME")
       final String targetModeStr,
       @ShellOption(value = {"--force"}, defaultValue = "false",
-          help = "Override the safety check that prevents changing the mode on a table with commits. "
-              + "Existing files are not rewritten — new commits use the new mode, old commits keep "
-              + "the old mode. Incremental queries and file-name-based lookups will silently drop "
-              + "rows from commits written under the incompatible mode.")
+          help = "Allow NARROWING the mode on a table that already has commits. Does not permit "
+              + "widening, which is refused regardless. Existing files are not rewritten — new "
+              + "commits use the new mode, old commits keep the old one. Incremental queries and "
+              + "file-name-based lookups will silently drop rows from commits written under the "
+              + "incompatible mode.")
       final boolean force) throws IOException {
     MetaFieldsMode targetMode;
     try {
