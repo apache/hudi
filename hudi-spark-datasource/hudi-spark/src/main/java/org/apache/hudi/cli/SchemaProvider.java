@@ -73,8 +73,8 @@ public abstract class SchemaProvider implements Serializable {
       Schema schema = getTargetSchema();
       return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
     } catch (UnsupportedOperationException e) {
-      // If the legacy getTargetSchema() calls getSourceSchema() which is not implemented,
-      // fall back to using getSourceHoodieSchema as target schema
+      // A subclass may override getTargetSchema() to throw UnsupportedOperationException
+      // (e.g. it supplies only a source schema); fall back to the source schema as target.
       return getSourceHoodieSchema();
     }
   }
