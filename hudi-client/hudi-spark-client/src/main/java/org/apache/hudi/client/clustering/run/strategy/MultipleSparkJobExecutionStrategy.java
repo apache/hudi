@@ -106,7 +106,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         Math.min(clusteringPlan.getInputGroups().size(), writeConfig.getClusteringMaxParallelism()),
         new CustomizedThreadFactory("clustering-job-group", true));
     try {
-      boolean canUseRowWriter = getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", true);
+      // shouldForceRowWriter() opts in for subclasses that require the Row path (e.g. when
+      // delegating to a ClusteringGroupWriter SPI provider that operates on Datasets only).
+      boolean canUseRowWriter = shouldForceRowWriter()
+          || getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", true);
       // execute clustering for each group async and collect WriteStatus
       Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
               clusteringPlan.getInputGroups().stream()
@@ -217,6 +220,18 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     }).orElseGet(() -> isRowPartitioner
         ? BulkInsertInternalPartitionerWithRowsFactory.get(getWriteConfig(), getHoodieTable().isPartitioned(), true)
         : BulkInsertInternalPartitionerFactory.get(getHoodieTable(), getWriteConfig(), true));
+  }
+
+  /**
+   * Hook for subclasses to force the Row write path regardless of {@code
+   * hoodie.datasource.write.row.writer.enable}. Default returns {@code false} so existing
+   * behavior is unchanged. Subclasses delegating to a {@link ClusteringGroupWriter} that only
+   * supports the Dataset pipeline override this to return {@code true} when delegation is
+   * active. The standard Row-writer compatibility check (decimal + list/map handling) still
+   * gates whether the path is actually taken.
+   */
+  protected boolean shouldForceRowWriter() {
+    return false;
   }
 
   /**
