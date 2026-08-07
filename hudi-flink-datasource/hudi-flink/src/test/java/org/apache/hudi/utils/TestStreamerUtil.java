@@ -351,14 +351,12 @@ class TestStreamerUtil {
   }
 
   @Test
-  void testPartitionExists() throws IOException {
+  void testPartitionExists() {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     assertFalse(StreamerUtil.partitionExists(tempFile.getAbsolutePath(), "dt=2026-08-06", hadoopConf));
 
-    try (FileSystem fs = HadoopFSUtils.getFs(tempFile.getAbsolutePath(), hadoopConf)) {
-      fs.mkdirs(new Path(tempFile.getAbsolutePath(), "dt=2026-08-06"));
-    }
+    assertTrue(new File(tempFile, "dt=2026-08-06").mkdir());
     assertTrue(StreamerUtil.partitionExists(tempFile.getAbsolutePath(), "dt=2026-08-06", hadoopConf));
   }
 
