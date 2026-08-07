@@ -3,7 +3,7 @@ title: Schema Evolution
 keywords: [hudi, incremental, batch, stream, processing, schema, evolution]
 summary: In this page, we will discuss schema evolution support in Hudi.
 toc: true
-last_modified_at: 2022-04-27T15:59:57-04:00
+last_modified_at: 2026-08-05T22:49:08+05:30
 ---
 
 Schema evolution is an essential aspect of data management, and Hudi supports schema evolution on write out-of-the-box,
@@ -168,9 +168,47 @@ ALTER TABLE tableName RENAME COLUMN old_columnName TO new_columnName
 ALTER TABLE table1 RENAME COLUMN a.b.c TO x
 ```
 
+### Disabling the Hive metastore column type compatibility check
+
+For tables registered in the Hive metastore, the metastore compares the new column list against the existing one
+position by position and rejects the `ALTER TABLE` when the types in a given position are not compatible. Schema changes
+that alter the type or the position of an existing column, such as adding a column with `FIRST` or `AFTER`, can
+therefore fail with:
+
+`The following columns have types incompatible with the existing columns in their respective positions`
+
+Setting `hive.metastore.disallow.incompatible.col.type.changes` to `false` skips this check. The metastore evaluates the
+check, so where you set the property depends on the metastore the engine talks to.
+
+When Spark runs its own embedded metastore (no `hive.metastore.uris` configured), the metastore shares the Spark JVM, so
+pass the property with Spark's `spark.hadoop.` prefix when you start the job:
+
+```shell
+--conf 'spark.hadoop.hive.metastore.disallow.incompatible.col.type.changes=false'
+```
+
+When the engine talks to a remote Hive metastore service, the property has to take effect on the server. Either set it
+in the metastore's `hive-site.xml` and restart the service:
+
+```xml
+<property>
+  <name>hive.metastore.disallow.incompatible.col.type.changes</name>
+  <value>false</value>
+</property>
+```
+
+or override it for a single Beeline session with the `metaconf:` prefix, which pushes the value to the metastore for
+that connection:
+
+```sql
+set metaconf:hive.metastore.disallow.incompatible.col.type.changes=false;
+```
+
 :::note
-When using hive metastore, please disable  `hive.metastore.disallow.incompatible.col.type.changes` if you encounter this error:
-`The following columns have types incompatible with the existing columns in their respective positions`.
+Only Hive's SQL processor handles the `metaconf:` prefix, and the override applies over HiveServer2. Spark SQL accepts
+the same statement and echoes the value back, but stores it as an ordinary session property that never reaches the
+metastore. The legacy Hive CLI does send the value to the metastore, but not on the connection that runs the
+`ALTER`. In both cases, use the `hive-site.xml` option above instead.
 :::
 
 ## Schema Evolution in Action 
