@@ -137,7 +137,12 @@ object HoodieDatasetBulkInsertHelper
       //       need access to the [[InternalRow]] and therefore can avoid the need
       //       to dereference [[DataFrame]] into [[RDD]]
       val query = df.queryExecution.logical
-      val metaFieldsStubs = metaFields.map(f => Alias(Literal(UTF8String.EMPTY_UTF8, dataType = StringType), f.name)())
+      // Nullable null stubs — the actual meta-column values are set downstream by
+      // HoodieRowCreateHandle.write based on hoodie.meta.fields.mode. Using a null literal (rather
+      // than an empty-string literal) guarantees the resulting StructField's nullable=true so the
+      // physical Parquet column is written as OPTIONAL and can hold nulls under selective / NONE
+      // modes.
+      val metaFieldsStubs = metaFields.map(f => Alias(Literal.create(null, StringType), f.name)())
       val prependedQuery = Project(metaFieldsStubs ++ query.output, query)
 
       sparkAdapter.getUnsafeUtils.createDataFrameFrom(df.sparkSession, prependedQuery)

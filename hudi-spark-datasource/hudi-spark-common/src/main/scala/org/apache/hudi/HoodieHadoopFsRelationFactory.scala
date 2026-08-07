@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.StoragePath
 
@@ -390,6 +391,21 @@ abstract class HoodieBaseCopyOnWriteIncrementalHadoopFsRelationFactory(override 
                                                                        override val schemaSpec: Option[StructType],
                                                                        isBootstrap: Boolean)
   extends HoodieBaseHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
+
+  // Incremental reads filter on _hoodie_commit_time, so a table that does not populate it can only
+  // ever return nothing. Reject rather than hand back an empty result, which reads as "no new data"
+  // instead of "this query cannot work here".
+  //
+  // The same guard exists in IncrementalRelationV1/V2, but those classes back only the streaming
+  // source — a Spark datasource incremental read is served by this factory, so without this check
+  // hoodie.meta.fields.mode=NONE / FILE_NAME_ONLY silently returned zero rows.
+  if (!metaClient.getTableConfig.isCommitTimePopulated) {
+    throw new HoodieException("Incremental queries are not supported when _hoodie_commit_time is not populated. "
+      + "hoodie.meta.fields.mode is a physical-storage decision baked into files at write time, so it cannot be "
+      + "changed by flipping write options, and it cannot be widened afterwards either — hudi-cli may only narrow a "
+      + "mode, since existing files are never rewritten. Recreating the table is the only way to enable incremental "
+      + "queries on it: create it with hoodie.meta.fields.mode=COMMIT_TIME_ONLY (or COMMIT_TIME_AND_FILE_NAME, or ALL).")
+  }
 
   override protected def getMandatoryFields(): Seq[String] = Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
     orderingFields ++ partitionColumnsToRead

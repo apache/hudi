@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -69,7 +70,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
+    boolean populateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(path, storage.getConf(), config);
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
@@ -89,7 +91,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         hoodieConfig.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
         storageConfiguration, hoodieConfig.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         hoodieConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
-    return new HoodieAvroParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
+    return new HoodieAvroParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, metaFieldsMode);
   }
 
   protected HoodieFileWriter newParquetFileWriter(
@@ -123,7 +125,13 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME,
         filter,
         config.getBoolean(HFILE_WRITER_TO_ALLOW_DUPLICATES));
-    return new HoodieAvroHFileWriter(instantTime, path, hfileConfig, schema, taskContextSupplier, config.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
+    // Resolve through the mode like the parquet path above. HFile does not populate meta columns
+    // selectively, so a selective mode is treated as "record key not populated". Note getBoolean
+    // (unlike getBooleanOrDefault) returns null when neither property is set, which would NPE here.
+    boolean populateMetaFields = org.apache.hudi.common.model.MetaFieldsMode.resolve(
+        config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
+        config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)).isRecordKeyPopulated();
+    return new HoodieAvroHFileWriter(instantTime, path, hfileConfig, schema, taskContextSupplier, populateMetaFields);
   }
 
   protected HoodieFileWriter newOrcFileWriter(

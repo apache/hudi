@@ -22,12 +22,14 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -143,6 +145,62 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     assertEquals(metaClient1.toString(), metaClient2.toString());
     assertNotEquals(metaClient1.toString(), new Object().toString());
+  }
+
+  @Test
+  void testMetaFieldsModeDerivesLegacyBooleanAndRejectsContradictions() throws IOException {
+    // hoodie.properties must never record a legacy boolean that contradicts the mode: a pre-1.3.0
+    // reader ignores hoodie.meta.fields.mode entirely and would otherwise treat a selectively
+    // written table as ALL. For NONE that is unsafe — an old incremental reader would run against
+    // all-null commit times and silently return no rows.
+    //
+    // The invariant is upheld two ways: an unstated boolean is derived from the mode, and a stated
+    // one that contradicts it is rejected rather than silently overridden.
+    for (MetaFieldsMode mode : MetaFieldsMode.values()) {
+      final String path = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-derive-" + mode.name();
+      HoodieTableMetaClient created = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+          .setTableName("mfm-derive-" + mode.name())
+          .setMetaFieldsMode(mode)
+          .initTable(this.metaClient.getStorageConf(), path);
+      assertEquals(mode, created.getTableConfig().getMetaFieldsMode());
+      assertEquals(mode.toLegacyPopulateMetaFields(), created.getTableConfig().populateMetaFields(),
+          "the legacy boolean must be derived from the mode for " + mode);
+
+      // Restating the derived value is coherent and must be accepted.
+      final String restatedPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-restate-" + mode.name();
+      HoodieTableMetaClient restated = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+          .setTableName("mfm-restate-" + mode.name())
+          .setPopulateMetaFields(mode.toLegacyPopulateMetaFields())
+          .setMetaFieldsMode(mode)
+          .initTable(this.metaClient.getStorageConf(), restatedPath);
+      assertEquals(mode, restated.getTableConfig().getMetaFieldsMode());
+
+      // Contradicting it is rejected, naming both properties so the user knows which to drop.
+      final String conflictPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-conflict-" + mode.name();
+      HoodieException thrown = assertThrows(HoodieException.class, () ->
+          HoodieTableMetaClient.newTableBuilder()
+              .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+              .setTableName("mfm-conflict-" + mode.name())
+              .setPopulateMetaFields(!mode.toLegacyPopulateMetaFields())
+              .setMetaFieldsMode(mode)
+              .initTable(this.metaClient.getStorageConf(), conflictPath),
+          "a contradicting boolean must be rejected for " + mode);
+      assertTrue(thrown.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key())
+          && thrown.getMessage().contains(HoodieTableConfig.POPULATE_META_FIELDS.key()));
+    }
+
+    // No explicit mode: pre-1.3.0 behavior preserved, only the legacy boolean is recorded, and it is
+    // never a conflict because there is no mode for it to contradict.
+    final String legacyPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-legacy";
+    HoodieTableMetaClient legacy = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("mfm-legacy")
+        .setPopulateMetaFields(false)
+        .initTable(this.metaClient.getStorageConf(), legacyPath);
+    assertEquals(MetaFieldsMode.NONE, legacy.getTableConfig().getMetaFieldsMode());
+    assertFalse(legacy.getTableConfig().populateMetaFields());
   }
 
   @Test

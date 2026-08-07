@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -124,7 +125,11 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public HoodieSchema getTableSchema() throws Exception {
-    return getTableSchema(metaClient.getTableConfig().populateMetaFields());
+    // Include meta fields whenever the table's meta-fields mode populates any of them. Under
+    // selective modes (COMMIT_TIME_ONLY / FILE_NAME_ONLY / COMMIT_TIME_AND_FILE_NAME) the meta
+    // columns exist as physical nullable Parquet columns even though populateMetaFields() is false,
+    // and read paths (e.g. incremental relations) must see them in the projected schema.
+    return getTableSchema(metaClient.getTableConfig().getMetaFieldsMode() != MetaFieldsMode.NONE);
   }
 
   /**
@@ -148,7 +153,8 @@ public class TableSchemaResolver {
         .filterCompletedInstants()
         .findInstantsBeforeOrEquals(timestamp)
         .lastInstant();
-    return getTableSchemaInternal(metaClient.getTableConfig().populateMetaFields(), instant)
+    return getTableSchemaInternal(
+        metaClient.getTableConfig().getMetaFieldsMode() != MetaFieldsMode.NONE, instant)
         .orElseThrow(schemaNotFoundError());
   }
 

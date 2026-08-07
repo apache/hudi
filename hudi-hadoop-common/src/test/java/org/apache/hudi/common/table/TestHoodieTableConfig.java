@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -352,6 +353,32 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals("p1", HoodieTableConfig.getPartitionFieldWithoutKeyGenPartitionType(partitionFields.split(",")[0], config));
   }
 
+  /**
+   * The resolution rules themselves are unit-tested in {@code TestHoodieTableConfigMetaFieldsMode} against an
+   * in-memory config. This covers the part that needs real storage: that the mode survives a
+   * {@code hoodie.properties} write / read round trip and still resolves the same way afterwards.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"ALL", "NONE", "COMMIT_TIME_ONLY", "FILE_NAME_ONLY", "COMMIT_TIME_AND_FILE_NAME"})
+  void testMetaFieldsModeSurvivesAPropertiesRoundTrip(String modeName) {
+    MetaFieldsMode mode = MetaFieldsMode.valueOf(modeName);
+    Properties updatedProps = new Properties();
+    updatedProps.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    // Written the way TableBuilder writes it: the legacy boolean is derived from the mode, never
+    // taken from the caller, so hoodie.properties cannot contradict itself.
+    updatedProps.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+        String.valueOf(mode.toLegacyPopulateMetaFields()));
+    HoodieTableConfig.update(storage, metaPath, updatedProps);
+
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
+    assertEquals(mode, config.getMetaFieldsMode());
+    assertEquals(mode.name(), config.getString(HoodieTableConfig.META_FIELDS_MODE));
+    assertEquals(mode.toLegacyPopulateMetaFields(), config.populateMetaFields(),
+        "populateMetaFields() is derived from the mode, so it must agree after a reload");
+    assertEquals(mode.isCommitTimePopulated(), config.isCommitTimePopulated());
+    assertEquals(mode.isFileNamePopulated(), config.isFileNamePopulated());
+  }
+
   @Test
   void testValidateConfigVersion() {
     assertTrue(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.INITIAL_VERSION, HoodieTableVersion.EIGHT));
@@ -386,7 +413,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(45, configProperties.size());
+    assertEquals(46, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());
