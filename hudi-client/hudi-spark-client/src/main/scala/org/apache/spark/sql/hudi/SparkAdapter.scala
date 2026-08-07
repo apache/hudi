@@ -519,6 +519,23 @@ trait SparkAdapter extends Serializable {
                             sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = None
 
   /**
+   * Rewrites each top-level VariantType field of `schema` into the full-variant projection
+   * struct that PushVariantIntoScan would request for whole-variant access: a single child
+   * field "0" of VariantType carrying `VariantMetadata` for path "$". Requesting that shape
+   * makes the parquet reader reconstruct shredded variants by field name; requesting native
+   * VariantType instead clips a shredded file group down to {metadata, value} and reads
+   * value=null (#19556).
+   *
+   * Used by internal (non-catalyst) reads of parquet base files, which have no
+   * PushVariantIntoScan to do this for them. The caller restores the native VariantType
+   * shape by projecting child 0 of each rewritten field.
+   *
+   * Returns None when the schema has no top-level VariantType field or the Spark version has
+   * no shredded-read support (Spark 3.x / 4.0).
+   */
+  def buildFullVariantReadSchema(schema: StructType): Option[StructType] = None
+
+  /**
    * Generates a shredded Variant schema and marks it with write shredding metadata.
    *
    * For Spark 4.x, this uses SparkShreddingUtils to generate the schema and add metadata.
