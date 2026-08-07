@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -43,6 +45,10 @@ import static org.mockito.Mockito.when;
  * {@code hoodie.populate.meta.fields} back from it. The write-back is the load-bearing part:
  * {@code POPULATE_META_FIELDS} defaults to {@code true}, so deleting the mode without restating the
  * boolean would silently downgrade the table to {@code ALL}.
+ *
+ * <p>Only {@code ALL} and {@code NONE} can be restated that way. A selective mode is rejected
+ * outright rather than collapsed to {@code NONE}, so the downgrade never produces a table whose
+ * files carry meta columns nothing advertises.
  */
 class TestTenToNineDowngradeHandler {
 
@@ -67,13 +73,8 @@ class TestTenToNineDowngradeHandler {
   @ParameterizedTest
   @CsvSource({
       // Only ALL populates every meta column, so it is the only mode that maps back to true.
-      "ALL,                       true",
-      "NONE,                      false",
-      // Selective modes cannot be expressed in version 9. They degrade to false, i.e. the table
-      // under-claims rather than asserting meta columns a version 9 reader would then trust.
-      "COMMIT_TIME_ONLY,          false",
-      "FILE_NAME_ONLY,            false",
-      "COMMIT_TIME_AND_FILE_NAME, false"
+      "ALL,  true",
+      "NONE, false"
   })
   void downgradeWritesTheLegacyBooleanDerivedFromTheMode(String modeName, boolean expectedBoolean) {
     UpgradeDowngrade.TableConfigChangeSet changeSet =
@@ -85,6 +86,23 @@ class TestTenToNineDowngradeHandler {
     // The mode itself goes away; the boolean must not, or the table resolves to the `true` default.
     assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.META_FIELDS_MODE));
     assertFalse(changeSet.propertiesToDelete().contains(HoodieTableConfig.POPULATE_META_FIELDS));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"COMMIT_TIME_ONLY", "FILE_NAME_ONLY", "COMMIT_TIME_AND_FILE_NAME"})
+  void downgradeRejectsSelectiveModesRatherThanDegradingThem(String modeName) {
+    // A selective mode has no version 9 representation. Writing `false` would under-claim a table
+    // whose files really do carry commit times or file names, and the mode could not be recovered by
+    // upgrading again, since NineToTenUpgradeHandler derives it from that same boolean. Failing keeps
+    // the lossy state unreachable instead of merely warning about it.
+    MetaFieldsMode mode = MetaFieldsMode.valueOf(modeName);
+
+    HoodieUpgradeDowngradeException thrown =
+        assertThrows(HoodieUpgradeDowngradeException.class, () -> downgradeWith(mode));
+
+    assertTrue(thrown.getMessage().contains(modeName),
+        "the operator needs to know which mode blocked the downgrade, got: " + thrown.getMessage());
+    assertTrue(thrown.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()));
   }
 
   @Test
