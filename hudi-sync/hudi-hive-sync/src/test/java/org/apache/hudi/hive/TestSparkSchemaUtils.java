@@ -121,6 +121,31 @@ public class TestSparkSchemaUtils {
   }
 
   @Test
+  public void testConvertWithFieldDocs() {
+    HoodieSchema nestedSchema = HoodieSchema.createRecord("profile", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING), "City of the person", null),
+        HoodieSchemaField.of("zip", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, null)));
+    HoodieSchema schema = HoodieSchema.createRecord("root", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), "Unique \"id\"\nof the record", null),
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(HoodieSchemaType.STRING), "Name of the person", null),
+        HoodieSchemaField.of("age", HoodieSchema.createNullable(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("profile", nestedSchema, "Profile of the person", null)));
+
+    StructType withoutDocs = (StructType) StructType.fromJson(SparkSchemaUtils.convertToSparkSchemaJson(schema));
+    assertFalse(withoutDocs.fields()[0].getComment().isDefined());
+    assertFalse(((StructType) withoutDocs.fields()[3].dataType()).fields()[0].getComment().isDefined());
+
+    StructType withDocs = (StructType) StructType.fromJson(SparkSchemaUtils.convertToSparkSchemaJson(schema, true));
+    assertEquals("Unique \"id\"\nof the record", withDocs.fields()[0].getComment().get());
+    assertEquals("Name of the person", withDocs.fields()[1].getComment().get());
+    assertFalse(withDocs.fields()[2].getComment().isDefined());
+    assertEquals("Profile of the person", withDocs.fields()[3].getComment().get());
+    StructType nestedStruct = (StructType) withDocs.fields()[3].dataType();
+    assertEquals("City of the person", nestedStruct.fields()[0].getComment().get());
+    assertFalse(nestedStruct.fields()[1].getComment().isDefined());
+  }
+
+  @Test
   public void testConvertComplexType() {
     StructType sparkSchema = parser.parseTableSchema(
             "f0 int, f1 map<string, int>, f2 array<decimal(10,2)>"

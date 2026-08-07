@@ -29,19 +29,27 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
@@ -52,6 +60,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
@@ -59,17 +69,28 @@ import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.PrimitiveType;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -81,6 +102,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -441,5 +463,138 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     boolean committed =
         client.commitStats(instant, writeStats, Option.empty(), metaClient.getCommitActionType());
     assertTrue(committed);
+  }
+
+  // Avro fixed(10) decimal(20,2). 10 is wider than the precision-minimal width (9 for precision
+  // 20), so Spark's own DecimalType->Avro conversion would emit fixed(9); the declared 10 only
+  // survives if the write path honors the Avro fixed size. Do not derive this schema from a
+  // DataFrame, which would drop the fixed size.
+  private static final String FIXED10_DECIMAL_SCHEMA =
+      "{\"type\":\"record\",\"name\":\"decimalRec\",\"fields\":["
+          + "{\"name\":\"_row_key\",\"type\":\"string\"},"
+          + "{\"name\":\"partition_path\",\"type\":\"string\"},"
+          + "{\"name\":\"ts\",\"type\":\"long\"},"
+          + "{\"name\":\"dec\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixed\",\"size\":10,"
+          + "\"logicalType\":\"decimal\",\"precision\":20,\"scale\":2}}]}";
+
+  private static final String DECIMAL_PARTITION = "p1";
+  private static final int EXPECTED_DECIMAL_FIXED_LEN = 10;
+
+  @Test
+  void testDecimalFixedWidthPreservedAfterCompactionAndClustering() throws Exception {
+    Properties props = getPropertiesForKeyGen(true);
+    Properties rowWriterProps = new Properties();
+    rowWriterProps.put("hoodie.datasource.write.row.writer.enable", "true");
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .forTable("test-decimal-fixed")
+        .withPath(basePath())
+        .withSchema(FIXED10_DECIMAL_SCHEMA)
+        .withParallelism(2, 2)
+        .withPreCombineField("ts")
+        .withProperties(rowWriterProps)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(1)
+            .compactionSmallFileSize(0)
+            .withInlineCompaction(false)
+            .build())
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withClusteringMaxNumGroups(10)
+            .withClusteringTargetPartitions(0)
+            .withInlineClustering(false)
+            .withInlineClusteringNumCommits(1)
+            .build())
+        .build();
+    props.putAll(config.getProps());
+
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
+    client = getHoodieWriteClient(config);
+
+    // two insert commits (small-file size 0 forces a fresh file group each) create two base-file
+    // groups, both written via the Avro path at fixed(10)
+    String instant1 = WriteClientTestUtils.createNewInstantTime();
+    writeData(instant1, buildDecimalRecords(0, 10, 1L, new BigDecimal("123456789.12")), true);
+    String instant2 = WriteClientTestUtils.createNewInstantTime();
+    writeData(instant2, buildDecimalRecords(10, 10, 1L, new BigDecimal("223456789.34")), true);
+    // update every key so both groups accumulate log files for compaction to merge
+    String instant3 = WriteClientTestUtils.createNewInstantTime();
+    writeData(instant3, buildDecimalRecords(0, 20, 2L, new BigDecimal("323456789.56")), true);
+
+    // precondition: both file groups must carry log files, else compaction is a no-op and would not
+    // exercise the row-writer merge path
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context(), metaClient);
+    hoodieTable.getHoodieView().sync();
+    List<FileSlice> latestSlices =
+        hoodieTable.getHoodieView().getLatestFileSlices(DECIMAL_PARTITION).collect(Collectors.toList());
+    assertEquals(2, latestSlices.size(), "expected two file groups before compaction");
+    assertTrue(latestSlices.stream().allMatch(slice -> slice.getLogFiles().findAny().isPresent()),
+        "each file group must have log files for compaction to merge");
+    HoodieSchema tableSchema = new TableSchemaResolver(metaClient).getTableSchema(false);
+
+    // compaction rewrites both base files through the Spark record type
+    String compactionInstant = (String) client.scheduleCompaction(Option.empty()).get();
+    HoodieWriteMetadata compactionResult = client.compact(compactionInstant);
+    client.commitCompaction(compactionInstant, compactionResult, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstant));
+    List<StoragePath> compactedBaseFiles = latestBaseFilePaths(config, DECIMAL_PARTITION);
+    assertEquals(2, compactedBaseFiles.size(), "expected two compacted base files");
+    for (StoragePath path : compactedBaseFiles) {
+      assertDecimalFixedLen(path, EXPECTED_DECIMAL_FIXED_LEN);
+    }
+    assertEquals(tableSchema,
+        new TableSchemaResolver(HoodieTableMetaClient.reload(metaClient)).getTableSchema(false),
+        "table schema in commit metadata must not change after compaction");
+
+    // clustering rewrites the two compacted groups through the same Spark row-writer path
+    String clusteringInstant = (String) client.scheduleClustering(Option.empty()).get();
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> clusterMetadata = client.cluster(clusteringInstant, true);
+    List<HoodieWriteStat> clusterStats = clusterMetadata.getWriteStats().get();
+    assertFalse(clusterStats.isEmpty(), "clustering should write at least one base file");
+    for (HoodieWriteStat stat : clusterStats) {
+      assertDecimalFixedLen(new StoragePath(metaClient.getBasePath(), stat.getPath()),
+          EXPECTED_DECIMAL_FIXED_LEN);
+    }
+    assertEquals(tableSchema,
+        new TableSchemaResolver(HoodieTableMetaClient.reload(metaClient)).getTableSchema(false),
+        "table schema in commit metadata must not change after clustering");
+  }
+
+  private List<HoodieRecord> buildDecimalRecords(int startKey, int count, long ts, BigDecimal decValue) {
+    Schema schema = new Schema.Parser().parse(FIXED10_DECIMAL_SCHEMA);
+    Schema decSchema = schema.getField("dec").schema();
+    Conversions.DecimalConversion decimalConversion = new Conversions.DecimalConversion();
+    LogicalTypes.Decimal decimalType = LogicalTypes.decimal(20, 2);
+    BigDecimal scaledValue = decValue.setScale(2);
+    List<HoodieRecord> records = new ArrayList<>();
+    for (int i = 0; i < count; i++) {
+      String key = "key_" + (startKey + i);
+      GenericRecord rec = new GenericData.Record(schema);
+      rec.put("_row_key", key);
+      rec.put("partition_path", DECIMAL_PARTITION);
+      rec.put("ts", ts);
+      GenericFixed fixed = decimalConversion.toFixed(scaledValue, decSchema, decimalType);
+      rec.put("dec", fixed);
+      records.add(new HoodieAvroRecord<>(new HoodieKey(key, DECIMAL_PARTITION),
+          new OverwriteWithLatestAvroPayload(rec, ts)));
+    }
+    return records;
+  }
+
+  private List<StoragePath> latestBaseFilePaths(HoodieWriteConfig config, String partition) {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context(), metaClient);
+    hoodieTable.getHoodieView().sync();
+    return hoodieTable.getBaseFileOnlyView().getLatestBaseFiles(partition)
+        .map(HoodieBaseFile::getStoragePath).collect(Collectors.toList());
+  }
+
+  private void assertDecimalFixedLen(StoragePath baseFilePath, int expectedLen) {
+    MessageType parquetSchema = ParquetUtils.readMetadata(hoodieStorage(), baseFilePath)
+        .getFileMetaData().getSchema();
+    PrimitiveType decType = parquetSchema.getType("dec").asPrimitiveType();
+    assertEquals(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, decType.getPrimitiveTypeName(),
+        "decimal must be encoded as FIXED_LEN_BYTE_ARRAY");
+    assertEquals(expectedLen, decType.getTypeLength(),
+        "Avro fixed(10) decimal(20,2) must stay FIXED_LEN_BYTE_ARRAY(10), not narrow to 9");
   }
 }

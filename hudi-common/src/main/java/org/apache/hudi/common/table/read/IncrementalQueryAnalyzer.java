@@ -32,8 +32,11 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 
@@ -108,11 +111,13 @@ import java.util.stream.Stream;
  *
  * <p>IMPORTANT: the reader may optionally choose to fall back to reading the latest snapshot if there are files decoding the commit metadata are already cleaned.
  */
+@Slf4j
 public class IncrementalQueryAnalyzer {
+
   public static final String START_COMMIT_EARLIEST = "earliest";
-  private static final Logger LOG = LoggerFactory.getLogger(IncrementalQueryAnalyzer.class);
 
   private final HoodieTableMetaClient metaClient;
+  @Getter
   private final Option<String> startCompletionTime;
   private final Option<String> endCompletionTime;
   private final InstantRange.RangeType rangeType;
@@ -141,10 +146,6 @@ public class IncrementalQueryAnalyzer {
     this.skipInsertOverwrite = skipInsertOverwrite;
     this.readCdcFromChangelog = readCdcFromChangelog;
     this.limit = limit;
-  }
-
-  public Option<String> getStartCompletionTime() {
-    return startCompletionTime;
   }
 
   /**
@@ -206,7 +207,7 @@ public class IncrementalQueryAnalyzer {
       String endInstant = endCompletionTime.isEmpty() ? null : lastInstant;
       return QueryContext.create(startInstant, endInstant, instants, archivedInstants, activeInstants, filteredTimeline, archivedReadTimeline);
     } catch (Exception ex) {
-      LOG.error("Got exception when generating incremental query info", ex);
+      log.error("Got exception when generating incremental query info", ex);
       throw new HoodieException(ex);
     }
   }
@@ -284,6 +285,7 @@ public class IncrementalQueryAnalyzer {
   /**
    * Builder for {@link IncrementalQueryAnalyzer}.
    */
+  @NoArgsConstructor
   public static class Builder {
     /**
      * Start completion time.
@@ -303,9 +305,6 @@ public class IncrementalQueryAnalyzer {
      * Maximum number of instants to read per run.
      */
     private int limit = -1;
-
-    public Builder() {
-    }
 
     public Builder startCompletionTime(String startCompletionTime) {
       this.startCompletionTime = startCompletionTime;
@@ -361,9 +360,12 @@ public class IncrementalQueryAnalyzer {
   /**
    * Represents the analyzed query context.
    */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @Getter
   public static class QueryContext {
+
     public static final QueryContext EMPTY =
-        new QueryContext(null, null, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null);
+        new QueryContext(Option.empty(), Option.empty(), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null);
 
     /**
      * An empty option indicates consumption from the earliest instant.
@@ -373,6 +375,8 @@ public class IncrementalQueryAnalyzer {
      * An empty option indicates consumption to the latest instant.
      */
     private final Option<String> endInstant;
+    @Getter(AccessLevel.NONE)
+    private final List<String> instants;
     private final List<HoodieInstant> archivedInstants;
     private final List<HoodieInstant> activeInstants;
     /**
@@ -382,25 +386,9 @@ public class IncrementalQueryAnalyzer {
     /**
      * The archived timeline to read filtered by given configurations.
      */
+    @Nullable
+    @Getter(AccessLevel.NONE)
     private final HoodieTimeline archivedTimeline;
-    private final List<String> instants;
-
-    private QueryContext(
-        @Nullable String startInstant,
-        @Nullable String endInstant,
-        List<String> instants,
-        List<HoodieInstant> archivedInstants,
-        List<HoodieInstant> activeInstants,
-        HoodieTimeline activeTimeline,
-        @Nullable HoodieTimeline archivedTimeline) {
-      this.startInstant = Option.ofNullable(startInstant);
-      this.endInstant = Option.ofNullable(endInstant);
-      this.archivedInstants = archivedInstants;
-      this.activeInstants = activeInstants;
-      this.activeTimeline = activeTimeline;
-      this.archivedTimeline = archivedTimeline;
-      this.instants = instants;
-    }
 
     public static QueryContext create(
         @Nullable String startInstant,
@@ -410,7 +398,7 @@ public class IncrementalQueryAnalyzer {
         List<HoodieInstant> activeInstants,
         HoodieTimeline activeTimeline,
         @Nullable HoodieTimeline archivedTimeline) {
-      return new QueryContext(startInstant, endInstant, instants, archivedInstants, activeInstants, activeTimeline, archivedTimeline);
+      return new QueryContext(Option.ofNullable(startInstant), Option.ofNullable(endInstant), instants, archivedInstants, activeInstants, activeTimeline, archivedTimeline);
     }
 
     public boolean isEmpty() {
@@ -419,14 +407,6 @@ public class IncrementalQueryAnalyzer {
 
     public List<String> getInstantTimeList() {
       return this.instants;
-    }
-
-    public Option<String> getStartInstant() {
-      return startInstant;
-    }
-
-    public Option<String> getEndInstant() {
-      return endInstant;
     }
 
     /**
@@ -439,14 +419,6 @@ public class IncrementalQueryAnalyzer {
 
     public List<HoodieInstant> getInstants() {
       return Stream.concat(archivedInstants.stream(), activeInstants.stream()).collect(Collectors.toList());
-    }
-
-    public List<HoodieInstant> getArchivedInstants() {
-      return archivedInstants;
-    }
-
-    public List<HoodieInstant> getActiveInstants() {
-      return activeInstants;
     }
 
     public boolean isConsumingFromEarliest() {
@@ -487,10 +459,6 @@ public class IncrementalQueryAnalyzer {
                 .explicitInstants(new HashSet<>(instants))
                 .build());
       }
-    }
-
-    public HoodieTimeline getActiveTimeline() {
-      return this.activeTimeline;
     }
 
     public @Nullable HoodieTimeline getArchivedTimeline() {

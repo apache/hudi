@@ -647,6 +647,62 @@ class TestAWSGlueSyncClient {
     assertTrue(ex.getCause().getCause().getMessage().contains("Fail to drop partitions"));
   }
 
+  @Test
+  void testDropPartitions_IgnoresEntityNotFound() {
+    String tableName = "tbl";
+    List<String> toDrop = List.of("2025/05/19");
+
+    // Glue reports EntityNotFoundException for a partition that no longer exists; it should be ignored.
+    ErrorDetail detail = ErrorDetail.builder().errorCode(EntityNotFoundException.class.getSimpleName()).build();
+    PartitionError pe = PartitionError.builder().partitionValues(Arrays.asList("2025", "05", "19")).errorDetail(detail).build();
+    BatchDeletePartitionResponse resp = BatchDeletePartitionResponse.builder()
+        .errors(Collections.singletonList(pe))
+        .build();
+    when(mockAwsGlue.batchDeletePartition(any(BatchDeletePartitionRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(resp));
+
+    // should swallow the EntityNotFound error and not throw
+    awsGlueSyncClient.dropPartitions(tableName, toDrop);
+
+    verify(mockAwsGlue).batchDeletePartition(any(BatchDeletePartitionRequest.class));
+  }
+
+  @Test
+  void testDropPartitions_MixedErrorsStillThrow() {
+    String tableName = "tbl";
+    List<String> toDrop = Arrays.asList("2025/05/19", "2025/05/18");
+
+    // One ignorable EntityNotFound error and one real error -> should still throw for the real one.
+    PartitionError ignorable = PartitionError.builder()
+        .partitionValues(Arrays.asList("2025", "05", "19"))
+        .errorDetail(ErrorDetail.builder().errorCode(EntityNotFoundException.class.getSimpleName()).build())
+        .build();
+    PartitionError real = PartitionError.builder()
+        .partitionValues(Arrays.asList("2025", "05", "18"))
+        .errorDetail(ErrorDetail.builder().errorCode("InternalServiceException").build())
+        .build();
+    BatchDeletePartitionResponse resp = BatchDeletePartitionResponse.builder()
+        .errors(Arrays.asList(ignorable, real))
+        .build();
+    when(mockAwsGlue.batchDeletePartition(any(BatchDeletePartitionRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(resp));
+
+    HoodieGlueSyncException ex = assertThrows(
+        HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.dropPartitions(tableName, toDrop)
+    );
+    // Walk the full cause chain: the error list is nested a few wrappers deep.
+    StringBuilder chain = new StringBuilder();
+    for (Throwable t = ex; t != null; t = t.getCause()) {
+      chain.append(t.getMessage()).append('\n');
+    }
+    String messages = chain.toString();
+    assertTrue(messages.contains("Fail to drop partitions"));
+    // Only the real error should be surfaced, not the ignored EntityNotFound one.
+    assertTrue(messages.contains("InternalServiceException"));
+    assertFalse(messages.contains(EntityNotFoundException.class.getSimpleName()));
+  }
+
   @Disabled("Integration test – requires real AWS environment")
   @Test
   void testIntegrationTableExists_RealGlueEnvironment() {

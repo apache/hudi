@@ -27,18 +27,16 @@ import org.apache.hudi.exception.HoodieException;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 public class HoodieCleaner {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCleaner.class);
 
   /**
    * Config for Cleaner.
@@ -63,7 +61,7 @@ public class HoodieCleaner {
     this.cfg = cfg;
     this.jssc = jssc;
     this.props = props;
-    LOG.info("Creating Cleaner with configs : " + props.toString());
+    log.info("Creating Cleaner with configs : {}", props.toString());
   }
 
   public void run() {
@@ -124,6 +122,6 @@ public class HoodieCleaner {
       SparkAdapterSupport$.MODULE$.sparkAdapter().stopSparkContext(jssc, exitCode);
     }
 
-    LOG.info("Cleaner ran successfully");
+    log.info("Cleaner ran successfully");
   }
 }

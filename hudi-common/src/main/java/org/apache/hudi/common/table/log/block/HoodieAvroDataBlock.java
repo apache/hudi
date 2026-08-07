@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -507,9 +508,11 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       output.writeInt(records.size());
 
       // 3. Write the records
+      // schema is loop-invariant; intern it once (shared, cached) instead of rebuilding the HoodieSchema per record
+      HoodieSchema hoodieSchema = HoodieAvroSchemaCache.intern(schema);
       Iterator<HoodieRecord<?>> itr = records.iterator();
       while (itr.hasNext()) {
-        IndexedRecord s = itr.next().toIndexedRecord(HoodieSchema.fromAvroSchema(schema), new Properties()).get().getData();
+        IndexedRecord s = itr.next().toIndexedRecord(hoodieSchema, new Properties()).get().getData();
         ByteArrayOutputStream temp = new ByteArrayOutputStream();
         BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(temp, encoderCache.get());
         encoderCache.set(encoder);

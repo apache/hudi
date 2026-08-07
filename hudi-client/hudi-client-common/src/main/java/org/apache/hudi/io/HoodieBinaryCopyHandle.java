@@ -70,7 +70,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       try {
         ParquetUtils parquetUtils = new ParquetUtils();
         MessageType fileSchema = parquetUtils.readMessageType(table.getStorage(), inputFiles.get(0));
-        log.info("Binary copy schema evolution disabled. Using schema from input file: " + inputFiles.get(0));
+        log.info("Binary copy schema evolution disabled. Using schema from input file: {}", inputFiles.get(0));
         return fileSchema;
       } catch (Exception e) {
         log.error("Failed to read schema from input file", e);
@@ -109,8 +109,8 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
   }
 
   public void write() {
-    log.info("Start to merge source files " + this.inputFiles + " into target file: " + this.path
-        + ". Please pay attention that we will not rolling files based on max-file-size config during binary copy.");
+    log.info("Start to merge source files {} into target file: {}. Please pay attention that we will not rolling files based on max-file-size config during binary copy.",
+        this.inputFiles, this.path);
     HoodieTimer timer = HoodieTimer.start();
     long records = 0;
     try {
@@ -123,12 +123,12 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       this.recordsWritten = records;
       this.insertRecordsWritten = records;
     }
-    log.info("Finish rewriting " + this.path + ". Using " + timer.endTimer() + " mills");
+    log.info("Finish rewriting {}. Using {} mills", this.path, timer.endTimer());
   }
 
   @Override
   public List<WriteStatus> close() {
-    log.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
+    log.info("Closing the file {} as we are done with all the records {}", writeStatus.getFileId(), recordsWritten);
     try {
       this.writer.close();
 

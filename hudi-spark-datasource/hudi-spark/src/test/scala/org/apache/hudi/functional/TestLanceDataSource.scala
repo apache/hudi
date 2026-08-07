@@ -991,7 +991,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     // read_blob() on INLINE rows under DESCRIPTOR mode is unsupported by design: DESCRIPTOR
     // is metadata-only and the synthesized reference is an internal pointer into the .lance
     // file's storage layout, not user-facing metadata. BatchedBlobReader must throw with a
-    // message that names both INLINE and DESCRIPTOR so the failure is actionable.
+    // message that names INLINE, DESCRIPTOR and the CONTENT fix so the failure is actionable
     val viewName = s"${tableName}_view"
     spark.read.format("hudi")
       .option(modeKey, "DESCRIPTOR")
@@ -1004,8 +1004,8 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     })
     val msgChain = Iterator.iterate[Throwable](ex)(_.getCause).takeWhile(_ != null)
       .flatMap(t => Option(t.getMessage)).mkString(" | ")
-    assertTrue(msgChain.contains("INLINE") && msgChain.contains("DESCRIPTOR"),
-      s"error must mention INLINE and DESCRIPTOR; got: $msgChain")
+    assertTrue(Seq("INLINE", "DESCRIPTOR", "CONTENT").forall(msgChain.contains),
+      s"error must name INLINE, DESCRIPTOR and the CONTENT fix; got: $msgChain")
   }
 
   /**
@@ -1303,12 +1303,22 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
   /**
    * Compaction must preserve INLINE blob bytes under the DESCRIPTOR default. MOR compaction reads
-   * the base file via {@link HoodieSparkLanceReader}, which hard-pins CONTENT regardless of the
-   * user-facing {@code hoodie.read.blob.inline.mode}. If that pin were to honor the default
-   * (DESCRIPTOR), compaction would read null {@code data} and rewrite a base file without bytes,
-   * silently corrupting untouched rows. This test inserts INLINE blobs, upserts a subset to force
-   * compaction, and asserts that touched rows carry the new bytes while untouched rows retain the
-   * originals.
+   * the base file through the internal write-side reader stack
+   * SparkReaderContextFactory -> SparkFileFormatInternalRowReaderContext -> SparkLanceReaderBase,
+   * not through HoodieSparkLanceReader (that reader serves LanceUtils stats/key reads,
+   * bloom-index key lookups, and legacy HoodieWriteMergeHandle merges, with its own CONTENT pin).
+   * SparkLanceReaderBase honors {@code hoodie.read.blob.inline.mode}, whose DESCRIPTOR default
+   * would read null {@code data} and rewrite a base file without bytes, silently corrupting
+   * untouched rows. Correctness now relies on SparkReaderContextFactory pinning
+   * {@code hoodie.read.blob.inline.mode=CONTENT} in the broadcast conf used by all internal reads.
+   * User-facing queries are unaffected because they build their own conf.
+   *
+   * The test forces all rows into a single file group (coalesce(1) plus bulk-insert/insert
+   * shuffle parallelism 1) so the untouched rows genuinely go through the compaction rewrite.
+   * Without that, untouched rows land in log-free file groups that compaction never rewrites,
+   * which is how the original bug (#19232) stayed masked. This test inserts INLINE blobs,
+   * upserts a subset to force compaction, and asserts that touched rows carry the new bytes while
+   * untouched rows retain the originals.
    */
   @Test
   def testBlobInlineCompactionRoundTrip(): Unit = {
@@ -1332,7 +1342,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     def asInlineDf(idToBytes: Seq[(Int, Array[Byte])]): DataFrame = {
       val rawDf = idToBytes.toDF("id", "bytes")
         .select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
-      spark.createDataFrame(rawDf.rdd, canonicalSchema)
+      spark.createDataFrame(rawDf.rdd, canonicalSchema).coalesce(1)
     }
 
     // First commit: bulk_insert ids 0..5 with the initial pattern. Lands in a base file.
@@ -1340,7 +1350,9 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       asInlineDf(initialPayloads.zipWithIndex.map { case (b, i) => (i, b) }),
       saveMode = SaveMode.Overwrite,
       operation = Some("bulk_insert"),
-      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id",
+        "hoodie.bulkinsert.shuffle.parallelism" -> "1",
+        "hoodie.insert.shuffle.parallelism" -> "1"))
 
     assertLanceBlobEncoding(tablePath)
 
@@ -1366,9 +1378,9 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .getInstants.asScala
     val deltaCommits = completedInstants.filter(_.getAction == "deltacommit")
     assertTrue(deltaCommits.nonEmpty,
-      "Upsert must have written a deltacommit on MOR — without log files the compaction " +
+      "Upsert must have written a deltacommit on MOR -- without log files the compaction " +
         "round-trip below would be a no-op and the test would silently pass even if the " +
-        "CONTENT-pin in HoodieSparkLanceReader were broken.")
+        "CONTENT-pin in SparkReaderContextFactory were broken.")
     val compactionCommits = completedInstants.filter(_.getAction == "commit")
     assertTrue(compactionCommits.nonEmpty, "Compaction commit should be present after upsert")
 
@@ -1386,6 +1398,13 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     val fsView = viewManager.getFileSystemView(metaClient)
     try {
       fsView.loadAllPartitions()
+      // Pin the single-file-group invariant the whole test rests on. If rows ever spread across
+      // multiple file groups, the untouched ids could sit in log-free groups that compaction never
+      // rewrites, and the round-trip below would pass without exercising the regression (#19232).
+      assertEquals(1L, fsView.getAllFileGroups("").count(),
+        s"All rows must land in exactly one file group (coalesce(1) + shuffle parallelism 1) " +
+          s"at $tablePath; otherwise untouched ids may sit in log-free file groups that " +
+          s"compaction never rewrites and the regression is not exercised")
       val anyHadLogs = fsView.getAllFileGroups("").iterator().asScala.exists { fg =>
         fg.getAllFileSlices.iterator().asScala.exists(_.hasLogFiles)
       }
@@ -1422,11 +1441,34 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         s"DESCRIPTOR default should populate reference on plain read (id=$id)")
     }
 
-    // read_blob() under CONTENT mode is what we use to verify the post-compaction bytes
-    // because read_blob() on INLINE rows throws under the DESCRIPTOR default. The bytes can
-    // only come back if HoodieSparkLanceReader's CONTENT pin held during the compactor's
-    // base-file read — otherwise untouched ids 3..5 would have been rewritten with null
-    // `data` and CONTENT-mode read would surface that.
+    // Byte check via a plain projection under CONTENT. A broken rewrite could produce two shapes:
+    // - {INLINE, null data, populated reference}: a DESCRIPTOR-mode read leaked into the write
+    //   path. HoodieSparkLanceWriter.validateBlobRow rejects this shape and fails the compaction
+    //   itself, so it can never reach the base file.
+    // - {INLINE, null data, null reference}: legitimate for an empty inline blob, so the writer
+    //   guard lets it through. If a rewrite dropped the bytes this way, only the null-data
+    //   assertion below would catch it.
+    // The CONTENT pin on internal reads is unit-tested in TestSparkReaderContextFactory.
+    val contentRows = spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, contentRows.length)
+    contentRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertFalse(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"null data under CONTENT: the compaction rewrite dropped the bytes (id=$id)")
+      assertArrayEquals(expected(id),
+        payload.getAs[Array[Byte]](payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"INLINE data bytes must survive the compaction rewrite (id=$id)")
+    }
+
+    // read_blob() under CONTENT verifies the same bytes through the SQL expression path
+    // (read_blob() on INLINE rows throws under the DESCRIPTOR default, so CONTENT is
+    // required here).
     val viewName = s"${tableName}_view"
     spark.read.format("hudi")
       .option("hoodie.read.blob.inline.mode", "CONTENT")
@@ -1440,6 +1482,313 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       val bytes = row.getAs[Array[Byte]]("bytes")
       assertArrayEquals(expected(id), bytes,
         s"read_blob() must return correct bytes post-compaction (id=$id)")
+    }
+  }
+
+  /**
+   * Clustering must preserve INLINE blob bytes under the DESCRIPTOR default. Clustering rewrites
+   * ALL rows through MultipleSparkJobExecutionStrategy.readRecordsForGroupAsRow, which reads base
+   * files through the same internal write-side reader context as compaction
+   * (SparkReaderContextFactory -> SparkFileFormatInternalRowReaderContext -> SparkLanceReaderBase).
+   * Before SparkReaderContextFactory pinned {@code hoodie.read.blob.inline.mode=CONTENT} for
+   * internal reads, the first clustering of a Lance table with INLINE blobs read null {@code data}
+   * (the DESCRIPTOR default) and rewrote every row's blob with null bytes, silently losing all
+   * blob content (#19232). This test bulk-inserts INLINE blobs, triggers inline clustering,
+   * asserts a replacecommit actually completed, and verifies every row's bytes survived.
+   */
+  @Test
+  def testBlobInlineClusteringRoundTrip(): Unit = {
+    val tableType = HoodieTableType.COPY_ON_WRITE
+    val tableName = "test_lance_blob_inline_cluster_cow"
+    val tablePath = s"$basePath/$tableName"
+
+    val payloadLen = 1024
+    val numRows = 5
+    val expectedPayloads: Seq[Array[Byte]] = (0 until numRows).map { i =>
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
+    }
+    val sparkSess = spark
+    import sparkSess.implicits._
+
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    def asInlineDf(idToBytes: Seq[(Int, Array[Byte])]): DataFrame = {
+      val rawDf = idToBytes.toDF("id", "bytes")
+        .select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
+      spark.createDataFrame(rawDf.rdd, canonicalSchema)
+    }
+
+    // First commit: bulk_insert ids 0..4 with the initial pattern into a base file.
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(expectedPayloads.zipWithIndex.map { case (b, i) => (i, b) }),
+      saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+
+    assertLanceBlobEncoding(tablePath)
+
+    // Snapshot the first commit's base file(s); the disjointness check below uses them to prove
+    // clustering rewrote (not skipped) them, else the byte checks pass on stale bytes (#19232).
+    val metaClientAfterFirst = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val preClusterBaseFiles = latestBaseFileNames(metaClientAfterFirst, tablePath)
+    assertFalse(preClusterBaseFiles.isEmpty, "First commit should have written at least one base file")
+
+    // Second commit: a small bulk_insert that trips inline clustering (max.commits=1). Clustering
+    // rewrites the existing base file's rows through readRecordsForGroupAsRow, which must read the
+    // INLINE bytes as CONTENT, not the DESCRIPTOR default, or every rewritten row loses its bytes.
+    val extraPayloads = (numRows until numRows + 2).map { i =>
+      (i, (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray)
+    }
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(extraPayloads),
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id",
+        "hoodie.clustering.inline" -> "true",
+        "hoodie.clustering.inline.max.commits" -> "1"))
+
+    // Require a COMPLETED replacecommit. getLastClusteringInstant filters by action only, so a
+    // REQUESTED/INFLIGHT instant satisfies isPresent; isCompleted confirms the rewrite finished.
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val lastClustering = metaClient.getActiveTimeline.getLastClusteringInstant
+    assertTrue(lastClustering.isPresent && lastClustering.get.isCompleted,
+      "A COMPLETED clustering (replacecommit) instant must exist after inline clustering; without a " +
+        "completed rewrite the blob-loss regression below could not be exercised")
+
+    // ...and that it rewrote the base file(s) into new ones. Disjoint sets prove the rewrite ran
+    // instead of the byte checks reading untouched originals (#19232).
+    val postClusterBaseFiles = latestBaseFileNames(metaClient, tablePath)
+    assertTrue(preClusterBaseFiles.intersect(postClusterBaseFiles).isEmpty,
+      s"Post-clustering base files must be disjoint from the pre-clustering base file(s), proving the " +
+        s"rewrite ran (pre=$preClusterBaseFiles, post=$postClusterBaseFiles)")
+
+    // Read back in CONTENT mode and assert every row's bytes survived the clustering rewrite.
+    val allExpected: Map[Int, Array[Byte]] =
+      (expectedPayloads.zipWithIndex.map { case (b, i) => i -> b } ++ extraPayloads).toMap
+
+    // Byte check via a plain projection under CONTENT. As in the compaction test: a DESCRIPTOR
+    // leak already fails the rewrite in HoodieSparkLanceWriter.validateBlobRow, so what this
+    // catches is the guard-allowed empty-inline shape {INLINE, null data, null reference},
+    // where dropped bytes would persist silently.
+    val contentRows = spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(allExpected.size, contentRows.length)
+    contentRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertFalse(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"null data under CONTENT: the clustering rewrite dropped the bytes (id=$id)")
+      assertArrayEquals(allExpected(id),
+        payload.getAs[Array[Byte]](payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"INLINE data bytes must survive the clustering rewrite (id=$id)")
+    }
+
+    val viewName = s"${tableName}_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+    val materialized = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+    assertEquals(allExpected.size, materialized.length)
+    materialized.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val bytes = row.getAs[Array[Byte]]("bytes")
+      assertArrayEquals(allExpected(id), bytes,
+        s"read_blob() must return correct bytes post-clustering (id=$id)")
+    }
+  }
+
+  /**
+   * A CoW upsert merge must preserve INLINE blob bytes under the DESCRIPTOR default.
+   *
+   * Compaction and clustering (covered above) obtain their reader through
+   * {@code HoodieEngineContext.getReaderContextFactory}. A CoW upsert takes a different path: it
+   * rewrites the base file through FileGroupReaderBasedMergeHandle, which resolves its reader
+   * through {@code getReaderContextFactoryForWrite}. That method branches on the record merger
+   * type: AvroReaderContextFactory for AVRO, SparkReaderContextFactory for SPARK (the datasource
+   * default, used here). A DESCRIPTOR leak on this branch would rewrite untouched rows with null
+   * {@code data}, the same silent loss as #19232.
+   *
+   * The test bulk-inserts INLINE blobs into a single file group, upserts a subset, proves the
+   * merge rewrote the base file, and verifies touched rows carry the new bytes while untouched
+   * rows keep the originals.
+   */
+  @Test
+  def testBlobInlineCowUpsertMergeRoundTrip(): Unit = {
+    val tableType = HoodieTableType.COPY_ON_WRITE
+    val tableName = "test_lance_blob_inline_upsert_merge_cow"
+    val tablePath = s"$basePath/$tableName"
+
+    val payloadLen = 1024
+    val numRows = 6
+    val initialPayloads: Seq[Array[Byte]] = (0 until numRows).map { i =>
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
+    }
+    val sparkSess = spark
+    import sparkSess.implicits._
+
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    def asInlineDf(idToBytes: Seq[(Int, Array[Byte])]): DataFrame = {
+      val rawDf = idToBytes.toDF("id", "bytes")
+        .select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
+      spark.createDataFrame(rawDf.rdd, canonicalSchema).coalesce(1)
+    }
+
+    // First commit: bulk_insert ids 0..5 into a single base file. A single file group is required
+    // so the untouched ids 3..5 genuinely pass through the merge rewrite; in their own group the
+    // upsert would never touch them and the byte checks below would pass vacuously.
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(initialPayloads.zipWithIndex.map { case (b, i) => (i, b) }),
+      saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id",
+        "hoodie.bulkinsert.shuffle.parallelism" -> "1",
+        "hoodie.insert.shuffle.parallelism" -> "1"))
+
+    assertLanceBlobEncoding(tablePath)
+
+    val metaClientAfterFirst = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val preUpsertBaseFiles = latestBaseFileNames(metaClientAfterFirst, tablePath)
+    assertEquals(1, preUpsertBaseFiles.size,
+      s"All rows must land in exactly one base file (coalesce(1) + shuffle parallelism 1) at " +
+        s"$tablePath, got $preUpsertBaseFiles; otherwise untouched ids sit in file groups the " +
+        s"upsert never rewrites and the merge path is not exercised")
+
+    // Second commit: upsert ids 0..2 with all-0xEE payloads. On CoW this routes every existing
+    // file-group record through the merge handle's CONTENT-pinned base-file read and rewrite.
+    val updatedPayloadByte: Byte = 0xEE.toByte
+    val updatedIds = 0 until 3
+    val updatedPayloads = updatedIds.map(i => (i, Array.fill[Byte](payloadLen)(updatedPayloadByte)))
+    writeDataframe(tableType, tableName, tablePath,
+      asInlineDf(updatedPayloads),
+      operation = Some("upsert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id"))
+
+    // The upsert must have stayed on the CoW commit path: two completed commits, no deltacommits
+    // (a deltacommit would mean an append path that never rewrites the base file).
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+    val completedInstants = metaClient.reloadActiveTimeline().filterCompletedInstants()
+      .getInstants.asScala
+    assertEquals(2, completedInstants.count(_.getAction == "commit"),
+      "Expected exactly two completed commits (bulk_insert + upsert) on CoW")
+    assertTrue(completedInstants.forall(_.getAction != "deltacommit"),
+      "CoW upsert must not write deltacommits; the merge rewrite would not be exercised")
+
+    // The merge must also have replaced the base file: a single new name, disjoint from the
+    // pre-upsert one. If the old name were still the latest, the untouched ids were never
+    // merged and the byte checks below would read stale bytes.
+    val postUpsertBaseFiles = latestBaseFileNames(metaClient, tablePath)
+    assertEquals(1, postUpsertBaseFiles.size,
+      s"Upsert must keep all rows in one file group, got $postUpsertBaseFiles")
+    assertTrue(preUpsertBaseFiles.intersect(postUpsertBaseFiles).isEmpty,
+      s"Post-upsert base file must differ from the pre-upsert one, proving the merge rewrote it " +
+        s"(pre=$preUpsertBaseFiles, post=$postUpsertBaseFiles)")
+
+    val expected: Map[Int, Array[Byte]] = (
+      updatedIds.map(i => i -> Array.fill[Byte](payloadLen)(updatedPayloadByte)) ++
+        (updatedIds.length until numRows).map(i => i -> initialPayloads(i))
+      ).toMap
+
+    // Plain read yields the DESCRIPTOR shape, confirming the user-facing default end-to-end.
+    val readRows = spark.read.format("hudi")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, readRows.length)
+    readRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertEquals(HoodieSchema.Blob.INLINE,
+        payload.getString(payload.fieldIndex(HoodieSchema.Blob.TYPE)),
+        s"Type must remain INLINE post-merge (id=$id)")
+      assertTrue(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"DESCRIPTOR default should null `data` on plain read (id=$id)")
+      assertNotNull(payload.getStruct(payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)),
+        s"DESCRIPTOR default should populate reference on plain read (id=$id)")
+    }
+
+    // Byte check via a plain projection under CONTENT. As in the compaction test: a DESCRIPTOR
+    // leak already fails the merge in HoodieSparkLanceWriter.validateBlobRow, so what this
+    // catches is the guard-allowed empty-inline shape {INLINE, null data, null reference},
+    // where dropped bytes would persist silently.
+    val contentRows = spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .select($"id", $"payload")
+      .orderBy($"id")
+      .collect()
+    assertEquals(numRows, contentRows.length)
+    contentRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val payload = row.getStruct(row.fieldIndex("payload"))
+      assertFalse(payload.isNullAt(payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"null data under CONTENT: the merge rewrite dropped the bytes (id=$id)")
+      assertArrayEquals(expected(id),
+        payload.getAs[Array[Byte]](payload.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)),
+        s"INLINE data bytes must survive the merge rewrite (id=$id)")
+    }
+
+    // read_blob() under CONTENT verifies the same bytes through the SQL expression path.
+    val viewName = s"${tableName}_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+    val materializedRows = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+    assertEquals(numRows, materializedRows.length)
+    materializedRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val bytes = row.getAs[Array[Byte]]("bytes")
+      assertArrayEquals(expected(id), bytes,
+        s"read_blob() must return correct bytes post-merge (id=$id)")
+    }
+  }
+
+  /**
+   * Latest base file name per file group under {@code tablePath}. Snapshots taken before and
+   * after a rewriting table service (clustering, CoW upsert merge) are compared for disjointness
+   * to prove the rewrite actually replaced the base file(s).
+   */
+  private def latestBaseFileNames(mc: HoodieTableMetaClient, tablePath: String): Set[String] = {
+    val engineContext = new HoodieLocalEngineContext(mc.getStorageConf)
+    val metadataConfig = HoodieMetadataConfig.newBuilder.build
+    val viewManager = FileSystemViewManager.createViewManager(
+      engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
+      HoodieCommonConfig.newBuilder.build,
+      (m: HoodieTableMetaClient) => mc.getTableFormat
+        .getMetadataFactory.create(engineContext, m.getStorage, metadataConfig, tablePath))
+    val fsView = viewManager.getFileSystemView(mc)
+    try {
+      fsView.getLatestBaseFiles("")
+        .collect(Collectors.toList[org.apache.hudi.common.model.HoodieBaseFile])
+        .asScala.map(_.getFileName).toSet
+    } finally {
+      fsView.close()
     }
   }
 
@@ -1981,6 +2330,253 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     writer.mode(saveMode).save(tablePath)
   }
+
+  // The small-n blob tests above all read fewer than 512 rows, so they never cross Lance's
+  // internal BLOB page boundary (512 rows). BLOB reads regress specifically once a single base
+  // file holds more than 512 rows: a single Lance readAll stream then exports a second BLOB page
+  // through the Arrow C FFI, which panics in lance-core 4.0.0. These tests size the base file
+  // above 512 rows (single coalesced file) to exercise the chunked-read work-around.
+  private val BATCH_SCALE_ROWS = 1000
+  private val BATCH_SCALE_PARALLELISM_OPTS = Map(
+    "hoodie.bulkinsert.shuffle.parallelism" -> "1",
+    "hoodie.insert.shuffle.parallelism" -> "1")
+
+  /**
+   * Batch-scale INLINE BLOB read regression (HUDI-UNSTRUCTURED-001). Writes
+   * {@code BATCH_SCALE_ROWS} inline-blob rows into a single Lance base file and reads them back
+   * under CONTENT mode, materializing each via {@code read_blob()}. Reproduces the native Lance
+   * BLOB decoder failure that only surfaces once the read crosses the 512-row batch boundary.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBlobInlineContentBatchScale(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_blob_inline_batch_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    val payloadLen = 256
+    val n = BATCH_SCALE_ROWS
+    val sparkSess = spark
+    import sparkSess.implicits._
+    // Deterministic per-row payload: row i -> bytes (i + j) % 256, so a row/byte misalignment
+    // across the batch boundary surfaces as a byte mismatch rather than silently passing.
+    def payloadFor(i: Int): Array[Byte] =
+      (0 until payloadLen).map(j => ((i + j) % 256).toByte).toArray
+    val baseDf = (0 until n).map(i => (i, payloadFor(i)))
+      .toDF("id", "bytes")
+      .coalesce(1)
+    val rawDf = baseDf.select($"id", BlobTestHelpers.inlineBlobStructCol("payload", $"bytes"))
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    val df = spark.createDataFrame(rawDf.rdd, canonicalSchema).coalesce(1)
+
+    writeDataframe(tableType, tableName, tablePath, df, saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id") ++ BATCH_SCALE_PARALLELISM_OPTS)
+
+    assertLanceBlobEncoding(tablePath)
+    assertSingleLanceBaseFileSpansMultipleBatches(tablePath)
+
+    val viewName = s"${tableName}_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+    val materialized = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+    assertEquals(n, materialized.length, "row count mismatch after read_blob at batch scale")
+    materialized.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val bytes = row.getAs[Array[Byte]]("bytes")
+      assertArrayEquals(payloadFor(id), bytes, s"inline read_blob() bytes mismatch for id=$id")
+    }
+  }
+
+  /**
+   * Comprehensive batch-scale VECTOR + OUT_OF_LINE BLOB regression (HUDI-UNSTRUCTURED-002 and 003).
+   * Parameterized over table type and {@code n} in {100, 1000}; n=1000 crosses the 512-row BLOB page
+   * boundary that trips the lance-core FFI panic without the chunked-read fix. Writes one Lance base
+   * file with a VECTOR(32) and an OUT_OF_LINE BLOB column, then validates across DataFrame and SQL
+   * reads: row count; exact vector values (incl. rows straddling the boundary); top-k IDs via
+   * {@code hudi_vector_search}; column projection and id-range filtering; {@code read_blob()} bytes +
+   * SHA-256 (full and filtered); and DESCRIPTOR-mode reference pass-through. Default Lance read
+   * allocator (256MB) suffices — no non-default settings required.
+   */
+  @ParameterizedTest
+  @MethodSource(Array("vectorBlobBatchParams"))
+  def testVectorAndBlobBatchScale(tableType: HoodieTableType, n: Int): Unit = {
+    val tableName = s"test_lance_vec_blob_batch_${n}_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    val dim = 32
+    val payloadLen = 512
+    val externalDir = Files.createDirectories(
+      Paths.get(s"$basePath/_vec_blob_ext_${n}_${tableType.name().toLowerCase}"))
+    val extPath = BlobTestHelpers.createTestFile(externalDir, "vec_blob.bin", n * payloadLen)
+
+    val sparkSess = spark
+    import sparkSess.implicits._
+    // Deterministic, strictly monotonic-by-id vector: row i -> [(i*dim+j)/1000f]. Monotonicity
+    // makes nearest-neighbor ordering predictable; per-row distinctness makes a row/value
+    // misalignment across the batch boundary surface as a value (or top-k) mismatch.
+    def vectorFor(i: Int): Array[Float] = (0 until dim).map(j => (i * dim + j) / 1000.0f).toArray
+    // Deterministic blob bytes for row i: (i*payloadLen + k) % 256, matching assertBytesContent.
+    def expectedBlob(i: Int): Array[Byte] =
+      (0 until payloadLen).map(k => ((i * payloadLen + k) % 256).toByte).toArray
+    def sha256(bytes: Array[Byte]): Seq[Byte] =
+      java.security.MessageDigest.getInstance("SHA-256").digest(bytes).toSeq
+
+    val baseDf = (0 until n)
+      .map(i => (i, vectorFor(i), extPath, (i.toLong * payloadLen), payloadLen.toLong))
+      .toDF("id", "embedding", "path", "offset", "length")
+      .coalesce(1)
+    val rawDf = baseDf.select($"id", $"embedding",
+      BlobTestHelpers.blobStructCol("payload", $"path", $"offset", $"length"))
+    val vectorMeta = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, s"VECTOR($dim)").build()
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("embedding", ArrayType(FloatType, containsNull = false), nullable = false,
+        vectorMeta),
+      StructField("payload", BlobType().asInstanceOf[StructType], nullable = true,
+        BlobTestHelpers.blobMetadata)
+    ))
+    val df = spark.createDataFrame(rawDf.rdd, canonicalSchema).coalesce(1)
+
+    writeDataframe(tableType, tableName, tablePath, df, saveMode = SaveMode.Overwrite,
+      operation = Some("bulk_insert"),
+      extraOptions = Map(PRECOMBINE_FIELD.key() -> "id") ++ BATCH_SCALE_PARALLELISM_OPTS)
+
+    if (n > 512) {
+      assertSingleLanceBaseFileSpansMultipleBatches(tablePath)
+    }
+
+    // --- Vectors (DataFrame path): row count + exact values on a sample straddling the boundary.
+    val vecRows = spark.read.format("hudi").load(tablePath)
+      .select($"id", $"embedding").orderBy($"id").collect()
+    assertEquals(n, vecRows.length, "vector row count mismatch at batch scale")
+    val sampleIds = (Seq(0, 1, n / 2, n - 1) ++ (if (n > 512) Seq(511, 512, 513) else Seq.empty))
+      .filter(i => i >= 0 && i < n).distinct
+    val vecById = vecRows.map(r => r.getInt(r.fieldIndex("id")) -> r).toMap
+    sampleIds.foreach { id =>
+      val emb = vecById(id).getSeq[Float](vecById(id).fieldIndex("embedding")).toArray
+      assertEquals(dim, emb.length, s"vector dim mismatch for id=$id")
+      val expected = vectorFor(id)
+      (0 until dim).foreach { j =>
+        assertEquals(expected(j), emb(j), 1e-6f, s"vector value mismatch id=$id j=$j")
+      }
+    }
+
+    // --- Top-k vector search IDs: query near row q nudged toward higher ids by a small delta so
+    // the L2 ordering is strict (q, q+1, q-1). hudi_vector_search must return those exact IDs.
+    val tkView = s"${tableName}_tk"
+    spark.read.format("hudi").load(tablePath)
+      .select("id", "embedding").createOrReplaceTempView(tkView)
+    val q = n / 2
+    val delta = 0.005f
+    val queryLiteral = vectorFor(q).map(v => (v + delta).toDouble).mkString(", ")
+    val topk = spark.sql(
+      s"""SELECT id, _hudi_distance
+         |FROM hudi_vector_search('$tkView', 'embedding', ARRAY($queryLiteral), 3, 'l2')
+         |ORDER BY _hudi_distance""".stripMargin).collect()
+    val topkIds = topk.map(_.getInt(0)).toSeq
+    assertEquals(Seq(q, q + 1, q - 1), topkIds,
+      s"top-3 vector-search IDs mismatch for query near id=$q")
+
+    // --- Projection (id only) and predicate filter (id range) correctness.
+    val idOnly = spark.read.format("hudi").load(tablePath).select("id")
+    assertEquals(1, idOnly.schema.fields.length, "projection should yield a single column")
+    // collect() (not count()) so the id column is actually projected/read; a count() would push an
+    // empty required schema down the scan, a separate code path not under test here.
+    val idOnlyVals = idOnly.collect().map(_.getInt(0)).toSet
+    assertEquals((0 until n).toSet, idOnlyVals, "projected id set mismatch")
+    // For n=1000 choose a range that straddles the 512-row batch boundary (400..620).
+    val lo = if (n > 512) 400 else n / 4
+    val hi = math.min(n, lo + (if (n > 512) 220 else 30))
+    val filteredIds = spark.read.format("hudi").load(tablePath)
+      .where(s"id >= $lo AND id < $hi").select("id").orderBy("id")
+      .collect().map(_.getInt(0)).toSeq
+    assertEquals((lo until hi).toSeq, filteredIds, "filtered id range mismatch")
+
+    // --- Blobs (SQL path, CONTENT): full-scan read_blob byte content + SHA-256 round-trip.
+    val viewName = s"${tableName}_view"
+    spark.read.format("hudi")
+      .option("hoodie.read.blob.inline.mode", "CONTENT")
+      .load(tablePath)
+      .createOrReplaceTempView(viewName)
+    val blobRows = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName ORDER BY id").collect()
+    assertEquals(n, blobRows.length, "blob row count mismatch at batch scale")
+    blobRows.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      val bytes = row.getAs[Array[Byte]]("bytes")
+      assertEquals(payloadLen, bytes.length, s"blob length mismatch for id=$id")
+      BlobTestHelpers.assertBytesContent(bytes, expectedOffset = id * payloadLen)
+    }
+    // SHA-256 round-trip on a sample (faithful to the AC's SHA256 requirement).
+    val blobById = blobRows.map(r => r.getInt(r.fieldIndex("id")) -> r.getAs[Array[Byte]]("bytes")).toMap
+    sampleIds.foreach { id =>
+      assertEquals(sha256(expectedBlob(id)), sha256(blobById(id)),
+        s"blob SHA-256 mismatch for id=$id")
+    }
+
+    // --- Blobs under a filter (SQL path, CONTENT): read_blob restricted to an id range.
+    val filteredBlobs = spark.sql(
+      s"SELECT id, read_blob(payload) AS bytes FROM $viewName WHERE id >= $lo AND id < $hi ORDER BY id")
+      .collect()
+    assertEquals(hi - lo, filteredBlobs.length, "filtered read_blob count mismatch")
+    filteredBlobs.foreach { row =>
+      val id = row.getInt(row.fieldIndex("id"))
+      assertEquals(sha256(expectedBlob(id)), sha256(row.getAs[Array[Byte]]("bytes")),
+        s"filtered blob SHA-256 mismatch for id=$id")
+    }
+
+    // --- DESCRIPTOR-mode read at scale: exercises the chunked reader WITH the blob transform
+    // (re-initialized per chunk). OUT_OF_LINE references must pass through intact on both sides of
+    // the batch boundary.
+    val descRows = spark.read.format("hudi").option("hoodie.read.blob.inline.mode", "DESCRIPTOR")
+      .load(tablePath).select($"id", $"payload").orderBy($"id").collect()
+    val descById = descRows.map(r => r.getInt(r.fieldIndex("id")) -> r).toMap
+    sampleIds.foreach { id =>
+      val payload = descById(id).getStruct(descById(id).fieldIndex("payload"))
+      assertEquals(HoodieSchema.Blob.OUT_OF_LINE,
+        payload.getString(payload.fieldIndex(HoodieSchema.Blob.TYPE)), s"type mismatch id=$id")
+      val ref = payload.getStruct(payload.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE))
+      assertTrue(ref.getString(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH))
+        .endsWith(".bin"), s"external_path mismatch id=$id")
+      assertEquals(id.toLong * payloadLen,
+        ref.getLong(ref.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET)),
+        s"reference offset mismatch id=$id")
+    }
+  }
+
+  /**
+   * Guards the batch-scale tests' core assumption: exactly one Lance base file holds all rows and
+   * that file has more rows than a single Arrow read batch (512). If a future change splits the
+   * write across files or shrinks the row count below the batch size, the cross-batch drain path
+   * would no longer be exercised and the regression would silently stop reproducing.
+   */
+  private def assertSingleLanceBaseFileSpansMultipleBatches(tablePath: String): Unit = {
+    val lanceFiles = Files.walk(Paths.get(tablePath))
+      .filter(p => p.toString.endsWith(".lance"))
+      .collect(Collectors.toList[java.nio.file.Path]).asScala
+    assertEquals(1, lanceFiles.length,
+      s"expected exactly one Lance base file, found: ${lanceFiles.mkString(", ")}")
+    val allocator = new RootAllocator(64L * 1024 * 1024)
+    try {
+      val reader = LanceFileReader.open(lanceFiles.head.toString, allocator)
+      try {
+        assertTrue(reader.numRows() > 512,
+          s"base file must span >512 rows to cross a batch boundary, got ${reader.numRows()}")
+      } finally {
+        reader.close()
+      }
+    } finally {
+      allocator.close()
+    }
+  }
 }
 
 object TestLanceDataSource {
@@ -1990,6 +2586,18 @@ object TestLanceDataSource {
       tableType <- HoodieTableType.values()
       readMode <- Array(null, "CONTENT", "DESCRIPTOR")
     } yield Arguments.of(tableType, readMode: java.lang.String)
+    java.util.stream.Stream.of(params: _*)
+  }
+
+  /**
+   * Cross-product of table types and row counts for the VECTOR+BLOB batch-scale suite. n=100 stays
+   * within one Arrow batch; n=1000 crosses the 512-row Lance BLOB page boundary.
+   */
+  def vectorBlobBatchParams(): java.util.stream.Stream[Arguments] = {
+    val params = for {
+      tableType <- HoodieTableType.values()
+      n <- Array(100, 1000)
+    } yield Arguments.of(tableType, n: java.lang.Integer)
     java.util.stream.Stream.of(params: _*)
   }
 }

@@ -32,6 +32,7 @@ import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.util.Lazy;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
@@ -41,8 +42,6 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -62,8 +61,9 @@ import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far.
  */
+@Slf4j
 public class HoodieDeleteBlock extends HoodieLogBlock {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieDeleteBlock.class);
+
   /**
    * These static builders are added to avoid performance issue in Avro 1.10.
    * You can find more details in HoodieAvroUtils, HUDI-3834, and AVRO-3048.

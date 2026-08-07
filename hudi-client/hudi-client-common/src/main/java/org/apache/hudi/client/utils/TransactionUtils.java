@@ -89,8 +89,7 @@ public class TransactionUtils {
         try {
           ConcurrentOperation otherOperation = new ConcurrentOperation(instant, table.getMetaClient());
           if (resolutionStrategy.hasConflict(thisOperation, otherOperation)) {
-            log.info("Conflict encountered between current instant = " + thisOperation + " and instant = "
-                + otherOperation + ", attempting to resolve it...");
+            log.info("Conflict encountered between current instant = {} and instant = {}, attempting to resolve it...", thisOperation, otherOperation);
             resolutionStrategy.resolveConflict(table, thisOperation, otherOperation);
           }
         } catch (IOException io) {

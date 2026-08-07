@@ -109,7 +109,7 @@ public class LockManager implements Serializable, AutoCloseable {
   public synchronized LockProvider getLockProvider() {
     // Perform lazy initialization of lock provider only if needed
     if (lockProvider == null) {
-      log.info("LockProvider " + writeConfig.getLockProviderClass());
+      log.info("LockProvider {}", writeConfig.getLockProviderClass());
       
       // Try to load lock provider with HoodieLockMetrics constructor first
       Class<?>[] metricsConstructorTypes = {LockConfiguration.class, StorageConfiguration.class, HoodieLockMetrics.class};

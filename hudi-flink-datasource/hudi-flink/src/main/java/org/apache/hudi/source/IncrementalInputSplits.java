@@ -147,7 +147,7 @@ public class IncrementalInputSplits implements Serializable {
     IncrementalQueryAnalyzer.QueryContext analyzingResult = analyzer.analyze();
 
     if (analyzingResult.isEmpty()) {
-      log.info("No new instant found for the table under path " + path + ", skip reading");
+      log.info("No new instant found for the table under path {}, skip reading", path);
       return Result.EMPTY;
     }
     final HoodieTimeline commitTimeline = analyzingResult.getActiveTimeline();
@@ -184,7 +184,12 @@ public class IncrementalInputSplits implements Serializable {
         return Result.EMPTY;
       }
       fileInfoList = fileIndex.getFilesInPartitions();
-      List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
+      // Use the full commits-and-compaction timeline rather than the (possibly compaction-filtered)
+      // activeTimeline carried by the QueryContext. Otherwise, on a MOR table with
+      // 'read.streaming.skip_compaction = true', file slice boundaries would be wrongly
+      // computed and log files could be missed, causing data loss.
+      List<FileSlice> allFileSlices = getFileSlices(metaClient, getFullCommitsTimeline(metaClient),
+          readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
       fileSlices = fileIndex.filterFileSlices(allFileSlices);
     } else {
       if (cdcEnabled) {
@@ -217,7 +222,11 @@ public class IncrementalInputSplits implements Serializable {
           return Result.EMPTY;
         }
         fileInfoList = fileIndex.getFilesInPartitions();
-        List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
+        // Same reason as the full-table-scan branch above: build the FileSystemView with the
+        // complete commits-and-compaction timeline to avoid losing data when 'skip_compaction'
+        // is enabled.
+        List<FileSlice> allFileSlices = getFileSlices(metaClient, getFullCommitsTimeline(metaClient),
+            readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
         fileSlices = fileIndex.filterFileSlices(allFileSlices);
       } else {
         fileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, files, analyzingResult.getMaxCompletionTime(), false);
@@ -267,7 +276,7 @@ public class IncrementalInputSplits implements Serializable {
     IncrementalQueryAnalyzer.QueryContext queryContext = analyzer.analyze();
 
     if (queryContext.isEmpty()) {
-      log.info("No new instant found for the table under path " + path + ", skip reading");
+      log.info("No new instant found for the table under path {}, skip reading", path);
       return Result.EMPTY;
     }
 
@@ -295,7 +304,10 @@ public class IncrementalInputSplits implements Serializable {
         log.warn("No files found for reading under path: {}", path);
         return Result.EMPTY;
       }
-      List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, pathInfoList, offsetToIssue, false);
+      // Same reason as the batch full-table-scan branch:
+      // see getFullCommitsTimeline() for why a compaction-filtered timeline must not be used here.
+      List<FileSlice> allFileSlices = getFileSlices(metaClient, getFullCommitsTimeline(metaClient),
+          readPartitions, pathInfoList, offsetToIssue, false);
       List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices);
 
       List<MergeOnReadInputSplit> inputSplits = getInputSplits(fileSlices, metaClient, endInstant, null);
@@ -391,6 +403,23 @@ public class IncrementalInputSplits implements Serializable {
     return getInputSplits(fileSlices, metaClient, endInstant, instantRange);
   }
 
+  /**
+   * Returns the full commit timeline (including completed compaction instants) for building
+   * a {@link HoodieTableFileSystemView} during full table scan.
+   *
+   * <p>NOTE: when streaming/batch read enables {@code skip_compaction}, the {@code activeTimeline}
+   * carried by {@link IncrementalQueryAnalyzer.QueryContext} has already filtered out the
+   * compaction instants. Using such a partial timeline to construct a {@link HoodieTableFileSystemView}
+   * would mis-classify the file slice boundaries on a MOR table (since file slice boundaries
+   * are derived from compaction instants), leading to data loss when reading from the earliest
+   * or after start commit got archived. For full table scan we should always rely on the
+   * complete commits-and-compaction timeline; the {@code skip_compaction} semantics is preserved
+   * by the instant range filtering applied later on the generated input splits.
+   */
+  private static HoodieTimeline getFullCommitsTimeline(HoodieTableMetaClient metaClient) {
+    return metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
+  }
+
   private List<FileSlice> getFileSlices(
       HoodieTableMetaClient metaClient,
       HoodieTimeline commitTimeline,
@@ -472,8 +501,7 @@ public class IncrementalInputSplits implements Serializable {
       double total = partitions.size();
       double selectedNum = selectedPartitions.size();
       double percentPruned = total == 0 ? 0 : (1 - selectedNum / total) * 100;
-      log.info("Selected " + selectedNum + " partitions out of " + total
-          + ", pruned " + percentPruned + "% partitions.");
+      log.info("Selected {} partitions out of {}, pruned {}% partitions.", selectedNum, total, percentPruned);
       return selectedPartitions;
     }
     return partitions;

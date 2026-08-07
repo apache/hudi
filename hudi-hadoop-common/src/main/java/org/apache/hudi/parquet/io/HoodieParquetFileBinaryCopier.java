@@ -315,7 +315,7 @@ public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase i
         }
         return new PrefetchResult(targetBuffer, requiredSize);
       } catch (IOException e) {
-        log.error("Failed to prefetch file: " + fileToPrefetch, e);
+        log.error("Failed to prefetch file: {}", fileToPrefetch, e);
         throw new RuntimeException(e);
       }
     }, prefetchExecutor);

@@ -19,6 +19,9 @@
 
 package org.apache.hudi.common.table.log;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.util.List;
 
 /**
@@ -26,17 +29,11 @@ import java.util.List;
  * That is, the comparison between a record key and an element
  * of the set is {@link String#equals}.
  */
+@AllArgsConstructor
+@Getter
 public class FullKeySpec implements KeySpec {
+
   private final List<String> keys;
-
-  public FullKeySpec(List<String> keys) {
-    this.keys = keys;
-  }
-
-  @Override
-  public List<String> getKeys() {
-    return keys;
-  }
 
   @Override
   public boolean isFullKey() {

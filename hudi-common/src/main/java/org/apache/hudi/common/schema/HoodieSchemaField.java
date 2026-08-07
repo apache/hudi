@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 
 import java.io.Serializable;
@@ -55,6 +56,7 @@ public class HoodieSchemaField implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
+  @Getter
   private final Schema.Field avroField;
   private final HoodieSchema fieldSchema;
 
@@ -249,18 +251,6 @@ public class HoodieSchemaField implements Serializable {
 
   public Set<String> aliases() {
     return avroField.aliases();
-  }
-
-  /**
-   * Returns the underlying Avro field for compatibility purposes.
-   *
-   * <p>This method is provided for gradual migration and should be used
-   * sparingly. New code should prefer the HoodieSchemaField API.</p>
-   *
-   * @return the wrapped Avro Schema.Field
-   */
-  public Schema.Field getAvroField() {
-    return avroField;
   }
 
   /**

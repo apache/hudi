@@ -432,7 +432,7 @@ public class CompactionCommand {
     ObjectInputStream in = new ObjectInputStream(inputStream);
     try {
       T result = (T) in.readObject();
-      log.info("Result : " + result);
+      log.info("Result : {}", result);
       return result;
     } finally {
       in.close();

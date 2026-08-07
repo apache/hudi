@@ -78,6 +78,9 @@ public class HoodieMetaSyncMetrics {
   }
 
   public void incrementRecreateAndSyncFailureCounter() {
+    if (!metricsConfig.isMetricsOn()) {
+      return;
+    }
     recreateAndSyncFailureCounter = getCounter(recreateAndSyncFailureCounter, recreateAndSyncFailureCounterName);
     recreateAndSyncFailureCounter.inc();
   }

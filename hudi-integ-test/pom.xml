@@ -42,12 +42,13 @@
       <artifactId>jersey-container-servlet-core</artifactId>
     </dependency>
 
+    <!-- TODO: remove this after we migrate integration tests to testcontainers (requires docker-java to be >= 3.3.6) -->
     <!-- Docker-Java - Test-->
     <!-- needs to be at top to force javax.ws version -->
     <dependency>
       <groupId>com.github.docker-java</groupId>
       <artifactId>docker-java</artifactId>
-      <version>3.1.2</version>
+      <version>3.3.6</version>
       <scope>test</scope>
       <exclusions>
         <exclusion>
@@ -391,6 +392,19 @@
       <artifactId>trino-jdbc</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <!-- not managed in the root pom's dependencyManagement, unlike testcontainers itself -->
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <properties>
@@ -518,6 +532,38 @@
   </build>
 
   <profiles>
+    <profile>
+      <id>integration-tests</id>
+      <!--
+        Tests under org.apache.hudi.integ2.** are testcontainers-based and manage
+        their own docker stack. The legacy `integration-tests` CI stage brings up
+        its own docker-compose demo in the same job, which collides on host ports
+        (e.g. zookeeper 2181). Exclude the integ2 package here so only the
+        dedicated `integration-tests-hive-sync` stage runs them (via -Dit.test=).
+      -->
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <configuration combine.self="override">
+              <skip>${skipITs}</skip>
+              <includes>
+                <include>**/IT*.java</include>
+              </includes>
+              <excludes>
+                <exclude>**/integ2/**</exclude>
+              </excludes>
+              <systemPropertyVariables>
+                <dynamodb-local.endpoint>${dynamodb-local.endpoint}</dynamodb-local.endpoint>
+                <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+              </systemPropertyVariables>
+              <useSystemClassLoader>false</useSystemClassLoader>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
     <profile>
       <id>m1-mac</id>
       <properties>

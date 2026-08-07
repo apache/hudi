@@ -60,6 +60,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -649,14 +650,46 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public static HoodieRecord<HoodieMetadataPayload> createRecordIndexUpdate(String recordKey, String partition,
                                                                             String fileId, String instantTime, int fileIdEncoding) {
+    return createRecordIndexUpdate(recordKey, partition, fileId, parseRecordIndexInstantTime(instantTime), fileIdEncoding);
+  }
 
-    HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
-    long instantTimeMillis = -1;
+  /**
+   * Parses an instant time into the epoch millis stored in record index entries.
+   * <p>
+   * Callers creating record index updates for many records of the same commit should parse the
+   * instant time once with this method and use the millis-based
+   * {@link #createRecordIndexUpdate(String, String, String, long, int)} overload per record.
+   */
+  public static long parseRecordIndexInstantTime(String instantTime) {
     try {
-      instantTimeMillis = TimelineUtils.parseDateFromInstantTime(instantTime).getTime();
+      return TimelineUtils.parseDateFromInstantTime(instantTime).getTime();
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to create metadata payload for record index. Instant time parsing for " + instantTime + " failed ", e);
     }
+  }
+
+  /**
+   * Create and return a {@code HoodieMetadataPayload} to insert or update an entry for the record index.
+   * <p>
+   * Same as {@link #createRecordIndexUpdate(String, String, String, String, int)} but takes the
+   * instant time already parsed to epoch millis, so per-commit callers parse it only once.
+   * <p>
+   * {@code instantTimeMillis} must be obtained from {@link #parseRecordIndexInstantTime(String)} (which
+   * delegates to {@link TimelineUtils#parseDateFromInstantTime(String)}); it should not be constructed by
+   * hand, so that the value stored here matches what the String overload would write. The instant-time
+   * string is interpreted in the JVM default time zone ({@link java.time.ZoneId#systemDefault()}) and the
+   * result is epoch milliseconds (since 1970-01-01T00:00:00Z).
+   *
+   * @param recordKey         Key of the record
+   * @param partition         Name of the partition which contains the record
+   * @param fileId            fileId which contains the record
+   * @param instantTimeMillis epoch millis of the instant when the record was added, as returned by
+   *                          {@link #parseRecordIndexInstantTime(String)}
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createRecordIndexUpdate(String recordKey, String partition,
+                                                                            String fileId, long instantTimeMillis, int fileIdEncoding) {
+
+    HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
     if (fileIdEncoding == 0) {
       // Data file names have a -D suffix to denote the index (D = integer) of the file written
       // In older HUID versions the file index was missing
@@ -672,8 +705,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           fileIndex = Integer.parseInt(fileId.substring(index + 1));
         }
       } catch (Exception e) {
+        // reconstruct the instant time only on this cold error path; the hot per-record path keeps the pre-parsed millis
         throw new HoodieMetadataException(String.format("Invalid UUID or index: fileID=%s, partition=%s, instantTime=%s",
-            fileId, partition, instantTime), e);
+            fileId, partition, TimelineUtils.formatDate(new Date(instantTimeMillis))), e);
       }
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey,

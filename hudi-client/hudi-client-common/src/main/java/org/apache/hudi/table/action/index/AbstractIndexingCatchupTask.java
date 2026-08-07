@@ -107,7 +107,7 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
         try {
           // we need take a lock here as inflight writer could also try to update the timeline
           transactionManager.beginStateChange(Option.of(instant), Option.empty());
-          log.info("Updating metadata table for instant: " + instant);
+          log.info("Updating metadata table for instant: {}", instant);
           switch (instant.getAction()) {
             case HoodieTimeline.COMMIT_ACTION:
             case HoodieTimeline.DELTA_COMMIT_ACTION:

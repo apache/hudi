@@ -138,7 +138,7 @@ public class ClientIds implements AutoCloseable, Serializable {
       }
     } catch (IOException e) {
       // if any exception happens, just return false.
-      log.error("Check heartbeat file existence error: " + path);
+      log.error("Check heartbeat file existence error: {}", path);
     }
     return false;
   }

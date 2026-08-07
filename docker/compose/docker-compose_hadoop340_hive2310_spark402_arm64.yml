@@ -78,7 +78,7 @@ services:
     volumes:
       - historyserver:/hadoop/yarn/timeline
 
-  # Pure Hive 2.3.10 stack (postgres 2.3 schema -> HMS 2.3.10 → HS2 2.3.10).
+  # Pure Hive 2.3.10 stack (postgres 2.3 schema -> HMS 2.3.10 -> HS2 2.3.10).
   # Matches hudi-spark-bundle's compile-time Hive 2.3 client, so Hudi hive-sync
   # talks to HMS natively (no Thrift get_table incompat, no sharedPrefixes hack).
   # Hadoop 3.4.0 HDFS is backward-compat for the 2.8.4-based Hive client.
@@ -255,6 +255,29 @@ services:
       "
     depends_on:
       - minio
+
+  # Gated behind the "trino" compose profile: inert for the default hive-sync CI
+  # rows, only starts when COMPOSE_PROFILES=trino. The plugin overlay defaults to
+  # docker/trino/empty-overlay (baked-in plugin used); set TRINO_PLUGIN_DIR to a
+  # locally-built trino-hudi plugin dir to override it at container start.
+  trinocoordinator:
+    image: apachehudi/hudi-trino_481:latest
+    profiles: ["trino"]
+    hostname: trinocoordinator
+    container_name: trinocoordinator
+    ports:
+      - "8092:8080"
+    depends_on:
+      - "hivemetastore"
+      - "namenode"
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${TRINO_PLUGIN_DIR:-${HUDI_WS}/docker/trino/empty-overlay}:/opt/hudi-plugin-overlay:ro
+      - ${HUDI_WS}:/var/hoodie/ws
 
 volumes:
   namenode:

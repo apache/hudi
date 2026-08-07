@@ -24,9 +24,12 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -38,9 +41,13 @@ import java.util.stream.Stream;
  * Represents a split of input data for reading, which includes the partition path the data belongs to along with an optional base file and a list of log files.
  * If there is only a base file, it is possible for the reader to specify a particular range of the file with the start and length parameters.
  */
+@Getter
 public class InputSplit {
+
   private final Option<HoodieBaseFile> baseFileOption;
+  @Getter(AccessLevel.NONE)
   private final List<HoodieLogFile> logFiles;
+  @Getter(AccessLevel.NONE)
   private final Option<Iterator<HoodieRecord>> recordIterator;
   private final String partitionPath;
   // Byte offset to start reading from the base file
@@ -48,26 +55,41 @@ public class InputSplit {
   // Length of bytes to read from the base file
   private final long length;
 
-  InputSplit(Option<HoodieBaseFile> baseFileOption,
-             Either<Stream<HoodieLogFile>, Iterator<HoodieRecord>> recordsToMerge,
-             String partitionPath, long start, long length) {
-    this.baseFileOption = baseFileOption;
-    if (recordsToMerge.isLeft()) {
-      this.logFiles = recordsToMerge.asLeft().sorted(HoodieLogFile.getLogFileComparator())
-          .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
-          .collect(Collectors.toList());
-      this.recordIterator = Option.empty();
-    } else {
-      this.logFiles = Collections.emptyList();
-      this.recordIterator = Option.of(recordsToMerge.asRight());
-    }
+  @Builder
+  private InputSplit(
+      Option<HoodieBaseFile> baseFileOption,
+      Stream<HoodieLogFile> logFileStream,
+      Iterator<HoodieRecord> recordIterator,
+      String partitionPath,
+      long start,
+      long length) {
+
+    // Ensure we do not have both sources of data to merge
+    // i.e. logFileStream and recordIterator cannot be both non-null
+    ValidationUtils.checkArgument(!(logFileStream != null && recordIterator != null),
+        "Cannot provide both logFileStream and recordIterator");
+
+    this.baseFileOption = Option.ofNullable(baseFileOption).orElse(Option.empty());
     this.partitionPath = partitionPath;
     this.start = start;
     this.length = length;
-  }
 
-  public Option<HoodieBaseFile> getBaseFileOption() {
-    return baseFileOption;
+    if (logFileStream != null) {
+      // Process Log Files (if provided)
+      this.logFiles = logFileStream
+          .sorted(HoodieLogFile.getLogFileComparator())
+          .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+          .collect(Collectors.toList());
+      this.recordIterator = Option.empty();
+    } else if (recordIterator != null) {
+      // Process Record Iterator (if provided)
+      this.logFiles = Collections.emptyList();
+      this.recordIterator = Option.of(recordIterator);
+    } else {
+      // Handle Case with neither (Base file only read)
+      this.logFiles = Collections.emptyList();
+      this.recordIterator = Option.empty();
+    }
   }
 
   public List<HoodieLogFile> getLogFiles() {
@@ -77,18 +99,6 @@ public class InputSplit {
 
   public boolean hasLogFiles() {
     return !logFiles.isEmpty();
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public long getStart() {
-    return start;
-  }
-
-  public long getLength() {
-    return length;
   }
 
   public boolean isParquetBaseFile() {

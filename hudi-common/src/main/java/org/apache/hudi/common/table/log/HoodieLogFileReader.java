@@ -44,8 +44,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 
@@ -63,14 +63,15 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * Scans a log file and provides block level iterator on the log file Loads the entire block contents in memory Can emit
  * either a DataBlock, CommandBlock, DeleteBlock or CorruptBlock (if one is found).
  */
+@Slf4j
 public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   public static final int DEFAULT_BUFFER_SIZE = 16 * 1024 * 1024; // 16 MB
-  private static final int BLOCK_SCAN_READ_BUFFER_SIZE = 1024 * 1024; // 1 MB
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFileReader.class);
+  private static final int BLOCK_SCAN_READ_BUFFER_SIZE = 1024 * 1024;
   private static final String REVERSE_LOG_READER_HAS_NOT_BEEN_ENABLED = "Reverse log reader has not been enabled";
 
   private final HoodieStorage storage;
+  @Getter
   private final HoodieLogFile logFile;
   private final int bufferSize;
   private final byte[] magicBuffer = new byte[6];
@@ -116,11 +117,6 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = this.logFile.getFileSize();
     }
-  }
-
-  @Override
-  public HoodieLogFile getLogFile() {
-    return logFile;
   }
 
   // TODO : convert content and block length to long by using ByteBuffer, raw byte [] allows
@@ -244,12 +240,12 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   }
 
   private HoodieLogBlock createCorruptBlock(long blockStartPos) throws IOException {
-    LOG.info("Log {} has a corrupted block at {}", logFile, blockStartPos);
+    log.info("Log {} has a corrupted block at {}", logFile, blockStartPos);
     inputStream.seek(blockStartPos);
     long nextBlockOffset = scanForNextAvailableBlockOffset();
     // Rewind to the initial start and read corrupted bytes till the nextBlockOffset
     inputStream.seek(blockStartPos);
-    LOG.info("Next available block in {} starts at {}", logFile, nextBlockOffset);
+    log.info("Next available block in {} starts at {}", logFile, nextBlockOffset);
     int corruptedBlockSize = (int) (nextBlockOffset - blockStartPos);
     long contentPosition = inputStream.getPos();
     Option<byte[]> corruptedBytes = HoodieLogBlock.tryReadContent(inputStream, corruptedBlockSize, true);
@@ -276,7 +272,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       // So we have to shorten the footer block size by the size of magic hash
       blockSizeFromFooter = inputStream.readLong() - magicBuffer.length;
     } catch (EOFException e) {
-      LOG.info("Found corrupted block in file {} with block size({}) running past EOF", logFile, blocksize);
+      log.info("Found corrupted block in file {} with block size({}) running past EOF", logFile, blocksize);
       // this is corrupt
       // This seek is required because contract of seek() is different for naked DFSInputStream vs BufferedFSInputStream
       // release-3.1.0-RC1/DFSInputStream.java#L1455
@@ -286,7 +282,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     }
 
     if (blocksize != blockSizeFromFooter) {
-      LOG.info("Found corrupted block in file {}. Header block size({}) did not match the footer block size({})", logFile, blocksize, blockSizeFromFooter);
+      log.info("Found corrupted block in file {}. Header block size({}) did not match the footer block size({})", logFile, blocksize, blockSizeFromFooter);
       inputStream.seek(currentPos);
       return true;
     }
@@ -297,7 +293,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       return false;
     } catch (CorruptedLogFileException e) {
       // This is a corrupted block
-      LOG.info("Found corrupted block in file {}. No magic hash found right after footer block size entry", logFile);
+      log.info("Found corrupted block in file {}. No magic hash found right after footer block size entry", logFile);
       return true;
     } finally {
       inputStream.seek(currentPos);
@@ -330,7 +326,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   @Override
   public void close() throws IOException {
     if (!closed) {
-      LOG.info("Closing Log file reader {}",  logFile.getFileName());
+      log.info("Closing Log file reader {}",  logFile.getFileName());
       if (null != this.inputStream) {
         this.inputStream.close();
       }

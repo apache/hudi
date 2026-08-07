@@ -676,14 +676,12 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     if (inflightOnly) {
       HoodieTestTable.of(metaClient).addInflightClean(instantTime, cleanerPlan);
     } else {
-      HoodieCleanStat cleanStats = new HoodieCleanStat(
-              HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-              HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
-              Collections.emptyList(),
-              Collections.emptyList(),
-              Collections.emptyList(),
-              instantTime,
-              "");
+      HoodieCleanStat cleanStats = HoodieCleanStat.builder()
+          .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+          .withPartitionPath(HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)])
+          .withEarliestCommitToRetain(instantTime)
+          .withLastCompletedCommitTimestamp("")
+          .build();
       HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats), Collections.EMPTY_MAP);
       HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata, isEmptyForAll, isEmptyCompleted);
     }

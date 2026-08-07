@@ -33,7 +33,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.sort.QuickSort;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
-import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
 import org.apache.flink.table.runtime.generated.GeneratedNormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.GeneratedRecordComparator;
 import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
@@ -89,9 +88,8 @@ public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction
     // Resolve sort keys (defaults to record key if not specified)
     List<String> sortKeyList = AppendWriteFunctions.resolveSortKeys(config);
     SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, sortKeyList.toArray(new String[0]));
-    SortCodeGenerator codeGenerator = sortOperatorGen.createSortCodeGenerator();
-    GeneratedNormalizedKeyComputer keyComputer = codeGenerator.generateNormalizedKeyComputer("SortComputer");
-    GeneratedRecordComparator recordComparator = codeGenerator.generateRecordComparator("SortComparator");
+    GeneratedNormalizedKeyComputer keyComputer = sortOperatorGen.generateNormalizedKeyComputer("SortComputer");
+    GeneratedRecordComparator recordComparator = sortOperatorGen.generateRecordComparator("SortComparator");
     this.memorySegmentPools = this.memorySegmentPoolFactory.createMemorySegmentPools(config, 2, OptionsResolver.getWriteBufferSizeInBytes(config));
 
     this.activeBuffer = BufferUtils.createBuffer(rowType,

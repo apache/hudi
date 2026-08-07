@@ -71,6 +71,7 @@ import software.amazon.awssdk.services.glue.model.GetPartitionsRequest;
 import software.amazon.awssdk.services.glue.model.GetPartitionsResponse;
 import software.amazon.awssdk.services.glue.model.GetTableRequest;
 import software.amazon.awssdk.services.glue.model.KeySchemaElement;
+import software.amazon.awssdk.services.glue.model.PartitionError;
 import software.amazon.awssdk.services.glue.model.PartitionIndex;
 import software.amazon.awssdk.services.glue.model.PartitionIndexDescriptor;
 import software.amazon.awssdk.services.glue.model.PartitionInput;
@@ -137,6 +138,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private static final int MAX_PARTITIONS_PER_CHANGE_REQUEST = 100;
   private static final int MAX_PARTITIONS_PER_READ_REQUEST = 1000;
   private static final int MAX_DELETE_PARTITIONS_PER_REQUEST = 25;
+  private static final String ENTITY_NOT_FOUND_ERROR_CODE = "EntityNotFoundException";
   protected final GlueAsyncClient awsGlue;
   private static final String GLUE_PARTITION_INDEX_ENABLE = "partition_filtering.enabled";
   private static final int PARTITION_INDEX_MAX_NUMBER = 3;
@@ -250,7 +252,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public List<Partition> getPartitionsFromList(String tableName, List<String> partitionList) {
     if (partitionList.isEmpty()) {
-      log.info("No partitions to read for " + tableId(this.databaseName, tableName));
+      log.info("No partitions to read for {}", tableId(this.databaseName, tableName));
       return Collections.emptyList();
     }
     HoodieTimer timer = HoodieTimer.start();
@@ -308,7 +310,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     HoodieTimer timer = HoodieTimer.start();
     try {
       if (partitionsToAdd.isEmpty()) {
-        log.info("No partitions to add for " + tableId(this.databaseName, tableName));
+        log.info("No partitions to add for {}", tableId(this.databaseName, tableName));
         return;
       }
       Table table = getTable(awsGlue, databaseName, tableName);
@@ -371,7 +373,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     HoodieTimer timer = HoodieTimer.start();
     try {
       if (changedPartitions.isEmpty()) {
-        log.info("No partitions to update for " + tableId(this.databaseName, tableName));
+        log.info("No partitions to update for {}", tableId(this.databaseName, tableName));
         return;
       }
       Table table = getTable(awsGlue, databaseName, tableName);
@@ -411,7 +413,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     HoodieTimer timer = HoodieTimer.start();
     try {
       if (partitionsToDrop.isEmpty()) {
-        log.info("No partitions to drop for " + tableId(this.databaseName, tableName));
+        log.info("No partitions to drop for {}", tableId(this.databaseName, tableName));
         return;
       }
       parallelizeChange(partitionsToDrop, this.changeParallelism, partitions -> this.dropPartitionsInternal(tableName, partitions), MAX_DELETE_PARTITIONS_PER_REQUEST);
@@ -437,8 +439,22 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
       BatchDeletePartitionResponse response = future.get();
       if (CollectionUtils.nonEmpty(response.errors())) {
-        throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName)
-            + " with error(s): " + response.errors());
+        // Dropping a partition that no longer exists is a no-op for an idempotent cleanup, so
+        // ignore EntityNotFoundException errors and only fail on other (e.g. permission/throttling) errors.
+        Map<Boolean, List<PartitionError>> errorsByIgnorable = response.errors().stream()
+            .collect(Collectors.partitioningBy(
+                error -> ENTITY_NOT_FOUND_ERROR_CODE.equals(error.errorDetail().errorCode())));
+        List<PartitionError> ignorableErrors = errorsByIgnorable.get(true);
+        if (!ignorableErrors.isEmpty()) {
+          log.info("Ignored dropping {} non-existent partition(s) from table {}: {}", ignorableErrors.size(),
+              tableId(databaseName, tableName),
+              ignorableErrors.stream().map(PartitionError::partitionValues).collect(Collectors.toList()));
+        }
+        List<PartitionError> realErrors = errorsByIgnorable.get(false);
+        if (!realErrors.isEmpty()) {
+          throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName)
+              + " with error(s): " + realErrors);
+        }
       }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName), e);

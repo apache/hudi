@@ -74,7 +74,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
     } else {
       BasicStagedTable(
         ident,
-        super.createTable(ident, schema, partitions, properties),
+        createOrLoadTable(ident, schema, partitions, properties),
         this)
     }
   }
@@ -92,7 +92,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
       super.dropTable(ident)
       BasicStagedTable(
         ident,
-        super.createTable(ident, schema, partitions, properties),
+        createOrLoadTable(ident, schema, partitions, properties),
         this)
     }
   }
@@ -115,9 +115,23 @@ class HoodieCatalog extends DelegatingCatalogExtension
       }
       BasicStagedTable(
         ident,
-        super.createTable(ident, schema, partitions, properties),
+        createOrLoadTable(ident, schema, partitions, properties),
         this)
     }
+  }
+
+  /**
+   * Creates the table in the delegate catalog and returns it, never null.
+   *
+   * A delegate is allowed to return null from `createTable`: `V2SessionCatalog` does so deliberately, to save the
+   * `loadTable` round-trip for a `CREATE TABLE` without `AS SELECT`. Load the table that was just created in that
+   * case, so that the staged table is never backed by a null table. Spark guards its own staging the same way.
+   */
+  private def createOrLoadTable(ident: Identifier,
+                                schema: StructType,
+                                partitions: Array[Transform],
+                                properties: util.Map[String, String]): Table = {
+    Option(super.createTable(ident, schema, partitions, properties)).getOrElse(loadTable(ident))
   }
 
   override def loadTable(ident: Identifier): Table = {

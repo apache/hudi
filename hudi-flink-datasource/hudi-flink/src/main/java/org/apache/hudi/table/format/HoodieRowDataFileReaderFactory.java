@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -34,5 +35,10 @@ public class HoodieRowDataFileReaderFactory extends HoodieFileReaderFactory {
   @Override
   protected HoodieFileReader newParquetFileReader(StoragePath path) {
     return new HoodieRowDataParquetReader(storage, path);
+  }
+
+  @Override
+  protected HoodieFileReader newLanceFileReader(HoodieConfig hoodieConfig, StoragePath path) {
+    return new HoodieRowDataLanceReader(path, hoodieConfig);
   }
 }

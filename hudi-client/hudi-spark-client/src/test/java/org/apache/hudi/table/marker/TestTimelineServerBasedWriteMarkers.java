@@ -74,7 +74,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     this.markerFolderPath = new StoragePath(metaClient.getMarkerFolderPath("000"));
 
     restartServerAndClient(0);
-    log.info("Connecting to Timeline Server :" + timelineService.getServerPort());
+    log.info("Connecting to Timeline Server :{}", timelineService.getServerPort());
   }
 
   @AfterEach
@@ -108,7 +108,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
   @EnumSource(value = FileSystemViewStorageType.class)
   public void testCreationWithTimelineServiceRetries(FileSystemViewStorageType storageType) throws Exception {
     restartServerAndClient(0, storageType);
-    log.info("Connecting to Timeline Server :" + timelineService.getServerPort());
+    log.info("Connecting to Timeline Server :{}", timelineService.getServerPort());
     // Validate marker creation/ deletion work without any failures in the timeline service.
     createSomeMarkers(true);
     assertTrue(storage.exists(markerFolderPath));

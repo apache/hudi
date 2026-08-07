@@ -19,6 +19,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -68,6 +69,10 @@ public class HoodieSchemaConverter {
    *
    * <p>The "{rowName}." is used as the nested row type name prefix in order to generate
    * the right schema. Nested record types that only differ by type name are still compatible.
+   *
+   * <p>On Flink 2.1+, {@code LogicalTypeRoot.VARIANT} is detected via string comparison
+   * (to avoid compile-time dependency) and mapped to {@link HoodieSchema#createVariant()}.
+   * Pre-2.1 Flink does not support Variant.
    *
    * @param logicalType Flink logical type
    * @param rowName     the record name
@@ -222,6 +227,10 @@ public class HoodieSchemaConverter {
 
       case RAW:
       default:
+        if (DataTypeAdapter.isVariantType(logicalType)) {
+          schema = HoodieSchema.createVariant();
+          break;
+        }
         throw new UnsupportedOperationException(
             "Unsupported type for HoodieSchema conversion: " + logicalType);
     }
@@ -263,6 +272,16 @@ public class HoodieSchemaConverter {
 
   /**
    * Detects if a Flink RowType represents a BLOB structure by validating it matches the schema defined in {@link HoodieSchema.Blob}.
+   *
+   * <p>Detection intentionally keys off the stable structural signals (field names and base type
+   * roots) and does <b>not</b> assert nested-field nullability. Flink SQL {@code CREATE TABLE} does
+   * not reliably preserve {@code NOT NULL} constraints on nested {@code ROW} fields, so requiring an
+   * exact nullability match would silently demote a user's BLOB column to a generic record when the
+   * column is declared through DDL. The canonical nullability is restored by {@link HoodieSchema#createBlob()}.
+   *
+   * <p>TODO: This heuristic is a workaround for the lack of a native Flink/Parquet BLOB logical
+   * type. See <a href="https://github.com/apache/hudi/issues/18711">apache/hudi#18711</a> for
+   * the tracked work to remove this structural inference.
    */
   private static boolean isBlobStructure(RowType rowType) {
     // Validate: 3 fields with exact names
@@ -277,24 +296,20 @@ public class HoodieSchemaConverter {
       return false;
     }
 
-    // Validate 'type' field: non-null STRING
-    LogicalType typeField = rowType.getTypeAt(0);
-    if (!isFamily(typeField, LogicalTypeFamily.CHARACTER_STRING) || typeField.isNullable()) {
+    // Validate 'type' field: STRING
+    if (!isFamily(rowType.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)) {
       return false;
     }
 
-    // Validate 'data' field: nullable BYTES/VARBINARY
+    // Validate 'data' field: BYTES/VARBINARY
     LogicalType dataField = rowType.getTypeAt(1);
     if (dataField.getTypeRoot() != LogicalTypeRoot.BINARY && dataField.getTypeRoot() != LogicalTypeRoot.VARBINARY) {
       return false;
     }
-    if (!dataField.isNullable()) {
-      return false;
-    }
 
-    // Validate 'reference' field: nullable ROW
+    // Validate 'reference' field: ROW
     LogicalType referenceField = rowType.getTypeAt(2);
-    if (!referenceField.isNullable() || referenceField.getTypeRoot() != LogicalTypeRoot.ROW) {
+    if (referenceField.getTypeRoot() != LogicalTypeRoot.ROW) {
       return false;
     }
 
@@ -313,24 +328,20 @@ public class HoodieSchemaConverter {
     }
 
     // Validate reference sub-field types
-    // external_path: non-null STRING
-    if (!isFamily(referenceRow.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)
-        || referenceRow.getTypeAt(0).isNullable()) {
+    // external_path: STRING
+    if (!isFamily(referenceRow.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)) {
       return false;
     }
-    // offset: nullable BIGINT
-    if (referenceRow.getTypeAt(1).getTypeRoot() != LogicalTypeRoot.BIGINT
-        || !referenceRow.getTypeAt(1).isNullable()) {
+    // offset: BIGINT
+    if (referenceRow.getTypeAt(1).getTypeRoot() != LogicalTypeRoot.BIGINT) {
       return false;
     }
-    // length: nullable BIGINT
-    if (referenceRow.getTypeAt(2).getTypeRoot() != LogicalTypeRoot.BIGINT
-        || !referenceRow.getTypeAt(2).isNullable()) {
+    // length: BIGINT
+    if (referenceRow.getTypeAt(2).getTypeRoot() != LogicalTypeRoot.BIGINT) {
       return false;
     }
-    // managed: non-null BOOLEAN
-    if (referenceRow.getTypeAt(3).getTypeRoot() != LogicalTypeRoot.BOOLEAN
-        || referenceRow.getTypeAt(3).isNullable()) {
+    // managed: BOOLEAN
+    if (referenceRow.getTypeAt(3).getTypeRoot() != LogicalTypeRoot.BOOLEAN) {
       return false;
     }
 
@@ -576,23 +587,24 @@ public class HoodieSchemaConverter {
   }
 
   /**
-   * Converts a Variant schema to Flink's ROW type.
-   * Variant is represented as ROW<`metadata` BYTES, `value` BYTES> in Flink.
+   * Converts a Variant HoodieSchema to the native Flink {@code VariantType} DataType.
+   * Requires Flink 2.1+ at runtime; throws {@link UnsupportedOperationException} on older versions.
    *
    * @param schema HoodieSchema to convert (must be a VARIANT type)
-   * @return DataType representing the Variant as a ROW with binary fields
+   * @return native VariantType DataType
+   * @throws UnsupportedOperationException if Flink runtime is pre-2.1 or variant is shredded
    */
   private static DataType convertVariant(HoodieSchema schema) {
     if (schema.getType() != HoodieSchemaType.VARIANT) {
       throw new IllegalStateException("Expected HoodieSchema.Variant but got: " + schema.getClass());
     }
 
-    // Variant is stored as a struct with two binary fields: metadata and value.
-    // Field order follows the Parquet spec and Iceberg convention (metadata first, value second).
-    return DataTypes.ROW(
-        DataTypes.FIELD("metadata", DataTypes.BYTES().notNull()),
-        DataTypes.FIELD("value", DataTypes.BYTES().notNull())
-    ).notNull();
+    if (((HoodieSchema.Variant) schema).isShredded()) {
+      throw new UnsupportedOperationException(
+          "Shredded Variant is not yet supported in Flink. Use unshredded Variant instead.");
+    }
+
+    return DataTypeAdapter.createVariantType().notNull();
   }
 
   /**

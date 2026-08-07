@@ -31,6 +31,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -58,6 +59,13 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
  */
 public class HoodieHadoopStorage extends HoodieStorage {
   private final FileSystem fs;
+  /**
+   * Resolved once. On a filesystem that does not implement {@code getScheme()} the fallback in
+   * {@link HadoopFSUtils#getScheme} costs a thrown-and-caught exception, and this is called once per log
+   * block via {@code StorageSchemes.isWriteTransactional} and three times per immutable-file write via
+   * {@code needCreateTempFile}. {@code fs} is final, so the answer cannot change.
+   */
+  private final Lazy<String> scheme = Lazy.lazily(this::resolveScheme);
 
   public HoodieHadoopStorage(StoragePath path, StorageConfiguration<?> conf) {
     super(conf);
@@ -111,7 +119,11 @@ public class HoodieHadoopStorage extends HoodieStorage {
 
   @Override
   public String getScheme() {
-    return fs.getScheme();
+    return scheme.get();
+  }
+
+  private String resolveScheme() {
+    return HadoopFSUtils.getScheme(fs);
   }
 
   @Override
