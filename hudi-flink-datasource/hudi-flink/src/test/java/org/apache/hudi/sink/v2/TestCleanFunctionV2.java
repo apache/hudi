@@ -30,6 +30,7 @@ import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -128,18 +129,14 @@ class TestCleanFunctionV2 {
     return harness;
   }
 
-  private boolean waitUntil(Condition condition) throws Exception {
+  private boolean waitUntil(Callable<Boolean> condition) throws Exception {
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
     while (System.nanoTime() < deadline) {
-      if (condition.evaluate()) {
+      if (condition.call()) {
         return true;
       }
       Thread.sleep(10);
     }
-    return condition.evaluate();
-  }
-
-  private interface Condition {
-    boolean evaluate() throws Exception;
+    return condition.call();
   }
 }

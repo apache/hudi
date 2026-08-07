@@ -31,11 +31,15 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.transformations.PartitionTransformation;
+import org.apache.flink.streaming.runtime.partitioner.CustomPartitionerWrapper;
+import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
 import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -57,6 +61,7 @@ class TestPipelinesV2 {
   void setUp() {
     conf = new Configuration();
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    env.setParallelism(7);
     input = env.fromCollection(
         Collections.<RowData>emptyList(),
         TypeInformation.of(RowData.class));
@@ -65,6 +70,7 @@ class TestPipelinesV2 {
   @Test
   void testSinkUsesModeSpecificParallelismAndStableIdentity() {
     conf.set(FlinkOptions.OPERATION, "bulk_insert");
+    conf.set(FlinkOptions.TABLE_NAME, "sink_v2_test");
     conf.set(FlinkOptions.WRITE_TASKS, 4);
 
     DataStreamSink<RowData> sink = PipelinesV2.sink(
@@ -72,10 +78,11 @@ class TestPipelinesV2 {
 
     assertEquals(4, sink.getTransformation().getParallelism());
     assertEquals("sink_v2", sink.getTransformation().getName());
+    assertEquals("uid_sink_v2_sink_v2_test", sink.getTransformation().getUid());
   }
 
   @Test
-  void testServiceTopologiesUseExpectedSingletonCommitOperators() {
+  void testServiceTopologiesUseExpectedSingletonOperatorsAndPartitioners() throws Exception {
     conf.set(FlinkOptions.CLUSTERING_TASKS, 3);
     conf.set(FlinkOptions.COMPACTION_TASKS, 2);
 
@@ -85,10 +92,14 @@ class TestPipelinesV2 {
     DataStream<RowData> compact = PipelinesV2.compactV2(conf, input);
 
     assertOperator(clean, "clean_commits", 1, 1);
+    assertOperator(cluster, "cluster_plan_generate", 1, 1);
     assertOperator(cluster, "clustering_commit", 1, 1);
+    assertOperator(compact, "compact_plan_generate", 1, 1);
     assertOperator(compact, "compact_commit", 1, 1);
     assertEquals(3, transformation(cluster, "clustering_task").getParallelism());
     assertEquals(2, transformation(compact, "compact_task").getParallelism());
+    assertEquals(1, countCustomPartitions(cluster, Pipelines.IndexPartitioner.class));
+    assertEquals(1, countCustomPartitions(compact, Pipelines.IndexPartitioner.class));
   }
 
   @Test
@@ -196,5 +207,29 @@ class TestPipelinesV2 {
         .collect(Collectors.toList());
     assertEquals(1, matches.size(), "Expected one transformation named " + name);
     return matches.get(0);
+  }
+
+  private long countCustomPartitions(DataStream<?> stream, Class<?> partitionerClass)
+      throws Exception {
+    long count = 0;
+    for (Transformation<?> transformation : stream.getTransformation().getTransitivePredecessors()) {
+      if (transformation instanceof PartitionTransformation) {
+        StreamPartitioner<?> partitioner =
+            ((PartitionTransformation<?>) transformation).getPartitioner();
+        if (partitioner instanceof CustomPartitionerWrapper
+            && partitionerClass.isInstance(
+                getCustomPartitioner((CustomPartitionerWrapper<?, ?>) partitioner))) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
+  private Object getCustomPartitioner(CustomPartitionerWrapper<?, ?> partitionerWrapper)
+      throws Exception {
+    Field partitionerField = CustomPartitionerWrapper.class.getDeclaredField("partitioner");
+    partitionerField.setAccessible(true);
+    return partitionerField.get(partitionerWrapper);
   }
 }
