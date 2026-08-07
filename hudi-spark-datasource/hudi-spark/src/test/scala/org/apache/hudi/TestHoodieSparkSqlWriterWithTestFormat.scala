@@ -106,7 +106,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
     // fetch all records from parquet files generated from write to hudi
     val actualDf = sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
     if (!populateMetaFields) {
-      List(0, 1, 2, 3, 4).foreach(i => assertEquals(0, actualDf.select(HoodieRecord.HOODIE_META_COLUMNS.get(i)).filter(entry => !(entry.mkString(",").equals(""))).count()))
+      List(0, 1, 2, 3, 4).foreach(i => assertEquals(0, actualDf.select(HoodieRecord.HOODIE_META_COLUMNS.get(i)).filter(entry => !entry.isNullAt(0) && entry.getString(0).nonEmpty).count()))
     }
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf = dropMetaFields(actualDf)

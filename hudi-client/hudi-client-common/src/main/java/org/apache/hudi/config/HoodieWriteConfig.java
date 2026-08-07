@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
@@ -1775,6 +1776,30 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean populateMetaFields() {
     return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+  }
+
+  /**
+   * @return the {@link MetaFieldsMode} resolved from the write config. Older tables without the
+   * mode property fall back to {@link MetaFieldsMode#ALL} or {@link MetaFieldsMode#NONE} based on
+   * the legacy {@code hoodie.populate.meta.fields} boolean.
+   */
+  public MetaFieldsMode getMetaFieldsMode() {
+    return MetaFieldsMode.fromConfig(populateMetaFields(),
+        getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE));
+  }
+
+  /**
+   * @return true when {@code _hoodie_commit_time} is physically populated on every row.
+   */
+  public boolean isCommitTimePopulated() {
+    return getMetaFieldsMode().isCommitTimePopulated();
+  }
+
+  /**
+   * @return true when {@code _hoodie_file_name} is physically populated on every row.
+   */
+  public boolean isFileNamePopulated() {
+    return getMetaFieldsMode().isFileNamePopulated();
   }
 
   /**
@@ -3592,6 +3617,17 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
+      // ALL is the default (implicit) mode — persist the enum name only for selective modes to
+      // keep hoodie.properties clean for tables that don't opt in.
+      if (metaFieldsMode == null || metaFieldsMode == MetaFieldsMode.ALL) {
+        writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, "");
+      } else {
+        writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
+      }
+      return this;
+    }
+
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
       writeConfig.setValue(ALLOW_OPERATION_METADATA_FIELD, Boolean.toString(allowOperationMetadataField));
       return this;
@@ -3889,6 +3925,56 @@ public class HoodieWriteConfig extends HoodieConfig {
       checkArgument(ttlStatsMaxParallelism > 0,
           String.format("%s must be positive, but was %d",
               HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), ttlStatsMaxParallelism));
+
+      // hoodie.meta.fields.mode is an additive opt-in on top of populate.meta.fields=false. Setting
+      // populate.meta.fields=true together with a non-ALL mode is ambiguous (the mode has no effect
+      // when all meta fields are already populated) so reject it explicitly rather than silently
+      // ignore. MetaFieldsMode.fromConfig also throws on unrecognized on-disk values.
+      MetaFieldsMode metaFieldsMode = writeConfig.getMetaFieldsMode();
+      boolean populateMetaFields = writeConfig.populateMetaFields();
+      String rawMode = writeConfig.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE);
+      checkArgument(!(populateMetaFields && rawMode != null && !rawMode.isEmpty()),
+          String.format("%s must be empty when %s=true. Disable populate.meta.fields or clear the mode.",
+              HoodieTableConfig.META_FIELDS_MODE.key(),
+              HoodieTableConfig.POPULATE_META_FIELDS.key()));
+      // Selective meta-field modes are wired only for the Spark writer path in this release. Flink
+      // RowData / Java-client writers ignore the mode and would silently produce NONE-mode output.
+      boolean isSelective = metaFieldsMode != MetaFieldsMode.ALL && metaFieldsMode != MetaFieldsMode.NONE;
+      checkArgument(!(engineType != EngineType.SPARK && isSelective),
+          String.format("%s=%s is currently supported for the Spark writer only. Support for engine=%s is a follow-up. "
+                  + "Either keep %s=true or use NONE mode.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode, engineType,
+              HoodieTableConfig.POPULATE_META_FIELDS.key()));
+      // RLI and secondary indexes both look up rows by _hoodie_record_key. Only ALL mode populates
+      // the record-key column; every other mode leaves it null on the base file, which would
+      // silently corrupt index maintenance (RLI would key on nulls, SI updates would target
+      // phantom rows). Reject the combination up-front so the failure surfaces at write-config
+      // build time rather than as a mysterious query-time miss.
+      //
+      // Predicates mirror HoodieMetadataConfig.isRecordLevelIndexEnabled / isSecondaryIndexEnabled
+      // — including the metadata-enabled and (for SI) column-non-empty gates. We inline them here
+      // rather than calling writeConfig.isRecordLevelIndexEnabled() because validate() runs before
+      // the HoodieWriteConfig instance is materialized — the metadataConfig field is only wired in
+      // the private constructor invoked by build(). SECONDARY_INDEX_ENABLE_PROP defaults to true,
+      // so we must combine it with the column-set gate to avoid firing on default configs.
+      if (!metaFieldsMode.isRecordKeyPopulated()) {
+        boolean mdtEnabled = writeConfig.getBooleanOrDefault(HoodieMetadataConfig.ENABLE);
+        boolean rliEnabled = mdtEnabled
+            && (writeConfig.getBooleanOrDefault(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP)
+                || writeConfig.getBooleanOrDefault(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP));
+        checkArgument(!rliEnabled,
+            String.format("Record-level index requires %s=ALL (which populates _hoodie_record_key). "
+                    + "Current mode=%s does not populate the record key. Either disable RLI or set the mode to ALL.",
+                HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode));
+        boolean siEnabled = mdtEnabled
+            && writeConfig.getBooleanOrDefault(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP)
+            && writeConfig.getBooleanOrDefault(HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP)
+            && StringUtils.nonEmpty(writeConfig.getString(HoodieMetadataConfig.SECONDARY_INDEX_COLUMN));
+        checkArgument(!siEnabled,
+            String.format("Secondary index requires %s=ALL (which populates _hoodie_record_key). "
+                    + "Current mode=%s does not populate the record key. Either disable the secondary index or set the mode to ALL.",
+                HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode));
+      }
     }
 
     public HoodieWriteConfig build() {

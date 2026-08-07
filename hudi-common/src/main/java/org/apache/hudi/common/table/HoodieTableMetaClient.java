@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -1014,6 +1015,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String bootstrapBasePath;
     private Boolean bootstrapIndexEnable;
     private Boolean populateMetaFields;
+    private MetaFieldsMode metaFieldsMode;
     private String keyGeneratorClassProp;
     private String partitionValueExtractorClass;
     private String keyGeneratorType;
@@ -1173,6 +1175,25 @@ public class HoodieTableMetaClient implements Serializable {
 
     public TableBuilder setPopulateMetaFields(boolean populateMetaFields) {
       this.populateMetaFields = populateMetaFields;
+      return this;
+    }
+
+    public TableBuilder setMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
+      this.metaFieldsMode = metaFieldsMode;
+      return this;
+    }
+
+    /**
+     * Convenience overload that accepts the raw on-disk string (e.g. from properties files).
+     * Empty or null values leave the mode unset — the caller-provided populateMetaFields boolean
+     * determines whether the table is ALL or NONE.
+     */
+    public TableBuilder setMetaFieldsModeFromString(String rawMode) {
+      if (rawMode == null || rawMode.trim().isEmpty()) {
+        this.metaFieldsMode = null;
+        return this;
+      }
+      this.metaFieldsMode = MetaFieldsMode.valueOf(rawMode.trim());
       return this;
     }
 
@@ -1395,6 +1416,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS)) {
         setPopulateMetaFields(hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.META_FIELDS_MODE)) {
+        setMetaFieldsModeFromString(hoodieConfig.getString(HoodieTableConfig.META_FIELDS_MODE));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
         setKeyGeneratorClassProp(hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
       } else if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE)) {
@@ -1537,6 +1561,28 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != populateMetaFields) {
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
+      }
+      // Persist the mode in one place. Rules:
+      //  - Explicit selective mode wins → validate compatibility with populateMetaFields and write.
+      //  - populateMetaFields=false + no explicit mode → NONE (leave property empty for backward compat).
+      //  - populateMetaFields=true + no explicit mode → ALL (implicit; leave property empty).
+      if (null != metaFieldsMode) {
+        if (Boolean.TRUE.equals(populateMetaFields) && metaFieldsMode != MetaFieldsMode.ALL) {
+          throw new IllegalArgumentException(String.format(
+              "%s=%s is incompatible with %s=true. Set populate.meta.fields=false or use MetaFieldsMode.ALL.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
+              HoodieTableConfig.POPULATE_META_FIELDS.key()));
+        }
+        if (Boolean.FALSE.equals(populateMetaFields) && metaFieldsMode == MetaFieldsMode.ALL) {
+          throw new IllegalArgumentException(String.format(
+              "%s=ALL is incompatible with %s=false. Set populate.meta.fields=true or pick a selective mode.",
+              HoodieTableConfig.META_FIELDS_MODE.key(),
+              HoodieTableConfig.POPULATE_META_FIELDS.key()));
+        }
+        // Persist only the selective modes; ALL/NONE are implicit from populate.meta.fields.
+        if (metaFieldsMode != MetaFieldsMode.ALL && metaFieldsMode != MetaFieldsMode.NONE) {
+          tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
+        }
       }
       if (null != keyGeneratorClassProp) {
         KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);

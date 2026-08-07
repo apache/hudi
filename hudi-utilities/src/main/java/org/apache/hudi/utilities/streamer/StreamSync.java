@@ -478,6 +478,8 @@ public class StreamSync implements Serializable, Closeable {
         .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
         .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
+        .setMetaFieldsModeFromString(props.getString(HoodieTableConfig.META_FIELDS_MODE.key(),
+            HoodieTableConfig.META_FIELDS_MODE.defaultValue()))
         .setKeyGeneratorClassProp(keyGenClassName)
         .setPartitionValueExtractorClass(partitionValueExtractorClassName)
         .setOrderingFields(cfg.sourceOrderingFields)

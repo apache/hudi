@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -333,6 +334,15 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(true)
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
+
+  public static final ConfigProperty<String> META_FIELDS_MODE = ConfigProperty
+      .key("hoodie.meta.fields.mode")
+      .defaultValue("")
+      .withDocumentation("Which Hudi meta columns are physically populated on disk. Allowed values are "
+          + "COMMIT_TIME_ONLY, FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME (or NONE / ALL, though those are "
+          + "derived automatically from hoodie.populate.meta.fields when unset). Set only at table creation, "
+          + "via the hudi-cli, or during table upgrade — the property is immutable at runtime because it is a "
+          + "physical-storage decision baked into files at write time.");
 
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
@@ -1234,6 +1244,38 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public boolean populateMetaFields() {
     return Boolean.parseBoolean(getStringOrDefault(POPULATE_META_FIELDS));
+  }
+
+  /**
+   * @return the {@link MetaFieldsMode} resolved from the on-disk properties. Older tables without
+   * the mode property fall back to {@link MetaFieldsMode#ALL} or {@link MetaFieldsMode#NONE} based
+   * on the legacy {@link #POPULATE_META_FIELDS} boolean.
+   */
+  public MetaFieldsMode getMetaFieldsMode() {
+    return MetaFieldsMode.fromConfig(populateMetaFields(), getStringOrDefault(META_FIELDS_MODE));
+  }
+
+  /**
+   * @return true when the {@code _hoodie_commit_time} meta column is physically populated on disk.
+   */
+  public boolean isCommitTimePopulated() {
+    return getMetaFieldsMode().isCommitTimePopulated();
+  }
+
+  /**
+   * @return true when the {@code _hoodie_file_name} meta column is physically populated on disk.
+   */
+  public boolean isFileNamePopulated() {
+    return getMetaFieldsMode().isFileNamePopulated();
+  }
+
+  /**
+   * @return true when the {@code _hoodie_record_key} meta column is physically populated on disk.
+   * Only {@link MetaFieldsMode#ALL} populates the record-key column; every selective mode leaves
+   * it null.
+   */
+  public boolean isRecordKeyPopulated() {
+    return getMetaFieldsMode().isRecordKeyPopulated();
   }
 
   /**
