@@ -547,4 +547,37 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
       }
     }
   }
+
+  test("Test show_clean_plans validates its inputs") {
+    withSQLConf("hoodie.clean.automatic" -> "false") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             | id int,
+             | name string,
+             | price double,
+             | ts long
+             | ) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |   primaryKey = 'id',
+             |   type = 'cow',
+             |   preCombineField = 'ts'
+             | )
+             |""".stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+        // A non-positive limit is rejected.
+        checkExceptionContain(s"call show_clean_plans(table => '$tableName', limit => 0)")(
+          "Limit must be positive")
+
+        // A filter that references an unknown column is rejected before the plans are read.
+        checkExceptionContain(
+          s"""call show_clean_plans(table => '$tableName', filter => "nonexistent_col > 1")""")(
+          "Invalid filter expression")
+      }
+    }
+  }
 }

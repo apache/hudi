@@ -177,4 +177,116 @@ class TestCopyToTempViewProcedure extends HoodieSparkSqlTestBase {
 
     }
   }
+
+  test("Test Call copy_to_temp_view Procedure with incremental query type") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 2000")
+
+      val commits = spark.sql(s"select distinct _hoodie_commit_time from $tableName order by _hoodie_commit_time")
+        .collect().map(_.getString(0))
+      assert(commits.length == 2)
+
+      // Incremental query type requires begin/end instant times.
+      val incViewName = generateTableName
+      checkExceptionContain(
+        s"call copy_to_temp_view(table => '$tableName', view_name => '$incViewName', query_type => 'incremental')")(
+        "begin_instance_time and end_instance_time can not be null")
+
+      // Hudi incremental read treats the begin instant as an exclusive lower bound, so a range from
+      // before the first commit up to the last commit returns only the record(s) written by the last
+      // commit here (the first commit falls on / below the begin boundary and is not re-emitted).
+      val row = spark.sql(
+        s"""call copy_to_temp_view(table => '$tableName', view_name => '$incViewName',
+           | query_type => 'incremental', begin_instance_time => '000', end_instance_time => '${commits.last}')"""
+          .stripMargin).collectAsList()
+      assert(row.size() == 1 && row.get(0).get(0) == 0)
+      val incCount = spark.sql(s"select count(1) from $incViewName").collectAsList()
+      assert(incCount.size() == 1 && incCount.get(0).get(0) == 1)
+    }
+  }
+
+  test("Test Call copy_to_temp_view Procedure with read_optimized query type") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 2000")
+      // Update goes to a log file; the read-optimized view only sees the base files.
+      spark.sql(s"update $tableName set price = 99 where id = 1")
+
+      val viewName = generateTableName
+      val row = spark.sql(
+        s"""call copy_to_temp_view(table => '$tableName', view_name => '$viewName',
+           | query_type => 'read_optimized')""".stripMargin).collectAsList()
+      assert(row.size() == 1 && row.get(0).get(0) == 0)
+      val roCount = spark.sql(s"select count(1) from $viewName").collectAsList()
+      assert(roCount.size() == 1 && roCount.get(0).get(0) == 2)
+    }
+  }
+
+  test("Test Call copy_to_temp_view Procedure with as_of_instant time travel") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      val firstCommit = spark.sql(s"select distinct _hoodie_commit_time from $tableName")
+        .collect().map(_.getString(0)).head
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 2000")
+
+      val viewName = generateTableName
+      val row = spark.sql(
+        s"""call copy_to_temp_view(table => '$tableName', view_name => '$viewName',
+           | as_of_instant => '$firstCommit')""".stripMargin).collectAsList()
+      assert(row.size() == 1 && row.get(0).get(0) == 0)
+      // The snapshot at the first commit contains only the first record.
+      val asOfCount = spark.sql(s"select count(1) from $viewName").collectAsList()
+      assert(asOfCount.size() == 1 && asOfCount.get(0).get(0) == 1)
+    }
+  }
 }

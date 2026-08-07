@@ -100,4 +100,63 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
       }
     }
   }
+
+  test("Test Call show_logfile_records Procedure with merge and filter") {
+    // Keep automatic cleaning off so the pre-compaction log files survive for the merged scan, and
+    // lower the compaction trigger so the explicit run_compaction below actually schedules and
+    // executes (producing the commit instant that the merged scan needs to find the latest instant).
+    withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.compact.inline.max.delta.commits" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  partition long
+             |) using hudi
+             | partitioned by (partition)
+             | location '$tablePath'
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  orderingFields = 'ts'
+             | )
+       """.stripMargin)
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
+        spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1000")
+        spark.sql(s"update $tableName set name = 'b1' where id = 1")
+        spark.sql(s"update $tableName set name = 'b2' where id = 2")
+
+        // Compaction produces a commit instant on the timeline, which the merged scan needs
+        // to determine the latest instant time; the delta log files remain on disk.
+        spark.sql(s"call run_compaction(op => 'run', table => '$tableName')").collect()
+
+        val pattern = s"$tablePath/*/*.log.*"
+
+        // Merged scan returns records from the log files.
+        val merged = spark.sql(
+          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', merge => true, limit => 10)""".stripMargin).collect()
+        assert(merged.nonEmpty, "Merged log-file scan should return records")
+
+        // Unmerged scan, used as the baseline for the filter assertions.
+        val unfiltered = spark.sql(
+          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10)""".stripMargin).collect()
+        assert(unfiltered.nonEmpty)
+
+        // A filter that always holds keeps every row.
+        val keepAll = spark.sql(
+          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10, filter => "records IS NOT NULL")""".stripMargin).collect()
+        assertResult(unfiltered.length)(keepAll.length)
+
+        // A filter that never holds drops every row.
+        val dropAll = spark.sql(
+          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10, filter => "records LIKE '%__no_such_token__%'")""".stripMargin).collect()
+        assertResult(0)(dropAll.length)
+      }
+    }
+  }
 }

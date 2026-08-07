@@ -122,6 +122,70 @@ class TestRepairClusteringPlanProcedure extends HoodieSparkProcedureTestBase {
     assertNotNull(org.apache.spark.sql.hudi.command.procedures.HoodieProcedures.newBuilder("repair_clustering_plan"))
   }
 
+  test("Test repair_clustering_plan validate_delete, unsupported op and allow_empty_plan guard") {
+    withTempDir { tmp =>
+      withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string
+             |) using hudi
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  type = 'cow',
+             |  orderingFields = 'ts',
+             |  hoodie.metadata.enable = 'false'
+             | )
+             | partitioned by (dt)
+             | location '$basePath'
+             |""".stripMargin)
+
+        insertRows(tableName, "2026-01-27", 1)
+        insertRows(tableName, "2026-01-27", 4)
+        insertRows(tableName, "2026-01-27", 7)
+
+        runClustering(tableName, "schedule")
+        val metadata = getLatestRequestedClusteringPlan(basePath)
+        val instant = metadata.getLeft
+        val plannedFiles = getPlanDataFiles(metadata.getRight)
+        assertTrue(plannedFiles.size > 1, s"Expected more than one planned file, but got $plannedFiles")
+
+        // validate_delete over a healthy plan finds no corrupt files, so no candidates are returned.
+        val healthyRows = spark.sql(
+          s"call repair_clustering_plan(table => '$tableName', instant => '${instant.requestedTime}', " +
+            s"op => 'validate_delete')").collect()
+        assertEquals(0, healthyRows.length)
+
+        // An unknown operation is rejected.
+        checkExceptionContain(
+          s"call repair_clustering_plan(table => '$tableName', instant => '${instant.requestedTime}', op => 'bogus')")(
+          "Unsupported operation")
+
+        // Removing every input group without allow_empty_plan is rejected.
+        val allFilesArg = plannedFiles.distinct.mkString(",")
+        checkExceptionContain(
+          s"call repair_clustering_plan(table => '$tableName', instant => '${instant.requestedTime}', " +
+            s"op => 'delete', invalid_parquet_files => '$allFilesArg')")(
+          "would remove all input groups")
+
+        // With allow_empty_plan the (dry-run) removal of every planned file is reported.
+        val emptyPlanRows = spark.sql(
+          s"call repair_clustering_plan(table => '$tableName', instant => '${instant.requestedTime}', " +
+            s"op => 'delete', invalid_parquet_files => '$allFilesArg', allow_empty_plan => true)").collect()
+        assertEquals(plannedFiles.distinct.size, emptyPlanRows.length)
+        assertTrue(emptyPlanRows.forall(_.getString(2) == "WOULD_REMOVE_FROM_PLAN"),
+          s"Expected all rows to be WOULD_REMOVE_FROM_PLAN, but got ${emptyPlanRows.mkString("[", ", ", "]")}")
+      }
+    }
+  }
+
   private def runClustering(tableName: String,
                             operation: String,
                             instant: Option[String] = None): Unit = {
