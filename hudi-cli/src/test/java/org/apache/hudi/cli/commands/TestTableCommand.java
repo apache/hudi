@@ -507,6 +507,104 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
         HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode());
   }
 
+  /**
+   * Pins the whole migration matrix rather than spot-checking it. Twenty ordered pairs, each either
+   * a legal narrowing or a refused widening, on a table that already has commits.
+   *
+   * <p>The subtle entries are the mutually-wider siblings: {@code COMMIT_TIME_ONLY} and
+   * {@code FILE_NAME_ONLY} each populate a column the other does not, so neither can migrate to the
+   * other in either direction. A spot-check of "narrowing works, widening does not" would miss that
+   * the relation is a lattice rather than a chain.
+   *
+   * <p>Uses a fresh table per pair so the starting mode can be set without tripping the very guard
+   * under test -- setting the initial mode happens before any commit exists.
+   */
+  @Test
+  public void testSetMetaFieldsModeMigrationMatrixOnPopulatedTable() throws Exception {
+    for (MetaFieldsMode from : MetaFieldsMode.values()) {
+      for (MetaFieldsMode to : MetaFieldsMode.values()) {
+        if (from == to) {
+          continue;
+        }
+        // Fresh table per pair; connect to it so HoodieCLI points at the right one.
+        String pairName = tableName + "_" + from.name() + "_to_" + to.name();
+        String pairPath = tablePath(pairName);
+        assertTrue(ShellEvaluationResultUtil.isSuccess(
+            shell.evaluate(() -> "create --path " + pairPath + " --tableName " + pairName)));
+
+        // Establish the starting mode while the table is still empty, then make it "populated".
+        assertTrue(ShellEvaluationResultUtil.isSuccess(
+            shell.evaluate(() -> "table set-meta-fields-mode --target-mode " + from.name())),
+            "setting the initial mode on an empty table must succeed: " + from);
+        createDummyCommitFileAt(pairPath, "20260101000000000");
+        HoodieCLI.refreshTableMetadata();
+        assertEquals(from, HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode());
+
+        boolean widening = to.isWiderThan(from);
+        Object result = shell.evaluate(() ->
+            "table set-meta-fields-mode --target-mode " + to.name() + " --force true");
+
+        if (widening) {
+          assertFalse(ShellEvaluationResultUtil.isSuccess(result),
+              from + " -> " + to + " adds a meta column and must be refused even with --force");
+          assertTrue(result.toString().contains("widen"),
+              "expected a widening refusal for " + from + " -> " + to + ", got: " + result);
+          assertEquals(from, HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode(),
+              "a refused migration must leave the mode untouched: " + from + " -> " + to);
+        } else {
+          assertTrue(ShellEvaluationResultUtil.isSuccess(result),
+              from + " -> " + to + " drops meta columns and must be allowed with --force, got: " + result);
+          HoodieTableConfig tableConfig = HoodieCLI.getTableMetaClient().getTableConfig();
+          assertEquals(to, tableConfig.getMetaFieldsMode(), from + " -> " + to);
+          assertEquals(to.toLegacyPopulateMetaFields(), tableConfig.populateMetaFields(),
+              "the derived boolean must follow the new mode for " + from + " -> " + to);
+        }
+      }
+    }
+  }
+
+  /** Both mutually-wider directions between the two single-column modes are refused. */
+  @Test
+  public void testSetMetaFieldsModeRefusesBothSiblingDirections() throws Exception {
+    assertTrue(prepareTable());
+    shell.evaluate(() -> "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY");
+    createDummyCommitFile("20260101000000000");
+    HoodieCLI.refreshTableMetadata();
+
+    Object toSibling = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode FILE_NAME_ONLY --force true");
+    assertFalse(ShellEvaluationResultUtil.isSuccess(toSibling),
+        "COMMIT_TIME_ONLY -> FILE_NAME_ONLY adds _hoodie_file_name and must be refused");
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY,
+        HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode());
+
+    // ...and the reverse, on a table that starts the other way round.
+    String otherName = tableName + "_sibling_reverse";
+    String otherPath = tablePath(otherName);
+    assertTrue(ShellEvaluationResultUtil.isSuccess(
+        shell.evaluate(() -> "create --path " + otherPath + " --tableName " + otherName)));
+    shell.evaluate(() -> "table set-meta-fields-mode --target-mode FILE_NAME_ONLY");
+    createDummyCommitFileAt(otherPath, "20260101000000000");
+    HoodieCLI.refreshTableMetadata();
+
+    Object toOther = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY --force true");
+    assertFalse(ShellEvaluationResultUtil.isSuccess(toOther),
+        "FILE_NAME_ONLY -> COMMIT_TIME_ONLY adds _hoodie_commit_time and must be refused");
+    assertEquals(MetaFieldsMode.FILE_NAME_ONLY,
+        HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode());
+  }
+
+  private void createDummyCommitFileAt(String tableBasePath, String instantTime) throws IOException {
+    java.nio.file.Path timelineDir =
+        Paths.get(tableBasePath, METAFOLDER_NAME, "timeline");
+    if (!timelineDir.toFile().exists()) {
+      timelineDir.toFile().mkdirs();
+    }
+    String completionTime = instantTime + "1";
+    java.nio.file.Files.createFile(timelineDir.resolve(instantTime + "_" + completionTime + ".commit"));
+  }
+
   private void createDummyCommitFile(String instantTime) throws IOException {
     // Timeline v2 layout: files live under .hoodie/timeline/. Writing an empty completed commit
     // is enough to make countInstants > 0 for the safety check.
