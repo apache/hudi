@@ -261,6 +261,35 @@ class TestIMetaStoreClientPool {
   }
 
   @Test
+  void anErrorThatAbortsTheBatchIsNotAlsoReportedAsSuppressed() throws Exception {
+    List<IMetaStoreClient> clients = mockClients(2);
+    IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 2);
+    try {
+      // Given the aborting task throws an Error rather than an Exception. guard() catches
+      // Throwable, so the Error is what trips the abort, but it cannot be reported as-is:
+      // it gets wrapped in a RuntimeException. An identity check against that wrapper
+      // would never match the raw cause coming back off the future, so the one real
+      // failure would be reported twice -- once as the cause, once as suppressed.
+      ParallelDispatch dispatch = pool.dispatchAll(
+          Collections.singletonList("BOOM"),
+          (client, batch) -> {
+            throw new StackOverflowError("boom");
+          });
+
+      // Asserted on the Outcome rather than on awaitAll(): awaitAll only *logs* the
+      // suppressed list, so a duplicate there is invisible to the thrown exception.
+      ParallelDispatch.Outcome outcome = dispatch.awaitOutcome();
+
+      assertTrue(outcome.suppressed().isEmpty(),
+          "The failure that aborted the batch must not also appear in its own suppressed list");
+      assertEquals("boom", outcome.firstError().getCause().getMessage(),
+          "The wrapped Error must still be reported as the root cause");
+    } finally {
+      pool.close();
+    }
+  }
+
+  @Test
   void closeIsIdempotentAndClosesEveryClient() throws Exception {
     List<IMetaStoreClient> clients = mockClients(2);
     IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 2);

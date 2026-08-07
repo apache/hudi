@@ -349,7 +349,7 @@ class TestHiveDriverPool {
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 1, factory)) {
-      HiveDriverPool.Dispatch dispatch = pool.dispatchAll(Collections.singletonList("FAIL"));
+      ParallelDispatch dispatch = pool.dispatchAll(Collections.singletonList("FAIL"));
       assertTrue(entered.await(10, TimeUnit.SECONDS), "Driver must have started the statement");
       assertTrue(dispatch.futureAt(0).cancel(false),
           "Sanity: a running FutureTask is still NEW, so cancel(false) must succeed");

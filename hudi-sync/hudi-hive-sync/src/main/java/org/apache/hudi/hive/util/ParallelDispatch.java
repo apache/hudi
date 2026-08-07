@@ -176,7 +176,8 @@ public final class ParallelDispatch {
 
     // Seeded from the task that tripped the abort, so the reported root cause is the
     // failure that actually stopped the batch rather than the lowest-indexed one.
-    Exception firstError = asException(abortCause.get());
+    Throwable abortedBy = abortCause.get();
+    Exception firstError = asException(abortedBy);
     int completed = 0;
     List<Exception> suppressed = new ArrayList<>();
     for (Future<?> f : futures) {
@@ -198,9 +199,13 @@ public final class ParallelDispatch {
           cancelled++;
         } else if (firstError == null) {
           firstError = cause;
-        } else if (cause != firstError) {
-          // Identity, not equality: the aborting task's own failure comes back through
-          // here too, and it must not land in its own suppressed list.
+        } else if (ee.getCause() != abortedBy) {
+          // Identity against the *raw* cause, not the unwrapped one: the aborting task's
+          // own failure comes back through here too and must not land in its own
+          // suppressed list. Comparing to abortedBy rather than firstError matters when
+          // the task threw an Error — asException() wraps that in a new RuntimeException,
+          // so comparing against firstError would never match and would report the one
+          // real failure twice.
           suppressed.add(cause);
         }
       }
