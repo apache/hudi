@@ -31,13 +31,12 @@ import org.apache.hudi.index.bucket.BucketIdentifier
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.testutils.{HoodieDummyExpressionHolder, HoodieSparkClientTestBase}
 import org.apache.hudi.timeline.service.TimelineService
 
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.{BucketPartitionUtils, HoodieCatalystExpressionUtils, SparkSession}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, PredicateHelper}
-import org.apache.spark.sql.catalyst.plans.logical.LeafNode
+import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 
@@ -451,10 +450,4 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
     metadataConfig.setValue(HoodieIndexConfig.BUCKET_QUERY_INDEX, "true")
     assert(bucketIndexSupport.isIndexAvailable)
   }
-}
-
-// SPARK-44219 added extra rule to validate expressions against its children's references to check if there are dangling references
-// This is forked from Spark's [[DummyExpressionHolder]], which always set the output to Nil and would fail this test
-case class HoodieDummyExpressionHolder(exprs: Seq[Expression], output: Seq[Attribute]) extends LeafNode {
-  override lazy val resolved = true
 }
