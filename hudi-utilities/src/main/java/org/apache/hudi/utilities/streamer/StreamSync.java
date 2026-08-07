@@ -1295,22 +1295,13 @@ public class StreamSync implements Serializable, Closeable {
     }
 
     if (metaClient != null) {
+      // NOTE: hoodie.meta.fields.mode is deliberately *not* folded in here. It is a table property, and
+      // BaseHoodieWriteClient#validateAgainstTableProperties owns the rule for every engine: a writer
+      // that states neither meta-field property inherits the table's mode, and one that states either is
+      // compared and rejected on mismatch. Inheriting here as well would pre-empt that comparison — a
+      // restart passing only hoodie.populate.meta.fields would silently adopt the table's mode instead
+      // of being told its setting conflicts.
       HoodieTableConfig tableConfig = metaClient.getTableConfig();
-      // Inherit the table's meta-fields mode when this run does not state one, mirroring how the Spark
-      // datasource folds table props into the write params (HoodieSparkSqlWriter#mergeParamsAndGetHoodieConfig).
-      //
-      // Meta-field population is physical, so it belongs to the table, not to the run. StreamSync builds
-      // its write config from `props` alone, and the mode is persisted only in `initializeEmptyTable` --
-      // which runs solely when the base path does not exist. So a restart against an existing table that
-      // passes only the legacy boolean (or nothing at all) resolved to NONE and wrote base files with a
-      // null _hoodie_commit_time, while hoodie.properties still advertised COMMIT_TIME_ONLY. Incremental
-      // queries were then admitted and silently dropped every one of those rows.
-      //
-      // Only fills the gap: an explicitly stated mode is left alone so a genuine conflict is still caught
-      // downstream by BaseHoodieWriteClient#validateAgainstTableProperties.
-      if (!props.containsKey(HoodieTableConfig.META_FIELDS_MODE.key())) {
-        builder.withMetaFieldsMode(tableConfig.getMetaFieldsMode());
-      }
       // After upgrade to table version 9 with MySqlDebeziumAvroPayload, ordering fields are changed from
       // `_event_seq` to `_event_bin_file,_event_pos`. The logic here ensures that deltastreamer config is updated
       // if it points to older ordering field `_event_seq`.

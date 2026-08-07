@@ -126,18 +126,43 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  void validateAgainstTablePropertiesAllowsUnstatedWriterToNarrow() throws IOException {
+  void validateAgainstTablePropertiesMakesAnUnstatedWriterInheritTheTableMode() throws IOException {
     initMetaClient();
-    // Long-standing behavior: a writer that sets only populate.meta.fields=false (never naming a
-    // mode) resolves to NONE, and must still be able to write to an ALL table. Many callers build
-    // a write config without restating the table's meta-field settings.
-    HoodieWriteConfig unstated = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withPopulateMetaFields(false)
-        .build();
-    assertEquals(MetaFieldsMode.NONE, unstated.getMetaFieldsMode());
+    // hoodie.meta.fields.mode is a table property, changeable only through hudi-cli or an upgrade. A
+    // writer that states neither meta-field property therefore inherits the table's mode. Many
+    // callers build a write config that way — table services and a restarted StreamSync both do — so
+    // they must inherit rather than be rejected.
+    //
+    // "Unstated" means neither property. An explicitly-passed legacy boolean is a stated intent and
+    // is compared instead, see validateAgainstTablePropertiesRejectsAnExplicitLegacyBooleanThatDisagrees.
+    HoodieWriteConfig unstated = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    assertEquals(MetaFieldsMode.ALL, unstated.getMetaFieldsMode(),
+        "precondition: on its own an unstated writer resolves to the ALL default");
+
     validatorClient(unstated)
         .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.ALL), unstated);
+
+    assertEquals(MetaFieldsMode.ALL, unstated.getMetaFieldsMode());
+    assertTrue(unstated.populateMetaFields(),
+        "the derived legacy boolean must follow the inherited mode, or the ~55 call sites still "
+            + "reading populateMetaFields() would disagree with the enum");
+  }
+
+  @Test
+  void validateAgainstTablePropertiesMakesAnUnstatedWriterInheritASelectiveMode() throws IOException {
+    initMetaClient();
+    // The inheriting half of the StreamSync-restart case: a restarted writer that states nothing must
+    // pick up COMMIT_TIME_ONLY and keep writing commit times, rather than resolving to the ALL default
+    // (rejected as a widening) or to NONE (silently producing rows incremental queries then drop).
+    HoodieWriteConfig unstated = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+
+    validatorClient(unstated)
+        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), unstated);
+
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, unstated.getMetaFieldsMode(),
+        "the writer must have adopted the table's selective mode");
+    assertFalse(unstated.populateMetaFields(),
+        "COMMIT_TIME_ONLY does not populate the record key, so the derived boolean stays false");
   }
 
   @Test
@@ -149,38 +174,37 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     // null _hoodie_commit_time while hoodie.properties still says COMMIT_TIME_ONLY, and incremental
     // queries — which the table is still deemed to support — would silently drop those rows.
     //
-    // Distinct from validateAgainstTablePropertiesAllowsUnstatedWriterToNarrow above: there the
-    // table is ALL, where narrowing remains legal. The carve-out is scoped to non-selective tables.
-    HoodieWriteConfig unstated = HoodieWriteConfig.newBuilder()
+    // The writer must *state* NONE for this to be a conflict. An unstated writer inherits instead —
+    // see validateAgainstTablePropertiesMakesAnUnstatedWriterInheritASelectiveMode.
+    HoodieWriteConfig stated = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withPopulateMetaFields(false)
+        .withMetaFieldsMode(MetaFieldsMode.NONE)
         .build();
-    assertEquals(MetaFieldsMode.NONE, unstated.getMetaFieldsMode());
+    assertEquals(MetaFieldsMode.NONE, stated.getMetaFieldsMode());
 
     HoodieException ex = assertThrows(HoodieException.class, () ->
-        validatorClient(unstated).validateAgainstTableProperties(
-            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), unstated));
+        validatorClient(stated).validateAgainstTableProperties(
+            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), stated));
     assertTrue(ex.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()), ex.getMessage());
     assertTrue(ex.getMessage().contains("COMMIT_TIME_ONLY") && ex.getMessage().contains("NONE"),
         "error must name both modes: " + ex.getMessage());
-    // The writer never set the mode, so the message must not claim it did.
-    assertFalse(ex.getMessage().contains("explicitly set"), ex.getMessage());
+    // The message must point at the sanctioned mutation path rather than implying a write can do it.
+    assertTrue(ex.getMessage().contains("hudi-cli"), ex.getMessage());
   }
 
   @Test
-  void validateAgainstTablePropertiesRejectsSelectiveToSelectiveNarrowingWhenUnstated() throws IOException {
+  void validateAgainstTablePropertiesRejectsStatedSelectiveToSelectiveNarrowing() throws IOException {
     initMetaClient();
-    // Same shape one step in: an unstated writer against COMMIT_TIME_AND_FILE_NAME. Nothing in this
-    // suite previously mentioned that mode, so the isRecordKeyPopulated clause of isWiderThan was
-    // mutation-survivable here.
-    HoodieWriteConfig unstated = HoodieWriteConfig.newBuilder()
+    // Same shape one step in: a writer stating COMMIT_TIME_ONLY against COMMIT_TIME_AND_FILE_NAME.
+    // Narrowing between two selective modes is still a conflict — only hudi-cli may do that.
+    HoodieWriteConfig stated = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withPopulateMetaFields(false)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
         .build();
 
     assertThrows(HoodieException.class, () ->
-        validatorClient(unstated).validateAgainstTableProperties(
-            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME), unstated));
+        validatorClient(stated).validateAgainstTableProperties(
+            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME), stated));
   }
 
   @Test
@@ -223,17 +247,57 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  void validateAgainstTablePropertiesRejectsWideningEvenWhenUnstated() throws IOException {
+  void validateAgainstTablePropertiesMakesADefaultWriterInheritNoneRatherThanWiden() throws IOException {
     initMetaClient();
-    // Widening is rejected regardless of whether the writer named a mode: a default writer resolves
-    // to ALL, which would claim meta columns a NONE table never wrote.
+    // A default writer states neither meta-field property, so it inherits NONE rather than being
+    // rejected for widening. That is the point of inheritance: the overwhelmingly common writer —
+    // one that says nothing about meta fields — must keep working against any table, and it cannot
+    // accidentally start populating columns the table never wrote.
     HoodieWriteConfig defaultWriteConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    assertEquals(MetaFieldsMode.ALL, defaultWriteConfig.getMetaFieldsMode());
+    assertEquals(MetaFieldsMode.ALL, defaultWriteConfig.getMetaFieldsMode(),
+        "precondition: on its own a default writer resolves to ALL");
+
+    validatorClient(defaultWriteConfig)
+        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.NONE), defaultWriteConfig);
+
+    assertEquals(MetaFieldsMode.NONE, defaultWriteConfig.getMetaFieldsMode(),
+        "the writer must have inherited NONE from the table");
+    assertFalse(defaultWriteConfig.populateMetaFields());
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsStatedWidening() throws IOException {
+    initMetaClient();
+    // Widening is rejected when the writer asks for it: ALL against a NONE table would claim meta
+    // columns the table never wrote, and earlier commits cannot be distinguished from later ones.
+    HoodieWriteConfig allWriter = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetaFieldsMode(MetaFieldsMode.ALL)
+        .build();
 
     HoodieException ex = assertThrows(HoodieException.class, () ->
-        validatorClient(defaultWriteConfig)
-            .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.NONE), defaultWriteConfig));
+        validatorClient(allWriter)
+            .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.NONE), allWriter));
     assertTrue(ex.getMessage().contains("cannot be widened"), ex.getMessage());
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsAnExplicitLegacyBooleanThatDisagrees() throws IOException {
+    initMetaClient();
+    // The one user-visible break in this rule. Passing populate.meta.fields=false against an ALL
+    // table used to narrow it silently (HUDI-2161); it now throws, because the writer explicitly
+    // asked for something the table cannot do. Telling the user beats overriding them — but existing
+    // jobs that pass this flag against a default table will fail until they drop it.
+    HoodieWriteConfig legacyFalse = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withPopulateMetaFields(false)
+        .build();
+
+    HoodieException ex = assertThrows(HoodieException.class, () ->
+        validatorClient(legacyFalse)
+            .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.ALL), legacyFalse));
+    assertTrue(ex.getMessage().contains("hudi-cli"),
+        "the message must point at the sanctioned mutation path: " + ex.getMessage());
   }
 
   @Test

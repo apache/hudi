@@ -1545,52 +1545,79 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return true;
   }
 
+  /**
+   * Adopt the table's {@code hoodie.meta.fields.mode} when this writer did not state one.
+   *
+   * <p>The mode is a table property: it is settable at table creation, through hudi-cli, or by an
+   * upgrade, and never by an ordinary write. Callers routinely build a write config without
+   * restating the table's meta-field settings — table services do, and so does a restarted
+   * StreamSync — and such a writer must write what the table already advertises rather than silently
+   * narrowing it. Without this, an unstated writer resolves to {@code NONE} (via the deprecated
+   * {@code hoodie.populate.meta.fields} fallback) and writes null meta columns into a table whose
+   * earlier files have them populated.
+   *
+   * <p>Inheritance applies only when the writer states <em>neither</em> property. If it explicitly
+   * set the mode or the deprecated boolean, that value is left alone so the comparison below can
+   * reject it on a mismatch: a user who deliberately passed {@code populate.meta.fields=false}
+   * against an {@code ALL} table should be told the setting conflicts, not have it silently
+   * overridden.
+   *
+   * @return true when the writer stated neither property, i.e. the mode was inherited and cannot
+   *         disagree with the table.
+   */
+  private static boolean inferMetaFieldsModeFromTable(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+    boolean statedMode = writeConfig.contains(HoodieTableConfig.META_FIELDS_MODE)
+        && !StringUtils.isNullOrEmpty(writeConfig.getString(HoodieTableConfig.META_FIELDS_MODE));
+    boolean statedLegacyBoolean = writeConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS);
+    if (statedMode || statedLegacyBoolean) {
+      return false;
+    }
+    MetaFieldsMode tableMode = tableConfig.getMetaFieldsMode();
+    writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, tableMode.name());
+    // Keep the derived boolean in step, so the ~55 call sites still reading populateMetaFields()
+    // observe an answer consistent with the mode.
+    writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+        Boolean.toString(tableMode.toLegacyPopulateMetaFields()));
+    return true;
+  }
+
   public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
-    // Meta-field population is physical, so a writer must not claim columns the table does not
-    // have. Compare the full enum rather than the legacy booleans: those collapse every selective
-    // mode to false, so a writer claiming COMMIT_TIME_ONLY against a NONE table would slip through
-    // and advertise commit times that were never written.
+    // A writer that stated neither meta-field property inherits the table's mode here, which makes
+    // the comparison below a no-op for it. A writer that stated either keeps its value and is
+    // compared.
+    inferMetaFieldsModeFromTable(tableConfig, writeConfig);
+
+    // Meta-field population is physical, so a writer must not disagree with the table about which
+    // meta columns hold values. Compare the full enum rather than the legacy booleans: those
+    // collapse every selective mode to false, so a writer claiming COMMIT_TIME_ONLY against a NONE
+    // table would slip through and advertise commit times that were never written.
     //
-    // Two distinct cases, because writers routinely omit meta-field settings entirely:
-    //
-    //  - Widening is always rejected. Enabling a column now would leave earlier commits without it,
-    //    and readers cannot tell the two apart.
-    //  - Any disagreement is rejected when the writer *explicitly* sets hoodie.meta.fields.mode, or
-    //    when the table is on a selective mode. An explicit NONE against a COMMIT_TIME_ONLY table
-    //    would write null commit times while the table still advertises COMMIT_TIME_ONLY, making
-    //    incremental queries silently miss those rows — and so would an *unstated* writer that
-    //    resolves to NONE, which is how the StreamSync-restart case slipped through.
-    //
-    // The narrowing carve-out is therefore limited to non-selective tables: resolving to NONE
-    // against an ALL table is long-standing behavior for callers that build a write config without
-    // restating the table's settings (see d5026e9a2485 / HUDI-2161), and there writing fewer meta
-    // columns cannot make a reader believe in absent data — nothing keys off a partially populated
-    // ALL table. A selective table has no such guarantee, because the mode it advertises is exactly
-    // what the read path trusts.
+    // hoodie.meta.fields.mode is a table property, changeable only via hudi-cli or an upgrade — never
+    // as a side effect of a write. Both directions are therefore rejected, for different reasons:
+    //  - Widening would leave earlier commits missing a column later ones have, and readers cannot
+    //    tell the two apart.
+    //  - Narrowing would leave rows the table still advertises as populated, which incremental
+    //    queries silently skip — the StreamSync-restart data loss.
     MetaFieldsMode tableMetaFieldsMode = tableConfig.getMetaFieldsMode();
     MetaFieldsMode writeMetaFieldsMode = writeConfig.getMetaFieldsMode();
-    boolean writerStatedMode = writeConfig.contains(HoodieTableConfig.META_FIELDS_MODE)
-        && !StringUtils.isNullOrEmpty(writeConfig.getString(HoodieTableConfig.META_FIELDS_MODE));
     if (writeMetaFieldsMode.isWiderThan(tableMetaFieldsMode)) {
       throw new HoodieException(String.format(
           "%s cannot be widened for an existing table: table is %s but the writer requests %s. Meta "
               + "columns are physical, so enabling one now would leave earlier commits without it. "
-              + "Set %s=%s on the writer, or recreate the table to change it.",
+              + "Set %s=%s on the writer, or change the table's mode through hudi-cli.",
           HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode, writeMetaFieldsMode,
           HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode));
-    } else if (writeMetaFieldsMode != tableMetaFieldsMode
-        && (writerStatedMode || tableMetaFieldsMode.isSelective())) {
+    } else if (writeMetaFieldsMode != tableMetaFieldsMode) {
       throw new HoodieException(String.format(
-          "%s mismatch: table is %s but the writer resolves to %s%s. Meta columns are physical, so the "
+          "%s mismatch: table is %s but the writer requests %s. Meta columns are physical, so the "
               + "writer must match the table — writing fewer of them leaves rows the table still "
-              + "advertises as populated, which incremental queries then silently skip. Set %s=%s on "
-              + "the writer, or recreate the table.",
+              + "advertises as populated, which incremental queries then silently skip. %s is a table "
+              + "property: drop it from the writer to inherit %s, or change the table's mode through "
+              + "hudi-cli.",
           HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode, writeMetaFieldsMode,
-          writerStatedMode ? " (explicitly set)"
-              : " (not set on the writer; it defaults from " + HoodieTableConfig.POPULATE_META_FIELDS.key() + ")",
           HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode));
     }
 
