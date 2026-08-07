@@ -27,6 +27,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.sql.{Dataset, Row, SparkSession, SQLContext}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.Assertions.assertEquals
 
 import scala.collection.JavaConverters
 
@@ -123,6 +124,23 @@ class HoodieSparkWriterTestBase {
     df.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
       .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
       .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
+  }
+
+  /**
+   * Asserts that every one of the five meta columns is NULL on every row.
+   *
+   * Strictly NULL, not "null or empty": the row-writer bulk-insert stubs are
+   * `Literal.create(null, StringType)` so the columns are Parquet OPTIONAL, which is what lets a
+   * selective `hoodie.meta.fields.mode` leave them unpopulated. Accepting `""` as well would stop
+   * pinning which representation is written, and would disagree with the `assertNull` assertions in
+   * TestMetaFieldsMode for the same scenario.
+   */
+  def assertNoMetaFieldsPopulated(df: Dataset[Row]): Unit = {
+    (0 until HoodieRecord.HOODIE_META_COLUMNS.size()).foreach { i =>
+      val column = HoodieRecord.HOODIE_META_COLUMNS.get(i)
+      assertEquals(0, df.select(column).filter(entry => !entry.isNullAt(0)).count(),
+        s"expected every row to have a NULL $column")
+    }
   }
 
   /**

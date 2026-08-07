@@ -61,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Every {@link MetaFieldsMode} value is exercised via a write / re-read round trip; on-disk column
  * population is verified by reading the parquet files back and inspecting the meta-column values.
  */
-class TestMetaFieldsMode extends SparkClientFunctionalTestHarness {
+class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
 
   private static StructType simpleSchema() {
     return DataTypes.createStructType(new StructField[]{
@@ -340,112 +340,100 @@ class TestMetaFieldsMode extends SparkClientFunctionalTestHarness {
   }
 
   // -------------------------------------------------------------------------
-  // Clustering coverage. Inline clustering rewrites files through the create/merge handles which
-  // delegate to the same underlying HoodieAvroParquetWriter / HoodieRowCreateHandle we exercise
-  // in the write tests. Verifies clustered files preserve the mode's column population semantics.
+  // Clustering coverage.
+  //
+  // These target 358fbfdd717a, where HoodieRowCreateHandle's selective path copied the *source
+  // row's* _hoodie_file_name during clustering, leaving records pointing at a file clustering had
+  // just replaced. asserting only assertNotNull cannot catch that — the stale value is non-null too
+  // — so the assertion here compares the column against the file actually holding the row.
+  //
+  // Only the selective modes are covered: ALL and NONE route through writeRow /
+  // writeRowNoMetaFields and never enter the branch the fix touched.
   // -------------------------------------------------------------------------
 
-  @Test
-  void clusteringPreservesCommitTimeOnlyMode() {
+  private Map<String, String> inlineClusteringOptions(MetaFieldsMode mode) {
     Map<String, String> options = baseOptions();
-    options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
-    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.COMMIT_TIME_ONLY.name());
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
-    // Inline clustering after each write.
     options.put("hoodie.clustering.inline", "true");
     options.put("hoodie.clustering.inline.max.commits", "1");
     options.put("hoodie.clustering.plan.strategy.target.file.max.bytes", "10485760");
     options.put("hoodie.clustering.plan.strategy.small.file.limit", "10485760");
+    return options;
+  }
 
-    writeRows(Arrays.asList(
-            RowFactory.create("k1", "p1", "v1"),
-            RowFactory.create("k2", "p1", "v2"),
-            RowFactory.create("k3", "p1", "v3")),
-        simpleSchema(), options, basePath(), SaveMode.Overwrite);
-
+  /**
+   * Asserts clustering actually ran and that every surviving row's {@code _hoodie_file_name} names
+   * the file holding it.
+   *
+   * <p>Reads through Hudi rather than globbing the parquet directly: after inline clustering the
+   * pre-clustering file is still on disk (no cleaning has run), so a raw glob would also inspect
+   * rows that were replaced and are no longer served.
+   */
+  private void assertClusteredFileNamesPointAtTheirOwnFile(String path, MetaFieldsMode mode) {
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setBasePath(basePath()).setConf(storageConf()).build();
-    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, metaClient.getTableConfig().getMetaFieldsMode());
-    // After clustering, files are rewritten — verify the rewritten files still respect the mode.
+        HoodieTableMetaClient.builder().setBasePath(path).setConf(storageConf()).build();
+    assertEquals(mode, metaClient.getTableConfig().getMetaFieldsMode());
+    assertEquals(1, metaClient.getActiveTimeline().getCompletedReplaceTimeline().countInstants(),
+        "clustering must have produced a replacecommit, otherwise this test proves nothing");
+
+    List<Row> rows = spark().read().format("hudi").load(path)
+        .withColumn("__containing_file", functions.input_file_name())
+        .collectAsList();
+    assertFalse(rows.isEmpty(), "expected the clustered table to still serve rows");
+
+    for (Row row : rows) {
+      String fileName = row.getAs(HoodieRecord.FILENAME_METADATA_FIELD);
+      String containingFile = row.getAs("__containing_file").toString();
+      if (mode.isFileNamePopulated()) {
+        assertNotNull(fileName, "file name is opted in, so clustered rows must carry one");
+        assertTrue(containingFile.endsWith("/" + fileName),
+            "_hoodie_file_name must name the file holding the row after clustering, not the "
+                + "pre-clustering file it was read from; got " + fileName + " inside " + containingFile);
+      } else {
+        assertNull(fileName,
+            "file name is not opted in, so clustering must not populate it; got " + fileName);
+      }
+    }
+  }
+
+  @Test
+  void clusteringWritesTheNewFileNameUnderFileNameOnly() {
+    Map<String, String> options = inlineClusteringOptions(MetaFieldsMode.FILE_NAME_ONLY);
+    writeRows(Arrays.asList(
+            RowFactory.create("k1", "p1", "v1"),
+            RowFactory.create("k2", "p1", "v2"),
+            RowFactory.create("k3", "p1", "v3")),
+        simpleSchema(), options, basePath(), SaveMode.Overwrite);
+
+    assertClusteredFileNamesPointAtTheirOwnFile(basePath(), MetaFieldsMode.FILE_NAME_ONLY);
+  }
+
+  @Test
+  void clusteringWritesTheNewFileNameUnderCommitTimeAndFileName() {
+    Map<String, String> options = inlineClusteringOptions(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME);
+    writeRows(Arrays.asList(
+            RowFactory.create("k1", "p1", "v1"),
+            RowFactory.create("k2", "p1", "v2"),
+            RowFactory.create("k3", "p1", "v3")),
+        simpleSchema(), options, basePath(), SaveMode.Overwrite);
+
+    assertClusteredFileNamesPointAtTheirOwnFile(basePath(), MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME);
+  }
+
+  @Test
+  void clusteringLeavesFileNameNullUnderCommitTimeOnly() {
+    Map<String, String> options = inlineClusteringOptions(MetaFieldsMode.COMMIT_TIME_ONLY);
+    writeRows(Arrays.asList(
+            RowFactory.create("k1", "p1", "v1"),
+            RowFactory.create("k2", "p1", "v2"),
+            RowFactory.create("k3", "p1", "v3")),
+        simpleSchema(), options, basePath(), SaveMode.Overwrite);
+
+    // Also guards HoodieParquetBinaryCopyBase's unconditional file-name mask from leaking into the
+    // row-writer clustering path.
+    assertClusteredFileNamesPointAtTheirOwnFile(basePath(), MetaFieldsMode.COMMIT_TIME_ONLY);
     assertMetaColumnPopulation(basePath(), MetaFieldsMode.COMMIT_TIME_ONLY);
-  }
-
-  @Test
-  void clusteringPreservesFileNameOnlyMode() {
-    Map<String, String> options = baseOptions();
-    options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
-    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.FILE_NAME_ONLY.name());
-    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
-    options.put("hoodie.clustering.inline", "true");
-    options.put("hoodie.clustering.inline.max.commits", "1");
-    options.put("hoodie.clustering.plan.strategy.target.file.max.bytes", "10485760");
-    options.put("hoodie.clustering.plan.strategy.small.file.limit", "10485760");
-
-    writeRows(Arrays.asList(
-            RowFactory.create("k1", "p1", "v1"),
-            RowFactory.create("k2", "p1", "v2"),
-            RowFactory.create("k3", "p1", "v3")),
-        simpleSchema(), options, basePath(), SaveMode.Overwrite);
-
-    assertMetaColumnPopulation(basePath(), MetaFieldsMode.FILE_NAME_ONLY);
-  }
-
-  @Test
-  void clusteringPreservesCommitTimeAndFileNameMode() {
-    Map<String, String> options = baseOptions();
-    options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
-    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME.name());
-    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
-    options.put("hoodie.clustering.inline", "true");
-    options.put("hoodie.clustering.inline.max.commits", "1");
-    options.put("hoodie.clustering.plan.strategy.target.file.max.bytes", "10485760");
-    options.put("hoodie.clustering.plan.strategy.small.file.limit", "10485760");
-
-    writeRows(Arrays.asList(
-            RowFactory.create("k1", "p1", "v1"),
-            RowFactory.create("k2", "p1", "v2"),
-            RowFactory.create("k3", "p1", "v3")),
-        simpleSchema(), options, basePath(), SaveMode.Overwrite);
-
-    assertMetaColumnPopulation(basePath(), MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME);
-  }
-
-  @Test
-  void clusteringPreservesAllMode() {
-    Map<String, String> options = baseOptions();
-    // ALL is the default.
-    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
-    options.put("hoodie.clustering.inline", "true");
-    options.put("hoodie.clustering.inline.max.commits", "1");
-    options.put("hoodie.clustering.plan.strategy.target.file.max.bytes", "10485760");
-    options.put("hoodie.clustering.plan.strategy.small.file.limit", "10485760");
-
-    writeRows(Arrays.asList(
-            RowFactory.create("k1", "p1", "v1"),
-            RowFactory.create("k2", "p1", "v2"),
-            RowFactory.create("k3", "p1", "v3")),
-        simpleSchema(), options, basePath(), SaveMode.Overwrite);
-
-    assertMetaColumnPopulation(basePath(), MetaFieldsMode.ALL);
-  }
-
-  @Test
-  void clusteringPreservesNoneMode() {
-    Map<String, String> options = baseOptions();
-    options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
-    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
-    options.put("hoodie.clustering.inline", "true");
-    options.put("hoodie.clustering.inline.max.commits", "1");
-    options.put("hoodie.clustering.plan.strategy.target.file.max.bytes", "10485760");
-    options.put("hoodie.clustering.plan.strategy.small.file.limit", "10485760");
-
-    writeRows(Arrays.asList(
-            RowFactory.create("k1", "p1", "v1"),
-            RowFactory.create("k2", "p1", "v2"),
-            RowFactory.create("k3", "p1", "v3")),
-        simpleSchema(), options, basePath(), SaveMode.Overwrite);
-
-    assertMetaColumnPopulation(basePath(), MetaFieldsMode.NONE);
   }
 
   @Test
@@ -688,6 +676,82 @@ class TestMetaFieldsMode extends SparkClientFunctionalTestHarness {
       assertTrue(containingFile.endsWith("/" + fileName),
           "_hoodie_file_name must name the file actually holding the row, so a copied record cannot "
               + "keep pointing at its previous file; got " + fileName + " inside " + containingFile);
+    }
+  }
+
+  /**
+   * The metadata table is disabled in the rest of this class for speed, but it is on by default in
+   * production. Nothing in the patch proves the data table's mode cannot leak into the MDT's write
+   * config — {@code HoodieMetadataWriteUtils#createMetadataWriteConfig} builds a fresh config and
+   * sets {@code populate.meta.fields=false} itself, so today it cannot, but that is one
+   * {@code withProps(dataWriteConfig.getProps())} refactor away from turning every MDT-enabled
+   * selective write into a hard failure.
+   */
+  @Test
+  void selectiveModeWritesSucceedWithTheMetadataTableEnabled() {
+    Map<String, String> options = baseOptions();
+    options.put(HoodieMetadataConfig.ENABLE.key(), "true");
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.COMMIT_TIME_ONLY.name());
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+
+    writeRows(Arrays.asList(
+            RowFactory.create("k1", "p1", "v1"),
+            RowFactory.create("k2", "p1", "v2")),
+        simpleSchema(), options, basePath(), SaveMode.Overwrite);
+
+    HoodieTableMetaClient dataTable =
+        HoodieTableMetaClient.builder().setBasePath(basePath()).setConf(storageConf()).build();
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, dataTable.getTableConfig().getMetaFieldsMode());
+    assertMetaColumnPopulation(basePath(), MetaFieldsMode.COMMIT_TIME_ONLY);
+
+    // The MDT is its own table and must stay NONE regardless of what the data table opted into.
+    HoodieTableMetaClient metadataTable = HoodieTableMetaClient.builder()
+        .setBasePath(basePath() + "/.hoodie/metadata")
+        .setConf(storageConf())
+        .build();
+    assertEquals(MetaFieldsMode.NONE, metadataTable.getTableConfig().getMetaFieldsMode(),
+        "the data table's mode must not leak into the metadata table");
+  }
+
+  /**
+   * Every other functional write here uses {@code SaveMode.Overwrite}, i.e. a fresh table each time,
+   * which skips the inheritance path entirely: {@code HoodieSparkSqlWriter} folds table props into
+   * the write params only when the mode is not Overwrite, and {@code validateTableConfig} is bypassed
+   * for Overwrite altogether. An append against an existing selective table is the realistic shape.
+   */
+  @Test
+  void appendWithoutRestatingTheModeKeepsTheTableSelective() {
+    Map<String, String> options = baseOptions();
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.COMMIT_TIME_ONLY.name());
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+
+    writeRows(Arrays.asList(
+            RowFactory.create("k1", "p1", "v1"),
+            RowFactory.create("k2", "p1", "v2")),
+        simpleSchema(), options, basePath(), SaveMode.Overwrite);
+
+    // Second write states neither meta-field property, so it must inherit COMMIT_TIME_ONLY.
+    Map<String, String> appendOptions = baseOptions();
+    appendOptions.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+    writeRows(Arrays.asList(
+            RowFactory.create("k3", "p1", "v3"),
+            RowFactory.create("k4", "p1", "v4")),
+        simpleSchema(), appendOptions, basePath(), SaveMode.Append);
+
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setBasePath(basePath()).setConf(storageConf()).build();
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, metaClient.getTableConfig().getMetaFieldsMode(),
+        "an append that says nothing about meta fields must not change the table's mode");
+
+    // Both commits' rows must carry a commit time; a null one is what incremental queries drop.
+    Dataset<Row> all = spark().read().format("hudi").load(basePath());
+    List<Row> rows = all.collectAsList();
+    assertEquals(4, rows.size());
+    for (Row row : rows) {
+      assertNotNull(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
+          "row " + row.getAs("column1") + " has a null commit time after an inheriting append");
+      assertNull(row.getAs(HoodieRecord.FILENAME_METADATA_FIELD),
+          "file name must stay null under COMMIT_TIME_ONLY");
     }
   }
 
