@@ -458,6 +458,15 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
   // columns but keeps _hoodie_commit_time so incremental reads still work. The assertions below are
   // on the query result, not on the raw parquet — a populated commit-time column is necessary but
   // not sufficient, since the relation also has to admit the table and filter on the right range.
+  //
+  // IMPORTANT for anyone adding a case here: assert on collectAsList(), never count() and never a
+  // select() of a subset of columns. A column-less or narrowly-projected CoW incremental scan
+  // returns zero rows — HoodieFileGroupReaderBasedFileFormat routes it to readBaseFile, which pushes
+  // the _hoodie_commit_time predicate into Parquet without projecting that column. That is a
+  // PRE-EXISTING defect, not something this feature introduced: it reproduces on unmodified master
+  // at table version 9 on a default ALL table (collect=2, count=0, select(col)=0). Being tracked
+  // separately; deliberately out of scope here because it sits on the shared read path for every
+  // Spark query. No test in this class is disabled for it — reading whole rows sidesteps it.
   // ---------------------------------------------------------------------------------------------
 
   /**
