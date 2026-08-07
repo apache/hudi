@@ -360,18 +360,96 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
   }
 
   @Test
-  public void testSetMetaFieldsModeToAllClearsProperty() throws IOException {
+  public void testSetMetaFieldsModeToAllWritesTheModeExplicitly() throws IOException {
     assertTrue(prepareTable());
-    // First move to a selective mode so we have something to clear.
+    // First move to a selective mode, then back to ALL. Legal here only because the table has no
+    // commits — on a populated table this would be a widening and refused outright.
     shell.evaluate(() -> "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY");
-    // Then set back to ALL.
     Object result = shell.evaluate(() -> "table set-meta-fields-mode --target-mode ALL");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
+
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     assertEquals(MetaFieldsMode.ALL, client.getTableConfig().getMetaFieldsMode());
     assertTrue(client.getTableConfig().populateMetaFields());
-    // The mode property should be cleared (ALL is implicit).
-    assertFalse(client.getTableConfig().getProps().containsKey(HoodieTableConfig.META_FIELDS_MODE.key()));
+    // The mode is written explicitly rather than deleted. Deleting it would leave the table
+    // resolving through the legacy fallback -- indistinguishable from a table predating the
+    // property -- and would make this command's effect invisible in hoodie.properties. The v10->v9
+    // downgrade handler also reads the mode to derive the boolean it writes back.
+    assertEquals(MetaFieldsMode.ALL.name(),
+        client.getTableConfig().getString(HoodieTableConfig.META_FIELDS_MODE));
+  }
+
+  @Test
+  public void testSetMetaFieldsModeRefusesWideningOnPopulatedTableEvenWithForce() throws Exception {
+    assertTrue(prepareTable());
+    shell.evaluate(() -> "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY");
+    createDummyCommitFile("20260101000000000");
+    HoodieCLI.refreshTableMetadata();
+
+    // Widening is one-way-forbidden and --force does not override it: existing files are not
+    // rewritten, so the table would advertise a column that is null for every row written so far,
+    // and incremental queries would then admit the table and silently skip those rows. There is no
+    // consequence for an operator to knowingly accept, so this is a hard failure.
+    for (String command : new String[] {
+        "table set-meta-fields-mode --target-mode ALL",
+        "table set-meta-fields-mode --target-mode ALL --force true",
+        "table set-meta-fields-mode --target-mode COMMIT_TIME_AND_FILE_NAME --force true"}) {
+      Object result = shell.evaluate(() -> command);
+      assertFalse(ShellEvaluationResultUtil.isSuccess(result), "expected refusal for: " + command);
+      assertTrue(result.toString().contains("widen"),
+          "expected a widening refusal for '" + command + "', got: " + result);
+      assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY,
+          HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode(),
+          "mode must be unchanged after a refused widening");
+    }
+  }
+
+  @Test
+  public void testSetMetaFieldsModeAllowsNarrowingOnPopulatedTableWithForce() throws Exception {
+    assertTrue(prepareTable());
+    shell.evaluate(() -> "table set-meta-fields-mode --target-mode COMMIT_TIME_AND_FILE_NAME");
+    createDummyCommitFile("20260101000000000");
+    HoodieCLI.refreshTableMetadata();
+
+    // Narrowing is the direction the CLI exists to allow. It still needs --force, because it leaves
+    // mixed-mode files, but it is not refused outright the way widening is.
+    Object refused = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY");
+    assertFalse(ShellEvaluationResultUtil.isSuccess(refused));
+
+    Object forced = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode COMMIT_TIME_ONLY --force true");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(forced), "narrowing with --force must succeed: " + forced);
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY,
+        HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode());
+  }
+
+  @Test
+  public void testSetMetaFieldsModeAcceptsLowercaseTargetMode() {
+    assertTrue(prepareTable());
+    // Routed through MetaFieldsMode.parse rather than valueOf, so an operator typing the mode in
+    // lower case is not rejected.
+    Object result = shell.evaluate(() ->
+        "table set-meta-fields-mode --target-mode commit_time_only");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result), "expected lowercase to be accepted: " + result);
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY,
+        HoodieCLI.getTableMetaClient().getTableConfig().getMetaFieldsMode());
+  }
+
+  @Test
+  public void testSetMetaFieldsModeKeepsBothPropertiesInAgreement() {
+    assertTrue(prepareTable());
+    // hoodie.properties must never contradict itself: the legacy boolean is derived from the mode,
+    // never taken from the caller, so a pre-1.3.0 reader that sees only the boolean treats a
+    // selective table as NONE rather than assuming meta columns that are physically null.
+    for (MetaFieldsMode mode : MetaFieldsMode.values()) {
+      shell.evaluate(() -> "table set-meta-fields-mode --target-mode " + mode.name() + " --force true");
+      HoodieTableConfig tableConfig = HoodieCLI.getTableMetaClient().getTableConfig();
+      if (tableConfig.getMetaFieldsMode() == mode) {
+        assertEquals(mode.toLegacyPopulateMetaFields(), tableConfig.populateMetaFields(),
+            "populate.meta.fields must be the derived value for mode " + mode);
+      }
+    }
   }
 
   @Test

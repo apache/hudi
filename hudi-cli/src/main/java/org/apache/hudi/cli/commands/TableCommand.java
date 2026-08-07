@@ -54,7 +54,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -259,12 +258,13 @@ public class TableCommand {
   }
 
   @ShellMethod(key = "table set-meta-fields-mode",
-      value = "Set hoodie.meta.fields.mode on an existing table. Refuses to change the mode on a "
-          + "table that already has commits unless --force is passed — the property is a "
-          + "physical-storage decision baked into files at write time, so mixing modes across "
-          + "commits produces mixed-mode files whose incremental / file-pruning semantics differ "
-          + "between old and new data. Use only on a table with zero commits, or with --force if "
-          + "you accept the data-correctness consequences.")
+      value = "Set hoodie.meta.fields.mode on an existing table. This is the sanctioned way to change "
+          + "the property — a write never can, since it is a physical-storage decision baked into "
+          + "files at write time. Two guards apply on a table that already has commits: widening the "
+          + "mode (adding a populated meta column) is refused outright, because existing files are "
+          + "not rewritten and the table would advertise a column that is null for every earlier "
+          + "row; narrowing is refused unless --force is passed, since it leaves mixed-mode files "
+          + "whose incremental / file-pruning semantics differ between old and new data.")
   public String setMetaFieldsMode(
       @ShellOption(value = {"--target-mode"},
           help = "One of ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME")
@@ -277,11 +277,12 @@ public class TableCommand {
       final boolean force) throws IOException {
     MetaFieldsMode targetMode;
     try {
-      targetMode = MetaFieldsMode.valueOf(targetModeStr.trim());
+      // Routed through parse rather than valueOf: it is case-insensitive, trims, and lists the
+      // allowed values in its message, so an operator typing `commit_time_only` is not rejected and
+      // the error text matches what a bad value in hoodie.properties or a write option produces.
+      targetMode = MetaFieldsMode.parse(targetModeStr);
     } catch (IllegalArgumentException e) {
-      throw new HoodieException(String.format(
-          "Unsupported --target-mode '%s'. Allowed values: ALL, NONE, COMMIT_TIME_ONLY, "
-              + "FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME.", targetModeStr));
+      throw new HoodieException("Invalid --target-mode: " + e.getMessage(), e);
     }
 
     HoodieCLI.refreshTableMetadata();
@@ -293,8 +294,29 @@ public class TableCommand {
       return String.format("Table is already in %s mode; nothing to change.", targetMode);
     }
 
-    // Safety check: refuse to change the mode on a table with commits unless --force.
     int commitCount = client.getActiveTimeline().getCommitsTimeline().countInstants();
+
+    // Meta-field population is one-way for a table that already holds data, and --force does not
+    // override it: dropping a column leaves earlier files carrying values nothing reads, which a
+    // reader can ignore, but *adding* one leaves later files claiming a column earlier files do not
+    // physically have. Nothing distinguishes the two sets, so a widened table advertises a column
+    // that is silently null for every pre-existing row — incremental queries would then admit the
+    // table and drop exactly those rows. There is no consequence for an operator to accept here, so
+    // this is a hard failure rather than a --force gate.
+    //
+    // Same predicate the write path uses (BaseHoodieWriteClient#validateAgainstTableProperties), so
+    // the CLI and the writer cannot disagree about which transitions are legal.
+    if (commitCount > 0 && targetMode.isWiderThan(currentMode)) {
+      throw new HoodieException(String.format(
+          "Refusing to widen hoodie.meta.fields.mode from %s to %s on a table with %d commit(s): "
+              + "%s populates meta columns that %s does not, and this command does not rewrite "
+              + "existing files. The table would advertise a column that is null for every row "
+              + "written so far, which incremental queries and file-name lookups silently skip. "
+              + "Narrowing the mode is allowed; to widen, recreate the table.",
+          currentMode, targetMode, commitCount, targetMode, currentMode));
+    }
+
+    // Safety check: refuse to change the mode on a table with commits unless --force.
     if (commitCount > 0 && !force) {
       throw new HoodieException(String.format(
           "Refusing to change hoodie.meta.fields.mode on a table that already has %d commit(s). "
@@ -313,21 +335,22 @@ public class TableCommand {
           currentMode, targetMode, commitCount);
     }
 
-    // Persist. ALL and NONE are implicit (derived from populate.meta.fields); selective modes are
-    // written explicitly. We also toggle populate.meta.fields to keep both properties in sync so
-    // older readers that only understand the legacy boolean still degrade correctly.
+    // Persist both properties, always, and derive the legacy boolean from the mode rather than
+    // letting the caller supply it — the same invariant HoodieTableMetaClient.TableBuilder enforces
+    // at creation. hoodie.properties can then never contradict itself, which is what lets a
+    // pre-1.3.0 reader (which sees only the boolean) treat a selective table as NONE instead of
+    // assuming meta columns that are physically null.
+    //
+    // The mode is written even for ALL and NONE rather than deleted. Deleting it would leave the
+    // table resolving through the legacy fallback, which is indistinguishable from a table that
+    // predates the property — and it would make this command's effect invisible to anyone reading
+    // hoodie.properties. Writing it explicitly also keeps the value present for the v10 -> v9
+    // downgrade handler, which reads the mode to derive the boolean it writes back.
     Properties toUpdate = new Properties();
+    toUpdate.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), targetMode.name());
     toUpdate.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(),
-        String.valueOf(targetMode == MetaFieldsMode.ALL));
-    if (targetMode == MetaFieldsMode.ALL || targetMode == MetaFieldsMode.NONE) {
-      // Selective mode is being cleared; delete the property rather than write empty string.
-      HoodieTableConfig.delete(client.getStorage(), client.getMetaPath(),
-          Collections.singleton(HoodieTableConfig.META_FIELDS_MODE.key()));
-      HoodieTableConfig.update(client.getStorage(), client.getMetaPath(), toUpdate);
-    } else {
-      toUpdate.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), targetMode.name());
-      HoodieTableConfig.update(client.getStorage(), client.getMetaPath(), toUpdate);
-    }
+        String.valueOf(targetMode.toLegacyPopulateMetaFields()));
+    HoodieTableConfig.update(client.getStorage(), client.getMetaPath(), toUpdate);
 
     HoodieCLI.refreshTableMetadata();
     Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
