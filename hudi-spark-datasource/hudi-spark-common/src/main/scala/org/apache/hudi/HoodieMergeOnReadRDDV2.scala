@@ -30,7 +30,8 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.log.InstantRange.RangeType
-import org.apache.hudi.common.table.read.HoodieFileGroupReader
+import org.apache.hudi.common.table.read.{HoodieFileGroupReader, HoodieRecordReader}
+import org.apache.hudi.common.table.read.lsm.{HoodieLsmFileGroupReader, LsmReaderUtils}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
@@ -191,18 +192,34 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
         } else {
           val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, optionalFilters,
             Seq.empty, storageConf, metaClient.getTableConfig)
-          val fileGroupReader = HoodieFileGroupReader.builder()
-            .withReaderContext(readerContext)
-            .withHoodieTableMetaClient(metaClient)
-            .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
-            .withLogFiles(logFiles.stream())
-            .withBaseFileOption(baseFileOption)
-            .withPartitionPath(partitionPath)
-            .withProps(properties)
-            .withDataSchema(tableSchema.schema)
-            .withRequestedSchema(requiredSchema.schema)
-            .withInternalSchemaOpt(HOption.ofNullable(tableSchema.internalSchema.orNull))
-            .build()
+          val fileGroupReader: HoodieRecordReader[InternalRow] =
+            if (LsmReaderUtils.shouldUseLsmReader(metaClient.getTableConfig, mergeType)) {
+              HoodieLsmFileGroupReader.builder[InternalRow]()
+                .withReaderContext(readerContext)
+                .withHoodieTableMetaClient(metaClient)
+                .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
+                .withLogFiles(logFiles.stream())
+                .withBaseFileOption(baseFileOption)
+                .withPartitionPath(partitionPath)
+                .withProps(properties)
+                .withDataSchema(tableSchema.schema)
+                .withRequestedSchema(requiredSchema.schema)
+                .withInternalSchemaOpt(HOption.ofNullable(tableSchema.internalSchema.orNull))
+                .build()
+            } else {
+              HoodieFileGroupReader.builder[InternalRow]()
+                .withReaderContext(readerContext)
+                .withHoodieTableMetaClient(metaClient)
+                .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
+                .withLogFiles(logFiles.stream())
+                .withBaseFileOption(baseFileOption)
+                .withPartitionPath(partitionPath)
+                .withProps(properties)
+                .withDataSchema(tableSchema.schema)
+                .withRequestedSchema(requiredSchema.schema)
+                .withInternalSchemaOpt(HOption.ofNullable(tableSchema.internalSchema.orNull))
+                .build()
+            }
           convertCloseableIterator(fileGroupReader.getClosableIterator)
         }
     }

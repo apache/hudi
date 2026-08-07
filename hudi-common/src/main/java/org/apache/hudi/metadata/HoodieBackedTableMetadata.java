@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
@@ -34,7 +35,6 @@ import org.apache.hudi.common.expression.Expression;
 import org.apache.hudi.common.expression.Literal;
 import org.apache.hudi.common.expression.Predicate;
 import org.apache.hudi.common.expression.Predicates;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
@@ -54,6 +54,7 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.buffer.ReusableFileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.lsm.HoodieLsmFileGroupReader;
+import org.apache.hudi.common.table.read.lsm.LsmReaderUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -574,7 +575,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     // If reuse is enabled and full scan is allowed for the partition, we can reuse the file readers for base files and the reader context for the log files.
     boolean shouldReuse = reuse && isFullScanAllowedForPartition(fileSlice.getPartitionPath());
-    boolean useLsmReader = !shouldReuse && shouldUseLsmReader(metadataMetaClient, fileSlice);
+    boolean useLsmReader = !shouldReuse
+        && LsmReaderUtils.shouldUseLsmReader(
+            metadataMetaClient.getTableConfig(), HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE);
     Map<StoragePath, HoodieAvroFileReader> baseFileReaders = Collections.emptyMap();
     ReusableFileGroupRecordBufferLoader<IndexedRecord> recordBufferLoader = null;
     TypedProperties fileGroupReaderProps = ConfigUtils.buildFileGroupReaderProperties(metadataConfig, shouldReuse);
@@ -637,11 +640,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           .build()
           .getClosableIterator();
     }
-  }
-
-  private static boolean shouldUseLsmReader(HoodieTableMetaClient metaClient, FileSlice fileSlice) {
-    return metaClient.getTableConfig().isLSMTreeStorageLayout()
-        && fileSlice.getLogFiles().allMatch(logFile -> FSUtils.isNativeLogFile(logFile.getFileName()));
   }
 
   private ReusableFileGroupRecordBufferLoader<IndexedRecord> buildReusableRecordBufferLoader(FileSlice fileSlice, String latestMetadataInstantTime,
