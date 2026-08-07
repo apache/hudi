@@ -127,9 +127,10 @@ public class TestDataTypeUtils {
         DataTypes.FIELD("id", DataTypes.INT()))
         .getLogicalType();
     assertArrayEquals(new int[] {1, 0}, DataTypeUtils.projectOrdinals(rowType, projected));
+    RowType.RowField[] projectedFields =
+        DataTypeUtils.projectRowFields(rowType, new String[] {"name", "id"});
     assertEquals(Arrays.asList("name", "id"), Arrays.asList(
-        DataTypeUtils.projectRowFields(rowType, new String[] {"name", "id"})[0].getName(),
-        DataTypeUtils.projectRowFields(rowType, new String[] {"name", "id"})[1].getName()));
+        projectedFields[0].getName(), projectedFields[1].getName()));
   }
 
   @Test
