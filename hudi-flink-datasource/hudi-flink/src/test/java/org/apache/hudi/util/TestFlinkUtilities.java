@@ -27,6 +27,8 @@ import org.apache.flink.core.io.GenericInputSplit;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
 import org.apache.flink.runtime.state.hashmap.HashMapStateBackend;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelDelete;
+import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelUpdate;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
@@ -127,8 +129,14 @@ class TestFlinkUtilities {
     assertTrue(ChangelogModes.FULL.contains(RowKind.UPDATE_BEFORE));
     assertFalse(ChangelogModes.UPSERT.contains(RowKind.UPDATE_BEFORE));
     assertTrue(ChangelogModes.UPSERT.contains(RowKind.DELETE));
-    assertSame(DataModificationInfos.DEFAULT_DELETE_INFO, DataModificationInfos.DEFAULT_DELETE_INFO);
-    assertSame(DataModificationInfos.DEFAULT_UPDATE_INFO, DataModificationInfos.DEFAULT_UPDATE_INFO);
+    assertEquals(
+        SupportsRowLevelDelete.RowLevelDeleteMode.DELETED_ROWS,
+        DataModificationInfos.DEFAULT_DELETE_INFO.getRowLevelDeleteMode());
+    assertTrue(DataModificationInfos.DEFAULT_DELETE_INFO.requiredColumns().isEmpty());
+    assertEquals(
+        SupportsRowLevelUpdate.RowLevelUpdateMode.UPDATED_ROWS,
+        DataModificationInfos.DEFAULT_UPDATE_INFO.getRowLevelUpdateMode());
+    assertTrue(DataModificationInfos.DEFAULT_UPDATE_INFO.requiredColumns().isEmpty());
   }
 
   @Test

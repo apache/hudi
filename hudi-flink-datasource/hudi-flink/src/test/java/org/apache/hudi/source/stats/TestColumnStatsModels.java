@@ -47,15 +47,13 @@ class TestColumnStatsModels {
     assertNotNull(ColumnStatsSchemas.METADATA_DATA_TYPE);
     assertNotNull(ColumnStatsSchemas.COL_STATS_DATA_TYPE);
     assertEquals(6, ColumnStatsSchemas.COL_STATS_TARGET_POS.length);
-    assertArrayEquals(
-        new int[] {
-            ColumnStatsSchemas.ORD_FILE_NAME,
-            ColumnStatsSchemas.ORD_MIN_VAL,
-            ColumnStatsSchemas.ORD_MAX_VAL,
-            ColumnStatsSchemas.ORD_NULL_CNT,
-            ColumnStatsSchemas.ORD_VAL_CNT,
-            ColumnStatsSchemas.ORD_COL_NAME
-        },
-        new int[] {0, 1, 2, 3, 4, 5});
+    int[] expectedSourcePositions = new int[6];
+    expectedSourcePositions[ColumnStatsSchemas.ORD_FILE_NAME] = 0;
+    expectedSourcePositions[ColumnStatsSchemas.ORD_MIN_VAL] = 2;
+    expectedSourcePositions[ColumnStatsSchemas.ORD_MAX_VAL] = 3;
+    expectedSourcePositions[ColumnStatsSchemas.ORD_NULL_CNT] = 5;
+    expectedSourcePositions[ColumnStatsSchemas.ORD_VAL_CNT] = 4;
+    expectedSourcePositions[ColumnStatsSchemas.ORD_COL_NAME] = 1;
+    assertArrayEquals(expectedSourcePositions, ColumnStatsSchemas.COL_STATS_TARGET_POS);
   }
 }
