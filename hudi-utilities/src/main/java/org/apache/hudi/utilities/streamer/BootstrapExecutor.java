@@ -209,8 +209,11 @@ public class BootstrapExecutor implements Serializable {
         .setOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(props))
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
         .setTableFormat(props.getString(HoodieTableConfig.TABLE_FORMAT.key(), HoodieTableConfig.TABLE_FORMAT.defaultValue()))
-        .setPopulateMetaFields(props.getBoolean(
-            POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue()))
+        // null when unstated: TableBuilder rejects a boolean that contradicts an explicit
+        // meta.fields.mode, so passing the `true` default here would turn a plain
+        // hoodie.meta.fields.mode=COMMIT_TIME_ONLY bootstrap into a spurious conflict.
+        .setPopulateMetaFields(props.containsKey(POPULATE_META_FIELDS.key())
+            ? props.getBoolean(POPULATE_META_FIELDS.key()) : null)
         .setMetaFieldsModeFromString(props.getString(
             HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.defaultValue()))
         .setArchiveLogFolder(props.getString(
