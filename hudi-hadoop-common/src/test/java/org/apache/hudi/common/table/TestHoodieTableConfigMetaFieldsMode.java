@@ -28,12 +28,22 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests the meta-field-population modes exposed by {@link HoodieTableConfig} via the
- * {@code hoodie.meta.fields.mode} property. The mode is materialized as a {@link MetaFieldsMode}
- * enum resolved from both the legacy {@code hoodie.populate.meta.fields} boolean and the on-disk
- * {@code hoodie.meta.fields.mode} property.
+ * {@link HoodieTableConfig} resolution of {@code hoodie.meta.fields.mode} into a
+ * {@link MetaFieldsMode}, including the precedence between the mode and the deprecated
+ * {@code hoodie.populate.meta.fields} boolean.
+ *
+ * <p>Deliberately separate from its two siblings, which cover different layers:
+ * <ul>
+ *   <li>{@code TestMetaFieldsMode} (hudi-common) — the enum's own semantics: {@code parse},
+ *       {@code isWiderThan}, {@code toLegacyPopulateMetaFields}. No config involved.</li>
+ *   <li>{@code TestHoodieTableConfig#testMetaFieldsModeSurvivesAPropertiesRoundTrip} — the same
+ *       resolution against real storage, proving the value survives a {@code hoodie.properties}
+ *       write / read.</li>
+ * </ul>
+ * These cases use an in-memory {@link HoodieTableConfig} instead, so they stay fast and need no
+ * storage fixture.
  */
-class TestHoodieMetaFieldsMode {
+class TestHoodieTableConfigMetaFieldsMode {
 
   private static HoodieTableConfig configOf(Boolean populate, String mode) {
     HoodieTableConfig cfg = new HoodieTableConfig();
