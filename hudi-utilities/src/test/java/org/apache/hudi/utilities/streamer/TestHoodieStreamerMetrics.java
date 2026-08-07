@@ -28,6 +28,9 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
@@ -38,6 +41,36 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * Tests {@link HoodieStreamerMetrics}.
  */
 public class TestHoodieStreamerMetrics {
+  @Test
+  public void testPre12543TimerMetricNamesRemainStable() {
+    assertPre12543TimerMetricNames("", ".", "/tmp/path8");
+    assertPre12543TimerMetricNames("my_prefix", "my_prefix.", "/tmp/path9");
+  }
+
+  private void assertPre12543TimerMetricNames(String configuredPrefix, String expectedPrefix, String path) {
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
+        .on(true)
+        .withPath(path)
+        .withReporterType("INMEMORY")
+        .withMetricsReporterMetricNamePrefix(configuredPrefix)
+        .build();
+    HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
+        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+
+    metrics.getOverallTimerContext().stop();
+    metrics.getHiveSyncTimerContext().stop();
+    metrics.getMetaSyncTimerContext().stop();
+    metrics.getErrorTableWriteTimerContext().stop();
+
+    Set<String> expectedNames = new HashSet<>(Arrays.asList(
+        expectedPrefix + "timer.deltastreamer",
+        expectedPrefix + "timer.deltastreamerHiveSync",
+        expectedPrefix + "timer.deltastreamerMetaSync",
+        expectedPrefix + "timer.errorTableWrite"));
+    assertEquals(expectedNames, metrics.getMetrics().getRegistry().getTimers().keySet());
+    metrics.shutdown();
+  }
+
   @Test
   public void testHoodieStreamerMetricsForErrorTableIfEnabled() throws InterruptedException {
     HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
