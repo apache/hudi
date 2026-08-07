@@ -99,9 +99,9 @@ timeline by completion time — see [timeline](timeline.md). The cleaner's own p
 | `lastCompletedCommitTimestamp` | both | Instant time of the last completed write before the clean was planned. Despite the name, this is a start time, not a completion time. |
 | `startCleanTime` | `HoodieCleanMetadata` | Instant time of the clean action itself. |
 
-Incremental clean planning follows the same convention: it selects the commits whose **requested** instant time falls
-between the previous clean's `earliestCommitToRetain` and the current one, and scans only the partitions those commits
-touched.
+Incremental clean planning follows the same convention: it selects the commits whose **requested** instant time is at or
+after the previous clean's `earliestCommitToRetain` and before this clean's, then scans only the partitions those
+commits touched.
 
 ### Configs
 For details about all possible configurations and their default values see the [configuration docs](https://hudi.apache.org/docs/next/configurations/#Clean-Configs).

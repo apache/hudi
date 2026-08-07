@@ -707,8 +707,8 @@ by completion time. The fields below all hold the requested instant time of the 
 | lastCompletedCommitTimestamp | Instant time of the last completed write before the clean was planned. Despite the name, this is a start time |
 | startCleanTime | Instant time of the clean action itself, in `HoodieCleanMetadata` |
 
-Incremental clean planning selects commits whose requested instant time falls between the previous clean's
-`earliestCommitToRetain` and the current one, and scans only the partitions those commits touched.
+Incremental clean planning selects commits whose requested instant time is at or after the previous clean's
+`earliestCommitToRetain` and before this clean's, and scans only the partitions those commits touched.
 
 
 ### Indexing
