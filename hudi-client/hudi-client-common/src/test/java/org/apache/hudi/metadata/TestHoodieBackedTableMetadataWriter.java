@@ -42,7 +42,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.util.Lazy;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -591,8 +590,12 @@ class TestHoodieBackedTableMetadataWriter {
   }
 
   @Test
-  void wrapsMetadataReaderAndFileSliceReadFailures() throws Exception {
-    // Reader setup and lazy file listing must preserve the public exception contract.
+  void wrapsMetadataReaderFailures() throws Exception {
+    // Reader setup must preserve the public exception contract.
+    // The lazy file listing half of this test is dropped on this branch: it reflects on
+    // getLazyMergedFileSlices, which master added in 2baa29b14d37 (#18372) as part of the
+    // index-abstraction refactor of the metadata table update path, and that refactor is not
+    // backported here.
     HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer =
         mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
     writer.dataWriteConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/missing-table").build();
@@ -603,22 +606,6 @@ class TestHoodieBackedTableMetadataWriter {
     InvocationTargetException readerFailure = assertThrows(
         InvocationTargetException.class, () -> maybeReinitializeReader.invoke(writer));
     assertTrue(readerFailure.getCause() instanceof HoodieException);
-
-    HoodieBackedTableMetadata metadata = mock(HoodieBackedTableMetadata.class);
-    HoodieTableFileSystemView metadataView = mock(HoodieTableFileSystemView.class);
-    HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
-    when(dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant())
-        .thenReturn(Option.empty());
-    when(metadata.getMetadataFileSystemView()).thenReturn(metadataView);
-    when(metadata.getAllPartitionPaths()).thenThrow(new IOException("listing failed"));
-    writer.metadata = metadata;
-    writer.dataMetaClient = dataMetaClient;
-    setField(writer, "metadataView", metadataView);
-    Method getLazyMergedFileSlices =
-        HoodieBackedTableMetadataWriter.class.getDeclaredMethod("getLazyMergedFileSlices");
-    getLazyMergedFileSlices.setAccessible(true);
-    Lazy<?> lazyFileSlices = (Lazy<?>) getLazyMergedFileSlices.invoke(writer);
-    assertThrows(HoodieIOException.class, lazyFileSlices::get);
   }
 
   @Test
