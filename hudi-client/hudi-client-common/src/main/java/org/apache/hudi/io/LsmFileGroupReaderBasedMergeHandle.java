@@ -30,14 +30,11 @@ import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.table.read.lsm.HoodieLsmFileGroupReader;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.Comparator;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -58,15 +55,6 @@ public class LsmFileGroupReaderBasedMergeHandle<T, I, K, O> extends FileGroupRea
                                             Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                                             TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt);
-  }
-
-  public LsmFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                            Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier,
-                                            Option<BaseKeyGenerator> keyGeneratorOpt) {
-    this(config, instantTime, hoodieTable,
-        keyToNewRecords.values().stream().sorted(Comparator.comparing(HoodieRecord::getRecordKey, StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR)).iterator(),
-        partitionPath, fileId, taskContextSupplier, dataFileToBeMerged, keyGeneratorOpt);
   }
 
   public LsmFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,

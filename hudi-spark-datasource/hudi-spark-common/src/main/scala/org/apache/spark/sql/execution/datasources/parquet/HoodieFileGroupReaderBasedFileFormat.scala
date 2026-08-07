@@ -316,7 +316,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                 0
               }
               val reader: HoodieRecordReader[InternalRow] =
-                if (!metaClient.isMetadataTable && LsmReaderUtils.shouldUseLsmReader(
+                if (LsmReaderUtils.shouldUseLsmReader(
                   metaClient.getTableConfig,
                   fileSlice.getLogFiles,
                   ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true))) {

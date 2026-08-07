@@ -193,8 +193,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
           val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, optionalFilters,
             Seq.empty, storageConf, metaClient.getTableConfig)
           val fileGroupReader: HoodieRecordReader[InternalRow] =
-            if (!metaClient.isMetadataTable
-              && LsmReaderUtils.shouldUseLsmReader(metaClient.getTableConfig, logFiles.stream(), mergeType)) {
+            if (LsmReaderUtils.shouldUseLsmReader(metaClient.getTableConfig, logFiles.stream(), mergeType)) {
               HoodieLsmFileGroupReader.builder[InternalRow]()
                 .withReaderContext(readerContext)
                 .withHoodieTableMetaClient(metaClient)
