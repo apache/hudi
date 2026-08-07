@@ -52,7 +52,7 @@ import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.hudi.blob.{BatchedBlobReaderStrategy, ScalarFunctions}
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark4_2ExtendedSqlParser}
-import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructField, StructType}
+import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructField, StructType, VariantType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
@@ -234,6 +234,22 @@ class Spark4_2Adapter extends BaseSpark4Adapter {
 
   override def isVariantProjectionStruct(structType: StructType): Boolean = {
     VariantMetadata.isVariantStruct(structType)
+  }
+
+  override def buildFullVariantReadSchema(schema: StructType): Option[StructType] = {
+    var rewritten = false
+    val fields = schema.fields.map { f =>
+      if (isVariantType(f.dataType)) {
+        rewritten = true
+        // Mirrors RequestedVariantField.fullVariant in PushVariantIntoScan: whole-variant
+        // access is a single child "0" at path "$" with failOnError and UTC.
+        f.copy(dataType = StructType(Array(StructField("0", VariantType,
+          metadata = VariantMetadata("$", failOnError = true, timeZoneId = "UTC").toMetadata))))
+      } else {
+        f
+      }
+    }
+    if (rewritten) Some(StructType(fields)) else None
   }
 
   override def buildVariantProjector(sparkDataSchema: StructType,
