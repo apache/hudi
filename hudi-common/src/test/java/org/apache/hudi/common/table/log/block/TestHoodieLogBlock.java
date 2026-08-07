@@ -27,6 +27,7 @@ import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
+import org.apache.avro.Schema;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -102,6 +103,29 @@ public class TestHoodieLogBlock {
     Assertions.assertEquals("", b.get(HoodieLogBlock.HeaderMetadataType.RECORD_POSITIONS));
     Assertions.assertEquals("1", b.get(HoodieLogBlock.HeaderMetadataType.BLOCK_IDENTIFIER));
     Assertions.assertEquals("true", b.get(HoodieLogBlock.HeaderMetadataType.IS_PARTIAL));
+  }
+
+  @Test
+  public void testHeaderMetadataWithNonAsciiSchema() throws IOException {
+    // Header metadata is written as UTF-8 (getHeaderMetadataBytes -> StringUtils.getUTF8Bytes), so
+    // the read side must decode as UTF-8 to round-trip. Decoding with the platform default charset
+    // corrupts non-ASCII values on any JVM whose default charset is not UTF-8, and the corrupted
+    // schema then fails Avro parsing with "Illegal initial character".
+    String schema =
+        "{\"type\":\"record\",\"name\":\"r\",\"fields\":["
+            + "{\"name\":\"名字\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
+    Map<HoodieLogBlock.HeaderMetadataType, String> a = new HashMap<>();
+    a.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema);
+    byte[] bytes = HoodieLogBlock.getHeaderMetadataBytes(a);
+
+    Map<HoodieLogBlock.HeaderMetadataType, String> b =
+        HoodieLogBlock.getHeaderMetadata(new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(bytes)));
+    Assertions.assertEquals(schema, b.get(HoodieLogBlock.HeaderMetadataType.SCHEMA),
+        "non-ASCII header value must round-trip via UTF-8 regardless of the JVM default charset");
+    // The user-visible failure was Avro schema parsing, so assert the round-tripped schema parses
+    // and the non-ASCII field name survives.
+    Schema parsed = new Schema.Parser().parse(b.get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
+    Assertions.assertEquals("名字", parsed.getFields().get(0).name());
   }
 
   private SeekableDataInputStream prepareMockedLogInputStream(int contentSize,
