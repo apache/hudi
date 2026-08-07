@@ -273,15 +273,26 @@ public class HoodieRealtimeRecordReaderUtils {
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L188}
     // Field Names -> {@link https://github.com/apache/hive/blob/f37c5de6c32b9395d1b34fa3c02ed06d1bfbf6eb/serde/src/java
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L229}
-    String[] fieldOrdersWithDups = fieldOrderCsv.isEmpty() ? new String[0] : fieldOrderCsv.split(",");
+    // Blank tokens are dropped rather than carried into the loop below. For SELECT COUNT(*) on Hive before
+    // 3.0.0 the read-column ids arrive empty and Hive combines them into e.g. ",2,0,3" (HIVE-22438, see
+    // HoodieRealtimeInputFormatUtils#cleanProjectionColumnIds, which only strips one leading comma). A blank
+    // token used to reach Integer.parseInt and fail with a bare NumberFormatException carrying none of the
+    // projection lists.
+    String[] fieldOrdersWithDups = fieldOrderCsv.isEmpty() ? new String[0]
+        : Arrays.stream(fieldOrderCsv.split(",")).filter(id -> !id.trim().isEmpty()).toArray(String[]::new);
     Set<String> fieldOrdersSet = new LinkedHashSet<>(Arrays.asList(fieldOrdersWithDups));
     String[] fieldOrders = fieldOrdersSet.toArray(new String[0]);
     List<String> fieldNames = fieldNameCsv.isEmpty() ? new ArrayList<>() : Arrays.stream(fieldNameCsv.split(",")).collect(Collectors.toList());
     Set<String> fieldNamesSet = new LinkedHashSet<>(fieldNames);
     if (fieldNamesSet.size() != fieldOrders.length) {
+      // The counts are of the de-duplicated lists, which is what was compared, so they are named as such:
+      // quoting the raw name count can print two equal numbers for a real mismatch, and printing a
+      // de-duplicated count beside the raw list reads as a contradiction. The lists come from Hive and are
+      // the only way to diagnose which side is wrong.
       throw new HoodieException(String
-          .format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
-              fieldNames.size(), fieldOrders.length));
+          .format("Error ordering fields for storage read. #distinctFieldNames: %d, #distinctFieldPositions: %d, "
+                  + "read column names: [%s], read column ids: [%s]",
+              fieldNamesSet.size(), fieldOrders.length, fieldNameCsv, fieldOrderCsv));
     }
     TreeMap<Integer, String> orderedFieldMap = new TreeMap<>();
     String[] fieldNamesArray = fieldNamesSet.toArray(new String[0]);
