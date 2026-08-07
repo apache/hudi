@@ -33,7 +33,6 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -172,15 +171,13 @@ public class HudiColumnStatsIndexSupport
             return isIndexSupported;
         }
 
-        Map<String, HoodieIndexDefinition> indexDefinitions = getAllIndexDefinitions();
-        HoodieIndexDefinition colStatsDefinition = indexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
-        if (colStatsDefinition == null || colStatsDefinition.getSourceFields() == null || colStatsDefinition.getSourceFields().isEmpty()) {
-            log.warn("Column stats index definition is missing or has no source fields defined");
+        List<String> sourceFields = resolveStatsIndexedColumns(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
+        if (sourceFields.isEmpty()) {
+            log.warn("Could not determine the columns covered by the column stats index");
             return false;
         }
 
         // Optimization applied: Only consider applicable if predicates reference indexed columns
-        List<String> sourceFields = colStatsDefinition.getSourceFields();
         boolean applicable = TupleDomainUtils.areSomeFieldsReferenced(tupleDomain, sourceFields);
 
         if (applicable) {

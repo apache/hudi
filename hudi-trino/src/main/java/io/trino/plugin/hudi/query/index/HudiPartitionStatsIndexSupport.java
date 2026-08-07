@@ -22,7 +22,6 @@ import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.Type;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.data.HoodieListData;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.metadata.ColumnStatsIndexPrefixRawKey;
@@ -128,15 +127,14 @@ public class HudiPartitionStatsIndexSupport
             return false;
         }
 
-        Map<String, HoodieIndexDefinition> indexDefinitions = getAllIndexDefinitions();
-        HoodieIndexDefinition partitionsStatsIndex = indexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
-        if (partitionsStatsIndex == null || partitionsStatsIndex.getSourceFields() == null || partitionsStatsIndex.getSourceFields().isEmpty()) {
-            log.warn("Partition stats index definition is missing or has no source fields defined");
+        // Partition stats cover the same columns as column stats, so resolve against that partition
+        List<String> sourceFields = resolveStatsIndexedColumns(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
+        if (sourceFields.isEmpty()) {
+            log.warn("Could not determine the columns covered by the partition stats index");
             return false;
         }
 
         // Optimization applied: Only consider applicable if predicates reference indexed columns
-        List<String> sourceFields = partitionsStatsIndex.getSourceFields();
         boolean applicable = TupleDomainUtils.areSomeFieldsReferenced(tupleDomain, sourceFields);
 
         if (applicable) {
