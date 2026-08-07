@@ -24,8 +24,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HiveDriverPool;
+import org.apache.hudi.hive.util.HiveMetaStoreClientPool;
 import org.apache.hudi.hive.util.HivePartitionUtil;
-import org.apache.hudi.hive.util.IMetaStoreClientPool;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -63,8 +63,8 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private final Option<HiveDriverPool> driverPool;
   // When present, dropPartitionsToTable fans batches across this Thrift client pool.
   // Owned by HoodieHiveSyncClient; close() is delegated through there. See
-  // IMetaStoreClientPool javadoc for the usage contract (partition-row ops only).
-  private final Option<IMetaStoreClientPool> metaStoreClientPool;
+  // HiveMetaStoreClientPool javadoc for the usage contract (partition-row ops only).
+  private final Option<HiveMetaStoreClientPool> metaStoreClientPool;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
     this(config, metaStoreClient, Option.empty(), Option.empty());
@@ -72,7 +72,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient,
                               Option<HiveDriverPool> driverPool,
-                              Option<IMetaStoreClientPool> metaStoreClientPool) {
+                              Option<HiveMetaStoreClientPool> metaStoreClientPool) {
     super(config);
     this.metaStoreClient = metaStoreClient;
     this.driverPool = driverPool;
@@ -257,7 +257,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       }
       return;
     }
-    IMetaStoreClientPool pool = metaStoreClientPool.get();
+    HiveMetaStoreClientPool pool = metaStoreClientPool.get();
     pool.awaitAll(
         pool.dispatchAll(batches, (client, batch) -> applyDropBatch(client, tableName, batch)),
         "drop partition");

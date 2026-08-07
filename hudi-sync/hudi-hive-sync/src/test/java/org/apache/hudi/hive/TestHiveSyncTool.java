@@ -406,7 +406,7 @@ public class TestHiveSyncTool {
   /**
    * Exercises the DROP path in HiveQL mode with batching on. DROP routes through
    * IMetaStoreClient.dropPartition (Thrift, not Hive Driver), so when batching is
-   * enabled it fans out across IMetaStoreClientPool. Verifies the partition set
+   * enabled it fans out across HiveMetaStoreClientPool. Verifies the partition set
    * shrinks as expected when batches drop in parallel.
    */
   @Test

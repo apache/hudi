@@ -58,9 +58,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * through {@code IMetaStoreClient.dropPartition} (Thrift), whereas ADD/UPDATE/TOUCH go
  * through the thread-bound Hive {@code Driver} and use {@code HiveDriverPool} instead.
  */
-public class IMetaStoreClientPool implements AutoCloseable {
+public class HiveMetaStoreClientPool implements AutoCloseable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(IMetaStoreClientPool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveMetaStoreClientPool.class);
 
   private final ArrayBlockingQueue<IMetaStoreClient> available;
   private final List<IMetaStoreClient> all;
@@ -68,13 +68,13 @@ public class IMetaStoreClientPool implements AutoCloseable {
   private final int size;
   private volatile boolean closed;
 
-  public IMetaStoreClientPool(HiveSyncConfig config, int size) {
+  public HiveMetaStoreClientPool(HiveSyncConfig config, int size) {
     this(buildClients(config, size), size);
   }
 
   // Package-private for tests: accepts a pre-built list of clients so we can
   // exercise borrow/return/close semantics without a live metastore.
-  IMetaStoreClientPool(List<IMetaStoreClient> clients, int size) {
+  HiveMetaStoreClientPool(List<IMetaStoreClient> clients, int size) {
     if (size < 1) {
       throw new IllegalArgumentException("Pool size must be >= 1, got " + size);
     }

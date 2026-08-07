@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * list, which is not necessarily the one that aborted the run.
  *
  * <p>Shared by {@link HiveDriverPool} (Hive {@code Driver} statements) and
- * {@link IMetaStoreClientPool} (Thrift {@code dropPartition} batches), which fan out over
+ * {@link HiveMetaStoreClientPool} (Thrift {@code dropPartition} batches), which fan out over
  * different execution models but need identical abort-on-first-error semantics.
  */
 public final class ParallelDispatch {

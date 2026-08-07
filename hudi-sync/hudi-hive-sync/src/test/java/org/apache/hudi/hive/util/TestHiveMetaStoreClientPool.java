@@ -42,10 +42,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 /**
- * Unit tests for {@link IMetaStoreClientPool}: borrow/return bounding, batch fan-out,
+ * Unit tests for {@link HiveMetaStoreClientPool}: borrow/return bounding, batch fan-out,
  * abort-on-first-error, and close semantics. Uses mock clients so no metastore is needed.
  */
-class TestIMetaStoreClientPool {
+class TestHiveMetaStoreClientPool {
 
   private static List<IMetaStoreClient> mockClients(int n) {
     return IntStream.range(0, n)
@@ -56,7 +56,7 @@ class TestIMetaStoreClientPool {
   @Test
   void runBorrowsAndReturnsTheSameClient() throws Exception {
     List<IMetaStoreClient> clients = mockClients(1);
-    try (IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 1)) {
+    try (HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, 1)) {
       // Given a single-client pool, two sequential borrows must both succeed --
       // which can only happen if the first borrow returned its client.
       IMetaStoreClient first = pool.run(c -> c);
@@ -70,7 +70,7 @@ class TestIMetaStoreClientPool {
   @Test
   void runReturnsClientEvenWhenActionThrows() throws Exception {
     List<IMetaStoreClient> clients = mockClients(1);
-    try (IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 1)) {
+    try (HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, 1)) {
       assertThrows(IllegalStateException.class, () -> pool.run(c -> {
         throw new IllegalStateException("boom");
       }));
@@ -86,7 +86,7 @@ class TestIMetaStoreClientPool {
     List<IMetaStoreClient> clients = mockClients(3);
     List<String> batches = Arrays.asList("b0", "b1", "b2", "b3", "b4");
     List<String> applied = Collections.synchronizedList(new ArrayList<>());
-    try (IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 3)) {
+    try (HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, 3)) {
       pool.awaitAll(pool.dispatchAll(batches, (client, batch) -> applied.add(batch)), "test");
     }
 
@@ -100,7 +100,7 @@ class TestIMetaStoreClientPool {
     List<IMetaStoreClient> clients = mockClients(poolSize);
     AtomicInteger inFlight = new AtomicInteger();
     AtomicInteger maxInFlight = new AtomicInteger();
-    try (IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, poolSize)) {
+    try (HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, poolSize)) {
       pool.awaitAll(pool.dispatchAll(Arrays.asList("a", "b", "c", "d", "e"), (client, batch) -> {
         int now = inFlight.incrementAndGet();
         maxInFlight.accumulateAndGet(now, Math::max);
@@ -119,7 +119,7 @@ class TestIMetaStoreClientPool {
     List<IMetaStoreClient> clients = mockClients(poolSize);
     Set<IMetaStoreClient> seenConcurrently = ConcurrentHashMap.newKeySet();
     CountDownLatch allBorrowed = new CountDownLatch(poolSize);
-    try (IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, poolSize)) {
+    try (HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, poolSize)) {
       pool.awaitAll(pool.dispatchAll(Arrays.asList("a", "b", "c"), (client, batch) -> {
         seenConcurrently.add(client);
         // Hold every client at once so none can be recycled to another batch.
@@ -135,7 +135,7 @@ class TestIMetaStoreClientPool {
   @Test
   void awaitAllThrowsFirstError() {
     List<IMetaStoreClient> clients = mockClients(2);
-    IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 2);
+    HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, 2);
     try {
       Exception ex = assertThrows(Exception.class, () ->
           pool.awaitAll(pool.dispatchAll(Arrays.asList("ok", "boom"), (client, batch) -> {
@@ -163,7 +163,7 @@ class TestIMetaStoreClientPool {
   void abortStopsQueuedBatchesAfterFirstFailure() {
     List<IMetaStoreClient> clients = mockClients(1);
     List<String> applied = Collections.synchronizedList(new ArrayList<>());
-    IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 1);
+    HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, 1);
     try {
       assertThrows(Exception.class, () ->
           pool.awaitAll(pool.dispatchAll(Arrays.asList("FAIL", "AFTER_A", "AFTER_B"),
@@ -192,7 +192,7 @@ class TestIMetaStoreClientPool {
     List<String> applied = Collections.synchronizedList(new ArrayList<>());
     CountDownLatch failed = new CountDownLatch(1);
     CountDownLatch releaseSlow = new CountDownLatch(1);
-    IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 2);
+    HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, 2);
     try {
       // SLOW occupies one client and blocks until FAIL has thrown, pinning the
       // interleaving where awaitAll is still parked on future 0.
@@ -224,7 +224,7 @@ class TestIMetaStoreClientPool {
   void firstErrorIsTheFailureThatAbortedTheBatch() throws Exception {
     List<IMetaStoreClient> clients = mockClients(2);
     AtomicReference<ParallelDispatch> dispatchRef = new AtomicReference<>();
-    IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 2);
+    HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, 2);
     try {
       // Given a slow batch submitted first that fails only after a later batch has
       // already failed and tripped the abort. Selecting the error by submission order
@@ -263,7 +263,7 @@ class TestIMetaStoreClientPool {
   @Test
   void anErrorThatAbortsTheBatchIsNotAlsoReportedAsSuppressed() throws Exception {
     List<IMetaStoreClient> clients = mockClients(2);
-    IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 2);
+    HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, 2);
     try {
       // Given the aborting task throws an Error rather than an Exception. guard() catches
       // Throwable, so the Error is what trips the abort, but it cannot be reported as-is:
@@ -292,7 +292,7 @@ class TestIMetaStoreClientPool {
   @Test
   void closeIsIdempotentAndClosesEveryClient() throws Exception {
     List<IMetaStoreClient> clients = mockClients(2);
-    IMetaStoreClientPool pool = new IMetaStoreClientPool(clients, 2);
+    HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, 2);
 
     pool.close();
     pool.close();
@@ -306,7 +306,7 @@ class TestIMetaStoreClientPool {
 
   @Test
   void dispatchOnClosedPoolFailsFast() {
-    IMetaStoreClientPool pool = new IMetaStoreClientPool(mockClients(1), 1);
+    HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(mockClients(1), 1);
     pool.close();
 
     assertThrows(IllegalStateException.class,
@@ -315,7 +315,7 @@ class TestIMetaStoreClientPool {
 
   @Test
   void rejectsSizeMismatchAndNonPositiveSize() {
-    assertThrows(IllegalArgumentException.class, () -> new IMetaStoreClientPool(mockClients(1), 2));
-    assertThrows(IllegalArgumentException.class, () -> new IMetaStoreClientPool(mockClients(0), 0));
+    assertThrows(IllegalArgumentException.class, () -> new HiveMetaStoreClientPool(mockClients(1), 2));
+    assertThrows(IllegalArgumentException.class, () -> new HiveMetaStoreClientPool(mockClients(0), 0));
   }
 }

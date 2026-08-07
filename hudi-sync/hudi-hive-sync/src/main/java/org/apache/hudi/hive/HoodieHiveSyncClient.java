@@ -38,7 +38,7 @@ import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCBasedMetadataOperator;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.util.HiveDriverPool;
-import org.apache.hudi.hive.util.IMetaStoreClientPool;
+import org.apache.hudi.hive.util.HiveMetaStoreClientPool;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.hive.util.PartitionFilterGenerator;
 import org.apache.hudi.sync.common.HoodieSyncClient;
@@ -92,9 +92,9 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   private IMetaStoreClient client;
   // Present only when HIVE_SYNC_BATCHING_ENABLED and sync mode is HIVEQL. Owned by
   // this class; closed in close() before Hive.closeCurrent(). HiveQueryDDLExecutor
-  // uses it only for DROP (Hive Thrift, not Hive Driver) — see IMetaStoreClientPool
+  // uses it only for DROP (Hive Thrift, not Hive Driver) — see HiveMetaStoreClientPool
   // javadoc.
-  private Option<IMetaStoreClientPool> partitionClientPool = Option.empty();
+  private Option<HiveMetaStoreClientPool> partitionClientPool = Option.empty();
   // Present only when HIVE_SYNC_BATCHING_ENABLED and sync mode is HIVEQL (explicit
   // or legacy default). Owned by HiveQueryDDLExecutor; this field is kept for
   // reference only — close() is delegated through ddlExecutor.close().
@@ -241,7 +241,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
   }
 
-  private Option<IMetaStoreClientPool> maybeBuildPartitionClientPool(HiveSyncConfig config) {
+  private Option<HiveMetaStoreClientPool> maybeBuildPartitionClientPool(HiveSyncConfig config) {
     if (!config.getBooleanOrDefault(HIVE_SYNC_BATCHING_ENABLED)) {
       return Option.empty();
     }
@@ -254,7 +254,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       return Option.empty();
     }
     int size = config.getIntOrDefault(HIVE_SYNC_BATCHING_THREADS);
-    return Option.of(new IMetaStoreClientPool(config, size));
+    return Option.of(new HiveMetaStoreClientPool(config, size));
   }
 
   private Option<HiveDriverPool> maybeBuildHiveDriverPool(HiveSyncConfig config) {

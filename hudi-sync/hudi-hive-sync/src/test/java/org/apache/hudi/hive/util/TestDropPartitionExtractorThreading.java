@@ -57,7 +57,7 @@ import static org.mockito.Mockito.when;
  * and drop the wrong partition, so the values are resolved before any fan-out.
  *
  * <p>Lives in {@code hive.util} rather than next to the executor because it needs the
- * package-private {@link IMetaStoreClientPool} constructor that takes pre-built clients.
+ * package-private {@link HiveMetaStoreClientPool} constructor that takes pre-built clients.
  */
 class TestDropPartitionExtractorThreading {
 
@@ -68,7 +68,7 @@ class TestDropPartitionExtractorThreading {
     for (int i = 0; i < 4; i++) {
       poolClients.add(mock(IMetaStoreClient.class));
     }
-    IMetaStoreClientPool pool = new IMetaStoreClientPool(poolClients, 4);
+    HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(poolClients, 4);
 
     Set<String> extractorThreads = ConcurrentHashMap.newKeySet();
     PartitionValueExtractor recordingExtractor = mock(PartitionValueExtractor.class);
