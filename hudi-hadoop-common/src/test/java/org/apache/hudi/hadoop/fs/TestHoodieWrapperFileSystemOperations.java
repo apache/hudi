@@ -57,6 +57,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class TestHoodieWrapperFileSystemOperations {
 
@@ -239,52 +242,87 @@ class TestHoodieWrapperFileSystemOperations {
   }
 
   @Test
-  void testOptionalDelegatedFileSystemApis(@TempDir java.nio.file.Path tempDir) throws Exception {
-    try (FileSystem local = FileSystem.newInstanceLocal(new Configuration())) {
-      HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(local, new NoOpConsistencyGuard());
-      Path directory = new Path(tempDir.resolve("optional").toUri());
-      Path file = new Path(directory, "data.bin");
-      assertTrue(fs.mkdirs(directory));
-      try (FSDataOutputStream output = fs.create(file)) {
-        output.write(1);
-      }
+  void testOptionalDelegatedFileSystemApis() throws IOException {
+    FileSystem delegate = mock(FileSystem.class);
+    when(delegate.getUri()).thenReturn(URI.create("file:///"));
+    when(delegate.getScheme()).thenReturn("file");
+    when(delegate.getUsed()).thenReturn(42L);
 
-      ignoreUnsupported(() -> fs.getDelegationToken("renewer"));
-      ignoreUnsupported(() -> fs.addDelegationTokens("renewer", new Credentials()));
-      ignoreUnsupported(() -> fs.listCorruptFileBlocks(directory));
-      ignoreUnsupported(() -> fs.getUsed());
-      ignoreUnsupported(() -> fs.getFileChecksum(file, 1));
-      ignoreUnsupported(() -> fs.setOwner(file, System.getProperty("user.name"), null));
+    HoodieWrapperFileSystem fs = wrapper(delegate, new NoOpConsistencyGuard());
+    Path directory = new Path("hoodie-file:///optional");
+    Path file = new Path(directory, "data.bin");
+    Path link = new Path(directory, "data.link");
+    Path deleteOnExit = new Path(directory, "delete-on-exit");
+    Path defaultDirectory = new Path("file:///optional");
+    Path defaultFile = new Path(defaultDirectory, "data.bin");
+    Path defaultLink = new Path(defaultDirectory, "data.link");
+    Path defaultDeleteOnExit = new Path(defaultDirectory, "delete-on-exit");
+    Credentials credentials = new Credentials();
+    List<AclEntry> aclEntries = Collections.emptyList();
+    byte[] attribute = new byte[] {1, 2};
+    EnumSet<XAttrSetFlag> xAttrFlags = EnumSet.of(XAttrSetFlag.REPLACE);
+    List<String> xAttrNames = Collections.singletonList("user.hudi");
 
-      Path link = new Path(directory, "data.link");
-      ignoreUnsupported(() -> fs.createSymlink(file, link, false));
-      ignoreUnsupported(() -> fs.getFileLinkStatus(link));
-      ignoreUnsupported(() -> fs.getLinkTarget(link));
+    when(delegate.getLinkTarget(defaultLink)).thenReturn(defaultFile);
+    when(delegate.createSnapshot(defaultDirectory, "snapshot")).thenReturn(defaultDirectory);
+    when(delegate.deleteOnExit(defaultDeleteOnExit)).thenReturn(true);
+    when(delegate.cancelDeleteOnExit(defaultDeleteOnExit)).thenReturn(true);
 
-      ignoreUnsupported(() -> fs.createSnapshot(directory, "snapshot"));
-      ignoreUnsupported(() -> fs.renameSnapshot(directory, "snapshot", "renamed"));
-      ignoreUnsupported(() -> fs.deleteSnapshot(directory, "renamed"));
-      ignoreUnsupported(() -> fs.modifyAclEntries(file, Collections.<AclEntry>emptyList()));
-      ignoreUnsupported(() -> fs.removeAclEntries(file, Collections.<AclEntry>emptyList()));
-      ignoreUnsupported(() -> fs.removeDefaultAcl(file));
-      ignoreUnsupported(() -> fs.removeAcl(file));
-      ignoreUnsupported(() -> fs.setAcl(file, Collections.<AclEntry>emptyList()));
-      ignoreUnsupported(() -> fs.getAclStatus(file));
+    fs.getDelegationToken("renewer");
+    fs.addDelegationTokens("renewer", credentials);
+    fs.listCorruptFileBlocks(directory);
+    assertEquals(42L, fs.getUsed());
+    fs.getFileChecksum(file, 1);
+    fs.setOwner(file, "owner", null);
+    fs.createSymlink(file, link, false);
+    fs.getFileLinkStatus(link);
+    assertEquals("hoodie-file", fs.getLinkTarget(link).toUri().getScheme());
+    assertEquals("hoodie-file", fs.createSnapshot(directory, "snapshot").toUri().getScheme());
+    fs.renameSnapshot(directory, "snapshot", "renamed");
+    fs.deleteSnapshot(directory, "renamed");
+    fs.modifyAclEntries(file, aclEntries);
+    fs.removeAclEntries(file, aclEntries);
+    fs.removeDefaultAcl(file);
+    fs.removeAcl(file);
+    fs.setAcl(file, aclEntries);
+    fs.getAclStatus(file);
+    fs.setXAttr(file, "user.hudi", attribute);
+    fs.setXAttr(file, "user.hudi", attribute, xAttrFlags);
+    fs.getXAttr(file, "user.hudi");
+    fs.getXAttrs(file);
+    fs.getXAttrs(file, xAttrNames);
+    fs.listXAttrs(file);
+    fs.removeXAttr(file, "user.hudi");
+    assertTrue(fs.deleteOnExit(deleteOnExit));
+    assertTrue(fs.cancelDeleteOnExit(deleteOnExit));
 
-      byte[] attribute = new byte[] {1, 2};
-      ignoreUnsupported(() -> fs.setXAttr(file, "user.hudi", attribute));
-      ignoreUnsupported(() -> fs.setXAttr(file, "user.hudi", attribute, EnumSet.of(XAttrSetFlag.REPLACE)));
-      ignoreUnsupported(() -> fs.getXAttr(file, "user.hudi"));
-      ignoreUnsupported(() -> fs.getXAttrs(file));
-      ignoreUnsupported(() -> fs.getXAttrs(file, Collections.singletonList("user.hudi")));
-      ignoreUnsupported(() -> fs.listXAttrs(file));
-      ignoreUnsupported(() -> fs.removeXAttr(file, "user.hudi"));
-
-      Path deleteOnExit = new Path(directory, "delete-on-exit");
-      assertTrue(fs.createNewFile(deleteOnExit));
-      assertTrue(fs.deleteOnExit(deleteOnExit));
-      assertTrue(fs.cancelDeleteOnExit(deleteOnExit));
-    }
+    verify(delegate).getDelegationToken("renewer");
+    verify(delegate).addDelegationTokens("renewer", credentials);
+    verify(delegate).listCorruptFileBlocks(defaultDirectory);
+    verify(delegate).getUsed();
+    verify(delegate).getFileChecksum(defaultFile, 1);
+    verify(delegate).setOwner(defaultFile, "owner", null);
+    verify(delegate).createSymlink(defaultFile, defaultLink, false);
+    verify(delegate).getFileLinkStatus(defaultLink);
+    verify(delegate).getLinkTarget(defaultLink);
+    verify(delegate).createSnapshot(defaultDirectory, "snapshot");
+    verify(delegate).renameSnapshot(defaultDirectory, "snapshot", "renamed");
+    verify(delegate).deleteSnapshot(defaultDirectory, "renamed");
+    verify(delegate).modifyAclEntries(defaultFile, aclEntries);
+    verify(delegate).removeAclEntries(defaultFile, aclEntries);
+    verify(delegate).removeDefaultAcl(defaultFile);
+    verify(delegate).removeAcl(defaultFile);
+    verify(delegate).setAcl(defaultFile, aclEntries);
+    verify(delegate).getAclStatus(defaultFile);
+    verify(delegate).setXAttr(defaultFile, "user.hudi", attribute);
+    verify(delegate).setXAttr(defaultFile, "user.hudi", attribute, xAttrFlags);
+    verify(delegate).getXAttr(defaultFile, "user.hudi");
+    verify(delegate).getXAttrs(defaultFile);
+    verify(delegate).getXAttrs(defaultFile, xAttrNames);
+    verify(delegate).listXAttrs(defaultFile);
+    verify(delegate).removeXAttr(defaultFile, "user.hudi");
+    verify(delegate).deleteOnExit(defaultDeleteOnExit);
+    verify(delegate).cancelDeleteOnExit(defaultDeleteOnExit);
   }
 
   @Test
@@ -400,19 +438,6 @@ class TestHoodieWrapperFileSystemOperations {
     java.nio.file.Path file = tempDir.resolve(name);
     Files.write(file, new byte[] {(byte) value});
     return new Path(file.toUri());
-  }
-
-  private static void ignoreUnsupported(CheckedOperation operation) {
-    try {
-      operation.run();
-    } catch (Exception ignored) {
-      // LocalFileSystem does not implement every optional FileSystem API. Reaching the delegate is what matters here.
-    }
-  }
-
-  @FunctionalInterface
-  private interface CheckedOperation {
-    void run() throws Exception;
   }
 
   private static final class FailingConsistencyGuard implements ConsistencyGuard {
