@@ -32,6 +32,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.HFileUtils;
 import org.apache.hudi.common.util.Option;
@@ -208,19 +209,25 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   public void testReadFooterMetadata() throws Exception {
     HoodieSchema schema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
     HoodieAvroHFileWriter writer = createWriter(schema, false);
+    String schemaMetadataKey = NativeLogFooterMetadata.getFooterMetadataKey(HeaderMetadataType.SCHEMA);
     Map<String, String> footerMetadata = new TreeMap<>();
-    footerMetadata.put(NativeLogFooterMetadata.FOOTER_METADATA_KEY, "{\"SCHEMA\":\"schema\"}");
+    footerMetadata.put(schemaMetadataKey, "schema");
     footerMetadata.put("custom", "value");
     writer.addFooterMetadata(footerMetadata);
     writer.close();
 
     HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
     Map<String, String> footer = new HFileUtils().readFooter(
-        storage, false, getFilePath(), NativeLogFooterMetadata.FOOTER_METADATA_KEY, "custom", "missing");
+        storage, false, getFilePath(), schemaMetadataKey, "custom", "missing");
 
     assertEquals(2, footer.size());
-    assertEquals("{\"SCHEMA\":\"schema\"}", footer.get(NativeLogFooterMetadata.FOOTER_METADATA_KEY));
+    assertEquals("schema", footer.get(schemaMetadataKey));
     assertEquals("value", footer.get("custom"));
+
+    Map<String, String> footerByPrefix = new HFileUtils().readFooterWithPrefix(
+        storage, true, getFilePath(), NativeLogFooterMetadata.FOOTER_METADATA_KEY_PREFIX);
+    assertEquals(Collections.singletonMap(schemaMetadataKey, "schema"), footerByPrefix);
+
     assertThrows(MetadataNotFoundException.class,
         () -> new HFileUtils().readFooter(storage, true, getFilePath(), "missing"));
   }

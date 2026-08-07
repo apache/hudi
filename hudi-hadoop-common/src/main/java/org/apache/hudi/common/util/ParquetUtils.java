@@ -254,6 +254,23 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   @Override
+  public Map<String, String> readFooterWithPrefix(
+      HoodieStorage storage, boolean required, StoragePath filePath, String footerPrefix) {
+    Map<String, String> footerVals = new HashMap<>();
+    ParquetMetadata footer = readFileMetadataOnly(storage, filePath);
+    footer.getFileMetaData().getKeyValueMetaData().forEach((key, value) -> {
+      if (key.startsWith(footerPrefix)) {
+        footerVals.put(key, value);
+      }
+    });
+    if (required && footerVals.isEmpty()) {
+      throw new MetadataNotFoundException(
+          "Could not find metadata in Parquet footer with prefix " + footerPrefix + " in " + filePath);
+    }
+    return footerVals;
+  }
+
+  @Override
   public HoodieSchema readSchema(HoodieStorage storage, StoragePath filePath) {
     MessageType parquetSchema = readMessageType(storage, filePath);
     return getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(parquetSchema);

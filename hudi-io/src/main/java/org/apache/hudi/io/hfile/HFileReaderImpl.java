@@ -99,6 +99,12 @@ public class HFileReaderImpl implements HFileReader {
   }
 
   @Override
+  public Map<UTF8StringKey, byte[]> getMetaInfo() throws IOException {
+    initializeMetadata();
+    return fileInfo.getInfoMap();
+  }
+
+  @Override
   public Option<ByteBuffer> getMetaBlock(String metaBlockName) throws IOException {
     initializeMetadata();
     BlockIndexEntry blockIndexEntry = metaBlockIndexEntryMap.get(new UTF8StringKey(metaBlockName));

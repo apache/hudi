@@ -121,5 +121,10 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
         .getFileFormatUtils(HoodieFileFormat.ORC)
         .readFooter(storage, true, getFilePath(), "custom.footer.key");
     assertEquals("custom-footer-value", footer.get("custom.footer.key"));
+
+    Map<String, String> footerByPrefix = HoodieIOFactory.getIOFactory(storage)
+        .getFileFormatUtils(HoodieFileFormat.ORC)
+        .readFooterWithPrefix(storage, true, getFilePath(), "custom.footer.");
+    assertEquals(footer, footerByPrefix);
   }
 }

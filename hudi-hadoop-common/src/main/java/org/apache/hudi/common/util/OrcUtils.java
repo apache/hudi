@@ -225,6 +225,27 @@ public class OrcUtils extends FileFormatUtils {
   }
 
   @Override
+  public Map<String, String> readFooterWithPrefix(
+      HoodieStorage storage, boolean required, StoragePath filePath, String footerPrefix) {
+    try (Reader reader = OrcFile.createReader(
+        convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
+      Map<String, String> footerVals = new HashMap<>();
+      reader.getFileTail().getFooter().getMetadataList().forEach(metadataItem -> {
+        if (metadataItem.getName().startsWith(footerPrefix)) {
+          footerVals.put(metadataItem.getName(), metadataItem.getValue().toStringUtf8());
+        }
+      });
+      if (required && footerVals.isEmpty()) {
+        throw new MetadataNotFoundException(
+            "Could not find metadata in ORC footer with prefix " + footerPrefix + " in " + filePath);
+      }
+      return footerVals;
+    } catch (IOException io) {
+      throw new HoodieIOException("Unable to read footer for ORC file:" + filePath, io);
+    }
+  }
+
+  @Override
   public HoodieSchema readSchema(HoodieStorage storage, StoragePath filePath) {
     try (Reader reader = OrcFile.createReader(
         convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {

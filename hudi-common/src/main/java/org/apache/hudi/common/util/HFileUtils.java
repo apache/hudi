@@ -129,6 +129,31 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
+  public Map<String, String> readFooterWithPrefix(
+      HoodieStorage storage, boolean required, StoragePath filePath, String footerPrefix) {
+    Map<String, String> footerVals = new HashMap<>();
+    try (HFileReader reader = HFileReaderFactory.builder()
+        .withStorage(storage)
+        .withPath(filePath)
+        .build()
+        .createHFileReader()) {
+      reader.getMetaInfo().forEach((key, value) -> {
+        String footerName = fromUTF8Bytes(key.getBytes());
+        if (footerName.startsWith(footerPrefix)) {
+          footerVals.put(footerName, fromUTF8Bytes(value));
+        }
+      });
+      if (required && footerVals.isEmpty()) {
+        throw new MetadataNotFoundException(
+            "Could not find metadata in HFile footer with prefix " + footerPrefix + " in " + filePath);
+      }
+      return footerVals;
+    } catch (IOException io) {
+      throw new HoodieIOException("Unable to read footer for HFile: " + filePath, io);
+    }
+  }
+
+  @Override
   public long getRowCount(HoodieStorage storage, StoragePath filePath) {
     throw new UnsupportedOperationException("HFileUtils does not support getRowCount");
   }

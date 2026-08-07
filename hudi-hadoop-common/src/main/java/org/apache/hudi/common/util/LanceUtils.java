@@ -145,6 +145,37 @@ public class LanceUtils extends FileFormatUtils {
   }
 
   @Override
+  public Map<String, String> readFooterWithPrefix(
+      HoodieStorage storage, boolean required, StoragePath filePath, String footerPrefix) {
+    Map<String, String> footerVals = new HashMap<>();
+    long metadataAllocatorSize = Long.parseLong(
+        HoodieStorageConfig.LANCE_READ_METADATA_ALLOCATOR_SIZE_BYTES.defaultValue());
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+        getClass().getSimpleName() + "-metadata-" + filePath.getName(), metadataAllocatorSize);
+         LanceFileReader reader = LanceFileReader.open(filePath.toString(), allocator)) {
+      Map<String, String> metadata = reader.schema().getCustomMetadata();
+      if (metadata != null) {
+        metadata.forEach((key, value) -> {
+          if (key.startsWith(footerPrefix)) {
+            footerVals.put(key, value);
+          }
+        });
+      }
+      if (required && footerVals.isEmpty()) {
+        throw new MetadataNotFoundException(
+            "Could not find metadata in Lance footer with prefix " + footerPrefix + " in " + filePath);
+      }
+      return footerVals;
+    } catch (MetadataNotFoundException e) {
+      throw e;
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to read footer for Lance: " + filePath, e);
+    } catch (Exception e) {
+      throw new HoodieException("Unable to close Lance footer reader: " + filePath, e);
+    }
+  }
+
+  @Override
   public long getRowCount(HoodieStorage storage, StoragePath filePath) {
     try (HoodieFileReader fileReader =
              HoodieIOFactory.getIOFactory(storage)
