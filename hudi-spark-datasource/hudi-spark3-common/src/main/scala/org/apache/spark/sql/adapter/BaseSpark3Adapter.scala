@@ -26,31 +26,34 @@ import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark.internal.ReflectUtil
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.Type
 import org.apache.parquet.schema.Type.Repetition
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, Dataset, Encoder, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark3DataFrameUtil, Spark3HoodieUnsafeUtils, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, Dataset, Encoder, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark3DataFrameUtil, Spark3HoodieUnsafeUtils, Spark3HoodieUTF8StringFactory, SparkSession, SparkSessionExtensions, SQLContext}
 import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate, Predicate, SpecializedGetters}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, SpecializedGetters}
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
-import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
+import org.apache.spark.sql.execution.PartitionedFileUtil
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.lance.SparkLanceReaderBase
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFormatTrait
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.hudi.{HoodieMemoryStream, SparkAdapter}
+import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
+import org.apache.spark.sql.hudi.blob.{BatchedBlobReaderStrategy, ScalarFunctions}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
-import org.apache.spark.storage.StorageLevel
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.time.ZoneId
@@ -97,10 +100,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     }
   }
 
-  override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
-    Predicate.createInterpreted(e)
-  }
-
   override def createHoodieFileScanRDD(sparkSession: SparkSession,
                                        readFunction: PartitionedFile => Iterator[InternalRow],
                                        filePartitions: Seq[FilePartition],
@@ -117,7 +116,19 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, parameters.asScala.toMap)
   }
 
-  override def convertStorageLevelToString(level: StorageLevel): String
+  override def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {
+    TableValuedFunctions.funcs.foreach(extensions.injectTableFunction)
+  }
+
+  override def injectScalarFunctions(extensions: SparkSessionExtensions): Unit = {
+    ScalarFunctions.funcs.foreach(extensions.injectFunction)
+  }
+
+  override def injectPlannerStrategies(extensions: SparkSessionExtensions): Unit = {
+    extensions.injectPlannerStrategy { session =>
+      BatchedBlobReaderStrategy(session)
+    }
+  }
 
   override def translateFilter(predicate: Expression,
                                supportNestedPredicatePushdown: Boolean = false): Option[Filter] = {
@@ -128,13 +139,12 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     new ColumnarBatch(vectors, numRows)
   }
 
-  override def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
-                                                 queryExecution: QueryExecution,
-                                                 name: Option[String])(body: => T): T = {
-      SQLExecution.withNewExecutionId(queryExecution, name)(body)
+  override def createLanceFileReader(vectorized: Boolean,
+                                     sqlConf: SQLConf,
+                                     options: Map[String, String],
+                                     hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
+    Some(new SparkLanceReaderBase(vectorized))
   }
-
-  def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 
   override def createInternalRow(metaFields: Array[UTF8String],
                                 sourceRow: InternalRow,
