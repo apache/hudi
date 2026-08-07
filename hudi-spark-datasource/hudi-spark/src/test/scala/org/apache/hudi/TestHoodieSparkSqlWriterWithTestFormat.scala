@@ -489,6 +489,13 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
       .setPartitionFields(fooTableParams(DataSourceWriteOptions.PARTITIONPATH_FIELD.key))
       .setKeyGeneratorClassProp(fooTableParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key,
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue()))
+    // Forward the meta-field setting the caller is about to write with; see the same fix in
+    // TestHoodieSparkSqlWriter. Without it the table is created as ALL while the writer asks for
+    // NONE, which the write client now rejects -- meta-field population is a table property.
+    if (fooTableParams.contains(HoodieTableConfig.POPULATE_META_FIELDS.key)) {
+      tableMetaClientBuilder.setPopulateMetaFields(
+        java.lang.Boolean.valueOf(fooTableParams(HoodieTableConfig.POPULATE_META_FIELDS.key)))
+    }
     if (fooTableParams.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key)) {
       tableMetaClientBuilder.setPayloadClassName(fooTableParams(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key))
     }
