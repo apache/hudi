@@ -113,7 +113,7 @@ public abstract class InstantRange implements Serializable {
 
     public OpenClosedRangeNullableBoundary(String startInstant, String endInstant) {
       super(startInstant, endInstant);
-      ValidationUtils.checkArgument(!startInstant.isEmpty() || !endInstant.isEmpty(),
+      ValidationUtils.checkArgument(!this.startInstant.isEmpty() || !this.endInstant.isEmpty(),
           "At least one of start and end instants should be specified.");
     }
 
@@ -150,7 +150,7 @@ public abstract class InstantRange implements Serializable {
 
     public ClosedClosedRangeNullableBoundary(String startInstant, String endInstant) {
       super(startInstant, endInstant);
-      ValidationUtils.checkArgument(!startInstant.isEmpty() || !endInstant.isEmpty(),
+      ValidationUtils.checkArgument(!this.startInstant.isEmpty() || !this.endInstant.isEmpty(),
           "At least one of start and end instants should be specified.");
     }
 
