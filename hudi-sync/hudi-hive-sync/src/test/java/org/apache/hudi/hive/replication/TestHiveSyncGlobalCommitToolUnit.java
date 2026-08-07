@@ -28,7 +28,6 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -83,7 +82,7 @@ class TestHiveSyncGlobalCommitToolUnit {
     assertEquals("100", params.globalHiveSyncConfigParams.globallyReplicatedTimeStamp);
   }
 
-  private static void setField(Object target, String name, List<ReplicationStateSync> value) throws Exception {
+  private static void setField(Object target, String name, Object value) throws Exception {
     Field field = HiveSyncGlobalCommitTool.class.getDeclaredField(name);
     field.setAccessible(true);
     field.set(target, value);

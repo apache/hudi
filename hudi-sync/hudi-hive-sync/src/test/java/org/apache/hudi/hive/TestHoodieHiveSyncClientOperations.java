@@ -33,6 +33,8 @@ import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.thrift.TApplicationException;
 import org.apache.thrift.TException;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import java.lang.reflect.Field;
 import java.util.Collections;
@@ -51,7 +53,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -97,10 +101,16 @@ class TestHoodieHiveSyncClientOperations {
     fixture.syncClient.createOrReplaceTable("table", null, "input", "output", "serde",
         Collections.emptyMap(), Collections.emptyMap());
 
+    ArgumentCaptor<String> temporaryTableNameCaptor = ArgumentCaptor.forClass(String.class);
+    InOrder replacementOrder = inOrder(fixture.ddlExecutor, fixture.jdbcMetadataOperator);
+    replacementOrder.verify(fixture.ddlExecutor).createTable(temporaryTableNameCaptor.capture(),
+        isNull(), eq("input"), eq("output"), eq("serde"), eq(Collections.emptyMap()), eq(Collections.emptyMap()));
+    String temporaryTableName = temporaryTableNameCaptor.getValue();
+    replacementOrder.verify(fixture.jdbcMetadataOperator).dropTable("table");
+    replacementOrder.verify(fixture.jdbcMetadataOperator).renameTable(temporaryTableName, "table");
+
     verify(fixture.jdbcMetadataOperator).unsetTableProperty("table", GLOBALLY_CONSISTENT_READ_TIMESTAMP);
     verify(fixture.jdbcMetadataOperator).setStorageFormat(eq("table"), anyString(), anyString(), anyString(), any());
-    verify(fixture.jdbcMetadataOperator).dropTable("table");
-    verify(fixture.jdbcMetadataOperator).renameTable(anyString(), eq("table"));
   }
 
   @Test
@@ -154,8 +164,13 @@ class TestHoodieHiveSyncClientOperations {
     fixture.syncClient.createOrReplaceTable("table", null, "input", "output", "serde",
         Collections.emptyMap(), Collections.emptyMap());
 
-    verify(fixture.metaStoreClient).dropTable("test_db", "table");
-    verify(fixture.metaStoreClient).alter_table(eq("test_db"), anyString(), eq(temporaryTable));
+    ArgumentCaptor<String> temporaryTableNameCaptor = ArgumentCaptor.forClass(String.class);
+    InOrder replacementOrder = inOrder(fixture.ddlExecutor, fixture.metaStoreClient);
+    replacementOrder.verify(fixture.ddlExecutor).createTable(temporaryTableNameCaptor.capture(),
+        isNull(), eq("input"), eq("output"), eq("serde"), eq(Collections.emptyMap()), eq(Collections.emptyMap()));
+    String temporaryTableName = temporaryTableNameCaptor.getValue();
+    replacementOrder.verify(fixture.metaStoreClient).dropTable("test_db", "table");
+    replacementOrder.verify(fixture.metaStoreClient).alter_table("test_db", temporaryTableName, temporaryTable);
 
     Table serdeTable = new Table();
     StorageDescriptor storageDescriptor = new StorageDescriptor();
