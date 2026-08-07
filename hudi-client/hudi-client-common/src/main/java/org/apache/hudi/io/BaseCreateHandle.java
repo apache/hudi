@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
@@ -57,6 +58,8 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   protected long recordsDeleted = 0;
   protected Map<String, HoodieRecord<T>> recordMap;
   protected boolean useWriterSchema = false;
+  // Resolved once rather than per record: updateFileName consults it on the preserve-metadata path.
+  private final MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
 
   public BaseCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           String partitionPath, String fileId, Option<HoodieSchema> overriddenSchema,
@@ -167,8 +170,17 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   }
 
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, HoodieSchema schema, HoodieSchema targetSchema, String fileName, Properties prop) {
-    MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
-    return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
+    // hoodie.meta.fields.mode decides whether _hoodie_file_name carries a value. On the
+    // preserve-metadata path the record comes from an existing file, so leaving the column alone is
+    // not enough — MetadataValues skips null entries, and a record written while the table was on
+    // ALL would keep the file name it already had. Overwrite it with an explicit null instead.
+    if (metaFieldsMode.isFileNamePopulated()) {
+      MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
+      return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
+    }
+    HoodieRecord<T> withMetaFields =
+        record.prependMetaFields(schema, targetSchema, new MetadataValues(), prop);
+    return withMetaFields.updateMetaField(targetSchema, HoodieRecord.FILENAME_META_FIELD_ORD, null);
   }
 
   @Override

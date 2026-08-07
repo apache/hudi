@@ -34,6 +34,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
@@ -594,6 +595,100 @@ class TestMetaFieldsMode extends SparkClientFunctionalTestHarness {
         "Expected the commit-time guard from IncrementalRelation, got: " + rootMessage);
     assertTrue(rootMessage.contains(HoodieTableConfig.META_FIELDS_MODE.key()),
         "the message must name the property so users know what to change, got: " + rootMessage);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Upserts. Disabling the record-key meta column does not disable upserts: the key is re-derived
+  // through the key generator from the base file's data columns, and incoming records carry theirs
+  // in memory. So HoodieWriteMergeHandle's preserve-metadata branch is reachable here, and it is
+  // the one write path that stamps a meta column outside the mode-aware writers.
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * An upsert rewrites the whole file group: the updated record goes through the normal write path,
+   * while untouched records are copied forward through
+   * {@code HoodieWriteMergeHandle.writeToFile(..., shouldPreserveRecordMetadata=true)}. That branch
+   * used to stamp {@code _hoodie_file_name} unconditionally, so a {@code COMMIT_TIME_ONLY} table
+   * accumulated file names on every upsert while advertising that the column stays null.
+   */
+  @Test
+  void upsertLeavesFileNameNullOnCopiedRecordsUnderCommitTimeOnly() {
+    Map<String, String> options = baseOptions();
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.COMMIT_TIME_ONLY.name());
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL());
+
+    writeRows(Arrays.asList(
+            RowFactory.create("k1", "p1", "v1"),
+            RowFactory.create("k2", "p1", "v2"),
+            RowFactory.create("k3", "p1", "v3")),
+        simpleSchema(), options, basePath(), SaveMode.Overwrite);
+
+    // Update only k1. k2 and k3 are copied forward untouched — the preserve-metadata path.
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL());
+    writeRows(Collections.singletonList(RowFactory.create("k1", "p1", "v1-updated")),
+        simpleSchema(), options, basePath(), SaveMode.Append);
+
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setBasePath(basePath()).setConf(storageConf()).build();
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, metaClient.getTableConfig().getMetaFieldsMode(),
+        "the upsert must not have changed the table's mode");
+
+    // Read the latest file slice only: the pre-upsert file is still on disk (no cleaning has run),
+    // and it would otherwise be counted alongside the rewritten one.
+    Dataset<Row> latest = spark().read().format("hudi").load(basePath());
+    List<Row> rows = latest.collectAsList();
+    assertEquals(3, rows.size(), "upsert must not change the record count");
+
+    for (Row row : rows) {
+      String key = row.getAs("column1").toString();
+      assertNull(row.getAs(HoodieRecord.FILENAME_METADATA_FIELD),
+          "_hoodie_file_name must stay null under COMMIT_TIME_ONLY, including on records copied "
+              + "forward by the merge handle; row " + key + " had it populated");
+      assertNotNull(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
+          "_hoodie_commit_time is opted in, so every row must carry one; row " + key + " did not");
+      assertNull(row.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD),
+          "record key is ALL-only; row " + key + " had it populated");
+    }
+
+    // The update landed, so the merge genuinely ran rather than being skipped.
+    List<String> updated = rows.stream()
+        .filter(r -> "k1".equals(r.getAs("column1").toString()))
+        .map(r -> r.getAs("column3").toString()).collect(Collectors.toList());
+    assertEquals(Collections.singletonList("v1-updated"), updated);
+  }
+
+  /**
+   * The same upsert on {@code COMMIT_TIME_AND_FILE_NAME}, where the file name is opted in, must
+   * still rewrite it to the new file — otherwise a copied record would point at the file it came
+   * from rather than the one holding it, which is why the unconditional rewrite existed.
+   */
+  @Test
+  void upsertRewritesFileNameOnCopiedRecordsWhenFileNameIsOptedIn() {
+    Map<String, String> options = baseOptions();
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME.name());
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL());
+
+    writeRows(Arrays.asList(
+            RowFactory.create("k1", "p1", "v1"),
+            RowFactory.create("k2", "p1", "v2")),
+        simpleSchema(), options, basePath(), SaveMode.Overwrite);
+
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL());
+    writeRows(Collections.singletonList(RowFactory.create("k1", "p1", "v1-updated")),
+        simpleSchema(), options, basePath(), SaveMode.Append);
+
+    Dataset<Row> latest = spark().read().format("hudi")
+        .load(basePath())
+        .withColumn("__containing_file", functions.input_file_name());
+
+    for (Row row : latest.collectAsList()) {
+      String fileName = row.getAs(HoodieRecord.FILENAME_METADATA_FIELD);
+      String containingFile = row.getAs("__containing_file").toString();
+      assertNotNull(fileName, "file name is opted in, so it must be populated");
+      assertTrue(containingFile.endsWith("/" + fileName),
+          "_hoodie_file_name must name the file actually holding the row, so a copied record cannot "
+              + "keep pointing at its previous file; got " + fileName + " inside " + containingFile);
+    }
   }
 
   private static String rootMessageOf(Throwable thrown) {
