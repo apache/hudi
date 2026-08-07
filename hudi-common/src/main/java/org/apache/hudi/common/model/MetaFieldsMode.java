@@ -189,9 +189,18 @@ public enum MetaFieldsMode {
    * therefore rejected — {@code NONE -> COMMIT_TIME_ONLY} and
    * {@code FILE_NAME_ONLY -> COMMIT_TIME_AND_FILE_NAME} just as much as {@code NONE -> ALL}.
    *
-   * <p>Narrowing is not flagged here: writing fewer meta columns than the table advertises cannot
-   * make a reader believe in data that is absent, and it is long-standing behavior for a writer to
-   * resolve to {@link #NONE} against an {@link #ALL} table without restating its settings.
+   * <p>Narrowing is not flagged here, because the two callers treat it differently:
+   *
+   * <ul>
+   *   <li>A writer must match the table exactly. It cannot narrow either — the mode is a table
+   *       property, so a writer that did not state one inherits the table's rather than changing it
+   *       (see {@code BaseHoodieWriteClient#inferMetaFieldsModeFromTable}).</li>
+   *   <li>The sanctioned mutation paths — hudi-cli and upgrade — may narrow, and only narrow.
+   *       Dropping a meta column leaves earlier files carrying values nothing reads, which is
+   *       recoverable; adding one leaves later files claiming a column earlier files lack, which is
+   *       not. A caller changing the mode must therefore reject any transition where the new mode
+   *       {@code isWiderThan} the old.</li>
+   * </ul>
    */
   public boolean isWiderThan(MetaFieldsMode other) {
     if (other == null) {
