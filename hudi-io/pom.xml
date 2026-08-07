@@ -116,6 +116,9 @@
               <goal>shade</goal>
             </goals>
             <configuration>
+              <!-- The shaded jar is attached under the "shaded" classifier and the primary jar stays
+                   unshaded, so the published POM must keep declaring protobuf-java: reducing it would strip
+                   a dependency the primary jar really needs. -->
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <shadedArtifactAttached>true</shadedArtifactAttached>
               <shadedClassifierName>shaded</shadedClassifierName>
