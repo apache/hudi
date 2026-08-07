@@ -26,7 +26,8 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
@@ -110,9 +111,18 @@ public class GlueTestUtil {
         .setPayloadClass(HoodieAvroPayload.class)
         .initTable(HadoopFSUtils.getStorageConf(new Configuration()), basePath);
 
-    String instantTime = "101";
+    // Write the commit through HoodieTestTable rather than by hand. A table-version-8+ timeline lives under
+    // .hoodie/timeline and is read through CommitMetadataSerDe, so a hand-written JSON file in .hoodie is not
+    // on the timeline at all and TableSchemaResolver finds no schema - which left every sync path that reads
+    // the table schema failing before it reached what it was meant to exercise.
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(false);
-    createMetaFile(basePath, new DefaultInstantFileNameGenerator().makeCommitFileName(instantTime), commitMetadata);
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getSimpleSchema().toAvroSchema().toString());
+    try {
+      HoodieTestTable.of(metaClient).addCommit("101", Option.of(commitMetadata));
+    } catch (Exception e) {
+      throw new IOException("Failed to seed the test table with a commit", e);
+    }
+    metaClient.reloadActiveTimeline();
   }
 
   public static HoodieSchema getSimpleSchema() {
