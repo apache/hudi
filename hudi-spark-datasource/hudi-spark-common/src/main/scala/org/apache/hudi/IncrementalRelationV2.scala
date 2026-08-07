@@ -78,8 +78,12 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
       s"option ${DataSourceReadOptions.START_COMMIT.key}")
   }
 
-  if (!metaClient.getTableConfig.populateMetaFields()) {
-    throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
+  if (!metaClient.getTableConfig.isCommitTimePopulated()) {
+    throw new HoodieException("Incremental queries are not supported when _hoodie_commit_time is not populated. "
+      + "hoodie.meta.fields.mode is a physical-storage decision baked into files at write time, so it cannot be "
+      + "changed by flipping write options, and it cannot be widened afterwards either — hudi-cli may only narrow a "
+      + "mode, since existing files are never rewritten. Recreating the table is the only way to enable incremental "
+      + "queries on it: create it with hoodie.meta.fields.mode=COMMIT_TIME_ONLY (or COMMIT_TIME_AND_FILE_NAME, or ALL).")
   }
 
   private val queryContext: IncrementalQueryAnalyzer.QueryContext =

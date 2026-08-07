@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
@@ -1773,8 +1774,39 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT);
   }
 
+  /**
+   * @return true when every meta column is populated.
+   *
+   * <p>Derived from {@link #getMetaFieldsMode()} so that call sites still written against the
+   * deprecated {@code hoodie.populate.meta.fields} boolean observe the same answer as the enum:
+   * only {@link MetaFieldsMode#ALL} populates every meta column.
+   */
   public boolean populateMetaFields() {
-    return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    return getMetaFieldsMode().toLegacyPopulateMetaFields();
+  }
+
+  /**
+   * @return the {@link MetaFieldsMode} resolved from the write config.
+   * {@code hoodie.meta.fields.mode} is the source of truth; configs written before that property
+   * existed fall back to {@link MetaFieldsMode#ALL} or {@link MetaFieldsMode#NONE} based on the
+   * deprecated {@code hoodie.populate.meta.fields} boolean.
+   */
+  public MetaFieldsMode getMetaFieldsMode() {
+    return MetaFieldsMode.resolve(this);
+  }
+
+  /**
+   * @return true when {@code _hoodie_commit_time} is physically populated on every row.
+   */
+  public boolean isCommitTimePopulated() {
+    return getMetaFieldsMode().isCommitTimePopulated();
+  }
+
+  /**
+   * @return true when {@code _hoodie_file_name} is physically populated on every row.
+   */
+  public boolean isFileNamePopulated() {
+    return getMetaFieldsMode().isFileNamePopulated();
   }
 
   /**
@@ -3587,9 +3619,62 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    /**
+     * @deprecated since 1.3.0, use {@link #withMetaFieldsMode(MetaFieldsMode)} instead
+     * ({@code true} maps to {@link MetaFieldsMode#ALL}, {@code false} to {@link MetaFieldsMode#NONE}).
+     */
+    @Deprecated
     public Builder withPopulateMetaFields(boolean populateMetaFields) {
       writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       return this;
+    }
+
+    public Builder withMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
+      // Leaving the mode unset defers to the deprecated populate.meta.fields boolean. The legacy
+      // boolean is derived from the mode in build() rather than here, so the two cannot be made to
+      // disagree by calling the setters in either order.
+      writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE,
+          metaFieldsMode == null ? "" : metaFieldsMode.name());
+      return this;
+    }
+
+    /**
+     * Rewrite the deprecated {@code populate.meta.fields} boolean from {@code meta.fields.mode}
+     * whenever a mode is set, so the two can never disagree on the resulting config.
+     *
+     * <p>Done at build time, not in the setter: {@code withPopulateMetaFields} does not re-derive
+     * the mode, so deriving in {@link #withMetaFieldsMode} alone would make the invariant depend on
+     * call order. {@code withMetaFieldsMode(COMMIT_TIME_ONLY).withPopulateMetaFields(true)} would
+     * leave a selective mode sitting next to {@code populate.meta.fields=true} — a config that
+     * resolves correctly (the mode wins) but carries the contradiction to disk on any path that
+     * copies raw write-config props into {@code hoodie.properties}, misleading pre-1.3.0 readers
+     * into treating the table as ALL.
+     */
+    private void deriveLegacyPopulateMetaFieldsFromMode() {
+      String rawMode = writeConfig.getString(HoodieTableConfig.META_FIELDS_MODE);
+      if (StringUtils.isNullOrEmpty(rawMode)) {
+        return;
+      }
+      boolean derived = MetaFieldsMode.parse(rawMode).toLegacyPopulateMetaFields();
+      // A caller that explicitly set the boolean to something the mode contradicts is rejected rather
+      // than silently overridden — otherwise half their request is discarded without a word. Only a
+      // genuine contradiction fails; restating the derived value (ALL + true, NONE + false) passes.
+      // An absent boolean is the ordinary case and simply takes the derived value.
+      checkArgument(
+          !writeConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS)
+              || writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS) == derived,
+          () -> String.format(
+              "Conflicting meta-field settings on the write config: %s=%s implies %s=%s, but %s was "
+                  + "explicitly set to %s. %s is the source of truth and the boolean is only its "
+                  + "pre-1.3.0 fallback, so the two cannot be set to different things. Drop %s, or set "
+                  + "it to %s.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), rawMode,
+              HoodieTableConfig.POPULATE_META_FIELDS.key(), derived,
+              HoodieTableConfig.POPULATE_META_FIELDS.key(),
+              writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS),
+              HoodieTableConfig.META_FIELDS_MODE.key(),
+              HoodieTableConfig.POPULATE_META_FIELDS.key(), derived));
+      writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(derived));
     }
 
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
@@ -3889,6 +3974,27 @@ public class HoodieWriteConfig extends HoodieConfig {
       checkArgument(ttlStatsMaxParallelism > 0,
           String.format("%s must be positive, but was %d",
               HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), ttlStatsMaxParallelism));
+
+      // hoodie.meta.fields.mode is the source of truth for meta-column population; the deprecated
+      // populate.meta.fields boolean is consulted only when the mode is absent. There is therefore
+      // no ambiguous combination to reject here — MetaFieldsMode.resolve throws on unrecognized
+      // values.
+      MetaFieldsMode metaFieldsMode = writeConfig.getMetaFieldsMode();
+      // Selective meta-field modes are CoW-only in this release. MoR log-write path does not yet
+      // respect the mode, which would silently produce log records with null meta columns.
+      boolean isSelective = metaFieldsMode.isSelective();
+      checkArgument(!(writeConfig.getTableType() == HoodieTableType.MERGE_ON_READ && isSelective),
+          String.format("%s=%s is currently supported for COPY_ON_WRITE tables only. MoR support is a follow-up. "
+                  + "For MoR use %s=ALL or %s=NONE.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
+              HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.key()));
+      // Selective meta-field modes are wired only for the Spark writer path in this release. Flink
+      // RowData / Java-client writers ignore the mode and would silently produce NONE-mode output.
+      checkArgument(!(engineType != EngineType.SPARK && isSelective),
+          String.format("%s=%s is currently supported for the Spark writer only. Support for engine=%s is a follow-up. "
+                  + "Use %s=ALL or %s=NONE.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode, engineType,
+              HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.key()));
     }
 
     public HoodieWriteConfig build() {
@@ -3898,6 +4004,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     @VisibleForTesting
     public HoodieWriteConfig build(boolean shouldValidate) {
       setDefaults();
+      // Before validate(), so the MoR / engine-type checks see the same mode the built config will.
+      deriveLegacyPopulateMetaFieldsFromMode();
       if (shouldValidate) {
         validate();
       }

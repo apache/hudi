@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -1014,6 +1015,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String bootstrapBasePath;
     private Boolean bootstrapIndexEnable;
     private Boolean populateMetaFields;
+    private MetaFieldsMode metaFieldsMode;
     private String keyGeneratorClassProp;
     private String partitionValueExtractorClass;
     private String keyGeneratorType;
@@ -1171,8 +1173,38 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public TableBuilder setPopulateMetaFields(boolean populateMetaFields) {
+    /**
+     * @param populateMetaFields {@code null} when the caller did not state the property. That is
+     *        distinct from {@code false}: an unstated boolean defers entirely to
+     *        {@code hoodie.meta.fields.mode}, whereas a stated one that contradicts the mode is
+     *        rejected at build time. Callers reading the value through {@code getBooleanOrDefault}
+     *        must pass {@code null} rather than the default, or every writer that never mentioned
+     *        the property would look like it had asked for {@code true}.
+     * @deprecated since 1.3.0, use {@link #setMetaFieldsMode(MetaFieldsMode)} instead
+     * ({@code true} maps to {@link MetaFieldsMode#ALL}, {@code false} to {@link MetaFieldsMode#NONE}).
+     */
+    @Deprecated
+    public TableBuilder setPopulateMetaFields(Boolean populateMetaFields) {
       this.populateMetaFields = populateMetaFields;
+      return this;
+    }
+
+    public TableBuilder setMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
+      this.metaFieldsMode = metaFieldsMode;
+      return this;
+    }
+
+    /**
+     * Convenience overload that accepts the raw on-disk string (e.g. from properties files).
+     * Empty or null values leave the mode unset — the table then resolves to ALL or NONE from the
+     * deprecated populate.meta.fields boolean.
+     */
+    public TableBuilder setMetaFieldsModeFromString(String rawMode) {
+      if (rawMode == null || rawMode.trim().isEmpty()) {
+        this.metaFieldsMode = null;
+        return this;
+      }
+      this.metaFieldsMode = MetaFieldsMode.parse(rawMode);
       return this;
     }
 
@@ -1395,6 +1427,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS)) {
         setPopulateMetaFields(hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.META_FIELDS_MODE)) {
+        setMetaFieldsModeFromString(hoodieConfig.getString(HoodieTableConfig.META_FIELDS_MODE));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
         setKeyGeneratorClassProp(hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
       } else if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE)) {
@@ -1535,7 +1570,37 @@ public class HoodieTableMetaClient implements Serializable {
           tableConfig.setValue(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE, cdcSupplementalLoggingMode);
         }
       }
-      if (null != populateMetaFields) {
+      // hoodie.meta.fields.mode is the source of truth, and hoodie.properties must never contradict
+      // it: a table written selectively that still recorded populate.meta.fields=true would be read
+      // as ALL by a pre-1.3.0 reader, which ignores the mode property entirely. For NONE that is
+      // actively unsafe — an older incremental reader would run against all-null commit times and
+      // silently return no rows.
+      //
+      // A caller that states both and disagrees is rejected rather than silently overridden. Half
+      // their request would otherwise be discarded without a word, and it would be inconsistent with
+      // BaseHoodieWriteClient#validateAgainstTableProperties, which already rejects an explicitly-set
+      // boolean that disagrees with the table. Only a genuine contradiction fails: ALL + true and
+      // NONE + false are coherent restatements and pass.
+      if (null != metaFieldsMode) {
+        boolean derivedPopulateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
+        if (null != populateMetaFields && populateMetaFields != derivedPopulateMetaFields) {
+          throw new HoodieException(String.format(
+              "Conflicting meta-field settings at table creation: %s=%s implies %s=%s, but %s was "
+                  + "explicitly set to %s. %s is the source of truth and the boolean is only its "
+                  + "pre-1.3.0 fallback, so the two cannot be set to different things. Drop %s, or set "
+                  + "it to %s.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
+              HoodieTableConfig.POPULATE_META_FIELDS.key(), derivedPopulateMetaFields,
+              HoodieTableConfig.POPULATE_META_FIELDS.key(), populateMetaFields,
+              HoodieTableConfig.META_FIELDS_MODE.key(),
+              HoodieTableConfig.POPULATE_META_FIELDS.key(), derivedPopulateMetaFields));
+        }
+        tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
+        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+            Boolean.toString(derivedPopulateMetaFields));
+      } else if (null != populateMetaFields) {
+        // No explicit mode: preserve pre-1.3.0 behavior and record only the legacy boolean, which
+        // resolves to ALL / NONE on read.
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       }
       if (null != keyGeneratorClassProp) {

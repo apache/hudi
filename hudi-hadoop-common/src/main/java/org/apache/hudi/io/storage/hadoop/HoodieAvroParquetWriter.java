@@ -23,10 +23,13 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.core.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -48,39 +51,72 @@ public class HoodieAvroParquetWriter
   private final String fileName;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
-  private final boolean populateMetaFields;
+  private final MetaFieldsMode metaFieldsMode;
   private final HoodieAvroWriteSupport writeSupport;
 
+  /**
+   * @deprecated since 1.3.0, use the {@link MetaFieldsMode} overload. Retained for existing callers
+   * that only distinguish all-or-nothing meta fields ({@code true} maps to {@link MetaFieldsMode#ALL},
+   * {@code false} to {@link MetaFieldsMode#NONE}); it cannot express the selective modes.
+   */
+  @Deprecated
   @SuppressWarnings({"unchecked", "rawtypes"})
   public HoodieAvroParquetWriter(StoragePath file,
                                  HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig,
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,
                                  boolean populateMetaFields) throws IOException {
+    this(file, parquetConfig, instantTime, taskContextSupplier,
+        populateMetaFields ? MetaFieldsMode.ALL : MetaFieldsMode.NONE);
+  }
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public HoodieAvroParquetWriter(StoragePath file,
+                                 HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig,
+                                 String instantTime,
+                                 TaskContextSupplier taskContextSupplier,
+                                 MetaFieldsMode metaFieldsMode) throws IOException {
     super(file, (HoodieParquetConfig) parquetConfig);
     this.fileName = file.getName();
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
-    this.populateMetaFields = populateMetaFields;
+    this.metaFieldsMode = metaFieldsMode == null ? MetaFieldsMode.NONE : metaFieldsMode;
   }
 
   @Override
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
-    if (populateMetaFields) {
-      prepRecordWithMetadata(key, avroRecord, instantTime,
-          taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
-      super.write(avroRecord);
-      writeSupport.add(key.getRecordKey());
-    } else {
-      super.write(avroRecord);
+    switch (metaFieldsMode) {
+      case ALL:
+        prepRecordWithMetadata(key, avroRecord, instantTime,
+            taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
+        super.write(avroRecord);
+        writeSupport.add(key.getRecordKey());
+        break;
+      case NONE:
+        super.write(avroRecord);
+        break;
+      default:
+        // Selective mode — populate only the opted-in columns. The other meta columns stay null,
+        // which Parquet stores as definition-level flags (zero data bytes). Bloom filter /
+        // record-key index population is intentionally skipped — that requires the record-key
+        // column, which is never populated in selective modes.
+        GenericRecord genericRecord = (GenericRecord) avroRecord;
+        if (metaFieldsMode.isCommitTimePopulated()) {
+          genericRecord.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
+        }
+        if (metaFieldsMode.isFileNamePopulated()) {
+          genericRecord.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
+        }
+        super.write(avroRecord);
+        break;
     }
   }
 
   @Override
   public void writeAvro(String key, IndexedRecord object) throws IOException {
     super.write(object);
-    if (populateMetaFields) {
+    if (metaFieldsMode == MetaFieldsMode.ALL) {
       writeSupport.add(key);
     }
   }
