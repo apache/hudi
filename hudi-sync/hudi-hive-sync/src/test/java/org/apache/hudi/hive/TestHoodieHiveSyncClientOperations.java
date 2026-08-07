@@ -38,7 +38,6 @@ import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
 import static org.apache.hudi.sync.common.HoodieMetaSyncOperations.HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC;
