@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
@@ -199,7 +200,10 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
   void testMergeOnReadRoutesAppendAndCompactionActions() throws IOException {
     initMetaClient(HoodieTableType.MERGE_ON_READ);
     HoodieFlinkMergeOnReadTable table = new HoodieFlinkMergeOnReadTable(config(), context, metaClient);
-    HoodieAppendHandle appendHandle = mock(HoodieAppendHandle.class);
+    // This branch's HoodieFlinkMergeOnReadTable requires a FlinkAppendHandle. Master relaxed the
+    // guard to HoodieAppendHandle in 0311d6c43961 (#19067), the native log format work, which is
+    // not backported here.
+    FlinkAppendHandle appendHandle = mock(FlinkAppendHandle.class);
     BucketInfo bucketInfo = new BucketInfo(BucketType.UPDATE, "file-1", "partition");
 
     assertWriteMetadataPropagated(FlinkUpsertDeltaCommitActionExecutor.class,
