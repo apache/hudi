@@ -127,6 +127,51 @@ public class TestHoodieStreamerMetaFieldsMode extends HoodieDeltaStreamerTestBas
         "both commits must be represented, so the second run really did write through this path");
   }
 
+  /**
+   * The variant @voonhous asked for, and the one cshuo originally described: the restart states the
+   * deprecated boolean rather than nothing at all.
+   *
+   * <p>These are different cases under the current rule. Stating neither meta-field property inherits
+   * the table's mode (above); stating the boolean is an explicit request that contradicts a
+   * {@code COMMIT_TIME_ONLY} table, so it is rejected rather than silently narrowing the write to
+   * {@code NONE}. Before this rule it narrowed silently, writing base files with a null
+   * {@code _hoodie_commit_time} into a table that still advertised the mode.
+   */
+  @Test
+  public void testRestartStatingTheLegacyBooleanIsRejected() throws Exception {
+    String tablePath = basePath + "/streamer_restart_legacy_boolean_conflict";
+
+    HoodieDeltaStreamer.Config first = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
+    first.tableType = "COPY_ON_WRITE";
+    first.configs.add(HoodieTableConfig.META_FIELDS_MODE.key() + "=" + MetaFieldsMode.COMMIT_TIME_ONLY.name());
+    HoodieDeltaStreamer streamer = new HoodieDeltaStreamer(first, jsc);
+    streamer.getIngestionService().ingestOnce();
+    streamer.shutdownGracefully();
+
+    HoodieDeltaStreamer.Config restart = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
+    restart.tableType = "COPY_ON_WRITE";
+    restart.configs.add(HoodieTableConfig.POPULATE_META_FIELDS.key() + "=false");
+
+    Throwable thrown = assertThrows(Throwable.class, () -> {
+      HoodieDeltaStreamer restarted = new HoodieDeltaStreamer(restart, jsc);
+      restarted.getIngestionService().ingestOnce();
+      restarted.shutdownGracefully();
+    });
+
+    String rootMessage = rootMessageOf(thrown);
+    assertTrue(rootMessage.contains(HoodieTableConfig.META_FIELDS_MODE.key())
+            || rootMessage.contains(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+        "expected a meta-fields conflict, got: " + rootMessage);
+
+    // The failed run must not have changed the table, nor written rows with a null commit time.
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, metaClient.getTableConfig().getMetaFieldsMode(),
+        "a rejected restart must leave the table's mode untouched");
+    Dataset<Row> raw = sparkSession.read().parquet(tablePath + "/*/*/*/*.parquet");
+    assertEquals(0, raw.filter(functions.col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isNull()).count(),
+        "no row may have a null _hoodie_commit_time");
+  }
+
   @Test
   public void testStreamerRejectsMorWithSelectiveMode() throws Exception {
     String tablePath = basePath + "/streamer_mor_selective_rejected";
