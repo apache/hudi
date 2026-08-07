@@ -217,8 +217,20 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
     log.info("Drop partitions {} on {}", partitionsToDrop.size(), tableName);
     try {
+      // Resolved here, on the calling thread, rather than inside the workers: this is the
+      // only sync path that would otherwise call a user-supplied PartitionValueExtractor
+      // from several threads at once. Extractors are pluggable and not required to be
+      // thread-safe, and a garbled clause would drop the wrong partition. It also halves
+      // the extractor calls, since partitionExists and the drop clause share the values.
+      List<PartitionToDrop> resolved = new ArrayList<>(partitionsToDrop.size());
+      for (String partition : partitionsToDrop) {
+        List<String> values = partitionValueExtractor.extractPartitionValuesInPath(partition);
+        resolved.add(new PartitionToDrop(partition, values,
+            HivePartitionUtil.getPartitionClauseForDrop(values, config)));
+      }
+
       int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
-      List<List<String>> batches = CollectionUtils.batches(partitionsToDrop, batchSyncPartitionNum);
+      List<List<PartitionToDrop>> batches = CollectionUtils.batches(resolved, batchSyncPartitionNum);
       runDropBatches(tableName, batches);
     } catch (Exception e) {
       log.error("{} drop partition failed", tableId(databaseName, tableName), e);
@@ -238,9 +250,9 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    * {@code HiveDriverPool}: the first failure is rethrown, batches that have not started
    * are stopped via the task-side abort flag, and later failures are logged at WARN.
    */
-  private void runDropBatches(String tableName, List<List<String>> batches) throws Exception {
+  private void runDropBatches(String tableName, List<List<PartitionToDrop>> batches) throws Exception {
     if (!metaStoreClientPool.isPresent()) {
-      for (List<String> batch : batches) {
+      for (List<PartitionToDrop> batch : batches) {
         applyDropBatch(metaStoreClient, tableName, batch);
       }
       return;
@@ -251,21 +263,36 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
         "drop partition");
   }
 
-  private void applyDropBatch(IMetaStoreClient client, String tableName, List<String> batch) throws Exception {
+  private void applyDropBatch(IMetaStoreClient client, String tableName, List<PartitionToDrop> batch) throws Exception {
     int dropped = 0;
-    for (String dropPartition : batch) {
-      if (HivePartitionUtil.partitionExists(client, tableName, dropPartition,
-          partitionValueExtractor, config)) {
-        String partitionClause =
-            HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
-        client.dropPartition(databaseName, tableName, partitionClause, false);
+    for (PartitionToDrop dropPartition : batch) {
+      if (HivePartitionUtil.partitionExists(client, tableName, dropPartition.path,
+          dropPartition.values, config)) {
+        client.dropPartition(databaseName, tableName, dropPartition.clause, false);
         dropped++;
       }
       // Per-partition detail stays at debug: a batch can hold thousands of partitions
       // and N workers log concurrently, so INFO carries the per-batch summary instead.
-      log.debug("Dropped partition {} on {}", dropPartition, tableName);
+      log.debug("Dropped partition {} on {}", dropPartition.path, tableName);
     }
     log.info("Dropped {} of {} partitions in batch on {}", dropped, batch.size(), tableName);
+  }
+
+  /**
+   * A partition to drop with its extractor-derived values already resolved, so worker
+   * threads never touch the shared {@link PartitionValueExtractor}. Immutable: the
+   * {@code values} list is wrapped unmodifiable at construction.
+   */
+  private static final class PartitionToDrop {
+    private final String path;
+    private final List<String> values;
+    private final String clause;
+
+    private PartitionToDrop(String path, List<String> values, String clause) {
+      this.path = path;
+      this.values = Collections.unmodifiableList(values);
+      this.clause = clause;
+    }
   }
 
   @Override
