@@ -101,6 +101,33 @@ class TestSparkVectorIndexUpdater {
   }
 
   @Test
+  void testVectorChangeAcrossClustersTombstonesOldPostingAndAddsNewPosting() {
+    float[][] centroids = {{0.0f, 0.0f}, {10.0f, 10.0f}};
+    Object routingModel = TwoLevelKMeansBootstrap$.MODULE$.restoreModelForJava(
+        centroids, centroids, new int[] {0, 1, 2});
+    SparkVectorIndexUpdater.Artifacts artifacts = new SparkVectorIndexUpdater.Artifacts(
+        centroids, routingModel, 1.1f, 1,
+        VectorDistanceMetric.L2, 2, 1, 42L, false, false);
+    SparkVectorIndexBootstrap.VectorRow previous = row(
+        "id-moving", "p1", "file-1", "001", floats(0.0f, 0.0f), 5L);
+    SparkVectorIndexBootstrap.VectorRow current = row(
+        "id-moving", "p1", "file-1", "001", floats(10.0f, 10.0f), 6L);
+
+    List<HoodieRecord> records = classify(rows(previous), rows(current), artifacts);
+
+    assertEquals(2, records.size());
+    assertEquals(
+        VectorIndexMetadataKey.postingDelta(GENERATION, 0, 0, "id-moving"),
+        records.get(0).getRecordKey());
+    assertInstanceOf(HoodieVectorIndexTombstone.class, metadata(records.get(0)));
+    assertEquals(
+        VectorIndexMetadataKey.postingDelta(GENERATION, 1, 0, "id-moving"),
+        records.get(1).getRecordKey());
+    HoodieVectorIndexPostingDelta posting = posting(records.get(1));
+    assertEquals(6L, posting.getRowPosition());
+  }
+
+  @Test
   void testLocatorOnlyRewriteEmitsNewPostingWithoutTombstone() {
     byte[] vector = floats(1.0f, 2.0f);
     SparkVectorIndexBootstrap.VectorRow previous = row(
