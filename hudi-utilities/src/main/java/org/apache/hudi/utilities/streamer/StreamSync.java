@@ -476,8 +476,11 @@ public class StreamSync implements Serializable, Closeable {
         .setPartitionFields(partitionColumns)
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
         .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
-        .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
-            HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
+        // null when unstated: TableBuilder rejects a boolean that contradicts an explicit
+        // meta.fields.mode, so handing it the `true` default would turn a plain
+        // hoodie.meta.fields.mode=COMMIT_TIME_ONLY run into a spurious conflict.
+        .setPopulateMetaFields(props.containsKey(HoodieTableConfig.POPULATE_META_FIELDS.key())
+            ? props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key()) : null)
         .setMetaFieldsModeFromString(props.getString(HoodieTableConfig.META_FIELDS_MODE.key(),
             HoodieTableConfig.META_FIELDS_MODE.defaultValue()))
         .setKeyGeneratorClassProp(keyGenClassName)

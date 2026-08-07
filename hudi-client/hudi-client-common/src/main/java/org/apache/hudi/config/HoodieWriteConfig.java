@@ -3651,10 +3651,29 @@ public class HoodieWriteConfig extends HoodieConfig {
      */
     private void deriveLegacyPopulateMetaFieldsFromMode() {
       String rawMode = writeConfig.getString(HoodieTableConfig.META_FIELDS_MODE);
-      if (!StringUtils.isNullOrEmpty(rawMode)) {
-        writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
-            Boolean.toString(MetaFieldsMode.parse(rawMode).toLegacyPopulateMetaFields()));
+      if (StringUtils.isNullOrEmpty(rawMode)) {
+        return;
       }
+      boolean derived = MetaFieldsMode.parse(rawMode).toLegacyPopulateMetaFields();
+      // A caller that explicitly set the boolean to something the mode contradicts is rejected rather
+      // than silently overridden — otherwise half their request is discarded without a word. Only a
+      // genuine contradiction fails; restating the derived value (ALL + true, NONE + false) passes.
+      // An absent boolean is the ordinary case and simply takes the derived value.
+      checkArgument(
+          !writeConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS)
+              || writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS) == derived,
+          () -> String.format(
+              "Conflicting meta-field settings on the write config: %s=%s implies %s=%s, but %s was "
+                  + "explicitly set to %s. %s is the source of truth and the boolean is only its "
+                  + "pre-1.3.0 fallback, so the two cannot be set to different things. Drop %s, or set "
+                  + "it to %s.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), rawMode,
+              HoodieTableConfig.POPULATE_META_FIELDS.key(), derived,
+              HoodieTableConfig.POPULATE_META_FIELDS.key(),
+              writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS),
+              HoodieTableConfig.META_FIELDS_MODE.key(),
+              HoodieTableConfig.POPULATE_META_FIELDS.key(), derived));
+      writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(derived));
     }
 
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {

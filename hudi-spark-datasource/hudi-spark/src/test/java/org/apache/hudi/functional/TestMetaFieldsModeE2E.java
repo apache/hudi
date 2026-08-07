@@ -206,11 +206,30 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  void selectiveModeWinsOverLegacyPopulateTrue() {
-    // hoodie.meta.fields.mode is the source of truth: an explicit mode is honored regardless of
-    // the deprecated boolean, so this combination is no longer ambiguous and is not rejected.
+  void explicitlyContradictingTheModeIsRejectedAtTableCreation() {
+    // A selective mode implies populate.meta.fields=false. Stating the boolean as true alongside it
+    // is a contradiction, and the user is told rather than having half their request discarded.
+    // This is the datasource end of the check in HoodieTableMetaClient.TableBuilder.
     Map<String, String> options = baseOptions();
     options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.COMMIT_TIME_ONLY.name());
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+
+    Throwable thrown = assertThrows(Throwable.class, () ->
+        writeSampleAndGetTableConfig(options, basePath()));
+
+    String rootMessage = rootMessageOf(thrown);
+    assertTrue(rootMessage.contains(HoodieTableConfig.META_FIELDS_MODE.key())
+            && rootMessage.contains(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+        "the error must name both properties so the user knows which to drop, got: " + rootMessage);
+  }
+
+  @Test
+  void selectiveModeWithoutTheLegacyBooleanDerivesItAsFalse() {
+    // The ordinary case: state only the mode. The boolean is derived, never carried through
+    // verbatim -- a pre-1.3.0 reader ignores the mode property, so leaving populate=true would make
+    // it treat a selectively-written table as ALL.
+    Map<String, String> options = baseOptions();
     options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.COMMIT_TIME_ONLY.name());
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
 
@@ -218,19 +237,16 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
 
     assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, tc.getMetaFieldsMode());
     assertMetaColumnPopulation(basePath(), MetaFieldsMode.COMMIT_TIME_ONLY);
-    // ...and hoodie.properties must not contradict the mode. A pre-1.3.0 reader ignores the mode
-    // property entirely, so leaving populate.meta.fields=true here would make it treat a
-    // selectively-written table as ALL.
     assertFalse(tc.populateMetaFields(),
-        "legacy populate.meta.fields must be derived from the mode, not carried through verbatim");
+        "legacy populate.meta.fields must be derived from the mode");
   }
 
   @Test
   void noneModePersistsLegacyBooleanAsFalse() {
-    // The unsafe case: an old incremental reader that sees populate.meta.fields=true on a NONE
-    // table would run against all-null commit times and silently return zero rows.
+    // The unsafe case this invariant protects: an old incremental reader that saw
+    // populate.meta.fields=true on a NONE table would run against all-null commit times and
+    // silently return zero rows. Stating only the mode -- the ordinary case -- must derive false.
     Map<String, String> options = baseOptions();
-    options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
     options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
 
@@ -244,7 +260,6 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
   @Test
   void allModePersistsLegacyBooleanAsTrue() {
     Map<String, String> options = baseOptions();
-    options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
     options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.ALL.name());
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
 
