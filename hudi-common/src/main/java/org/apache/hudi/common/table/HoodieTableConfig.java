@@ -893,7 +893,7 @@ public class HoodieTableConfig extends HoodieConfig {
         handleMergeModeConfigs(payloadClassName, reconciledConfigs);
         // Partial update mode config.
         handlePartialUpdateModeConfigs(payloadClassName, reconciledConfigs);
-        // Additional custom merge properties.s
+        // Additional custom merge properties.
         // Certain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
         // merge to function as expected. Handing such special cases here.
         handlePayloadAdhocConfigs(payloadClassName, reconciledConfigs);
