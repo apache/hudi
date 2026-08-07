@@ -116,10 +116,14 @@ public class TestMetadataPartitionType {
     }
 
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfigBuilder.build(), metaClient);
-    // Verify partition type is enabled due to config
     assertEquals(expectedEnabledPartitions, enabledPartitions.size());
     Set<MetadataPartitionType> validPartitions = Arrays.stream(MetadataPartitionType.getValidValues(tableVersion)).collect(Collectors.toSet());
-    assertTrue(!validPartitions.contains(partitionType) || enabledPartitions.contains(partitionType) || MetadataPartitionType.ALL_PARTITIONS.equals(partitionType));
+    if (partitionType == MetadataPartitionType.VECTOR_INDEX) {
+      // Vector indexes are enabled by a persisted CREATE INDEX definition, never by metadata config alone.
+      assertFalse(enabledPartitions.contains(partitionType));
+    } else {
+      assertTrue(!validPartitions.contains(partitionType) || enabledPartitions.contains(partitionType) || MetadataPartitionType.ALL_PARTITIONS.equals(partitionType));
+    }
   }
 
   @Test
@@ -205,6 +209,7 @@ public class TestMetadataPartitionType {
     assertEquals(MetadataPartitionType.BLOOM_FILTERS, MetadataPartitionType.fromPartitionPath("bloom_filters"));
     assertEquals(MetadataPartitionType.RECORD_INDEX, MetadataPartitionType.fromPartitionPath("record_index"));
     assertEquals(MetadataPartitionType.PARTITION_STATS, MetadataPartitionType.fromPartitionPath("partition_stats"));
+    assertEquals(MetadataPartitionType.VECTOR_INDEX, MetadataPartitionType.fromPartitionPath("vector_index_embedding"));
     assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.fromPartitionPath("unknown"));
   }
 
@@ -217,6 +222,7 @@ public class TestMetadataPartitionType {
     assertEquals(5, MetadataPartitionType.RECORD_INDEX.getRecordType());
     assertEquals(6, MetadataPartitionType.PARTITION_STATS.getRecordType());
     assertEquals(7, MetadataPartitionType.SECONDARY_INDEX.getRecordType());
+    assertEquals(8, MetadataPartitionType.VECTOR_INDEX.getRecordType());
   }
 
   @ParameterizedTest
@@ -225,7 +231,8 @@ public class TestMetadataPartitionType {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     String expressionIndexName = "expr_index_dummyExpressionIndex";
     String secondaryIndexName = "secondary_index_dummySecondaryIndex";
-    HoodieIndexMetadata indexMetadata = getIndexMetadata(expressionIndexName, secondaryIndexName);
+    String vectorIndexName = "vector_index_dummyVectorIndex";
+    HoodieIndexMetadata indexMetadata = getIndexMetadata(expressionIndexName, secondaryIndexName, vectorIndexName);
     when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
     
     // Mock getIndexForMetadataPartition for both index names
@@ -233,17 +240,21 @@ public class TestMetadataPartitionType {
         .thenReturn(Option.of(indexMetadata.getIndexDefinitions().get(expressionIndexName)));
     when(metaClient.getIndexForMetadataPartition(secondaryIndexName))
         .thenReturn(Option.of(indexMetadata.getIndexDefinitions().get(secondaryIndexName)));
-    
+    when(metaClient.getIndexForMetadataPartition(vectorIndexName))
+        .thenReturn(Option.of(indexMetadata.getIndexDefinitions().get(vectorIndexName)));
+
     if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
       assertEquals(expressionIndexName, partitionType.getPartitionPath(metaClient, expressionIndexName));
     } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
       assertEquals(secondaryIndexName, partitionType.getPartitionPath(metaClient, secondaryIndexName));
+    } else if (partitionType == MetadataPartitionType.VECTOR_INDEX) {
+      assertEquals(vectorIndexName, partitionType.getPartitionPath(metaClient, vectorIndexName));
     } else {
       assertEquals(partitionType.getPartitionPath(), partitionType.getPartitionPath(metaClient, null));
     }
   }
 
-  private static HoodieIndexMetadata getIndexMetadata(String expressionIndexName, String secondaryIndexName) {
+  private static HoodieIndexMetadata getIndexMetadata(String expressionIndexName, String secondaryIndexName, String vectorIndexName) {
     Map<String, HoodieIndexDefinition> indexDefinitions = new HashMap<>();
     HoodieIndexDefinition expressionIndexDefinition = HoodieIndexDefinition.newBuilder()
         .withIndexName(expressionIndexName)
@@ -261,6 +272,13 @@ public class TestMetadataPartitionType {
         .withSourceFields(Collections.singletonList("name"))
         .build();
     indexDefinitions.put(secondaryIndexName, secondaryIndexDefinition);
+    HoodieIndexDefinition vectorIndexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName(vectorIndexName)
+        .withIndexType("VECTOR")
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), vectorIndexName))
+        .withSourceFields(Collections.singletonList("embedding"))
+        .build();
+    indexDefinitions.put(vectorIndexName, vectorIndexDefinition);
     return new HoodieIndexMetadata(indexDefinitions);
   }
 
@@ -278,7 +296,9 @@ public class TestMetadataPartitionType {
   @Test
   public void testIndexNameWithoutPrefix() {
     for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues(HoodieTableVersion.current())) {
-      String userIndexName = MetadataPartitionType.isExpressionOrSecondaryIndex(partitionType.getPartitionPath()) ? "idx" : "";
+      boolean hasDynamicPartitionPath = MetadataPartitionType.isExpressionOrSecondaryIndex(partitionType.getPartitionPath())
+          || partitionType == MetadataPartitionType.VECTOR_INDEX;
+      String userIndexName = hasDynamicPartitionPath ? "idx" : "";
       HoodieIndexDefinition indexDefinition = createIndexDefinition(partitionType, userIndexName, partitionType.name(), null, null, null);
       assertEquals(partitionType.getIndexNameWithoutPrefix(indexDefinition), userIndexName);
     }
