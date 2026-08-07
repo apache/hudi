@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
@@ -255,7 +255,12 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
     // records. The base-file writer respects hoodie.meta.fields.mode, but the log-write path
     // (HoodieAppendHandle) does not yet — until that gap is closed, MoR incremental must require
     // populate.meta.fields=true to avoid silently dropping log-file rows whose commit_time is null.
-    if (!this.tableConfig.populateMetaFields()) {
+    //
+    // Gate on the table type, not just the flag: HoodieCopyOnWriteIncrementalHadoopFsRelationFactory
+    // builds one of these relations for CoW tables too (it backs HoodieIncrementalFileIndex), so an
+    // unconditional check here rejects every selective-mode CoW table — the case this release
+    // actually supports. CoW keeps its own commit-time guard in IncrementalRelationV1/V2.
+    if (metaClient.getTableType == HoodieTableType.MERGE_ON_READ && !this.tableConfig.populateMetaFields()) {
       throw new HoodieException("Incremental queries on MoR tables are not supported when "
         + "hoodie.populate.meta.fields=false. Selective meta-field modes (hoodie.meta.fields.mode) "
         + "are supported for CoW only in this release; MoR support is tracked as a follow-up.")
