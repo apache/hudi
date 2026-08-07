@@ -2,7 +2,7 @@
 
 | **Syntax** | **Description** |
 | ---|-----------------|
-| Last Updated | Jul 2026        |
+| Last Updated | Aug 2026        |
 | [Table Version](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java) | 9               |
 | Reflects release | Hudi 1.2.0 (May 2026) |
 
@@ -697,6 +697,18 @@ For e.g, there are a couple of retention policies supported in Apache Hudi platf
 
 Apache Hudi provides snapshot isolation between writers and readers by managing multiple files with MVCC concurrency. These file versions provide history
 and enable time travel and rollbacks, but it is important to manage how much history you keep to balance your storage costs.
+
+Cleaning is planned and tracked in terms of **instant (start) times**, even though actions on the timeline are ordered
+by completion time. The fields below all hold the requested instant time of the action they refer to.
+
+| Field | Description |
+|---|---|
+| earliestInstantToRetain | Instant time, action and state of the oldest commit the clean run retains. Held in `HoodieCleanerPlan`, and copied to `HoodieCleanMetadata` as `earliestCommitToRetain` |
+| lastCompletedCommitTimestamp | Instant time of the last completed write before the clean was planned. Despite the name, this is a start time |
+| startCleanTime | Instant time of the clean action itself, in `HoodieCleanMetadata` |
+
+Incremental clean planning selects commits whose requested instant time is at or after the previous clean's
+`earliestCommitToRetain` and before this clean's, and scans only the partitions those commits touched.
 
 
 ### Indexing
