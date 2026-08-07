@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.DataSourceReadOptions;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -42,7 +42,6 @@ import java.util.List;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSION;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 
 /**
  * This class is currently used only by s3 and gcs incr sources that supports size based batching
@@ -89,15 +88,16 @@ public class QueryRunner {
   public Pair<QueryInfo, Dataset<Row>> runIncrementalQuery(QueryInfo queryInfo) {
     log.info("Running incremental query");
 
-    HoodieTableVersion tableVersion = HoodieTableMetaClient.builder().setConf(getStorageConf()).setBasePath(sourcePath).build().getTableConfig().getTableVersion();
+    // S3/GCS event incremental sources operate with V1 checkpoint (commit#fileKey, requested-time based),
+    // so force INCREMENTAL_READ_TABLE_VERSION to 6. Use previousInstant so the start-exclusive incremental
+    // scan still includes the commit (startInstant), required to resume from checkpoint commit#fileKey.
     return Pair.of(queryInfo, sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType())
-        .option(INCREMENTAL_READ_TABLE_VERSION().key(), tableVersion.versionCode())
-        .option(DataSourceReadOptions.START_COMMIT().key(), queryInfo.getStartInstant())
+        .option(INCREMENTAL_READ_TABLE_VERSION().key(), HoodieTableVersion.SIX.versionCode())
+        .option(DataSourceReadOptions.START_COMMIT().key(), queryInfo.getPreviousInstant())
         .option(DataSourceReadOptions.END_COMMIT().key(), queryInfo.getEndInstant())
         .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-            props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-                tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue() : "false"))
+            props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(), "false"))
         .load(sourcePath));
   }
 
