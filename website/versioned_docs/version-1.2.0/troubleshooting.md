@@ -190,12 +190,15 @@ set hive.metastore.disallow.incompatible.col.type.changes=false;
 
 The metastore evaluates this check against its own configuration, so the `set` above only takes effect when the
 metastore is embedded in the same session. Against a remote Hive metastore service, either set the property in the
-metastore's `hive-site.xml` and restart the service, or override it for a single connection with the `metaconf:`
-prefix, which pushes the value to the metastore:
+metastore's `hive-site.xml` and restart the service, or override it for a single Beeline session with the `metaconf:`
+prefix, which pushes the value to the metastore for that connection:
 
 ```sql
 set metaconf:hive.metastore.disallow.incompatible.col.type.changes=false;
 ```
+
+The `metaconf:` form applies over HiveServer2. The legacy Hive CLI sends the value to the metastore but does not apply it
+to the connection that runs the `ALTER`, so use the `hive-site.xml` option there.
 
 #### HoodieHiveSyncException: Could not convert field Type from `<type1>` to `<type2>` for field col1
 
