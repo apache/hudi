@@ -263,6 +263,15 @@ public class StreamSync implements Serializable, Closeable {
   private final SchemaSet processedSchema;
 
   /**
+   * Last source/target schemas the {@link SchemaChangeLogger} has emitted a diff against.
+   * Used purely for logging; the authoritative source-of-truth for "have we seen this schema
+   * before" is {@link #processedSchema}. These two fields capture the most-recent schema so that
+   * the logger can produce a per-field diff when a new schema is detected.
+   */
+  private transient HoodieSchema lastLoggedSourceSchema;
+  private transient HoodieSchema lastLoggedTargetSchema;
+
+  /**
    * DeltaSync will explicitly manage embedded timeline server so that they can be reused across Write Client
    * instantiations.
    */
@@ -552,11 +561,33 @@ public class StreamSync implements Serializable, Closeable {
       this.schemaProvider = inputBatch.getSchemaProvider();
       // Setup HoodieWriteClient and compaction now that we decided on schema
       setupWriteClient(inputBatch.getBatch(), metaClient);
+      // Log initial schema observation so the very first batch's schema is visible in the log
+      // even when no comparison is possible yet.
+      String providerClass = inputBatch.getSchemaProvider() == null
+          ? "unknown" : inputBatch.getSchemaProvider().getClass().getName();
+      SchemaChangeLogger.logIfChanged(
+          "Source", null, inputBatch.getSchemaProvider().getSourceHoodieSchema(), providerClass);
+      SchemaChangeLogger.logIfChanged(
+          "Target", null, inputBatch.getSchemaProvider().getTargetHoodieSchema(), providerClass);
+      this.lastLoggedSourceSchema = inputBatch.getSchemaProvider().getSourceHoodieSchema();
+      this.lastLoggedTargetSchema = inputBatch.getSchemaProvider().getTargetHoodieSchema();
     } else {
       HoodieSchema newSourceSchema = inputBatch.getSchemaProvider().getSourceHoodieSchema();
       HoodieSchema newTargetSchema = inputBatch.getSchemaProvider().getTargetHoodieSchema();
       if ((newSourceSchema != null && !processedSchema.isSchemaPresent(newSourceSchema))
           || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
+        // Log the per-field diff (and compatibility classification) BEFORE the existing summary
+        // line, so an operator scanning logs sees what changed without having to diff two big
+        // schema dumps by eye. The full schemas are only emitted on INCOMPATIBLE.
+        String providerClass = inputBatch.getSchemaProvider() == null
+          ? "unknown" : inputBatch.getSchemaProvider().getClass().getName();
+        SchemaChangeLogger.logIfChanged(
+            "Source", lastLoggedSourceSchema, newSourceSchema, providerClass);
+        SchemaChangeLogger.logIfChanged(
+            "Target", lastLoggedTargetSchema, newTargetSchema, providerClass);
+        this.lastLoggedSourceSchema = newSourceSchema;
+        this.lastLoggedTargetSchema = newTargetSchema;
+
         String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
         String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
         log.info("Seeing new schema. Source: {}, Target: {}", sourceStr, targetStr);
