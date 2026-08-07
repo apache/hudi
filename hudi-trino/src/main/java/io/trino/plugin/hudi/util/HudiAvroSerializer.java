@@ -116,6 +116,9 @@ public class HudiAvroSerializer
     // constructor, which maps page channel i to record position channelToFieldPosition[i].
     private final Schema schema;
     private final int[] channelToFieldPosition;
+    // Per channel, whether the mapped record field is an Avro string; see serialize(). Null for the
+    // page-building-only serializer, which never calls serialize().
+    private final boolean[] channelIsStringField;
     // Single-entry cache for buildRecordInPage: all records of a split share one schema instance,
     // so an identity check makes the per-record, per-column field-name lookup a one-time cost.
     // Prefilled (hidden/synthesized) columns are not fields of the record schema; they get -1.
@@ -129,6 +132,7 @@ public class HudiAvroSerializer
         this.prefilledColumnValues = prefilledColumnValues;
         this.schema = null;
         this.channelToFieldPosition = null;
+        this.channelIsStringField = null;
     }
 
     /**
@@ -153,6 +157,23 @@ public class HudiAvroSerializer
             mapping[i] = getFieldFromSchema(columnHandles.get(i).getName(), recordSchema).pos();
         }
         this.channelToFieldPosition = mapping;
+        boolean[] stringFields = new boolean[columnHandles.size()];
+        for (int i = 0; i < columnHandles.size(); i++) {
+            stringFields[i] = isStringField(recordSchema.getFields().get(mapping[i]));
+        }
+        this.channelIsStringField = stringFields;
+    }
+
+    /**
+     * Whether an Avro record field holds a string, looking through a nullable union.
+     */
+    private static boolean isStringField(Schema.Field field)
+    {
+        Schema fieldSchema = field.schema();
+        if (fieldSchema.getType() == Schema.Type.UNION) {
+            return fieldSchema.getTypes().stream().anyMatch(branch -> branch.getType() == Schema.Type.STRING);
+        }
+        return fieldSchema.getType() == Schema.Type.STRING;
     }
 
     public IndexedRecord serialize(Page sourcePage, int position)
@@ -160,7 +181,17 @@ public class HudiAvroSerializer
         checkState(schema != null, "serialize() requires a serializer built with a record schema");
         IndexedRecord record = new GenericData.Record(schema);
         for (int i = 0; i < columnTypes.size(); i++) {
-            record.put(channelToFieldPosition[i], getValue(sourcePage, i, position));
+            Object value = getValue(sourcePage, i, position);
+            // Trino hands back a java.lang.String for VARCHAR/CHAR, but Avro's own decoder produces Utf8,
+            // so records read out of a classic Avro log block carry Utf8 for the same field. Records from
+            // the two sides meet in the file-group reader -- BufferedRecordMergerFactory#shouldKeepNewerRecord
+            // compares their ordering values directly -- and Utf8.compareTo casts its argument to Utf8, so a
+            // String ordering value from the base side throws ClassCastException against a Utf8 from the log
+            // side. Emit Avro's representation here so every record of a merge carries the same type.
+            if (channelIsStringField[i] && value instanceof String stringValue) {
+                value = new Utf8(stringValue);
+            }
+            record.put(channelToFieldPosition[i], value);
         }
         return record;
     }

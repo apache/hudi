@@ -16,6 +16,7 @@ package io.trino.plugin.hudi;
 import io.trino.plugin.hudi.testing.CommitTimeOrderingHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.StringOrderingHudiTablesInitializer;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
@@ -46,7 +47,8 @@ public class TestHudiMorMergeModeSemantics
         return HudiQueryRunner.builder()
                 .setDataLoader(new CompositeHudiTablesInitializer(
                         new EventTimeDeletesHudiTablesInitializer(),
-                        new CommitTimeOrderingHudiTablesInitializer()))
+                        new CommitTimeOrderingHudiTablesInitializer(),
+                        new StringOrderingHudiTablesInitializer()))
                 .build();
     }
 
@@ -61,6 +63,21 @@ public class TestHudiMorMergeModeSemantics
         assertQuery(
                 "SELECT key, name, value FROM " + CommitTimeOrderingHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT)), ('k2', 'k2_base', 20), ('k3', 'k3_base', 30)");
+    }
+
+    @Test
+    public void testEventTimeMergeOnStringOrderingField()
+    {
+        // Regression test for the String/Utf8 ordering-value mismatch. The base row's ordering value comes
+        // from HudiAvroSerializer (a java.lang.String), the log row's from an inline-deserialized Avro log
+        // block (a Utf8); BufferedRecordMergerFactory#shouldKeepNewerRecord compares them directly and
+        // Utf8.compareTo casts, so before the fix this query failed outright with ClassCastException rather
+        // than returning wrong rows. k1's update carries a later ts and wins; k2's carries an earlier ts and
+        // loses, which also pins that the comparison still resolves the right way round.
+        assertQuery(
+                "SELECT key, name, value, ts FROM " + StringOrderingHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
+                "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT), '2018-08-31 11:00:00'),"
+                        + " ('k2', 'k2_base', CAST(20 AS BIGINT), '2018-08-31 10:00:00')");
     }
 
     @Test
