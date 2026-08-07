@@ -46,6 +46,17 @@ public class PartitionPathRepartitionPartitionerWithRows implements BulkInsertPa
   private final boolean isTablePartitioned;
   private final boolean shouldPopulateMetaFields;
 
+  /**
+   * Constructor taking only the write config, so this partitioner can also be named through
+   * {@code HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME}, which is
+   * instantiated by reflection with only the write config.
+   *
+   * @param config Write config.
+   */
+  public PartitionPathRepartitionPartitionerWithRows(HoodieWriteConfig config) {
+    this(BulkInsertPartitioner.isTablePartitioned(config), config);
+  }
+
   public PartitionPathRepartitionPartitionerWithRows(boolean isTablePartitioned, HoodieWriteConfig config) {
     this.isTablePartitioned = isTablePartitioned;
     this.shouldPopulateMetaFields = config.populateMetaFields();
