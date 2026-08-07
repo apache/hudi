@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
@@ -107,6 +108,10 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   protected HoodieFileWriter fileWriter;
   @Setter
   protected HoodieReaderContext<T> readerContext;
+
+  // Resolved once rather than per record: writeToFile consults it on the preserve-metadata path,
+  // which runs for every record copied forward during a merge.
+  private final MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
 
   protected long recordsWritten = 0;
   protected long recordsDeleted = 0;
@@ -413,7 +418,16 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
       //       file holding this record even in cases when overall metadata is preserved
-      HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
+      //
+      // The rewrite is gated on the mode: hoodie.meta.fields.mode is the single authority on which
+      // meta columns hold values, and this path would otherwise populate _hoodie_file_name on a
+      // COMMIT_TIME_ONLY / NONE table. The value written when the mode opts out is an explicit null
+      // rather than a skipped update, because the record being preserved here came from the previous
+      // base file — under a narrowed mode it can still carry a file name written while the table was
+      // on ALL, and leaving that in place would carry a stale value forward.
+      String fileNameToWrite =
+          metaFieldsMode.isFileNamePopulated() ? newFilePath.getName() : null;
+      HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, fileNameToWrite);
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, props);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
