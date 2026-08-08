@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -54,6 +56,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -307,6 +310,54 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
 
     // then
     verify(tableBuilder, times(1)).setTableVersion(HoodieTableVersion.SIX);
+  }
+
+  /**
+   * Pins where the archived timeline lands for a table created by the streamer. Table versions below
+   * {@link HoodieTableVersion#EIGHT} resolve the archived timeline through {@code hoodie.archivelog.folder}
+   * (timeline layout version 1), so forcing that config to the layout version 2 default {@code history}
+   * relocated the archived timeline of a table version 6 table away from {@code .hoodie/archived}.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "SEVEN", "EIGHT", "NINE"})
+  void testInitializeEmptyTableArchiveFolderMatchesTableVersion(HoodieTableVersion tableVersion) throws IOException {
+    HoodieTableMetaClient metaClient = initializeEmptyTableAtVersion(tableVersion, new TypedProperties());
+
+    // the streamer never forces the layout version 2 folder onto the legacy archive folder config
+    assertEquals("archived", metaClient.getTableConfig().getArchivelogFolder());
+    assertEquals(
+        new StoragePath(metaClient.getBasePath(),
+            tableVersion.lesserThan(HoodieTableVersion.EIGHT) ? ".hoodie/archived" : ".hoodie/timeline/history"),
+        metaClient.getArchivePath());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "NINE"})
+  void testInitializeEmptyTableHonoursConfiguredTimelineHistoryPath(HoodieTableVersion tableVersion) throws IOException {
+    TypedProperties props = new TypedProperties();
+    props.put(HoodieTableConfig.TIMELINE_HISTORY_PATH.key(), "myhistory");
+
+    HoodieTableMetaClient metaClient = initializeEmptyTableAtVersion(tableVersion, props);
+
+    assertEquals("myhistory", metaClient.getTableConfig().getArchivelogFolder());
+  }
+
+  private HoodieTableMetaClient initializeEmptyTableAtVersion(HoodieTableVersion tableVersion, TypedProperties props)
+      throws IOException {
+    String tablePath = basePath() + "/" + tableVersion.name();
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.targetTableName = "testTableName";
+    cfg.targetBasePath = tablePath;
+    cfg.tableType = "MERGE_ON_READ";
+    props.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion.versionCode());
+
+    StreamSync streamSync = new StreamSync(cfg, mock(SparkSession.class), props,
+        mock(HoodieSparkEngineContext.class), new HoodieHadoopStorage(tablePath, storageConf()),
+        mock(Configuration.class), client -> true, getSchemaProvider("InputBatch", false),
+        Option.empty(), mock(SourceFormatAdapter.class), Option.empty(), false);
+
+    // matches the production caller, which passes a bare builder
+    return streamSync.initializeEmptyTable(HoodieTableMetaClient.newTableBuilder(), "", storageConf());
   }
 
   private StreamSync setupStreamSync() {

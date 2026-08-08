@@ -282,7 +282,7 @@ class HoodieSparkSqlWriterInternal {
           .build()
       } else {
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
-        val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_HISTORY_PATH)
+        val archiveLogFolder = hoodieConfig.getString(HoodieTableConfig.TIMELINE_HISTORY_PATH)
         val populateMetaFields = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
         val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT);
         val payloadClass = hoodieConfig.getString(DataSourceWriteOptions.PAYLOAD_CLASS_NAME)
@@ -740,7 +740,7 @@ class HoodieSparkSqlWriterInternal {
       handleSaveModes(sparkSession, mode, basePath, tableConfig, tableName, WriteOperationType.BOOTSTRAP, fs)
 
       if (!tableExists) {
-        val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_HISTORY_PATH)
+        val archiveLogFolder = hoodieConfig.getString(HoodieTableConfig.TIMELINE_HISTORY_PATH)
         val tableVersion = Integer.valueOf(getStringWithAltKeys(parameters, HoodieWriteConfig.WRITE_TABLE_VERSION))
         val partitionColumnsWithType = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(toProperties(parameters), HoodieTableVersion.fromVersionCode(tableVersion))
         val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD)
