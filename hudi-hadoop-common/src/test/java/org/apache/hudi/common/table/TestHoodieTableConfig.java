@@ -46,6 +46,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -381,6 +382,29 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     config.setValue(RECORD_MERGE_MODE, COMMIT_TIME_ORDERING.name());
     HoodieTableConfig.dropInvalidConfigs(config);
     assertTrue(config.contains(RECORD_MERGE_MODE));
+  }
+
+  /**
+   * The timeline path configs describe the timeline layout version 2 folders, which a table below
+   * table version 8 does not have: it keeps its timeline in {@code .hoodie} and resolves the archived
+   * timeline through {@link HoodieTableConfig#ARCHIVELOG_FOLDER}. Persisting them onto such a table
+   * records a layout it does not use.
+   */
+  @ParameterizedTest
+  @CsvSource({"SIX,false", "SEVEN,false", "EIGHT,true", "NINE,true"})
+  void testDropInvalidConfigsForTimelineLayoutConfigs(HoodieTableVersion tableVersion, boolean retained) {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion.versionCode()));
+    config.setValue(HoodieTableConfig.TIMELINE_PATH, "timeline");
+    config.setValue(HoodieTableConfig.TIMELINE_HISTORY_PATH, "history");
+    config.setValue(HoodieTableConfig.ARCHIVELOG_FOLDER, "archived");
+
+    HoodieTableConfig.dropInvalidConfigs(config);
+
+    assertEquals(retained, config.contains(HoodieTableConfig.TIMELINE_PATH));
+    assertEquals(retained, config.contains(HoodieTableConfig.TIMELINE_HISTORY_PATH));
+    // the legacy archive folder carries the archived timeline location at every table version
+    assertTrue(config.contains(HoodieTableConfig.ARCHIVELOG_FOLDER));
   }
 
   @Test
