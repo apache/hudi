@@ -3,7 +3,7 @@ title: Cleaning
 toc: true
 toc_min_heading_level: 2
 toc_max_heading_level: 4
-last_modified_at: 2026-05-27T00:00:00-00:00
+last_modified_at: 2026-08-06T15:17:36+05:30
 ---
 ## Background
 Cleaning is a table service employed by Hudi to reclaim space occupied by older versions of data and keep storage costs 
@@ -85,6 +85,33 @@ takes precedence over the regex.
 |---|---|---|
 | `hoodie.clean.partition.filter.regex` | (none) | Java regex pattern; only partitions whose path matches are cleaned. |
 | `hoodie.clean.partition.filter.selected` | (none) | Comma-separated list of partition paths to clean; takes precedence over the regex when both are set. |
+
+### Instant Times in Clean Metadata
+
+Hudi 1.x stamps every action with both a requested instant time and a completion time, and orders actions on the
+timeline by completion time — see [timeline](timeline.md). The cleaner's own plan and metadata, however, record
+**instant (start) times** throughout. Keep this in mind when reading them for debugging.
+
+| Field | Written to | Value |
+|---|---|---|
+| `earliestInstantToRetain.timestamp` | `HoodieCleanerPlan` (the `clean.requested` instant) | Instant time of the oldest commit this clean run retains. |
+| `earliestCommitToRetain` | `HoodieCleanMetadata` (the completed `clean` instant) | Copied from the plan, so also an instant time. |
+| `lastCompletedCommitTimestamp` | both | Instant time of the write that completed most recently before the clean was planned. Despite the name, this is a start time, not a completion time. |
+| `startCleanTime` | `HoodieCleanMetadata` | Instant time of the clean action itself. |
+
+Two details are easy to trip over when reading these values back:
+
+- `lastCompletedCommitTimestamp` mixes the two orderings. The instant is taken from the end of the completed-commits
+  timeline, which is ordered by completion time, but what gets recorded is that instant's start time. Concurrent writers
+  can complete in a different order than they started in, so this is not always the largest instant time among the
+  completed commits.
+- `earliestCommitToRetain` is an empty string under the `KEEP_LATEST_FILE_VERSIONS` policy. That policy retains a fixed
+  number of file versions per file group rather than a range of the timeline, so the plan carries no
+  `earliestInstantToRetain` for the metadata to copy.
+
+Incremental clean planning follows the same convention: it selects the commits whose **requested** instant time is at or
+after the previous clean's `earliestCommitToRetain` and before this clean's, then scans only the partitions those
+commits touched.
 
 ### Configs
 For details about all possible configurations and their default values see the [configuration docs](https://hudi.apache.org/docs/next/configurations/#Clean-Configs).
