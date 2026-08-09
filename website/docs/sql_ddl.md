@@ -2,7 +2,7 @@
 title: SQL DDL
 summary: "In this page, we discuss using SQL DDL commands with Hudi"
 toc: true
-last_modified_at: 2026-05-29T00:00:00-00:00
+last_modified_at: 2026-08-07T20:54:32+05:30
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS hudi_table_partitioned (
 TBLPROPERTIES (
   type = 'cow'
 )
-PARTITIONED BY (dt);
+PARTITIONED BY (dt, hh);
 ```
 
 :::note
@@ -71,6 +71,16 @@ You can also create a table partitioned by multiple fields by supplying comma-se
 When creating a table partitioned by multiple fields, ensure that you specify the columns in the `PARTITIONED BY` clause 
 in the same order as they appear in the `CREATE TABLE` schema. For example, for the above table, the partition fields 
 should be specified as `PARTITIONED BY (dt, hh)`.
+:::
+
+:::caution
+Declare partition columns last in the `CREATE TABLE` column list. Spark moves partition columns to the end of the table
+schema, so declaring one earlier makes the stored column order differ from what you wrote. Declaring
+`(id, name, price, dt, ts)` with `PARTITIONED BY (dt)`, for example, stores the table as `(id, name, price, ts, dt)`.
+A positional `INSERT INTO ... SELECT` then assigns values to the wrong columns: it fails with `CANNOT_SAFELY_CAST` when
+the shifted types are incompatible, and writes values to the wrong columns without reporting an error when they are
+compatible. Naming the columns explicitly, as in `INSERT INTO tbl (id, name, price, dt, ts) SELECT ...`, also avoids the
+mismatch.
 :::
 
 ### Create table with record keys and ordering fields
