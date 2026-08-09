@@ -96,8 +96,18 @@ timeline by completion time — see [timeline](timeline.md). The cleaner's own p
 |---|---|---|
 | `earliestInstantToRetain.timestamp` | `HoodieCleanerPlan` (the `clean.requested` instant) | Instant time of the oldest commit this clean run retains. |
 | `earliestCommitToRetain` | `HoodieCleanMetadata` (the completed `clean` instant) | Copied from the plan, so also an instant time. |
-| `lastCompletedCommitTimestamp` | both | Instant time of the last completed write before the clean was planned. Despite the name, this is a start time, not a completion time. |
+| `lastCompletedCommitTimestamp` | both | Instant time of the write that completed most recently before the clean was planned. Despite the name, this is a start time, not a completion time. |
 | `startCleanTime` | `HoodieCleanMetadata` | Instant time of the clean action itself. |
+
+Two details are easy to trip over when reading these values back:
+
+- `lastCompletedCommitTimestamp` mixes the two orderings. The instant is taken from the end of the completed-commits
+  timeline, which is ordered by completion time, but what gets recorded is that instant's start time. Concurrent writers
+  can complete in a different order than they started in, so this is not always the largest instant time among the
+  completed commits.
+- `earliestCommitToRetain` is an empty string under the `KEEP_LATEST_FILE_VERSIONS` policy. That policy retains a fixed
+  number of file versions per file group rather than a range of the timeline, so the plan carries no
+  `earliestInstantToRetain` for the metadata to copy.
 
 Incremental clean planning follows the same convention: it selects the commits whose **requested** instant time is at or
 after the previous clean's `earliestCommitToRetain` and before this clean's, then scans only the partitions those

@@ -703,8 +703,8 @@ by completion time. The fields below all hold the requested instant time of the 
 
 | Field | Description |
 |---|---|
-| earliestInstantToRetain | Instant time, action and state of the oldest commit the clean run retains. Held in `HoodieCleanerPlan`, and copied to `HoodieCleanMetadata` as `earliestCommitToRetain` |
-| lastCompletedCommitTimestamp | Instant time of the last completed write before the clean was planned. Despite the name, this is a start time |
+| earliestInstantToRetain | Instant time, action and state of the oldest commit the clean run retains. Held in `HoodieCleanerPlan`, and copied to `HoodieCleanMetadata` as `earliestCommitToRetain`. Absent under `KEEP_LATEST_FILE_VERSIONS`, which retains a fixed number of file versions per file group rather than a range of the timeline; `earliestCommitToRetain` is then an empty string |
+| lastCompletedCommitTimestamp | Instant time of the write that completed most recently before the clean was planned. Despite the name, this is a start time. The instant is chosen by completion order, so with concurrent writers it is not always the largest instant time among completed commits |
 | startCleanTime | Instant time of the clean action itself, in `HoodieCleanMetadata` |
 
 Incremental clean planning selects commits whose requested instant time is at or after the previous clean's
