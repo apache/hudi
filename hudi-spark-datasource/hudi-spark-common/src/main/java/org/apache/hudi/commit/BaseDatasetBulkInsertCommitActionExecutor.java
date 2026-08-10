@@ -117,6 +117,14 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
     boolean populateMetaFields = writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS);
     preExecute();
 
+    // preExecute() -> initTable() may auto-deduce the single-field ComplexKeyGenerator encoding and set
+    // it on the write client's config. The row-writer builds its key generator from this executor's
+    // separate writeConfig, so propagate the resolved encoding across; otherwise the row-writer would
+    // fall back to the default and write record keys with the wrong encoding (mismatching the
+    // deduced/cached value), reintroducing the key mismatch this deduction is meant to prevent.
+    writeConfig.setValue(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING,
+        writeClient.getConfig().getString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING));
+
     BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows = getPartitioner(populateMetaFields, isTablePartitioned);
     Dataset<Row> hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(records, writeConfig, table.getMetaClient().getTableConfig(), bulkInsertPartitionerRows, instantTime);
 

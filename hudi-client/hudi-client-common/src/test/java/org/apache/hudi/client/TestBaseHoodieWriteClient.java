@@ -227,6 +227,10 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     writeProperties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), recordKeyFields);
     writeProperties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathFields);
     writeProperties.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(tableVersion));
+    // This test targets the complex-keygen validation guard specifically, so disable auto-deduction
+    // (self-healing is covered by the dedicated auto-deduce tests). With auto-deduction enabled the
+    // guard is bypassed, so it must be off here for the guard path to be exercised.
+    writeProperties.put(HoodieWriteConfig.COMPLEX_KEYGEN_AUTO_DEDUCE_ENCODING.key(), "false");
     if (setComplexKeyGeneratorValidationConfig) {
       writeProperties.put(
           HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), enableComplexKeyGeneratorValidation);
