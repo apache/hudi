@@ -280,13 +280,7 @@ public class VectorIndexer extends BaseIndexer {
       return Option.empty();
     }
 
-    HoodieTimeline completedWrites = dataTableMetaClient.getActiveTimeline()
-        .getWriteTimeline().filterCompletedInstants();
-    if (completedWrites.isBeforeTimelineStarts(lastCovered)) {
-      log.warn("Cannot advance vector index {} coverage from archived instant {} using only the active timeline",
-          indexPartition, lastCovered);
-      return Option.empty();
-    }
+    HoodieTimeline completedWrites = completedWriteTimelineSince(lastCovered);
     List<String> requiredInstants = completedWrites
         .findInstantsAfter(lastCovered)
         .getInstantsAsStream()
@@ -322,6 +316,18 @@ public class VectorIndexer extends BaseIndexer {
         .build();
     return Option.of(HoodieMetadataPayload.createVectorIndexManifestRecord(
         advanced, generation, indexPartition));
+  }
+
+  private HoodieTimeline completedWriteTimelineSince(String lastCovered) {
+    HoodieTimeline activeWrites = dataTableMetaClient.getActiveTimeline()
+        .getWriteTimeline().filterCompletedInstants();
+    if (!activeWrites.isBeforeTimelineStarts(lastCovered)) {
+      return activeWrites;
+    }
+    return dataTableMetaClient.getArchivedTimeline(lastCovered)
+        .mergeTimeline(activeWrites)
+        .getWriteTimeline()
+        .filterCompletedInstants();
   }
 
   private int activeGeneration(IndexUpdateContext context, String indexPartition) {
