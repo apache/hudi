@@ -23,8 +23,9 @@ import java.io.Serializable;
 /**
  * Immutable identity of the active vector-index generation used to serve a query (RFC-109).
  * Every field is versioned through the manifest so readers can reject unsupported or mismatched
- * encodings rather than silently mis-scoring. Pinned for the whole request alongside the table
- * instant in {@link VectorSearchSnapshot}.
+ * encodings rather than silently mis-scoring. The contiguous source watermark is pinned with the
+ * generation so the executor can apply the requested stale policy before scanning postings. Pinned
+ * for the whole request alongside the table instant in {@link VectorSearchSnapshot}.
  */
 public final class VectorIndexSnapshot implements Serializable {
 
@@ -35,17 +36,28 @@ public final class VectorIndexSnapshot implements Serializable {
   private final int blockFormatVersion;
   private final String rotationVersion;
   private final String quantizerVersion;
+  private final String lastContiguousSourceInstant;
 
   public VectorIndexSnapshot(int generationId,
                              int factorVersion,
                              int blockFormatVersion,
                              String rotationVersion,
                              String quantizerVersion) {
+    this(generationId, factorVersion, blockFormatVersion, rotationVersion, quantizerVersion, null);
+  }
+
+  public VectorIndexSnapshot(int generationId,
+                             int factorVersion,
+                             int blockFormatVersion,
+                             String rotationVersion,
+                             String quantizerVersion,
+                             String lastContiguousSourceInstant) {
     this.generationId = generationId;
     this.factorVersion = factorVersion;
     this.blockFormatVersion = blockFormatVersion;
     this.rotationVersion = rotationVersion;
     this.quantizerVersion = quantizerVersion;
+    this.lastContiguousSourceInstant = lastContiguousSourceInstant;
   }
 
   public int getGenerationId() {
@@ -66,5 +78,9 @@ public final class VectorIndexSnapshot implements Serializable {
 
   public String getQuantizerVersion() {
     return quantizerVersion;
+  }
+
+  public String getLastContiguousSourceInstant() {
+    return lastContiguousSourceInstant;
   }
 }

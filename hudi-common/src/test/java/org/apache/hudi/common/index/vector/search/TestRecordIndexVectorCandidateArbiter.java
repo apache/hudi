@@ -57,7 +57,7 @@ public class TestRecordIndexVectorCandidateArbiter {
   }
 
   private static VectorSearchSnapshot snapshot() {
-    return new VectorSearchSnapshot("001", new VectorIndexSnapshot(1, 1, 1, "rot-v1", "quant-v1"));
+    return new VectorSearchSnapshot("001", new VectorIndexSnapshot(1, 1, 1, "rot-v1", "quant-v1", "001"));
   }
 
   @Test

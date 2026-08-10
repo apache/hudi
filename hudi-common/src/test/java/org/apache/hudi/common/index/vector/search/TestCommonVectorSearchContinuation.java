@@ -62,7 +62,7 @@ class TestCommonVectorSearchContinuation {
 
     CommonVectorSearchExecutor executor = new CommonVectorSearchExecutor(
         ignored -> new VectorSearchSnapshot(
-            "001", new VectorIndexSnapshot(1, 1, 1, "rot-v1", "quant-v1")),
+            "001", new VectorIndexSnapshot(1, 1, 1, "rot-v1", "quant-v1", "001")),
         ignored -> new VectorExecutionDecision(
             VectorExecutionMode.LOCAL, VectorExecutionMode.LOCAL, 4, 10, "test"),
         source,

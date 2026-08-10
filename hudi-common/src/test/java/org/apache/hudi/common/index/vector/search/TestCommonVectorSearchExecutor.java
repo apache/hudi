@@ -20,17 +20,21 @@ package org.apache.hudi.common.index.vector.search;
 
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.index.vector.VectorDistanceMetric;
+import org.apache.hudi.common.index.vector.VectorStalePolicy;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.exception.HoodieIndexException;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -47,9 +51,82 @@ public class TestCommonVectorSearchExecutor {
   }
 
   private static VectorSearchRequest request() {
+    return request(VectorStalePolicy.FAIL);
+  }
+
+  private static VectorSearchRequest request(VectorStalePolicy stalePolicy) {
     VectorSearchBudget budget = VectorSearchBudget.defaults(3, 5000L);
     return new VectorSearchRequest("embedding", new float[] {1f, 2f}, VectorDistanceMetric.L2,
-        3, 32, 50, true, null, budget);
+        3, 32, 50, true, stalePolicy, null, budget);
+  }
+
+  @Test
+  void staleFailPolicyRejectsBeforeCandidateScan() {
+    AtomicBoolean candidateScanInvoked = new AtomicBoolean(false);
+    CommonVectorSearchExecutor executor = staleExecutor(
+        (plan, context) -> {
+          candidateScanInvoked.set(true);
+          return new ListVectorCandidatePool(Collections.emptyList(), plan.getRequest().getBudget());
+        },
+        null);
+
+    assertThrows(HoodieIndexException.class,
+        () -> executor.execute(request(VectorStalePolicy.FAIL), null));
+    assertTrue(!candidateScanInvoked.get());
+  }
+
+  @Test
+  void staleFallbackPolicyBypassesCandidateScan() {
+    AtomicBoolean candidateScanInvoked = new AtomicBoolean(false);
+    AtomicBoolean fallbackInvoked = new AtomicBoolean(false);
+    VectorSearchResult fallbackResult = new VectorSearchResult(
+        "fallback", 0.0, new HoodieRecordGlobalLocation("p", "002", "file"));
+    CommonVectorSearchExecutor executor = staleExecutor(
+        (plan, context) -> {
+          candidateScanInvoked.set(true);
+          return new ListVectorCandidatePool(java.util.Collections.emptyList(), plan.getRequest().getBudget());
+        },
+        (req, snapshot, context) -> {
+          fallbackInvoked.set(true);
+          return HoodieListData.eager(Collections.singletonList(fallbackResult));
+        });
+
+    List<VectorSearchResult> results = executor
+        .execute(request(VectorStalePolicy.FALLBACK), null).collectAsList();
+
+    assertEquals(java.util.Collections.singletonList(fallbackResult), results);
+    assertTrue(fallbackInvoked.get());
+    assertTrue(!candidateScanInvoked.get());
+  }
+
+  @Test
+  void staleWarnPolicyContinuesWithCandidateScan() {
+    AtomicBoolean candidateScanInvoked = new AtomicBoolean(false);
+    CommonVectorSearchExecutor executor = staleExecutor(
+        (plan, context) -> {
+          candidateScanInvoked.set(true);
+          return new ListVectorCandidatePool(java.util.Collections.emptyList(), plan.getRequest().getBudget());
+        },
+        null);
+
+    assertTrue(executor.execute(request(VectorStalePolicy.WARN), null).collectAsList().isEmpty());
+    assertTrue(candidateScanInvoked.get());
+  }
+
+  private static CommonVectorSearchExecutor staleExecutor(
+      VectorCandidateSource source, VectorFallbackSearch fallbackSearch) {
+    VectorSnapshotResolver resolver = req -> new VectorSearchSnapshot("002",
+        new VectorIndexSnapshot(1, 1, 1, "rot-v1", "quant-v1", "001"));
+    VectorExecutionModeSelector selector = req -> new VectorExecutionDecision(
+        VectorExecutionMode.AUTO, VectorExecutionMode.LOCAL, 50, 100, "test");
+    VectorCandidateArbiter arbiter = (candidates, request, snapshot, context) ->
+        HoodieListData.eager(java.util.Collections.emptyList());
+    VectorFetchPlanner planner = (candidates, snapshot, context) ->
+        HoodieListData.eager(java.util.Collections.emptyList());
+    VectorExactReranker reranker = (tasks, request, snapshot, context) ->
+        HoodieListData.eager(java.util.Collections.emptyList());
+    return new CommonVectorSearchExecutor(
+        resolver, selector, source, arbiter, planner, reranker, fallbackSearch);
   }
 
   @Test
@@ -63,7 +140,7 @@ public class TestCommonVectorSearchExecutor {
     VectorSnapshotResolver resolver = req -> {
       snapshotResolved.set(true);
       return new VectorSearchSnapshot("001",
-          new VectorIndexSnapshot(1, 1, 1, "rot-v1", "quant-v1"));
+            new VectorIndexSnapshot(1, 1, 1, "rot-v1", "quant-v1", "001"));
     };
 
     // Real arbiter with a fake RLI: k1/k2 live & matching (SERVE), k3 absent (DELETED).
