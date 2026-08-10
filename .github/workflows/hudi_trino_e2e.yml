@@ -1,0 +1,186 @@
+name: Hudi Trino E2E
+
+on:
+  push:
+    branches:
+      - master
+      - 'release-*'
+    paths:
+      # Several entries are deliberately broad -- keep them that way:
+      #   docker/demo/**        the ITs drive demo fixture scripts
+      #                         (sparksql-*.commands, setup_demo_container.sh).
+      #   docker/compose/hadoop.env
+      #                         copied into the generated compose dir and loaded
+      #                         by every service in the stack.
+      #   hudi-integ-test/**    the IT step runs `mvn verify -pl hudi-integ-test`,
+      #                         which compiles the whole module, so a break
+      #                         anywhere in it fails this pipeline -- not just
+      #                         under integ2/.
+      #   pom.xml               owns trino.version, which the shim pom's parent,
+      #                         the Dockerfile TRINO_VERSION arg and the
+      #                         hardcoded 481 paths below all track by hand.
+      - 'hudi-trino/**'
+      - 'docker/trino/**'
+      - 'docker/compose/docker-compose_hadoop340_hive2310_spark402*'
+      - 'docker/compose/hadoop.env'
+      - 'docker/demo/**'
+      - 'hudi-integ-test/**'
+      - 'pom.xml'
+      - '.github/workflows/hudi_trino_e2e.yml'
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+    # Keep in sync with the push paths above; see the rationale there.
+    paths:
+      - 'hudi-trino/**'
+      - 'docker/trino/**'
+      - 'docker/compose/docker-compose_hadoop340_hive2310_spark402*'
+      - 'docker/compose/hadoop.env'
+      - 'docker/demo/**'
+      - 'hudi-integ-test/**'
+      - 'pom.xml'
+      - '.github/workflows/hudi_trino_e2e.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: hudi-trino-e2e-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'release-') }}
+
+env:
+  # The aether.connector.http.* retry/timeout knobs are copied verbatim from bot.yml's
+  # MVN_ARGS: the JDK 17 step below is a cold-cache full-reactor build, exactly what
+  # those were added for. They are maven-resolver properties -- Maven 3.9 resolves through
+  # the native resolver HTTP transport, which ignores the older maven.wagon.* names.
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Daether.connector.http.retryHandler.count=5 -Daether.connector.http.retryHandler.interval=3000 -Daether.connector.http.retryHandler.intervalMax=30000 -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504 -Daether.connector.http.connectionMaxTtl=25
+  SCALA_PROFILE: -Dscala-2.13 -Dscala.binary.version=2.13
+  COMPOSE_PREFIX: docker-compose_hadoop340_hive2310_spark402
+
+jobs:
+  trino-e2e:
+    # Testcontainers E2E for the RFC-105 native trino-hudi connector: builds
+    # hudi-trino at HEAD, assembles the plugin dir via the in-repo shim
+    # (docker/trino/shim, standing in for the not-yet-released upstream
+    # trinodb/trino plugin/trino-hudi shim), bakes it into a local
+    # apachehudi/hudi-trino_481 image, and runs ITTestTrino* against the
+    # spark402 compose stack (the only pair with the trinocoordinator service).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          docker system prune --all --force --volumes
+      - name: Pre-pull compose images (fails fast if not published)
+        run: |
+          # Surface a missing sparkadhoc image before the long Maven install. The
+          # remaining stack images are pulled by docker-compose at test time; the
+          # trino image is built locally below, never pulled.
+          docker pull apachehudi/hudi-hadoop_3.4.0-hive_2.3.10-sparkadhoc_4.0.2:latest
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build and install Hudi artifacts (JDK 17)
+        # Full reactor: the compose containers mount the workspace and the tests
+        # use bundles staged by the -Pintegration-tests build (e.g.
+        # docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar).
+        run:
+          mvn clean install -T 2 $SCALA_PROFILE -Dspark4.0 -Dflink1.20 -Pintegration-tests -DskipTests=true -Ddocker.compose.skip=true $MVN_ARGS
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+      - name: Build hudi-trino connector (JDK 25)
+        # No trinodb/trino checkout needed: the unpublished Trino test-jars sit
+        # behind the off-by-default hudi-trino-tests profile and packaging
+        # resolves entirely from Maven Central.
+        run:
+          mvn $MVN_ARGS -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
+      - name: Assemble trino-hudi plugin dir via in-repo shim (JDK 25)
+        # package, NOT install: installing would shadow the real
+        # io.trino:trino-hudi release coordinates in the local m2 (the shim pom
+        # also hard-disables install via maven.install.skip).
+        # dep.hudi.version is derived from the reactor pom because the shim sits
+        # outside the reactor: cut_release_branch.sh's `mvn versions:set` cannot
+        # bump its literal default, and a stale value could resolve silently
+        # from the actions maven cache instead of failing loudly.
+        run: |
+          HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
+          echo "Building shim against hudi version: $HUDI_VERSION"
+          mvn $MVN_ARGS -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
+      - name: Build apachehudi/hudi-trino_481 image
+        run: |
+          docker/trino/build_image.sh --plugin-dir docker/trino/shim/target/trino-hudi-481
+          # Sanity: the shim must have produced a populated plugin dir with a
+          # service descriptor jar, or Trino cannot load the plugin at boot.
+          echo "plugin dir jar count: $(ls docker/trino/shim/target/trino-hudi-481 | wc -l)"
+          ls docker/trino/shim/target/trino-hudi-481/*services*.jar
+      - name: Smoke-boot the Trino image standalone
+        # Catches image-level boot failures (plugin load errors, bad etc/ config)
+        # ~30 min before the IT step would, with the full boot log on screen.
+        # --hostname trinocoordinator makes the baked discovery.uri self-resolve.
+        run: |
+          docker run -d --name trino-smoke --hostname trinocoordinator \
+            apachehudi/hudi-trino_481:latest
+          ok=""
+          for i in $(seq 1 18); do
+            if [ "$(docker inspect -f '{{.State.Running}}' trino-smoke)" != "true" ]; then
+              echo "trino-smoke container died during startup" >&2
+              break
+            fi
+            if docker exec trino-smoke trino --server localhost:8080 \
+                --execute "SELECT 1" >/dev/null 2>&1; then
+              ok=1; echo "Trino answered SELECT 1 (attempt $i)"; break
+            fi
+            sleep 10
+          done
+          if [ -z "$ok" ]; then
+            echo "==== trino-smoke boot log ===="
+            docker logs trino-smoke 2>&1 | tail -200
+            docker rm -f trino-smoke >/dev/null 2>&1 || true
+            exit 1
+          fi
+          docker rm -f trino-smoke
+      - name: Set up JDK 17 (restore for the IT run)
+        # setup-java resets JAVA_HOME on each call; hudi-integ-test needs 17.
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+      - name: Run Trino E2E ITs (JDK 17)
+        run: |
+          # -DskipITs=false overrides the spark4.0 profile's skipITs=true default
+          # (see root pom.xml). -Dcompose.profiles=trino starts the profile-gated
+          # trinocoordinator service; without it every ITTestTrino* class skips.
+          # redirectTestOutputToFile makes failsafe write per-class *-output.txt
+          # files, which the on-failure dump step below relies on.
+          mvn verify $SCALA_PROFILE -Dspark4.0 -Pintegration-tests \
+            -pl hudi-integ-test \
+            -DskipITs=false \
+            -Ddocker.compose.skip=true \
+            -Dit.test='ITTestTrino*' \
+            -Dcompose.profiles=trino \
+            -Dspark.docker.compose.prefix=$COMPOSE_PREFIX \
+            -Dmaven.test.redirectTestOutputToFile=true \
+            $MVN_ARGS
+      - name: Dump failsafe test outputs on failure
+        # The IT step redirects test stdout (incl. the streamed trinocoordinator
+        # boot/query logs) into per-class output files; print their tails so
+        # server-side failures are readable straight from the workflow log.
+        if: failure()
+        run: |
+          for f in hudi-integ-test/target/failsafe-reports/*-output.txt; do
+            [ -f "$f" ] || continue
+            echo "===== $f (last 400 lines) ====="
+            tail -n 400 "$f"
+          done

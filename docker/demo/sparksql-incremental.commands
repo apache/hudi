@@ -1,0 +1,71 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import org.apache.hudi.DataSourceReadOptions;
+import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.spark.sql.SaveMode;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.HoodieDataSourceHelpers;
+import org.apache.hudi.hive.HiveSyncConfigHolder;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.hive.MultiPartKeysValueExtractor;
+import org.apache.hadoop.fs.FileSystem;
+
+val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
+
+val startCompletionTime = HoodieDataSourceHelpers.streamCompletionTimeSince(fs, "/user/hive/warehouse/stock_ticks_cow", "00000").findFirst().orElseThrow()
+println("Begin completion time for COW incremental query: " + startCompletionTime)
+val hoodieIncQueryDF =  spark.read.format("hudi").
+                      option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
+                      option(DataSourceReadOptions.START_COMMIT.key(), startCompletionTime).
+                      load("/user/hive/warehouse/stock_ticks_cow");
+println("stock_ticks_cow incremental count: " + hoodieIncQueryDF.count)
+hoodieIncQueryDF.registerTempTable("stock_ticks_cow_incr")
+spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_incr where  symbol = 'GOOG'").show(100, false);
+
+val bsStartCompletionTime = HoodieDataSourceHelpers.streamCompletionTimeSince(fs, "/user/hive/warehouse/stock_ticks_cow_bs", "00000000000000").findFirst().orElseThrow()
+println("Begin completion time for bootstrap COW incremental query: " + bsStartCompletionTime)
+val hoodieIncQueryBsDF =  spark.read.format("hudi").
+                      option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
+                      option(DataSourceReadOptions.START_COMMIT.key(), bsStartCompletionTime).
+                      load("/user/hive/warehouse/stock_ticks_cow_bs");
+println("stock_ticks_cow_bs incremental count: " + hoodieIncQueryBsDF.count)
+hoodieIncQueryBsDF.registerTempTable("stock_ticks_cow_bs_incr")
+spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_bs_incr where  symbol = 'GOOG'").show(100, false);
+
+val morStartCompletionTime = HoodieDataSourceHelpers.streamCompletionTimeSince(fs, "/user/hive/warehouse/stock_ticks_mor", "00000").findFirst().orElseThrow()
+println("Begin completion time for MOR incremental query: " + morStartCompletionTime)
+val hoodieMorIncQueryDF =  spark.read.format("hudi").
+                      option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
+                      option(DataSourceReadOptions.START_COMMIT.key(), morStartCompletionTime).
+                      load("/user/hive/warehouse/stock_ticks_mor");
+println("stock_ticks_mor incremental count: " + hoodieMorIncQueryDF.count)
+hoodieMorIncQueryDF.registerTempTable("stock_ticks_mor_incr")
+spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close from stock_ticks_mor_incr where symbol = 'GOOG'").show(100, false);
+
+val bsMorStartCompletionTime = HoodieDataSourceHelpers.streamCompletionTimeSince(fs, "/user/hive/warehouse/stock_ticks_mor_bs", "00000000000000").findFirst().orElseThrow()
+println("Begin completion time for bootstrap MOR incremental query: " + bsMorStartCompletionTime)
+val hoodieMorIncQueryBsDF =  spark.read.format("hudi").
+                      option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
+                      option(DataSourceReadOptions.START_COMMIT.key(), bsMorStartCompletionTime).
+                      load("/user/hive/warehouse/stock_ticks_mor_bs");
+println("stock_ticks_mor_bs incremental count: " + hoodieMorIncQueryBsDF.count)
+hoodieIncQueryBsDF.registerTempTable("stock_ticks_mor_bs_incr")
+spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close from stock_ticks_mor_bs_incr where symbol = 'GOOG'").show(100, false);
+
+System.exit(0);

@@ -1,0 +1,510 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.client;
+
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.callback.HoodieClientInitCallback;
+import org.apache.hudi.callback.HoodieCommitCallbackFactory;
+import org.apache.hudi.callback.HoodieWriteCommitCallback;
+import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
+import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.transaction.TransactionUtils;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.util.HoodieStorageUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.table.HoodieTable;
+
+import com.codahale.metrics.Timer;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.config.HoodieWriteConfig.APPLICATION_ID;
+
+/**
+ * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
+ * embedded timeline-server if enabled.
+ */
+@Slf4j
+public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
+
+  private static final long serialVersionUID = 1L;
+  protected final transient HoodieStorage storage;
+  protected final transient HoodieEngineContext context;
+  protected final transient StorageConfiguration<?> storageConf;
+  protected final transient HoodieMetrics metrics;
+  @Getter
+  protected final HoodieWriteConfig config;
+  protected final String basePath;
+  @Getter
+  protected final HoodieHeartbeatClient heartbeatClient;
+  protected final TransactionManager txnManager;
+  protected final TimeGenerator timeGenerator;
+
+  /**
+   * Lazily-initialized commit callback (HoodieWriteCommitCallback). Lifted from
+   * {@link BaseHoodieWriteClient} so that {@link BaseHoodieTableServiceClient} can also
+   * fire callbacks for compaction and clustering completions. Transient is fine
+   * because the callback is only ever invoked from the driver after a commit.
+   */
+  protected transient HoodieWriteCommitCallback commitCallback;
+
+  /**
+   * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
+   * able to take advantage of the cached file-system view. New completed actions will be synced automatically in an
+   * incremental fashion.
+   */
+  @Getter private transient Option<EmbeddedTimelineService> timelineServer;
+  private final boolean shouldStopTimelineServer;
+
+  protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    this(context, clientConfig, Option.empty());
+  }
+
+  protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
+                             Option<EmbeddedTimelineService> timelineServer) {
+    this(context, clientConfig, timelineServer, buildTransactionManager(context, clientConfig), buildTimeGenerator(context, clientConfig));
+  }
+
+  private static TimeGenerator buildTimeGenerator(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    return TimeGenerators.getTimeGenerator(clientConfig.getTimeGeneratorConfig(), context.getStorageConf());
+  }
+
+  private static TransactionManager buildTransactionManager(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    return new TransactionManager(clientConfig, HoodieStorageUtils.getStorage(clientConfig.getBasePath(), context.getStorageConf()));
+  }
+
+  @VisibleForTesting
+  BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
+                   Option<EmbeddedTimelineService> timelineServer, TransactionManager transactionManager, TimeGenerator timeGenerator) {
+    this.storageConf = context.getStorageConf();
+    this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), storageConf);
+    this.context = context;
+    this.basePath = clientConfig.getBasePath();
+    this.config = clientConfig;
+    this.config.setValue(APPLICATION_ID, context.getApplicationId());
+    this.timelineServer = timelineServer;
+    shouldStopTimelineServer = !timelineServer.isPresent();
+    this.heartbeatClient = new HoodieHeartbeatClient(storage, this.basePath,
+        clientConfig.getHoodieClientHeartbeatIntervalInMs(),
+        clientConfig.getHoodieClientHeartbeatTolerableMisses());
+    this.metrics = new HoodieMetrics(config, storage);
+    this.txnManager = transactionManager;
+    this.timeGenerator = timeGenerator;
+    startEmbeddedServerView();
+    runClientInitCallbacks();
+  }
+
+  /**
+   * Releases any resources used by the client.
+   */
+  @Override
+  public void close() {
+    stopEmbeddedServerView(true);
+    this.context.setJobStatus("", "");
+    this.heartbeatClient.close();
+    this.txnManager.close();
+  }
+
+  private synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
+    if (timelineServer.isPresent() && shouldStopTimelineServer) {
+      // Stop only if owner
+      log.info("Stopping Timeline service !!");
+      timelineServer.get().stopForBasePath(basePath);
+    }
+
+    timelineServer = Option.empty();
+    // Reset Storage Config to Client specified config
+    if (resetViewStorageConfig) {
+      config.resetViewStorageConfig();
+    }
+  }
+
+  private synchronized void startEmbeddedServerView() {
+    if (config.isEmbeddedTimelineServerEnabled()) {
+      if (!timelineServer.isPresent()) {
+        // Run Embedded Timeline Server
+        try {
+          timelineServer = Option.of(EmbeddedTimelineServerHelper.createEmbeddedTimelineService(context, config));
+        } catch (IOException e) {
+          log.warn("Unable to start timeline service. Proceeding as if embedded server is disabled", e);
+          stopEmbeddedServerView(false);
+        }
+      } else {
+        log.debug("Timeline Server already running. Not restarting the service");
+      }
+    } else {
+      log.info("Embedded Timeline Server is disabled. Not starting timeline service");
+    }
+  }
+
+  private void runClientInitCallbacks() {
+    String callbackClassNames = config.getClientInitCallbackClassNames();
+    if (StringUtils.isNullOrEmpty(callbackClassNames)) {
+      return;
+    }
+    Arrays.stream(callbackClassNames.split(",")).forEach(callbackClass -> {
+      Object callback = ReflectionUtils.loadClass(callbackClass);
+      if (!(callback instanceof HoodieClientInitCallback)) {
+        throw new HoodieException(callbackClass + " is not a subclass of "
+            + HoodieClientInitCallback.class.getName());
+      }
+      ((HoodieClientInitCallback) callback).call(this);
+    });
+  }
+
+  public HoodieEngineContext getEngineContext() {
+    return context;
+  }
+
+  protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
+    return HoodieTableMetaClient.builder()
+        .setConf(storageConf.newInstance())
+        .setBasePath(config.getBasePath())
+        .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad)
+        .setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+        .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
+        .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
+        .setMetaserverConfig(config.getProps()).build();
+  }
+
+  /**
+   * Returns next instant time in the correct format.
+   *
+   * @param shouldLock Whether to lock the context to get the instant time.
+   */
+  public String createNewInstantTime(boolean shouldLock) {
+    return TimelineUtils.generateInstantTime(shouldLock, timeGenerator);
+  }
+
+  /**
+   * Resolve write conflicts before commit.
+   *
+   * @param table A hoodie table instance created after transaction starts so that the latest commits and files are captured.
+   * @param metadata Current committing instant's metadata
+   * @param pendingInflightAndRequestedInstants Pending instants on the timeline
+   *
+   * @see {@link BaseHoodieWriteClient#preCommit}
+   * @see {@link BaseHoodieTableServiceClient#preCommit}
+   */
+  protected void resolveWriteConflict(HoodieTable table, HoodieCommitMetadata metadata, Set<String> pendingInflightAndRequestedInstants) {
+    Timer.Context conflictResolutionTimer = metrics.getConflictResolutionCtx();
+    try {
+      TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
+          Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), true, pendingInflightAndRequestedInstants);
+      metrics.emitConflictResolutionSuccessful();
+    } catch (HoodieWriteConflictException e) {
+      metrics.emitConflictResolutionFailed();
+      e.getCategory().ifPresent(metrics::emitConflictResolutionByCategory);
+      throw e;
+    } finally {
+      if (conflictResolutionTimer != null) {
+        conflictResolutionTimer.stop();
+      }
+    }
+  }
+
+  /**
+   * Finalize Write operation.
+   *
+   * @param table HoodieTable
+   * @param instantTime Instant Time
+   * @param stats Hoodie Write Stat
+   */
+  protected void finalizeWrite(HoodieTable table, String instantTime, List<HoodieWriteStat> stats) {
+    try {
+      final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
+      table.finalizeWrite(context, instantTime, stats);
+      if (finalizeCtx != null) {
+        Option<Long> durationInMs = Option.of(metrics.getDurationInMs(finalizeCtx.stop()));
+        durationInMs.ifPresent(duration -> {
+          log.info("Finalize write elapsed time (milliseconds): {}", duration);
+          metrics.updateFinalizeWriteMetrics(duration, stats.size());
+        });
+      }
+    } catch (HoodieIOException ioe) {
+      throw new HoodieCommitException("Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
+    }
+  }
+
+  /**
+   * Write the HoodieCommitMetadata to metadata table if available.
+   *
+   * @param table         {@link HoodieTable} of interest.
+   * @param instantTime   instant time of the commit.
+   * @param metadata      instance of {@link HoodieCommitMetadata}.
+   */
+  protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
+    if (metadataWriterOpt.isPresent()) {
+      try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+        metadataWriter.update(metadata, instantTime);
+      } catch (Exception e) {
+        if (e instanceof HoodieException) {
+          throw (HoodieException) e;
+        } else {
+          throw new HoodieException("Failed to update metadata", e);
+        }
+      }
+    }
+  }
+
+  /**
+   * Updates the cols being indexed with column stats. This is for tracking purpose so that queries can leverage col stats
+   * from MDT only for indexed columns.
+   * @param metaClient instance of {@link HoodieTableMetaClient} of interest.
+   * @param columnsToIndex list of columns to index.
+   */
+  protected abstract void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
+
+  protected void executeUsingTxnManager(Option<HoodieInstant> ownerInstant, Runnable r) {
+    this.txnManager.beginStateChange(ownerInstant, Option.empty());
+    try {
+      r.run();
+    } finally {
+      this.txnManager.endStateChange(ownerInstant);
+    }
+  }
+
+  public TransactionManager getTransactionManager() {
+    return txnManager;
+  }
+
+  protected boolean isStreamingWriteToMetadataEnabled(HoodieTable table) {
+    return config.isMetadataTableEnabled()
+        && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
+  }
+
+  /**
+   * Merges rolling metadata from recent completed instants into the current commit metadata.
+   * This method MUST be called within the transaction lock after conflict resolution.
+   *
+   * <p>Rolling metadata keys configured via {@link HoodieWriteConfig#ROLLING_METADATA_KEYS} will be
+   * automatically carried forward from recent instants. The system walks back through completed
+   * commits and clean instants (in reverse completion-time order) up to
+   * {@link HoodieWriteConfig#ROLLING_METADATA_TIMELINE_LOOKBACK_COMMITS} to find the most
+   * recent value for each key.
+   *
+   * @param table HoodieTable instance (may have refreshed timeline after conflict resolution)
+   * @param metadata Current commit metadata to be augmented with rolling metadata
+   */
+  protected void mergeRollingMetadata(HoodieTable table, HoodieCommitMetadata metadata) {
+    // IMPORTANT: We're inside the lock here. The timeline in 'table' is either:
+    // 1. Fresh from createTable() if no conflict resolution happened
+    // 2. Reloaded during resolveWriteConflict() if conflicts were checked
+    // In both cases, we have the latest view of the timeline.
+
+    // Skip for metadata table - rolling metadata is only for data tables
+    if (table.isMetadataTable()) {
+      return;
+    }
+
+    Set<String> rollingKeys = config.getRollingMetadataKeys();
+    if (rollingKeys.isEmpty()) {
+      return;  // No rolling metadata configured
+    }
+
+    Map<String, String> foundRollingMetadata = collectRollingMetadataFromTimeline(table, config, rollingKeys, metadata.getExtraMetadata());
+    for (Map.Entry<String, String> entry : foundRollingMetadata.entrySet()) {
+      metadata.addMetadata(entry.getKey(), entry.getValue());
+    }
+  }
+
+  /**
+   * Overload of {@link #mergeRollingMetadata(HoodieTable, HoodieCommitMetadata)} for clean
+   * commits. Populates {@link HoodieCleanMetadata#getExtraMetadata()} with rolling metadata
+   * values found on the active timeline.
+   *
+   * <p>This is {@code public static} so that {@code CleanActionExecutor} (which does not extend
+   * {@code BaseHoodieClient}) can invoke it.
+   */
+  public static void mergeRollingMetadata(HoodieTable table, HoodieWriteConfig config, HoodieCleanMetadata metadata) {
+    if (table.isMetadataTable()) {
+      return;
+    }
+    Set<String> rollingKeys = config.getRollingMetadataKeys();
+    if (rollingKeys.isEmpty()) {
+      return;
+    }
+
+    Map<String, String> existing = metadata.getExtraMetadata() != null
+        ? metadata.getExtraMetadata() : Collections.emptyMap();
+    Map<String, String> foundRollingMetadata = collectRollingMetadataFromTimeline(table, config, rollingKeys, existing);
+    if (!foundRollingMetadata.isEmpty()) {
+      Map<String, String> merged = new HashMap<>(existing);
+      merged.putAll(foundRollingMetadata);
+      metadata.setExtraMetadata(merged);
+    }
+  }
+
+  /**
+   * Walks backwards through completed instants (commits, replace-commits, delta-commits, and
+   * clean) on the active timeline, extracting extra-metadata values for the requested rolling
+   * keys. For commit-type instants the values come from {@link HoodieCommitMetadata#getMetadata};
+   * for clean instants they come from {@link HoodieCleanMetadata#getExtraMetadata()}.
+   *
+   * <p>Keys already present with a non-empty value in {@code existingExtra} are skipped (empty
+   * strings are treated as "missing").
+   */
+  private static Map<String, String> collectRollingMetadataFromTimeline(
+      HoodieTable table, HoodieWriteConfig config,
+      Set<String> rollingKeys, Map<String, String> existingExtra) {
+
+    Map<String, String> foundRollingMetadata = new HashMap<>();
+    Set<String> remaining = new HashSet<>(rollingKeys);
+
+    for (String key : rollingKeys) {
+      if (existingExtra.containsKey(key) && !StringUtils.isNullOrEmpty(existingExtra.get(key))) {
+        remaining.remove(key);
+      }
+    }
+    if (remaining.isEmpty()) {
+      log.debug("All rolling metadata keys already present. No walkback needed.");
+      return foundRollingMetadata;
+    }
+
+    int lookbackLimit = config.getRollingMetadataTimelineLookbackCommits();
+    HoodieTimeline completed = table.getActiveTimeline().filterCompletedInstants();
+    List<HoodieInstant> instants = completed.getReverseOrderedInstantsByCompletionTime()
+        .filter(i -> HoodieTimeline.VALID_ACTIONS_FOR_ROLLING_METADATA.contains(i.getAction()))
+        .limit(lookbackLimit)
+        .collect(Collectors.toList());
+
+    log.debug("Walking back up to {} instants to find rolling metadata for keys: {}", lookbackLimit, remaining);
+    int instantsWalkedBack = 0;
+
+    try {
+      for (HoodieInstant instant : instants) {
+        if (remaining.isEmpty()) {
+          break;
+        }
+        String action = instant.getAction();
+        Map<String, String> extraMeta = null;
+
+        if (HoodieTimeline.CLEAN_ACTION.equals(action)) {
+          HoodieCleanMetadata cleanMeta = table.getActiveTimeline().readCleanMetadata(instant);
+          extraMeta = cleanMeta.getExtraMetadata();
+        } else {
+          HoodieCommitMetadata commitMeta = table.getMetaClient().getActiveTimeline()
+              .readInstantContent(instant, HoodieCommitMetadata.class);
+          extraMeta = commitMeta.getExtraMetadata();
+        }
+        instantsWalkedBack++;
+
+        if (extraMeta == null) {
+          continue;
+        }
+        for (String key : new HashSet<>(remaining)) {
+          String value = extraMeta.get(key);
+          if (!StringUtils.isNullOrEmpty(value)) {
+            foundRollingMetadata.put(key, value);
+            remaining.remove(key);
+            log.debug("Found rolling metadata key '{}' in {} instant {} with value: {}",
+                key, action, instant.requestedTime(), value);
+          }
+        }
+      }
+
+      if (!foundRollingMetadata.isEmpty() || !remaining.isEmpty()) {
+        log.info("Rolling metadata: walked {} instants. Rolled forward: {}, Not found: {}, Total keys: {}",
+            instantsWalkedBack, foundRollingMetadata.size(), remaining.size(), rollingKeys.size());
+      }
+      if (!remaining.isEmpty()) {
+        log.warn("Rolling metadata keys not found in last {} instants: {}.", instantsWalkedBack, remaining);
+      }
+    } catch (IOException e) {
+      log.error("Failed to read previous metadata for rolling metadata keys: {}.", rollingKeys, e);
+      throw new HoodieIOException("Failed to read previous metadata for rolling keys: " + rollingKeys, e);
+    }
+
+    return foundRollingMetadata;
+  }
+
+  protected Option<Map<String, String>> updateExtraMetadata(Option<Map<String, String>> extraMetadata) {
+    return CommitMetadataProperties.enrich(extraMetadata, config, context);
+  }
+
+  /**
+   * Fire {@link HoodieWriteCommitCallback} for a commit, if enabled. Shared by
+   * {@link BaseHoodieWriteClient#postCommit} (regular auto- and explicit-commit paths)
+   * and {@link BaseHoodieTableServiceClient} (compaction and clustering completions).
+   * Lazily constructs the callback instance from {@code hoodie.write.commit.callback.class}.
+   *
+   * <p>Best-effort: catches and logs any exception from the user-supplied callback so a
+   * misbehaving observer cannot fail the commit.
+   */
+  protected void fireCommitCallbackIfNecessary(String commitTime,
+                                               String commitActionType,
+                                               List<HoodieWriteStat> stats,
+                                               Supplier<BaseFileOnlyView> fsViewSupplier,
+                                               Option<Map<String, String>> extraMetadata) {
+    if (!config.writeCommitCallbackOn()) {
+      return;
+    }
+    try {
+      if (commitCallback == null) {
+        commitCallback = HoodieCommitCallbackFactory.create(config);
+      }
+      commitCallback.call(new HoodieWriteCommitCallbackMessage(
+          commitTime, config.getTableName(), config.getBasePath(),
+          stats, Option.of(commitActionType), extraMetadata,
+          fsViewSupplier,
+          Collections.emptyMap()));
+    } catch (Exception e) {
+      log.warn("HoodieWriteCommitCallback failed for commit {} ({}); ignoring",
+          commitTime, commitActionType, e);
+    }
+  }
+}

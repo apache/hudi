@@ -1,0 +1,38 @@
+name: Commit Co-author Validation
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - master
+      - branch-0.x
+
+concurrency:
+  group: commit-coauthor-validation-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') }}
+
+jobs:
+  validate-commit-coauthor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check commits for Claude co-author trailers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "Checking commits of PR #${PR_NUMBER} for Claude co-author trailers..."
+          flagged=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/commits" --paginate \
+            --jq '.[] | select(.commit.message | test("(^|\\n)co-authored-by:\\s*(claude\\s+(opus|sonnet|haiku|fable|mythos|instant|code|[0-9])|[^\\n]*<noreply@anthropic\\.com>)"; "i")) | .sha')
+
+          if [[ -n "$flagged" ]]; then
+            echo "❌ The following commits contain a Claude co-author trailer:"
+            echo "$flagged"
+            echo ""
+            echo "Commits must not credit Claude as a co-author."
+            echo "Remove the 'Co-authored-by: Claude ...' trailer from the commit message(s),"
+            echo "e.g., by amending the commit or rebasing, and force-push the branch."
+            exit 1
+          fi
+
+          echo "✅ No Claude co-author trailers found."

@@ -1,0 +1,65 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+dag_name: simple-deltastreamer.yaml
+dag_rounds: 6
+dag_intermittent_delay_mins: 0
+dag_content:
+  first_insert:
+    config:
+      record_size: 5000
+      num_partitions_insert: 1
+      repeat_count: 1
+      num_records_insert: 1000
+    type: InsertNode
+    deps: none
+  second_insert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      repeat_count: 1
+      num_records_insert: 100000
+    deps: first_insert
+    type: InsertNode
+  third_insert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      repeat_count: 1
+      num_records_insert: 30000
+    deps: second_insert
+    type: InsertNode
+  first_upsert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      num_records_insert: 5000
+      repeat_count: 1
+      num_records_upsert: 50000
+      num_partitions_upsert: 1
+    type: UpsertNode
+    deps: third_insert
+  first_delete:
+    config:
+      num_partitions_delete : 0
+      num_records_delete: 100000
+    type: DeleteNode
+    deps: first_upsert
+  second_validate:
+    config:
+      validate_hive: false
+      delete_input_data: true
+    type: ValidateDatasetNode
+    deps: first_delete

@@ -1,0 +1,126 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.connect.writers;
+
+import org.apache.hudi.client.HoodieJavaWriteClient;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.serialization.DefaultSerializer;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.DefaultSizeEstimator;
+import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.MergeUtils;
+import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.schema.SchemaProvider;
+
+import lombok.extern.slf4j.Slf4j;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Specific implementation of a Hudi Writer that buffers all incoming records,
+ * and writes them to Hudi files on the end of a transaction using Bulk Insert.
+ */
+@Slf4j
+public class BufferedConnectWriter extends AbstractConnectWriter {
+
+  private final HoodieEngineContext context;
+  private final HoodieJavaWriteClient writeClient;
+  private final HoodieWriteConfig config;
+  private ExternalSpillableMap<String, HoodieRecord<?>> bufferedRecords;
+
+  public BufferedConnectWriter(HoodieEngineContext context,
+                               HoodieJavaWriteClient writeClient,
+                               String instantTime,
+                               KafkaConnectConfigs connectConfigs,
+                               HoodieWriteConfig config,
+                               KeyGenerator keyGenerator,
+                               SchemaProvider schemaProvider) {
+    super(connectConfigs, keyGenerator, schemaProvider, instantTime);
+    this.context = context;
+    this.writeClient = writeClient;
+    this.config = config;
+    init();
+  }
+
+  private void init() {
+    try {
+      // Load and batch all incoming records in a map
+      long memoryForMerge = MergeUtils.getMaxMemoryPerPartitionMerge(context.getTaskContextSupplier(), config);
+      log.info("MaxMemoryPerPartitionMerge => {}", memoryForMerge);
+      this.bufferedRecords = new ExternalSpillableMap<>(memoryForMerge,
+          config.getSpillableMapBasePath(),
+          new DefaultSizeEstimator(),
+          new HoodieRecordSizeEstimator(HoodieSchema.parse(config.getSchema())),
+          config.getCommonConfig().getSpillableDiskMapType(),
+          new DefaultSerializer<>(),
+          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
+          getClass().getSimpleName());
+    } catch (IOException io) {
+      throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
+    }
+  }
+
+  @Override
+  public void writeHudiRecord(HoodieRecord<?> record) {
+    bufferedRecords.put(record.getRecordKey(), record);
+  }
+
+  @Override
+  public List<WriteStatus> flushRecords() {
+    try {
+      log.info("Number of entries in MemoryBasedMap => {}, Total size in bytes of MemoryBasedMap => {}, "
+              + "Number of entries in BitCaskDiskMap => {}, Size of file spilled to disk => {}",
+          bufferedRecords.getInMemoryMapNumEntries(), bufferedRecords.getCurrentInMemoryMapSize(),
+          bufferedRecords.getDiskBasedMapNumEntries(), bufferedRecords.getSizeOfFileOnDiskInBytes());
+      List<WriteStatus> writeStatuses = new ArrayList<>();
+
+      boolean isMorTable = Option.ofNullable(connectConfigs.getString(HoodieTableConfig.TYPE))
+          .map(t -> t.equals(HoodieTableType.MERGE_ON_READ.name()))
+          .orElse(false);
+
+      // Write out all records if non-empty
+      if (!bufferedRecords.isEmpty()) {
+        if (isMorTable) {
+          writeStatuses = writeClient.upsertPreppedRecords(
+              new ArrayList<>(bufferedRecords.values()),
+              instantTime);
+        } else {
+          writeStatuses = writeClient.bulkInsertPreppedRecords(
+              new ArrayList<>(bufferedRecords.values()),
+              instantTime, Option.empty());
+        }
+      }
+      bufferedRecords.close();
+      log.info("Flushed hudi records and got writeStatuses: {}", writeStatuses);
+      return writeStatuses;
+    } catch (Exception e) {
+      throw new HoodieIOException("Write records failed", new IOException(e));
+    }
+  }
+}

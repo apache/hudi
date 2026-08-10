@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="TableMapper">
+
+    <insert id="insertDB" parameterType="java.util.Map" useGeneratedKeys="true" keyProperty="db_id">
+        INSERT INTO dbs (name, description, location_uri, owner_name, owner_type)
+        VALUES(#{databaseName}, null, null, null, null)
+    </insert>
+
+    <select id="selectDBId" parameterType="java.lang.String" resultType="java.lang.Long">
+        SELECT db_id
+        FROM dbs
+        WHERE name=#{databaseName}
+    </select>
+
+    <delete id="deleteDB" parameterType="java.util.HashMap">
+        DELETE
+        FROM
+            dbs
+        WHERE
+            db_id = #{dbId}
+    </delete>
+
+    <!-- table related -->
+    <insert id="insertTable" parameterType="java.util.Map" useGeneratedKeys="true" keyProperty="tbl_id">
+        INSERT INTO tbls (db_id, name, owner_name, location)
+        VALUES(#{dbId}, #{tableBean.tableName}, #{tableBean.owner}, #{tableBean.location})
+    </insert>
+
+    <select id="selectTable" parameterType="java.util.Map" resultType="TableBean">
+        SELECT
+            dbs.name AS databaseName, t.tbl_id, t.name AS tableName, t.create_time, t.owner_name, t.location
+        FROM
+            dbs JOIN tbls t ON dbs.db_id = t.db_id
+        WHERE
+            t.NAME = #{tableName}
+          AND dbs.NAME = #{databaseName}
+    </select>
+
+    <select id="selectTableId" parameterType="java.util.Map" resultType="java.lang.Long">
+        SELECT
+            t.tbl_id
+        FROM
+            dbs JOIN tbls t ON dbs.db_id = t.db_id
+        WHERE
+            t.NAME = #{tableName}
+            AND dbs.NAME = #{databaseName}
+    </select>
+
+    <delete id="deleteTable" parameterType="java.util.HashMap">
+        DELETE
+        FROM
+            tbls
+        WHERE
+            tbl_id = #{tableId}
+    </delete>
+
+</mapper>

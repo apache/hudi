@@ -1,0 +1,39 @@
+{
+  "type" : "record",
+  "name" : "example",
+  "doc" : "An address similar to http://microformats.org/wiki/h-card",
+  "namespace" : "example.com",
+  "fields" : [ {
+    "name" : "post_office_box",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "extended_address",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "street_address",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "locality",
+    "doc" : "",
+    "type" : "string"
+  }, {
+    "name" : "region",
+    "doc" : "",
+    "type" : "string"
+  }, {
+    "name" : "postal_code",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "country_name",
+    "doc" : "",
+    "type" : "string"
+  } ]
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "tripUberRec",
+  "type": "object",
+  "properties": {
+    "timestamp": {
+      "type": "integer"
+    },
+    "_row_key": {
+      "type": "string"
+    },
+    "rider": {
+      "type": "string"
+    },
+    "decfield": {
+      "title": "org.apache.kafka.connect.data.Decimal",
+      "connect.parameters": {
+        "connect.decimal.precision": "10",
+        "scale": "6"
+      },
+      "connect.type": "bytes",
+      "type": "number"
+    },
+    "lowprecision": {
+      "title": "org.apache.kafka.connect.data.Decimal",
+      "connect.parameters": {
+        "connect.decimal.precision": "4",
+        "scale": "2"
+      },
+      "connect.type": "bytes",
+      "type": "number"
+    },
+    "highprecision": {
+      "title": "org.apache.kafka.connect.data.Decimal",
+      "connect.parameters": {
+        "connect.decimal.precision": "32",
+        "scale": "12"
+      },
+      "connect.type": "bytes",
+      "type": "number"
+    },
+    "driver": {
+      "type":"string"
+    },
+    "fare": {
+      "type": "number"
+    },
+    "_hoodie_is_deleted": {
+      "type": "boolean",
+      "default": "false"
+    }
+  },
+  "required": [ "timestamp", "_row_key", "rider", "decfield", "lowprecision", "highprecision", "driver", "fare", "_hoodie_is_deleted" ]
+}

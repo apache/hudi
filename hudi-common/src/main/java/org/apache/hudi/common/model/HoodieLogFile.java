@@ -1,0 +1,280 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.common.model;
+
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.InvalidHoodiePathException;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
+import java.io.Serializable;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Abstracts a single log file. Contains methods to extract metadata like
+ * the fileId, version and extension from the log file path.
+ *
+ * <p>Also contains logic to roll over the log file.
+ */
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
+public class HoodieLogFile implements Serializable {
+
+  private static final long serialVersionUID = 1L;
+  public static final String DELTA_EXTENSION = ".log";
+  public static final String LOG_FILE_PREFIX = ".";
+  public static final Integer LOGFILE_BASE_VERSION = 1;
+  private static final Map<String, Integer> EXTENSION_PRECEDENCE;
+
+  private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
+  private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR_REVERSED = new LogFileComparator().reversed();
+
+  static {
+    Map<String, Integer> extensionPrecedence = new HashMap<>();
+    extensionPrecedence.put(LogExtensions.DATA_LOG_EXTENSION, 0);
+    extensionPrecedence.put(LogExtensions.DELETE_LOG_EXTENSION, 1); // the deletes come after logs to ensure commit time sequence.
+    extensionPrecedence.put(LogExtensions.CDC_LOG_EXTENSION, 2);
+    extensionPrecedence.put(LogExtensions.ARCHIVE_LOG_EXTENSION, 3);
+    EXTENSION_PRECEDENCE = Collections.unmodifiableMap(extensionPrecedence);
+  }
+
+  @Getter
+  @Setter
+  private transient StoragePathInfo pathInfo;
+  private transient StoragePath path;
+  @EqualsAndHashCode.Include
+  @ToString.Include
+  private final String pathStr;
+  private String fileId;
+  private String deltaCommitTime;
+  private int logVersion;
+  private String logWriteToken;
+  private String fileExtension;
+  private String suffix;
+  private Boolean nativeLogFile;
+  private Boolean cdcLogFile;
+  @Getter
+  @Setter
+  @ToString.Include
+  private long fileSize;
+
+  public HoodieLogFile(HoodieLogFile logFile) {
+    this.pathInfo = logFile.getPathInfo();
+    this.path = logFile.getPath();
+    this.pathStr = logFile.pathStr;
+    this.fileId = logFile.getFileId();
+    this.deltaCommitTime = logFile.getDeltaCommitTime();
+    this.logVersion = logFile.getLogVersion();
+    this.logWriteToken = logFile.getLogWriteToken();
+    this.fileExtension = logFile.getFileExtension();
+    this.suffix = logFile.getSuffix();
+    this.nativeLogFile = logFile.isNativeLogFile();
+    this.cdcLogFile = logFile.isCDC();
+    this.fileSize = logFile.getFileSize();
+  }
+
+  public HoodieLogFile(StoragePathInfo pathInfo) {
+    this(pathInfo, pathInfo.getPath(), pathInfo.getPath().toString(), pathInfo.getLength());
+  }
+
+  public HoodieLogFile(StoragePath logPath) {
+    this(null, logPath, logPath.toString(), -1);
+  }
+
+  public HoodieLogFile(StoragePath logPath, long fileSize) {
+    this(null, logPath, logPath.toString(), fileSize);
+  }
+
+  public HoodieLogFile(String logPathStr) {
+    this(null, null, logPathStr, -1);
+  }
+
+  private HoodieLogFile(StoragePathInfo pathInfo, StoragePath logPath, String logPathStr, long fileSize) {
+    this.pathInfo = pathInfo;
+    this.pathStr = logPathStr;
+    this.fileSize = fileSize;
+    this.logVersion = -1; // mark version as uninitialized
+    this.path = logPath;
+  }
+
+  private void parseFieldsFromPath() {
+    Option<FileNameParser.LogFileName> parsedLogFileName = FileNameParser.parseLogFile(getPath().getName());
+    if (!parsedLogFileName.isPresent()) {
+      throw new InvalidHoodiePathException(path, "LogFile");
+    }
+    FileNameParser.LogFileName logFileName = parsedLogFileName.get();
+    this.fileId = logFileName.getFileId();
+    this.deltaCommitTime = logFileName.getDeltaCommitTime();
+    this.fileExtension = logFileName.getFileExtension();
+    this.logVersion = logFileName.getLogVersion();
+    this.logWriteToken = logFileName.getWriteToken();
+    this.suffix = logFileName.getSuffix();
+    this.nativeLogFile = logFileName.isNativeLogFile();
+    this.cdcLogFile = logFileName.isCDCLogFile();
+  }
+
+  public String getFileId() {
+    if (fileId == null) {
+      parseFieldsFromPath();
+    }
+    return fileId;
+  }
+
+  public String getDeltaCommitTime() {
+    if (deltaCommitTime == null) {
+      parseFieldsFromPath();
+    }
+    return deltaCommitTime;
+  }
+
+  public int getLogVersion() {
+    if (logVersion == -1) {
+      parseFieldsFromPath();
+    }
+    return logVersion;
+  }
+
+  public String getLogWriteToken() {
+    if (logWriteToken == null) {
+      parseFieldsFromPath();
+    }
+    return logWriteToken;
+  }
+
+  public String getFileExtension() {
+    if (fileExtension == null) {
+      parseFieldsFromPath();
+    }
+    return fileExtension;
+  }
+
+  public boolean isCDC() {
+    if (cdcLogFile == null) {
+      parseFieldsFromPath();
+    }
+    return cdcLogFile;
+  }
+
+  public String getSuffix() {
+    if (suffix == null) {
+      parseFieldsFromPath();
+    }
+    return suffix;
+  }
+
+  public boolean isNativeLogFile() {
+    if (nativeLogFile == null) {
+      parseFieldsFromPath();
+    }
+    return nativeLogFile;
+  }
+
+  public StoragePath getPath() {
+    if (path == null) {
+      path = new StoragePath(pathStr);
+    }
+    return path;
+  }
+
+  public String getFileName() {
+    return getPath().getName();
+  }
+
+  public HoodieLogFile rollOver(String logWriteToken) {
+    String fileId = getFileId();
+    String deltaCommitTime = getDeltaCommitTime();
+    StoragePath path = getPath();
+    if (isNativeLogFile()) {
+      return new HoodieLogFile(new StoragePath(path.getParent(),
+          FSUtils.makeNativeLogFileName(fileId, logWriteToken, deltaCommitTime, logVersion + 1,
+              fileExtension, HoodieFileFormat.fromFileExtension("." + getSuffix()))));
+    }
+    String extension = "." + fileExtension;
+    return new HoodieLogFile(new StoragePath(path.getParent(),
+        FSUtils.makeInlineLogFileName(fileId, extension, deltaCommitTime, logVersion + 1, logWriteToken)));
+  }
+
+  public static Comparator<HoodieLogFile> getLogFileComparator() {
+    return LOG_FILE_COMPARATOR;
+  }
+
+  public static Comparator<HoodieLogFile> getReverseLogFileComparator() {
+    return LOG_FILE_COMPARATOR_REVERSED;
+  }
+
+  /**
+   * Comparator to order log-files.
+   */
+  public static class LogFileComparator implements Comparator<HoodieLogFile>, Serializable {
+
+    private static final long serialVersionUID = 1L;
+    private transient Comparator<String> writeTokenComparator;
+
+    private Comparator<String> getWriteTokenComparator() {
+      if (null == writeTokenComparator) {
+        // writeTokenComparator is not serializable. Hence, lazy loading
+        writeTokenComparator = Comparator.nullsFirst(Comparator.naturalOrder());
+      }
+      return writeTokenComparator;
+    }
+
+    @Override
+    public int compare(HoodieLogFile o1, HoodieLogFile o2) {
+      String deltaCommitTime1 = o1.getDeltaCommitTime();
+      String deltaCommitTime2 = o2.getDeltaCommitTime();
+
+      if (deltaCommitTime1.equals(deltaCommitTime2)) {
+
+        if (o1.getLogVersion() == o2.getLogVersion()) {
+
+          int compareWriteToken = getWriteTokenComparator().compare(o1.getLogWriteToken(), o2.getLogWriteToken());
+          if (compareWriteToken == 0) {
+
+            int p1 = EXTENSION_PRECEDENCE.getOrDefault(o1.getFileExtension(), Integer.MAX_VALUE);
+            int p2 = EXTENSION_PRECEDENCE.getOrDefault(o2.getFileExtension(), Integer.MAX_VALUE);
+            if (p1 == p2) {
+              // Compare by suffix when file extension is same
+              return o1.getSuffix().compareTo(o2.getSuffix());
+            }
+            return Integer.compare(p1, p2);
+          }
+
+          // Compare by write token when delta-commit and log-version is same
+          return compareWriteToken;
+        }
+
+        // compare by log-version when delta-commit is same
+        return Integer.compare(o1.getLogVersion(), o2.getLogVersion());
+      }
+
+      // compare by delta-commits
+      return deltaCommitTime1.compareTo(deltaCommitTime2);
+    }
+  }
+}

@@ -1,0 +1,168 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.hudi.utilities.testutils;
+
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
+
+import org.apache.spark.sql.types.ArrayType;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.MapType;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
+import org.junit.jupiter.params.provider.Arguments;
+
+import java.util.Arrays;
+import java.util.stream.Stream;
+
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+
+public class SanitizationTestUtils {
+  public static String invalidCharMask = SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue();
+
+  private static String sanitizeIfNeeded(String src, boolean shouldSanitize) {
+    return shouldSanitize ? HoodieSchemaUtils.sanitizeName(src, invalidCharMask) : src;
+  }
+
+  protected static StructType getSchemaWithProperNaming() {
+    StructType addressStruct = new StructType(new StructField[] {
+        new StructField("state", DataTypes.StringType, true, Metadata.empty()),
+        new StructField("street", DataTypes.StringType, true, Metadata.empty()),
+        new StructField("zip", DataTypes.LongType, true, Metadata.empty()),
+    });
+
+    StructType personStruct = new StructType(new StructField[] {
+        new StructField("address", addressStruct, true, Metadata.empty()),
+        new StructField("name", DataTypes.StringType, true, Metadata.empty()),
+        new StructField("occupation", DataTypes.StringType, true, Metadata.empty()),
+        new StructField("place", DataTypes.StringType, true, Metadata.empty())
+    });
+    return personStruct;
+  }
+
+  protected static StructType getSchemaWithBadAvroNamingForStructType(boolean shouldSanitize) {
+    StructType addressStruct = new StructType(new StructField[] {
+        new StructField(sanitizeIfNeeded("@state.", shouldSanitize),
+            DataTypes.StringType, true, Metadata.empty()),
+        new StructField(sanitizeIfNeeded("@@stree@t@", shouldSanitize),
+            DataTypes.StringType, true, Metadata.empty()),
+        new StructField(sanitizeIfNeeded("8@_zip", shouldSanitize),
+            DataTypes.LongType, true, Metadata.empty())
+    });
+
+    StructType personStruct = new StructType(new StructField[] {
+        new StructField(sanitizeIfNeeded("@_addr*$ess", shouldSanitize),
+            addressStruct, true, Metadata.empty()),
+        new StructField(sanitizeIfNeeded("9name", shouldSanitize),
+            DataTypes.StringType, true, Metadata.empty()),
+        new StructField(sanitizeIfNeeded("_occu9pation", shouldSanitize),
+            DataTypes.StringType, true, Metadata.empty()),
+        new StructField(sanitizeIfNeeded("@plac.e.", shouldSanitize),
+            DataTypes.StringType, true, Metadata.empty())
+    });
+    return personStruct;
+  }
+
+  protected static StructType getSchemaWithBadAvroNamingForArrayType(boolean shouldSanitize) {
+    StructType addressStruct = new StructType(new StructField[] {
+        new StructField(sanitizeIfNeeded("@state.", shouldSanitize),
+            DataTypes.StringType, true, Metadata.empty()),
+        new StructField(sanitizeIfNeeded("@@stree@t@", shouldSanitize),
+            DataTypes.StringType, true, Metadata.empty()),
+        new StructField(sanitizeIfNeeded("8@_zip", shouldSanitize),
+            DataTypes.LongType, true, Metadata.empty())
+    });
+
+    StructType personStruct = new StructType(new StructField[] {
+        new StructField(sanitizeIfNeeded("@name", shouldSanitize),
+            DataTypes.StringType, true, Metadata.empty()),
+        new StructField(sanitizeIfNeeded("@arr@", shouldSanitize),
+            new ArrayType(addressStruct, true), true, Metadata.empty())
+    });
+    return personStruct;
+  }
+
+  protected static StructType getSchemaWithBadAvroNamingForMapType(boolean shouldSanitize) {
+    StructType addressStruct = new StructType(new StructField[] {
+        new StructField(sanitizeIfNeeded("@state.", shouldSanitize),
+            DataTypes.StringType, true, Metadata.empty()),
+        new StructField(sanitizeIfNeeded("@@stree@t@", shouldSanitize),
+            DataTypes.StringType, true, Metadata.empty()),
+        new StructField(sanitizeIfNeeded("8@_zip", shouldSanitize),
+            DataTypes.LongType, true, Metadata.empty())
+    });
+
+    return new StructType(new StructField[] {
+        new StructField(sanitizeIfNeeded("@name", shouldSanitize),
+            DataTypes.StringType, true, Metadata.empty()),
+        new StructField(sanitizeIfNeeded("@map9", shouldSanitize),
+            new MapType(DataTypes.StringType, addressStruct, true), true, Metadata.empty()),
+    });
+  }
+
+  public static HoodieSchema generateProperFormattedSchema() {
+    HoodieSchema addressSchema =
+        HoodieSchema.createRecord("Address", null, null, Arrays.asList(HoodieSchemaField.of("streetaddress", HoodieSchema.create(HoodieSchemaType.STRING)),
+                HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING))));
+
+    return HoodieSchema.createRecord("Person", null, null,
+        Arrays.asList(HoodieSchemaField.of("firstname", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("lastname", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema)));
+  }
+
+  public static HoodieSchema generateRenamedSchemaWithDefaultReplacement() {
+    HoodieSchema addressSchema = HoodieSchema.createRecord("__Address", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("__stree9add__ress", HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.NULL)), null, "@@@any_address"),
+            HoodieSchemaField.of("cit__y__", HoodieSchema.create(HoodieSchemaType.STRING))));
+    return HoodieSchema.createRecord("Person", null, null,
+        Arrays.asList(HoodieSchemaField.of("__firstname", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("__lastname", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema)));
+  }
+
+  public static HoodieSchema generateRenamedSchemaWithConfiguredReplacement() {
+    HoodieSchema addressSchema = HoodieSchema.createRecord("_Address", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("_stree9add_ress", HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.NULL)), null, "@@@any_address"),
+            HoodieSchemaField.of("cit_y_", HoodieSchema.create(HoodieSchemaType.STRING))));
+    return HoodieSchema.createRecord("Person", null, null,
+        Arrays.asList(HoodieSchemaField.of("_firstname", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("_lastname", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema)));
+  }
+
+  public static Stream<Arguments> provideDataFiles() {
+    return Stream.of(
+        Arguments.of("src/test/resources/data/avro_sanitization.json", "src/test/resources/data/avro_sanitization.json",
+            getSchemaWithProperNaming(), getSchemaWithProperNaming()),
+        Arguments.of("src/test/resources/data/avro_sanitization_bad_naming_in.json", "src/test/resources/data/avro_sanitization_bad_naming_out.json",
+            getSchemaWithBadAvroNamingForStructType(false), getSchemaWithBadAvroNamingForStructType(true)),
+        Arguments.of("src/test/resources/data/avro_sanitization_bad_naming_nested_array_in.json", "src/test/resources/data/avro_sanitization_bad_naming_nested_array_out.json",
+            getSchemaWithBadAvroNamingForArrayType(false), getSchemaWithBadAvroNamingForArrayType(true)),
+        Arguments.of("src/test/resources/data/avro_sanitization_bad_naming_nested_map_in.json", "src/test/resources/data/avro_sanitization_bad_naming_nested_map_out.json",
+            getSchemaWithBadAvroNamingForMapType(false), getSchemaWithBadAvroNamingForMapType(true))
+    );
+  }
+}

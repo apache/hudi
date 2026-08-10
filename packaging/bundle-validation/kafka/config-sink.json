@@ -1,0 +1,20 @@
+{
+  "name": "hudi-sink",
+  "config": {
+    "bootstrap.servers": "localhost:9092",
+    "connector.class": "org.apache.hudi.connect.HoodieSinkConnector",
+    "tasks.max": "2",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter.schemas.enable": "false",
+    "topics": "hudi-test-topic",
+    "hoodie.table.name": "hudi-test-topic",
+    "hoodie.table.type": "COPY_ON_WRITE",
+    "hoodie.base.path": "file:///tmp/hudi-kafka-test",
+    "hoodie.datasource.write.recordkey.field": "volume",
+    "hoodie.datasource.write.partitionpath.field": "date",
+    "hoodie.schemaprovider.class": "org.apache.hudi.schema.SchemaRegistryProvider",
+    "hoodie.deltastreamer.schemaprovider.registry.url": "http://localhost:8081/subjects/hudi-test-topic/versions/latest",
+    "hoodie.kafka.commit.interval.secs": 10
+  }
+}

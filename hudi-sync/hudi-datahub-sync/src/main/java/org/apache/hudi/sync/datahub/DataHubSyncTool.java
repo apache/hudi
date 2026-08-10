@@ -1,0 +1,128 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.hudi.sync.datahub;
+
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.HadoopConfigUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.sync.common.HoodieSyncTool;
+import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
+
+import com.beust.jcommander.JCommander;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.conf.Configuration;
+
+import java.util.Map;
+import java.util.Properties;
+
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
+import static org.apache.hudi.sync.datahub.DataHubTableProperties.HoodieTableMetadata;
+import static org.apache.hudi.sync.datahub.DataHubTableProperties.getTableProperties;
+
+/**
+ * To sync with DataHub via REST APIs.
+ *
+ * @Experimental
+ * @see <a href="https://datahubproject.io/">https://datahubproject.io/</a>
+ */
+@Slf4j
+public class DataHubSyncTool extends HoodieSyncTool {
+
+  protected final DataHubSyncConfig config;
+  protected final HoodieTableMetaClient metaClient;
+  protected DataHubSyncClient syncClient;
+  private final String tableName;
+
+  public DataHubSyncTool(Properties props) {
+    this(props, HadoopConfigUtils.createHadoopConf(props), Option.empty());
+  }
+
+  public DataHubSyncTool(Properties props, Configuration hadoopConf, Option<HoodieTableMetaClient> metaClientOption) {
+    super(props, hadoopConf);
+    this.config = new DataHubSyncConfig(props);
+    this.metaClient = metaClientOption.orElseGet(() -> buildMetaClient(config));
+    this.syncClient = new DataHubSyncClient(config, metaClient);
+    this.tableName = this.syncClient.getTableName();
+  }
+
+  @Override
+  public void syncHoodieTable() {
+    try {
+      log.info("Syncing target Hoodie table with DataHub dataset({}). DataHub URL: {}, basePath: {}",
+          tableName, config.getDataHubServerEndpoint(), config.getString(META_SYNC_BASE_PATH));
+
+      syncSchema();
+      syncTableProperties();
+      updateLastCommitTimeIfNeeded();
+
+      log.info("Sync completed for table {}", tableName);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to sync table " + tableName + " to DataHub", e);
+    } finally {
+      close();
+    }
+  }
+
+  private void syncSchema() {
+    syncClient.updateTableSchema(tableName, null, null);
+    log.info("Schema synced for table {}", tableName);
+  }
+
+  private void syncTableProperties() {
+    HoodieSchema storageSchema = syncClient.getStorageSchema();
+    HoodieTableMetadata tableMetadata = new HoodieTableMetadata(metaClient, storageSchema);
+    Map<String, String> tableProperties = getTableProperties(config, tableMetadata);
+    syncClient.updateTableProperties(tableName, tableProperties);
+    log.info("Properties synced for table {}", tableName);
+  }
+
+  private void updateLastCommitTimeIfNeeded() {
+    boolean shouldUpdateLastCommitTime = !config.getBoolean(META_SYNC_CONDITIONAL_SYNC);
+    if (shouldUpdateLastCommitTime) {
+      syncClient.updateLastCommitTimeSynced(tableName);
+      log.info("Updated last sync time for table {}", tableName);
+    }
+  }
+
+  @Override
+  public void close() {
+    if (syncClient != null) {
+      try {
+        syncClient.close();
+        syncClient = null;
+      } catch (Exception e) {
+        log.error("Error closing DataHub sync client", e);
+      }
+    }
+  }
+
+  public static void main(String[] args) {
+    final DataHubSyncConfig.DataHubSyncConfigParams params = new DataHubSyncConfig.DataHubSyncConfigParams();
+    JCommander cmd = JCommander.newBuilder().addObject(params).build();
+    cmd.parse(args);
+    if (params.isHelp()) {
+      cmd.usage();
+      System.exit(0);
+    }
+    new DataHubSyncTool(params.toProps()).syncHoodieTable();
+  }
+}

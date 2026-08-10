@@ -1,0 +1,103 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+{
+  "type": "record",
+  "name": "source_schema_tab",
+  "namespace": "hoodie.schema_registry",
+  "fields": [
+    {
+      "name": "id",
+      "type": [
+        "long",
+        "null"
+      ]
+    },
+    {
+      "name": "name",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    {
+      "name": "num1",
+      "type": [
+        "int",
+        "null"
+      ]
+    },
+    {
+      "name": "num2",
+      "type": [
+        "long",
+        "null"
+      ]
+    },
+    {
+      "name": "num3",
+      "type": [
+        {
+          "type": "fixed",
+          "name": "fixed",
+          "namespace": "hoodie.schema_registry.source_schema_tab.num3",
+          "size": 9,
+          "logicalType": "decimal",
+          "precision": 20,
+          "scale": 0
+        },
+        "null"
+      ]
+    },
+    {
+      "name": "num4",
+      "type": [
+        "int",
+        "null"
+      ]
+    },
+    {
+      "name": "num5",
+      "type": [
+        "float",
+        "null"
+      ]
+    },
+    {
+      "name": "num6",
+      "type": [
+        "double",
+        "null"
+      ]
+    },
+    {
+      "name": "bool",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    {
+      "name": "bin",
+      "type": [
+        "bytes",
+        "null"
+      ]
+    }
+  ]
+}

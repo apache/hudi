@@ -1,0 +1,128 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+{
+    "namespace": "gcs.schema",
+    "type": "record",
+    "name": "gcs_metadata",
+    "fields": [
+        {
+            "name": "_row_key",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "partition_path",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "timestamp",
+            "type": "long"
+        },
+        {
+            "name": "bucket",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "contentLanguage",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "contentType",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "crc32c",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "etag",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "generation",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "id",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "kind",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "md5Hash",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "mediaLink",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "metageneration",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "name",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "selfLink",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "size",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "storageClass",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "timeCreated",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "timeStorageClassUpdated",
+            "type": ["null", "string"],
+            "default": null
+        },
+        {
+            "name": "updated",
+            "type": ["null", "string"],
+            "default": null
+        }
+    ]
+}

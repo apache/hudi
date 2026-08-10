@@ -1,0 +1,188 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+{
+  "type": "record",
+  "name": "hoodie_source",
+  "namespace": "hoodie.source",
+  "fields": [
+    {
+      "name": "awsRegion",
+      "type": ["null", "string"],
+      "default": null
+    },
+    {
+      "name": "eventName",
+      "type": ["null", "string"],
+      "default": null
+    },
+    {
+      "name": "eventSource",
+      "type": ["null", "string"],
+      "default": null
+    },
+    {
+      "name": "eventTime",
+      "type": ["null", "string"],
+      "default": null
+    },
+    {
+      "name": "eventVersion",
+      "type": ["null", "string"],
+      "default": null
+    },
+    {
+      "name": "requestParameters",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "requestParameters",
+          "namespace": "hoodie.source.hoodie_source",
+          "fields": [
+            {
+              "name": "sourceIPAddress",
+              "type": ["null", "string"],
+              "default": null
+            }
+          ]
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "s3",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "s3",
+          "namespace": "hoodie.source.hoodie_source",
+          "fields": [
+            {
+              "name": "bucket",
+              "type": [
+                "null",
+                {
+                  "type": "record",
+                  "name": "bucket",
+                  "namespace": "hoodie.source.hoodie_source.s3",
+                  "fields": [
+                    {
+                      "name": "arn",
+                      "type": ["null", "string"],
+                      "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type": ["null", "string"],
+                      "default": null
+                    },
+                    {
+                      "name": "ownerIdentity",
+                      "type": [
+                        "null",
+                        {
+                          "type": "record",
+                          "name": "ownerIdentity",
+                          "namespace": "hoodie.source.hoodie_source.s3.bucket",
+                          "fields": [
+                            {
+                              "name": "principalId",
+                              "type": ["null", "string"],
+                              "default": null
+                            }
+                          ]
+                        }
+                      ],
+                      "default": null
+                    }
+                  ]
+                }
+              ],
+              "default": null
+            },
+            {
+              "name": "configurationId",
+              "type": ["null", "string"],
+              "default": null
+            },
+            {
+              "name": "object",
+              "type": [
+                "null",
+                {
+                  "type": "record",
+                  "name": "object",
+                  "namespace": "hoodie.source.hoodie_source.s3",
+                  "fields": [
+                    {
+                      "name": "eTag",
+                      "type": ["null", "string"],
+                      "default": null
+                    },
+                    {
+                      "name": "key",
+                      "type": ["null", "string"],
+                      "default": null
+                    },
+                    {
+                      "name": "sequencer",
+                      "type": ["null", "string"],
+                      "default": null
+                    },
+                    {
+                      "name": "size",
+                      "type": ["null", "long"],
+                      "default": null
+                    }
+                  ]
+                }
+              ],
+              "default": null
+            },
+            {
+              "name": "s3SchemaVersion",
+              "type": ["null", "string"],
+              "default": null
+            }
+          ]
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "userIdentity",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "userIdentity",
+          "namespace": "hoodie.source.hoodie_source",
+          "fields": [
+            {
+              "name": "principalId",
+              "type": ["null", "string"],
+              "default": null
+            }
+          ]
+        }
+      ],
+      "default": null
+    }
+  ]
+}

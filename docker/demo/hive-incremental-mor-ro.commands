@@ -1,0 +1,33 @@
+
+#  Licensed to the Apache Software Foundation (ASF) under one
+#  or more contributor license agreements.  See the NOTICE file
+#  distributed with this work for additional information
+#  regarding copyright ownership.  The ASF licenses this file
+#  to you under the Apache License, Version 2.0 (the
+#  "License"); you may not use this file except in compliance
+#  with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+# limitations under the License.
+
+add jar ${hudi.hadoop.bundle};
+
+set hoodie.stock_ticks_mor.consume.mode=INCREMENTAL;
+set hoodie.stock_ticks_mor.consume.max.commits=3;
+set hoodie.stock_ticks_mor.consume.start.timestamp='${min.commit.time}';
+
+select symbol, ts, volume, open, close  from stock_ticks_mor_ro where  symbol = 'GOOG' and `_hoodie_commit_time` > '${min.commit.time}';
+
+set hoodie.stock_ticks_mor_bs.consume.mode=INCREMENTAL;
+set hoodie.stock_ticks_mor_bs.consume.max.commits=3;
+set hoodie.stock_ticks_mor_bs.consume.start.timestamp='00000000000001';
+
+select symbol, ts, volume, open, close  from stock_ticks_mor_bs_ro where  symbol = 'GOOG' and `_hoodie_commit_time` > '00000000000001';
+
+!quit
+

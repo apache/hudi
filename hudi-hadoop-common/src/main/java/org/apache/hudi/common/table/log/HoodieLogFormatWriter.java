@@ -1,0 +1,343 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.hudi.common.table.log;
+
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.exception.ExceptionUtil;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+
+import lombok.Builder;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
+import org.apache.hadoop.ipc.RemoteException;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * HoodieLogFormatWriter can be used to append blocks to a log file Use HoodieLogFormat.WriterBuilder to construct.
+ */
+@Getter
+@Slf4j
+public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
+
+  private final Short replication;
+  private FSDataOutputStream outputStream;
+  private boolean closed = false;
+  private transient Thread shutdownThread = null;
+
+  @Builder(setterPrefix = "with")
+  private HoodieLogFormatWriter(
+      Integer bufferSize,
+      HoodieStorage storage,
+      StoragePath parentPath,
+      String logFileId,
+      String fileExtension,
+      String instantTime,
+      Integer logVersion,
+      String logWriteToken,
+      String suffix,
+      Long fileSize,
+      Long sizeThreshold,
+      LogFileCreationCallback fileCreationCallback,
+      HoodieTableVersion tableVersion,
+      Short replication
+  ) throws IOException {
+    super(bufferSize, storage, parentPath, logFileId, fileExtension, instantTime, logVersion, logWriteToken,
+        suffix, fileSize, sizeThreshold, fileCreationCallback, tableVersion);
+    // outputStream is not initialized here, it will be lazily initialized in getOutputStream()
+    this.replication = replication != null ? replication : storage.getDefaultReplication(logFile.getPath().getParent());
+    addShutDownHook();
+  }
+
+  /**
+   * Overrides the output stream, only for test purpose.
+   */
+  @VisibleForTesting
+  public void withOutputStream(FSDataOutputStream outputStream) {
+    this.outputStream = outputStream;
+  }
+
+  /**
+   * Lazily opens the output stream if needed for writing.
+   * @return OutputStream for writing to current log file.
+   * @throws IOException
+   */
+  private FSDataOutputStream getOutputStream() throws IOException {
+    if (outputStream == null) {
+      boolean created = false;
+      while (!created) {
+        try {
+          if (storage.exists(logFile.getPath())) {
+            rollOver();
+          }
+          // Block size does not matter as we will always manually auto-flush
+          createNewFile();
+          log.info("Created a new log file: {}", logFile);
+          created = true;
+        } catch (FileAlreadyExistsException ignored) {
+          log.info("File {} already exists, rolling over", logFile.getPath());
+          rollOver();
+        } catch (RemoteException re) {
+          if (re.getClassName().contentEquals(AlreadyBeingCreatedException.class.getName())) {
+            log.warn("Another task executor writing to the same log file({}), rolling over", logFile);
+            // Rollover the current log file (since cannot get a stream handle) and create new one
+            rollOver();
+          } else {
+            throw re;
+          }
+        }
+      }
+    }
+    return outputStream;
+  }
+
+  @Override
+  public AppendResult appendBlock(HoodieLogBlock block) throws IOException, InterruptedException {
+    return appendBlocks(Collections.singletonList(block));
+  }
+
+  @Override
+  public AppendResult appendBlocks(List<HoodieLogBlock> blocks) throws IOException {
+    try {
+      HoodieLogFormat.LogFormatVersion inlineLogFormatVersion =
+          new HoodieLogFormatVersion(HoodieLogFormat.INLINE_LOG_FORMAT_VERSION);
+
+      FSDataOutputStream originalOutputStream = getOutputStream();
+      long startPos = originalOutputStream.getPos();
+      long sizeWritten = 0;
+      // HUDI-2655. here we wrap originalOutputStream to ensure huge blocks can be correctly written
+      FSDataOutputStream outputStream = new FSDataOutputStream(originalOutputStream, new FileSystem.Statistics(storage.getScheme()), startPos);
+      for (HoodieLogBlock block: blocks) {
+        long startSize = outputStream.size();
+
+        // 1. Write the magic header for the start of the block
+        outputStream.write(HoodieLogFormat.MAGIC);
+
+        // bytes for header
+        byte[] headerBytes = HoodieLogBlock.getHeaderMetadataBytes(block.getLogBlockHeader());
+        // content bytes
+        ByteArrayOutputStream content = block.getContentBytes(storage);
+        // bytes for footer
+        byte[] footerBytes = HoodieLogBlock.getFooterMetadataBytes(block.getLogBlockFooter());
+
+        // 2. Write the total size of the block (excluding Magic)
+        outputStream.writeLong(getLogBlockLength(content.size(), headerBytes.length, footerBytes.length));
+
+        // 3. Write the version of this log block
+        outputStream.writeInt(inlineLogFormatVersion.getVersion());
+        // 4. Write the block type
+        outputStream.writeInt(block.getBlockType().ordinal());
+
+        // 5. Write the headers for the log block
+        outputStream.write(headerBytes);
+        // 6. Write the size of the content block
+        outputStream.writeLong(content.size());
+        // 7. Write the contents of the data block
+        content.writeTo(outputStream);
+        // 8. Write the footers for the log block
+        outputStream.write(footerBytes);
+        // 9. Write the total size of the log block (including magic) which is everything written
+        // until now (for reverse pointer)
+        // Update: this information is now used in determining if a block is corrupt by comparing to the
+        //   block size in header. This change assumes that the block size will be the last data written
+        //   to a block. Read will break if any data is written past this point for a block.
+        outputStream.writeLong(outputStream.size() - startSize);
+
+        // Fetch the size again, so it accounts also (9).
+
+        // HUDI-2655. Check the size written to avoid log blocks whose size overflow.
+        if (outputStream.size() == Integer.MAX_VALUE) {
+          throw new HoodieIOException("Blocks appended may overflow. Please decrease log block size or log block amount");
+        }
+        sizeWritten +=  outputStream.size() - startSize;
+      }
+      // No flush/hsync here: append-time visibility is not part of the contract.
+      // Downstream readers only need commit-level visibility, which is provided
+      // when the writer is closed (see closeStream) or when callers explicitly
+      // invoke sync().
+
+      AppendResult result = new AppendResult(logFile, startPos, sizeWritten);
+      // roll over if size is past the threshold
+      rolloverIfNeeded();
+      return result;
+    } catch (IOException | RuntimeException e) {
+      closeOutputStreamOnAppendFailure(e);
+      throw e;
+    }
+  }
+
+  /**
+   * This method returns the total LogBlock Length which is the sum of 1. Number of bytes to write version 2. Number of
+   * bytes to write ordinal 3. Length of the headers 4. Number of bytes used to write content length 5. Length of the
+   * content 6. Length of the footers 7. Number of bytes to write totalLogBlockLength
+   */
+  private int getLogBlockLength(int contentLength, int headerLength, int footerLength) {
+    return Integer.BYTES // Number of bytes to write version
+        + Integer.BYTES // Number of bytes to write ordinal
+        + headerLength // Length of the headers
+        + Long.BYTES // Number of bytes used to write content length
+        + contentLength // Length of the content
+        + footerLength // Length of the footers
+        + Long.BYTES; // bytes to write totalLogBlockLength at end of block (for reverse ptr)
+  }
+
+  private void rolloverIfNeeded() throws IOException {
+    // Roll over if the size is past the threshold
+    if (getCurrentSize() > getSizeThreshold()) {
+      log.info("CurrentSize {} has reached threshold {}. Rolling over to the next version", getCurrentSize(), getSizeThreshold());
+      rollOver();
+    }
+  }
+
+  private void rollOver() throws IOException {
+    closeStream();
+    this.logFile = getLogFile().rollOver(getLogWriteToken());
+    this.closed = false;
+  }
+
+  private void createNewFile() throws IOException {
+    getFileCreationCallback().preFileCreation(this.getLogFile());
+    this.outputStream = new FSDataOutputStream(
+        getStorage().create(
+            this.getLogFile().getPath(),
+            false,
+            getBufferSize(),
+            getReplication(),
+            // HDFS block size is intentionally a fixed constant, independent of the
+            // log rollover threshold (getSizeThreshold()). A small rollover threshold
+            // must not shrink the underlying file's block size below HDFS limits.
+            DEFAULT_SIZE_THRESHOLD
+        ),
+        new FileSystem.Statistics(getStorage().getScheme())
+    );
+  }
+
+  @Override
+  public void close() throws IOException {
+    try {
+      closeStream();
+    } finally {
+      // remove the shutdown hook after closing the stream to avoid memory leaks
+      if (null != shutdownThread) {
+        Runtime.getRuntime().removeShutdownHook(shutdownThread);
+        shutdownThread = null;
+      }
+    }
+  }
+
+  private void closeStream() throws IOException {
+    if (outputStream == null) {
+      return;
+    }
+
+    Throwable failure = null;
+    try {
+      // Persist all buffered data to DataNodes before closing so downstream
+      // readers can observe a fully-written log file at commit-level visibility.
+      sync();
+    } catch (IOException | RuntimeException e) {
+      failure = e;
+    }
+
+    try {
+      closeOutputStream();
+    } catch (IOException | RuntimeException closeException) {
+      if (failure != null) {
+        failure.addSuppressed(closeException);
+      } else {
+        failure = closeException;
+      }
+    }
+
+    if (failure != null) {
+      ExceptionUtil.throwAsIOExceptionOrRuntimeException(failure);
+    }
+  }
+
+  private void closeOutputStreamOnAppendFailure(Throwable failure) {
+    try {
+      closeOutputStream();
+    } catch (IOException | RuntimeException closeException) {
+      failure.addSuppressed(closeException);
+      log.warn("Failed to close output stream after append failure for log file {}", logFile, closeException);
+    }
+  }
+
+  private void closeOutputStream() throws IOException {
+    if (outputStream != null) {
+      try {
+        outputStream.close();
+      } finally {
+        outputStream = null;
+        closed = true;
+      }
+    }
+  }
+
+  @Override
+  public void sync() throws IOException {
+    if (outputStream == null) {
+      return; // Presume closed
+    }
+    outputStream.flush();
+    // NOTE: the following API call makes sure that the data is flushed to disk on DataNodes (akin to POSIX fsync())
+    // See more details here: https://issues.apache.org/jira/browse/HDFS-744
+    outputStream.hsync();
+  }
+
+  @Override
+  public long getCurrentSize() throws IOException {
+    if (closed) {
+      throw new IllegalStateException("Cannot get current size as the underlying stream has been closed already");
+    }
+
+    if (outputStream == null) {
+      return 0;
+    }
+    return outputStream.getPos();
+  }
+
+  /**
+   * Close the output stream when the JVM exits.
+   */
+  private void addShutDownHook() {
+    shutdownThread = new Thread(() -> {
+      try {
+        log.info("Running HoodieLogFormatWriter shutdown hook to close output stream for log file: {}", logFile);
+        closeStream();
+      } catch (Exception e) {
+        log.warn("Unable to close output stream for log file: {}", logFile, e);
+        // fail silently for any sort of exception
+      }
+    });
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
+  }
+}

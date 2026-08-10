@@ -1,0 +1,357 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.utilities;
+
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.client.BaseHoodieTableServiceClient;
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.TableServiceUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.exception.HoodieException;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.PURGE_PENDING_INSTANT;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
+
+@Slf4j
+public class HoodieClusteringJob {
+
+  private final Config cfg;
+  private final TypedProperties props;
+  private final JavaSparkContext jsc;
+  private HoodieTableMetaClient metaClient;
+
+  public HoodieClusteringJob(JavaSparkContext jsc, Config cfg) {
+    this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs),
+        UtilHelpers.createMetaClient(jsc, cfg.basePath, true));
+  }
+
+  public HoodieClusteringJob(JavaSparkContext jsc, Config cfg, TypedProperties props, HoodieTableMetaClient metaClient) {
+    this.cfg = cfg;
+    this.jsc = jsc;
+    this.props = props;
+    this.metaClient = metaClient;
+    // Disable async cleaning, will trigger synchronous cleaning manually.
+    this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
+    if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
+      // add default lock config options if MDT is enabled.
+      UtilHelpers.addLockOptions(cfg.basePath, this.metaClient.getBasePath().toUri().getScheme(), this.props);
+    }
+  }
+
+  public static class Config implements Serializable {
+    @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
+    public String basePath = null;
+    @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
+    public String tableName = null;
+    @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time, only used when set --mode execute. "
+        + "If the instant time is not provided with --mode execute, "
+        + "the earliest scheduled clustering instant time is used by default. "
+        + "When set \"--mode scheduleAndExecute\" this instant-time will be ignored.")
+    public String clusteringInstantTime = null;
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert")
+    public int parallelism = 1;
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
+    public String sparkMaster = null;
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
+    public String sparkMemory = null;
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
+    @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
+    public int retry = 0;
+    @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after clustering", required = false)
+    public Boolean skipClean = true;
+
+    @Parameter(names = {"--schedule", "-sch"}, description = "Schedule clustering @desperate soon please use \"--mode schedule\" instead")
+    public Boolean runSchedule = false;
+
+    @Parameter(names = {"--retry-last-failed-job", "-rc"}, description = "Take effect when using --mode/-m scheduleAndExecute. Set true means "
+        + "check, rollback and execute last failed clustering plan instead of planing a new clustering job directly.")
+    public Boolean retryLastFailedJob = false;
+
+    @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" means make a cluster plan; "
+        + "Set \"execute\" means execute a cluster plan at given instant which means --instant-time is needed here; "
+        + "Set \"scheduleAndExecute\" means make a cluster plan first and execute that plan immediately")
+    public String runningMode = null;
+
+    @Parameter(names = {"--help", "-h"}, help = true)
+    public Boolean help = false;
+
+    @Parameter(names = {"--job-max-processing-time-ms", "-jt"}, description = "Take effect when using --mode/-m scheduleAndExecute and --retry-last-failed-clustering-job/-rc true. "
+        + "If maxProcessingTimeMs passed but clustering job is still unfinished, hoodie would consider this job as failed and relaunch.")
+    public long maxProcessingTimeMs = 0;
+
+    @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
+        + "hoodie client for clustering")
+    public String propsFilePath = null;
+
+    @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
+        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
+        splitter = IdentitySplitter.class)
+    public List<String> configs = new ArrayList<>();
+
+    @Override
+    public String toString() {
+      return "HoodieClusteringJobConfig{\n"
+          + "   --base-path " + basePath + ", \n"
+          + "   --table-name " + tableName + ", \n"
+          + "   --instant-time " + clusteringInstantTime + ", \n"
+          + "   --parallelism " + parallelism + ", \n"
+          + "   --spark-master " + sparkMaster + ", \n"
+          + "   --spark-memory " + sparkMemory + ", \n"
+          + "   --retry " + retry + ", \n"
+          + "   --skipClean " + skipClean + ", \n"
+          + "   --schedule " + runSchedule + ", \n"
+          + "   --retry-last-failed-job " + retryLastFailedJob + ", \n"
+          + "   --mode " + runningMode + ", \n"
+          + "   --job-max-processing-time-ms " + maxProcessingTimeMs + ", \n"
+          + "   --props " + propsFilePath + ", \n"
+          + "   --hoodie-conf " + configs + ", \n"
+          + "\n}";
+    }
+  }
+
+  public static void main(String[] args) {
+    final Config cfg = new Config();
+    JCommander cmd = new JCommander(cfg, null, args);
+
+    if (cfg.help || args.length == 0) {
+      cmd.usage();
+      throw new HoodieException("Clustering failed for basePath: " + cfg.basePath);
+    }
+
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName,
+        cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport);
+    int result = new HoodieClusteringJob(jsc, cfg).cluster(cfg.retry);
+    String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runningMode: %s",
+        cfg.basePath, cfg.tableName, cfg.runningMode);
+    if (result != 0) {
+      throw new HoodieException(resultMsg + " failed");
+    }
+    log.info("{} success", resultMsg);
+    jsc.stop();
+  }
+
+  // make sure that cfg.runningMode couldn't be null
+  private static void validateRunningMode(Config cfg) {
+    // --mode has a higher priority than --schedule
+    // If we remove --schedule option in the future we need to change runningMode default value to EXECUTE
+    if (StringUtils.isNullOrEmpty(cfg.runningMode)) {
+      cfg.runningMode = cfg.runSchedule ? SCHEDULE : EXECUTE;
+    }
+  }
+
+  public int cluster(int retry) {
+    // need to do validate in case that users call cluster() directly without setting cfg.runningMode
+    validateRunningMode(cfg);
+    return UtilHelpers.retry(retry, () -> {
+      switch (cfg.runningMode.toLowerCase()) {
+        case SCHEDULE: {
+          log.info("Running Mode: [{}]; Do schedule", SCHEDULE);
+          Option<String> instantTime = doSchedule(jsc);
+          int result = instantTime.isPresent() ? 0 : -1;
+          if (result == 0) {
+            log.info("The schedule instant time is {}", instantTime.get());
+          }
+          return result;
+        }
+        case SCHEDULE_AND_EXECUTE: {
+          log.info("Running Mode: [{}]", SCHEDULE_AND_EXECUTE);
+          return doScheduleAndCluster(jsc);
+        }
+        case EXECUTE: {
+          log.info("Running Mode: [{}]; Do cluster", EXECUTE);
+          return doCluster(jsc);
+        }
+        case PURGE_PENDING_INSTANT: {
+          log.info("Running Mode: [{}];", PURGE_PENDING_INSTANT);
+          return doPurgePendingInstant(jsc);
+        }
+        default: {
+          log.error("Unsupported running mode [{}], quit the job directly", cfg.runningMode);
+          return -1;
+        }
+      }
+    }, "Cluster failed");
+  }
+
+  private int doCluster(JavaSparkContext jsc) throws Exception {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+      if (StringUtils.isNullOrEmpty(cfg.clusteringInstantTime)) {
+        Option<HoodieInstant> firstClusteringInstant =
+            metaClient.getActiveTimeline().getFirstPendingClusterInstant();
+        if (firstClusteringInstant.isPresent()) {
+          cfg.clusteringInstantTime = firstClusteringInstant.get().requestedTime();
+          log.info("Found the earliest scheduled clustering instant which will be executed: {}", cfg.clusteringInstantTime);
+        } else {
+          log.info("There is no scheduled clustering in the table.");
+          return 0;
+        }
+      }
+      Option<HoodieCommitMetadata> commitMetadata = client.cluster(cfg.clusteringInstantTime).getCommitMetadata();
+      clean(client);
+      return UtilHelpers.handleErrors(commitMetadata.get(), cfg.clusteringInstantTime);
+    }
+  }
+
+  @VisibleForTesting
+  public Option<String> doSchedule() throws Exception {
+    return this.doSchedule(jsc);
+  }
+
+  private Option<String> doSchedule(JavaSparkContext jsc) throws Exception {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+      return doSchedule(client);
+    }
+  }
+
+  private Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client) {
+    return client.scheduleClustering(Option.empty());
+  }
+
+  private int doScheduleAndCluster(JavaSparkContext jsc) throws Exception {
+    log.info("Step 1: Do schedule");
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+      Option<String> instantTime = Option.empty();
+
+      if (cfg.retryLastFailedJob) {
+        Option<HoodieInstant> staleInstant = TableServiceUtils.findStaleInflightInstant(
+            metaClient, HoodieTimeline.CLUSTERING_ACTION, cfg.maxProcessingTimeMs);
+        if (staleInstant.isPresent()) {
+          log.info("Found failed clustering instant at : {}; Will rollback the failed clustering and re-trigger again.", staleInstant.get());
+          instantTime = Option.of(staleInstant.get().requestedTime());
+        }
+      }
+
+      instantTime = instantTime.isPresent() ? instantTime : doSchedule(client);
+      if (!instantTime.isPresent()) {
+        log.info("Couldn't generate cluster plan");
+        return -1;
+      }
+
+      log.info("The schedule instant time is {}", instantTime.get());
+      log.info("Step 2: Do cluster");
+      Option<HoodieCommitMetadata> metadata = client.cluster(instantTime.get()).getCommitMetadata();
+      clean(client);
+      return UtilHelpers.handleErrors(metadata.get(), instantTime.get());
+    }
+  }
+
+  private int doPurgePendingInstant(JavaSparkContext jsc) throws Exception {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+      client.purgePendingClustering(cfg.clusteringInstantTime);
+    }
+    return 0;
+  }
+
+  /**
+   * Returns the pending clustering instants that target any of the given partitions.
+   *
+   * @param metaClient the table meta client
+   * @param partitions list of partition paths to check against pending clustering plans
+   * @return list of clustering instants targeting the given partitions
+   */
+  public static List<HoodieInstant> getPendingClusteringInstantsForPartitions(
+      HoodieTableMetaClient metaClient,
+      List<String> partitions) {
+    Set<String> partitionSet = new HashSet<>(partitions);
+    Set<String> matchingInstantTimes = ClusteringUtils.getAllPendingClusteringPlans(metaClient)
+        .filter(planPair -> {
+          HoodieClusteringPlan plan = planPair.getRight();
+          return plan.getInputGroups().stream()
+              .flatMap(group -> group.getSlices().stream())
+              .map(slice -> slice.getPartitionPath())
+              .anyMatch(partitionSet::contains);
+        })
+        .map(planPair -> planPair.getLeft().requestedTime())
+        .collect(Collectors.toSet());
+    return metaClient.getActiveTimeline().filterInflightsAndRequested()
+        .getInstantsAsStream()
+        .filter(instant -> matchingInstantTimes.contains(instant.requestedTime()))
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Rolls back pending clustering instants that target any of the given partitions,
+   * are eligible for rollback (config enabled, old enough, and a clustering instant),
+   * and whose heartbeat has expired (indicating the clustering job is no longer alive).
+   *
+   * @param client     the write client to use for rollback operations
+   * @param metaClient the table meta client
+   * @param partitions list of partition paths to check against pending clustering plans
+   */
+  public static void rollbackFailedClusteringForPartitions(
+      SparkRDDWriteClient<?> client,
+      HoodieTableMetaClient metaClient,
+      List<String> partitions) {
+    for (HoodieInstant instant : getPendingClusteringInstantsForPartitions(metaClient, partitions)) {
+      if (!BaseHoodieTableServiceClient.isClusteringInstantEligibleForRollback(
+          metaClient, instant, client.getConfig(), client.getHeartbeatClient())) {
+        throw new HoodieException("Clustering instant " + instant.requestedTime()
+            + " targeting requested partitions is not eligible for rollback "
+            + "(heartbeat still active or instant too recent)");
+      }
+      // Reload timeline to handle the case where the instant committed and cleaned up
+      // its heartbeat after the timeline was first loaded
+      metaClient.reloadActiveTimeline();
+      if (metaClient.getActiveTimeline().filterInflightsAndRequested()
+          .containsInstant(instant.requestedTime())) {
+        log.info("Rolling back expired clustering instant {}", instant.requestedTime());
+        client.rollback(instant.requestedTime());
+      }
+    }
+  }
+
+  private void clean(SparkRDDWriteClient<?> client) {
+    if (!cfg.skipClean && client.getConfig().isAutoClean()) {
+      client.clean();
+    }
+  }
+}

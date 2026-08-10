@@ -1,0 +1,58 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.hive;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class TestMultiPartKeysValueExtractor {
+
+  @Test
+  public void testMultiPartExtractor() {
+    MultiPartKeysValueExtractor valueExtractor = new MultiPartKeysValueExtractor();
+    // Test extract empty partitionPath
+    assertEquals(new ArrayList<>(), valueExtractor.extractPartitionValuesInPath(""));
+    List<String> expected = new ArrayList<>();
+    expected.add("2021-04-25");
+    expected.add("04");
+    // Test extract multi-partition path
+    assertEquals(expected, valueExtractor.extractPartitionValuesInPath("2021-04-25/04"));
+    // Test extract hive style partition path
+    assertEquals(expected, valueExtractor.extractPartitionValuesInPath("ds=2021-04-25/hh=04"));
+  }
+
+  @Test
+  public void testValuesContainingEquals() {
+    MultiPartKeysValueExtractor valueExtractor = new MultiPartKeysValueExtractor();
+    // Only the first '=' separates key from value, so a value containing '=' is kept intact.
+    assertEquals(Collections.singletonList("a=b"), valueExtractor.extractPartitionValuesInPath("k=a=b"));
+    // base64-encoded value with '=' padding must not be truncated
+    assertEquals(Collections.singletonList("YWJjZA=="), valueExtractor.extractPartitionValuesInPath("col=YWJjZA=="));
+    // empty value
+    assertEquals(Collections.singletonList(""), valueExtractor.extractPartitionValuesInPath("dt="));
+    // multiple hive-style parts whose values contain '='
+    assertEquals(Arrays.asList("a=b", "YWJj=="), valueExtractor.extractPartitionValuesInPath("k1=a=b/k2=YWJj=="));
+  }
+}

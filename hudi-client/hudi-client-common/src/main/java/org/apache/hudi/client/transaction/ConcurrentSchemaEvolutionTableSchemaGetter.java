@@ -1,0 +1,248 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.client.transaction;
+
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.InstantComparator;
+import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+
+import lombok.extern.slf4j.Slf4j;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+
+/**
+ * Helper class to read table schema. ONLY USE IT FOR SimpleConcurrentFileWritesConflictResolutionStrategy.
+ */
+@Slf4j
+class ConcurrentSchemaEvolutionTableSchemaGetter {
+
+  protected final HoodieTableMetaClient metaClient;
+
+  private final Lazy<ConcurrentHashMap<HoodieInstant, HoodieSchema>> tableSchemaCache;
+
+  private final InstantComparator instantComparator;
+
+  private Option<HoodieInstant> latestCommitWithValidSchema = Option.empty();
+
+  @VisibleForTesting
+  public ConcurrentHashMap<HoodieInstant, HoodieSchema> getTableSchemaCache() {
+    return tableSchemaCache.get();
+  }
+
+  public ConcurrentSchemaEvolutionTableSchemaGetter(HoodieTableMetaClient metaClient) {
+    this.metaClient = metaClient;
+    this.instantComparator = metaClient.getTimelineLayout().getInstantComparator();
+    // Unbounded sized map. Should replace with some caching library.
+    this.tableSchemaCache = Lazy.lazily(ConcurrentHashMap::new);
+  }
+
+  /**
+   * Returns the timestamp ordering the instant in the schema evolution timeline.
+   */
+  String getOrderingTime(HoodieInstant instant) {
+    return instantComparator.getOrderingTime(instant);
+  }
+
+  /**
+   * Handles partition column logic for a given schema.
+   *
+   * @param schema the input schema to process
+   * @return the processed schema with partition columns handled appropriately
+   */
+  private HoodieSchema handlePartitionColumnsIfNeeded(HoodieSchema schema) {
+    if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
+      return metaClient.getTableConfig().getPartitionFields()
+          .map(partitionFields -> TableSchemaResolver.appendPartitionColumns(schema, Option.ofNullable(partitionFields)))
+          .orElseGet(() -> schema);
+    }
+    return schema;
+  }
+
+  public Option<HoodieSchema> getTableSchemaIfPresent(boolean includeMetadataFields, Option<HoodieInstant> instant) {
+    return getTableSchemaFromTimelineWithCache(instant) // Get table schema from schema evolution timeline.
+        .or(this::getTableCreateSchemaWithoutMetaField) // Fall back: read create schema from table config.
+        .map(tableSchema -> includeMetadataFields ? HoodieSchemaUtils.addMetadataFields(tableSchema, false) : HoodieSchemaUtils.removeMetadataFields(tableSchema))
+        .map(this::handlePartitionColumnsIfNeeded);
+  }
+
+  private Option<HoodieSchema> getTableCreateSchemaWithoutMetaField() {
+    return metaClient.getTableConfig().getTableCreateSchema();
+  }
+
+  private void setCachedLatestCommitWithValidSchema(Option<HoodieInstant> instantOption) {
+    latestCommitWithValidSchema = instantOption;
+  }
+
+  private Option<HoodieInstant> getCachedLatestCommitWithValidSchema() {
+    return latestCommitWithValidSchema;
+  }
+
+  @VisibleForTesting
+  Option<HoodieSchema> getTableSchemaFromTimelineWithCache(Option<HoodieInstant> instantTime) {
+    return getTableSchemaFromTimelineWithCache(computeSchemaEvolutionTimelineInReverseOrder(), instantTime);
+  }
+
+  // [HUDI-9112] simplify the logic
+  Option<HoodieSchema> getTableSchemaFromTimelineWithCache(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instantTime) {
+    // If instantTime is empty it means read the latest one. In that case, get the cached instant if there is one.
+    boolean fetchFromLastValidCommit = instantTime.isEmpty();
+    Option<HoodieInstant> targetInstant = instantTime.or(getCachedLatestCommitWithValidSchema());
+    HoodieSchema cachedTableSchema = null;
+
+    // Try cache first if there is a target instant to fetch for.
+    if (!targetInstant.isEmpty()) {
+      cachedTableSchema = tableSchemaCache.get().getOrDefault(targetInstant.get(), null);
+    }
+
+    // Cache miss on either latestCommitWithValidSchema or commitMetadataCache. Compute the result.
+    if (cachedTableSchema == null) {
+      Option<Pair<HoodieInstant, HoodieSchema>> instantWithSchema = getLastCommitMetadataWithValidSchemaFromTimeline(reversedTimelineStream, targetInstant);
+      if (instantWithSchema.isPresent()) {
+        targetInstant = Option.of(instantWithSchema.get().getLeft());
+        cachedTableSchema = instantWithSchema.get().getRight();
+      }
+    }
+
+    // After computation, update the cache for the instant and commit metadata.
+    if (fetchFromLastValidCommit) {
+      setCachedLatestCommitWithValidSchema(targetInstant);
+    }
+    if (cachedTableSchema != null) {
+      // We save cache for 2 cases
+      // - input specifies a specific instant, we update the cache for that instant, which is instantTime.
+      // - input is empty implying fetch the latest schema, update the cache for the
+      //   latest valid commit which is targetInstant
+      if (instantTime.isPresent()) {
+        tableSchemaCache.get().putIfAbsent(instantTime.get(), cachedTableSchema);
+      }
+      if (targetInstant.isPresent()) {
+        tableSchemaCache.get().putIfAbsent(targetInstant.get(), cachedTableSchema);
+      }
+    }
+
+    // Finally process the computation results and return.
+    return cachedTableSchema == null ? Option.empty() : Option.of(cachedTableSchema);
+  }
+
+  @VisibleForTesting
+  Option<Pair<HoodieInstant, HoodieSchema>> getLastCommitMetadataWithValidSchemaFromTimeline(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instant) {
+    // To find the table schema given an instant time, need to walk backwards from the latest instant in
+    // the timeline finding a completed instant containing a valid schema.
+    ConcurrentHashMap<HoodieInstant, HoodieSchema> tableSchemaAtInstant = new ConcurrentHashMap<>();
+    Option<HoodieInstant> instantWithTableSchema = Option.fromJavaOptional(reversedTimelineStream
+        // Find the first eligible instant whose ordering time is no later than the target instant's;
+        // a target instant without an ordering time (not completed yet, on table version 8 and above)
+        // does not bound the lookup.
+        .filter(s -> instant.isEmpty() || StringUtils.isNullOrEmpty(getOrderingTime(instant.get()))
+            || compareTimestamps(getOrderingTime(s), LESSER_THAN_OR_EQUALS, getOrderingTime(instant.get())))
+        // Make sure the commit metadata has a valid schema inside. Same caching the result for expensive operation.
+        .filter(s -> {
+          try {
+            // If we processed the instant before, do not parse the commit metadata again.
+            if (tableSchemaCache.get().containsKey(s)) {
+              tableSchemaAtInstant.putIfAbsent(s, tableSchemaCache.get().get(s));
+              return true;
+            }
+            HoodieCommitMetadata metadata = metaClient.getActiveTimeline().readCommitMetadata(s);
+            String schemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
+            boolean isValidSchemaStr = !StringUtils.isNullOrEmpty(schemaStr);
+            if (isValidSchemaStr) {
+              tableSchemaAtInstant.putIfAbsent(s, HoodieSchema.parse(schemaStr));
+            }
+            return isValidSchemaStr;
+          } catch (IOException e) {
+            log.warn("Failed to parse commit metadata for instant {} ", s, e);
+          }
+          return false;
+        })
+        .findFirst());
+
+    if (instantWithTableSchema.isEmpty()) {
+      return Option.empty();
+    }
+    return Option.of(Pair.of(instantWithTableSchema.get(), tableSchemaAtInstant.get(instantWithTableSchema.get())));
+  }
+
+  /**
+   * Get timeline in REVERSE order that only contains completed instants which POTENTIALLY evolve the table schema.
+   * The stream follows the timeline layout's instant ordering, newest first (completion time for
+   * layout v2, requested time for v1).
+   * For types of instants that are included and not reflecting table schema at their instant completion time please refer
+   * comments inside the code.
+   */
+  public Stream<HoodieInstant> computeSchemaEvolutionTimelineInReverseOrder() {
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    Stream<HoodieInstant> timelineStream = timeline.getInstantsAsStream();
+    final Set<String> actions;
+    switch (metaClient.getTableType()) {
+      case COPY_ON_WRITE: {
+        actions = new HashSet<>(Arrays.asList(COMMIT_ACTION, REPLACE_COMMIT_ACTION));
+        break;
+      }
+      case MERGE_ON_READ: {
+        actions = new HashSet<>(Arrays.asList(DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION));
+        break;
+      }
+      default:
+        throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
+    }
+
+    // We only care committed instant when it comes to table schema.
+    Comparator<HoodieInstant> reversedComparator = instantComparator.orderingComparator().reversed();
+
+    // The timeline still contains DELTA_COMMIT_ACTION/COMMIT_ACTION which might not contain a valid schema
+    // field in their commit metadata.
+    // Since the operations of filtering them out are expensive, we should do on-demand stream based
+    // filtering when we actually need the table schema.
+    Stream<HoodieInstant> reversedTimelineWithTableSchema = timelineStream
+        // Only focuses on those who could potentially evolve the table schema.
+        .filter(instant -> actions.contains(instant.getAction()))
+        // Further filtering out clustering operations as it does not evolve table schema.
+        .filter(instant -> !ClusteringUtils.isClusteringInstant(timeline, instant, metaClient.getInstantGenerator()))
+        .filter(HoodieInstant::isCompleted)
+        // We reverse the order as the operation against this timeline would be very efficient if
+        // we always start from the tail.
+        .sorted(reversedComparator);
+    return reversedTimelineWithTableSchema;
+  }
+}

@@ -1,0 +1,114 @@
+# Directories #
+/build/
+target/
+metastore_db/
+.metals/
+# Track the repo-root .mvn/extensions.xml: that directory must exist for
+# maven.multiModuleProjectDirectory to resolve to the repo root when a build runs from inside a
+# submodule (HUDI-6111).
+# Keep the un-anchored `.mvn/` entry. A pattern containing a slash is anchored to this file's
+# directory, so narrowing it to `.mvn/*` would stop matching nested .mvn directories -- and
+# apache-rat reads .gitignore, so that un-hides hudi-trino/.mvn/modernizer/*.xml, which are tracked
+# without ASF headers, and validate-source fails.
+.mvn/
+!/.mvn/
+/.mvn/*
+!/.mvn/extensions.xml
+*.bloop/
+*.vscode/
+*.metals/
+
+# OS Files #
+.DS_Store
+ 
+*.class
+.java-version
+ 
+# Package Files #
+*.jar
+# But not these files...
+!/hoodie-cli/lib/dnl/utils/textutils/0.3.3/textutils-0.3.3.jar
+*.war
+*.ear
+*.db
+*.patch 
+ 
+######################
+# OSX
+######################
+ 
+.DS_Store
+ 
+# Thumbnails
+._*
+ 
+######################
+# Eclipse
+######################
+ 
+*.pydevproject
+.project
+.metadata
+tmp/**
+tmp/**/*
+*.tmp
+*.bak
+*.swp
+*.pyc
+*~.nib
+local.properties
+.classpath
+.settings/
+.loadpath
+/src/main/resources/rebel.xml
+# External tool builders
+.externalToolBuilders/
+ 
+# Locally stored "Eclipse launch configurations"
+*.launch
+ 
+# CDT-specific
+.cproject
+ 
+# PDT-specific
+.buildpath
+
+#######################################
+# IntelliJ specific files/directories #
+#######################################
+.out
+.idea/*
+!.idea/vcs.xml
+!.idea/icon.png
+*.ipr
+*.iws
+*.iml
+*.log
+
+#######################################
+# Maven
+#######################################
+dependency-reduced-pom.xml
+
+
+#######################################
+# Docker
+#######################################
+hudi-integ-test/compose_env
+node_modules
+package-lock.json
+
+# Spark Binaries used for testing
+hudi-spark-datasource/hudi-spark/src/test/resources/upgrade-downgrade-fixtures/spark-versions/
+
+#######################################
+# AI Tools
+#######################################
+CLAUDE.md
+.claude
+.codex
+
+#######################################
+# Python virtual environments
+#######################################
+.venv/

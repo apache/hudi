@@ -1,0 +1,87 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.schema;
+
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIMethod;
+import org.apache.hudi.common.schema.HoodieSchema;
+
+import org.apache.avro.Schema;
+
+import java.io.Serializable;
+
+/**
+ * Class to provide schema for reading data and also writing into a Hoodie table.
+ * This class mirrors org.apache.hudi.utilities.schema.SchemaProvider.
+ */
+public abstract class SchemaProvider implements Serializable {
+
+  private static final long serialVersionUID = 1L;
+
+  /**
+   * Fetches the source schema from the provider.
+   * @return Source schema as a HoodieSchema object.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  public HoodieSchema getSourceHoodieSchema() {
+    Schema schema = getSourceSchema();
+    return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
+  }
+
+  /**
+   * Fetches the source schema from the provider.
+   * @return Source schema as an Avro Schema object.
+   * @deprecated since 1.2.0, use {@link #getSourceHoodieSchema()} instead.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
+  @Deprecated
+  public Schema getSourceSchema() {
+    throw new UnsupportedOperationException("getSourceSchema() is deprecated and is not implemented for this SchemaProvider. Use getSourceHoodieSchema() instead.");
+  }
+
+  /**
+   * Fetches the target schema from the provider, defaults to the source schema.
+   * @return Target schema as a HoodieSchema object.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  public HoodieSchema getTargetHoodieSchema() {
+    try {
+      // By default, delegate to legacy getTargetSchema() method
+      Schema schema = getTargetSchema();
+      return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
+    } catch (UnsupportedOperationException e) {
+      // If the legacy getTargetSchema() calls getSourceSchema() which is not implemented,
+      // fall back to using getSourceHoodieSchema as target schema
+      return getSourceHoodieSchema();
+    }
+  }
+
+  /**
+   * Fetches the target schema from the provider, defaults to the source schema.
+   * @return Target schema as an Avro Schema object.
+   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
+  @Deprecated
+  public Schema getTargetSchema() {
+    // by default, use source schema as target for hoodie table as well
+    return getSourceSchema();
+  }
+
+}

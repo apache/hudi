@@ -1,0 +1,9 @@
+
+blank_issues_enabled: true
+contact_links:
+  - name: FAQ 📋
+    url: https://hudi.apache.org/docs/faq
+    about: Checkout frequently asked questions before filing an issue.
+  - name: Questions? 💬
+    url: https://github.com/apache/hudi/discussions
+    about: Start discussion here (OR) join the Hudi Slack

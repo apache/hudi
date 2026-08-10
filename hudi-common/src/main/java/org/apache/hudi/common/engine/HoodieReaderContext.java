@@ -1,0 +1,368 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.hudi.common.engine;
+
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.expression.Predicate;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
+import org.apache.hudi.common.serialization.CustomSerializer;
+import org.apache.hudi.common.serialization.DefaultSerializer;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.table.read.IteratorMode;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableFilterIterator;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+
+import lombok.Getter;
+import lombok.Setter;
+import lombok.experimental.Accessors;
+
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
+
+/**
+ * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
+ * engine-specific implementation on reading data files, getting field values from a record,
+ * transforming a record, etc.
+ * <p>
+ * For each query engine, this class should be extended and plugged into {@code HoodieFileGroupReader}
+ * to realize the file group reading.
+ *
+ * @param <T> The type of engine-specific record representation, e.g.,{@code InternalRow} in Spark
+ *            and {@code RowData} in Flink.
+ */
+public abstract class HoodieReaderContext<T> {
+
+  @Getter
+  private final StorageConfiguration<?> storageConfiguration;
+  protected final HoodieFileFormat baseFileFormat;
+  // For general predicate pushdown.
+  @Getter
+  protected final Option<Predicate> keyFilterOpt;
+  protected final HoodieTableConfig tableConfig;
+  @Setter
+  private String tablePath = null;
+  @Getter
+  @Setter
+  private String latestCommitTime = null;
+  @Getter
+  @Setter
+  private Option<HoodieRecordMerger> recordMerger = null;
+  @Getter
+  @Setter
+  private Boolean hasLogFiles = null;
+  @Getter
+  @Setter
+  private Boolean hasBootstrapBaseFile = null;
+  @Getter
+  @Setter
+  private Boolean needsBootstrapMerge = null;
+
+  @Getter
+  @Setter
+  // should we do position based merging for mor
+  private Boolean shouldMergeUseRecordPosition = null;
+  protected Option<InstantRange> instantRangeOpt;
+  @Getter
+  private RecordMergeMode mergeMode;
+  @Getter
+  protected RecordContext<T> recordContext;
+  @Getter
+  @Setter
+  private FileGroupReaderSchemaHandler<T> schemaHandler = null;
+  // the default iterator mode is engine-specific record mode
+  @Setter
+  private IteratorMode iteratorMode = IteratorMode.ENGINE_RECORD;
+  @Getter
+  protected final HoodieConfig hoodieReaderConfig;
+  @Getter
+  @Setter
+  @Accessors(fluent = true)
+  private Boolean enableLogicalTimestampFieldRepair = true;
+
+  protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> keyFilterOpt,
+      RecordContext<T> recordContext) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, keyFilterOpt, recordContext, ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER);
+  }
+
+  protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
+                                HoodieTableConfig tableConfig,
+                                Option<InstantRange> instantRangeOpt,
+                                Option<Predicate> keyFilterOpt,
+                                RecordContext<T> recordContext,
+                                HoodieConfig hoodieReaderConfig) {
+    this.tableConfig = tableConfig;
+    this.storageConfiguration = storageConfiguration;
+    this.baseFileFormat = tableConfig.getBaseFileFormat();
+    this.instantRangeOpt = instantRangeOpt;
+    this.keyFilterOpt = keyFilterOpt;
+    this.recordContext = recordContext;
+    this.hoodieReaderConfig = hoodieReaderConfig;
+  }
+
+  public IteratorMode getIteratorMode() {
+    ValidationUtils.checkArgument(iteratorMode != null, "iterator mode should not be null!");
+    return this.iteratorMode;
+  }
+
+  public String getTablePath() {
+    if (tablePath == null) {
+      throw new IllegalStateException("Table path not set in reader context.");
+    }
+    return tablePath;
+  }
+
+  public TypedProperties getMergeProps(TypedProperties props) {
+    return ConfigUtils.getMergeProps(props, this.tableConfig);
+  }
+
+  public SizeEstimator<BufferedRecord<T>> getRecordSizeEstimator() {
+    return new HoodieRecordSizeEstimator<>(getSchemaHandler().getSchemaForUpdates());
+  }
+
+  public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
+    return new DefaultSerializer<>();
+  }
+
+  /**
+   * Gets the record iterator based on the type of engine-specific record representation from the
+   * file.
+   *
+   * @param filePath       {@link StoragePath} instance of a file.
+   * @param start          Starting byte to start reading.
+   * @param length         Bytes to read.
+   * @param dataSchema     Schema of records in the file in {@link HoodieSchema}.
+   * @param requiredSchema Schema containing required fields to read in {@link HoodieSchema} for projection.
+   * @param storage        {@link HoodieStorage} for reading records.
+   * @return {@link ClosableIterator<T>} that can return all records through iteration.
+   */
+  public abstract ClosableIterator<T> getFileRecordIterator(
+      StoragePath filePath, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
+      HoodieStorage storage) throws IOException;
+
+  /**
+   * Gets the record iterator based on the type of engine-specific record representation from the
+   * file.
+   *
+   * @param storagePathInfo {@link StoragePathInfo} instance of a file.
+   * @param start           Starting byte to start reading.
+   * @param length          Bytes to read.
+   * @param dataSchema      Schema of records in the file in {@link HoodieSchema}.
+   * @param requiredSchema  Schema containing required fields to read in {@link HoodieSchema} for projection.
+   * @param storage         {@link HoodieStorage} for reading records.
+   * @return {@link ClosableIterator<T>} that can return all records through iteration.
+   */
+  public ClosableIterator<T> getFileRecordIterator(
+      StoragePathInfo storagePathInfo, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
+      HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, storage);
+  }
+
+  /**
+   * Optionally returns an iterator over records matching the given keys directly from the file.
+   *
+   * <p>Reader contexts can override this when the underlying engine-specific reader supports key
+   * seeking. The default implementation scans the file and filters records by key.
+   */
+  public ClosableIterator<T> lookupRecords(
+      StoragePath filePath,
+      HoodieFileFormat fileFormat,
+      HoodieSchema readerSchema,
+      HoodieStorage storage,
+      List<String> keys,
+      boolean fullKey) throws IOException {
+    ClosableIterator<T> fileRecordIterator = getFileRecordIterator(
+        filePath, 0, FSUtils.getFileSize(storage, filePath), readerSchema, readerSchema, storage);
+    if (keys.isEmpty()) {
+      return fileRecordIterator;
+    }
+
+    HashSet<String> keySet = new HashSet<>(keys);
+    return new CloseableFilterIterator<>(fileRecordIterator, record -> {
+      String recordKey = recordContext.getRecordKey(record, readerSchema);
+      if (recordKey == null) {
+        throw new IllegalStateException(String.format("Record without a key (%s)", record));
+      }
+      return fullKey ? keySet.contains(recordKey) : keys.stream().anyMatch(recordKey::startsWith);
+    });
+  }
+
+  /**
+   * @param mergeMode        record merge mode
+   * @param mergeStrategyId  record merge strategy ID
+   * @param mergeImplClasses custom implementation classes for record merging
+   *
+   * @return {@link HoodieRecordMerger} to use.
+   */
+  protected abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses);
+
+  /**
+   * Initializes the record merger based on the table configuration and properties.
+   * @param properties the properties for the reader.
+   */
+  public void initRecordMerger(TypedProperties properties) {
+    initRecordMerger(properties, false);
+  }
+
+  public void initRecordMergerForIngestion(TypedProperties properties) {
+    initRecordMerger(properties, true);
+  }
+
+  /**
+   * Initializes the record merger based on the table configuration and properties.
+   * @param properties the properties for the reader.
+   * @param isIngestion indicates if the context is used in ingestion path.
+   */
+  private void initRecordMerger(TypedProperties properties, boolean isIngestion) {
+    if (recordMerger != null && mergeMode != null) {
+      // already initialized
+      return;
+    }
+    Option<String> writerPayloadClass = HoodieRecordPayload.getWriterPayloadOverride(properties);
+    RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
+    String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
+    HoodieTableVersion tableVersion = tableConfig.getTableVersion();
+    // If the provided payload class differs from the table's payload class, we need to infer the correct merging behavior.
+    if (isIngestion && writerPayloadClass.map(className -> !className.equals(tableConfig.getPayloadClass())).orElse(false)) {
+      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+        Map<String, String> mergeProperties = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+            null, writerPayloadClass.get(), null, tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
+        recordMergeMode = RecordMergeMode.valueOf(mergeProperties.get(RECORD_MERGE_MODE.key()));
+        mergeStrategyId = mergeProperties.get(RECORD_MERGE_STRATEGY_ID.key());
+      } else {
+        Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferMergingConfigsForWrites(
+            null, writerPayloadClass.get(), null, tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
+        recordMergeMode = triple.getLeft();
+        mergeStrategyId = triple.getRight();
+      }
+    } else if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      Triple<RecordMergeMode, String, String> triple = inferMergingConfigsForPreV9Table(
+          recordMergeMode, tableConfig.getPayloadClass(),
+          mergeStrategyId, tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
+      recordMergeMode = triple.getLeft();
+      mergeStrategyId = triple.getRight();
+    }
+    this.mergeMode = recordMergeMode;
+    this.recordMerger = getRecordMerger(recordMergeMode, mergeStrategyId,
+        properties.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
+            properties.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, "")));
+  }
+
+  /**
+   * Get the {@link InstantRange} filter.
+   */
+  public Option<InstantRange> getInstantRange() {
+    return instantRangeOpt;
+  }
+
+  /**
+   * Apply the {@link InstantRange} filter to the file record iterator.
+   *
+   * @param fileRecordIterator File record iterator.
+   *
+   * @return File record iterator filter by {@link InstantRange}.
+   */
+  public ClosableIterator<T> applyInstantRangeFilter(ClosableIterator<T> fileRecordIterator) {
+    // For metadata table, no need to apply instant range to base file.
+    if (HoodieTableMetadata.isMetadataTable(tablePath)) {
+      return fileRecordIterator;
+    }
+    InstantRange instantRange = getInstantRange().get();
+    final Option<HoodieSchemaField> commitTimeFieldOpt = getSchemaHandler().getRequiredSchema().getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    final int commitTimePos = commitTimeFieldOpt.orElseThrow(() ->
+        new HoodieSchemaException("Commit time metadata field '" + HoodieRecord.COMMIT_TIME_METADATA_FIELD + "' not found in required schema")).pos();
+    java.util.function.Predicate<T> instantFilter =
+        row -> instantRange.isInRange(recordContext.getMetaFieldValue(row, commitTimePos));
+    return new CloseableFilterIterator<>(fileRecordIterator, instantFilter);
+  }
+
+  /**
+   * Merge the skeleton file and data file iterators into a single iterator that will produce rows that contain all columns from the
+   * skeleton file iterator, followed by all columns in the data file iterator
+   *
+   * @param skeletonFileIterator iterator over bootstrap skeleton files that contain hudi metadata columns
+   * @param skeletonRequiredSchema the HoodieSchema of the skeleton file iterator
+   * @param dataFileIterator iterator over data files that were bootstrapped into the hudi table
+   * @param dataRequiredSchema the HoodieSchema of the data file iterator
+   * @param requiredPartitionFieldAndValues the partition field names and their values that are required by the query
+   * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
+   */
+  public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator,
+                                                            HoodieSchema skeletonRequiredSchema,
+                                                            ClosableIterator<T> dataFileIterator,
+                                                            HoodieSchema dataRequiredSchema,
+                                                            List<Pair<String, Object>> requiredPartitionFieldAndValues);
+
+  /**
+   * Optional per-row transformer applied to log-block records before they reach the merger.
+   * Engines override this to align records with a projected read schema (e.g. Spark 4.1's
+   * PushVariantIntoScan). Default is no projection.
+   */
+  public Option<Function<T, T>> getLogBlockRecordProjection(HoodieSchema dataBlockSchema) {
+    return Option.empty();
+  }
+
+  public Option<Pair<String, String>> getPayloadClasses(TypedProperties props) {
+    return getRecordMerger().map(merger -> {
+      if (merger.getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+        String incomingPayloadClass = HoodieRecordPayload.getWriterPayloadOverride(props).orElseGet(tableConfig::getPayloadClass);
+        return Pair.of(tableConfig.getPayloadClass(), incomingPayloadClass);
+      }
+      return null;
+    });
+  }
+}

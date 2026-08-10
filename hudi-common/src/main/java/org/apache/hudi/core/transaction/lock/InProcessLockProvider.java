@@ -1,0 +1,143 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.hudi.core.transaction.lock;
+
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.lock.LockState;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.storage.StorageConfiguration;
+
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+
+import java.io.Serializable;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+/**
+ * InProcess level lock. This {@link LockProvider} implementation is to
+ * guard table from concurrent operations happening in the local JVM process.
+ * A separate lock is maintained per "table basepath".
+ * <p>
+ * Note: This Lock provider implementation doesn't allow lock reentrancy.
+ * Attempting to reacquire the lock from the same thread will throw
+ * HoodieLockException. Threads other than the current lock owner, will
+ * block on lock() and return false on tryLock().
+ */
+@Slf4j
+public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock>, Serializable {
+
+  /**
+   * Pre-1.3.0 class name, still resolvable through the deprecated
+   * {@code org.apache.hudi.client.transaction.lock.InProcessLockProvider} compatibility alias.
+   */
+  public static final String LEGACY_CLASS_NAME = "org.apache.hudi.client.transaction.lock.InProcessLockProvider";
+
+  private static final Map<String, ReentrantReadWriteLock> LOCK_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
+  @Getter
+  private final ReentrantReadWriteLock lock;
+  private final String basePath;
+  private final long maxWaitTimeMillis;
+
+  /**
+   * Returns true if the given lock provider class name refers to this provider, under either
+   * its current or its pre-1.3.0 ({@link #LEGACY_CLASS_NAME}) name. Use this instead of a plain
+   * string equality wherever behavior keys off the configured lock provider being in-process.
+   */
+  public static boolean isInProcessLockProvider(String lockProviderClassName) {
+    return InProcessLockProvider.class.getName().equals(lockProviderClassName)
+        || LEGACY_CLASS_NAME.equals(lockProviderClassName);
+  }
+
+  public InProcessLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
+    TypedProperties typedProperties = lockConfiguration.getConfig();
+    basePath = lockConfiguration.getConfig().getProperty(HoodieCommonConfig.BASE_PATH.key());
+    ValidationUtils.checkArgument(basePath != null);
+    lock = LOCK_INSTANCE_PER_BASEPATH.computeIfAbsent(basePath, (ignore) -> new ReentrantReadWriteLock());
+    maxWaitTimeMillis = typedProperties.getLong(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,
+        LockConfiguration.DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS);
+  }
+
+  @Override
+  public void lock() {
+    log.info(getLogMessage(LockState.ACQUIRING));
+    if (lock.isWriteLockedByCurrentThread()) {
+      throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
+    }
+    lock.writeLock().lock();
+    log.info(getLogMessage(LockState.ACQUIRED));
+  }
+
+  @Override
+  public boolean tryLock() {
+    return tryLock(maxWaitTimeMillis, TimeUnit.MILLISECONDS);
+  }
+
+  @Override
+  public boolean tryLock(long time, TimeUnit unit) {
+    log.info(getLogMessage(LockState.ACQUIRING));
+    if (lock.isWriteLockedByCurrentThread()) {
+      throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
+    }
+
+    boolean isLockAcquired;
+    try {
+      isLockAcquired = lock.writeLock().tryLock(time, unit);
+    } catch (InterruptedException e) {
+      throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_ACQUIRE));
+    }
+
+    log.info(getLogMessage(isLockAcquired ? LockState.ACQUIRED : LockState.FAILED_TO_ACQUIRE));
+    return isLockAcquired;
+  }
+
+  @Override
+  public void unlock() {
+    log.info(getLogMessage(LockState.RELEASING));
+    try {
+      if (lock.isWriteLockedByCurrentThread()) {
+        lock.writeLock().unlock();
+        log.info(getLogMessage(LockState.RELEASED));
+      } else {
+        log.info("Cannot unlock because the current thread does not hold the lock.");
+      }
+    } catch (Exception e) {
+      throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_RELEASE), e);
+    }
+  }
+
+  @Override
+  public void close() {
+    if (lock.isWriteLockedByCurrentThread()) {
+      lock.writeLock().unlock();
+    }
+    log.info(getLogMessage(LockState.ALREADY_RELEASED));
+  }
+
+  private String getLogMessage(LockState state) {
+    return String.format("Base Path %s, Lock Instance %s, Thread %s, In-process lock state %s", basePath, getLock().toString(), Thread.currentThread().getName(), state.name());
+  }
+}

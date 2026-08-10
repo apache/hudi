@@ -1,0 +1,9 @@
+target/
+dbt_modules/
+logs/
+.tox/
+.idea/
+.DS_Store
+.vscode
+*.log
+dbt-env/

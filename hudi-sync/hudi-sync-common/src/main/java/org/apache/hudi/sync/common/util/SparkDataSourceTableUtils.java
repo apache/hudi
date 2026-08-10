@@ -1,0 +1,113 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.sync.common.util;
+
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.StringUtils;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class SparkDataSourceTableUtils {
+  /**
+   * Get Spark Sql related table properties. This is used for spark datasource table.
+   * @param schema  The schema to write to the table.
+   * @return A new parameters added the spark's table properties.
+   */
+  public static Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
+                                                            int schemaLengthThreshold, HoodieSchema schema) {
+    return getSparkTableProperties(partitionNames, sparkVersion, schemaLengthThreshold, schema, false);
+  }
+
+  /**
+   * Get Spark Sql related table properties. This is used for spark datasource table.
+   * @param schema           The schema to write to the table.
+   * @param includeFieldDocs Whether to include the field docs as column comments in the serialized spark schema.
+   * @return A new parameters added the spark's table properties.
+   */
+  public static Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
+                                                            int schemaLengthThreshold, HoodieSchema schema, boolean includeFieldDocs) {
+    // Convert the schema and partition info used by spark sql to hive table properties.
+    // The following code refers to the spark code in
+    // https://github.com/apache/spark/blob/master/sql/hive/src/main/scala/org/apache/spark/sql/hive/HiveExternalCatalog.scala
+    List<HoodieSchemaField> partitionCols = new ArrayList<>();
+    List<HoodieSchemaField> dataCols = new ArrayList<>();
+    Map<String, HoodieSchemaField> column2Field = new HashMap<>();
+
+    for (HoodieSchemaField field : schema.getFields()) {
+      column2Field.put(field.name(), field);
+    }
+    // Get partition columns and data columns.
+    for (String partitionName : partitionNames) {
+      // Default the unknown partition fields to be String.
+      // Keep the same logical with HiveSchemaUtil#getPartitionKeyType.
+      partitionCols.add(column2Field.getOrDefault(partitionName,
+          HoodieSchemaField.of(partitionName, HoodieSchema.create(HoodieSchemaType.STRING))));
+    }
+
+    for (HoodieSchemaField field : schema.getFields()) {
+      if (!partitionNames.contains(field.name())) {
+        dataCols.add(field);
+      }
+    }
+
+    List<HoodieSchemaField> reOrderedFields = new ArrayList<>(dataCols.size() + partitionCols.size());
+    dataCols.forEach(field -> reOrderedFields.add(HoodieSchemaUtils.createNewSchemaField(field)));
+    partitionCols.forEach(field -> reOrderedFields.add(HoodieSchemaUtils.createNewSchemaField(field)));
+    HoodieSchema reOrderedSchema = HoodieSchema.createRecord(schema.getName(), null, null, reOrderedFields);
+
+    Map<String, String> sparkProperties = new HashMap<>();
+    sparkProperties.put("spark.sql.sources.provider", "hudi");
+    if (!StringUtils.isNullOrEmpty(sparkVersion)) {
+      sparkProperties.put("spark.sql.create.version", sparkVersion);
+    }
+    // Split the schema string to multi-parts according the schemaLengthThreshold size.
+    String schemaString = SparkSchemaUtils.convertToSparkSchemaJson(reOrderedSchema, includeFieldDocs);
+    int numSchemaPart = (schemaString.length() + schemaLengthThreshold - 1) / schemaLengthThreshold;
+    sparkProperties.put("spark.sql.sources.schema.numParts", String.valueOf(numSchemaPart));
+    // Add each part of schema string to sparkProperties
+    for (int i = 0; i < numSchemaPart; i++) {
+      int start = i * schemaLengthThreshold;
+      int end = Math.min(start + schemaLengthThreshold, schemaString.length());
+      sparkProperties.put("spark.sql.sources.schema.part." + i, schemaString.substring(start, end));
+    }
+    // Add partition columns
+    if (!partitionNames.isEmpty()) {
+      sparkProperties.put("spark.sql.sources.schema.numPartCols", String.valueOf(partitionNames.size()));
+      for (int i = 0; i < partitionNames.size(); i++) {
+        sparkProperties.put("spark.sql.sources.schema.partCol." + i, partitionNames.get(i));
+      }
+    }
+    return sparkProperties;
+  }
+
+  public static Map<String, String> getSparkSerdeProperties(boolean readAsOptimized, String basePath) {
+    Map<String, String> sparkSerdeProperties = new HashMap<>();
+    sparkSerdeProperties.put(ConfigUtils.TABLE_SERDE_PATH, basePath);
+    sparkSerdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(readAsOptimized));
+    return sparkSerdeProperties;
+  }
+
+}

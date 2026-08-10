@@ -1,0 +1,294 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.hudi.utilities.deltastreamer;
+
+import org.apache.hudi.HoodieSchemaConversionUtils;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
+import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.sources.RowSource;
+import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructType;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.stream.Stream;
+
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+public class TestSourceFormatAdapter {
+
+  protected static SparkSession spark;
+  protected static JavaSparkContext jsc;
+  private static final String DUMMY_CHECKPOINT = "dummy_checkpoint";
+  private TestRowDataSource testRowDataSource;
+  private TestJsonDataSource testJsonDataSource;
+
+  @BeforeAll
+  public static void start() {
+    spark = SparkSession
+        .builder()
+        .config(getSparkConfForTest(TestSourceFormatAdapter.class.getName()))
+        .getOrCreate();
+    jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
+  }
+
+  @AfterAll
+  public static void shutdown() throws IOException {
+    jsc.close();
+    spark.close();
+  }
+
+  // Forces to initialize object before every test.
+  @AfterEach
+  public void teardown() {
+    testRowDataSource = null;
+    testJsonDataSource = null;
+  }
+
+  private void setupRowSource(Dataset<Row> ds, TypedProperties properties, SchemaProvider schemaProvider) {
+    InputBatch<Dataset<Row>> batch = new InputBatch<>(Option.of(ds), new StreamerCheckpointV2(DUMMY_CHECKPOINT), schemaProvider);
+    testRowDataSource = new TestRowDataSource(properties, jsc, spark, schemaProvider, batch);
+  }
+
+  private void setupJsonSource(JavaRDD<String> ds, HoodieSchema schema) {
+    SchemaProvider basicSchemaProvider = new BasicSchemaProvider(schema);
+    InputBatch<JavaRDD<String>> batch = new InputBatch<>(Option.of(ds), new StreamerCheckpointV2(DUMMY_CHECKPOINT), basicSchemaProvider);
+    testJsonDataSource = new TestJsonDataSource(new TypedProperties(), jsc, spark, basicSchemaProvider, batch);
+  }
+
+  private InputBatch<Dataset<Row>> fetchRowData(JavaRDD<String> rdd, StructType unsanitizedSchema, SchemaProvider schemaProvider) {
+    TypedProperties typedProperties = new TypedProperties();
+    typedProperties.put(HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), true);
+    typedProperties.put(HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
+    setupRowSource(spark.read().schema(unsanitizedSchema).json(rdd), typedProperties, schemaProvider);
+    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testRowDataSource, Option.empty(), Option.of(typedProperties));
+    return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(new StreamerCheckpointV2(DUMMY_CHECKPOINT)), 10L);
+  }
+
+  private InputBatch<Dataset<Row>> fetchJsonData(JavaRDD<String> rdd, StructType sanitizedSchema) {
+    TypedProperties typedProperties = new TypedProperties();
+    typedProperties.put(HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), true);
+    typedProperties.put(HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
+    setupJsonSource(rdd, HoodieSparkSchemaConverters.toHoodieType(sanitizedSchema, false, "record", "", Metadata.empty()));
+    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testJsonDataSource, Option.empty(), Option.of(typedProperties));
+    return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(new StreamerCheckpointV2(DUMMY_CHECKPOINT)), 10L);
+  }
+
+  private void verifySanitization(InputBatch<Dataset<Row>> inputBatch, String sanitizedDataFile, StructType sanitizedSchema) {
+    JavaRDD<String> expectedRDD = jsc.textFile(sanitizedDataFile);
+    assertTrue(inputBatch.getBatch().isPresent());
+    Dataset<Row> ds = inputBatch.getBatch().get();
+    assertEquals(2, ds.collectAsList().size());
+    assertEquals(sanitizedSchema, ds.schema());
+    if (inputBatch.getSchemaProvider() instanceof RowBasedSchemaProvider) {
+      assertEquals(HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(sanitizedSchema,
+          "hoodie_source", "hoodie.source"), inputBatch.getSchemaProvider().getSourceHoodieSchema());
+    }
+    assertEquals(expectedRDD.collect(), ds.toJSON().collectAsList());
+  }
+
+  @ParameterizedTest
+  @MethodSource("provideDataFiles")
+  public void testRowSanitization(String unsanitizedDataFile, String sanitizedDataFile, StructType unsanitizedSchema, StructType sanitizedSchema) {
+    JavaRDD<String> unsanitizedRDD = jsc.textFile(unsanitizedDataFile);
+    SchemaProvider schemaProvider = InputBatch.NullSchemaProvider.getInstance();
+    verifySanitization(fetchRowData(unsanitizedRDD, unsanitizedSchema, schemaProvider), sanitizedDataFile, sanitizedSchema);
+    verifySanitization(fetchRowData(unsanitizedRDD, unsanitizedSchema, null), sanitizedDataFile, sanitizedSchema);
+  }
+
+  @ParameterizedTest
+  @MethodSource("provideDataFiles")
+  public void testJsonSanitization(String unsanitizedDataFile, String sanitizedDataFile, StructType unsanitizedSchema, StructType sanitizedSchema) {
+    JavaRDD<String> unsanitizedRDD = jsc.textFile(unsanitizedDataFile);
+    verifySanitization(fetchJsonData(unsanitizedRDD, sanitizedSchema), sanitizedDataFile, sanitizedSchema);
+  }
+
+  /**
+   * Test that when using a non-FileBased/SchemaRegistry provider with ROW source,
+   * the target schema is correctly used for Row-to-Avro conversion.
+   * This test validates the fix for using target schema after transformations.
+   */
+  @Test
+  public void testTargetSchemaUsedForNonFileBasedProvider() {
+    // Create source schema with two fields
+    StructType sourceSchema = new StructType()
+        .add("id", DataTypes.IntegerType, false)
+        .add("name", DataTypes.StringType, false);
+
+    // Create target schema with an additional field (simulating transformation)
+    StructType targetSchema = new StructType()
+        .add("id", DataTypes.IntegerType, false)
+        .add("name", DataTypes.StringType, false)
+        .add("processed", DataTypes.BooleanType, false);
+
+    // Create test data matching the target schema
+    Dataset<Row> testDataset = spark.createDataFrame(
+        Arrays.asList(
+            RowFactory.create(1, "Alice", true),
+            RowFactory.create(2, "Bob", true)
+        ),
+        targetSchema
+    );
+
+    // Create a custom SchemaProvider with different source and target schemas
+    SchemaProvider schemaProvider = new TestSchemaProviderWithTransformation(sourceSchema, targetSchema);
+
+    // Setup the row source
+    InputBatch<Dataset<Row>> batch = new InputBatch<>(Option.of(testDataset), new StreamerCheckpointV2(DUMMY_CHECKPOINT), schemaProvider);
+    TestRowDataSource testSource = new TestRowDataSource(new TypedProperties(), jsc, spark, schemaProvider, batch);
+
+    // Create SourceFormatAdapter and fetch data in Avro format
+    SourceFormatAdapter adapter = new SourceFormatAdapter(testSource);
+    InputBatch<JavaRDD<GenericRecord>> result = adapter.fetchNewDataInAvroFormat(
+        Option.of(new StreamerCheckpointV2(DUMMY_CHECKPOINT)), 10L);
+
+    // Verify that the result uses the target schema
+    assertTrue(result.getBatch().isPresent());
+    JavaRDD<GenericRecord> genericRecords = result.getBatch().get();
+    assertNotNull(genericRecords);
+
+    // Verify the records have the target schema structure
+    GenericRecord firstRecord = genericRecords.first();
+    assertNotNull(firstRecord);
+
+    // The record should have fields from the target schema (including 'processed')
+    Schema recordSchema = firstRecord.getSchema();
+    assertNotNull(recordSchema.getField("id"));
+    assertNotNull(recordSchema.getField("name"));
+    assertNotNull(recordSchema.getField("processed"));
+
+    // Verify field values
+    assertEquals(1, firstRecord.get("id"));
+    assertEquals("Alice", firstRecord.get("name").toString());
+    assertEquals(true, firstRecord.get("processed"));
+  }
+
+  public static class TestRowDataSource extends RowSource {
+    private final InputBatch<Dataset<Row>> batch;
+    public TestRowDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
+                             SchemaProvider schemaProvider, InputBatch<Dataset<Row>> batch) {
+      super(props, sparkContext, sparkSession, schemaProvider);
+      this.batch = batch;
+    }
+
+    @Override
+    protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCkptStr, long sourceLimit) {
+      return Pair.of(batch.getBatch(), batch.getCheckpointForNextBatch());
+    }
+  }
+
+  public static class TestJsonDataSource extends Source<JavaRDD<String>> {
+    private final InputBatch<JavaRDD<String>> batch;
+
+    public TestJsonDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
+                             SchemaProvider schemaProvider, InputBatch<JavaRDD<String>> batch) {
+      super(props, sparkContext, sparkSession, schemaProvider, SourceType.JSON);
+      this.batch = batch;
+    }
+
+    @Override
+    protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
+      return batch;
+    }
+  }
+
+  public static class BasicSchemaProvider extends SchemaProvider {
+
+    private final HoodieSchema schema;
+
+    public BasicSchemaProvider(HoodieSchema schema) {
+      this(null, null, schema);
+    }
+
+    public BasicSchemaProvider(TypedProperties props, JavaSparkContext jssc, HoodieSchema schema) {
+      super(props, jssc);
+      this.schema = schema;
+    }
+
+    @Override
+    public HoodieSchema getSourceHoodieSchema() {
+      return schema;
+    }
+  }
+
+  /**
+   * Custom SchemaProvider for testing that has different source and target schemas.
+   * This simulates scenarios where transformations have been applied and the
+   * target schema differs from the source schema.
+   */
+  public static class TestSchemaProviderWithTransformation extends SchemaProvider {
+
+    private final HoodieSchema sourceSchema;
+    private final HoodieSchema targetSchema;
+
+    public TestSchemaProviderWithTransformation(StructType sourceStruct, StructType targetStruct) {
+      super(null, null);
+      this.sourceSchema = HoodieSparkSchemaConverters.toHoodieType(sourceStruct, false, "source", "", Metadata.empty());
+      this.targetSchema = HoodieSparkSchemaConverters.toHoodieType(targetStruct, false, "target", "", Metadata.empty());
+    }
+
+    @Override
+    public HoodieSchema getSourceHoodieSchema() {
+      return sourceSchema;
+    }
+
+    @Override
+    public HoodieSchema getTargetHoodieSchema() {
+      return targetSchema;
+    }
+  }
+
+  private static Stream<Arguments> provideDataFiles() {
+    return SanitizationTestUtils.provideDataFiles();
+  }
+
+}
