@@ -320,6 +320,44 @@ If you need to change the checkpoints for reprocessing or replaying data you can
 - `--source-limit` will set a maximum amount of data to read from the source. For DFS sources, this is max # of bytes read.
 For Kafka, this is the max # of events to read.
 
+#### Resetting the checkpoint for the Hudi incremental source
+
+When Hudi Streamer writes a target table at table version 8 or higher using `HoodieIncrSource`, it tracks progress by
+**completion time** instead of requested instant time, and records it in the commit metadata under
+`streamer.checkpoint.key.v2`. A bare timestamp would be ambiguous between the two, so `--checkpoint` has to state which
+one it is:
+
+```shell
+# resume after the instant with this requested instant time
+--checkpoint resumeFromInstantRequestTime:20250110120000000
+
+# resume after the instant with this completion time
+--checkpoint resumeFromInstantCompletionTime:20250110120005000
+```
+
+Both forms resume from the same position. The request time form is translated internally to the completion time of that
+same instant, and ingestion proceeds in completion time order either way. Whichever value you pass is recorded verbatim
+under `streamer.checkpoint.reset.key.v2`.
+
+Passing a bare timestamp is rejected:
+
+```plain
+Illegal checkpoint key override `20250110120000000`. Valid format is either
+`resumeFromInstantRequestTime:<checkpoint value>` or `resumeFromInstantCompletionTime:<checkpoint value>`.
+```
+
+:::note
+`S3EventsHoodieIncrSource` and `GcsEventsHoodieIncrSource` are excluded from completion time checkpoints. They continue
+to take a plain `--checkpoint` value regardless of the table version.
+:::
+
+:::caution
+Do not pass `--checkpoint` or `--ignore-checkpoint` on the run that upgrades or downgrades the table version while using
+a Hudi incremental source. Rather than risk applying the override under the wrong checkpoint semantics, Hudi fails the
+job with a message asking you to drop those options. Let the upgrade finish first, then reset the checkpoint on a later
+run.
+:::
+
 ### Transformers
 
 Hudi Streamer supports custom transformation on records before writing to storage. This is done by supplying 
