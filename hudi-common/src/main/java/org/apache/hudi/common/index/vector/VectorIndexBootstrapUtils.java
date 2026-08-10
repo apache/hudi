@@ -99,20 +99,25 @@ public final class VectorIndexBootstrapUtils {
     return Arrays.copyOf(source, rowBytes);
   }
 
-  /** Splits interleaved lower-bit codes into fixed-width posting-block planes. */
+  /** Transposes packed per-dimension lower-bit codes into fixed-width posting-block planes. */
   public static byte[] splitExPlanes(
       byte[] extendedCode, int planeCount, int dimension, int rowBytes) {
     if (planeCount == 0) {
       return new byte[0];
     }
     checkArgument(extendedCode != null, "Extended RaBitQ planes are required");
-    int sourcePlaneBytes = (dimension + 7) / 8;
-    checkArgument(extendedCode.length == planeCount * sourcePlaneBytes,
-        "Extended RaBitQ plane size does not match dimension and bit width");
+    int expectedBytes = (dimension * planeCount + 7) / 8;
+    checkArgument(extendedCode.length == expectedBytes,
+        "Extended RaBitQ code size does not match dimension and bit width");
     byte[] planes = new byte[planeCount * rowBytes];
-    for (int plane = 0; plane < planeCount; plane++) {
-      System.arraycopy(
-          extendedCode, plane * sourcePlaneBytes, planes, plane * rowBytes, sourcePlaneBytes);
+    for (int vectorOffset = 0; vectorOffset < dimension; vectorOffset++) {
+      for (int plane = 0; plane < planeCount; plane++) {
+        int sourceBit = vectorOffset * planeCount + plane;
+        if ((extendedCode[sourceBit >> 3] & (1 << (sourceBit & 7))) != 0) {
+          int targetBit = plane * rowBytes * 8 + vectorOffset;
+          planes[targetBit >> 3] |= (byte) (1 << (targetBit & 7));
+        }
+      }
     }
     return planes;
   }

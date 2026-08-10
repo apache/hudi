@@ -44,6 +44,24 @@ class TestRaBitQEncoder {
   }
 
   @Test
+  void splitExPlanesTransposesPackedDimensionCodes() {
+    byte[] interleavedLevels = {(byte) 0xD1, 0x08};
+
+    assertArrayEquals(
+        new byte[] {0x05, 0x06, 0x08},
+        VectorIndexBootstrapUtils.splitExPlanes(interleavedLevels, 3, 4, 1));
+  }
+
+  @Test
+  void splitExPlanesSupportsNonByteAlignedDimensions() {
+    byte[] interleavedLevels = {(byte) 0xD1, 0x00};
+
+    assertArrayEquals(
+        new byte[] {0x05, 0x06, 0x00},
+        VectorIndexBootstrapUtils.splitExPlanes(interleavedLevels, 3, 3, 1));
+  }
+
+  @Test
   void codeBytesSizeCorrect() {
     assertEquals((DIM + 7) / 8, encoder.codeBytes());
   }

@@ -19,10 +19,14 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieVectorIndexClusterStats;
+import org.apache.hudi.avro.model.HoodieVectorIndexPostingDelta;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
@@ -36,6 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metadata.index.SparkIndexerSupport;
+import org.apache.hudi.metadata.index.vector.VectorIndexFileGroupUpdate;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
@@ -47,6 +52,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +61,13 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 
 class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
 
@@ -75,6 +87,7 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
         .withSchema(vectorWriteSchemaJson(dim))
         .withProperties(tableProps)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withEmbeddedTimelineServerEnabled(false)
         .build();
 
     String instantTime;
@@ -91,14 +104,7 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
         .setBasePath(tablePath)
         .build();
 
-    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
-        .withIndexName(indexName)
-        .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX)
-        .withIndexFunction("ivfflat")
-        .withSourceFields(Arrays.asList("embedding"))
-        .withIndexOptions(vectorIndexOptions(dim))
-        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), MetadataPartitionType.VECTOR_INDEX))
-        .build();
+    HoodieIndexDefinition indexDefinition = vectorIndexDefinition(indexName);
 
     HoodieSchema tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
     List<FileSliceAndPartition> fileSlices = collectLatestFileSlices(metaClient, writeConfig);
@@ -122,6 +128,114 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
         "Expected a posting record. Families: " + families);
     assertTrue(recordKeys.stream().anyMatch(TestSparkVectorIndexBootstrap::isManifestGenerationOne),
         "Expected generation-1 manifest key in fresh vector bootstrap. Families: " + families);
+  }
+
+  @Test
+  void testIncrementalUpdateReadsCommittedFileSlicesAndEmitsIndexDeltas() throws Exception {
+    String tablePath = java.net.URI.create(basePath()).getPath();
+    String indexName = HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX + "vec_update";
+    int dim = 4;
+    Properties tableProps = getPropertiesForKeyGen(true);
+    tableProps.put("hoodie.datasource.write.precombine.field", "ts");
+    tableProps.put(HoodieWriteConfig.AVRO_SCHEMA_STRING.key(), vectorWriteSchemaJson(dim));
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(
+        storageConf(), tablePath, tableProps, COPY_ON_WRITE);
+    HoodieWriteConfig writeConfig = getConfigBuilder(true)
+        .withPath(tablePath)
+        .withSchema(vectorWriteSchemaJson(dim))
+        .withProperties(tableProps)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+
+    String bootstrapInstant;
+    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
+      bootstrapInstant = client.startCommit();
+      List<WriteStatus> statuses = client.insert(
+          jsc().parallelize(buildVectorRecords(dim), 1), bootstrapInstant).collect();
+      assertNoWriteErrors(statuses);
+      client.commit(bootstrapInstant, jsc().parallelize(statuses), Option.empty(),
+          metaClient.getCommitActionType(), new HashMap<>());
+    }
+    metaClient = reloadMetaClient(tablePath);
+    HoodieIndexDefinition indexDefinition = vectorIndexDefinition(indexName);
+    HoodieSchema tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
+    SparkIndexerSupport indexerSupport = new SparkIndexerSupport(context(), writeConfig);
+    List<FileSliceAndPartition> previousSlices = collectLatestFileSlices(metaClient, writeConfig);
+    List<HoodieRecord> bootstrapRecords = HoodieJavaRDD.getJavaRDD(
+        indexerSupport.generateVectorIndexRecords(
+            indexDefinition, metaClient, previousSlices, tableSchema, 1, bootstrapInstant)).collect();
+
+    String updateInstant;
+    Schema schema = new Schema.Parser().parse(vectorWriteSchemaJson(dim));
+    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
+      updateInstant = client.startCommit();
+      HoodieRecord update = createRecord(
+          schema, "id1", "p1", 10L, new float[] {0.0f, 0.0f, 0.0f, 10.0f});
+      List<WriteStatus> statuses = client.upsert(
+          jsc().parallelize(Collections.singletonList(update), 1), updateInstant).collect();
+      assertNoWriteErrors(statuses);
+      client.commit(updateInstant, jsc().parallelize(statuses), Option.empty(),
+          metaClient.getCommitActionType(), new HashMap<>());
+    }
+    metaClient = reloadMetaClient(tablePath);
+    List<FileSliceAndPartition> currentSlices = collectLatestFileSlices(metaClient, writeConfig);
+    FileSlice previous = sliceForPartition(previousSlices, "p1");
+    FileSlice current = sliceForPartition(currentSlices, "p1");
+    assertEquals(previous.getFileId(), current.getFileId());
+
+    HoodieTableMetadata tableMetadata = mock(HoodieTableMetadata.class);
+    doReturn(HoodieListData.eager(bootstrapRecords))
+        .when(tableMetadata).getRecordsByKeyPrefixes(any(), eq(indexName), anyBoolean());
+    List<VectorIndexFileGroupUpdate> fileGroupUpdates = Collections.singletonList(
+        new VectorIndexFileGroupUpdate("p1", Option.of(previous), current));
+    List<HoodieRecord> updateRecords = HoodieJavaRDD.getJavaRDD(
+        indexerSupport.generateVectorIndexUpdateRecords(
+            indexDefinition, metaClient, tableMetadata, fileGroupUpdates,
+            tableSchema, 1, updateInstant)).collect();
+
+    assertTrue(updateRecords.stream()
+        .map(TestSparkVectorIndexBootstrap::metadata)
+        .filter(HoodieVectorIndexPostingDelta.class::isInstance)
+        .map(HoodieVectorIndexPostingDelta.class::cast)
+        .anyMatch(posting -> "id1".contentEquals(posting.getRecordKey())),
+        "Updated id1 must produce a replacement posting");
+    assertTrue(updateRecords.stream()
+        .map(TestSparkVectorIndexBootstrap::metadata)
+        .anyMatch(HoodieVectorIndexClusterStats.class::isInstance),
+        "Incremental update must produce additive cluster statistics");
+  }
+
+  private static Object metadata(HoodieRecord record) {
+    return ((HoodieMetadataPayload) record.getData()).getVectorIndexMetadata().get();
+  }
+
+  private static FileSlice sliceForPartition(
+      List<FileSliceAndPartition> slices, String partition) {
+    return slices.stream()
+        .filter(slice -> partition.equals(slice.getPartitionPath()))
+        .map(FileSliceAndPartition::getFileSlice)
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("Missing file slice for " + partition));
+  }
+
+  private HoodieTableMetaClient reloadMetaClient(String tablePath) {
+    return HoodieTableMetaClient.builder()
+        .setConf(storageConf())
+        .setBasePath(tablePath)
+        .build();
+  }
+
+  private static HoodieIndexDefinition vectorIndexDefinition(String indexName) {
+    return HoodieIndexDefinition.newBuilder()
+        .withIndexName(indexName)
+        .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX)
+        .withIndexFunction("ivfflat")
+        .withSourceFields(Arrays.asList("embedding"))
+        .withIndexOptions(vectorIndexOptions())
+        .withVersion(HoodieIndexVersion.getCurrentVersion(
+            HoodieTableVersion.current(), MetadataPartitionType.VECTOR_INDEX))
+        .build();
   }
 
   private static int family(String key) {
@@ -186,10 +300,10 @@ class TestSparkVectorIndexBootstrap extends SparkClientFunctionalTestHarness {
     return buffer.array();
   }
 
-  private static Map<String, String> vectorIndexOptions(int dim) {
+  private static Map<String, String> vectorIndexOptions() {
     Map<String, String> opts = new HashMap<>();
-    opts.put("vector.dimension", Integer.toString(dim));
     opts.put("vector.num_clusters", "2");
+    opts.put("vector.query.nprobes", "2");
     opts.put("vector.metric", "l2");
     opts.put("vector.max_iter", "5");
     opts.put("vector.quantizer", "IVF_RABITQ");
