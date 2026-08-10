@@ -310,7 +310,8 @@ Read more in depth about concurrency control in the [concurrency control concept
 `HoodieStreamer` uses checkpoints to keep track of what data has been read already so it can resume without needing to reprocess all data.
 When using a Kafka source, the checkpoint is the [Kafka Offset](https://cwiki.apache.org/confluence/display/KAFKA/Offset+Management) 
 When using a DFS source, the checkpoint is the 'last modified' timestamp of the latest file read.
-Checkpoints are saved in the .hoodie commit file as `streamer.checkpoint.key`.
+Checkpoints are saved in the .hoodie commit file, under `streamer.checkpoint.key.v2` for tables at table
+version 8 or higher and `deltastreamer.checkpoint.key` below that.
 
 If you need to change the checkpoints for reprocessing or replaying data you can use the following options:
 
@@ -323,7 +324,8 @@ For Kafka, this is the max # of events to read.
 When Hudi Streamer writes a target table at table version 8 or higher using `HoodieIncrSource`, it tracks progress by
 **completion time** instead of requested instant time, and records it in the commit metadata under
 `streamer.checkpoint.key.v2`. A bare timestamp would be ambiguous between the two, so `--checkpoint` has to state which
-one it is:
+one it is. This form is required from Hudi 1.0.1 onward; on 1.0.0 the prefixes are not recognised and `--checkpoint`
+takes a bare completion time.
 
 ```shell
 # resume after the instant with this requested instant time
