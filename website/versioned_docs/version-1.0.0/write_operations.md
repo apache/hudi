@@ -128,7 +128,7 @@ The following is an inside look on the Hudi write path and the sequence of event
 6. Update [Index](indexes.md): Now that the write is performed, we will go back and update the index.
 7. Commit: Finally we commit all of these changes atomically. ([Post-commit callback](platform_services_post_commit_callback.md) can be configured.)
 8. [Clean](cleaning.md) (if needed): Following the commit, cleaning is invoked if needed.
-9. [Compaction](compaction.md): If you are using MOR tables, compaction will either run inline, or be scheduled asynchronously
+9. [Compaction](compaction.md): If you are using MOR tables, compaction will either run inline, or be scheduled asynchronously. [Log compaction](compaction.md#log-compaction) may also run, stitching small log blocks together without rewriting the base file.
 10. Archive : Lastly, we perform an archival step which moves old [timeline](timeline.md) items to an archive folder.
 
 Here is a diagramatic representation of the flow.

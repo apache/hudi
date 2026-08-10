@@ -252,6 +252,27 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 | `--service`                         | `false`  (Optional)  | Whether to start a monitoring service that checks and schedules new compaction task in configured interval.                                                                                                                                                                                      |
 | `--min-compaction-interval-seconds` | `600(s)` (optional)  | The checking interval for service mode, by default 10 minutes.                                                                                                                                                                                                                                   |
 
+## Log Compaction
+
+Log compaction is a minor compaction for Merge-on-Read tables. Rather than merging log files into a new base file, it
+stitches several small log blocks into a larger one within the same file group. A file group that receives frequent
+small updates can therefore be kept efficient without paying the cost of rewriting its base file. Readers skip the log
+blocks that have already been stitched, so read amplification is reduced as well. Log compaction appears on the timeline
+as a `logcompaction` action.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.log.compaction.inline` | `false` (Optional) | When set to true, the log compaction service is triggered after each write. While being simpler operationally, this adds extra latency on the write path.<br /><br />`Config Param: INLINE_LOG_COMPACT`<br />`Since Version: 0.13.0` |
+| `hoodie.log.compaction.blocks.threshold` | `5` (Optional) | Log compaction can be scheduled once the number of log blocks crosses this threshold. Effective only when log compaction is enabled via `hoodie.log.compaction.inline`.<br /><br />`Config Param: LOG_COMPACTION_BLOCKS_THRESHOLD`<br />`Since Version: 0.13.0` |
+| `hoodie.log.compaction.enable` | `false` (Optional) | By enabling log compaction through this config, log compaction also gets enabled for the metadata table.<br /><br />`Config Param: ENABLE_LOG_COMPACTION`<br />`Since Version: 0.14.0` |
+
+:::note
+Log compaction is scheduled inline through the configs above. Unlike compaction, it has no dedicated SQL procedure,
+Hudi CLI command, or standalone utility.
+:::
+
+See [RFC-48](https://github.com/apache/hudi/blob/master/rfc/rfc-48/rfc-48.md) for the design behind this table service.
+
 ## Related Resources
 
 <h3>Blogs</h3>
