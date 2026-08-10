@@ -306,9 +306,10 @@ object DefaultSource {
   private val log = LoggerFactory.getLogger(classOf[DefaultSource])
 
   /**
-   * What to do instead, appended to every rejection in the 3-arg createRelation so the user is
-   * never told only what does not work. Predicates on the partition columns are pushed down and
-   * prune partitions before any file is listed, which is what selecting paths by hand was for.
+   * What to do instead, appended to every rejection in
+   * `createRelation(sqlContext, optParams, schema)` so the user is never told only what does not
+   * work. Predicates on the partition columns are pushed down and prune partitions before any file
+   * is listed, which is what selecting paths by hand was for.
    * See HoodieFileIndex#prunePartitionsAndGetFileSlices.
    */
   private[hudi] val LOAD_BASE_PATH_INSTEAD: String =
