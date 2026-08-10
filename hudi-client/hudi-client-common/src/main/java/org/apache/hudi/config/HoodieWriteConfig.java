@@ -1761,6 +1761,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
   }
 
+  public boolean isLSMTreeStorageLayout() {
+    return HoodieTableConfig.TableStorageLayout.fromConfigValue(
+        getStringOrDefault(HoodieTableConfig.TABLE_STORAGE_LAYOUT))
+        == HoodieTableConfig.TableStorageLayout.LSM_TREE;
+  }
+
   public boolean isMergeDataValidationCheckEnabled() {
     return getBoolean(MERGE_DATA_VALIDATION_CHECK_ENABLE);
   }
@@ -3724,6 +3730,9 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
+      if (writeConfig.isLSMTreeStorageLayout()) {
+        writeConfig.setDefaultValue(BULK_INSERT_SORT_MODE, BulkInsertSortMode.PARTITION_SORT.name());
+      }
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
       // Make sure the props is propagated
