@@ -30,7 +30,7 @@ Following are the valid action types.
   like clustering.
 * **CLEANS** - Table service that removes older file slices that are no longer needed from the table, by deleting those files.
 * **COMPACTION** - Table service to reconcile differential data between base and delta files, by merging delta files into base files. 
-* **LOGCOMPACTION** - Table service to merge multiple small log files into a bigger log file in the same file slice. 
+* **LOGCOMPACTION** - Table service to merge multiple small log files into a bigger log file in the same file slice. See [log compaction](compaction.md#log-compaction). 
 * **CLUSTERING** - Table service to rewrite existing file groups with optimized sort order or storage layouts, as new file groups in the table.
 * **INDEXING** - Table service to build an index of a requested type on a column of the table, consistent with the state of the table at the completed instant in face of ongoing writes.
 * **ROLLBACK** - Indicates that an unsuccessful write operation was rolled back, removing any partial/uncommitted files produced during such a write from storage.

@@ -283,6 +283,64 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 The retry options (`--retry`, `--retry-last-failed-job`, `--job-max-processing-time-ms`) are only effective in single-run mode, not in service mode. Service mode has implicit retry semantics via its continuous monitoring loop. A warning will be logged if `--retry-last-failed-job` is enabled but `--job-max-processing-time-ms` is not set to a positive value.
 :::
 
+## Log Compaction
+
+Log compaction is a minor compaction for Merge-on-Read tables. Rather than merging log files into a new base file, it
+stitches several small log blocks into a larger one within the same file group, so a file group that receives frequent
+small updates can be kept efficient without paying the cost of rewriting its base file. Readers skip the log blocks that
+have already been stitched, so there are fewer blocks to merge on read.
+
+The stitched block is appended rather than replacing anything: the superseded blocks stay on disk until the next full
+compaction and clean. Log compaction therefore trades extra storage for fewer blocks to merge on read. A single run can
+also emit more than one block if the merged output exceeds the log block size.
+
+Log compaction is scheduled on the timeline as a `logcompaction` action, in the `requested` and `inflight` states. On
+completion it is committed as a `deltacommit`, so there is no completed `logcompaction` instant to look for.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.log.compaction.inline` | `false` (Optional) | When set to true, the log compaction service is triggered after each write. While being simpler operationally, this adds extra latency on the write path.<br /><br />`Config Param: INLINE_LOG_COMPACT`<br />`Since Version: 0.13.0` |
+| `hoodie.log.compaction.blocks.threshold` | `5` (Optional) | Log compaction can be scheduled once a file slice has at least this many log files, or at least this many log blocks. Applies to any scheduling attempt, whether triggered inline or programmatically.<br /><br />`Config Param: LOG_COMPACTION_BLOCKS_THRESHOLD`<br />`Since Version: 0.13.0` |
+
+:::note
+`hoodie.log.compaction.inline` is the only built-in way to schedule log compaction on a data table. There is no
+asynchronous log compaction service for the data table, and no SQL procedure, Hudi CLI command or standalone utility,
+unlike compaction. It is also not exposed through Flink options, so Flink cannot schedule it for a data table.
+Programmatic scheduling is available through the write client's `scheduleLogCompaction` and `logCompact` methods.
+:::
+
+The metadata table runs its own log compaction, controlled by a separate pair of configs. It is executed by the writer
+that maintains the metadata table. On Flink no extra configuration is needed: the compaction pipeline schedules and
+executes metadata table log compaction directly.
+
+| Config Name | Default | Description |
+|---|---|---|
+| `hoodie.metadata.log.compaction.enable` | `false` (Optional) | Enables log compaction for the metadata table.<br /><br />`Config Param: ENABLE_LOG_COMPACTION_ON_METADATA_TABLE`<br />`Since Version: 0.14.0` |
+| `hoodie.metadata.log.compaction.blocks.threshold` | `5` (Optional) | Number of log blocks above which log compaction is scheduled on the metadata table.<br /><br />`Config Param: LOG_COMPACT_BLOCKS_THRESHOLD`<br />`Since Version: 0.14.0` |
+
+:::caution
+`hoodie.metadata.table.service.manager.actions` lists `logcompaction` among its supported actions, but it cannot be used
+to move metadata table log compaction off the writer. Setting it stops the writer from executing log compaction inline
+without handing the work anywhere: Hudi has no dispatch path that delegates a log compaction to a table service manager,
+and does not ship a table service manager in any case. Pending `logcompaction` instants would then accumulate on the
+metadata table and, per the note below, metadata table compaction would stop being scheduled as well.
+:::
+
+:::note
+While a log compaction is pending on the metadata table, major compaction of the metadata table is not scheduled, since
+metadata partitions such as the record level index rely on processing-time ordering. See
+[HUDI-7533](https://issues.apache.org/jira/browse/HUDI-7533).
+:::
+
+:::caution
+`hoodie.log.compaction.enable` also appears in the configuration reference, but it is not a switch to set on your table.
+Hudi applies it internally to the metadata table's own write config, deriving its value from
+`hoodie.metadata.log.compaction.enable`. Setting it on a data table has no effect: use
+`hoodie.log.compaction.inline` for the data table, and `hoodie.metadata.log.compaction.enable` for the metadata table.
+:::
+
+See [RFC-48](https://github.com/apache/hudi/blob/master/rfc/rfc-48/rfc-48.md) for the design behind this table service.
+
 ## Related Resources
 
 <h3>Blogs</h3>
