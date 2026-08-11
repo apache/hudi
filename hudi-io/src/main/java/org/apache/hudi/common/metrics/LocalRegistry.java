@@ -71,10 +71,7 @@ public class LocalRegistry implements Registry {
     return countersMap;
   }
 
-  private synchronized Counter getCounter(String name) {
-    if (!counters.containsKey(name)) {
-      counters.put(name, new Counter());
-    }
-    return counters.get(name);
+  private Counter getCounter(String name) {
+    return counters.computeIfAbsent(name, k -> new Counter());
   }
 }
