@@ -252,41 +252,6 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 | `--service`                         | `false`  (Optional)  | Whether to start a monitoring service that checks and schedules new compaction task in configured interval.                                                                                                                                                                                      |
 | `--min-compaction-interval-seconds` | `600(s)` (optional)  | The checking interval for service mode, by default 10 minutes.                                                                                                                                                                                                                                   |
 
-## Log Compaction
-
-Log compaction is a minor compaction for Merge-on-Read tables. Rather than merging log files into a new base file, it
-stitches several small log blocks into a larger one within the same file group. A file group that receives frequent
-small updates can therefore be kept efficient without paying the cost of rewriting its base file. Readers skip the log
-blocks that have already been stitched, so read amplification is reduced as well. Log compaction appears on the timeline
-as a `logcompaction` action.
-
-| Config Name | Default | Description |
-|---|---|---|
-| `hoodie.log.compaction.inline` | `false` (Optional) | When set to true, the log compaction service is triggered after each write. While being simpler operationally, this adds extra latency on the write path.<br /><br />`Config Param: INLINE_LOG_COMPACT`<br />`Since Version: 0.13.0` |
-| `hoodie.log.compaction.blocks.threshold` | `5` (Optional) | Log compaction can be scheduled once the number of log blocks crosses this threshold. Effective only when log compaction is enabled via `hoodie.log.compaction.inline`.<br /><br />`Config Param: LOG_COMPACTION_BLOCKS_THRESHOLD`<br />`Since Version: 0.13.0` |
-
-:::note
-`hoodie.log.compaction.inline` is the only built-in way to schedule log compaction on a data table. There is no
-asynchronous log compaction service, SQL procedure, Hudi CLI command, or standalone utility for it, unlike compaction.
-Programmatic scheduling is available through the write client's `scheduleLogCompaction` and `logCompact` methods.
-:::
-
-The metadata table runs its own log compaction, controlled by a separate pair of configs:
-
-| Config Name | Default | Description |
-|---|---|---|
-| `hoodie.metadata.log.compaction.enable` | `false` (Optional) | Enables log compaction for the metadata table.<br /><br />`Config Param: ENABLE_LOG_COMPACTION_ON_METADATA_TABLE`<br />`Since Version: 0.14.0` |
-| `hoodie.metadata.log.compaction.blocks.threshold` | `5` (Optional) | Number of log blocks above which log compaction is scheduled on the metadata table.<br /><br />`Config Param: LOG_COMPACT_BLOCKS_THRESHOLD`<br />`Since Version: 0.14.0` |
-
-:::caution
-`hoodie.log.compaction.enable` also appears in the configuration reference, but it is not a switch to set on your table.
-Hudi applies it internally to the metadata table's own write config, deriving its value from
-`hoodie.metadata.log.compaction.enable`. Setting it on a data table has no effect: use
-`hoodie.log.compaction.inline` for the data table, and `hoodie.metadata.log.compaction.enable` for the metadata table.
-:::
-
-See [RFC-48](https://github.com/apache/hudi/blob/master/rfc/rfc-48/rfc-48.md) for the design behind this table service.
-
 ## Related Resources
 
 <h3>Blogs</h3>
