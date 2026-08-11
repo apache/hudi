@@ -59,6 +59,10 @@ It can also synchronize your data to half dozen data catalogs to keep table cons
 ## Blog — Comparisons
 
 - [Hudi vs Iceberg for CDC Workloads](https://hudi.apache.org/blog/2026/08/06/hudi-vs-iceberg-for-cdc-workloads): Criteria-driven comparison for change-data-capture ingestion.
+- [Hudi vs Iceberg for Streaming Ingestion](https://hudi.apache.org/blog/2026/08/11/hudi-vs-iceberg-for-streaming-ingestion): Which table format handles continuous, high-frequency writes better.
+- [Hudi vs Delta Lake for Write-Heavy Workloads](https://hudi.apache.org/blog/2026/08/12/hudi-vs-delta-lake-for-write-heavy-workloads): Update-intensive and mutable workloads compared across both formats.
+- [Hudi vs Iceberg Performance Benchmarks](https://hudi.apache.org/blog/2026/08/13/hudi-vs-iceberg-performance-benchmarks): A methodology-aware compilation of published benchmarks.
+- [Point Lookups on the Lakehouse](https://hudi.apache.org/blog/2026/08/14/hudi-for-read-heavy-workloads-point-lookups-with-indexes): How Hudi indexes accelerate read-heavy workloads and selective queries on high-cardinality columns.
 - [Hudi vs Delta Lake vs Iceberg Feature Comparison](https://hudi.apache.org/blog/2023/01/11/Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison): Feature-by-feature comparison of the three open table formats.
 
 ## Blog — Deep dives
