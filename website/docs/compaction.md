@@ -309,14 +309,22 @@ unlike compaction. It is also not exposed through Flink options, so Flink cannot
 Programmatic scheduling is available through the write client's `scheduleLogCompaction` and `logCompact` methods.
 :::
 
-The metadata table runs its own log compaction, controlled by a separate pair of configs. Unlike the data table, it can
-be delegated to an async pipeline by setting `hoodie.metadata.table.service.manager.enabled` together with
-`hoodie.metadata.table.service.manager.actions=logcompaction`.
+The metadata table runs its own log compaction, controlled by a separate pair of configs. Its execution can be delegated
+to an external table service manager by setting `hoodie.metadata.table.service.manager.enabled=true` together with
+`hoodie.metadata.table.service.manager.actions=logcompaction`. Flink does not need this: its compaction pipeline
+schedules and executes metadata table log compaction directly.
 
 | Config Name | Default | Description |
 |---|---|---|
 | `hoodie.metadata.log.compaction.enable` | `false` (Optional) | Enables log compaction for the metadata table.<br /><br />`Config Param: ENABLE_LOG_COMPACTION_ON_METADATA_TABLE`<br />`Since Version: 0.14.0` |
 | `hoodie.metadata.log.compaction.blocks.threshold` | `5` (Optional) | Number of log blocks above which log compaction is scheduled on the metadata table.<br /><br />`Config Param: LOG_COMPACT_BLOCKS_THRESHOLD`<br />`Since Version: 0.14.0` |
+
+:::caution
+Delegating only stops the writer from running log compaction inline. Hudi does not ship the table service manager
+itself, so one must be deployed and reachable at `hoodie.table.service.manager.uris` (default
+`http://localhost:9091`); otherwise pending `logcompaction` instants accumulate on the metadata table and, per the note
+below, metadata table compaction stops being scheduled as well.
+:::
 
 :::note
 While a log compaction is pending on the metadata table, major compaction of the metadata table is not scheduled, since
