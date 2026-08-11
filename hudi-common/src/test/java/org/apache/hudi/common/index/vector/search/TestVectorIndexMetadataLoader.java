@@ -20,6 +20,7 @@ package org.apache.hudi.common.index.vector.search;
 
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.RawKey;
@@ -79,7 +80,8 @@ class TestVectorIndexMetadataLoader {
       return HoodieListData.eager(Arrays.asList(quantizer));
     });
 
-    LoadedVectorIndexMetadata loaded = VectorIndexMetadataLoader.load(metadata, partition);
+    LoadedVectorIndexMetadata loaded = VectorIndexMetadataLoader.load(
+        metadata, partition, HoodieSchema.createVector(2));
 
     assertEquals(2, loaded.getSnapshot().getGenerationId());
     assertEquals("002", loaded.getSnapshot().getLastContiguousSourceInstant());

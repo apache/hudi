@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieVectorIndexQuantizer;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.index.vector.VectorDistanceMetric;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -46,7 +47,8 @@ public final class VectorIndexMetadataLoader {
   }
 
   public static LoadedVectorIndexMetadata load(HoodieTableMetadata metadataTable,
-                                               String indexPartition) {
+                                               String indexPartition,
+                                               HoodieSchema.Vector vectorSchema) {
     HoodieVectorIndexActiveManifest pointer = requireSingle(
         records(metadataTable, indexPartition, VectorIndexMetadataKey.activeManifest()),
         HoodieVectorIndexActiveManifest.class, "active manifest");
@@ -65,10 +67,14 @@ public final class VectorIndexMetadataLoader {
       throw new IllegalStateException("Reader requires residual-encoded vector postings");
     }
 
+    if (vectorSchema.getDimension() != manifest.getDim()) {
+      throw new IllegalStateException(
+          "Vector schema dimension does not match active generation manifest");
+    }
     List<HoodieRecord<HoodieMetadataPayload>> centroidRecords = records(
         metadataTable, indexPartition, VectorIndexMetadataKey.centroidsPrefix(generation));
     float[][] centroids = decodeCentroids(
-        centroidRecords, manifest.getNumClusters(), manifest.getDim());
+        centroidRecords, manifest.getNumClusters(), manifest.getDim(), vectorSchema.getVectorElementType());
     HoodieVectorIndexQuantizer quantizer = requireSingle(
         records(metadataTable, indexPartition, VectorIndexMetadataKey.quantizerPrefix(generation)),
         HoodieVectorIndexQuantizer.class, "quantizer");
@@ -116,7 +122,10 @@ public final class VectorIndexMetadataLoader {
   }
 
   private static float[][] decodeCentroids(
-      List<HoodieRecord<HoodieMetadataPayload>> records, int clusterCount, int dimension) {
+      List<HoodieRecord<HoodieMetadataPayload>> records,
+      int clusterCount,
+      int dimension,
+      HoodieSchema.Vector.VectorElementType elementType) {
     float[][] result = new float[clusterCount][];
     int decoded = 0;
     for (HoodieRecord<HoodieMetadataPayload> record : records) {
@@ -131,7 +140,8 @@ public final class VectorIndexMetadataLoader {
         throw new IllegalStateException("Centroid cluster-id payload is misaligned");
       }
       int rows = ids.remaining() / Integer.BYTES;
-      if (values.remaining() != rows * dimension * Float.BYTES) {
+      int elementBytes = elementType.getElementSize();
+      if (values.remaining() != rows * dimension * elementBytes) {
         throw new IllegalStateException("Centroid value payload has an invalid length");
       }
       for (int row = 0; row < rows; row++) {
@@ -141,7 +151,7 @@ public final class VectorIndexMetadataLoader {
         }
         float[] centroid = new float[dimension];
         for (int dim = 0; dim < dimension; dim++) {
-          centroid[dim] = values.getFloat();
+          centroid[dim] = readElement(values, elementType);
         }
         result[clusterId] = centroid;
         decoded++;
@@ -152,6 +162,20 @@ public final class VectorIndexMetadataLoader {
           "Incomplete centroid artifacts: expected=" + clusterCount + ", actual=" + decoded);
     }
     return result;
+  }
+
+  private static float readElement(
+      ByteBuffer values, HoodieSchema.Vector.VectorElementType elementType) {
+    switch (elementType) {
+      case DOUBLE:
+        return (float) values.getDouble();
+      case INT8:
+        return values.get();
+      case FLOAT:
+        return values.getFloat();
+      default:
+        throw new IllegalStateException("Unsupported vector element type: " + elementType);
+    }
   }
 
   private static VectorDistanceMetric parseMetric(String metric) {
