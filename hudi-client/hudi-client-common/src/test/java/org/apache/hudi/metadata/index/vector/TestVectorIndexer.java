@@ -55,7 +55,6 @@ import org.mockito.MockedStatic;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
@@ -203,16 +202,18 @@ class TestVectorIndexer {
           .get(0).indexRecords().collectAsList();
 
       assertEquals(markerPresent ? 2 : 1, records.size());
-      Optional<HoodieVectorIndexManifest> advancedManifest = records.stream()
+      HoodieVectorIndexManifest advancedManifest = records.stream()
           .map(record -> ((HoodieMetadataPayload) record.getData()).getVectorIndexMetadata())
           .filter(Option::isPresent)
           .map(Option::get)
           .filter(HoodieVectorIndexManifest.class::isInstance)
           .map(HoodieVectorIndexManifest.class::cast)
-          .findFirst();
-      assertEquals(markerPresent, advancedManifest.isPresent());
-      advancedManifest.ifPresent(manifest ->
-          assertEquals("003", manifest.getLastContiguousSourceInstant()));
+          .findFirst()
+          .orElse(null);
+      assertEquals(markerPresent, advancedManifest != null);
+      if (advancedManifest != null) {
+        assertEquals("003", advancedManifest.getLastContiguousSourceInstant());
+      }
       assertTrue(records.stream().anyMatch(record -> VectorIndexMetadataKey
           .sourceInstantMarker(GENERATION, "003").equals(record.getRecordKey())));
       verify(metaClient).getArchivedTimeline("001");
