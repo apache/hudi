@@ -147,6 +147,14 @@ public final class VectorIndexMetadataKey {
     return (Byte.toUnsignedInt(bytes[9]) << 8) | Byte.toUnsignedInt(bytes[10]);
   }
 
+  public static long postingBlockId(String key) {
+    byte[] bytes = decode(key);
+    if (bytes.length < 15 || Byte.toUnsignedInt(bytes[0]) != FAMILY_POSTING) {
+      return -1L;
+    }
+    return Integer.toUnsignedLong(readInt(bytes, 11));
+  }
+
   public static String postingRecordKey(String key) {
     byte[] bytes = decode(key);
     if (bytes.length <= 15 || Byte.toUnsignedInt(bytes[0]) != FAMILY_POSTING

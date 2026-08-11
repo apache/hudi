@@ -43,6 +43,22 @@ class TestVectorCandidateOverlay {
   }
 
   @Test
+  void crossClusterTombstoneDoesNotSuppressNewClusterDelta() {
+    VectorCandidate oldPosting = candidate("moved", 1, "old");
+    VectorCandidate newPosting = new VectorCandidate("moved", 2, 0, 4,
+        new VectorPostingLocator(1, 2, 0, 0, 0, "p", "new", "002", 2));
+
+    List<VectorCandidate> result = VectorCandidateOverlay.resolvePostingKeys(
+        Collections.singletonList(oldPosting),
+        Collections.singletonList(newPosting),
+        Collections.singleton(new VectorPostingKey(1, 0, "moved")), 2, 1);
+
+    assertEquals(Collections.singletonList("moved"), keys(result));
+    assertEquals(2, result.get(0).getClusterId());
+    assertEquals("new", result.get(0).getPostingLocator().getFileId());
+  }
+
+  @Test
   void overlaySlackBackfillsSuppressedBaseFinalist() {
     List<VectorCandidate> base = Arrays.asList(
         candidate("deleted", 1, "f"), candidate("second", 2, "f"), candidate("backfill", 3, "f"));

@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /** Resolves packed-block candidates with the canonical delta overlay before finalist arbitration. */
 public final class VectorCandidateOverlay {
@@ -35,6 +36,30 @@ public final class VectorCandidateOverlay {
       Collection<String> tombstonedDeltaKeys,
       int maxCandidates,
       int overlaySlack) {
+    Set<String> tombstones = new HashSet<>(tombstonedDeltaKeys);
+    return resolve(baseCandidates, deltaCandidates,
+        candidate -> tombstones.contains(candidate.getRecordKey()), maxCandidates, overlaySlack);
+  }
+
+  /** Resolves overlay using the canonical cluster/shard/record-key identity of tombstones. */
+  public static List<VectorCandidate> resolvePostingKeys(
+      Collection<VectorCandidate> baseCandidates,
+      Collection<VectorCandidate> deltaCandidates,
+      Collection<VectorPostingKey> tombstonedPostingKeys,
+      int maxCandidates,
+      int overlaySlack) {
+    Set<VectorPostingKey> tombstones = new HashSet<>(tombstonedPostingKeys);
+    return resolve(baseCandidates, deltaCandidates,
+        candidate -> tombstones.contains(VectorPostingKey.fromCandidate(candidate)),
+        maxCandidates, overlaySlack);
+  }
+
+  private static List<VectorCandidate> resolve(
+      Collection<VectorCandidate> baseCandidates,
+      Collection<VectorCandidate> deltaCandidates,
+      Predicate<VectorCandidate> isTombstoned,
+      int maxCandidates,
+      int overlaySlack) {
     if (maxCandidates < 0 || overlaySlack < 0) {
       throw new IllegalArgumentException("candidate bounds must be non-negative");
     }
@@ -42,16 +67,15 @@ public final class VectorCandidateOverlay {
     List<VectorCandidate> orderedBase = new ArrayList<>(baseCandidates);
     orderedBase.sort(ORDER);
 
-    Set<String> tombstones = new HashSet<>(tombstonedDeltaKeys);
     Map<String, VectorCandidate> resolved = new HashMap<>();
     for (int i = 0; i < retainedBaseCount; i++) {
       VectorCandidate candidate = orderedBase.get(i);
-      if (!tombstones.contains(candidate.getRecordKey())) {
+      if (!isTombstoned.test(candidate)) {
         resolved.put(candidate.getRecordKey(), candidate);
       }
     }
     for (VectorCandidate delta : deltaCandidates) {
-      if (tombstones.contains(delta.getRecordKey())) {
+      if (isTombstoned.test(delta)) {
         resolved.remove(delta.getRecordKey());
       } else {
         resolved.put(delta.getRecordKey(), delta);
