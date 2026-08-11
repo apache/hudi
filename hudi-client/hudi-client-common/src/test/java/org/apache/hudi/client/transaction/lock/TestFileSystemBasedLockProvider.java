@@ -33,7 +33,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
@@ -42,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -75,6 +78,93 @@ public class TestFileSystemBasedLockProvider {
       provider.unlock();
       // After unlock the file is gone, so the lock is acquirable again.
       assertTrue(provider.tryLock(1, TimeUnit.SECONDS), "re-acquisition after unlock should succeed");
+    } finally {
+      provider.unlock();
+      provider.close();
+    }
+  }
+
+  /**
+   * The lock-file operations used to synchronize on the {@code "lock"} String constant, which is interned
+   * and therefore shared JVM-wide with every other {@code "lock"} literal. Unrelated code holding that
+   * monitor blocked lock acquisition outright. {@link
+   * org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass} aliased it the same way until
+   * this change gave it a private monitor too, so the unrelated thread below stands in for any remaining
+   * {@code synchronized ("lock")} anywhere in the JVM.
+   */
+  @Test
+  public void testAcquisitionIsNotBlockedByTheInternedLockLiteral() throws Exception {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    FileSystemBasedLockProvider provider =
+        new FileSystemBasedLockProvider(lockConfiguration(lockDir("interned"), 0), storageConf);
+    CountDownLatch holding = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    // stands in for any other class in the JVM doing synchronized ("lock")
+    Thread unrelated = new Thread(() -> {
+      synchronized ("lock") {
+        holding.countDown();
+        try {
+          release.await();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    });
+    unrelated.setDaemon(true);
+    // Everything below has to sit inside the try: if an assertion fails before release.countDown() runs,
+    // the daemon thread parks on release.await() forever holding the JVM-wide monitor, and surefire's
+    // reuseForks would carry that into every later test in the fork.
+    try {
+      unrelated.start();
+      assertTrue(holding.await(10, TimeUnit.SECONDS), "the unrelated thread should hold the interned monitor");
+
+      boolean gotLock = assertTimeoutPreemptively(Duration.ofSeconds(10),
+          () -> provider.tryLock(1, TimeUnit.SECONDS),
+          "tryLock never returned - it is blocked on the monitor held by the unrelated thread, which means "
+              + "the provider is synchronizing on the interned \"lock\" literal again rather than on a "
+              + "private monitor");
+      assertTrue(gotLock,
+          "acquisition must not wait on a monitor held by code that has nothing to do with Hudi");
+
+      // unlock() and close() take the same monitor, so exercise them while it is still held. Without this
+      // the test passes with either of them reverted to synchronized (LOCK_FILE_NAME).
+      assertTimeoutPreemptively(Duration.ofSeconds(10),
+          () -> {
+            provider.unlock();
+            provider.close();
+          },
+          "unlock/close never returned - they are blocked on the monitor held by the unrelated thread, "
+              + "which means unlock()/close() are synchronizing on the interned \"lock\" literal again "
+              + "rather than on a private monitor");
+    } finally {
+      release.countDown();
+      provider.unlock();
+      provider.close();
+    }
+  }
+
+  /**
+   * {@code reloadCurrentOwnerLockInfo} opened the lock file in the try-with-resources header, before its own
+   * existence check, so a vanished lock file threw {@link java.io.FileNotFoundException} instead of clearing
+   * the field. The caller swallows that, so the previous owner's payload was then reported as the current
+   * one. Reading it back after the file is gone must yield the empty string, not the stale payload.
+   */
+  @Test
+  public void testReloadCurrentOwnerLockInfoClearsWhenLockFileIsGone() {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    FileSystemBasedLockProvider provider =
+        new FileSystemBasedLockProvider(lockConfiguration(lockDir("reload"), 0), storageConf);
+    try {
+      assertTrue(provider.tryLock(1, TimeUnit.SECONDS));
+      provider.reloadCurrentOwnerLockInfo();
+      assertFalse(provider.getCurrentOwnerLockInfo().isEmpty(),
+          "the holder's payload should have been read back while the lock file exists");
+
+      provider.unlock();
+      assertDoesNotThrow(provider::reloadCurrentOwnerLockInfo,
+          "a missing lock file must not throw out of the reload");
+      assertEquals("", provider.getCurrentOwnerLockInfo(),
+          "a missing lock file must clear the owner info rather than leave the previous owner's payload");
     } finally {
       provider.unlock();
       provider.close();

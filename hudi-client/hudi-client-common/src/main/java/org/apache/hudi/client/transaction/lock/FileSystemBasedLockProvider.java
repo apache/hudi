@@ -63,14 +63,33 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER
 @Slf4j
 public class FileSystemBasedLockProvider implements LockProvider<String>, Serializable {
   private static final String LOCK_FILE_NAME = "lock";
+  /**
+   * Guards this provider's lock-file operations.
+   *
+   * <p>These blocks used to synchronize on {@link #LOCK_FILE_NAME}. That is a compile-time String constant,
+   * so it is interned: any class anywhere in the JVM that synchronizes on the same {@code "lock"} literal
+   * contends on the very same monitor and silently couples itself to Hudi's lock acquisition. A private
+   * object cannot be aliased that way.
+   *
+   * <p>Kept static so that, within a classloader, the mutual-exclusion scope is unchanged by this fix.
+   * The interned literal was additionally shared across classloaders; that was never a correctness
+   * guarantee, since the atomic create on storage is the real mutual exclusion.
+   */
+  private static final Object LOCK_FILE_MONITOR = new Object();
   private final int lockTimeoutMinutes;
   private final transient HoodieStorage storage;
   private final transient StoragePath lockFile;
   protected LockConfiguration lockConfiguration;
   private final SimpleDateFormat sdf;
   private final LockInfo lockInfo;
+  /**
+   * Written while holding {@link #LOCK_FILE_MONITOR} in {@code tryLock}, but exposed through the generated
+   * getter without it. Every in-repo caller reads it on the thread that called {@code tryLock}, so they
+   * would be safe either way; {@code getCurrentOwnerLockInfo()} is public {@link LockProvider} API, and a
+   * plugged-in caller may read it from another thread, which is what the modifier is for.
+   */
   @Getter
-  private String currentOwnerLockInfo;
+  private volatile String currentOwnerLockInfo;
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
     checkRequiredProps(lockConfiguration);
@@ -97,7 +116,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   @Override
   public void close() {
-    synchronized (LOCK_FILE_NAME) {
+    synchronized (LOCK_FILE_MONITOR) {
       try {
         storage.deleteFile(this.lockFile);
       } catch (IOException e) {
@@ -120,7 +139,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   @Override
   public boolean tryLock(long time, TimeUnit unit) {
     try {
-      synchronized (LOCK_FILE_NAME) {
+      synchronized (LOCK_FILE_MONITOR) {
         // Check whether lock is already expired, if so try to delete lock file
         if (storage.exists(this.lockFile)) {
           if (checkIfExpired()) {
@@ -142,7 +161,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   @Override
   public void unlock() {
-    synchronized (LOCK_FILE_NAME) {
+    synchronized (LOCK_FILE_MONITOR) {
       try {
         if (storage.exists(this.lockFile)) {
           storage.deleteFile(this.lockFile);
@@ -188,12 +207,23 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     lockInfo.setLockStacksInfo(Thread.currentThread().getStackTrace());
   }
 
+  /**
+   * Reloads the payload written by whoever currently holds the lock file.
+   *
+   * <p>The existence check has to happen before the open, not inside it. {@code storage.open} throws
+   * {@link java.io.FileNotFoundException} on a missing path, so evaluating it in the try-with-resources
+   * header made the empty-string branch unreachable: a lock file that vanished between the caller's
+   * {@code exists} check and this call threw instead of clearing the field, the caller swallowed it, and
+   * the previous owner's payload was then reported as the current one.
+   */
   public void reloadCurrentOwnerLockInfo() {
-    try (InputStream is = storage.open(this.lockFile)) {
-      if (storage.exists(this.lockFile)) {
-        this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(is);
-      } else {
+    try {
+      if (!storage.exists(this.lockFile)) {
         this.currentOwnerLockInfo = "";
+        return;
+      }
+      try (InputStream is = storage.open(this.lockFile)) {
+        this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(is);
       }
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
