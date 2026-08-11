@@ -76,9 +76,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
@@ -763,22 +766,55 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       return lastInstant;
     }
 
+    /**
+     * Polls {@code condition} until it holds, the deltastreamer future finishes, or the timeout expires.
+     *
+     * <p>On timeout the last error the condition threw is attached to the failure. Without it the only
+     * output is a bare {@link TimeoutException} pointing at this method, which says nothing about which
+     * assertion never held - the reason HUDI-6843 stayed open: every report of it looks identical.
+     */
     static void waitTillCondition(Function<Boolean, Boolean> condition, Future dsFuture, long timeoutInSecs) throws Exception {
-      Future<Boolean> res = Executors.newSingleThreadExecutor().submit(() -> {
-        boolean ret = false;
-        while (!ret && !dsFuture.isDone()) {
-          try {
-            Thread.sleep(2000);
-            ret = condition.apply(true);
-            log.info("Condition completed successfully");
-          } catch (Throwable error) {
-            log.debug("Got error waiting for condition", error);
-            ret = false;
+      AtomicReference<Throwable> lastError = new AtomicReference<>();
+      ExecutorService executor = Executors.newSingleThreadExecutor();
+      try {
+        Future<Boolean> res = executor.submit(() -> {
+          boolean ret = false;
+          while (!ret && !dsFuture.isDone() && !Thread.currentThread().isInterrupted()) {
+            try {
+              Thread.sleep(2000);
+              ret = condition.apply(true);
+              if (ret) {
+                log.info("Condition completed successfully");
+              }
+            } catch (InterruptedException interrupted) {
+              // shutdownNow below interrupts this thread once the wait has given up. Thread.sleep clears
+              // the interrupt flag when it throws, so catching this with everything else would re-enter
+              // the loop and keep polling forever. Restore the flag and stop; this is not a condition
+              // failure, so it is deliberately not recorded as one.
+              Thread.currentThread().interrupt();
+              break;
+            } catch (Throwable error) {
+              lastError.set(error);
+              ret = false;
+            }
           }
+          return ret;
+        });
+        try {
+          res.get(timeoutInSecs, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+          Throwable last = lastError.get();
+          String detail = last == null
+              ? "The condition returned false without throwing, so there is no further detail."
+              : "The last failure it reported was: " + last;
+          Throwable cause = last == null ? e : last;
+          throw new AssertionError(
+              String.format("Condition was not met within %d seconds. %s", timeoutInSecs, detail), cause);
         }
-        return ret;
-      });
-      res.get(timeoutInSecs, TimeUnit.SECONDS);
+      } finally {
+        // this used to leak the polling thread on every call, and it is called by every continuous-mode test
+        executor.shutdownNow();
+      }
     }
 
     /**
