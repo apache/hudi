@@ -56,12 +56,20 @@ public final class VectorIndexMetadataKey {
     return encode(putUnsignedInt(ByteBuffer.allocate(5).put((byte) FAMILY_MANIFEST), Integer.toUnsignedLong(generation)));
   }
 
+  public static String quantizerPrefix(int generation) {
+    return generationFamilyPrefix(FAMILY_QUANTIZER, generation);
+  }
+
   public static String quantizer(int generation, int chunk) {
     ByteBuffer buffer = ByteBuffer.allocate(7).order(ByteOrder.BIG_ENDIAN);
     buffer.put((byte) FAMILY_QUANTIZER);
     putUnsignedInt(buffer, Integer.toUnsignedLong(generation));
     putUnsignedShort(buffer, chunk);
     return encode(buffer);
+  }
+
+  public static String centroidsPrefix(int generation) {
+    return generationFamilyPrefix(FAMILY_CENTROIDS, generation);
   }
 
   public static String centroids(int generation, int chunk) {
@@ -175,6 +183,13 @@ public final class VectorIndexMetadataKey {
       }
     }
     return Integer.compare(leftBytes.length, rightBytes.length);
+  }
+
+  private static String generationFamilyPrefix(int family, int generation) {
+    ByteBuffer buffer = ByteBuffer.allocate(5).order(ByteOrder.BIG_ENDIAN);
+    buffer.put((byte) family);
+    putUnsignedInt(buffer, Integer.toUnsignedLong(generation));
+    return encode(buffer);
   }
 
   private static int readInt(byte[] bytes, int offset) {
