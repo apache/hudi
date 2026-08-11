@@ -30,27 +30,30 @@ import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Column, DataFrame, DataFrameUtil, Dataset, Encoder, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.{Column, DataFrame, DataFrameUtil, Dataset, Encoder, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SparkSessionExtensions, SQLContext}
 import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate, Predicate, SpecializedGetters}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, SpecializedGetters}
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.catalyst.util.{DateFormatter, RebaseDateTime}
 import org.apache.spark.sql.classic.ColumnConversions
-import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
+import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
+import org.apache.spark.sql.execution.PartitionedFileUtil
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.lance.SparkLanceReaderBase
 import org.apache.spark.sql.execution.datasources.orc.{OrcColumnarBatchReader, SparkOrcReaderBase}
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFilters, SparkShreddingUtils}
 import org.apache.spark.sql.hudi.SparkAdapter
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
+import org.apache.spark.sql.hudi.blob.{BatchedBlobReaderStrategy, ScalarFunctions}
+import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.{BinaryType, DataType, StructType, VariantType}
+import org.apache.spark.sql.types.{BinaryType, DataType, DataTypes, StructType, VariantType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
-import org.apache.spark.storage.StorageLevel
 import org.apache.spark.types.variant.Variant
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -99,8 +102,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     }
   }
 
-  override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
-    Predicate.createInterpreted(e)
+  def isHoodieTable(v2Table: V2TableWithV1Fallback): Boolean = {
+    v2Table.getClass.getName.contains("HoodieInternalV2Table")
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,
@@ -128,7 +131,19 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, parameters.asScala.toMap)
   }
 
-  override def convertStorageLevelToString(level: StorageLevel): String
+  override def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {
+    TableValuedFunctions.funcs.foreach(extensions.injectTableFunction)
+  }
+
+  override def injectScalarFunctions(extensions: SparkSessionExtensions): Unit = {
+    ScalarFunctions.funcs.foreach(extensions.injectFunction)
+  }
+
+  override def injectPlannerStrategies(extensions: SparkSessionExtensions): Unit = {
+    extensions.injectPlannerStrategy { session =>
+      BatchedBlobReaderStrategy(session)
+    }
+  }
 
   override def translateFilter(predicate: Expression,
                                supportNestedPredicatePushdown: Boolean = false): Option[Filter] = {
@@ -139,13 +154,16 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     new ColumnarBatch(vectors, numRows)
   }
 
-  override def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
-                                                 queryExecution: QueryExecution,
-                                                 name: Option[String])(body: => T): T = {
-      SQLExecution.withNewExecutionId(queryExecution, name)(body)
+  override def createLanceFileReader(vectorized: Boolean,
+                                     sqlConf: SQLConf,
+                                     options: Map[String, String],
+                                     hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
+    Some(new SparkLanceReaderBase(vectorized))
   }
 
-  def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
+  override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
+    jssc.sc.stop(exitCode)
+  }
 
   override def getUTF8StringFactory: HoodieUTF8StringFactory = Spark4HoodieUTF8StringFactory
 
@@ -180,6 +198,18 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     org.apache.spark.sql.classic.Dataset.ofRows(sqlContext.sparkSession.asInstanceOf[org.apache.spark.sql.classic.SparkSession],
       applyFiltersToPlan(logicalRelation, requiredSchema, resolvedSchema,
         relation.fileFormat.asInstanceOf[HoodieFormatTrait].getRequiredFilters))
+  }
+
+  override def isLegacyBehaviorPolicy(value: Object): Boolean = {
+    value == LegacyBehaviorPolicy.LEGACY
+  }
+
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    dataType == DataTypes.TimestampNTZType
+  }
+
+  override def getRebaseSpec(policy: String): RebaseDateTime.RebaseSpec = {
+    RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName(policy))
   }
 
   override def createParquetFilters(schema: MessageType, storageConf: StorageConfiguration[_], sqlConf: SQLConf): ParquetFilters = {
