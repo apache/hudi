@@ -309,10 +309,9 @@ unlike compaction. It is also not exposed through Flink options, so Flink cannot
 Programmatic scheduling is available through the write client's `scheduleLogCompaction` and `logCompact` methods.
 :::
 
-The metadata table runs its own log compaction, controlled by a separate pair of configs. Its execution can be delegated
-to an external table service manager by setting `hoodie.metadata.table.service.manager.enabled=true` together with
-`hoodie.metadata.table.service.manager.actions=logcompaction`. Flink does not need this: its compaction pipeline
-schedules and executes metadata table log compaction directly.
+The metadata table runs its own log compaction, controlled by a separate pair of configs. It is executed by the writer
+that maintains the metadata table. On Flink no extra configuration is needed: the compaction pipeline schedules and
+executes metadata table log compaction directly.
 
 | Config Name | Default | Description |
 |---|---|---|
@@ -320,10 +319,11 @@ schedules and executes metadata table log compaction directly.
 | `hoodie.metadata.log.compaction.blocks.threshold` | `5` (Optional) | Number of log blocks above which log compaction is scheduled on the metadata table.<br /><br />`Config Param: LOG_COMPACT_BLOCKS_THRESHOLD`<br />`Since Version: 0.14.0` |
 
 :::caution
-Delegating only stops the writer from running log compaction inline. Hudi does not ship the table service manager
-itself, so one must be deployed and reachable at `hoodie.table.service.manager.uris` (default
-`http://localhost:9091`); otherwise pending `logcompaction` instants accumulate on the metadata table and, per the note
-below, metadata table compaction stops being scheduled as well.
+`hoodie.metadata.table.service.manager.actions` lists `logcompaction` among its supported actions, but it cannot be used
+to move metadata table log compaction off the writer. Setting it stops the writer from executing log compaction inline
+without handing the work anywhere: Hudi has no dispatch path that delegates a log compaction to a table service manager,
+and does not ship a table service manager in any case. Pending `logcompaction` instants would then accumulate on the
+metadata table and, per the note below, metadata table compaction would stop being scheduled as well.
 :::
 
 :::note
