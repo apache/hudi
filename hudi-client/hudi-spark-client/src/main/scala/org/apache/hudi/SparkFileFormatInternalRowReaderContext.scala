@@ -163,10 +163,16 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     // PushVariantIntoScan does for user queries. Requesting native VariantType against a
     // SHREDDED parquet base file clips the file group to {metadata, value} and reads
     // value=null; write-side callers (compaction, clustering, merge) would then persist the
-    // nulls, silently losing the variant data (#19556). Request the full-variant projection
-    // shape instead and restore native VariantType after the scan. User-facing reads pass
-    // sparkRequiredSchema and are overlaid above; Spark < 4.1 has no shredded read support
-    // and the adapter returns None (shredded files cannot be written there either).
+    // nulls, silently losing the variant data (#19556). Query paths that build this context
+    // without sparkRequiredSchema (MOR incremental relation, streaming, CDC) hit the same
+    // null reads and take the same rewrite. Request the full-variant projection shape
+    // instead and restore native VariantType after the scan. User-facing reads pass
+    // sparkRequiredSchema and are overlaid above. Only top-level variant fields are
+    // rewritten: no production write path shreds a nested variant today (a nested shredded
+    // write schema needs the test-only force config until shredding-schema inference
+    // lands), so the nested leg is deferred until such files can exist. Spark < 4.1 cannot
+    // reconstruct shredded values on read (SPARK-54410) and the adapter returns None;
+    // Spark 4.0 does write shredded files, so its pre-existing read-side gap stays as is.
     val isParquetBaseFile = !isInlineLog && !FSUtils.isLogFile(filePath) &&
       HoodieFileFormat.fromFileExtension(filePath.getFileExtension) == HoodieFileFormat.PARQUET
     val (readStructTypeForScan, variantOrdinals) =

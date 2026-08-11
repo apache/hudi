@@ -250,6 +250,37 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       metaClient.reloadActiveTimeline()
       assert(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0,
         "Expected at least one .clean instant on the timeline after compaction")
+
+      // Round 2: the compaction above compacted a log-only slice, so it never read a
+      // parquet base file. Pin that the compacted base file is shredded, then drive a
+      // second compaction that reads it through the internal reader
+      // (SparkFileFormatInternalRowReaderContext) and must carry rows 3 and 4, which
+      // exist only in that base file, forward (#19556).
+      val compactedFiles = listDataParquetFiles(tablePath)
+      assert(compactedFiles.nonEmpty, "Should have a compacted base parquet file")
+      compactedFiles.foreach { filePath =>
+        val parquetSchema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(parquetSchema, "v")
+        assert(variantGroup.containsField("typed_value"),
+          s"Compacted base file should carry typed_value. Schema:\n$variantGroup")
+      }
+
+      // The v2-merged deltacommit above was the first after the compaction; four more
+      // reach max.delta.commits = 5 and trip the second compaction inline.
+      spark.sql(s"""update $tableName set v = parse_json('{"key":"v1-r2"}'), ts = 1003 where id = 1""")
+      spark.sql(s"""update $tableName set v = parse_json('{"key":"v2-r2"}'), ts = 1004 where id = 2""")
+      spark.sql(s"""update $tableName set v = parse_json('{"key":"v1-r3"}'), ts = 1005 where id = 1""")
+      spark.sql(s"""update $tableName set v = parse_json('{"key":"v2-r3"}'), ts = 1006 where id = 2""")
+
+      metaClient.reloadActiveTimeline()
+      assertResult(2)(metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants.countInstants)
+
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"v1-r3\"}", 1005),
+        Seq(2, "{\"key\":\"v2-r3\"}", 1006),
+        Seq(3, "{\"key\":\"value3\"}", 1000),
+        Seq(4, "{\"key\":\"value4\"}", 1000)
+      )
     })
   }
 
@@ -296,6 +327,19 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName values " +
         "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
         "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
+
+      // The pre-clustering base file must actually carry the shredded layout; without this
+      // check the test silently degrades into the unshredded twin below if the forced
+      // shredding schema ever stops taking effect.
+      val preClusteringFiles = listDataParquetFiles(tablePath)
+      assert(preClusteringFiles.nonEmpty, "Should have at least one data parquet file before clustering")
+      preClusteringFiles.foreach { filePath =>
+        val parquetSchema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(parquetSchema, "v")
+        assert(variantGroup.containsField("typed_value"),
+          s"Pre-clustering base file should carry typed_value. Schema:\n$variantGroup")
+      }
+
       // Second commit trips inline clustering (max.commits = 2), which rewrites the rows
       // of the first commit too.
       spark.sql(s"insert into $tableName values " +
