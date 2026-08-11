@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.dml.schema
 
-import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.HoodieSchemaException
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -281,6 +281,24 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         Seq(3, "{\"key\":\"value3\"}", 1000),
         Seq(4, "{\"key\":\"value4\"}", 1000)
       )
+
+      // Incremental round trip over the shredded table: batch incremental reads the
+      // shredded base file through the file-group-reader file format with a catalyst
+      // schema, a stack nothing else in this suite pins for variant columns. The
+      // no-catalyst-schema legs of the incremental relation (streaming source, CDC)
+      // are tracked in #19578.
+      val incRows = spark.read.format("hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        .option(DataSourceReadOptions.START_COMMIT.key, "000")
+        .load(tablePath)
+        .selectExpr("id", "cast(v as string) as v", "ts")
+        .orderBy("id")
+        .collect()
+      assertResult(4)(incRows.length)
+      assertResult("{\"key\":\"v1-r3\"}")(incRows(0).getString(1))
+      assertResult("{\"key\":\"v2-r3\"}")(incRows(1).getString(1))
+      assertResult("{\"key\":\"value3\"}")(incRows(2).getString(1))
+      assertResult("{\"key\":\"value4\"}")(incRows(3).getString(1))
     })
   }
 
@@ -399,6 +417,19 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName values " +
         "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
         "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
+
+      // Pin the layout: these files must NOT carry typed_value, or this twin silently
+      // becomes a copy of the shredded test above and the unshredded leg of the rewrite
+      // goes uncovered.
+      val preClusteringFiles = listDataParquetFiles(tablePath)
+      assert(preClusteringFiles.nonEmpty, "Should have at least one data parquet file before clustering")
+      preClusteringFiles.foreach { filePath =>
+        val parquetSchema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(parquetSchema, "v")
+        assert(!variantGroup.containsField("typed_value"),
+          s"Unshredded base file must not carry typed_value. Schema:\n$variantGroup")
+      }
+
       spark.sql(s"insert into $tableName values " +
         "(3, parse_json('{\"key\":\"value3\"}'), 1000), " +
         "(4, parse_json('{\"key\":\"value4\"}'), 1000)")
