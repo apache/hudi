@@ -24,6 +24,14 @@ import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.hbase.CellComparatorImpl;
+import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.io.compress.Compression;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hadoop.hbase.io.hfile.HFile;
+import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -55,6 +63,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestHFileWriter {
   private static final String TEST_FILE = "test.hfile";
   private static final HFileContext CONTEXT = HFileContext.builder().build();
+  // Golden bytes (NONE compression, fixed input) that lock the on-disk encoding of the data block
+  // and the root block-index block. Update intentionally ONLY after reviewing HBase-reader
+  // compatibility, since any change here is a storage-format change.
+  private static final String GOLDEN_DATA_REGION_HEX =
+      "44415441424c4b2a000000610000005dffffffffffffffff00000040000000007e000000100000000600046b65793100"
+          + "7fffffffffffffff0476616c75653100000000100000000600046b657932007fffffffffffffff0476616c7565320000"
+          + "0000100000000600046b657933007fffffffffffffff0476616c7565330000000000";
+  private static final String GOLDEN_ROOT_INDEX_BLOCK_HEX =
+      "494458524f4f5432000000210000001dffffffffffffffff00000040000000003e000000000000000000000082100004"
+          + "6b657931007fffffffffffffff0400000000";
 
   @AfterEach
   public void tearDown() throws IOException {
@@ -232,6 +250,72 @@ class TestHFileWriter {
     }
   }
 
+  /**
+   * Format lock: with NONE compression and a fixed input the data block and root block-index block
+   * are deterministic, so their raw bytes are asserted against a golden. The same records written
+   * by the HBase HFile writer (NONE compression, NULL checksum, latest timestamp, Put type) must
+   * produce the same two block byte regions, proving the native and HBase writers agree on the
+   * on-disk encoding. Any change to the encoding (dropping the KeyValue suffix, ts/type, or
+   * framing) fails here. Neither block holds the file-creation timestamp, so the bytes are stable.
+   */
+  @Test
+  void writerBlockBytesAreStableFormatLock() throws Exception {
+    writeTestFile();
+    String[] nativeBlocks = dataAndRootIndexBlockHex(Files.readAllBytes(Paths.get(TEST_FILE)));
+    // Logged so the golden can be regenerated intentionally.
+    log.info("GOLDEN_DATA_REGION_HEX={}", nativeBlocks[0]);
+    log.info("GOLDEN_ROOT_INDEX_BLOCK_HEX={}", nativeBlocks[1]);
+    assertEquals(GOLDEN_DATA_REGION_HEX, nativeBlocks[0],
+        "native data block bytes changed (storage-format change); review HBase compatibility");
+    assertEquals(GOLDEN_ROOT_INDEX_BLOCK_HEX, nativeBlocks[1],
+        "native root block-index bytes changed (storage-format change); review HBase compatibility");
+
+    // The HBase writer, given the same records, must produce the same two block byte regions.
+    String[] hbaseBlocks = dataAndRootIndexBlockHex(writeFixedHBaseFile());
+    log.info("HBASE_DATA_REGION_HEX={}", hbaseBlocks[0]);
+    log.info("HBASE_ROOT_INDEX_BLOCK_HEX={}", hbaseBlocks[1]);
+    assertEquals(GOLDEN_DATA_REGION_HEX, hbaseBlocks[0],
+        "HBase writer data block bytes differ from the native writer");
+    assertEquals(GOLDEN_ROOT_INDEX_BLOCK_HEX, hbaseBlocks[1],
+        "HBase writer root block-index bytes differ from the native writer");
+  }
+
+  /** Returns {@code [dataRegionHex, rootIndexBlockHex]} for an HFile's raw bytes. */
+  private static String[] dataAndRootIndexBlockHex(byte[] data) {
+    int idxRootOffset = indexOf(data, HFileBlockType.ROOT_INDEX.getMagic());
+    assertTrue(idxRootOffset > 0, "root index block not found");
+    // Root index block: 33-byte v3 block header + onDiskSizeWithoutHeader payload (at header + 8).
+    int onDiskSizeWithoutHeader = readIntBE(data, idxRootOffset + 8);
+    return new String[] {
+        hex(Arrays.copyOfRange(data, 0, idxRootOffset)),
+        hex(Arrays.copyOfRange(data, idxRootOffset, idxRootOffset + 33 + onDiskSizeWithoutHeader))
+    };
+  }
+
+  /** Writes key1/key2/key3 with the HBase HFile writer, matching the native writer's settings. */
+  private static byte[] writeFixedHBaseFile() throws IOException {
+    Configuration conf = new Configuration();
+    FileSystem fs = FileSystem.getLocal(conf);
+    org.apache.hadoop.fs.Path path =
+        new org.apache.hadoop.fs.Path(Files.createTempFile("hbase_fixed_", ".hfile").toString());
+    org.apache.hadoop.hbase.io.hfile.HFileContext context = new HFileContextBuilder()
+        .withBlockSize(1024 * 1024)
+        .withCompression(Compression.Algorithm.NONE)
+        .withChecksumType(org.apache.hadoop.hbase.util.ChecksumType.NULL)
+        .withCellComparator(CellComparatorImpl.COMPARATOR)
+        .withIncludesMvcc(true)
+        .build();
+    try (HFile.Writer writer = HFile.getWriterFactory(conf, new CacheConfig(conf))
+        .withPath(fs, path).withFileContext(context).create()) {
+      for (int i = 1; i <= 3; i++) {
+        writer.append(new org.apache.hadoop.hbase.KeyValue(
+            ("key" + i).getBytes(StandardCharsets.UTF_8), new byte[0], new byte[0],
+            HConstants.LATEST_TIMESTAMP, ("value" + i).getBytes(StandardCharsets.UTF_8)));
+      }
+    }
+    return Files.readAllBytes(Paths.get(path.toString()));
+  }
+
   private static void writeTestFile() throws Exception {
     try (
         DataOutputStream outputStream =
@@ -246,7 +330,9 @@ class TestHFileWriter {
   private static void validateHFileSize() throws IOException {
     Path path = Paths.get(TEST_FILE);
     long actualSize = Files.size(path);
-    long expectedSize = 4537;
+    // Each root block-index entry carries the 10-byte HBase KeyValue suffix (column-family
+    // length + timestamp + key type). This file has one index entry, so the size grows by 10.
+    long expectedSize = 4547;
     assertEquals(expectedSize, actualSize);
   }
 
@@ -337,6 +423,32 @@ class TestHFileWriter {
     if (!Arrays.equals(expected, actual)) {
       throw new AssertionError("Byte array mismatch");
     }
+  }
+
+  private static int indexOf(byte[] haystack, byte[] needle) {
+    outer:
+    for (int i = 0; i + needle.length <= haystack.length; i++) {
+      for (int j = 0; j < needle.length; j++) {
+        if (haystack[i + j] != needle[j]) {
+          continue outer;
+        }
+      }
+      return i;
+    }
+    return -1;
+  }
+
+  private static int readIntBE(byte[] b, int off) {
+    return ((b[off] & 0xff) << 24) | ((b[off + 1] & 0xff) << 16)
+        | ((b[off + 2] & 0xff) << 8) | (b[off + 3] & 0xff);
+  }
+
+  private static String hex(byte[] b) {
+    StringBuilder sb = new StringBuilder(b.length * 2);
+    for (byte x : b) {
+      sb.append(Character.forDigit((x >> 4) & 0xf, 16)).append(Character.forDigit(x & 0xf, 16));
+    }
+    return sb.toString();
   }
 
   public static String generateRandomStringStream(int length) {
