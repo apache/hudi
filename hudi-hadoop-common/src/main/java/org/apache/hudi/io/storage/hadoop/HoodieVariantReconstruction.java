@@ -98,7 +98,7 @@ final class HoodieVariantReconstruction {
     for (int i = 0; i < requestedFields.size(); i++) {
       HoodieSchemaField requestedField = requestedFields.get(i);
       Option<HoodieSchemaField> fileField = fileSchema.getField(requestedField.name());
-      if (fileField.isPresent() && isShreddedVariant(fileField.get().schema())) {
+      if (fileField.isPresent() && isShreddedVariantTarget(requestedField.schema(), fileField.get().schema())) {
         isTarget[i] = true;
         anyTarget = true;
         // Read this column in its on-disk shredded shape.
@@ -173,10 +173,41 @@ final class HoodieVariantReconstruction {
     return out;
   }
 
-  private static boolean isShreddedVariant(HoodieSchema schema) {
-    HoodieSchema unwrapped = schema.getNonNullType();
-    return unwrapped.getType() == HoodieSchemaType.VARIANT
-        && ((HoodieSchema.Variant) unwrapped).isShredded();
+  /**
+   * Whether this column must be read in its on-disk shredded shape and reconstructed. The file
+   * schema comes from converting the parquet footer MessageType, which loses the variant logical
+   * type (variant groups come back as plain records), so the on-disk side is detected by SHAPE,
+   * anchored by the requested side: the requested column (from the table schema, logical type
+   * intact) must be a variant for the shape match to count (#19567). A file schema that kept its
+   * logical type still short-circuits on isShredded.
+   */
+  private static boolean isShreddedVariantTarget(HoodieSchema requestedFieldSchema, HoodieSchema fileFieldSchema) {
+    HoodieSchema file = fileFieldSchema.getNonNullType();
+    if (file.getType() == HoodieSchemaType.VARIANT && ((HoodieSchema.Variant) file).isShredded()) {
+      return true;
+    }
+    HoodieSchema requested = requestedFieldSchema.getNonNullType();
+    return requested.getType() == HoodieSchemaType.VARIANT && isShreddedVariantShape(file);
+  }
+
+  /** The on-disk shredded variant shape: a record of exactly {metadata: bytes, value: [nullable] bytes, typed_value}. */
+  private static boolean isShreddedVariantShape(HoodieSchema schema) {
+    if (schema.getType() != HoodieSchemaType.RECORD || schema.getFields().size() != 3) {
+      return false;
+    }
+    if (!schema.getField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD).isPresent()) {
+      return false;
+    }
+    return isBytesField(schema, HoodieSchema.Variant.VARIANT_METADATA_FIELD)
+        && isBytesField(schema, HoodieSchema.Variant.VARIANT_VALUE_FIELD);
+  }
+
+  private static boolean isBytesField(HoodieSchema schema, String fieldName) {
+    return schema.getField(fieldName)
+        .map(HoodieSchemaField::schema)
+        .map(s -> s.isNullable() ? s.getNonNullType() : s)
+        .map(s -> s.getType() == HoodieSchemaType.BYTES)
+        .orElse(false);
   }
 
   private static VariantShreddingProvider loadProvider(HoodieStorage storage) {

@@ -139,6 +139,61 @@ class TestHoodieVariantReconstruction {
     assertNull(reconstruction.reconstruct(input).get(1));
   }
 
+  @Test
+  void engagesOnFooterDerivedPlainShreddedShape(@TempDir Path tmp) {
+    // #19567: a real file schema comes from converting the parquet footer MessageType, which
+    // loses the variant logical type, so the shredded column arrives as a PLAIN record of
+    // {metadata, value, typed_value}. Detection must anchor on the requested column being a
+    // variant and match the file side by shape, then reconstruction proceeds as usual.
+    HoodieSchema fileSchema = recordWithIdAndVariant(footerStylePlainShreddedSchema());
+    HoodieSchema requestedSchema = recordWithIdAndVariant(HoodieSchema.createVariant());
+    HoodieStorage storage = storageWithReadingShredded(tmp, true);
+    storage.getConf().set(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(),
+        TestVariantShreddingProvider.class.getName());
+
+    HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(
+        fileSchema, requestedSchema, storage);
+    assertNotNull(reconstruction, "Plain-record shredded shape with a variant requested column must engage");
+
+    GenericRecord shredded = new GenericData.Record(
+        reconstruction.intermediateSchema().getField("v").get().schema().getNonNullType().toAvroSchema());
+    shredded.put("metadata", ByteBuffer.wrap(new byte[] {1}));
+    shredded.put("value", null);
+    shredded.put("typed_value", 42);
+    GenericRecord input = new GenericData.Record(reconstruction.intermediateSchema().toAvroSchema());
+    input.put("id", "record-1");
+    input.put("v", shredded);
+
+    IndexedRecord output = reconstruction.reconstruct(input);
+    assertEquals("record-1", output.get(0).toString());
+    GenericRecord variant = (GenericRecord) output.get(1);
+    assertEquals(ByteBuffer.wrap(new byte[] {1}), variant.get("metadata"));
+    assertEquals(ByteBuffer.wrap(new byte[] {42}), variant.get("value"));
+  }
+
+  @Test
+  void ignoresShreddedShapeWhenRequestedColumnIsNotVariant(@TempDir Path tmp) {
+    // A user struct that merely has the {metadata, value, typed_value} shape must not be
+    // treated as a shredded variant: without the requested-side variant anchor there is
+    // nothing to reconstruct, so create() returns null even with shredded reading disabled.
+    HoodieSchema fileSchema = recordWithIdAndVariant(footerStylePlainShreddedSchema());
+    HoodieSchema requestedSchema = recordWithIdAndVariant(footerStylePlainShreddedSchema());
+    assertNull(HoodieVariantReconstruction.create(fileSchema, requestedSchema,
+        storageWithReadingShredded(tmp, false)));
+  }
+
+  /**
+   * The shape a shredded variant column has after the parquet footer MessageType is converted
+   * back to a schema: a plain record of {metadata, value, typed_value} with no variant logical
+   * type attached.
+   */
+  private static HoodieSchema footerStylePlainShreddedSchema() {
+    return HoodieSchema.createRecord("v", "org.apache.hudi.test", null, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.INT))));
+  }
+
   private static HoodieSchema recordWithIdAndVariant(HoodieSchema variantSchema) {
     return HoodieSchema.createRecord("test_record", "org.apache.hudi.test", null, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
