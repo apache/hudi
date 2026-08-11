@@ -164,8 +164,11 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     // SHREDDED parquet base file clips the file group to {metadata, value} and reads
     // value=null; write-side callers (compaction, clustering, merge) would then persist the
     // nulls, silently losing the variant data (#19556). Query paths that build this context
-    // without sparkRequiredSchema (MOR incremental relation, streaming, CDC) hit the same
-    // null reads and take the same rewrite. Request the full-variant projection shape
+    // without sparkRequiredSchema hit the same null reads and take the same rewrite: CDC
+    // (CDCFileGroupIterator) under default configs, plus the legacy RDD paths (streaming
+    // source, MergeOnRead relations) only when hoodie.file.group.reader.enabled=false;
+    // batch incremental always scans through the file format with a catalyst schema.
+    // Request the full-variant projection shape
     // instead and restore native VariantType after the scan. User-facing reads pass
     // sparkRequiredSchema and are overlaid above. Only top-level variant fields are
     // rewritten: no production write path shreds a nested variant today (a nested shredded
