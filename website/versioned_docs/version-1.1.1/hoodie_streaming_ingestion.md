@@ -310,12 +310,13 @@ Read more in depth about concurrency control in the [concurrency control concept
 Hudi Streamer uses checkpoints to keep track of what data has been read already so it can resume without needing to reprocess all data.
 When using a Kafka source, the checkpoint is the [Kafka Offset](https://cwiki.apache.org/confluence/display/KAFKA/Offset+Management) 
 When using a DFS source, the checkpoint is the 'last modified' timestamp of the latest file read.
-Checkpoints are saved in the .hoodie commit file, under `streamer.checkpoint.key.v2` for tables at table
-version 8 or higher and `deltastreamer.checkpoint.key` below that.
+Checkpoints are saved in the .hoodie commit file. Completion time checkpoints are stored under
+`streamer.checkpoint.key.v2` and request time checkpoints under `deltastreamer.checkpoint.key`. Which one applies
+depends on the source, and for the Hudi incremental source also on the table version — see below.
 
 If you need to change the checkpoints for reprocessing or replaying data you can use the following options:
 
-- `--checkpoint` will set the checkpoint reset key in the commit file to overwrite the current checkpoint — `streamer.checkpoint.reset.key.v2` at table version 8 or higher, `deltastreamer.checkpoint.reset_key` below that. Format of checkpoint depends on [KAFKA_CHECKPOINT_TYPE](configurations.md#hoodiestreamersourcekafkacheckpointtype). By default (for type `string`), checkpoint should be provided as: `topicName,0:offset0,1:offset1,2:offset2`. For type `timestamp`, checkpoint should be provided as long value of desired timestamp. For type `single_offset`, we assume that topic consists of a single partition, so checkpoint should be provided as long value of desired offset.
+- `--checkpoint` will set the matching reset key in the commit file to overwrite the current checkpoint, either `streamer.checkpoint.reset.key.v2` or `deltastreamer.checkpoint.reset_key`. Format of checkpoint depends on [KAFKA_CHECKPOINT_TYPE](configurations.md#hoodiestreamersourcekafkacheckpointtype). By default (for type `string`), checkpoint should be provided as: `topicName,0:offset0,1:offset1,2:offset2`. For type `timestamp`, checkpoint should be provided as long value of desired timestamp. For type `single_offset`, we assume that topic consists of a single partition, so checkpoint should be provided as long value of desired offset.
 - `--source-limit` will set a maximum amount of data to read from the source. For DFS sources, this is max # of bytes read.
 For Kafka, this is the max # of events to read.
 
