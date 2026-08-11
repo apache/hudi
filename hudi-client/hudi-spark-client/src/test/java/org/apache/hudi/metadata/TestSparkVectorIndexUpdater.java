@@ -164,6 +164,43 @@ class TestSparkVectorIndexUpdater {
   }
 
   @Test
+  void testValidToInvalidVectorEmitsTombstone() {
+    SparkVectorIndexBootstrap.VectorRow previous = row(
+        "id-transition", "p1", "file-1", "001", floats(1.0f, 2.0f), 5L);
+    SparkVectorIndexBootstrap.VectorRow current = row(
+        "id-transition", "p1", "file-1", "001", floats(Float.NaN, 2.0f), 6L);
+
+    List<HoodieRecord> records = classify(rows(previous), rows(current));
+
+    assertEquals(1, records.size());
+    assertInstanceOf(HoodieVectorIndexTombstone.class, metadata(records.get(0)));
+  }
+
+  @Test
+  void testInvalidToValidVectorEmitsPosting() {
+    SparkVectorIndexBootstrap.VectorRow previous = row(
+        "id-transition", "p1", "file-1", "001", new byte[] {1, 2}, 5L);
+    SparkVectorIndexBootstrap.VectorRow current = row(
+        "id-transition", "p1", "file-1", "001", floats(1.0f, 2.0f), 6L);
+
+    List<HoodieRecord> records = classify(rows(previous), rows(current));
+
+    assertEquals(1, records.size());
+    assertEquals(6L, posting(records.get(0)).getRowPosition());
+  }
+
+  @Test
+  void testLogBackedCurrentRowPreservesKeyLookupLocator() {
+    SparkVectorIndexBootstrap.VectorRow current = row(
+        "id-log", "p1", "file-1", "001", floats(1.0f, 2.0f), -1L);
+
+    List<HoodieRecord> records = classify(Collections.emptyMap(), rows(current));
+
+    assertEquals(1, records.size());
+    assertEquals(-1L, posting(records.get(0)).getRowPosition());
+  }
+
+  @Test
   void testInvalidCurrentVectorIsNotIndexed() {
     SparkVectorIndexBootstrap.VectorRow invalid = row(
         "id-invalid", "p1", "file-1", "001", floats(Float.NaN, 1.0f), 5L);
