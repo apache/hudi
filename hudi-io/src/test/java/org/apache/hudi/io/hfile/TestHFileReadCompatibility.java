@@ -298,6 +298,33 @@ class TestHFileReadCompatibility {
     }
   }
 
+  /**
+   * The data block's previous-block-offset header must be correct: the HBase reader uses it in
+   * {@link HFileScanner#seekBefore} to step back to the prior block when the target lands on a
+   * block's first key. With a wrong offset (e.g. the block's own offset) the HBase reader re-reads
+   * the same block and throws {@code IllegalStateException} at every block boundary. On a
+   * native-written multi-block file, {@code seekBefore(key(i))} must return {@code key(i - 1)} for
+   * every record. The native reader is forward-only and never reads this field.
+   */
+  @Test
+  void hbaseReaderSeekBeforeWorksOnNativeMultiBlockFile() throws IOException {
+    byte[] data = writeMultiBlockHudiHFile(MULTI_BLOCK_RECORDS, SMALL_BLOCK_SIZE, CompressionCodec.NONE);
+    try (HFile.Reader hbaseReader = createHBaseHFileReader(data)) {
+      assertTrue(hbaseReader.getTrailer().getDataIndexCount() > 1,
+          "precondition: the file must have multiple data blocks for seekBefore to cross boundaries");
+      HFileScanner scanner = hbaseReader.getScanner(true, true);
+      for (int i = 1; i < MULTI_BLOCK_RECORDS; i++) {
+        KeyValue probe = new KeyValue(key(i).getBytes(StandardCharsets.UTF_8),
+            new byte[0], new byte[0], HConstants.LATEST_TIMESTAMP, new byte[0]);
+        assertTrue(scanner.seekBefore(probe), "seekBefore should find a key before " + key(i));
+        Cell c = scanner.getCell();
+        assertEquals(key(i - 1),
+            Bytes.toString(c.getRowArray(), c.getRowOffset(), c.getRowLength()),
+            "seekBefore(" + key(i) + ") must land on the immediately preceding key");
+      }
+    }
+  }
+
   static boolean isPrefix(byte[] prefix, byte[] array) {
     if (prefix.length > array.length) {
       return false; // can't be prefix if longer
