@@ -253,7 +253,10 @@ public final class SparkVectorIndexUpdater {
     private List<HoodieRecord> postingRecords(
         int generation, String instantTime, String indexPartition) {
       List<HoodieRecord> records = new ArrayList<>(2);
-      if (previous != null) {
+      if (previous != null
+          && (current == null
+          || previous.clusterId != current.clusterId
+          || previous.shardId != current.shardId)) {
         records.add(HoodieMetadataPayload.createVectorIndexPostingDeleteRecord(
             generation,
             previous.row.recordKey,

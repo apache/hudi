@@ -85,7 +85,7 @@ class TestSparkVectorIndexUpdater {
   }
 
   @Test
-  void testBytewiseVectorChangeEmitsOldTombstoneAndNewPosting() {
+  void testBytewiseVectorChangeWithinClusterEmitsReplacementPosting() {
     SparkVectorIndexBootstrap.VectorRow previous = row(
         "id-1", "p1", "file-1", "001", floats(0.0f, 1.0f), 5L);
     // +0.0f and -0.0f compare numerically equal but have distinct stored bytes.
@@ -94,9 +94,8 @@ class TestSparkVectorIndexUpdater {
 
     List<HoodieRecord> records = classify(rows(previous), rows(current));
 
-    assertEquals(2, records.size());
-    assertInstanceOf(HoodieVectorIndexTombstone.class, metadata(records.get(0)));
-    HoodieVectorIndexPostingDelta posting = posting(records.get(1));
+    assertEquals(1, records.size());
+    HoodieVectorIndexPostingDelta posting = posting(records.get(0));
     assertEquals(6L, posting.getRowPosition());
   }
 

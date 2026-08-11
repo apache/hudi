@@ -29,6 +29,7 @@ import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.avro.model.HoodieVectorIndexTombstone;
 import org.apache.hudi.avro.model.IntWrapper;
 import org.apache.hudi.avro.model.LongWrapper;
 import org.apache.hudi.avro.model.StringWrapper;
@@ -758,22 +759,49 @@ public class HoodieTableMetadataUtil {
     } else {
       metadataRecordsPair = metadataRecords.mapToPair(r -> Pair.of(r.getKey(), r));
     }
-    return metadataRecordsPair.reduceByKey((SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) (record1, record2) -> {
-      boolean isRecord1Deleted = record1.isDelete(DELETE_CONTEXT, CollectionUtils.emptyProps());
-      boolean isRecord2Deleted = record2.isDelete(DELETE_CONTEXT, CollectionUtils.emptyProps());
-      if (isRecord1Deleted && !isRecord2Deleted) {
+    return metadataRecordsPair.reduceByKey(
+        (SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) HoodieTableMetadataUtil::reduceIndexRecords,
+        parallelism).values();
+  }
+
+  @VisibleForTesting
+  static HoodieRecord reduceIndexRecords(HoodieRecord record1, HoodieRecord record2) {
+    boolean isRecord1VectorTombstone = isVectorIndexTombstone(record1);
+    boolean isRecord2VectorTombstone = isVectorIndexTombstone(record2);
+    if (isRecord1VectorTombstone || isRecord2VectorTombstone) {
+      // Logical vector tombstones are persisted records rather than physical Hudi deletes. When
+      // relocation emits a tombstone and a posting for the same canonical key, the live posting
+      // is authoritative regardless of partition reduction order.
+      if (isRecord1VectorTombstone && !isRecord2VectorTombstone) {
         return record2;
-      } else if (!isRecord1Deleted && isRecord2Deleted) {
+      } else if (!isRecord1VectorTombstone) {
         return record1;
-      } else if (isRecord1Deleted && isRecord2Deleted) {
-        // let's delete just 1 of them
-        return record1;
-      } else {
-        // Both records are non-deleted
-        throw new HoodieIOException("Two HoodieRecord updates to the index is seen for same record key " + record2.getRecordKey() + ", record 1 : "
-            + record1 + ", record 2 : " + record2);
       }
-    }, parallelism).values();
+      return record2;
+    }
+
+    boolean isRecord1Deleted = record1.isDelete(DELETE_CONTEXT, CollectionUtils.emptyProps());
+    boolean isRecord2Deleted = record2.isDelete(DELETE_CONTEXT, CollectionUtils.emptyProps());
+    if (isRecord1Deleted && !isRecord2Deleted) {
+      return record2;
+    } else if (!isRecord1Deleted && isRecord2Deleted) {
+      return record1;
+    } else if (isRecord1Deleted) {
+      // Both records are deleted; retain either one.
+      return record1;
+    }
+    throw new HoodieIOException("Two HoodieRecord updates to the index is seen for same record key " + record2.getRecordKey() + ", record 1 : "
+        + record1 + ", record 2 : " + record2);
+  }
+
+  private static boolean isVectorIndexTombstone(HoodieRecord record) {
+    if (!(record.getData() instanceof HoodieMetadataPayload)) {
+      return false;
+    }
+    HoodieMetadataPayload payload = (HoodieMetadataPayload) record.getData();
+    return payload.getVectorIndexMetadata()
+        .map(metadata -> metadata instanceof HoodieVectorIndexTombstone)
+        .orElse(false);
   }
 
   /**

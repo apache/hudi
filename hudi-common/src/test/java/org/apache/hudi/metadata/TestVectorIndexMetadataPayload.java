@@ -26,18 +26,67 @@ import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.avro.model.HoodieVectorIndexPostingDelta;
 import org.apache.hudi.avro.model.HoodieVectorIndexQuantizer;
 import org.apache.hudi.avro.model.HoodieVectorIndexSourceInstantMarker;
+import org.apache.hudi.avro.model.HoodieVectorIndexTombstone;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestVectorIndexMetadataPayload {
+
+  @Test
+  void testPostingTombstonePersistsAsLogicalOverlayRecord() throws Exception {
+    HoodieRecord<HoodieMetadataPayload> record =
+        HoodieMetadataPayload.createVectorIndexPostingDeleteRecord(
+            7, "rk-1", 3, 1, "20260811120000", "vector_index_demo");
+
+    assertFalse(record.getData().isDeleted());
+    GenericRecord storedRecord = (GenericRecord) record.getData().getInsertValue(null).get();
+    HoodieMetadataPayload restored = new HoodieMetadataPayload(Option.of(storedRecord));
+
+    assertFalse(restored.isDeleted());
+    HoodieVectorIndexTombstone tombstone = assertInstanceOf(
+        HoodieVectorIndexTombstone.class, restored.getVectorIndexMetadata().get());
+    assertEquals("20260811120000", tombstone.getDeleteInstant());
+  }
+
+  @Test
+  void testPostingWinsLogicalTombstoneDuringSameBatchReduction() {
+    HoodieRecord<HoodieMetadataPayload> posting = HoodieMetadataPayload.createVectorIndexPostingRecord(
+        7, "rk-1", 3, 1, "file-group-1", "dt=2026-04-01", "20260603120000",
+        new byte[] {0x01}, 1.0f, 1L, "vector_index_demo");
+    HoodieRecord<HoodieMetadataPayload> tombstone =
+        HoodieMetadataPayload.createVectorIndexPostingDeleteRecord(
+            7, "rk-1", 3, 1, "20260811120000", "vector_index_demo");
+
+    assertEquals(posting, HoodieTableMetadataUtil.reduceIndexRecords(posting, tombstone));
+    assertEquals(posting, HoodieTableMetadataUtil.reduceIndexRecords(tombstone, posting));
+  }
+
+  @Test
+  void testLatestPostingOrLogicalTombstoneWinsPreCombine() {
+    HoodieRecord<HoodieMetadataPayload> posting = HoodieMetadataPayload.createVectorIndexPostingRecord(
+        7, "rk-1", 3, 1, "file-group-1", "dt=2026-04-01", "20260603120000",
+        new byte[] {0x01}, 1.0f, 1L, "vector_index_demo");
+    HoodieRecord<HoodieMetadataPayload> tombstone =
+        HoodieMetadataPayload.createVectorIndexPostingDeleteRecord(
+            7, "rk-1", 3, 1, "20260811120000", "vector_index_demo");
+
+    assertInstanceOf(HoodieVectorIndexTombstone.class,
+        tombstone.getData().preCombine(posting.getData()).getVectorIndexMetadata().get());
+    assertInstanceOf(HoodieVectorIndexPostingDelta.class,
+        posting.getData().preCombine(tombstone.getData()).getVectorIndexMetadata().get());
+  }
 
   @Test
   void testSourceInstantMarkerCarriesGenerationAndInstant() {

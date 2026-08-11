@@ -304,7 +304,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this.key = key;
     this.type = MetadataPartitionType.VECTOR_INDEX.getRecordType();
     this.vectorIndexMetadata = vectorIndexInfo;
-    this.isDeletedRecord = vectorIndexInfo instanceof HoodieVectorIndexTombstone;
+    // Vector tombstones are logical overlay records. They must remain in the MDT until vector
+    // compaction removes the corresponding packed posting; treating them as physical Hudi deletes
+    // would allow that stale packed posting to reappear in search results.
+    this.isDeletedRecord = false;
   }
 
   /**
