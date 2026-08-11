@@ -18,6 +18,8 @@
 
 package org.apache.hudi.cdc
 
+import org.apache.hudi.SparkAdapterSupport
+
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
@@ -90,6 +92,11 @@ class InternalRowToJsonStringConverter(schema: StructType) {
               structMap.toMap
             case _ => value // fallback
           }
+        case dt if SparkAdapterSupport.sparkAdapter.isVariantType(dt) =>
+          // VariantVal.toString renders the variant as JSON; embed it as a real JSON node so
+          // the image carries the variant's structure. Falling through to the default would
+          // serialize the VariantVal bean, i.e. its raw value/metadata bytes as base64.
+          mapper.readTree(value.toString)
         case _ =>
           // For primitive types and other unsupported types, return as is
           value

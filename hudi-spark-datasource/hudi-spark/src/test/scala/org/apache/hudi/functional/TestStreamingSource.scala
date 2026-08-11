@@ -17,9 +17,9 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceReadOptions
+import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
 import org.apache.hudi.DataSourceReadOptions.{START_OFFSET, STREAMING_READ_TABLE_VERSION}
-import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
@@ -379,6 +379,69 @@ class TestStreamingSource extends StreamTest {
 
   test("test mor stream source with legacy file group reader disabled on table version 8") {
     testLegacyIncrementalStreamSource(MERGE_ON_READ, HoodieTableVersion.EIGHT)
+  }
+
+  test("test mor stream source reads shredded variant with legacy file group reader disabled") {
+    // #19578: with the file group reader disabled, MOR streaming batches materialize through
+    // HoodieMergeOnReadRDDV2, the only user-facing path reading shredded variant base files
+    // without a catalyst schema. Covers both RDD branches: the base-only split (first batch,
+    // right after inline compaction) and the merged split (second batch, after a
+    // post-compaction update lands in a log file).
+    assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
+
+    withTempDir { inputDir =>
+      val tablePath = s"${inputDir.getCanonicalPath}/test_mor_variant_legacy_stream"
+      HoodieTableMetaClient.newTableBuilder()
+        .setTableType(MERGE_ON_READ)
+        .setTableName(getTableName(tablePath))
+        .setRecordKeyFields("id")
+        .setOrderingFields("ts")
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+
+      // INMEMORY index routes MOR inserts to log files, so the first base file is the
+      // compaction's SHREDDED one; compact = true trips inline compaction on that write.
+      def addVariantData(valuesSql: String, compact: Boolean): Unit = {
+        spark.sql(valuesSql).write.format("org.apache.hudi")
+          .options(commonOptions)
+          .option(TBL_NAME.key, getTableName(tablePath))
+          .option(TABLE_TYPE.key, MERGE_ON_READ.name)
+          .option("hoodie.index.type", "INMEMORY")
+          .option("hoodie.parquet.variant.write.shredding.enabled", "true")
+          .option("hoodie.parquet.variant.force.shredding.schema.for.test", "key string")
+          .option(HoodieCompactionConfig.INLINE_COMPACT.key, compact.toString)
+          .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key, "2")
+          .mode(SaveMode.Append)
+          .save(tablePath)
+      }
+
+      addVariantData("""select 1 as id, parse_json('{"key":"v1"}') as v, 1000L as ts""", compact = false)
+      addVariantData("""select 2 as id, parse_json('{"key":"v2"}') as v, 1000L as ts""", compact = true)
+
+      val df = spark.readStream
+        .format("org.apache.hudi")
+        // force the legacy (non file-group-reader) incremental relation path
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key, "false")
+        .load(tablePath)
+        .selectExpr("id", "cast(v as string) as v", "ts")
+
+      testStream(df)(
+        // Base-only split: the compacted shredded base file must round-trip its variants.
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1\"}", 1000L), Row(2, "{\"key\":\"v2\"}", 1000L)),
+          lastOnly = true, isSorted = false),
+        StopStream,
+
+        // Merged split: the update lands in a log file on the compacted slice, so the next
+        // batch merges the shredded base with the log.
+        AssertOnQuery { _ =>
+          addVariantData("""select 1 as id, parse_json('{"key":"v1-updated"}') as v, 1001L as ts""", compact = false)
+          true
+        },
+        StartStream(),
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1-updated\"}", 1001L)), lastOnly = true, isSorted = false)
+      )
+    }
   }
 
   private def testCheckpointTranslation(tableName: String,

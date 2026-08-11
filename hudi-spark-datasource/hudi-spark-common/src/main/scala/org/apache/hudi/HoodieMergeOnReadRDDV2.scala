@@ -148,12 +148,19 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
     }
   }
 
+  // The plain skip-merging reader cannot read a SHREDDED variant base file: it requests native
+  // VariantType, which clips the shredded group to {metadata, value} and reads value=null (the
+  // #19556 defect family). Splits with variant columns take the file-group reader below, whose
+  // reader context requests the full-variant projection shape instead (#19578).
+  private val requiredSchemaHasVariant: Boolean =
+    requiredSchema.structTypeSchema.fields.exists(f => sparkAdapter.isVariantType(f.dataType))
+
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val partition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val bytesReadCallback = HoodieSparkInputMetricsUtils.getFSBytesReadOnThreadCallback()
 
     val iter: Iterator[InternalRow] = partition.split match {
-      case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
+      case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty && !requiredSchemaHasVariant =>
         val projectedReader = projectReader(fileReaders.requiredSchemaReaderSkipMerging, requiredSchema.structTypeSchema)
         projectedReader(dataFileOnlySplit.dataFile.get)
 

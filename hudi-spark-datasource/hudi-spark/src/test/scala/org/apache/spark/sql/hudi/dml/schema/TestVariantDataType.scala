@@ -448,6 +448,86 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("Test CDC captures VARIANT values from shredded base files") {
+    // #19578: CDC is the only default-config query path that builds the internal reader
+    // context without a catalyst schema, and its BASE_FILE_INSERT case additionally reads
+    // the new base file directly, bypassing the context, so it needs its own full-variant
+    // rewrite. One row only on purpose: a COW update rewrites the base file through the
+    // avro merge path, whose shredded-read fix is #19582 (in flight), and a single row
+    // leaves nothing for that path to carry over.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
+
+    // OP_KEY_ONLY reconstructs both images by reading the (shredded) file slices;
+    // DATA_BEFORE_AFTER (the default) reads the update images from the cdc log instead.
+    // The insert leg takes BASE_FILE_INSERT in both modes.
+    Seq("OP_KEY_ONLY", "DATA_BEFORE_AFTER").foreach { loggingMode =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = tmp.getCanonicalPath
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v variant,
+             |  ts long
+             |) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  type = 'cow',
+             |  preCombineField = 'ts',
+             |  'hoodie.table.cdc.enabled' = 'true',
+             |  'hoodie.table.cdc.supplemental.logging.mode' = '$loggingMode',
+             |  hoodie.parquet.variant.write.shredding.enabled = 'true',
+             |  hoodie.parquet.variant.force.shredding.schema.for.test = 'key string',
+             |  hoodie.index.type = 'INMEMORY'
+             | )
+         """.stripMargin)
+
+        spark.sql(s"""insert into $tableName values (1, parse_json('{"key":"value1"}'), 1000)""")
+
+        // Pin the trigger: the base file the CDC reads must actually be shredded.
+        val baseFiles = listDataParquetFiles(tablePath)
+        assert(baseFiles.nonEmpty, "Should have a base parquet file after the insert")
+        baseFiles.foreach { filePath =>
+          val parquetSchema = readParquetSchema(filePath)
+          val variantGroup = getFieldAsGroup(parquetSchema, "v")
+          assert(variantGroup.containsField("typed_value"),
+            s"Base file should carry typed_value. Schema:\n$variantGroup")
+        }
+
+        spark.sql(s"""update $tableName set v = parse_json('{"key":"value2"}'), ts = 1001 where id = 1""")
+
+        val cdc = spark.read.format("hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+          .option(DataSourceReadOptions.INCREMENTAL_FORMAT.key, DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
+          .option(DataSourceReadOptions.START_COMMIT.key, "000")
+          .load(tablePath)
+
+        // Insert leg: the after-image comes from BASE_FILE_INSERT's direct read of the
+        // shredded base file; a null here means that read clipped typed_value away.
+        val insertRows = cdc.where("op = 'i'")
+          .selectExpr("get_json_object(after, '$.v.key') as after_key").collect()
+        assert(insertRows.length == 1, s"[$loggingMode] expected exactly one insert cdc row")
+        assert(insertRows(0).getString(0) == "value1",
+          s"[$loggingMode] insert after-image lost the variant payload: ${insertRows(0)}")
+
+        // Update leg: images come from slice reads (OP_KEY_ONLY) or the cdc log
+        // (DATA_BEFORE_AFTER); both must carry the variant payloads.
+        val updateRows = cdc.where("op = 'u'")
+          .selectExpr(
+            "get_json_object(before, '$.v.key') as before_key",
+            "get_json_object(after, '$.v.key') as after_key")
+          .collect()
+        assert(updateRows.length == 1, s"[$loggingMode] expected exactly one update cdc row")
+        assert(updateRows(0).getString(0) == "value1",
+          s"[$loggingMode] update before-image lost the variant payload: ${updateRows(0)}")
+        assert(updateRows(0).getString(1) == "value2",
+          s"[$loggingMode] update after-image lost the variant payload: ${updateRows(0)}")
+      }
+    }
+  }
+
   test("Test bulk_insert row-writer round-trips VARIANT") {
     assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
 
