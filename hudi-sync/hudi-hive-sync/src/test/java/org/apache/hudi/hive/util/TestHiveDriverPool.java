@@ -109,7 +109,7 @@ class TestHiveDriverPool {
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
       List<String> sqls = Arrays.asList("SELECT 1", "SELECT 2", "SELECT 3", "SELECT 4");
-      HiveDriverPool.Dispatch futures = pool.dispatchAll(sqls);
+      ParallelDispatch futures = pool.dispatchAll(sqls);
       pool.awaitAll(futures);
       assertEquals(2, seenThreadsByDriver.size(), "Expected exactly 2 worker Drivers");
       int totalCalls = seenThreadsByDriver.values().stream().mapToInt(Set::size).sum();
@@ -136,7 +136,7 @@ class TestHiveDriverPool {
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
-      HiveDriverPool.Dispatch futures = pool.dispatchAll(Arrays.asList("OK", "FAIL", "OK"));
+      ParallelDispatch futures = pool.dispatchAll(Arrays.asList("OK", "FAIL", "OK"));
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(futures));
       assertNotNull(ex.getCause());
@@ -163,7 +163,7 @@ class TestHiveDriverPool {
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
       // 5 SQLs against pool of size 2 → max in-flight should be 2.
-      HiveDriverPool.Dispatch futures = pool.dispatchAll(Arrays.asList("a", "b", "c", "d", "e"));
+      ParallelDispatch futures = pool.dispatchAll(Arrays.asList("a", "b", "c", "d", "e"));
       // Release after a short wait so all SQLs progress.
       Thread.sleep(150);
       hold.countDown();
@@ -214,7 +214,7 @@ class TestHiveDriverPool {
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 3, factory)) {
       pool.runOnEachWorker(Arrays.asList("USE `db1`"));
-      HiveDriverPool.Dispatch futures = pool.dispatchAll(Arrays.asList("ALTER 1", "ALTER 2", "ALTER 3"));
+      ParallelDispatch futures = pool.dispatchAll(Arrays.asList("ALTER 1", "ALTER 2", "ALTER 3"));
       pool.awaitAll(futures);
 
       assertEquals(3, sqlsByDriver.size(), "Expected one Driver per worker");
@@ -251,7 +251,7 @@ class TestHiveDriverPool {
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 1, factory)) {
-      HiveDriverPool.Dispatch dispatch = pool.dispatchAll(Arrays.asList("FAIL", "PENDING_A", "PENDING_B"));
+      ParallelDispatch dispatch = pool.dispatchAll(Arrays.asList("FAIL", "PENDING_A", "PENDING_B"));
 
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(dispatch));
@@ -302,7 +302,7 @@ class TestHiveDriverPool {
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
       // Round-robin over 2 workers: index 0 -> worker 0, indices 1 and 2 -> worker 1.
-      HiveDriverPool.Dispatch dispatch =
+      ParallelDispatch dispatch =
           pool.dispatchAll(Arrays.asList("SLOW", "FAIL", "AFTER_FAIL"));
       assertTrue(failed.await(5, TimeUnit.SECONDS), "FAIL must have run");
       releaseSlow.countDown();
@@ -349,7 +349,7 @@ class TestHiveDriverPool {
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 1, factory)) {
-      HiveDriverPool.Dispatch dispatch = pool.dispatchAll(Collections.singletonList("FAIL"));
+      ParallelDispatch dispatch = pool.dispatchAll(Collections.singletonList("FAIL"));
       assertTrue(entered.await(10, TimeUnit.SECONDS), "Driver must have started the statement");
       assertTrue(dispatch.futureAt(0).cancel(false),
           "Sanity: a running FutureTask is still NEW, so cancel(false) must succeed");
