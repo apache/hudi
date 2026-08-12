@@ -46,8 +46,10 @@ import java.util.function.Function;
  *
  * <p>Calls from other threads still contend through the configured lock provider. A state change started with
  * {@code beginStateChange} must be ended by the same thread and with the same action instant (including an empty
- * instant). Violations fail without changing the active transaction. The callback-based API is preferred because it
- * releases the lock in a {@code finally} block.</p>
+ * instant). Every successful {@code beginStateChange} call must have exactly one matching {@code endStateChange}
+ * call. The callback-based API manages its own release in a {@code finally} block and must not be mixed with manual
+ * begin or end calls. Violations of the thread and instant ownership rules fail without changing the active
+ * transaction.</p>
  *
  * <p>When locking is not required, the begin and end methods are no-ops and the ownership checks described above do
  * not apply.</p>
@@ -61,7 +63,6 @@ public class TransactionManager implements Serializable, AutoCloseable {
   protected final boolean isLockRequired;
   private final transient TimeGenerator timeGenerator;
   private transient volatile Thread lockHolder;
-  private transient volatile boolean explicitlyStartedStateChange;
   protected Option<HoodieInstant> changeActionInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedActionInstant = Option.empty();
 
@@ -78,7 +79,6 @@ public class TransactionManager implements Serializable, AutoCloseable {
     this.isLockRequired = isLockRequired;
     this.timeGenerator = timeGenerator;
     this.lockHolder = null;
-    this.explicitlyStartedStateChange = false;
   }
 
   /**
@@ -167,7 +167,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
    *
    * <p>When locking is required, the caller must later invoke {@link #endStateChange(Option)} from the same thread and
    * pass an action instant equal to {@code changeActionInstant}. Calls from other threads contend through the
-   * configured lock provider.</p>
+   * configured lock provider. Each successful call must have exactly one matching {@code endStateChange} call.</p>
    *
    * @throws HoodieLockException if the current thread is already executing a state change through this manager
    */
@@ -177,7 +177,6 @@ public class TransactionManager implements Serializable, AutoCloseable {
       LOG.info("State change starting for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
       acquireLock();
-      explicitlyStartedStateChange = true;
       reset(changeActionInstant, lastCompletedActionInstant);
       LOG.info("State change started for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
@@ -200,9 +199,6 @@ public class TransactionManager implements Serializable, AutoCloseable {
       if (!isLockHeldByCurrentThread()) {
         throw new HoodieLockException("Cannot end a state change from a thread that does not own the lock");
       }
-      if (!explicitlyStartedStateChange) {
-        throw new HoodieLockException("Cannot call endStateChange for a callback-based state change");
-      }
       if (!this.changeActionInstant.equals(changeActionInstant)) {
         throw new HoodieLockException(String.format(
             "Cannot end state change for action instant %s because the active action instant is %s",
@@ -223,7 +219,6 @@ public class TransactionManager implements Serializable, AutoCloseable {
     lockManager.lock();
     // The previous owner may still be clearing its local state after releasing the underlying lock. Publish the new
     // state before returning so that its cleanup cannot erase this ownership.
-    this.explicitlyStartedStateChange = false;
     reset(Option.empty(), Option.empty());
     this.lockHolder = Thread.currentThread();
     LOG.info("{}: Lock acquired for action instant {}", this, changeActionInstant);
@@ -243,7 +238,6 @@ public class TransactionManager implements Serializable, AutoCloseable {
     // Another thread may acquire the underlying lock and publish itself before the releasing thread reaches this
     // method. Only clear state if it still belongs to the releasing thread.
     if (lockHolder == releasingThread) {
-      explicitlyStartedStateChange = false;
       lockHolder = null;
       reset(Option.empty(), Option.empty());
     }
