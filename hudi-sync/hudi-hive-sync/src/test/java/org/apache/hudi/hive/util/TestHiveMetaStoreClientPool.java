@@ -340,6 +340,20 @@ class TestHiveMetaStoreClientPool {
   }
 
   @Test
+  void invalidPoolSizeIsRejectedWithAClearMessage() {
+    // Both zero and negative must report the pool's own message. Negative is the reason
+    // buildClients keeps its own guard: without it, ArrayList's capacity check fires first
+    // and the caller sees "Illegal Capacity: -1" instead.
+    for (int badSize : new int[] {0, -1}) {
+      IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
+          () -> new HiveMetaStoreClientPool(Collections.emptyList(), badSize),
+          "pool size " + badSize + " must be rejected");
+      assertTrue(thrown.getMessage().contains("Pool size must be >= 1"),
+          "expected the pool's own size message, got: " + thrown.getMessage());
+    }
+  }
+
+  @Test
   void closeIsIdempotentAndClosesEveryClient() throws Exception {
     List<IMetaStoreClient> clients = mockClients(2);
     HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, 2);

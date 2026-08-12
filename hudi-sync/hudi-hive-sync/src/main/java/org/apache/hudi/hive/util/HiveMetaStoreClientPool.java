@@ -41,9 +41,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>Each pooled client wraps an independent Thrift connection to the Hive Metastore.
  * Callers borrow a client via {@link #run(ClientAction)}, which blocks until a client
- * is available, executes the action, and returns the client to the pool. A worker
- * thread pool of the same size is exposed via {@link #executor()} so callers can fan
- * out their batches to match the number of available clients.
+ * is available, executes the action, and returns the client to the pool. Batches are
+ * fanned out via {@link #dispatchAll(List, ClientConsumer)}, which submits to an internal
+ * worker pool sized to match the clients, so in-flight Thrift calls can never exceed the
+ * number of available clients.
  *
  * <p><b>Usage contract:</b> pool clients must be used <i>only</i> for partition-row
  * operations — {@code add_partitions}, {@code alter_partitions}, {@code dropPartition},
@@ -90,6 +91,10 @@ public class HiveMetaStoreClientPool implements AutoCloseable {
   }
 
   private static List<IMetaStoreClient> buildClients(HiveSyncConfig config, int size) {
+    // Duplicated with the constructor deliberately: this runs first (the public
+    // constructor evaluates buildClients before delegating), so it both fails before any
+    // Thrift connection is opened and keeps the message meaningful for a negative size,
+    // which would otherwise surface as ArrayList's "Illegal Capacity".
     if (size < 1) {
       throw new IllegalArgumentException("Pool size must be >= 1, got " + size);
     }
@@ -191,15 +196,6 @@ public class HiveMetaStoreClientPool implements AutoCloseable {
     LOG.info("Completed {} {} batches ({} cancelled) in {} ms across {} clients",
         outcome.completed(), description, outcome.cancelled(),
         System.currentTimeMillis() - start, size);
-  }
-
-  /**
-   * Worker thread pool sized to match the client pool. Use this to fan out
-   * batches so the number of in-flight Thrift calls cannot exceed the
-   * number of pooled clients.
-   */
-  public ExecutorService executor() {
-    return executor;
   }
 
   public int size() {
