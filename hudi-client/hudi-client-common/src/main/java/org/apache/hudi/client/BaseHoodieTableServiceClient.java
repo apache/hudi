@@ -1364,7 +1364,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // Case 2b: no pending rollback exists — schedule one now.
       // Refresh commitInstantOpt from the reloaded timeline.
       String newRollbackInstantTime = suppliedRollbackInstantTime.orElseGet(() ->
-          txnManager.executeStateChangeWithInstant(instantTime -> instantTime));
+          skipLocking
+              ? txnManager.executeStateChangeWithInstant(instantTime -> instantTime)
+              : txnManager.generateInstantTime());
       HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, newRollbackInstantTime,
           table.getMetaClient().getTimelineLayout().getInstantComparator().requestedTimeOrderedComparator());
       Option<HoodieRollbackPlan> rollbackPlan = table.scheduleRollback(context, newRollbackInstantTime, commitInstantOpt.get(),

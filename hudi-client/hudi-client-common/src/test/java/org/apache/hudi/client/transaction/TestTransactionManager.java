@@ -19,8 +19,8 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -32,7 +32,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.metrics.MetricsReporterType;
 
 import org.junit.jupiter.api.Assertions;
@@ -42,21 +41,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestTransactionManager extends HoodieCommonTestHarness {
@@ -100,36 +97,41 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testReentrancyForStateChange() {
+  public void testStateChangeIsNonReentrant() {
     Option<HoodieInstant> lastCompletedInstant = getInstant("0000001");
     Option<HoodieInstant> newTxnOwnerInstant = getInstant("0000002");
     transactionManager.beginStateChange(newTxnOwnerInstant, lastCompletedInstant);
 
     Option<HoodieInstant> lastCompletedInstant1 = getInstant("0000003");
     Option<HoodieInstant> newTxnOwnerInstant1 = getInstant("0000004");
+    assertThrows(HoodieLockException.class,
+        () -> transactionManager.beginStateChange(newTxnOwnerInstant1, lastCompletedInstant1));
+    assertThrows(HoodieLockException.class,
+        () -> transactionManager.executeStateChangeWithInstant(instantTime -> instantTime));
 
-    assertDoesNotThrow(() -> transactionManager.beginStateChange(newTxnOwnerInstant1, lastCompletedInstant1));
-
+    assertEquals(newTxnOwnerInstant, transactionManager.getCurrentTransactionOwner());
+    assertEquals(lastCompletedInstant, transactionManager.getLastCompletedTransactionOwner());
+    assertNotNull(transactionManager.generateInstantTime());
     transactionManager.endStateChange(newTxnOwnerInstant);
-    assertDoesNotThrow(() -> {
-      transactionManager.endStateChange(newTxnOwnerInstant1);
-    });
+    validateLockReleased();
   }
 
   @Test
-  public void testReentrancyForStateChangeWithInstant() {
+  public void testCallbackStateChangeIsNonReentrant() {
     String instantTime1 = "0000001";
     String instantTime2 = "0000002";
     transactionManager.executeStateChangeWithInstant(Option.of(instantTime1), instant1 -> {
-      assertDoesNotThrow(() -> {
-        transactionManager.executeStateChangeWithInstant(Option.of(instantTime2), instant2 -> instant2);
-      });
+      assertThrows(HoodieLockException.class,
+          () -> transactionManager.executeStateChangeWithInstant(Option.of(instantTime2), instant2 -> instant2));
+      assertThrows(HoodieLockException.class, transactionManager::beginStateChange);
+      assertEquals(instantTime1, instant1);
       return instant1;
     });
+    validateLockReleased();
   }
 
   @Test
-  public void testLockAcquisitionAndReleaseForStateChangeWithInstant() throws NoSuchFieldException, IllegalAccessException {
+  public void testLockAcquisitionAndReleaseForStateChangeWithInstant() {
     String instantTime1 = "0000001";
     assertDoesNotThrow(() -> {
       transactionManager.executeStateChangeWithInstant(Option.of(instantTime1), instant1 -> {
@@ -141,7 +143,7 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testLockBeenReleasedWhenActionThrows() throws NoSuchFieldException, IllegalAccessException {
+  public void testLockBeenReleasedWhenActionThrows() {
     String instantTime1 = "0000001";
     assertThrows(HoodieIOException.class, () -> {
       transactionManager.executeStateChangeWithInstant(Option.of(instantTime1), instant1 -> {
@@ -279,16 +281,23 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     transactionManager.beginStateChange(newTxnOwnerInstant, lastCompletedInstant);
 
     CountDownLatch countDownLatch = new CountDownLatch(1);
+    AtomicReference<Throwable> failure = new AtomicReference<>();
     // Another writer thread
     Thread writer2 = new Thread(() -> {
-      Option<HoodieInstant> newTxnOwnerInstant1 = getInstant("0000003");
-      transactionManager.endStateChange(newTxnOwnerInstant1);
-      countDownLatch.countDown();
+      try {
+        Option<HoodieInstant> newTxnOwnerInstant1 = getInstant("0000003");
+        transactionManager.endStateChange(newTxnOwnerInstant1);
+      } catch (Throwable throwable) {
+        failure.set(throwable);
+      } finally {
+        countDownLatch.countDown();
+      }
     });
 
     writer2.start();
     countDownLatch.await(30, TimeUnit.SECONDS);
-    // should not have reset the state within transaction manager since the owner is different.
+    assertTrue(failure.get() instanceof HoodieLockException);
+    // The failed completion must not change the active transaction.
     Assertions.assertTrue(transactionManager.getCurrentTransactionOwner().isPresent());
     Assertions.assertTrue(transactionManager.getLastCompletedTransactionOwner().isPresent());
 
@@ -313,8 +322,8 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     lastCompletedInstant = getInstant("0000002");
     newTxnOwnerInstant = getInstant("0000003");
     transactionManager.beginStateChange(newTxnOwnerInstant, lastCompletedInstant);
-    transactionManager.endStateChange(getInstant("0000004"));
-    // Owner reset would not happen as the end txn was invoked with an incorrect current txn owner
+    assertThrows(HoodieLockException.class, () -> transactionManager.endStateChange(getInstant("0000004")));
+    // The active state remains unchanged when completion uses the wrong instant.
     Assertions.assertTrue(transactionManager.getCurrentTransactionOwner() == newTxnOwnerInstant);
     Assertions.assertTrue(transactionManager.getLastCompletedTransactionOwner() == lastCompletedInstant);
     transactionManager.endStateChange(newTxnOwnerInstant);
@@ -349,26 +358,34 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
   @Test
   public void testGenerateInstantTimeFailsWithoutLock() throws InterruptedException {
     assertThrows(HoodieLockException.class, () -> transactionManager.generateInstantTime());
+    CountDownLatch lockAcquired = new CountDownLatch(1);
+    CountDownLatch releaseLock = new CountDownLatch(1);
     Thread anotherThread = new Thread(() -> {
-      // acquires lock from another thread
       transactionManager.beginStateChange();
+      lockAcquired.countDown();
+      try {
+        releaseLock.await(30, TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } finally {
+        transactionManager.endStateChange();
+      }
     });
     anotherThread.start();
-    anotherThread.join();
-    // can not create instant time from current thread if there is no lock acquisition.
+    assertTrue(lockAcquired.await(30, TimeUnit.SECONDS));
+    // The manager is locked, but not by this thread.
     assertThrows(HoodieLockException.class, () -> transactionManager.generateInstantTime());
+    releaseLock.countDown();
+    anotherThread.join();
+    validateLockReleased();
   }
 
   @Test
   @Tag("useLockProviderWithRuntimeError")
   public void testTransactionsWithUncheckedLockProviderRuntimeException() {
-    assertThrows(RuntimeException.class, () -> {
-      try {
-        transactionManager.beginStateChange(Option.empty(), Option.empty());
-      } finally {
-        transactionManager.endStateChange(Option.empty());
-      }
-    });
+    assertThrows(RuntimeException.class,
+        () -> transactionManager.beginStateChange(Option.empty(), Option.empty()));
+    validateLockReleased();
   }
 
   private Option<HoodieInstant> getInstant(String timestamp) {
@@ -376,24 +393,11 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
   }
 
   private void validateLockAcquired() {
-    try {
-      Method method = transactionManager.getClass().getDeclaredMethod("isLockHeldByCurrentThread");
-      method.setAccessible(true);
-      boolean acquired = (boolean) method.invoke(transactionManager);
-      assertTrue(acquired, "The lock should be acquired");
-    } catch (Exception ex) {
-      throw new HoodieValidationException("Validate lock acquisition error", ex);
-    }
+    assertTrue(transactionManager.isLockHeld(), "The lock should be held");
+    assertTrue(transactionManager.isLockHeldByCurrentThread(), "The lock should be acquired");
   }
 
-  private void validateLockReleased() throws NoSuchFieldException, IllegalAccessException {
-    // validate permits
-    Field permits = transactionManager.getClass().getDeclaredField("permits");
-    permits.setAccessible(true);
-    assertThat(permits.get(transactionManager), is(0));
-    // validate lock holder
-    Field lockHolderId = transactionManager.getClass().getDeclaredField("lockHolderId");
-    lockHolderId.setAccessible(true);
-    assertThat(lockHolderId.get(transactionManager), is(-1L));
+  private void validateLockReleased() {
+    assertFalse(transactionManager.isLockHeld(), "The lock should be released");
   }
 }

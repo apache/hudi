@@ -48,9 +48,11 @@ public class SimpleTransactionDirectMarkerBasedDetectionStrategy
     DirectMarkerTransactionManager txnManager =
         new DirectMarkerTransactionManager((HoodieWriteConfig) config, storage, partitionPath, fileId);
     InstantGenerator instantGenerator = TimelineLayout.fromVersion(activeTimeline.getTimelineLayoutVersion()).getInstantGenerator();
+    boolean transactionStarted = false;
     try {
       // Need to do transaction before create marker file when using early conflict detection
       txnManager.beginTransaction(instantTime, instantGenerator);
+      transactionStarted = true;
       super.detectAndResolveConflictIfNecessary();
 
     } catch (Exception e) {
@@ -58,7 +60,9 @@ public class SimpleTransactionDirectMarkerBasedDetectionStrategy
       throw e;
     } finally {
       // End transaction after created marker file.
-      txnManager.endTransaction(instantTime, instantGenerator);
+      if (transactionStarted) {
+        txnManager.endTransaction(instantTime, instantGenerator);
+      }
       txnManager.close();
     }
   }
