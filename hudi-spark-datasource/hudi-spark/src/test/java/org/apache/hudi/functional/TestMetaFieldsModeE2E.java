@@ -670,6 +670,47 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
   }
 
   /**
+   * The same copy-forward upsert, but with the Spark record type rather than Avro.
+   *
+   * <p>These take different code paths for clearing a meta column. Avro's {@code updateMetaField}
+   * does {@code data.put(ordinal, null)} and tolerates a null; the Spark path goes through
+   * {@code HoodieInternalRow#update}, which accepts only UTF8String or String and reports anything
+   * else via {@code value.getClass()} -- NPE-ing on a null before it can build the exception. So a
+   * COMMIT_TIME_ONLY table would crash on the first upsert that copied a record forward, while the
+   * Avro-path test above passed. Reported by the review bot on this PR.
+   */
+  @Test
+  void upsertLeavesFileNameNullOnCopiedRecordsWithTheSparkRecordType() {
+    Map<String, String> options = baseOptions();
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.COMMIT_TIME_ONLY.name());
+    // Selects the SPARK record type, which is what routes updateMetaField through
+    // HoodieInternalRow#update rather than Avro's null-tolerant data.put.
+    options.put("hoodie.write.record.merge.custom.implementation.classes", "org.apache.hudi.DefaultSparkRecordMerger");
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL());
+
+    writeRows(Arrays.asList(
+            RowFactory.create("k1", "p1", "v1"),
+            RowFactory.create("k2", "p1", "v2"),
+            RowFactory.create("k3", "p1", "v3")),
+        simpleSchema(), options, basePath(), SaveMode.Overwrite);
+
+    // k2 and k3 are copied forward untouched -- the preserve-metadata path that clears the column.
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL());
+    writeRows(Collections.singletonList(RowFactory.create("k1", "p1", "v1-updated")),
+        simpleSchema(), options, basePath(), SaveMode.Append);
+
+    List<Row> rows = spark().read().format("hudi").load(basePath()).collectAsList();
+    assertEquals(3, rows.size(), "upsert must not change the record count");
+    for (Row row : rows) {
+      String key = row.getAs("column1").toString();
+      assertNull(row.getAs(HoodieRecord.FILENAME_METADATA_FIELD),
+          "_hoodie_file_name must stay null under COMMIT_TIME_ONLY; row " + key + " had it populated");
+      assertNotNull(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
+          "_hoodie_commit_time is opted in; row " + key + " did not carry one");
+    }
+  }
+
+  /**
    * The same upsert on {@code COMMIT_TIME_AND_FILE_NAME}, where the file name is opted in, must
    * still rewrite it to the new file — otherwise a copied record would point at the file it came
    * from rather than the one holding it, which is why the unconditional rewrite existed.

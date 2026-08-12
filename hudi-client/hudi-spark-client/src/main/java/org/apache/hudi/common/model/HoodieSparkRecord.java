@@ -234,7 +234,17 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public HoodieRecord updateMetaField(HoodieSchema recordSchema, int ordinal, String value) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(this.data, structType);
-    updatableRow.update(ordinal, CatalystTypeConverters.convertToCatalyst(value));
+    if (value == null) {
+      // HoodieInternalRow#update cannot take a null: it accepts only UTF8String or String and
+      // otherwise reports the offending type via value.getClass(), which NPEs on a null before the
+      // exception is built. Clearing a meta column is a legitimate request -- a selective
+      // hoodie.meta.fields.mode leaves _hoodie_file_name unpopulated, and a record copied forward
+      // from a file written under ALL must have the stale value cleared rather than carried over --
+      // so route it through setNullAt, which handles the meta-field range correctly.
+      updatableRow.setNullAt(ordinal);
+    } else {
+      updatableRow.update(ordinal, CatalystTypeConverters.convertToCatalyst(value));
+    }
     return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), this.currentLocation, this.newLocation, false);
   }
 
