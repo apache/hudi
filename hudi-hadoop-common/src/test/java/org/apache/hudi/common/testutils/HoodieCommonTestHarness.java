@@ -83,7 +83,7 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESS
  */
 public class HoodieCommonTestHarness {
 
-  protected static final Logger log = LoggerFactory.getLogger(HoodieCommonTestHarness.class);
+  protected static final Logger LOG = LoggerFactory.getLogger(HoodieCommonTestHarness.class);
 
   protected static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
   protected static ScheduledThreadPoolExecutor scheduledThreadPoolExecutor = null;
@@ -275,7 +275,7 @@ public class HoodieCommonTestHarness {
           semaphore.release();
         }
       } catch (Exception e) {
-        log.warn("Error in polling for timeline", e);
+        LOG.warn("Error in polling for timeline", e);
       }
     }, 0, 1, TimeUnit.SECONDS);
     int maxWaitInMinutes = 10;
