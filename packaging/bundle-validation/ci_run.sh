@@ -39,6 +39,8 @@ echo "SCALA_PROFILE: $SCALA_PROFILE"
 echo "MAVEN_BASE_URL: $MAVEN_BASE_URL"
 echo "STAGING_REPO_NUM: $STAGING_REPO_NUM"
 
+BASE_IMAGE_REPOSITORY=apachehudi/hudi-ci-bundle-validation-base
+
 # Ensure only one of STAGING_REPO_NUM or MAVEN_BASE_URL is provided
 if [[ -n "$STAGING_REPO_NUM" && -n "$MAVEN_BASE_URL" ]]; then
   echo "Error: Both STAGING_REPO_NUM and MAVEN_BASE_URL cannot be provided simultaneously."
@@ -108,6 +110,10 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.12' ]];
   elif [[ ${FLINK_PROFILE} == 'flink2.1' ]]; then
     IMAGE_TAG=flink211hive313spark351
     FLINK_VERSION=2.1.1
+  elif [[ ${FLINK_PROFILE} == 'flink2.2' ]]; then
+    IMAGE_TAG=flink221hive313spark351
+    FLINK_VERSION=2.2.1
+    BASE_IMAGE_REPOSITORY=icshuo/hudi-ci-bundle-validation-base
   else
     echo "Unsupported Flink profile ${FLINK_PROFILE}"
     exit 1
@@ -236,6 +242,8 @@ else
     HUDI_FLINK_BUNDLE_NAME=hudi-flink2.0-bundle
   elif [[ ${FLINK_PROFILE} == 'flink2.1' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink2.1-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink2.2' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink2.2-bundle
   fi
 
   echo "Downloading bundle jars from base URL - $REPO_BASE_URL ..."
@@ -270,6 +278,7 @@ docker build \
 --build-arg SPARK_HADOOP_VERSION=$SPARK_HADOOP_VERSION \
 --build-arg CONFLUENT_VERSION=$CONFLUENT_VERSION \
 --build-arg KAFKA_CONNECT_HDFS_VERSION=$KAFKA_CONNECT_HDFS_VERSION \
+--build-arg BASE_IMAGE_REPOSITORY=$BASE_IMAGE_REPOSITORY \
 --build-arg IMAGE_TAG=$IMAGE_TAG \
 -t hudi-ci-bundle-validation:$IMAGE_TAG \
 .
