@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -44,7 +45,7 @@ class TestHoodieHiveSyncClientClose {
 
   @Test
   void closeReleasesProxiedMetastoreClientDirectly() throws Exception {
-    HoodieHiveSyncClient syncClient = mock(HoodieHiveSyncClient.class, CALLS_REAL_METHODS);
+    HoodieHiveSyncClient syncClient = newSyncClientUnderTest();
     IMetaStoreClient metaStoreClient = mock(IMetaStoreClient.class);
     DDLExecutor ddlExecutor = mock(DDLExecutor.class);
     setField(syncClient, "client", metaStoreClient);
@@ -58,7 +59,7 @@ class TestHoodieHiveSyncClientClose {
 
   @Test
   void closeSwallowsProxyCloseFailure() throws Exception {
-    HoodieHiveSyncClient syncClient = mock(HoodieHiveSyncClient.class, CALLS_REAL_METHODS);
+    HoodieHiveSyncClient syncClient = newSyncClientUnderTest();
     IMetaStoreClient metaStoreClient = mock(IMetaStoreClient.class);
     DDLExecutor ddlExecutor = mock(DDLExecutor.class);
     doThrow(new RuntimeException("transient close failure")).when(metaStoreClient).close();
@@ -68,6 +69,19 @@ class TestHoodieHiveSyncClientClose {
     // A transient failure closing the proxied client must not propagate.
     assertDoesNotThrow(syncClient::close);
     verify(metaStoreClient).close();
+  }
+
+  /**
+   * CALLS_REAL_METHODS skips the constructor, so fields that close() dereferences are left
+   * null rather than carrying their declared initializers. Seed those here: close() reads
+   * partitionClientPool before it reaches the client, so leaving it null fails these tests
+   * with an NPE that looks like "zero interactions" with the client mock.
+   */
+  private static HoodieHiveSyncClient newSyncClientUnderTest() throws Exception {
+    HoodieHiveSyncClient syncClient = mock(HoodieHiveSyncClient.class, CALLS_REAL_METHODS);
+    setField(syncClient, "partitionClientPool", Option.empty());
+    setField(syncClient, "partitionDriverPool", Option.empty());
+    return syncClient;
   }
 
   private static void setField(Object target, String name, Object value) throws Exception {
