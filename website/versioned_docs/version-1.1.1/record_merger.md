@@ -102,6 +102,20 @@ interface HoodieRecordMerger {
         ...
     }
 
+    boolean isProjectionCompatible() {
+        // Whether this merger can work on a projection of the table schema rather than every column.
+        // Defaults to false, which makes MOR reads fetch all columns. See "Projection compatibility" below.
+        ...
+    }
+
+    String[] getMandatoryFieldsForMerging(Schema dataSchema, HoodieTableConfig cfg,
+                                          TypedProperties properties) {
+        // The columns merge() and partialMerge() read, beyond those the query itself requests.
+        // Only consulted when isProjectionCompatible() returns true.
+        // Defaults to the record key field plus the ordering fields.
+        ...
+    }
+
     HoodieRecordType getRecordType() {...}
 
     String getMergingStrategy() {...}
@@ -122,7 +136,54 @@ When implementing the `HoodieRecordMerger` interface, follow these guidelines to
 
 5. **Associative property**: The `merge()` method should be associative: `merge(a, merge(b, c))` should yield the same result as `merge(merge(a, b), c)` for any three versions A, B, C of the same record.
 
+6. **Declare every column your merge logic reads**: if you make the merger projection compatible, `getMandatoryFieldsForMerging()` must list every column `merge()` and `partialMerge()` touch that the query does not already request. See below.
+
 For more details on the implementation, see [RFC 101](https://github.com/apache/hudi/blob/master/rfc/rfc-101/rfc-101.md).
+
+#### Projection compatibility
+
+On a Merge-on-Read table the reader would rather fetch only the columns a query asks for. It cannot do that
+safely for a custom merger, because it has no way to know which columns your merge logic reads. Two methods
+resolve that, and they work as a pair:
+
+* `isProjectionCompatible()` — defaults to **`false`**, which tells the reader to fall back to reading the
+  **full table schema**. Merging is always correct in this mode, but a query selecting two columns still
+  reads every column of every log block, so it is the slower option. `COMMIT_TIME_ORDERING` and
+  `EVENT_TIME_ORDERING` are projection compatible; a `CUSTOM` merger is not until you say so.
+* `getMandatoryFieldsForMerging()` — only consulted once `isProjectionCompatible()` returns `true`. The
+  reader then reads the columns the query requested **plus** the ones this method names. Its default is the
+  record key field and the ordering fields, which is what a merger comparing only an ordering value needs.
+
+The two must agree, and this is where it goes wrong: if you return `true` from
+`isProjectionCompatible()` and your merge logic reads a column that is neither requested by the query nor
+returned by `getMandatoryFieldsForMerging()`, that column is absent from the records your merger receives.
+What happens next is up to your code — reading the missing field typically fails with a
+`NullPointerException`, and a merger that tolerates a null there will instead make its decision on
+incomplete data and return a silently wrong result. Either way it is query-dependent, showing up only for
+queries that do not happen to select the column themselves, which makes it easy to miss in testing.
+
+So if your merger compares, say, a `priority` column to decide a winner, either declare it:
+
+```Java
+@Override
+public boolean isProjectionCompatible() {
+    return true;
+}
+
+@Override
+public String[] getMandatoryFieldsForMerging(Schema dataSchema, HoodieTableConfig cfg,
+                                             TypedProperties properties) {
+    // Keep the defaults - record key and ordering fields - and add the column merge() reads, so the
+    // reader includes it even when a query does not project it.
+    LinkedHashSet<String> fields = new LinkedHashSet<>(
+            Arrays.asList(HoodieRecordMerger.super.getMandatoryFieldsForMerging(dataSchema, cfg, properties)));
+    fields.add("priority");
+    return fields.toArray(new String[0]);
+}
+```
+
+or leave `isProjectionCompatible()` at its default `false` and accept the full-schema read. Both are correct;
+only the half-way position, projection compatible without declaring the fields, is not.
 
 ### Merge Mode Configs
 
