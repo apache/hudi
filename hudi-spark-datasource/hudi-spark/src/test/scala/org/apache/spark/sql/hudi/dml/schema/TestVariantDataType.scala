@@ -553,15 +553,18 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
 
   test("Test COW small-file merge preserves shredded VARIANT values") {
     // The #19567 repro: the second insert bin-packs into the existing small file group, and the
-    // small-file MERGE rewrites the old base file through the AVRO read path
-    // (HoodieAvroParquetReader + HoodieVariantReconstruction), not the Spark reader context the
-    // clustering tests above exercise. Before the fix, the footer-derived file schema lost the
-    // variant logical type, reconstruction never engaged, and rows 1-2 came back null after the
-    // second commit. Unlike those tests, small.file.limit stays at its default on purpose: the
-    // bin-pack is the trigger.
+    // small-file merge (HoodieConcatHandle -> HoodieMergeHelper) rewrites the old base file
+    // through the AVRO read path (HoodieAvroParquetReader + HoodieVariantReconstruction), not the
+    // Spark reader context the clustering tests above exercise. Before the fix, the footer-derived
+    // reader schema lost the variant logical type, so the merge's strict-projection check failed
+    // and degenerated the requested schema to the footer schema itself; reconstruction had no
+    // variant column to anchor on, and the writer-schema rewrite silently dropped typed_value,
+    // nulling rows 1-2 after the second commit. Pinned to the AVRO record type: that is the leg
+    // this fix covers, and the record type picks the reader the merge uses. Unlike the clustering
+    // tests, small.file.limit stays at its default on purpose: the bin-pack is the trigger.
     assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
 
-    withRecordType()(withTempDir { tmp =>
+    withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath
       spark.sql(

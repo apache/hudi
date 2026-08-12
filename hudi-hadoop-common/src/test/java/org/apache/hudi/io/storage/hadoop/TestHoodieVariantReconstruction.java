@@ -172,6 +172,18 @@ class TestHoodieVariantReconstruction {
   }
 
   @Test
+  void returnsNullForFooterDerivedPlainUnshreddedShape(@TempDir Path tmp) {
+    // The ordinary unshredded layout after footer conversion: a plain {metadata, value} record
+    // with the variant logical type lost. There is no typed_value to reconstruct, so detection
+    // must stay disengaged (the column reads directly at the requested schema) even with
+    // shredded reading disabled.
+    HoodieSchema fileSchema = recordWithIdAndVariant(footerStylePlainUnshreddedSchema());
+    HoodieSchema requestedSchema = recordWithIdAndVariant(HoodieSchema.createVariant());
+    assertNull(HoodieVariantReconstruction.create(fileSchema, requestedSchema,
+        storageWithReadingShredded(tmp, false)));
+  }
+
+  @Test
   void ignoresShreddedShapeWhenRequestedColumnIsNotVariant(@TempDir Path tmp) {
     // A user struct that merely has the {metadata, value, typed_value} shape must not be
     // treated as a shredded variant: without the requested-side variant anchor there is
@@ -192,6 +204,16 @@ class TestHoodieVariantReconstruction {
         HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
         HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
         HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.INT))));
+  }
+
+  /**
+   * The shape an unshredded variant column has after the parquet footer MessageType is converted
+   * back to a schema: a plain record of {metadata, value} with no variant logical type attached.
+   */
+  private static HoodieSchema footerStylePlainUnshreddedSchema() {
+    return HoodieSchema.createRecord("v", "org.apache.hudi.test", null, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES))));
   }
 
   private static HoodieSchema recordWithIdAndVariant(HoodieSchema variantSchema) {

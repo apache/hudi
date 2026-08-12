@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -93,8 +94,15 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     // Check whether the writer schema is simply a projection of the file's one, ie
     //   - Its field-set is a proper subset (of the reader schema)
     //   - There's no schema evolution transformation necessary
+    // Shredded variant columns are aligned to the writer side first: their footer-derived file
+    // schema surfaces a plain {metadata, value, typed_value} record where the writer schema has a
+    // variant, which can never pass the strict check even though the reader reconstructs such
+    // columns when handed a variant-bearing requested schema. Without the alignment recordSchema
+    // degenerates to the footer schema, reconstruction cannot anchor on a variant requested
+    // column, and the rewrite below silently drops typed_value (#19567).
     boolean isPureProjection = schemaEvolutionTransformerOpt.isEmpty()
-        && HoodieSchemaCompatibility.isStrictProjectionOf(readerSchema, writerSchema);
+        && HoodieSchemaCompatibility.isStrictProjectionOf(
+            VariantSchemaUtils.alignShreddedVariants(readerSchema, writerSchema), writerSchema);
     // Check whether we will need to rewrite target (already merged) records into the
     // writer's schema
     boolean shouldRewriteInWriterSchema = !isPureProjection

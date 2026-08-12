@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
@@ -41,6 +42,7 @@ import static org.apache.hudi.common.schema.TestHoodieSchemaUtils.SIMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -213,6 +215,33 @@ public class TestHoodieSchemaCompatibility {
     MessageType messageType = new AvroSchemaConverter().convert(sourceSchema.toAvroSchema());
     HoodieSchema converted = HoodieSchema.fromAvroSchema(new AvroSchemaConverter().convert(messageType));
     assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(sourceSchema, converted));
+  }
+
+  @Test
+  public void testIsStrictProjectionWithAlignedShreddedVariants() {
+    // A shredded variant base file surfaces through the parquet footer as a plain
+    // {metadata, value, typed_value} record, so it can never look like a strict projection
+    // source of the table's variant column. HoodieMergeHelper aligns such columns via
+    // VariantSchemaUtils.alignShreddedVariants before the check so the merge reads at the
+    // writer schema and variant reconstruction can engage (#19567).
+    HoodieSchema footerShredded = HoodieSchema.createRecord("v", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.INT))));
+    HoodieSchema fileSchema = HoodieSchema.createRecord("rec", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("v", HoodieSchema.createNullable(footerShredded))));
+    HoodieSchema writerSchema = HoodieSchema.createRecord("rec", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("v", HoodieSchema.createNullable(HoodieSchema.createVariant()))));
+
+    assertFalse(HoodieSchemaCompatibility.isStrictProjectionOf(fileSchema, writerSchema));
+    assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(
+        VariantSchemaUtils.alignShreddedVariants(fileSchema, writerSchema), writerSchema));
+
+    // Without a variant on the requested side there is nothing to align: a plain user struct of
+    // the same shape passes through untouched.
+    assertSame(fileSchema, VariantSchemaUtils.alignShreddedVariants(fileSchema, fileSchema));
   }
 
   @Test
