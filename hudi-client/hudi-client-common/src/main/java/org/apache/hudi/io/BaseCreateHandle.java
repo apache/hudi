@@ -159,7 +159,11 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
    */
   protected void writeRecordToFile(HoodieRecord record, HoodieSchema schema) throws IOException {
     if (preserveMetadata) {
-      HoodieRecord populatedRecord = updateFileName(record, schema, writeSchemaWithMetaFields, path.getName(), config.getProps());
+      // hoodie.meta.fields.mode is the single authority on which meta columns carry values, so the
+      // file-name rewrite is gated on it here rather than inside updateFileName.
+      HoodieRecord populatedRecord = metaFieldsMode.isFileNamePopulated()
+          ? updateFileName(record, schema, writeSchemaWithMetaFields, path.getName(), config.getProps())
+          : clearFileName(record, schema, writeSchemaWithMetaFields, config.getProps());
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(populatedRecord, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, config);
       }
@@ -175,14 +179,22 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   }
 
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, HoodieSchema schema, HoodieSchema targetSchema, String fileName, Properties prop) {
-    // hoodie.meta.fields.mode decides whether _hoodie_file_name carries a value. On the
-    // preserve-metadata path the record comes from an existing file, so leaving the column alone is
-    // not enough — MetadataValues skips null entries, and a record written while the table was on
-    // ALL would keep the file name it already had. Overwrite it with an explicit null instead.
-    if (metaFieldsMode.isFileNamePopulated()) {
-      MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
-      return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
-    }
+    MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
+    return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
+  }
+
+  /**
+   * Blank out {@code _hoodie_file_name} on a record being copied forward under a mode that does not
+   * populate it.
+   *
+   * <p>Clearing rather than leaving the column alone is deliberate. The record here came from the
+   * previous base file, so it can still carry a file name written while the table was on
+   * {@code ALL} — and that name points at a file this record no longer lives in. Passing null
+   * through {@link MetadataValues} would not do it either: {@code updateMetadataValuesInternal}
+   * skips null entries (HoodieAvroIndexedRecord:383), so the stale value would survive. Hence the
+   * explicit {@code updateMetaField}.
+   */
+  private HoodieRecord<T> clearFileName(HoodieRecord<T> record, HoodieSchema schema, HoodieSchema targetSchema, Properties prop) {
     HoodieRecord<T> withMetaFields =
         record.prependMetaFields(schema, targetSchema, new MetadataValues(), prop);
     return withMetaFields.updateMetaField(targetSchema, HoodieRecord.FILENAME_META_FIELD_ORD, null);
