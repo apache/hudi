@@ -63,8 +63,8 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   // hoodie.populate.meta.fields would otherwise resolve to NONE and write null meta columns into a
   // table whose earlier files have them populated. Resolved once rather than per record --
   // updateFileName consults it on the preserve-metadata path.
-  private final MetaFieldsMode metaFieldsMode =
-      hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode();
+  private final MetaFieldsMode metaFieldsMode = MetaFieldsMode.orAllIfUnknown(
+      hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode());
 
   public BaseCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           String partitionPath, String fileId, Option<HoodieSchema> overriddenSchema,

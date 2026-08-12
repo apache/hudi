@@ -157,6 +157,20 @@ public enum MetaFieldsMode {
   }
 
   /**
+   * Resolve the mode from a table config that may not be able to answer, defaulting to {@link #ALL}.
+   *
+   * <p>For write handles, which read the mode from the table rather than the write config. A real
+   * {@link org.apache.hudi.common.table.HoodieTableConfig#getMetaFieldsMode()} never returns null --
+   * it falls back through the deprecated boolean to {@code ALL}. But a handle constructed against a
+   * partially-stubbed table (as several unit tests do) would otherwise take a null here and NPE later,
+   * at the point of use, far from the cause. {@code ALL} is the safe default: it is the pre-feature
+   * behavior, so a caller that cannot state a mode gets what it would have got before this existed.
+   */
+  public static MetaFieldsMode orAllIfUnknown(MetaFieldsMode mode) {
+    return mode == null ? ALL : mode;
+  }
+
+  /**
    * Parse a raw {@code hoodie.meta.fields.mode} value into an enum constant, with a message that
    * lists the allowed values. Prefer this over {@link #valueOf(String)} for user-supplied input.
    */
