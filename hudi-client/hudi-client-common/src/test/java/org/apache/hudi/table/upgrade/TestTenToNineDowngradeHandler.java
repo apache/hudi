@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -64,9 +66,22 @@ class TestTenToNineDowngradeHandler {
     return helper;
   }
 
-  private static UpgradeDowngrade.TableConfigChangeSet downgradeWith(MetaFieldsMode mode) {
+  private static UpgradeDowngrade.TableConfigChangeSet downgradeWith(MetaFieldsMode tableMode) {
+    return downgradeWith(tableMode, null);
+  }
+
+  /**
+   * @param tableMode  what the table config reports
+   * @param statedMode what the writer explicitly restated, or null for the ordinary unstated case
+   */
+  private static UpgradeDowngrade.TableConfigChangeSet downgradeWith(MetaFieldsMode tableMode,
+                                                                    MetaFieldsMode statedMode) {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.contains(HoodieTableConfig.META_FIELDS_MODE)).thenReturn(statedMode != null);
+    when(writeConfig.getString(HoodieTableConfig.META_FIELDS_MODE))
+        .thenReturn(statedMode == null ? null : statedMode.name());
     return new TenToNineDowngradeHandler().downgrade(
-        mock(HoodieWriteConfig.class), mock(HoodieEngineContext.class), "001", helperFor(mode));
+        writeConfig, mock(HoodieEngineContext.class), "001", helperFor(tableMode));
   }
 
   @ParameterizedTest
@@ -74,13 +89,6 @@ class TestTenToNineDowngradeHandler {
       // Only ALL populates every meta column, so it is the only mode that maps back to true.
       "ALL,                       true",
       "NONE,                      false",
-      // Selective modes need no special case: they already persist populate.meta.fields=false, since
-      // the boolean is always derived from the mode. Restating it is what version 9 should see --
-      // version 9 has no code that reads _hoodie_commit_time selectively, so presenting the table as
-      // having no meta columns is the only honest reading. Files keep their populated columns.
-      "COMMIT_TIME_ONLY,          false",
-      "FILE_NAME_ONLY,            false",
-      "COMMIT_TIME_AND_FILE_NAME, false"
   })
   void downgradeWritesTheLegacyBooleanDerivedFromTheMode(String modeName, boolean expectedBoolean) {
     UpgradeDowngrade.TableConfigChangeSet changeSet =
@@ -96,37 +104,57 @@ class TestTenToNineDowngradeHandler {
 
   @ParameterizedTest
   @CsvSource({"COMMIT_TIME_ONLY", "FILE_NAME_ONLY", "COMMIT_TIME_AND_FILE_NAME"})
-  void downgradeOfASelectiveModeUnderClaimsRatherThanOverClaims(String modeName) {
-    // The direction is what matters: after the downgrade a version 9 reader believes the table has
-    // *no* meta columns, while the files actually carry one or two. Under-claiming is safe --
-    // nothing keys off a column the table does not advertise. Over-claiming would be the bug, and it
-    // is what happens if the boolean is left to its `true` default.
-    UpgradeDowngrade.TableConfigChangeSet changeSet =
-        downgradeWith(MetaFieldsMode.valueOf(modeName));
+  void downgradeRejectsASelectiveModeTheWriterDidNotRestate(String modeName) {
+    // The ordinary case: nobody restates meta-field settings, so a selective table would be silently
+    // collapsed to NONE -- and irreversibly, since a re-upgrade derives the mode from the boolean.
+    // Require the operator to say so rather than making that call for them.
+    MetaFieldsMode mode = MetaFieldsMode.valueOf(modeName);
 
-    assertEquals("false",
-        changeSet.propertiesToUpdate().get(HoodieTableConfig.POPULATE_META_FIELDS),
-        "a selective table must present as having no meta columns to version 9, never as ALL");
-    assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.META_FIELDS_MODE),
-        "version 9 cannot interpret the mode, so it must be removed");
+    HoodieUpgradeDowngradeException thrown =
+        assertThrows(HoodieUpgradeDowngradeException.class, () -> downgradeWith(mode));
+
+    assertTrue(thrown.getMessage().contains(modeName),
+        "the operator needs to know which mode blocked the downgrade, got: " + thrown.getMessage());
+    assertTrue(thrown.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"COMMIT_TIME_ONLY", "FILE_NAME_ONLY", "COMMIT_TIME_AND_FILE_NAME"})
+  void downgradeRetainsASelectiveModeTheWriterRestated(String modeName) {
+    // Restating the mode is the operator asserting that every reader of this table honors it. The
+    // mode is then kept on the downgraded table -- which is also what makes the round trip lossless.
+    MetaFieldsMode mode = MetaFieldsMode.valueOf(modeName);
+
+    UpgradeDowngrade.TableConfigChangeSet changeSet = downgradeWith(mode, mode);
+
+    assertFalse(changeSet.propertiesToDelete().contains(HoodieTableConfig.META_FIELDS_MODE),
+        "an explicitly restated selective mode must be retained, not dropped");
+    assertEquals("false", changeSet.propertiesToUpdate().get(HoodieTableConfig.POPULATE_META_FIELDS),
+        "the boolean is still derived from the mode, so a reader ignoring the mode under-claims");
   }
 
   @Test
-  void reUpgradeAfterDowngradingASelectiveModeResolvesToNone() {
-    // The lossy part, pinned deliberately rather than left implicit. Downgrade drops the mode and
-    // leaves populate.meta.fields=false; NineToTenUpgradeHandler then derives the mode from that
-    // boolean, so the table comes back as NONE. The hudi-cli cannot widen it back either, so
-    // recreating the table is the only way to recover the mode.
-    UpgradeDowngrade.TableConfigChangeSet down = downgradeWith(MetaFieldsMode.COMMIT_TIME_ONLY);
-    assertEquals("false", down.propertiesToUpdate().get(HoodieTableConfig.POPULATE_META_FIELDS));
+  void downgradeRejectsARestatedModeThatDisagreesWithTheTable() {
+    // Restating a *different* mode is not consent for this table -- it asserts something untrue
+    // about it, so it is treated the same as not restating at all.
+    assertThrows(HoodieUpgradeDowngradeException.class,
+        () -> downgradeWith(MetaFieldsMode.COMMIT_TIME_ONLY, MetaFieldsMode.FILE_NAME_ONLY));
+  }
 
-    // What the v9 table now carries is populate=false, which resolves to NONE on the way back up.
+  @Test
+  void retainedSelectiveModeSurvivesAReUpgrade() {
+    // The point of retaining it: a later re-upgrade finds the mode intact rather than deriving NONE
+    // from the boolean. This is what the earlier drop-and-warn behaviour could not offer.
+    UpgradeDowngrade.TableConfigChangeSet down =
+        downgradeWith(MetaFieldsMode.COMMIT_TIME_ONLY, MetaFieldsMode.COMMIT_TIME_ONLY);
+    assertFalse(down.propertiesToDelete().contains(HoodieTableConfig.META_FIELDS_MODE));
+
     UpgradeDowngrade.TableConfigChangeSet up = new NineToTenUpgradeHandler().upgrade(
         mock(HoodieWriteConfig.class), mock(HoodieEngineContext.class), "001",
-        helperFor(MetaFieldsMode.NONE));
-    assertEquals(MetaFieldsMode.NONE.name(),
+        helperFor(MetaFieldsMode.COMMIT_TIME_ONLY));
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY.name(),
         up.propertiesToUpdate().get(HoodieTableConfig.META_FIELDS_MODE),
-        "the selective mode is not recoverable across a downgrade/upgrade round trip");
+        "the retained mode must still be COMMIT_TIME_ONLY after upgrading again");
   }
 
   @Test

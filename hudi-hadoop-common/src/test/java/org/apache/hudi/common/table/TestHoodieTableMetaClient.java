@@ -203,6 +203,49 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertFalse(legacy.getTableConfig().populateMetaFields());
   }
 
+  /**
+   * From table version 10 a newly created table records only {@code hoodie.meta.fields.mode}; below
+   * that it records the deprecated boolean too.
+   *
+   * <p>The split is about who reads the table. Selective modes have to work on older versions -- a
+   * fleet adopting this feature runs patched and unpatched pipelines against the same v6 tables for
+   * months, and an unpatched reader knows only the boolean. With the property absent it falls back
+   * to its {@code true} default and would treat a selective table as ALL, over-claiming meta columns
+   * that are physically null. A table only reaches v10 once everything touching it understands the
+   * mode, so by then the boolean is redundant.
+   *
+   * <p>Note this covers tables *created* at v10. One upgraded from v9 keeps both, since a 1.x reader
+   * may still be reading it -- see {@code NineToTenUpgradeHandler}.
+   */
+  @Test
+  void testMetaFieldsModeDropsTheLegacyBooleanFromTableVersionTen() throws IOException {
+    for (MetaFieldsMode mode : MetaFieldsMode.values()) {
+      final String newPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-v10-" + mode.name();
+      HoodieTableConfig newTable = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+          .setTableName("mfm-v10-" + mode.name())
+          .setTableVersion(HoodieTableVersion.TEN.versionCode())
+          .setMetaFieldsMode(mode)
+          .initTable(this.metaClient.getStorageConf(), newPath)
+          .getTableConfig();
+      assertEquals(mode, newTable.getMetaFieldsMode());
+      assertFalse(newTable.getProps().containsKey(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+          "a table created at v10 records the mode alone for " + mode);
+
+      final String oldPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-v6-" + mode.name();
+      HoodieTableConfig oldTable = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+          .setTableName("mfm-v6-" + mode.name())
+          .setTableVersion(HoodieTableVersion.SIX.versionCode())
+          .setMetaFieldsMode(mode)
+          .initTable(this.metaClient.getStorageConf(), oldPath)
+          .getTableConfig();
+      assertEquals(mode, oldTable.getMetaFieldsMode());
+      assertEquals(mode.toLegacyPopulateMetaFields(), oldTable.populateMetaFields(),
+          "a table below v10 must still carry the derived boolean for unpatched readers, " + mode);
+    }
+  }
+
   @Test
   void testTableVersion() throws IOException {
     final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t1";

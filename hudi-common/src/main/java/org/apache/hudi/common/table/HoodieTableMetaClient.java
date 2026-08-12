@@ -1596,8 +1596,21 @@ public class HoodieTableMetaClient implements Serializable {
               HoodieTableConfig.POPULATE_META_FIELDS.key(), derivedPopulateMetaFields));
         }
         tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
-        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
-            Boolean.toString(derivedPopulateMetaFields));
+        // Below table version 10, also record the deprecated boolean. Selective modes have to work
+        // on older tables -- they are supported on any version 1.x can write, and a fleet migrating
+        // onto this feature runs patched and unpatched pipelines against the same v6 tables for a
+        // while. An unpatched reader knows only the boolean, and with the property absent it falls
+        // back to its `true` default and would treat a selective table as ALL, i.e. over-claim meta
+        // columns that are physically null.
+        //
+        // From v10 the mode alone is enough: a table is only upgraded to v10 once every reader and
+        // writer touching it understands the mode, so there is no unpatched reader left to mislead.
+        // Note this applies to tables *created* at v10; one upgraded from v9 keeps both, since a
+        // 1.x reader may still be reading it (see NineToTenUpgradeHandler).
+        if (null == tableVersion || tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+          tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+              Boolean.toString(derivedPopulateMetaFields));
+        }
       } else if (null != populateMetaFields) {
         // No explicit mode: preserve pre-1.3.0 behavior and record only the legacy boolean, which
         // resolves to ALL / NONE on read.
