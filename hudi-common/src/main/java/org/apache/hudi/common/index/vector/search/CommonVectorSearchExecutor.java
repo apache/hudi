@@ -93,17 +93,17 @@ public final class CommonVectorSearchExecutor implements VectorSearchExecutor {
     // 1. Pin one snapshot for MDT / RLI / file-slice / base reads.
     VectorSearchSnapshot snapshot = snapshotResolver.resolve(request);
     if (isStale(snapshot)) {
-      if (request.getStalePolicy() == VectorStalePolicy.FAIL) {
+      if (request.getFreshnessPolicy() == VectorStalePolicy.FAIL) {
         throw new HoodieIndexException(staleMessage(snapshot));
       }
-      if (request.getStalePolicy() == VectorStalePolicy.FALLBACK) {
+      if (request.getFreshnessPolicy() == VectorStalePolicy.FALLBACK) {
         if (fallbackSearch == null) {
           throw new HoodieIndexException(
               staleMessage(snapshot) + "; no exact fallback search is configured");
         }
         return fallbackSearch.execute(request, snapshot, engineContext);
       }
-      LOG.warn("{}; continuing because vector.query.stale_policy=WARN", staleMessage(snapshot));
+      LOG.warn("{}; continuing because vector.freshness.policy=WARN", staleMessage(snapshot));
     }
     // 2. Choose execution locality (recorded on the plan for downstream + metrics).
     VectorExecutionDecision decision = executionModeSelector.select(request);

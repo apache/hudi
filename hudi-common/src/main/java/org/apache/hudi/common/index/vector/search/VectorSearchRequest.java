@@ -42,7 +42,8 @@ public final class VectorSearchRequest implements Serializable {
   private final int nprobe;
   private final int refineFactor;
   private final boolean exactRerank;
-  private final VectorStalePolicy stalePolicy;
+  private final VectorStalePolicy freshnessPolicy;
+  private final VectorStalePolicy staleLocatorPolicy;
   private final String queryInstant;
   private final VectorSearchBudget budget;
 
@@ -56,7 +57,8 @@ public final class VectorSearchRequest implements Serializable {
                              String queryInstant,
                              VectorSearchBudget budget) {
     this(vectorColumn, queryVector, metric, topK, nprobe, refineFactor, exactRerank,
-        VectorStalePolicy.FAIL, queryInstant, budget);
+        exactRerank ? VectorStalePolicy.FAIL : VectorStalePolicy.WARN,
+        VectorStalePolicy.FALLBACK, queryInstant, budget);
   }
 
   public VectorSearchRequest(String vectorColumn,
@@ -69,6 +71,21 @@ public final class VectorSearchRequest implements Serializable {
                              VectorStalePolicy stalePolicy,
                              String queryInstant,
                              VectorSearchBudget budget) {
+    this(vectorColumn, queryVector, metric, topK, nprobe, refineFactor, exactRerank,
+        stalePolicy, stalePolicy, queryInstant, budget);
+  }
+
+  public VectorSearchRequest(String vectorColumn,
+                             float[] queryVector,
+                             VectorDistanceMetric metric,
+                             int topK,
+                             int nprobe,
+                             int refineFactor,
+                             boolean exactRerank,
+                             VectorStalePolicy freshnessPolicy,
+                             VectorStalePolicy staleLocatorPolicy,
+                             String queryInstant,
+                             VectorSearchBudget budget) {
     this.vectorColumn = Objects.requireNonNull(vectorColumn, "vectorColumn");
     this.queryVector = Objects.requireNonNull(queryVector, "queryVector");
     this.metric = Objects.requireNonNull(metric, "metric");
@@ -76,7 +93,8 @@ public final class VectorSearchRequest implements Serializable {
     this.nprobe = nprobe;
     this.refineFactor = refineFactor;
     this.exactRerank = exactRerank;
-    this.stalePolicy = Objects.requireNonNull(stalePolicy, "stalePolicy");
+    this.freshnessPolicy = Objects.requireNonNull(freshnessPolicy, "freshnessPolicy");
+    this.staleLocatorPolicy = Objects.requireNonNull(staleLocatorPolicy, "staleLocatorPolicy");
     this.queryInstant = queryInstant;
     this.budget = Objects.requireNonNull(budget, "budget");
   }
@@ -109,8 +127,18 @@ public final class VectorSearchRequest implements Serializable {
     return exactRerank;
   }
 
+  public VectorStalePolicy getFreshnessPolicy() {
+    return freshnessPolicy;
+  }
+
+  public VectorStalePolicy getStaleLocatorPolicy() {
+    return staleLocatorPolicy;
+  }
+
+  /** @deprecated Use the policy-specific accessors. */
+  @Deprecated
   public VectorStalePolicy getStalePolicy() {
-    return stalePolicy;
+    return staleLocatorPolicy;
   }
 
   /** Pinned table instant for the request, or null to resolve the latest completed instant. */

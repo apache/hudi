@@ -18,8 +18,15 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.hudi.common.index.vector.{VectorIndexOptions, VectorStalePolicy}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator
+import org.apache.hudi.common.testutils.MockHoodieTimeline
+
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 import org.junit.jupiter.api.Test
+
+import scala.collection.JavaConverters._
 
 class TestIvfRaBitQMdtSearchAlgorithm {
 
@@ -31,5 +38,56 @@ class TestIvfRaBitQMdtSearchAlgorithm {
   @Test
   def testApproximateCandidateHeapDoesNotCapLargeTopK(): Unit = {
     assertEquals(50, IvfRaBitQMdtSearchAlgorithm.approximateCandidateHeapSize(50))
+  }
+
+  @Test
+  def testRuntimeModeOverrideRecomputesImplicitFreshnessButPreservesExplicitOverride(): Unit = {
+    val indexOptions = Map(
+      VectorIndexOptions.QUERY_MODE -> "exact_rerank",
+      VectorIndexOptions.FRESHNESS_POLICY -> "fail")
+    val approximateOptions = IvfRaBitQMdtSearchAlgorithm.resolvedTuningOptions(
+      indexOptions,
+      Map(VectorIndexOptions.QUERY_MODE -> "approximate"))
+
+    assertEquals(
+      VectorStalePolicy.WARN,
+      VectorIndexOptions.getFreshnessPolicy(approximateOptions.asJava))
+
+    val explicitlyOverridden = IvfRaBitQMdtSearchAlgorithm.resolvedTuningOptions(
+      indexOptions,
+      Map(
+        VectorIndexOptions.QUERY_MODE -> "approximate",
+        VectorIndexOptions.FRESHNESS_POLICY -> "fallback"))
+    assertEquals(
+      VectorStalePolicy.FALLBACK,
+      VectorIndexOptions.getFreshnessPolicy(explicitlyOverridden.asJava))
+  }
+
+  @Test
+  def testCompletedSourceWriteTimelineIgnoresCleanAndOtherNonWriteActions(): Unit = {
+    val generator = new DefaultInstantGenerator
+    val timeline = new MockHoodieTimeline(Seq(
+      generator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001"),
+      generator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "002"),
+      generator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.INDEXING_ACTION, "003"),
+      generator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "004")
+    ).asJava)
+
+    val sourceWrites = IvfRaBitQMdtSearchAlgorithm.completedSourceWriteTimeline(timeline)
+      .getInstantsAsStream.iterator.asScala.toSeq
+
+    assertEquals(Seq("001"), sourceWrites.map(_.requestedTime()))
+    assertFalse(sourceWrites.exists(_.getAction == HoodieTimeline.CLEAN_ACTION))
+  }
+
+  @Test
+  def testFreshnessLagReportsFirstUnmarkedInstantAndCount(): Unit = {
+    val lag = IvfRaBitQMdtSearchAlgorithm
+      .freshnessLag(Seq("001", "002", "003"), Some("001"))
+      .get
+
+    assertEquals("002", lag.firstUnmarkedInstant)
+    assertEquals(2, lag.lagCount)
+    assertEquals(None, IvfRaBitQMdtSearchAlgorithm.freshnessLag(Seq("001"), Some("001")))
   }
 }

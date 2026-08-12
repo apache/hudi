@@ -403,6 +403,19 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
 
   import HoodieVectorSearchPlanBuilder._
 
+  private[analysis] case class FreshnessLag(firstUnmarkedInstant: String, lagCount: Int)
+
+  private[analysis] def completedSourceWriteTimeline(timeline: HoodieTimeline): HoodieTimeline =
+    timeline.getWriteTimeline.filterCompletedInstants()
+
+  private[analysis] def freshnessLag(
+      completedWriteInstants: Seq[String],
+      coveredInstant: Option[String]): Option[FreshnessLag] = {
+    val uncovered = completedWriteInstants.filter(instant => coveredInstant.forall(covered =>
+      compareTimestamps(covered, InstantComparison.LESSER_THAN, instant)))
+    uncovered.headOption.map(first => FreshnessLag(first, uncovered.size))
+  }
+
   override val name: String = "ivf_rabitq_mdt"
 
   private case class VectorSearchPlanContext(
@@ -424,6 +437,22 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     VectorIndexOptions.RABITQ_SEED,
     VectorIndexOptions.RABITQ_ASSUME_NORMALIZED)
 
+  private[analysis] def resolvedTuningOptions(
+      indexOptions: Map[String, String],
+      runtimeOptions: Map[String, String]): Map[String, String] = {
+    val inherited = indexOptions
+      .filterNot { case (key, _) => STRUCTURAL_OPTION_KEYS.contains(key) }
+      // An explicit runtime mode change gets that mode's freshness default unless the caller also
+      // overrides freshness. Otherwise a persisted exact-mode default (FAIL) would leak into an
+      // approximate query whose contract default is WARN.
+      .filterNot { case (key, _) =>
+        key == VectorIndexOptions.FRESHNESS_POLICY &&
+          runtimeOptions.contains(VectorIndexOptions.QUERY_MODE) &&
+          !runtimeOptions.contains(VectorIndexOptions.FRESHNESS_POLICY)
+      }
+    inherited ++ runtimeOptions
+  }
+
   private def resolvePlanContext(
       spark: SparkSession,
       basePath: String,
@@ -443,7 +472,10 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
       .setConf(storageConf.newInstance())
       .setBasePath(basePath)
       .build()
-    val timeline = metaClient.getActiveTimeline.getCommitsAndCompactionTimeline.filterCompletedInstants()
+    // Freshness markers are emitted for completed source writes only. Keep the query comparand on
+    // exactly that action family: clean, rollback, savepoint, restore, and indexing instants must
+    // never make an otherwise-covered vector generation look stale.
+    val timeline = completedSourceWriteTimeline(metaClient.getActiveTimeline)
     val latestInstantTime = timeline.lastInstant().orElseThrow(() =>
       new HoodieAnalysisException(s"No completed commits found for table '$basePath'.")).requestedTime()
     val (indexPartition, indexDefinition) = resolveVectorIndexDefinition(metaClient, embeddingCol)
@@ -469,7 +501,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     val indexOptions = Option(indexDefinition.getIndexOptions).map(_.asScala.toMap).getOrElse(Map.empty)
     val indexMetric = toSqlMetric(VectorIndexOptions.getMetric(indexOptions.asJava))
     val authoritativeMetric = validateMetricAuthority(callerMetric, indexMetric, cache)
-    val tuningOptions = indexOptions.filterNot { case (key, _) => STRUCTURAL_OPTION_KEYS.contains(key) } ++ runtimeOptions
+    val tuningOptions = resolvedTuningOptions(indexOptions, runtimeOptions)
     VectorSearchPlanContext(
       basePath, metaClient, timeline, latestInstantTime, indexPartition, indexDefinition,
       metadataTable, cache, tuningOptions, authoritativeMetric)
@@ -539,27 +571,30 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
       s"[vector_search][plan_context] basePath=$basePath latestInstant=${ctx.latestInstantTime} " +
         s"elapsedMs=${elapsedMs(contextStartNs)}")
     val coveredInstant = ctx.cache.getLastContiguousSourceInstant
-    val indexIsStale = coveredInstant == null ||
-      compareTimestamps(coveredInstant, InstantComparison.LESSER_THAN, ctx.latestInstantTime)
-    val staleFallbackPlan = if (indexIsStale) {
-      val stalePolicy = VectorIndexOptions.getStalePolicy(ctx.tuningOptions.asJava)
+    val lag = freshnessLag(
+      ctx.timeline.getInstantsAsStream.iterator.asScala.map(_.requestedTime()).toSeq,
+      Option(coveredInstant))
+    val staleFallbackPlan = lag.map { freshnessLag =>
+      val freshnessPolicy = VectorIndexOptions.getFreshnessPolicy(ctx.tuningOptions.asJava)
+      val firstUnmarkedInstant = freshnessLag.firstUnmarkedInstant
+      val lagCount = freshnessLag.lagCount
       val staleMessage =
         s"Vector index generation ${ctx.cache.getGenerationId} covers source writes through " +
-          s"${Option(coveredInstant).getOrElse("<none>")} but the pinned table instant is ${ctx.latestInstantTime}"
-      stalePolicy match {
+          s"${Option(coveredInstant).getOrElse("<none>")} but the latest source data-write instant is ${ctx.latestInstantTime}; " +
+          s"first unmarked instant=$firstUnmarkedInstant, lag count=$lagCount. " +
+          s"Run vector-index catch-up/replay (or rebuild the index until replay is available) to repair the marker gap"
+      freshnessPolicy match {
         case VectorStalePolicy.FAIL =>
           throw new HoodieAnalysisException(staleMessage)
         case VectorStalePolicy.WARN =>
-          LOG.warn(s"$staleMessage; continuing because vector.query.stale_policy=WARN")
+          LOG.warn(s"$staleMessage; continuing because vector.freshness.policy=WARN")
           None
         case VectorStalePolicy.FALLBACK =>
           LOG.warn(s"$staleMessage; using brute-force exact fallback")
           Some(BruteForceSearchAlgorithm.buildSingleQueryPlan(
             spark, corpusTable, embeddingCol, queryVector, k, metric, runtimeOptions))
       }
-    } else {
-      None
-    }
+    }.flatten
     staleFallbackPlan.getOrElse {
       if (ctx.cache.getDimension != vectorSchema.getDimension) {
         throw new HoodieAnalysisException(
@@ -766,7 +801,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
         if (arbiterEnabled) {
           val arb = VectorIndexMdtSearchUtils.arbitrateMaterializedFinalists(
             ctx.metadataTable, topCandidateList.asJava)
-          val staleFailPolicy = VectorIndexOptions.isStalePolicyFail(mergedOptions.asJava)
+          val staleFailPolicy = VectorIndexOptions.isStaleLocatorPolicyFail(mergedOptions.asJava)
           LOG.info(
             s"[vector_search][exact][arbiter] arbiterExclusions{stale=${arb.staleCount}, deleted=${arb.deletedCount}} " +
               s"serve=${arb.serve.size} stalePolicy=${if (staleFailPolicy) "fail" else "fallback"}")
@@ -778,7 +813,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
             // silent recall regression). DELETED exclusion above is already fully in effect.
             throw new HoodieAnalysisException(
               s"Vector exact search: ${arb.staleCount} stale finalist(s) need a key-based fallback fetch " +
-                s"at their live RLI location (stale.policy=${if (staleFailPolicy) "fail" else "fallback"}). " +
+                s"at their live RLI location (vector.stale.locator.policy=${if (staleFailPolicy) "fail" else "fallback"}). " +
                 s"The RLI fallback fetch is not yet implemented; re-bootstrap the index.")
           }
           arb.serve.asScala.toSeq

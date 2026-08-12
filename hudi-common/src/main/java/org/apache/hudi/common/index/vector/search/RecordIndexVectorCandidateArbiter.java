@@ -80,7 +80,7 @@ public final class RecordIndexVectorCandidateArbiter implements VectorCandidateA
     RecordIndexLookup rli = this.lookup;
     int batchSize = this.lookupBatchSize;
     return candidates.mapPartitions(
-        it -> arbitratePartition(it, rli, snapshot.getTableInstant(), request.getStalePolicy(), batchSize), true);
+        it -> arbitratePartition(it, rli, snapshot.getTableInstant(), request.getStaleLocatorPolicy(), batchSize), true);
   }
 
   private static Iterator<ArbitratedVectorCandidate> arbitratePartition(

@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -44,7 +45,9 @@ class TestVectorIndexOptions {
             VectorIndexOptions.QUERY_NUM_PROBES, "32",
             VectorIndexOptions.QUERY_REFINE_FACTOR, "50",
             VectorIndexOptions.QUERY_MODE, "exact_rerank",
-            VectorIndexOptions.QUERY_STALE_POLICY, "fail"),
+            VectorIndexOptions.FRESHNESS_POLICY, "fail",
+            VectorIndexOptions.STALE_LOCATOR_POLICY, "fallback",
+            VectorIndexOptions.FETCH_VERIFY_KEYS, "false"),
         VectorIndexOptions.validateAndNormalize(opts()));
   }
 
@@ -55,13 +58,17 @@ class TestVectorIndexOptions {
         VectorIndexOptions.QUANTIZER, "ivf-rabitq",
         VectorIndexOptions.RABITQ_ASSUME_NORMALIZED, "TRUE",
         VectorIndexOptions.QUERY_MODE, "EXACT-RERANK",
-        VectorIndexOptions.QUERY_STALE_POLICY, "WARN"));
+        VectorIndexOptions.FRESHNESS_POLICY, "WARN",
+        VectorIndexOptions.STALE_LOCATOR_POLICY, "FAIL",
+        VectorIndexOptions.FETCH_VERIFY_KEYS, "TRUE"));
 
     assertEquals("dot_product", normalized.get(VectorIndexOptions.METRIC));
     assertEquals("IVF_RABITQ", normalized.get(VectorIndexOptions.QUANTIZER));
     assertEquals("true", normalized.get(VectorIndexOptions.RABITQ_ASSUME_NORMALIZED));
     assertEquals("exact_rerank", normalized.get(VectorIndexOptions.QUERY_MODE));
-    assertEquals("warn", normalized.get(VectorIndexOptions.QUERY_STALE_POLICY));
+    assertEquals("warn", normalized.get(VectorIndexOptions.FRESHNESS_POLICY));
+    assertEquals("fail", normalized.get(VectorIndexOptions.STALE_LOCATOR_POLICY));
+    assertEquals("true", normalized.get(VectorIndexOptions.FETCH_VERIFY_KEYS));
     assertThrows(
         UnsupportedOperationException.class,
         () -> normalized.put(VectorIndexOptions.METRIC, "l2"));
@@ -74,9 +81,12 @@ class TestVectorIndexOptions {
     assertCanonical(VectorIndexOptions.METRIC, "dot_product", "dot_product");
     assertCanonical(VectorIndexOptions.QUERY_MODE, "approximate", "approximate");
     assertCanonical(VectorIndexOptions.QUERY_MODE, "exact_rerank", "exact_rerank");
-    assertCanonical(VectorIndexOptions.QUERY_STALE_POLICY, "fail", "fail");
-    assertCanonical(VectorIndexOptions.QUERY_STALE_POLICY, "warn", "warn");
-    assertCanonical(VectorIndexOptions.QUERY_STALE_POLICY, "fallback", "fallback");
+    assertCanonical(VectorIndexOptions.FRESHNESS_POLICY, "fail", "fail");
+    assertCanonical(VectorIndexOptions.FRESHNESS_POLICY, "warn", "warn");
+    assertCanonical(VectorIndexOptions.FRESHNESS_POLICY, "fallback", "fallback");
+    assertCanonical(VectorIndexOptions.STALE_LOCATOR_POLICY, "fail", "fail");
+    assertCanonical(VectorIndexOptions.STALE_LOCATOR_POLICY, "warn", "warn");
+    assertCanonical(VectorIndexOptions.STALE_LOCATOR_POLICY, "fallback", "fallback");
   }
 
   @Test
@@ -91,8 +101,36 @@ class TestVectorIndexOptions {
     assertInvalidValueContainsKey(VectorIndexOptions.METRIC, "manhattan");
     assertInvalidValueContainsKey(VectorIndexOptions.QUANTIZER, "pq");
     assertInvalidValueContainsKey(VectorIndexOptions.QUERY_MODE, "fast-ish");
-    assertInvalidValueContainsKey(VectorIndexOptions.QUERY_STALE_POLICY, "ignore");
+    assertInvalidValueContainsKey(VectorIndexOptions.FRESHNESS_POLICY, "ignore");
+    assertInvalidValueContainsKey(VectorIndexOptions.STALE_LOCATOR_POLICY, "ignore");
     assertInvalidValueContainsKey(VectorIndexOptions.RABITQ_ASSUME_NORMALIZED, "yes");
+    assertInvalidValueContainsKey(VectorIndexOptions.FETCH_VERIFY_KEYS, "yes");
+  }
+
+  @Test
+  void testFreshnessDefaultDependsOnQueryModeWhileLocatorDefaultDoesNot() {
+    assertEquals(VectorStalePolicy.FAIL, VectorIndexOptions.getFreshnessPolicy(opts()));
+    assertEquals(
+        VectorStalePolicy.WARN,
+        VectorIndexOptions.getFreshnessPolicy(opts(VectorIndexOptions.QUERY_MODE, "approximate")));
+    assertEquals(VectorStalePolicy.FALLBACK, VectorIndexOptions.getStaleLocatorPolicy(opts()));
+  }
+
+  @Test
+  void testFreshnessAndStaleLocatorPoliciesAreIndependent() {
+    Map<String, String> options = opts(
+        VectorIndexOptions.FRESHNESS_POLICY, "warn",
+        VectorIndexOptions.STALE_LOCATOR_POLICY, "fail");
+
+    assertEquals(VectorStalePolicy.WARN, VectorIndexOptions.getFreshnessPolicy(options));
+    assertEquals(VectorStalePolicy.FAIL, VectorIndexOptions.getStaleLocatorPolicy(options));
+  }
+
+  @Test
+  void testFetchVerifyKeysBooleanOption() {
+    assertFalse(VectorIndexOptions.shouldVerifyFetchKeys(opts()));
+    assertTrue(VectorIndexOptions.shouldVerifyFetchKeys(
+        opts(VectorIndexOptions.FETCH_VERIFY_KEYS, "TRUE")));
   }
 
   @Test
