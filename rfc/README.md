@@ -146,4 +146,3 @@ The list of all RFCs can be found here.
 | 108          | [Multi-dataset incremental reads in Hudi Streamer](./rfc-108/rfc-108.md)                                                                                                                                             | :eyes: `UNDER REVIEW`               |
 | 109          | Hudi Native Vector Index                                                                                                                                                                                         | :eyes: `UNDER REVIEW`               |
 | 110          | Native Full-Text Search Index                                                                                                                                                                                   | :eyes: `UNDER REVIEW`               | | :eyes: `UNDER REVIEW`               |
->>>>>>> 9783f2d1c9e3 (docs: rfc-107 Support data partition aware RocksDB RecordIndexBackend)
