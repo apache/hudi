@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
 
-  private static final Logger log = LoggerFactory.getLogger(HoodieFlinkWriteableTestTable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkWriteableTestTable.class);
 
   private HoodieFlinkWriteableTestTable(String basePath, HoodieStorage storage,
                                         HoodieTableMetaClient metaClient, HoodieSchema schema,
@@ -156,7 +156,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
           HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
           return (IndexedRecord) val;
         } catch (IOException e) {
-          log.warn("Failed to convert record {}", r, e);
+          LOG.warn("Failed to convert record {}", r, e);
           return null;
         }
       }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));

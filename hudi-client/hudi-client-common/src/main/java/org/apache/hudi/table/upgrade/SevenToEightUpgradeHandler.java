@@ -19,8 +19,8 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.timeline.LSMTimelineWriter;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.timeline.LegacyArchivedMetaEntryReader;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;

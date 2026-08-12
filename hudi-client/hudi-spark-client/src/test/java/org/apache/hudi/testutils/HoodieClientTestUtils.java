@@ -35,13 +35,13 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
@@ -77,7 +77,7 @@ import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.readHFi
  */
 public class HoodieClientTestUtils {
 
-  private static final Logger log = LoggerFactory.getLogger(HoodieClientTestUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestUtils.class);
 
   /**
    * Returns a Spark config for this test.
@@ -133,7 +133,7 @@ public class HoodieClientTestUtils {
       Configuration testHadoopConfig = new Configuration(false);
       hadoopConfigurationField.set(sparkContext, testHadoopConfig);
     } catch (NoSuchFieldException | IllegalAccessException e) {
-      log.warn(e.getMessage());
+      LOG.warn(e.getMessage());
     }
   }
 
@@ -156,7 +156,7 @@ public class HoodieClientTestUtils {
     try {
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
-      log.info("Path :{}", paths.values());
+      LOG.info("Path :{}", paths.values());
       Dataset<Row> unFilteredRows = null;
       if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.PARQUET)) {
         unFilteredRows = sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]));
@@ -289,7 +289,7 @@ public class HoodieClientTestUtils {
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();
-      log.info("Timeline service server port: {}", timelineServicePort);
+      LOG.info("Timeline service server port: {}", timelineServicePort);
       return timelineService;
     } catch (Exception ex) {
       throw new RuntimeException(ex);
