@@ -59,7 +59,8 @@ private[analysis] final class PositionalParquetFetcher(
     metric: DistanceMetric.Value,
     outputSchema: StructType,
     failOnMissingOffsetIndex: Boolean,
-    vectorOnlyProjection: Boolean) extends Serializable {
+    vectorOnlyProjection: Boolean,
+    verifyKeys: Boolean) extends Serializable {
 
   import PositionalParquetFetcher._
 
@@ -75,7 +76,7 @@ private[analysis] final class PositionalParquetFetcher(
       candidates: Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch]): FetchResult = {
     val startNs = System.nanoTime()
     if (candidates.isEmpty) {
-      FetchResult(Iterator.empty, FetchMetrics(elapsedMs = elapsedMs(startNs)))
+      FetchResult(Iterator.empty, Seq.empty, FetchMetrics(elapsedMs = elapsedMs(startNs)))
     } else {
       fetchNonEmpty(filePath, candidates, startNs)
     }
@@ -106,6 +107,7 @@ private[analysis] final class PositionalParquetFetcher(
       candidates.groupBy(candidate => rowGroupOrdinal(rowGroupStarts, rowGroups, rowPosition(candidate)))
 
     val rows = mutable.ArrayBuffer.empty[InternalRow]
+    val keyMismatches = mutable.ArrayBuffer.empty[VectorIndexMdtSearchUtils.ScoredPostingMatch]
     var rowGroupsSelected = 0
     var pagesInSelectedRowGroups = 0L
     var pagesSelected = 0L
@@ -196,9 +198,13 @@ private[analysis] final class PositionalParquetFetcher(
           val row = recordReader.read()
           rowsDecoded += 1
           candidateByRelativeRow.get(relativeRow).foreach { candidate =>
-            fillSyntheticFields(row, candidate)
-            rows += row
-            rowsMaterialized += 1
+            if (verifyKeys && decodedRecordKey(row) != candidate.getRecordKey) {
+              keyMismatches += candidate
+            } else {
+              fillSyntheticFields(row, candidate)
+              rows += row
+              rowsMaterialized += 1
+            }
           }
         }
         decodeMs += elapsedMs(decodeStartNs)
@@ -220,6 +226,7 @@ private[analysis] final class PositionalParquetFetcher(
       pageBytesFetched = pageBytesFetched,
       rowsDecoded = rowsDecoded,
       rowsMaterialized = rowsMaterialized,
+      fetchKeyMismatch = keyMismatches.size,
       physicalBytesRead = math.max(0L, physicalAfter - physicalBefore),
       footerReads = if (footerResult.cacheHit) 0 else 1,
       footerCacheHits = if (footerResult.cacheHit) 1 else 0,
@@ -229,7 +236,7 @@ private[analysis] final class PositionalParquetFetcher(
       decodeMs = decodeMs,
       scoreMs = scoreMs,
       elapsedMs = elapsedMs(startNs))
-    FetchResult(rows.iterator, metrics)
+    FetchResult(rows.iterator, keyMismatches.toSeq, metrics)
   }
 
   private def parquetRecordReader(
@@ -251,6 +258,9 @@ private[analysis] final class PositionalParquetFetcher(
           .map(field => fieldByName(fileSchema, field.name))
           .toBuffer[org.apache.parquet.schema.Type]
       }
+    if ((verifyKeys || vectorOnlyProjection) && !parquetFields.exists(_.getName == HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
+      parquetFields += fieldByName(fileSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD)
+    }
     if (!parquetFields.exists(_.getName == embeddingCol)) {
       parquetFields += fieldByName(fileSchema, embeddingCol)
     }
@@ -276,10 +286,16 @@ private[analysis] final class PositionalParquetFetcher(
     location.getPosition
   }
 
+  private def decodedRecordKey(row: InternalRow): String =
+    recordKeyOrdinal.flatMap(ordinal => Option(row.getUTF8String(ordinal))).map(_.toString).orNull
+
   private def fillSyntheticFields(row: InternalRow, candidate: VectorIndexMdtSearchUtils.ScoredPostingMatch): Unit = {
+    val liveLocation = Option(candidate.getLocation)
     recordKeyOrdinal.foreach(row.update(_, UTF8String.fromString(candidate.getRecordKey)))
-    partitionPathOrdinal.foreach(row.update(_, UTF8String.fromString(Option(candidate.getPartitionPath).getOrElse(""))))
-    fileGroupIdOrdinal.foreach(row.update(_, UTF8String.fromString(Option(candidate.getFileGroupId).getOrElse(""))))
+    partitionPathOrdinal.foreach(row.update(_, UTF8String.fromString(
+      liveLocation.map(_.getPartitionPath).orElse(Option(candidate.getPartitionPath)).getOrElse(""))))
+    fileGroupIdOrdinal.foreach(row.update(_, UTF8String.fromString(
+      liveLocation.map(_.getFileId).orElse(Option(candidate.getFileGroupId)).getOrElse(""))))
   }
 
   private def fieldOrdinal(name: String): Option[Int] =
@@ -429,7 +445,10 @@ private[analysis] object PositionalParquetFetcher {
   private val OFFSET_INDEX_CACHE = new ConcurrentHashMap[String, Option[OffsetIndex]]()
   private val RANGE_MERGE_GAP_BYTES = 512L * 1024L
 
-  final case class FetchResult(rows: Iterator[InternalRow], metrics: FetchMetrics)
+  final case class FetchResult(
+      rows: Iterator[InternalRow],
+      retryByKey: Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch],
+      metrics: FetchMetrics)
 
   final case class FetchMetrics(
       rerankCandidates: Int = 0,
@@ -443,6 +462,7 @@ private[analysis] object PositionalParquetFetcher {
       pageBytesFetched: Long = 0L,
       rowsDecoded: Long = 0L,
       rowsMaterialized: Long = 0L,
+      fetchKeyMismatch: Long = 0L,
       physicalBytesRead: Long = 0L,
       footerReads: Long = 0L,
       footerCacheHits: Long = 0L,
@@ -465,6 +485,7 @@ private[analysis] object PositionalParquetFetcher {
       pageBytesFetched + other.pageBytesFetched,
       rowsDecoded + other.rowsDecoded,
       rowsMaterialized + other.rowsMaterialized,
+      fetchKeyMismatch + other.fetchKeyMismatch,
       physicalBytesRead + other.physicalBytesRead,
       footerReads + other.footerReads,
       footerCacheHits + other.footerCacheHits,

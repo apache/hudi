@@ -33,7 +33,9 @@ import java.util.Objects;
  * verdict is mode-specific and lives in the caller:
  *
  * <ul>
- *   <li>Approximate mode: {@code SERVE} -> keep, {@code STALE} -> exclude, {@code DELETED} -> exclude.</li>
+ *   <li>Approximate mode: {@code SERVE} -> keep; {@code STALE} delta -> keep with its refreshed
+ *       RLI location because the delta owns the updated code; {@code STALE} packed posting and
+ *       {@code DELETED} -> exclude.</li>
  *   <li>Exact mode: {@code SERVE} -> positional fetch, {@code STALE} -> key-based fallback fetch,
  *       {@code DELETED} -> exclude.</li>
  * </ul>

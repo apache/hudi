@@ -403,6 +403,25 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
 
   import HoodieVectorSearchPlanBuilder._
 
+  private[analysis] def isLogResidentCandidate(
+      candidate: VectorIndexMdtSearchUtils.ScoredPostingMatch,
+      currentBaseInstant: String,
+      sliceHasLogs: Boolean): Boolean = {
+    val location = candidate.getLocation
+    sliceHasLogs && location != null && location.getPosition < 0 &&
+      location.getInstantTime != currentBaseInstant
+  }
+
+  private[analysis] def approximateArbitratedCandidate(
+      candidate: VectorIndexMdtSearchUtils.ScoredPostingMatch): Option[VectorIndexMdtSearchUtils.ScoredPostingMatch] =
+    candidate.getArbiterDecision match {
+      case VectorIndexArbiter.Decision.SERVE => Some(candidate)
+      // A delta carries the updated vector code. Refreshing only its locator is safe and preserves
+      // the new score; a stale packed-block row carries old code and must never be resurrected.
+      case VectorIndexArbiter.Decision.STALE if candidate.isDelta => Some(candidate)
+      case _ => None
+    }
+
   private[analysis] case class FreshnessLag(firstUnmarkedInstant: String, lagCount: Int)
 
   private[analysis] def completedSourceWriteTimeline(timeline: HoodieTimeline): HoodieTimeline =
@@ -688,10 +707,10 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
           var deleted = 0L
           val kept = ArrayBuffer.empty[VectorIndexMdtSearchUtils.ScoredPostingMatch]
           it.foreach { c =>
-            c.getArbiterDecision match {
-              case VectorIndexArbiter.Decision.SERVE => kept += c
-              case VectorIndexArbiter.Decision.STALE => stale += 1L
-              case _ => deleted += 1L
+            approximateArbitratedCandidate(c) match {
+              case Some(candidate) => kept += candidate
+              case None if c.getArbiterDecision == VectorIndexArbiter.Decision.STALE => stale += 1L
+              case None => deleted += 1L
             }
           }
           staleAcc.add(stale)
@@ -705,10 +724,11 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
         HoodieJavaRDD.getJavaRDD(topCandidates).rdd
       }
     val resultRows = candidateRdd.map { c =>
+      val liveLocation = Option(c.getLocation)
       Row(
         c.getRecordKey,
-        Option(c.getPartitionPath).getOrElse(""),
-        Option(c.getFileGroupId).getOrElse(""),
+        liveLocation.map(_.getPartitionPath).orElse(Option(c.getPartitionPath)).getOrElse(""),
+        liveLocation.map(_.getFileId).orElse(Option(c.getFileGroupId)).getOrElse(""),
         c.getApproxDistance.toDouble
       )
     }
@@ -792,10 +812,8 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
             s"Exact rerank requires per-candidate posting locators.")
       }
 
-      // RFC-109 RLI finalist arbiter (freshness gate). Default-off. Exact mode already materialized
-      // the finalists to the driver, so this is a single batched RLI lookup with no extra shuffle.
-      // SERVE -> positional fetch (below); DELETED -> excluded here; STALE -> key-based fallback
-      // fetch at the live location, which is the one remaining hook (see throw below).
+      // RFC-109 RLI finalist arbiter. Exact mode uses refreshed RLI locations for every live
+      // candidate: SERVE retains positional trust; STALE is resolved by key in the live base file.
       val arbiterEnabled = VectorIndexOptions.isFinalistArbiterEnabled(mergedOptions.asJava)
       val serveCandidates: Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch] =
         if (arbiterEnabled) {
@@ -805,18 +823,12 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
           LOG.info(
             s"[vector_search][exact][arbiter] arbiterExclusions{stale=${arb.staleCount}, deleted=${arb.deletedCount}} " +
               s"serve=${arb.serve.size} stalePolicy=${if (staleFailPolicy) "fail" else "fallback"}")
-          if (!arb.stale.isEmpty) {
-            // Stale finalists (row rewritten/moved but still live) cannot be served by positional
-            // fetch; they need a key-based fallback fetch at the live RLI location. That fetch is
-            // the one remaining piece of upsert/delete work-stream item 1. Until it lands, fail
-            // loudly under BOTH policies rather than silently dropping live rows (which would be a
-            // silent recall regression). DELETED exclusion above is already fully in effect.
+          if (staleFailPolicy && !arb.stale.isEmpty) {
             throw new HoodieAnalysisException(
-              s"Vector exact search: ${arb.staleCount} stale finalist(s) need a key-based fallback fetch " +
-                s"at their live RLI location (vector.stale.locator.policy=${if (staleFailPolicy) "fail" else "fallback"}). " +
-                s"The RLI fallback fetch is not yet implemented; re-bootstrap the index.")
+              s"Vector exact search rejected ${arb.staleCount} stale finalist(s) because " +
+                "vector.stale.locator.policy=FAIL.")
           }
-          arb.serve.asScala.toSeq
+          arb.serve.asScala.toSeq ++ arb.stale.asScala.toSeq
         } else {
           topCandidateList
         }
@@ -825,8 +837,10 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
         emptyDf
       } else {
         val candidatesByPartition = serveCandidates
-          .groupBy(candidate => Option(candidate.getPartitionPath).getOrElse(""))
-          .map { case (partitionPath, candidates) => partitionPath -> candidates.map(_.getFileGroupId).toSet }
+          .groupBy(candidate => Option(candidate.getLocation).map(_.getPartitionPath).getOrElse(""))
+          .map { case (partitionPath, candidates) =>
+            partitionPath -> candidates.flatMap(candidate => Option(candidate.getLocation).map(_.getFileId)).toSet
+          }
         val fileSliceMap = preResolveFileSlices(
           ctx.metadataTable, ctx.metaClient, ctx.timeline, ctx.latestInstantTime, candidatesByPartition)
         if (fileSliceMap.isEmpty) {
@@ -839,7 +853,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
         val exactFetchParallelism = math.max(
           1,
           math.min(refineK, math.max(1, spark.sparkContext.defaultParallelism * 4)))
-        val groupedCandidates = serveCandidates.groupBy(_.getFileGroupId).toSeq.sortBy(_._1)
+        val groupedCandidates = serveCandidates.groupBy(_.getLocation.getFileId).toSeq.sortBy(_._1)
         val targetBatchesPerGroup = math.max(1, exactFetchParallelism / math.max(1, groupedCandidates.size))
         val fetchBatches = groupedCandidates.flatMap { case (fgId, candidates) =>
           val sorted = candidates.sortBy(candidate => candidate.getLocation.getPosition)
@@ -856,7 +870,9 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
         val vectorOnlyProjection = mergedOptions.get(VECTOR_ONLY_PROJECTION_OPT)
           .orElse(spark.conf.getOption(VECTOR_ONLY_PROJECTION_SPARK_CONF))
           .exists(_.equalsIgnoreCase("true"))
-        val staleFallbacksAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_stale_fallbacks")
+        val fetchSkippedLogResidentAcc: LongAccumulator =
+          spark.sparkContext.longAccumulator("vector_fetch_skipped_log_resident")
+        val fetchKeyMismatchAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_fetch_key_mismatch")
         val rowsMaterializedAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_rows_materialized")
         val exactRows: RDD[InternalRow] = byFetchBatch.mapPartitions { batches =>
           val startNs = System.nanoTime()
@@ -869,6 +885,9 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
           var logFiles = 0L
           var totalSliceBytes = 0L
           var staleCandidates = 0L
+          var fetchSkippedLogResident = 0L
+          var fetchKeyMismatch = 0L
+          var keyLookupRowsDecoded = 0L
           var metrics = PositionalParquetFetcher.FetchMetrics()
           val fetcher = new PositionalParquetFetcher(
             storageConf.newInstance().unwrap(),
@@ -878,7 +897,9 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
             ctx.metric,
             outputSchema,
             mergedOptions.getOrElse("vector.exact_fetch.offset_index_missing_policy", "fallback").equalsIgnoreCase("fail"),
-            vectorOnlyProjection)
+            vectorOnlyProjection,
+            VectorIndexOptions.shouldVerifyFetchKeys(mergedOptions.asJava))
+          val keyLocator = new ParquetRecordKeyLocator(storageConf.newInstance().unwrap())
           while (batches.hasNext) {
             val (fgId, candidates) = batches.next()
             batchCount += 1
@@ -891,43 +912,70 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
             } else {
               resolvedSlices += 1
               val fileSlice = fileSliceOpt.get
-              var staleInGroup = 0L
-              val liveCandidates = candidates.filter { candidate =>
-                val baseInstantTime = candidate.getBaseInstantTime
-                val currentBaseInstantTime = fileSlice.getBaseInstantTime
-                val current = baseInstantTime == null || baseInstantTime.isEmpty || baseInstantTime == currentBaseInstantTime
-                if (!current) {
-                  staleInGroup += 1
-                  staleCandidates += 1
-                  staleFallbacksAcc.add(1)
-                }
-                current
-              }
-              if (staleInGroup > 0) {
-                throw new HoodieAnalysisException(
-                  s"Vector exact search found $staleInGroup stale candidate locators for file group '$fgId': " +
-                    s"candidate base instant does not match resolved slice ${fileSlice.getBaseInstantTime}. " +
-                    s"No record-level-index fallback is active in this path.")
-              }
-              val recordKeys = liveCandidates.map(_.getRecordKey).toSet
-              candidateKeys += recordKeys.size
-              if (fileSlice.getBaseFile.isEmpty) {
-                throw new HoodieAnalysisException(
-                  s"Vector exact positional fetch requires a base Parquet file for file group '$fgId'.")
-              }
               val logFileCount = fileSlice.getLogFiles.count()
-              if (logFileCount > 0) {
-                throw new HoodieAnalysisException(
-                  s"Vector exact positional fetch does not support log files yet: fileGroup=$fgId logFiles=$logFileCount.")
+              val currentBaseInstantTime = fileSlice.getBaseInstantTime
+              val logResident = candidates.filter(candidate =>
+                isLogResidentCandidate(candidate, currentBaseInstantTime, logFileCount > 0))
+              if (logResident.nonEmpty) {
+                fetchSkippedLogResident += logResident.size
+                fetchSkippedLogResidentAcc.add(logResident.size)
+                LOG.warn(
+                  s"Vector exact fetch skipped ${logResident.size} log-resident candidate(s) in file group '$fgId'; " +
+                    "they remain a result shortfall and the retained candidate pool will refill where candidates remain")
               }
-              baseFiles += 1
-              logFiles += logFileCount
-              totalSliceBytes += fileSlice.getTotalFileSize
+              val liveCandidates = candidates.filterNot(logResident.toSet)
+              staleCandidates += liveCandidates.count(candidate =>
+                candidate.getArbiterDecision == VectorIndexArbiter.Decision.STALE)
               if (liveCandidates.nonEmpty) {
-                val fetchResult = fetcher.fetch(fileSlice.getBaseFile.get.getPath, liveCandidates)
-                rows ++= fetchResult.rows
-                metrics = metrics.add(fetchResult.metrics)
-                rowsMaterializedAcc.add(fetchResult.metrics.rowsMaterialized)
+                val positionalCandidates = liveCandidates.filter { candidate =>
+                  val location = candidate.getLocation
+                  location != null && location.getPosition >= 0 &&
+                    candidate.getArbiterDecision != VectorIndexArbiter.Decision.STALE &&
+                    (location.getInstantTime == null || location.getInstantTime == currentBaseInstantTime)
+                }
+                val keyCandidates = liveCandidates.filterNot(positionalCandidates.toSet)
+                val recordKeys = liveCandidates.map(_.getRecordKey).toSet
+                candidateKeys += recordKeys.size
+                if (fileSlice.getBaseFile.isEmpty) {
+                  throw new HoodieAnalysisException(
+                    s"Vector exact key fallback requires a base Parquet file for file group '$fgId'; " +
+                      "the remaining candidates are not classified as log-resident.")
+                }
+                baseFiles += 1
+                logFiles += logFileCount
+                totalSliceBytes += fileSlice.getTotalFileSize
+                val baseFilePath = fileSlice.getBaseFile.get.getPath
+                val locatedByKey = keyLocator.locate(baseFilePath, keyCandidates)
+                keyLookupRowsDecoded += locatedByKey.metrics.rowsDecoded
+                if (locatedByKey.metrics.located != keyCandidates.size) {
+                  throw new HoodieAnalysisException(
+                    s"Vector exact key fallback located ${locatedByKey.metrics.located} of ${keyCandidates.size} " +
+                      s"candidate key(s) in the live base file for file group '$fgId'.")
+                }
+                val firstFetch = fetcher.fetch(baseFilePath, positionalCandidates ++ locatedByKey.candidates)
+                rows ++= firstFetch.rows
+                metrics = metrics.add(firstFetch.metrics)
+                rowsMaterializedAcc.add(firstFetch.metrics.rowsMaterialized)
+                if (firstFetch.retryByKey.nonEmpty) {
+                  fetchKeyMismatch += firstFetch.retryByKey.size
+                  fetchKeyMismatchAcc.add(firstFetch.retryByKey.size)
+                  val retries = keyLocator.locate(baseFilePath, firstFetch.retryByKey)
+                  keyLookupRowsDecoded += retries.metrics.rowsDecoded
+                  if (retries.metrics.located != firstFetch.retryByKey.size) {
+                    throw new HoodieAnalysisException(
+                      s"Vector exact fetch could not relocate ${firstFetch.retryByKey.size - retries.metrics.located} " +
+                        s"key mismatch(es) in file group '$fgId'.")
+                  }
+                  val retryFetch = fetcher.fetch(baseFilePath, retries.candidates)
+                  if (retryFetch.retryByKey.nonEmpty) {
+                    throw new HoodieAnalysisException(
+                      s"Vector exact fetch could not self-heal ${retryFetch.retryByKey.size} key mismatch(es) " +
+                        s"in file group '$fgId' after key-based relocation.")
+                  }
+                  rows ++= retryFetch.rows
+                  metrics = metrics.add(retryFetch.metrics)
+                  rowsMaterializedAcc.add(retryFetch.metrics.rowsMaterialized)
+                }
               }
             }
           }
@@ -935,12 +983,14 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
             s"[vector_search][stage][exact_read] rerankCandidates=$candidateKeys candidateFileCount=$resolvedSlices " +
               s"fetchBatches=$batchCount resolvedSlices=$resolvedSlices missingSlices=$missingSlices " +
               s"rowsDecoded=${metrics.rowsDecoded} rowsMaterialized=${metrics.rowsMaterialized} " +
+              s"keyLookupRowsDecoded=$keyLookupRowsDecoded fetchKeyMismatch=$fetchKeyMismatch " +
+              s"fetchSkippedLogResident=$fetchSkippedLogResident " +
               s"rowGroupsTotal=${metrics.rowGroupsTotal} rowGroupsSelected=${metrics.rowGroupsSelected} " +
               s"pagesInSelectedRowGroups=${metrics.pagesInSelectedRowGroups} pagesSelected=${metrics.pagesSelected} " +
               s"offsetIndexHits=${metrics.offsetIndexHits} offsetIndexMissing=${metrics.offsetIndexMissing} " +
               s"rangedGets=${metrics.rangedGets} pageBytesFetched=${metrics.pageBytesFetched} " +
               s"physicalBytesRead=${metrics.physicalBytesRead} footerReads=${metrics.footerReads} footerCacheHits=${metrics.footerCacheHits} " +
-              s"staleFallbacks=$staleCandidates staleCandidates=$staleCandidates " +
+              s"fetchKeyMismatchMetric=${metrics.fetchKeyMismatch} staleCandidates=$staleCandidates " +
               s"baseFiles=$baseFiles logFiles=$logFiles " +
               s"sliceBytes=$totalSliceBytes footerMs=${metrics.footerMs} offsetIndexMs=${metrics.offsetIndexMs} " +
               s"fetchWaitMs=${metrics.fetchWaitMs} decodeMs=${metrics.decodeMs} scoreMs=${metrics.scoreMs} elapsedMs=${elapsedMs(startNs)}")
