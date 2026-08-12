@@ -102,9 +102,14 @@ class InternalRowToJsonStringConverter(schema: StructType) {
           try {
             mapper.readTree(variantJson)
           } catch {
-            // Variant JSON can carry tokens this mapper rejects (a non-finite double renders as
-            // a bare NaN/Infinity), and a CDC image is not worth failing the query over: keep
-            // the rendering as a plain string instead.
+            // A variant can hold a field name, string or nesting depth past Jackson's default
+            // StreamReadConstraints (50k chars, 20M chars, 1000 levels) while staying well inside
+            // the variant size limit, and all three arrive here as StreamConstraintsException. A
+            // CDC image is diagnostic data rather than the table's data, so keep the rendering as
+            // a plain string instead of failing the query over it.
+            // NOTE: value.toString is deliberately outside this block. It throws MALFORMED_VARIANT
+            // on corrupt bytes, which is a data-integrity problem an operator has to see, not a
+            // rendering quirk to paper over -- and there would be no rendering left to fall back to.
             case _: JsonProcessingException => variantJson
           }
         case _ =>

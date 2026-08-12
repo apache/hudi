@@ -179,12 +179,15 @@ class TestInternalRowToJsonStringConverter {
   }
 
   @Test
-  def variantColumnFallsBackToRawRenderingWhenNotJson(): Unit = {
+  def variantColumnFallsBackToRawRenderingWhenJacksonRejectsIt(): Unit = {
     assumeTrue(HoodieSparkUtils.gteqSpark4_0, "VariantType requires Spark 4.0 or higher")
-    // A non-finite double renders as a bare NaN/Infinity token, which the mapper rejects; the
-    // image keeps the raw rendering instead of failing the whole CDC query.
-    val row = InternalRow.fromSeq(Seq(1, variantRendering("NaN")))
-    assertEquals("""{"id":1,"v":"NaN"}""",
+    // Jackson's default StreamReadConstraints cap nesting at 1000 levels, field names at 50k chars
+    // and strings at 20M; a variant can exceed all three well inside its own size limit, and
+    // VariantVal.toString renders it faithfully. The image keeps that rendering rather than failing
+    // the whole CDC query. Nesting is the cheapest of the three to provoke.
+    val tooDeeplyNested = ("[" * 1001) + "1" + ("]" * 1001)
+    val row = InternalRow.fromSeq(Seq(1, variantRendering(tooDeeplyNested)))
+    assertEquals(s"""{"id":1,"v":"$tooDeeplyNested"}""",
       new InternalRowToJsonStringConverter(variantSchema.structTypeSchema).convert(row).toString)
   }
 
@@ -193,6 +196,10 @@ class TestInternalRowToJsonStringConverter {
    * what renders a real variant as JSON. Constructing a genuine VariantVal here would need
    * Spark-4-only symbols, and this module compiles against Spark 3 as well; the end-to-end
    * behaviour over real variants is covered by the CDC round trip in TestVariantDataType.
+   *
+   * Note this stands in only for renderings a real variant can produce. Spark quotes non-finite
+   * doubles (Variant.toJsonImpl guards them with isFinite and takes the appendQuoted arm), so no
+   * variant renders a bare NaN or Infinity token.
    */
   private def variantRendering(json: String): AnyRef = new AnyRef {
     override def toString: String = json
