@@ -150,17 +150,27 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
 
   // The plain skip-merging reader cannot read a SHREDDED variant base file: it requests native
   // VariantType, which clips the shredded group to {metadata, value} and reads value=null (the
-  // #19556 defect family). Splits with variant columns take the file-group reader below, whose
-  // reader context requests the full-variant projection shape instead (#19578).
-  private val requiredSchemaHasVariant: Boolean =
-    requiredSchema.structTypeSchema.fields.exists(f => sparkAdapter.isVariantType(f.dataType))
+  // #19556 defect family). Such splits take the file-group reader below, whose reader context
+  // requests the full-variant projection shape instead (#19578). Keyed off the adapter building
+  // that shape rather than the mere presence of a variant column: it is None below Spark 4.1,
+  // where the file-group reader would read the same nulls, so re-routing there would cost the
+  // fast path for nothing.
+  private val shouldRerouteVariantSplit: Boolean =
+    sparkAdapter.buildFullVariantReadSchema(requiredSchema.structTypeSchema).isDefined
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val partition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val bytesReadCallback = HoodieSparkInputMetricsUtils.getFSBytesReadOnThreadCallback()
 
     val iter: Iterator[InternalRow] = partition.split match {
-      case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty && !requiredSchemaHasVariant =>
+      // A split whose partition values were parsed off the partition path keeps the fast path even
+      // when re-routing would apply: only that reader appends them (drop.partition.columns,
+      // extract-from-path, bootstrap fast read), and the file-group reader branch below has no
+      // equivalent, so re-routing would trade null variants for null partition columns. Those
+      // splits stay on the pre-existing behaviour; the same gap on the merged branch is older than
+      // this change and is tracked separately.
+      case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty
+        && (!shouldRerouteVariantSplit || dataFileOnlySplit.dataFile.exists(_.partitionValues.numFields > 0)) =>
         val projectedReader = projectReader(fileReaders.requiredSchemaReaderSkipMerging, requiredSchema.structTypeSchema)
         projectedReader(dataFileOnlySplit.dataFile.get)
 

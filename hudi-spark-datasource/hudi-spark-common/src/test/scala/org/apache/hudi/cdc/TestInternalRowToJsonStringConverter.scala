@@ -18,15 +18,16 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.hudi.HoodieTableSchema
+import org.apache.hudi.{HoodieSparkUtils, HoodieTableSchema}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.InternalSchema
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData}
-import org.apache.spark.sql.types.{ArrayType, DataTypes, MapType, Metadata, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, DataTypes, MapType, Metadata, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
 class TestInternalRowToJsonStringConverter {
@@ -165,6 +166,49 @@ class TestInternalRowToJsonStringConverter {
     ))
     val converted = emptyMapConverter.convert(row)
     assertEquals("""{"id":8,"name":"empty_map_test","properties":{}}""", converted.toString)
+  }
+
+  @Test
+  def variantColumnEmbedsItsJson(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "VariantType requires Spark 4.0 or higher")
+    // VariantVal.toString renders the variant as JSON, so the image must carry that structure
+    // rather than a bean rendering of the raw value/metadata bytes.
+    val row = InternalRow.fromSeq(Seq(1, variantRendering("""{"key":"value1"}""")))
+    assertEquals("""{"id":1,"v":{"key":"value1"}}""",
+      new InternalRowToJsonStringConverter(variantSchema.structTypeSchema).convert(row).toString)
+  }
+
+  @Test
+  def variantColumnFallsBackToRawRenderingWhenNotJson(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "VariantType requires Spark 4.0 or higher")
+    // A non-finite double renders as a bare NaN/Infinity token, which the mapper rejects; the
+    // image keeps the raw rendering instead of failing the whole CDC query.
+    val row = InternalRow.fromSeq(Seq(1, variantRendering("NaN")))
+    assertEquals("""{"id":1,"v":"NaN"}""",
+      new InternalRowToJsonStringConverter(variantSchema.structTypeSchema).convert(row).toString)
+  }
+
+  /**
+   * Stands in for a VariantVal: the converter reaches the value only through toString, which is
+   * what renders a real variant as JSON. Constructing a genuine VariantVal here would need
+   * Spark-4-only symbols, and this module compiles against Spark 3 as well; the end-to-end
+   * behaviour over real variants is covered by the CDC round trip in TestVariantDataType.
+   */
+  private def variantRendering(json: String): AnyRef = new AnyRef {
+    override def toString: String = json
+  }
+
+  private def variantSchema: HoodieTableSchema = {
+    val structTypeSchema = new StructType(Array[StructField](
+      StructField("id", DataTypes.IntegerType, nullable = false, Metadata.empty),
+      StructField("v", DataType.fromDDL("variant"), nullable = true, Metadata.empty)))
+    val avroSchemaStr: String =
+      """{"type": "record", "name": "test", "fields": [
+        |{"name": "id", "type": "int"},
+        |{"name": "v", "type": {"type": "record", "name": "variant", "logicalType": "variant",
+        |  "fields": [{"name": "metadata", "type": "bytes"}, {"name": "value", "type": "bytes"}]}}
+        |]}""".stripMargin
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
   }
 
   private def hoodieTableSchema: HoodieTableSchema = {

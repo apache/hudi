@@ -18,9 +18,8 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.hudi.SparkAdapterSupport
-
 import com.fasterxml.jackson.annotation.JsonInclude.Include
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.sql.catalyst.InternalRow
@@ -92,15 +91,35 @@ class InternalRowToJsonStringConverter(schema: StructType) {
               structMap.toMap
             case _ => value // fallback
           }
-        case dt if SparkAdapterSupport.sparkAdapter.isVariantType(dt) =>
+        case dt if dt.typeName == InternalRowToJsonStringConverter.VARIANT_TYPE_NAME =>
           // VariantVal.toString renders the variant as JSON; embed it as a real JSON node so
           // the image carries the variant's structure. Falling through to the default would
           // serialize the VariantVal bean, i.e. its raw value/metadata bytes as base64.
-          mapper.readTree(value.toString)
+          // Matched on the type name rather than SparkAdapter.isVariantType: this guard is
+          // evaluated for every non-string/array/map/struct field, and resolving the adapter
+          // needs a version module that is not on hudi-spark-common's own test classpath.
+          val variantJson = value.toString
+          try {
+            mapper.readTree(variantJson)
+          } catch {
+            // Variant JSON can carry tokens this mapper rejects (a non-finite double renders as
+            // a bare NaN/Infinity), and a CDC image is not worth failing the query over: keep
+            // the rendering as a plain string instead.
+            case _: JsonProcessingException => variantJson
+          }
         case _ =>
           // For primitive types and other unsupported types, return as is
           value
       }
     }
   }
+}
+
+object InternalRowToJsonStringConverter {
+
+  /**
+   * Type name of Spark's VariantType. Matched by name so this module, which also compiles
+   * against Spark 3 where the type does not exist, needs neither the symbol nor a SparkAdapter.
+   */
+  private val VARIANT_TYPE_NAME = "variant"
 }

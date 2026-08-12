@@ -30,7 +30,7 @@ import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSER
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.util.JavaConversions
 
-import org.apache.spark.sql.{Row, SaveMode}
+import org.apache.spark.sql.{DataFrame, Row, SaveMode}
 import org.apache.spark.sql.streaming.StreamTest
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
@@ -384,9 +384,9 @@ class TestStreamingSource extends StreamTest {
   test("test mor stream source reads shredded variant with legacy file group reader disabled") {
     // #19578: with the file group reader disabled, MOR streaming batches materialize through
     // HoodieMergeOnReadRDDV2, the only user-facing path reading shredded variant base files
-    // without a catalyst schema. Covers both RDD branches: the base-only split (first batch,
-    // right after inline compaction) and the merged split (second batch, after a
-    // post-compaction update lands in a log file).
+    // without a catalyst schema. The first stream covers the base-only split (first batch, the
+    // branch this fix re-routes) and the log-only split (second batch); the second stream covers
+    // the merged base + log split.
     assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
 
     withTempDir { inputDir =>
@@ -401,7 +401,12 @@ class TestStreamingSource extends StreamTest {
       // INMEMORY index routes MOR inserts to log files, so the first base file is the
       // compaction's SHREDDED one; compact = true trips inline compaction on that write.
       def addVariantData(valuesSql: String, compact: Boolean): Unit = {
-        spark.sql(valuesSql).write.format("org.apache.hudi")
+        // The write must use the short name: it resolves to Spark4DefaultSource, the only
+        // provider overriding CreatableRelationProvider.supportsDataType to accept VariantType.
+        // The fully qualified "org.apache.hudi" resolves to DefaultSource (short name "hudi_v1"),
+        // which has no override, so DataSource.planForWriting on Spark 4.x rejects the variant
+        // column with UNSUPPORTED_DATA_TYPE_FOR_DATASOURCE.
+        spark.sql(valuesSql).write.format("hudi")
           .options(commonOptions)
           .option(TBL_NAME.key, getTableName(tablePath))
           .option(TABLE_TYPE.key, MERGE_ON_READ.name)
@@ -414,25 +419,44 @@ class TestStreamingSource extends StreamTest {
           .save(tablePath)
       }
 
-      addVariantData("""select 1 as id, parse_json('{"key":"v1"}') as v, 1000L as ts""", compact = false)
-      addVariantData("""select 2 as id, parse_json('{"key":"v2"}') as v, 1000L as ts""", compact = true)
-
-      val df = spark.readStream
+      // The read keeps the fully qualified name: it goes through StreamSourceProvider, which
+      // never calls supportsDataType.
+      def variantStreamDf(): DataFrame = spark.readStream
         .format("org.apache.hudi")
         // force the legacy (non file-group-reader) incremental relation path
         .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key, "false")
         .load(tablePath)
         .selectExpr("id", "cast(v as string) as v", "ts")
 
-      testStream(df)(
-        // Base-only split: the compacted shredded base file must round-trip its variants.
+      // The legacy branch of getBatch materializes the micro batch from an RDD via
+      // internalCreateDataFrame, so the physical plan is a "Scan ExistingRDD"; this fails if the
+      // legacy branch is dropped and the source silently falls back to the file group reader
+      // path, which scans a HadoopFsRelation ("FileScan" / "Scan parquet") instead.
+      val assertLegacyRddPlan = AssertOnQuery { q =>
+        val plan = q.lastExecution.executedPlan.toString
+        assertTrue(plan.contains("Scan ExistingRDD"),
+          "expected the legacy RDD-backed incremental batch, but got plan: " + plan)
+        assertTrue(!plan.contains("FileScan"),
+          "expected no file-group-reader HadoopFsRelation scan, but got plan: " + plan)
+        true
+      }
+
+      addVariantData("""select 1 as id, parse_json('{"key":"v1"}') as v, 1000L as ts""", compact = false)
+      addVariantData("""select 2 as id, parse_json('{"key":"v2"}') as v, 1000L as ts""", compact = true)
+
+      testStream(variantStreamDf())(
+        // Base-only split: this batch spans both deltacommits and the compaction commit, whose
+        // affected files resolve to the compacted shredded base file with no log on top. This is
+        // the branch the fix re-routes to the file group reader.
         AssertOnQuery { q => q.processAllAvailable(); true },
+        assertLegacyRddPlan,
         CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1\"}", 1000L), Row(2, "{\"key\":\"v2\"}", 1000L)),
           lastOnly = true, isSorted = false),
         StopStream,
 
-        // Merged split: the update lands in a log file on the compacted slice, so the next
-        // batch merges the shredded base with the log.
+        // Log-only split: MergeOnReadIncrementalRelationV2 builds its file system view out of the
+        // span's affected files alone, and this span covers only the update deltacommit, so the
+        // slice is the appended log file with no base file.
         AssertOnQuery { _ =>
           addVariantData("""select 1 as id, parse_json('{"key":"v1-updated"}') as v, 1001L as ts""", compact = false)
           true
@@ -440,6 +464,18 @@ class TestStreamingSource extends StreamTest {
         StartStream(),
         AssertOnQuery { q => q.processAllAvailable(); true },
         CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1-updated\"}", 1001L)), lastOnly = true, isSorted = false)
+      )
+
+      // Merged split: a fresh testStream over a fresh streaming DataFrame gets its own
+      // checkpoint, so it replays from the INIT offset and its first batch spans the compaction
+      // commit and the update deltacommit together. Only such a span puts the shredded base file
+      // and the update log file in one affected-file list, giving the base + log slice that
+      // neither batch above produces.
+      testStream(variantStreamDf())(
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        assertLegacyRddPlan,
+        CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1-updated\"}", 1001L), Row(2, "{\"key\":\"v2\"}", 1000L)),
+          lastOnly = true, isSorted = false)
       )
     }
   }
