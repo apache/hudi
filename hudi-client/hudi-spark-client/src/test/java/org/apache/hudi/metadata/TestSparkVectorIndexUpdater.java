@@ -37,6 +37,7 @@ import java.util.Map;
 import static org.apache.hudi.common.schema.HoodieSchema.Vector.VectorElementType.FLOAT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestSparkVectorIndexUpdater {
@@ -54,6 +55,21 @@ class TestSparkVectorIndexUpdater {
           1.1f,
           1,
           VectorDistanceMetric.L2, 2, 1, 42L, false, false);
+
+  @Test
+  void testRoutingDigestIsStableAndCoversEveryGeometryInput() {
+    float[][] coarse = {{0.0f, 0.0f}, {10.0f, 0.0f}};
+    float[][] leaves = {{1.0f, 0.0f}, {11.0f, 0.0f}};
+    int[] offsets = {0, 1, 2};
+    String digest = VectorRoutingArtifacts.digest(coarse, leaves, offsets, 1.1f);
+
+    assertEquals(digest, VectorRoutingArtifacts.digest(coarse, leaves, offsets, 1.1f));
+    assertEquals(64, digest.length());
+    assertNotEquals(digest, VectorRoutingArtifacts.digest(coarse, leaves, offsets, 1.2f));
+    assertNotEquals(digest, VectorRoutingArtifacts.digest(
+        coarse, new float[][] {{1.0f, 0.0f}, {12.0f, 0.0f}}, offsets, 1.1f));
+    assertNotEquals(digest, VectorRoutingArtifacts.digest(coarse, leaves, new int[] {0, 2, 2}, 1.1f));
+  }
 
   @Test
   void testInsertEmitsPostingWithPersistedRowPosition() {

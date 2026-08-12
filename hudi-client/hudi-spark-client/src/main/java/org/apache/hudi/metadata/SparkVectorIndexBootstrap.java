@@ -264,6 +264,8 @@ public final class SparkVectorIndexBootstrap {
               VectorRoutingArtifacts.serializeFloatMatrix(coarseCentroids),
               VectorRoutingArtifacts.serializeIntArray(leafOffsets),
               assignmentExpandRatio,
+              VectorRoutingArtifacts.digest(
+                  coarseCentroids, centroids, leafOffsets, assignmentExpandRatio),
               generationShardCount,
               Math.max(1, actualK),
               manifestMetricName(metric),
@@ -274,6 +276,8 @@ public final class SparkVectorIndexBootstrap {
               vectorsPerBlock,
               1,
               1,
+              RaBitQEncoder.ROTATION_VERSION,
+              RaBitQEncoder.rotationDigest(dimension, quantizerSeed),
               0.0d,
               0.0d,
               0.0d,

@@ -20,6 +20,10 @@
 package org.apache.hudi.common.index.vector;
 
 import java.io.Serializable;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
@@ -56,6 +60,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class RaBitQEncoder implements Serializable {
   private static final long serialVersionUID = 1L;
+  public static final int ROTATION_VERSION = 1;
   private static final Map<RotationKey, float[][]> ROTATION_MATRIX_CACHE = new ConcurrentHashMap<>();
   /** Neutral-factor thresholds for the current posting-block format (RFC-109 §3). */
   private static final RaBitQFactorConfig FACTOR_CONFIG = RaBitQFactorConfig.defaults();
@@ -86,6 +91,37 @@ public final class RaBitQEncoder implements Serializable {
   /** Convenience constructor using default seed. */
   public RaBitQEncoder(int dimension) {
     this(dimension, 1, 42L, false);
+  }
+
+  /** Returns the canonical SHA-256 identity of the seeded row-major float32 rotation matrix. */
+  public static String rotationDigest(int dimension, long seed) {
+    float[][] rotation = getOrBuildRotationMatrix(dimension, seed);
+    ByteBuffer canonical = ByteBuffer.allocate(
+        Integer.BYTES * 2 + Long.BYTES + dimension * dimension * Float.BYTES)
+        .order(ByteOrder.LITTLE_ENDIAN);
+    canonical.putInt(ROTATION_VERSION).putInt(dimension).putLong(seed);
+    for (float[] row : rotation) {
+      for (float value : row) {
+        canonical.putInt(Float.floatToRawIntBits(value));
+      }
+    }
+    return sha256Hex(canonical.array());
+  }
+
+  private static String sha256Hex(byte[] bytes) {
+    try {
+      byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+      final char[] digits = "0123456789abcdef".toCharArray();
+      char[] hex = new char[digest.length * 2];
+      for (int index = 0; index < digest.length; index++) {
+        int value = digest[index] & 0xff;
+        hex[index * 2] = digits[value >>> 4];
+        hex[index * 2 + 1] = digits[value & 0x0f];
+      }
+      return new String(hex);
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("SHA-256 is required by the Java runtime", exception);
+    }
   }
 
   // ---- encoding ----------------------------------------------------------

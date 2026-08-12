@@ -228,9 +228,9 @@ class TestVectorIndexer {
     return HoodieMetadataPayload.createVectorIndexManifestRecord(
         GENERATION, Integer.toString(GENERATION), "ACTIVE",
         2, 2, 1, 1, 0, 1, 1,
-        ByteBuffer.allocate(0), ByteBuffer.allocate(0), 1.1f,
+        ByteBuffer.allocate(0), ByteBuffer.allocate(0), 1.1f, "routing-digest",
         1, 1, "L2", false, false, "embedding",
-        65536, 100, 1, 1, 0.0, 0.0, 0.0, 0.0,
+        65536, 100, 1, 1, 1, "rotation-digest", 0.0, 0.0, 0.0, 0.0,
         1, "checksum", 2, 1, lastCoveredInstant, 0L, INDEX_PARTITION);
   }
 }

@@ -23,6 +23,8 @@ import org.apache.hudi.spark.index.vector.TwoLevelKMeansBootstrap$;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 /** Serialization and validation for generation-scoped two-level routing artifacts. */
 public final class VectorRoutingArtifacts {
@@ -30,6 +32,53 @@ public final class VectorRoutingArtifacts {
   public static final int ROUTING_VERSION = 1;
 
   private VectorRoutingArtifacts() {
+  }
+
+  public static String digest(
+      float[][] coarseCentroids,
+      float[][] leafCentroids,
+      int[] leafOffsets,
+      float expandRatio) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      updateInt(digest, ROUTING_VERSION);
+      updateInt(digest, Float.floatToRawIntBits(expandRatio));
+      updateMatrix(digest, coarseCentroids);
+      updateMatrix(digest, leafCentroids);
+      updateInt(digest, leafOffsets.length);
+      for (int offset : leafOffsets) {
+        updateInt(digest, offset);
+      }
+      return toHex(digest.digest());
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("SHA-256 is required by the Java runtime", exception);
+    }
+  }
+
+  private static void updateMatrix(MessageDigest digest, float[][] matrix) {
+    updateInt(digest, matrix.length);
+    updateInt(digest, matrix.length == 0 ? 0 : matrix[0].length);
+    for (float[] row : matrix) {
+      for (float value : row) {
+        updateInt(digest, Float.floatToRawIntBits(value));
+      }
+    }
+  }
+
+  private static void updateInt(MessageDigest digest, int value) {
+    digest.update(ByteBuffer.allocate(Integer.BYTES)
+        .order(ByteOrder.LITTLE_ENDIAN).putInt(value).array());
+  }
+
+  private static String toHex(byte[] digest) {
+    final char[] digits = "0123456789abcdef".toCharArray();
+    char[] hex = new char[digest.length * 2];
+    for (int index = 0; index < digest.length; index++) {
+      int value = digest[index] & 0xff;
+      hex[index * 2] = digits[value >>> 4];
+      hex[index * 2 + 1] = digits[value & 0x0f];
+    }
+    return new String(hex);
   }
 
   static ByteBuffer serializeFloatMatrix(float[][] values) {

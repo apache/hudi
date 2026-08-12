@@ -27,6 +27,7 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -313,6 +314,16 @@ class TestRaBitQEncoder {
     assertRelativeEquals(residualSq / fullIpResidual, encoded.rescaleFactor, 1.0e-4d);
     assertRelativeEquals(Math.sqrt(residualSq), encoded.scalar, 1.0e-4d);
     assertRelativeEquals(RaBitQEncoder.norm(vector), encoded.vectorNorm, 1.0e-4d);
+  }
+
+  @Test
+  void rotationDigestIsStableAndGeometrySensitive() {
+    String digest = RaBitQEncoder.rotationDigest(8, 42L);
+
+    assertEquals(digest, RaBitQEncoder.rotationDigest(8, 42L));
+    assertEquals(64, digest.length());
+    assertNotEquals(digest, RaBitQEncoder.rotationDigest(8, 43L));
+    assertNotEquals(digest, RaBitQEncoder.rotationDigest(9, 42L));
   }
 
   // ---- helpers -----------------------------------------------------------

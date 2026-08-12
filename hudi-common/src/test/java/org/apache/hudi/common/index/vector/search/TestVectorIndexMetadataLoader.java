@@ -48,9 +48,10 @@ class TestVectorIndexMetadataLoader {
         HoodieMetadataPayload.createVectorIndexActiveManifestRecord(2, partition);
     HoodieRecord<HoodieMetadataPayload> manifest = HoodieMetadataPayload.createVectorIndexManifestRecord(
         2, "build-2", "ACTIVE", 2, 2, 8, 1, 0, 2,
-        1, ByteBuffer.allocate(2 * Float.BYTES), ByteBuffer.allocate(2 * Integer.BYTES), 1.1f, 1, 8,
+        1, ByteBuffer.allocate(2 * Float.BYTES), ByteBuffer.allocate(2 * Integer.BYTES),
+        1.1f, "routing-digest", 1, 8,
         "L2", false, true, "embedding", 524288, 128,
-        1, 1, 1.9, 1.0e-3, 1.0, 1.0e-3, 2, "checksum",
+        1, 1, 1, "rotation-digest", 1.9, 1.0e-3, 1.0, 1.0e-3, 2, "checksum",
         4096, 1024, "002", 123L, partition);
     ByteBuffer ids = ByteBuffer.allocate(2 * Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN)
         .putInt(0).putInt(1);

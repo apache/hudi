@@ -160,9 +160,10 @@ class TestVectorIndexMetadataPayload {
   void testManifestCarriesGenerationGeometryWithoutEpoch() {
     HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createVectorIndexManifestRecord(
         2, "build-2", "BUILDING", 128, 128, 16, 2, 1, 64,
-        1, ByteBuffer.allocate(128 * Float.BYTES), ByteBuffer.allocate(2 * Integer.BYTES), 1.1f, 1, 8,
+        1, ByteBuffer.allocate(128 * Float.BYTES), ByteBuffer.allocate(2 * Integer.BYTES),
+        1.1f, "sha256:routing", 1, 8,
         "COSINE", true, true, "embedding", 524288, 2048,
-        1, 1, 1.9, 1.0e-3, 1.0, 1.0e-3, 4, "sha256:centroids",
+        1, 1, 1, "sha256:rotation", 1.9, 1.0e-3, 1.0, 1.0e-3, 4, "sha256:centroids",
         4096, 1024, "20260806120000000", 123L, "vector_index_demo");
 
     HoodieVectorIndexManifest manifest =
@@ -170,8 +171,11 @@ class TestVectorIndexMetadataPayload {
     assertEquals(8, manifest.getFileGroupCount());
     assertEquals(1, manifest.getRoutingVersion());
     assertEquals(1.1f, manifest.getRoutingExpandRatio());
+    assertEquals("sha256:routing", manifest.getRoutingArtifactDigest());
     assertEquals(1, manifest.getBlockFormatVersion());
     assertEquals(1, manifest.getFactorVersion());
+    assertEquals(1, manifest.getRotationVersion());
+    assertEquals("sha256:rotation", manifest.getRotationDigest());
     assertEquals(1.9, manifest.getKappa());
     assertEquals(1.0e-3, manifest.getGMin());
     assertEquals(1.0, manifest.getEps1Max());

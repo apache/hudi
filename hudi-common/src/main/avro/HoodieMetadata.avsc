@@ -586,6 +586,7 @@
                         {"name": "routingCoarseCentroids", "type": "bytes", "doc": "Coarse centroids as row-major float32 LE values in assignment space."},
                         {"name": "routingLeafOffsets", "type": "bytes", "doc": "One u32 LE boundary per coarse cell plus the terminal leaf-count boundary."},
                         {"name": "routingExpandRatio", "type": "float", "doc": "Persisted coarse-neighbor expansion ratio used by every writer."},
+                        {"name": "routingArtifactDigest", "type": "string", "doc": "SHA-256 over the canonical routing version, expansion ratio, coarse centroids, leaf centroids, and leaf offsets."},
                         {"name": "shardCount", "type": "int", "doc": "Generation-wide posting shard geometry frozen for all clusters."},
                         {"name": "fileGroupCount", "type": "int", "doc": "MDT file-group geometry frozen for this generation; readers and writers never re-derive it."},
                         {"name": "metric", "type": "string", "doc": "L2 | DOT | COSINE."},
@@ -596,6 +597,8 @@
                         {"name": "vectorsPerBlock", "type": "int", "doc": "Resolved N. Frozen per generation; readers never re-derive."},
                         {"name": "blockFormatVersion", "type": "int", "doc": "Expected posting-block layout version for this generation."},
                         {"name": "factorVersion", "type": "int", "doc": "RaBitQ scalar-factor semantics version. Readers reject unsupported values."},
+                        {"name": "rotationVersion", "type": "int", "doc": "Deterministic orthogonal-rotation algorithm version."},
+                        {"name": "rotationDigest", "type": "string", "doc": "SHA-256 over the canonical row-major float32 rotation matrix reconstructed for this generation."},
                         {"name": "kappa", "type": "double", "doc": "Generation-scoped pass-1 error scale."},
                         {"name": "gMin", "type": "double", "doc": "Generation-scoped normalized alignment floor."},
                         {"name": "eps1Max", "type": "double", "doc": "Maximum permitted relative pass-1 error."},
@@ -625,7 +628,7 @@
                     "name": "HoodieVectorIndexCentroids",
                     "fields": [
                         {"name": "clusterIds", "type": "bytes", "doc": "k x u32 LE cluster ids in this chunk, parallel to centroidBytes rows."},
-                        {"name": "centroidBytes", "type": "bytes", "doc": "k x dimPadded float32 LE, row-major, in rotated space."},
+                        {"name": "centroidBytes", "type": "bytes", "doc": "k x dim physical-vector elements, row-major, in original assignment space; rotated copies are derived and cached for scoring."},
                         {"name": "clusterRadii", "type": "bytes", "doc": "k x float32 LE max residual norm per cluster."}
                     ]
                 },
