@@ -242,6 +242,18 @@ public class TestHoodieSchemaCompatibility {
     // Without a variant on the requested side there is nothing to align: a plain user struct of
     // the same shape passes through untouched.
     assertSame(fileSchema, VariantSchemaUtils.alignShreddedVariants(fileSchema, fileSchema));
+
+    // The alignment now runs on every HoodieMergeHelper.runMerge, so pin the ordinary unshredded
+    // table too: a footer-derived plain {metadata, value} column carries no typed_value to
+    // reconstruct, and must pass through untouched even against a variant requested column.
+    HoodieSchema footerUnshredded = HoodieSchema.createRecord("v", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES))));
+    HoodieSchema unshreddedFileSchema = HoodieSchema.createRecord("rec", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("v", HoodieSchema.createNullable(footerUnshredded))));
+    assertSame(unshreddedFileSchema,
+        VariantSchemaUtils.alignShreddedVariants(unshreddedFileSchema, writerSchema));
   }
 
   @Test

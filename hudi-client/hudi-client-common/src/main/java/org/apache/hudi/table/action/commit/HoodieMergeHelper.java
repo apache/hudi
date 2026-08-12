@@ -84,7 +84,16 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieFileReader bootstrapFileReader = null;
 
     HoodieSchema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
-    HoodieSchema readerSchema = baseFileReader.getSchema();
+    // A shredded variant column loses its logical type through the parquet footer, so the base
+    // file's schema surfaces it as a plain {metadata, value, typed_value} record. Align such
+    // columns to the writer's variant form once, here, because every downstream use of the reader
+    // schema needs the aligned form: the strict-projection check below (RECORD vs VARIANT can
+    // never pass), and - whichever branch it lands on - the schema the reader is handed, since
+    // HoodieVariantReconstruction anchors on the requested column being a variant. Read at the raw
+    // footer schema instead and reconstruction stays disengaged, so the rewrite below copies
+    // {metadata, value} by name and silently drops typed_value (#19567). Returns the file schema
+    // untouched when no column has the shredded shape, so non-variant tables are unaffected.
+    HoodieSchema readerSchema = VariantSchemaUtils.alignShreddedVariants(baseFileReader.getSchema(), writerSchema);
 
     // In case Advanced Schema Evolution is enabled we might need to rewrite currently
     // persisted records to adhere to an evolved schema
@@ -94,15 +103,8 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     // Check whether the writer schema is simply a projection of the file's one, ie
     //   - Its field-set is a proper subset (of the reader schema)
     //   - There's no schema evolution transformation necessary
-    // Shredded variant columns are aligned to the writer side first: their footer-derived file
-    // schema surfaces a plain {metadata, value, typed_value} record where the writer schema has a
-    // variant, which can never pass the strict check even though the reader reconstructs such
-    // columns when handed a variant-bearing requested schema. Without the alignment recordSchema
-    // degenerates to the footer schema, reconstruction cannot anchor on a variant requested
-    // column, and the rewrite below silently drops typed_value (#19567).
     boolean isPureProjection = schemaEvolutionTransformerOpt.isEmpty()
-        && HoodieSchemaCompatibility.isStrictProjectionOf(
-            VariantSchemaUtils.alignShreddedVariants(readerSchema, writerSchema), writerSchema);
+        && HoodieSchemaCompatibility.isStrictProjectionOf(readerSchema, writerSchema);
     // Check whether we will need to rewrite target (already merged) records into the
     // writer's schema
     boolean shouldRewriteInWriterSchema = !isPureProjection
