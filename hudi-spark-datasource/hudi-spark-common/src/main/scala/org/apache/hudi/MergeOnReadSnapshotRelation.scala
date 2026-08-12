@@ -37,7 +37,8 @@ import org.apache.spark.sql.types.StructType
 import scala.collection.JavaConverters._
 
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
-                                      logFiles: List[HoodieLogFile]) extends HoodieFileSplit
+                                      logFiles: List[HoodieLogFile],
+                                      partitionValues: InternalRow = InternalRow.empty) extends HoodieFileSplit
 
 case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
                                        override val optParams: Map[String, String],
@@ -132,7 +133,15 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
           getPartitionColumnsAsInternalRow(file.getPathInfo), file.getPathInfo.getPath, 0, file.getFileSize)
       }
 
-      HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
+      // These values are empty unless the partition columns are omitted from the data files, which is
+      // exactly when a reader has to splice them back into the rows it produces. A log-only slice still
+      // lives in the partition directory, so a log file's path resolves them just as the base file does.
+      // NOTE: HoodieLogFile#getPathInfo is transient and null for log files built from a path.
+      val partitionValues = partitionedBaseFile.map(_.partitionValues).getOrElse {
+        logFiles.headOption.map(f => getPartitionColumnsAsInternalRow(f.getPath)).getOrElse(InternalRow.empty)
+      }
+
+      HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles, partitionValues)
     }.toList
   }
 }
