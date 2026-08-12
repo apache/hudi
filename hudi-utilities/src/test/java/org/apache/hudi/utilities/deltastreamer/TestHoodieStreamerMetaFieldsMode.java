@@ -77,21 +77,24 @@ public class TestHoodieStreamerMetaFieldsMode extends HoodieDeltaStreamerTestBas
 
   /**
    * The regression this fixture exists for, and the one cshuo raised in review: a restarted streamer
-   * that does not restate the mode must keep writing the table's meta columns.
+   * that does not restate the mode must not silently write the wrong meta columns.
    *
    * <p>StreamSync builds its write config from {@code props} alone, and the mode is persisted only by
-   * {@code initializeEmptyTable}, which runs solely when the base path does not exist. So a second
-   * run used to resolve to {@link MetaFieldsMode#NONE} and write base files with a null
+   * {@code initializeEmptyTable}, which runs solely when the base path does not exist. So a second run
+   * used to resolve to {@link MetaFieldsMode#NONE} and write base files with a null
    * {@code _hoodie_commit_time} while {@code hoodie.properties} still advertised
    * {@code COMMIT_TIME_ONLY} — incremental queries were then admitted and silently dropped every one
    * of those rows.
    *
-   * <p>The rule now lives in {@code BaseHoodieWriteClient#validateAgainstTableProperties} for every
-   * engine rather than in StreamSync, so this asserts it end-to-end through the streamer: a run that
-   * states neither meta-field property inherits the table's mode.
+   * <p>A selective table now requires the writer to state the mode, so the restart is <b>rejected</b>
+   * rather than inheriting. Inheritance would work here, but it cannot be relied on everywhere: the
+   * write path reads the mode in factories and handles that hold no table config at all, so the write
+   * config has to be right on its own. Failing loudly at init is what makes that guarantee real —
+   * and a rejected run leaves the table exactly as it was, which silent narrowing did not.
+   * See {@code testRestartRestatingTheModeSucceeds} for the migration path.
    */
   @Test
-  public void testRestartWithoutRestatingTheModeKeepsWritingCommitTimes() throws Exception {
+  public void testRestartWithoutRestatingTheModeIsRejected() throws Exception {
     String tablePath = basePath + "/streamer_restart_inherits_mode";
 
     HoodieDeltaStreamer.Config first = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
@@ -104,9 +107,59 @@ public class TestHoodieStreamerMetaFieldsMode extends HoodieDeltaStreamerTestBas
     assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY,
         HoodieTestUtils.createMetaClient(context, tablePath).getTableConfig().getMetaFieldsMode());
 
+    long commitsAfterFirstRun = HoodieTestUtils.createMetaClient(context, tablePath)
+        .getActiveTimeline().filterCompletedInstants().countInstants();
+
     // Restart against the existing table stating neither the mode nor the legacy boolean.
     HoodieDeltaStreamer.Config restart = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
     restart.tableType = "COPY_ON_WRITE";
+
+    Throwable thrown = assertThrows(Throwable.class, () -> {
+      HoodieDeltaStreamer restarted = new HoodieDeltaStreamer(restart, jsc);
+      restarted.getIngestionService().ingestOnce();
+      restarted.shutdownGracefully();
+    });
+
+    String rootMessage = rootMessageOf(thrown);
+    assertTrue(rootMessage.contains(HoodieTableConfig.META_FIELDS_MODE.key()),
+        "expected the writer to be told to state the mode, got: " + rootMessage);
+
+    // The rejected run must have left the table untouched -- no mode change, no extra commit, and no
+    // base file carrying a null commit time. That last one is the actual data loss being prevented:
+    // such rows are admitted by incremental queries and then silently dropped.
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, metaClient.getTableConfig().getMetaFieldsMode(),
+        "a rejected restart must leave the table's mode untouched");
+    assertEquals(commitsAfterFirstRun,
+        metaClient.getActiveTimeline().filterCompletedInstants().countInstants(),
+        "a rejected restart must not have committed anything");
+    Dataset<Row> raw = sparkSession.read().parquet(tablePath + "/*/*/*/*.parquet");
+    assertEquals(0,
+        raw.filter(functions.col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isNull()).count(),
+        "no row may have a null _hoodie_commit_time on a COMMIT_TIME_ONLY table");
+  }
+
+  /**
+   * The migration path for the case above: a restart that restates the table's mode proceeds normally.
+   *
+   * <p>This is what every writer against a selective table must do, and it is the assertion that keeps
+   * the requirement from being a dead end -- the mode is stateable, and stating it is enough.
+   */
+  @Test
+  public void testRestartRestatingTheModeSucceeds() throws Exception {
+    String tablePath = basePath + "/streamer_restart_restates_mode";
+
+    HoodieDeltaStreamer.Config first = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
+    first.tableType = "COPY_ON_WRITE";
+    first.configs.add(HoodieTableConfig.META_FIELDS_MODE.key() + "=" + MetaFieldsMode.COMMIT_TIME_ONLY.name());
+    HoodieDeltaStreamer streamer = new HoodieDeltaStreamer(first, jsc);
+    streamer.getIngestionService().ingestOnce();
+    streamer.shutdownGracefully();
+
+    // Restart restating the same mode.
+    HoodieDeltaStreamer.Config restart = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
+    restart.tableType = "COPY_ON_WRITE";
+    restart.configs.add(HoodieTableConfig.META_FIELDS_MODE.key() + "=" + MetaFieldsMode.COMMIT_TIME_ONLY.name());
     HoodieDeltaStreamer restarted = new HoodieDeltaStreamer(restart, jsc);
     restarted.getIngestionService().ingestOnce();
     restarted.shutdownGracefully();
@@ -131,11 +184,11 @@ public class TestHoodieStreamerMetaFieldsMode extends HoodieDeltaStreamerTestBas
    * The variant @voonhous asked for, and the one cshuo originally described: the restart states the
    * deprecated boolean rather than nothing at all.
    *
-   * <p>These are different cases under the current rule. Stating neither meta-field property inherits
-   * the table's mode (above); stating the boolean is an explicit request that contradicts a
-   * {@code COMMIT_TIME_ONLY} table, so it is rejected rather than silently narrowing the write to
-   * {@code NONE}. Before this rule it narrowed silently, writing base files with a null
-   * {@code _hoodie_commit_time} into a table that still advertised the mode.
+   * <p>Both cases are rejected against a selective table, for the same reason: the writer has not
+   * stated the mode the table is on. Stating the boolean instead makes the disagreement explicit
+   * rather than merely unstated, but the outcome is the same. Before this rule it narrowed silently,
+   * writing base files with a null {@code _hoodie_commit_time} into a table that still advertised the
+   * mode.
    */
   @Test
   public void testRestartStatingTheLegacyBooleanIsRejected() throws Exception {

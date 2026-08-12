@@ -81,7 +81,9 @@ public class ClusteringTestUtils {
         .withClusteringSortColumns(populateMetaFields ? "_hoodie_record_key" : "_row_key")
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(0).withInlineClustering(false)
         .build();
-    properties.putAll(getPropertiesForKeyGen());
+    // Must follow the flag: this config drives a clustering write, and a writer on populate=false
+    // against a table created with meta fields populated is rejected rather than silently narrowing it.
+    properties.putAll(getPropertiesForKeyGen(populateMetaFields));
 
     // write config builder
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)

@@ -197,6 +197,23 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     return properties;
   }
 
+  /**
+   * Align the fixture table's meta-fields setting with what the writer under test is about to ask for.
+   *
+   * <p>The table is created once per test by {@code initMetaClient()}, which always populates all meta
+   * fields. A test that then builds a {@code populate.meta.fields=false} writer is asking to narrow the
+   * table on the fly, which is rejected -- meta columns are physical, so a writer may not disagree with
+   * the table about which of them hold values. Tests that legitimately want a non-populated table state
+   * that on the table itself, here, rather than only on the writer.
+   */
+  protected void alignTableWithPopulateMetaFields(boolean populateMetaFields) throws IOException {
+    Properties props = new Properties();
+    props.putAll(metaClient.getTableConfig().getProps());
+    props.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+  }
+
   protected Properties getPropertiesForMetadataTable() {
     Properties properties = new Properties();
     properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
@@ -890,7 +907,9 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
     HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
             .withClusteringConfig(clusteringConfig)
-            .withProps(getPropertiesForKeyGen()).build();
+            // Match the table, which testInsertTwoBatches created with this same flag. performClustering
+            // below already threads it; this site used to hardcode populate=false regardless.
+            .withProps(getPropertiesForKeyGen(populateMetaFields)).build();
     HoodieWriteMetadata<List<WriteStatus>> clusterMetadata =
             performClustering(clusteringConfig, populateMetaFields, completeClustering, validatorClasses, sqlQueryForEqualityValidation,
                     sqlQueryForSingleResultValidation, allRecords.getLeft(), transformWriteMetadataFn, createKeyGeneratorFn);
@@ -1021,9 +1040,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     }
   }
 
-  protected void testDeletesWithoutInserts(boolean populateMetaFields, Function transformInputFn, Function transformOutputFn) {
+  protected void testDeletesWithoutInserts(boolean populateMetaFields, Function transformInputFn, Function transformOutputFn) throws IOException {
     final String testPartitionPath = "2016/09/26";
     final int insertSplitLimit = 100;
+    // The fixture table always populates meta fields; make it agree with the writer built below, which
+    // otherwise asks to narrow an ALL table to NONE.
+    alignTableWithPopulateMetaFields(populateMetaFields);
     // setup the small file handling params
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit,
             TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), populateMetaFields, populateMetaFields
@@ -1044,7 +1066,10 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     testInsertTwoBatches(true, createBrokenClusteringClientFn);
     HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withClusteringConfig(clusteringConfig)
-        .withProps(getPropertiesForKeyGen()).build();
+        // The table above was created with meta fields populated, so this writer must agree with it.
+        // The no-arg getPropertiesForKeyGen() hardcodes populate=false, which the writer-vs-table
+        // meta-fields check now rejects rather than silently narrowing the table.
+        .withProps(getPropertiesForKeyGen(true)).build();
     dataGen = new HoodieTestDataGenerator(new String[] {"2015/03/16"});
     generateInsertsAndCommit(config, transformInputFn, transformOutputFn);
     HoodieTableMetaClient metaClient = createMetaClient();
