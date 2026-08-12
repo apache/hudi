@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -124,6 +125,15 @@ public class HoodieDropPartitionsTool implements Serializable {
         .setBasePath(cfg.basePath)
         .setLoadActiveTimelineOnLoad(true)
         .build();
+    // Adopt the table's meta-fields mode unless the operator named one. The write configs built below
+    // come from these props alone, so without this they resolve to the ALL default and are rejected
+    // against any table that is not ALL -- meta columns are physical, and a writer may not disagree
+    // with the table about which of them hold values. Unlike an ingestion writer, which has to state
+    // the mode because the write path cannot re-derive it, this tool has the table in hand.
+    if (!props.containsKey(HoodieTableConfig.META_FIELDS_MODE.key())) {
+      props.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(),
+          metaClient.getTableConfig().getMetaFieldsMode().name());
+    }
   }
 
   /**
