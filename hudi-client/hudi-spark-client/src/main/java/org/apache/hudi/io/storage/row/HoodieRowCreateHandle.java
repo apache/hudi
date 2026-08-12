@@ -119,7 +119,8 @@ public class HoodieRowCreateHandle implements Serializable {
         table.getBaseFileExtension());
     this.path = makeNewPath(storage, partitionPath, fileName, writeConfig);
 
-    this.metaFieldsMode = writeConfig.getMetaFieldsMode();
+    // Read from the TABLE config, not the write config -- see the note on BaseCreateHandle.
+    this.metaFieldsMode = table.getMetaClient().getTableConfig().getMetaFieldsMode();
     this.fileName = UTF8String.fromString(path.getName());
     this.commitTime = UTF8String.fromString(instantTime);
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);

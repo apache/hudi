@@ -58,8 +58,13 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   protected long recordsDeleted = 0;
   protected Map<String, HoodieRecord<T>> recordMap;
   protected boolean useWriterSchema = false;
-  // Resolved once rather than per record: updateFileName consults it on the preserve-metadata path.
-  private final MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
+  // Read from the TABLE config, not the write config. Meta-field population is a physical property
+  // of the table, so the table is the authority: a writer carrying a stale
+  // hoodie.populate.meta.fields would otherwise resolve to NONE and write null meta columns into a
+  // table whose earlier files have them populated. Resolved once rather than per record --
+  // updateFileName consults it on the preserve-metadata path.
+  private final MetaFieldsMode metaFieldsMode =
+      hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode();
 
   public BaseCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           String partitionPath, String fileId, Option<HoodieSchema> overriddenSchema,

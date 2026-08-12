@@ -1515,6 +1515,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     doInitTable(operationType, metaClient, instantTime);
     HoodieTable table = createTable(config, metaClient);
 
+    // A writer that states no meta-field property adopts the table's mode; meta-field population is
+    // a table property and a write must not change it. Done before validation, and separately from
+    // it, so the check below is a pure comparison rather than a mutation with a check attached.
+    resolveMetaFieldsModeForWrite(table.getMetaClient().getTableConfig(), config);
+
     // Validate table properties
     validateAgainstTableProperties(table.getMetaClient().getTableConfig(), config);
 
@@ -1561,15 +1566,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * against an {@code ALL} table should be told the setting conflicts, not have it silently
    * overridden.
    *
-   * @return true when the writer stated neither property, i.e. the mode was inherited and cannot
-   *         disagree with the table.
+   * <p>Called explicitly from {@link #initTable} rather than from
+   * {@link #validateAgainstTableProperties}: resolving what this writer will use is a separate
+   * concern from checking it, and a method named "validate" must not quietly rewrite the config it
+   * is handed. Read-only entry points that only validate (marker deletion, dry-run partition
+   * listing) therefore do not resolve, which is correct -- they write no records.
    */
-  private static boolean inferMetaFieldsModeFromTable(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+  public static void resolveMetaFieldsModeForWrite(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     boolean statedMode = writeConfig.contains(HoodieTableConfig.META_FIELDS_MODE)
         && !StringUtils.isNullOrEmpty(writeConfig.getString(HoodieTableConfig.META_FIELDS_MODE));
     boolean statedLegacyBoolean = writeConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS);
     if (statedMode || statedLegacyBoolean) {
-      return false;
+      return;
     }
     MetaFieldsMode tableMode = tableConfig.getMetaFieldsMode();
     writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, tableMode.name());
@@ -1577,17 +1585,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // observe an answer consistent with the mode.
     writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
         Boolean.toString(tableMode.toLegacyPopulateMetaFields()));
-    return true;
   }
 
+  /**
+   * Pure validation: this method reads both configs and throws, and never modifies either. A writer
+   * that states no meta-field property is reconciled beforehand by
+   * {@link #resolveMetaFieldsModeForWrite}, so by the time this runs any disagreement is one the
+   * writer asked for explicitly.
+   */
   public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
-
-    // A writer that stated neither meta-field property inherits the table's mode here, which makes
-    // the comparison below a no-op for it. A writer that stated either keeps its value and is
-    // compared.
-    inferMetaFieldsModeFromTable(tableConfig, writeConfig);
 
     // Meta-field population is physical, so a writer must not disagree with the table about which
     // meta columns hold values. Compare the full enum rather than the legacy booleans: those
