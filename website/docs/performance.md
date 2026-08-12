@@ -132,6 +132,56 @@ To enable Data Skipping in your queries make sure to set following properties to
   - `hoodie.metadata.enable` (to enable metadata table use on the read path, enabled by default)
   - `hoodie.metadata.index.column.stats.enable` (to enable column stats index use on the read path)
 
+#### Parquet Bloom Filters
+
+Column stats prune on ranges, so they help least where they are needed most: an equality predicate on a
+high-cardinality column whose min-max range covers almost every file. Parquet's own bloom filters cover that
+case. They are written into the Parquet file itself, and a reader consults them to skip row groups that
+cannot contain the value being searched for.
+
+Hudi passes these through to the Parquet writer, per column, from the **Hadoop** configuration:
+
+| key | meaning |
+| --- | --- |
+| `parquet.bloom.filter.enabled#<column>` | write a bloom filter for `<column>` |
+| `parquet.bloom.filter.expected.ndv#<column>` | expected number of distinct values, which sizes the filter |
+
+`<column>` is any data column you filter on by equality — not the record key, and unrelated to the record-key
+bloom index discussed in the note below. Set the keys on the Hadoop configuration your writer uses; from Spark
+the `spark.hadoop.` prefix forwards them:
+
+```
+--conf spark.hadoop.parquet.bloom.filter.enabled#session_id=true
+--conf spark.hadoop.parquet.bloom.filter.expected.ndv#session_id=100000
+```
+
+Give `expected.ndv` a realistic estimate for the column. Too low and the filter saturates and stops
+eliminating anything; too high and you pay in file size for nothing.
+
+This is a write-time decision: only files written after you set it carry the filters, so an existing table
+picks them up as it is rewritten by ongoing writes, compaction or clustering.
+
+On the read side nothing extra needs configuring for Spark 3.x. Reading the table back through the Hudi
+datasource consults the filters, provided the query carries an equality predicate that can be pushed down to
+the Parquet reader — a query filtering on a value no row group contains skips those row groups entirely.
+Parquet's own read-side switch, `parquet.filter.bloom.enabled`, is left at its default and Hudi never
+overrides it, so there is no reader-side flag to turn on.
+
+:::note
+Do not confuse the keys above with Hudi's own `hoodie.parquet.bloom.filter.enabled`, which is a different
+feature despite the near-identical name. That config controls whether Hudi writes a bloom filter **of record
+keys** into the file footer for use by the [bloom index](indexes.md) during upserts; it defaults to `true`,
+applies only when meta fields are populated, and is implied anyway when `hoodie.index.type` names a `BLOOM`
+index. It has nothing to do with per-column skipping on the read path, and setting it does not enable the
+Parquet column filters described here.
+:::
+
+:::caution
+Hudi applies these settings reflectively, so if the Parquet version on your classpath predates the
+`withBloomFilterEnabled` / `withBloomFilterNDV` builder methods, the keys are **silently ignored** rather
+than rejected. If you see no change in file size or query behaviour, check your Parquet version first.
+:::
+
 ## Related Resources
 
 <h3>Blogs</h3>
