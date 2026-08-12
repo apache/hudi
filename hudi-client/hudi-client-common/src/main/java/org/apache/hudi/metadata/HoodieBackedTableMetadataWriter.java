@@ -1215,23 +1215,20 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // We cannot create a deltaCommit at instantTime now because a future (rollback) block has already been written to the logFiles.
       // We need to choose a timestamp which would be a validInstantTime for MDT. This is either a commit timestamp completed on the dataset
       // or a new timestamp which we use for MDT clean, compaction etc.
-      writeClient.getTransactionManager().executeStateChangeWithInstant(metadataTableCommit -> {
-        String syncCommitTime = createRestoreTimestamp(metadataTableCommit);
-        processAndCommit(syncCommitTime, () -> {
-          List<MetadataPartitionType> indexPartitions = new ArrayList<>();
-          indexPartitions.add(FILES);
-          if (dataMetaClient.getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath())) {
-            indexPartitions.add(COLUMN_STATS);
-          }
-          return indexPartitions.stream().flatMap(indexPartition -> {
-            Indexer indexer = this.enabledIndexerMap.get(indexPartition);
-            ValidationUtils.checkArgument(indexer != null, indexPartition + " index should be enabled.");
-            return indexer.buildRestore(IndexRestoreContext.of(syncCommitTime, partitionsToDelete,
-                partitionFilesToAdd, partitionFilesToDelete)).stream();
-          }).collect(Collectors.toList());
-        });
-        // empty result
-        return Option.empty();
+      String syncCommitTime = writeClient.getTransactionManager().executeStateChangeWithInstant(this::createRestoreTimestamp);
+      // processAndCommit starts its own metadata-table transaction and must run after timestamp generation releases the lock.
+      processAndCommit(syncCommitTime, () -> {
+        List<MetadataPartitionType> indexPartitions = new ArrayList<>();
+        indexPartitions.add(FILES);
+        if (dataMetaClient.getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath())) {
+          indexPartitions.add(COLUMN_STATS);
+        }
+        return indexPartitions.stream().flatMap(indexPartition -> {
+          Indexer indexer = this.enabledIndexerMap.get(indexPartition);
+          ValidationUtils.checkArgument(indexer != null, indexPartition + " index should be enabled.");
+          return indexer.buildRestore(IndexRestoreContext.of(syncCommitTime, partitionsToDelete,
+              partitionFilesToAdd, partitionFilesToDelete)).stream();
+        }).collect(Collectors.toList());
       });
       closeInternal();
     } catch (IOException e) {

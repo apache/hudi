@@ -99,9 +99,7 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     HoodieTimeline inflightAndRequestedTimeline = mock(HoodieTimeline.class);
     when(table.getActiveTimeline()).thenReturn(activeTimeline);
-    TransactionManager txnManager = mock(TransactionManager.class);
-    when(txnManager.getLockManager()).thenReturn(mock(LockManager.class));
-    when(table.getTxnManager()).thenReturn(Option.of(txnManager));
+    when(table.getMetaClient()).thenReturn(metaClient);
     when(activeTimeline.filterInflightsAndRequested()).thenReturn(inflightAndRequestedTimeline);
     when(inflightAndRequestedTimeline.lastInstant()).thenReturn(Option.empty());
 
@@ -271,8 +269,15 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
                                                     HoodieWriteConfig clientConfig,
                                                     Option<EmbeddedTimelineService> timelineService,
                                                     HoodieTable mockedTable) {
-      super(context, clientConfig, timelineService, (TransactionManager) mockedTable.getTxnManager().get());
+      super(context, clientConfig, timelineService, createTransactionManager());
       this.mockedTable = mockedTable;
+    }
+
+    private static TransactionManager createTransactionManager() {
+      TransactionManager transactionManager = mock(TransactionManager.class);
+      when(transactionManager.getLockManager()).thenReturn(mock(LockManager.class));
+      when(transactionManager.generateInstantTime()).thenReturn("20260723120000000");
+      return transactionManager;
     }
 
     @Override

@@ -508,6 +508,7 @@ class TestHoodieBackedTableMetadataWriter {
     when(writeClient.scheduleCompactionAtInstant("400", Option.empty())).thenReturn(false);
     when(writeClient.scheduleLogCompaction(Option.empty()))
         .thenReturn(Option.of("201"))
+        .thenReturn(Option.empty())
         .thenThrow(new HoodieException("log compaction failed"));
 
     writer.compactIfNecessary(writeClient, Option.empty());

@@ -65,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -82,11 +83,15 @@ class TestIndexActionExecutors {
   private HoodieTableConfig tableConfig;
   private HoodieActiveTimeline activeTimeline;
   private HoodieStorage storage;
+  private TransactionManager transactionManager;
 
   @BeforeEach
   void setUp() {
     context = mock(HoodieEngineContext.class);
     table = mock(HoodieTable.class);
+    transactionManager = mock(TransactionManager.class);
+    when(transactionManager.generateInstantTime()).thenReturn("003");
+    when(table.getTxnManager()).thenReturn(Option.of(transactionManager));
     metaClient = mock(HoodieTableMetaClient.class);
     tableConfig = mock(HoodieTableConfig.class);
     activeTimeline = mock(HoodieActiveTimeline.class);
@@ -228,7 +233,7 @@ class TestIndexActionExecutors {
     assertEquals("001", completedPartitions.get(0).getIndexUptoInstant());
     verify(activeTimeline).transitionIndexRequestedToInflight(requested);
     verify(tableConfig).setMetadataPartitionState(metaClient, MetadataPartitionType.FILES.getPartitionPath(), true);
-    verify(activeTimeline).saveAsComplete(any(Boolean.class), any(HoodieInstant.class), any(Option.class));
+    verify(activeTimeline).saveAsComplete(any(HoodieInstant.class), any(Option.class), eq("003"));
     verify(writer).close();
   }
 
@@ -308,7 +313,7 @@ class TestIndexActionExecutors {
     doAnswer(ignored -> {
       throw new IOException("timeline failure");
     })
-        .when(activeTimeline).saveAsComplete(any(Boolean.class), any(HoodieInstant.class), any(Option.class));
+        .when(activeTimeline).saveAsComplete(any(HoodieInstant.class), any(Option.class), eq("003"));
     when(tableConfig.getMetadataPartitionsInflight()).thenReturn(new HashSet<>(Collections.singleton(partition)));
     when(tableConfig.getMetadataPartitions()).thenReturn(new HashSet<>(Collections.singleton(partition)));
     when(metaClient.getBasePath()).thenReturn(new StoragePath("/table"));

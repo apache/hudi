@@ -1271,23 +1271,33 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         if (isMultiWriter && !acquireRollbackHeartbeatIfMultiWriter(table, rollbackInstantOpt)) {
           return false;
         }
-        String rollbackInstantTime = rollbackInstantOpt.get().requestedTime();
-        // There can be a case where the inflight rollback failed after the instant files
-        // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
-        // not present in the timeline.  In such a case, the hoodie instant instance
-        // is reconstructed to allow the rollback to be reattempted, and the deleteInstants
-        // is set to false since they are already deleted.
-        // Execute rollback
-        HoodieRollbackMetadata rollbackMetadata = commitInstantOpt.isPresent()
-            ? table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true, skipLocking)
-            : table.rollback(context, rollbackInstantTime, table.getMetaClient().createNewInstant(
-                HoodieInstant.State.INFLIGHT, rollbackPlanOption.get().getInstantToRollback().getAction(), commitInstantTime),
-            false, skipLocking);
-        if (timerContext != null) {
-          long durationInMs = metrics.getDurationInMs(timerContext.stop());
-          metrics.updateRollbackMetrics(durationInMs, rollbackMetadata.getTotalFilesDeleted());
+        try {
+          String rollbackInstantTime = rollbackInstantOpt.get().requestedTime();
+          // There can be a case where the inflight rollback failed after the instant files
+          // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
+          // not present in the timeline.  In such a case, the hoodie instant instance
+          // is reconstructed to allow the rollback to be reattempted, and the deleteInstants
+          // is set to false since they are already deleted.
+          // Execute rollback
+          HoodieRollbackMetadata rollbackMetadata = commitInstantOpt.isPresent()
+              ? table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true, skipLocking)
+              : table.rollback(context, rollbackInstantTime, table.getMetaClient().createNewInstant(
+                  HoodieInstant.State.INFLIGHT, rollbackPlanOption.get().getInstantToRollback().getAction(), commitInstantTime),
+              false, skipLocking);
+          if (timerContext != null) {
+            long durationInMs = metrics.getDurationInMs(timerContext.stop());
+            metrics.updateRollbackMetrics(durationInMs, rollbackMetadata.getTotalFilesDeleted());
+          }
+          return true;
+        } finally {
+          if (isMultiWriter) {
+            try {
+              heartbeatClient.stop(rollbackInstantOpt.get().requestedTime());
+            } catch (Exception e) {
+              log.warn("Failed to stop heartbeat for rollback instant {}", rollbackInstantOpt.get().requestedTime(), e);
+            }
+          }
         }
-        return true;
       } else {
         throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime);
       }
