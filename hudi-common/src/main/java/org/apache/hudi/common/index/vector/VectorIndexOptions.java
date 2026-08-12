@@ -221,7 +221,7 @@ public final class VectorIndexOptions {
     }
   }
 
-  private static VectorStalePolicy getStalePolicy(Map<String, String> options) {
+  public static VectorStalePolicy getStalePolicy(Map<String, String> options) {
     String value = getOption(options, QUERY_STALE_POLICY, DEFAULT_STALE_POLICY.name());
     try {
       return VectorStalePolicy.fromString(value);

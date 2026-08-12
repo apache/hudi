@@ -77,6 +77,7 @@ public final class VectorIndexMetadataCache implements Serializable {
   private final boolean residualEncoding;
   private final int defaultShardCount;
   private final Map<Integer, ClusterManifest> clusterManifests;
+  private final String lastContiguousSourceInstant;
   private final String validForInstant;
 
   /**
@@ -123,6 +124,7 @@ public final class VectorIndexMetadataCache implements Serializable {
                                    boolean residualEncoding,
                                    int defaultShardCount,
                                    Map<Integer, ClusterManifest> clusterManifests,
+                                   String lastContiguousSourceInstant,
                                    String validForInstant) {
     this.centroids = centroids;
     this.generationId = generationId;
@@ -133,6 +135,7 @@ public final class VectorIndexMetadataCache implements Serializable {
     this.residualEncoding = residualEncoding;
     this.defaultShardCount = Math.max(1, defaultShardCount);
     this.clusterManifests = Collections.unmodifiableMap(clusterManifests);
+    this.lastContiguousSourceInstant = lastContiguousSourceInstant;
     this.validForInstant = validForInstant;
   }
 
@@ -328,6 +331,8 @@ public final class VectorIndexMetadataCache implements Serializable {
         residualEncoding,
         activeManifest.getShardCount(),
         clusterManifests,
+        activeManifest.getLastContiguousSourceInstant() == null
+            ? null : activeManifest.getLastContiguousSourceInstant().toString(),
         currentInstant);
   }
 
@@ -422,6 +427,10 @@ public final class VectorIndexMetadataCache implements Serializable {
 
   public Map<Integer, ClusterManifest> getClusterManifests() {
     return clusterManifests;
+  }
+
+  public String getLastContiguousSourceInstant() {
+    return lastContiguousSourceInstant;
   }
 
   public String getValidForInstant() {

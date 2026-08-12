@@ -21,11 +21,12 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.index.vector.{VectorDistanceMetric, VectorIndexArbiter, VectorIndexMdtSearchUtils, VectorIndexMetadataCache, VectorIndexOptions}
+import org.apache.hudi.common.index.vector.{VectorDistanceMetric, VectorIndexArbiter, VectorIndexMdtSearchUtils, VectorIndexMetadataCache, VectorIndexOptions, VectorStalePolicy}
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.{HoodieTimeline, InstantComparison}
+import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -537,25 +538,49 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     LOG.info(
       s"[vector_search][plan_context] basePath=$basePath latestInstant=${ctx.latestInstantTime} " +
         s"elapsedMs=${elapsedMs(contextStartNs)}")
-    if (ctx.cache.getDimension != vectorSchema.getDimension) {
-      throw new HoodieAnalysisException(
-        s"Vector index dimension (${ctx.cache.getDimension}) does not match column '$embeddingCol' dimension (${vectorSchema.getDimension}).")
-    }
-    val approxMode = VectorIndexOptions.isApproximateSearchMode(ctx.tuningOptions.asJava)
-
-    if (approxMode) {
-      buildApproximatePlan(spark, ctx, queryFloat, k)
+    val coveredInstant = ctx.cache.getLastContiguousSourceInstant
+    val indexIsStale = coveredInstant == null ||
+      compareTimestamps(coveredInstant, InstantComparison.LESSER_THAN, ctx.latestInstantTime)
+    val staleFallbackPlan = if (indexIsStale) {
+      val stalePolicy = VectorIndexOptions.getStalePolicy(ctx.tuningOptions.asJava)
+      val staleMessage =
+        s"Vector index generation ${ctx.cache.getGenerationId} covers source writes through " +
+          s"${Option(coveredInstant).getOrElse("<none>")} but the pinned table instant is ${ctx.latestInstantTime}"
+      stalePolicy match {
+        case VectorStalePolicy.FAIL =>
+          throw new HoodieAnalysisException(staleMessage)
+        case VectorStalePolicy.WARN =>
+          LOG.warn(s"$staleMessage; continuing because vector.query.stale_policy=WARN")
+          None
+        case VectorStalePolicy.FALLBACK =>
+          LOG.warn(s"$staleMessage; using brute-force exact fallback")
+          Some(BruteForceSearchAlgorithm.buildSingleQueryPlan(
+            spark, corpusTable, embeddingCol, queryVector, k, metric, runtimeOptions))
+      }
     } else {
-      val exactOutputSchema = StructType(
-        corpusDf.schema.fields.filterNot(_.name.equalsIgnoreCase(embeddingCol)) :+
-          StructField(DISTANCE_COL, DoubleType, nullable = false))
-      val candidateDf = buildRaBitQExactCandidateDf(
-        spark, ctx, exactOutputSchema, embeddingCol, vectorSchema, queryFloat, queryVector, k)
+      None
+    }
+    staleFallbackPlan.getOrElse {
+      if (ctx.cache.getDimension != vectorSchema.getDimension) {
+        throw new HoodieAnalysisException(
+          s"Vector index dimension (${ctx.cache.getDimension}) does not match column '$embeddingCol' dimension (${vectorSchema.getDimension}).")
+      }
+      val approxMode = VectorIndexOptions.isApproximateSearchMode(ctx.tuningOptions.asJava)
 
-      candidateDf
-        .orderBy(col(DISTANCE_COL).asc)
-        .limit(k)
-        .queryExecution.analyzed
+      if (approxMode) {
+        buildApproximatePlan(spark, ctx, queryFloat, k)
+      } else {
+        val exactOutputSchema = StructType(
+          corpusDf.schema.fields.filterNot(_.name.equalsIgnoreCase(embeddingCol)) :+
+            StructField(DISTANCE_COL, DoubleType, nullable = false))
+        val candidateDf = buildRaBitQExactCandidateDf(
+          spark, ctx, exactOutputSchema, embeddingCol, vectorSchema, queryFloat, queryVector, k)
+
+        candidateDf
+          .orderBy(col(DISTANCE_COL).asc)
+          .limit(k)
+          .queryExecution.analyzed
+      }
     }
   }
 
