@@ -18,7 +18,10 @@
 
 package org.apache.hudi.common.index.vector.search;
 
+import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.index.vector.RaBitQEncoder;
+import org.apache.hudi.common.index.vector.VectorArtifactIdentity;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
@@ -34,6 +37,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -49,9 +53,11 @@ class TestVectorIndexMetadataLoader {
     HoodieRecord<HoodieMetadataPayload> manifest = HoodieMetadataPayload.createVectorIndexManifestRecord(
         2, "build-2", "ACTIVE", 2, 2, 8, 1, 0, 2,
         1, ByteBuffer.allocate(2 * Float.BYTES), ByteBuffer.allocate(2 * Integer.BYTES),
-        1.1f, "routing-digest", 1, 8,
+        1.1f, VectorArtifactIdentity.routingDigest(
+            new float[][] {{0f, 0f}}, new float[][] {{0f, 0f}, {1f, 1f}}, new int[] {0, 0}, 1.1f),
+        1, 8,
         "L2", false, true, "embedding", 524288, 128,
-        1, 1, 1, "rotation-digest", 1.9, 1.0e-3, 1.0, 1.0e-3, 2, "checksum",
+        1, 1, 1, RaBitQEncoder.rotationDigest(2, 17L), 1.9, 1.0e-3, 1.0, 1.0e-3, 2, "checksum",
         4096, 1024, "002", 123L, partition);
     ByteBuffer ids = ByteBuffer.allocate(2 * Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN)
         .putInt(0).putInt(1);
@@ -86,8 +92,23 @@ class TestVectorIndexMetadataLoader {
 
     assertEquals(2, loaded.getSnapshot().getGenerationId());
     assertEquals("002", loaded.getSnapshot().getLastContiguousSourceInstant());
+    assertEquals("1", loaded.getSnapshot().getRotationVersion());
+    assertEquals(RaBitQEncoder.rotationDigest(2, 17L), loaded.getSnapshot().getRotationDigest());
+    assertEquals(64, loaded.getSnapshot().getRoutingArtifactDigest().length());
     assertEquals(17L, loaded.getRandomSeed());
     assertEquals(1, loaded.getShardCounts().get(0));
     assertEquals(1f, loaded.getCentroids()[1][0]);
+
+    HoodieVectorIndexManifest manifestData = (HoodieVectorIndexManifest)
+        manifest.getData().getVectorIndexMetadata().get();
+    String routingDigest = manifestData.getRoutingArtifactDigest().toString();
+    manifestData.setRoutingArtifactDigest("mismatched-routing-digest");
+    assertThrows(IllegalStateException.class, () -> VectorIndexMetadataLoader.load(
+        metadata, partition, HoodieSchema.createVector(2)));
+
+    manifestData.setRoutingArtifactDigest(routingDigest);
+    manifestData.setRotationDigest("mismatched-rotation-digest");
+    assertThrows(IllegalStateException.class, () -> VectorIndexMetadataLoader.load(
+        metadata, partition, HoodieSchema.createVector(2)));
   }
 }

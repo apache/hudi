@@ -35,6 +35,8 @@ public final class VectorIndexSnapshot implements Serializable {
   private final int factorVersion;
   private final int blockFormatVersion;
   private final String rotationVersion;
+  private final String rotationDigest;
+  private final String routingArtifactDigest;
   private final String quantizerVersion;
   private final String lastContiguousSourceInstant;
 
@@ -43,7 +45,8 @@ public final class VectorIndexSnapshot implements Serializable {
                              int blockFormatVersion,
                              String rotationVersion,
                              String quantizerVersion) {
-    this(generationId, factorVersion, blockFormatVersion, rotationVersion, quantizerVersion, null);
+    this(generationId, factorVersion, blockFormatVersion, rotationVersion,
+        null, null, quantizerVersion, null);
   }
 
   public VectorIndexSnapshot(int generationId,
@@ -52,10 +55,24 @@ public final class VectorIndexSnapshot implements Serializable {
                              String rotationVersion,
                              String quantizerVersion,
                              String lastContiguousSourceInstant) {
+    this(generationId, factorVersion, blockFormatVersion, rotationVersion,
+        null, null, quantizerVersion, lastContiguousSourceInstant);
+  }
+
+  public VectorIndexSnapshot(int generationId,
+                             int factorVersion,
+                             int blockFormatVersion,
+                             String rotationVersion,
+                             String rotationDigest,
+                             String routingArtifactDigest,
+                             String quantizerVersion,
+                             String lastContiguousSourceInstant) {
     this.generationId = generationId;
     this.factorVersion = factorVersion;
     this.blockFormatVersion = blockFormatVersion;
     this.rotationVersion = rotationVersion;
+    this.rotationDigest = rotationDigest;
+    this.routingArtifactDigest = routingArtifactDigest;
     this.quantizerVersion = quantizerVersion;
     this.lastContiguousSourceInstant = lastContiguousSourceInstant;
   }
@@ -74,6 +91,14 @@ public final class VectorIndexSnapshot implements Serializable {
 
   public String getRotationVersion() {
     return rotationVersion;
+  }
+
+  public String getRotationDigest() {
+    return rotationDigest;
+  }
+
+  public String getRoutingArtifactDigest() {
+    return routingArtifactDigest;
   }
 
   public String getQuantizerVersion() {

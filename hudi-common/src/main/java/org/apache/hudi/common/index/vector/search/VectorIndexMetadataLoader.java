@@ -23,6 +23,10 @@ import org.apache.hudi.avro.model.HoodieVectorIndexCentroids;
 import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
 import org.apache.hudi.avro.model.HoodieVectorIndexQuantizer;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.index.vector.PostingBlockBuilder;
+import org.apache.hudi.common.index.vector.RaBitQEncoder;
+import org.apache.hudi.common.index.vector.RaBitQFactorConfig;
+import org.apache.hudi.common.index.vector.VectorArtifactIdentity;
 import org.apache.hudi.common.index.vector.VectorDistanceMetric;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -78,6 +82,7 @@ public final class VectorIndexMetadataLoader {
     HoodieVectorIndexQuantizer quantizer = requireSingle(
         records(metadataTable, indexPartition, VectorIndexMetadataKey.quantizerPrefix(generation)),
         HoodieVectorIndexQuantizer.class, "quantizer");
+    verifyImmutableIdentity(manifest, quantizer, centroids);
 
     Map<Integer, Integer> shardCounts = new HashMap<>();
     for (int clusterId = 0; clusterId < manifest.getNumClusters(); clusterId++) {
@@ -87,7 +92,9 @@ public final class VectorIndexMetadataLoader {
         generation,
         manifest.getFactorVersion(),
         manifest.getBlockFormatVersion(),
-        quantizer.getQuantizerType().toString(),
+        Integer.toString(manifest.getRotationVersion()),
+        manifest.getRotationDigest().toString(),
+        manifest.getRoutingArtifactDigest().toString(),
         "rabitq-" + manifest.getBitsTotal(),
         manifest.getLastContiguousSourceInstant() == null
             ? null : manifest.getLastContiguousSourceInstant().toString());
@@ -95,6 +102,57 @@ public final class VectorIndexMetadataLoader {
         snapshot, centroids, shardCounts, manifest.getDim(), manifest.getBitsTotal(),
         quantizer.getRandomSeed(), manifest.getAssumeNormalized(),
         parseMetric(manifest.getMetric().toString()), manifest.getVectorColumn().toString());
+  }
+
+  private static void verifyImmutableIdentity(
+      HoodieVectorIndexManifest manifest,
+      HoodieVectorIndexQuantizer quantizer,
+      float[][] leafCentroids) {
+    if (manifest.getFactorVersion() != RaBitQFactorConfig.FACTOR_VERSION
+        || manifest.getBlockFormatVersion() != PostingBlockBuilder.BLOCK_FORMAT_VERSION
+        || manifest.getRoutingVersion() != VectorArtifactIdentity.ROUTING_VERSION
+        || manifest.getRotationVersion() != VectorArtifactIdentity.ROTATION_VERSION) {
+      throw new IllegalStateException("Active vector generation uses unsupported artifact versions");
+    }
+    float[][] coarseCentroids = decodeFloatMatrix(
+        manifest.getRoutingCoarseCentroids(), manifest.getDim(), "routing coarse centroids");
+    int[] leafOffsets = decodeIntArray(manifest.getRoutingLeafOffsets(), "routing leaf offsets");
+    String routingDigest = VectorArtifactIdentity.routingDigest(
+        coarseCentroids, leafCentroids, leafOffsets, manifest.getRoutingExpandRatio());
+    if (!routingDigest.contentEquals(manifest.getRoutingArtifactDigest())) {
+      throw new IllegalStateException("Active vector generation routing digest does not match its artifacts");
+    }
+    String rotationDigest = RaBitQEncoder.rotationDigest(manifest.getDim(), quantizer.getRandomSeed());
+    if (!rotationDigest.contentEquals(manifest.getRotationDigest())) {
+      throw new IllegalStateException("Active vector generation rotation digest does not match its artifacts");
+    }
+  }
+
+  private static float[][] decodeFloatMatrix(ByteBuffer source, int columns, String name) {
+    ByteBuffer values = source.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+    int rowBytes = columns * Float.BYTES;
+    if (columns <= 0 || values.remaining() == 0 || values.remaining() % rowBytes != 0) {
+      throw new IllegalStateException("Invalid " + name + " payload size");
+    }
+    float[][] result = new float[values.remaining() / rowBytes][columns];
+    for (float[] row : result) {
+      for (int column = 0; column < columns; column++) {
+        row[column] = values.getFloat();
+      }
+    }
+    return result;
+  }
+
+  private static int[] decodeIntArray(ByteBuffer source, String name) {
+    ByteBuffer values = source.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+    if (values.remaining() == 0 || values.remaining() % Integer.BYTES != 0) {
+      throw new IllegalStateException("Invalid " + name + " payload size");
+    }
+    int[] result = new int[values.remaining() / Integer.BYTES];
+    for (int index = 0; index < result.length; index++) {
+      result[index] = values.getInt();
+    }
+    return result;
   }
 
   private static List<HoodieRecord<HoodieMetadataPayload>> records(

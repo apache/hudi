@@ -176,6 +176,7 @@ public final class SparkVectorIndexBootstrap {
       float[][] coarseCentroids = TwoLevelKMeansBootstrap$.MODULE$.coarseCentroidsForJava(routingModel);
       int[] leafOffsets = TwoLevelKMeansBootstrap$.MODULE$.leafOffsetsForJava(routingModel);
       double[][] centroidsDouble = toDoubleCentroids(centroids);
+      float[][] persistedCentroids = persistedCentroidGeometry(centroids, vectorType);
       int actualK = centroids.length;
 
       log.info("Centroid training complete: {} clusters for {}", actualK, indexName);
@@ -265,7 +266,7 @@ public final class SparkVectorIndexBootstrap {
               VectorRoutingArtifacts.serializeIntArray(leafOffsets),
               assignmentExpandRatio,
               VectorRoutingArtifacts.digest(
-                  coarseCentroids, centroids, leafOffsets, assignmentExpandRatio),
+                  coarseCentroids, persistedCentroids, leafOffsets, assignmentExpandRatio),
               generationShardCount,
               Math.max(1, actualK),
               manifestMetricName(metric),
@@ -660,6 +661,20 @@ public final class SparkVectorIndexBootstrap {
       }
     }
     return result;
+  }
+
+  private static float[][] persistedCentroidGeometry(
+      float[][] centroids, HoodieSchema.Vector.VectorElementType vectorType) {
+    float[][] persisted = new float[centroids.length][];
+    for (int row = 0; row < centroids.length; row++) {
+      persisted[row] = centroids[row].clone();
+      if (vectorType == HoodieSchema.Vector.VectorElementType.INT8) {
+        for (int column = 0; column < persisted[row].length; column++) {
+          persisted[row][column] = (byte) Math.round(persisted[row][column]);
+        }
+      }
+    }
+    return persisted;
   }
 
   private static double[][] toDoubleCentroids(float[][] centroids) {
