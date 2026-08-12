@@ -236,18 +236,24 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Sort by UTF-8 bytes to match the HFile order; the reader seeks forward without rewinding.
     sortedKeyPrefixes.sort(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
 
-    // NOTE: Since we partition records to a particular file-group by full key, we will have
-    //       to scan all file-groups for all key-prefixes as each of these might contain some
-    //       records matching the key-prefix
+    // NOTE: Since we generally partition records to a particular file-group by full key, we have to
+    //       scan all file-groups for all key-prefixes as each of these might contain some records
+    //       matching the key-prefix. The vector index partition is the exception: posting prefixes
+    //       are routed to specific file groups at write time
+    //       (MetadataPartitionType.VECTOR_INDEX.getFileGroupMappingFunction), so we prune each
+    //       prefix to only its target file slice below.
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     checkState(!partitionFileSlices.isEmpty(), () -> "Number of file slices for partition " + partitionName + " should be > 0");
 
-    return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
-        getEngineContext().parallelize(partitionFileSlices))
+    List<Pair<FileSlice, List<String>>> targetFileSlicesWithPrefixes =
+        getTargetFileSlicesWithPrefixesForKeyPrefixLookup(partitionName, sortedKeyPrefixes, partitionFileSlices);
+
+    return (shouldLoadInMemory ? HoodieListData.lazy(targetFileSlicesWithPrefixes) :
+        getEngineContext().parallelize(targetFileSlicesWithPrefixes))
         .flatMap(
-            (SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice ->
-                readSliceAndFilterByKeysIntoList(partitionName, sortedKeyPrefixes, fileSlice,
+            (SerializableFunction<Pair<FileSlice, List<String>>, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSliceWithPrefixes ->
+                readSliceAndFilterByKeysIntoList(partitionName, fileSliceWithPrefixes.getRight(), fileSliceWithPrefixes.getLeft(),
                     metadataRecord -> {
                       HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
                       String rowKey = payload.key != null ? payload.key : metadataRecord.get(KEY_FIELD_NAME).toString();
@@ -255,6 +261,73 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                       return new HoodieAvroRecord<>(key, payload);
                     }, false))
         .filter(r -> !r.getData().isDeleted());
+  }
+
+  /**
+   * Determines which file slices need to be scanned for each key-prefix.
+   *
+   * <p>For most partitions a key-prefix may match records in any file group, so every file slice is
+   * paired with the full prefix list. For the vector index partition, posting prefixes are routed to
+   * specific file groups by the write path
+   * ({@link MetadataPartitionType#VECTOR_INDEX} file-group mapping hashes by the cluster prefix
+   * {@code P|gen|cluster|}), so each prefix is pruned to only its target file slice. Read-time lookups
+   * may still use shard prefixes, but those collapse to the same routing key for file-slice pruning.
+   */
+  private List<Pair<FileSlice, List<String>>> getTargetFileSlicesWithPrefixesForKeyPrefixLookup(String partitionName,
+                                                                                                List<String> sortedKeyPrefixes,
+                                                                                                List<FileSlice> partitionFileSlices) {
+    if (partitionFileSlices.size() <= 1 || sortedKeyPrefixes.isEmpty()) {
+      return partitionFileSlices.stream()
+          .map(fileSlice -> Pair.of(fileSlice, sortedKeyPrefixes))
+          .collect(Collectors.toList());
+    }
+    if (isRouteableVectorMetadataLookup(partitionName, sortedKeyPrefixes)) {
+      int numFileGroups = partitionFileSlices.size();
+      List<List<String>> prefixesByFileGroup = new ArrayList<>(numFileGroups);
+      for (int i = 0; i < numFileGroups; i++) {
+        prefixesByFileGroup.add(new ArrayList<>());
+      }
+      for (String prefix : sortedKeyPrefixes) {
+        prefixesByFileGroup.get(HoodieTableMetadataUtil.mapVectorPostingKeyToFileGroupIndex(prefix, numFileGroups)).add(prefix);
+      }
+      List<Pair<FileSlice, List<String>>> targeted = new ArrayList<>();
+      for (int i = 0; i < numFileGroups; i++) {
+        List<String> prefixes = prefixesByFileGroup.get(i);
+        if (!prefixes.isEmpty()) {
+          targeted.add(Pair.of(partitionFileSlices.get(i), prefixes));
+        }
+      }
+      return targeted;
+    }
+    return partitionFileSlices.stream()
+        .map(fileSlice -> Pair.of(fileSlice, sortedKeyPrefixes))
+        .collect(Collectors.toList());
+  }
+
+  private boolean isRouteableVectorMetadataLookup(String partitionName, List<String> sortedKeyPrefixes) {
+    return MetadataPartitionType.fromPartitionPath(partitionName).equals(MetadataPartitionType.VECTOR_INDEX)
+        && sortedKeyPrefixes.stream().allMatch(this::isRouteableVectorMetadataKeyPrefix);
+  }
+
+  private boolean isRouteableVectorMetadataKeyPrefix(String keyPrefix) {
+    if (keyPrefix == null || keyPrefix.isEmpty()) {
+      return false;
+    }
+    byte[] keyBytes = VectorIndexMetadataKey.decode(keyPrefix);
+    switch (Byte.toUnsignedInt(keyBytes[0])) {
+      case VectorIndexMetadataKey.FAMILY_MANIFEST:
+        return keyBytes.length >= 5;
+      case VectorIndexMetadataKey.FAMILY_QUANTIZER:
+        return keyBytes.length >= 7;
+      case VectorIndexMetadataKey.FAMILY_CENTROIDS:
+        return keyBytes.length >= 15;
+      case VectorIndexMetadataKey.FAMILY_CLUSTER_STATS:
+        return keyBytes.length >= 9;
+      case VectorIndexMetadataKey.FAMILY_POSTING:
+        return keyBytes.length >= 9;
+      default:
+        return false;
+    }
   }
 
   private static TreeSet<String> getDistinctSortedKeysForSingleSlice(HoodieData<String> keys) {

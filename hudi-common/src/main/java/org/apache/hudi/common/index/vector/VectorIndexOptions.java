@@ -150,7 +150,7 @@ public final class VectorIndexOptions {
     return Collections.unmodifiableMap(normalized);
   }
 
-  private static VectorDistanceMetric getMetric(Map<String, String> options) {
+  public static VectorDistanceMetric getMetric(Map<String, String> options) {
     String value = getOption(options, METRIC, DEFAULT_METRIC.name());
     try {
       return VectorDistanceMetric.fromString(value);
@@ -204,11 +204,11 @@ public final class VectorIndexOptions {
     return Boolean.parseBoolean(value);
   }
 
-  private static int getNumProbes(Map<String, String> options) {
+  public static int getNumProbes(Map<String, String> options) {
     return getPositiveInt(options, QUERY_NUM_PROBES, DEFAULT_NUM_PROBES);
   }
 
-  private static int getRefineFactor(Map<String, String> options) {
+  public static int getRefineFactor(Map<String, String> options) {
     return getPositiveInt(options, QUERY_REFINE_FACTOR, DEFAULT_REFINE_FACTOR);
   }
 
@@ -228,6 +228,24 @@ public final class VectorIndexOptions {
     } catch (IllegalArgumentException e) {
       throw unsupportedValue(QUERY_STALE_POLICY, value, e);
     }
+  }
+
+  public static boolean isApproximateSearchMode(Map<String, String> options) {
+    return getQueryMode(options) == VectorQueryMode.APPROXIMATE;
+  }
+
+  /** The current posting format uses symmetric scoring. */
+  public static boolean isRaBitQAsymmetricScoring(Map<String, String> options) {
+    return false;
+  }
+
+  /** RLI arbitration is mandatory for correctness in both query modes. */
+  public static boolean isFinalistArbiterEnabled(Map<String, String> options) {
+    return true;
+  }
+
+  public static boolean isStalePolicyFail(Map<String, String> options) {
+    return getStalePolicy(options) == VectorStalePolicy.FAIL;
   }
 
   private static int getPositiveInt(Map<String, String> options, String key, int defaultValue) {
