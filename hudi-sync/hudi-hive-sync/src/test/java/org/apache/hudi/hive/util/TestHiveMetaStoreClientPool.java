@@ -29,6 +29,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -36,6 +37,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -285,6 +287,54 @@ class TestHiveMetaStoreClientPool {
       assertEquals("boom", outcome.firstError().getCause().getMessage(),
           "The wrapped Error must still be reported as the root cause");
     } finally {
+      pool.close();
+    }
+  }
+
+  @Test
+  void interruptedAwaitIsReportedAsAFailureNotASuccess() throws Exception {
+    List<IMetaStoreClient> clients = mockClients(2);
+    HiveMetaStoreClientPool pool = new HiveMetaStoreClientPool(clients, 2);
+    CountDownLatch release = new CountDownLatch(1);
+    CountDownLatch running = new CountDownLatch(1);
+    try {
+      // Given a batch that is still in flight when the awaiting thread is interrupted.
+      // The interrupt must surface as a dispatch failure: reporting success here would let
+      // HiveSyncTool advance the last-synced commit marker over work that never ran.
+      ParallelDispatch dispatch = pool.dispatchAll(
+          Collections.singletonList("BLOCKED"),
+          (client, batch) -> {
+            running.countDown();
+            release.await(10, TimeUnit.SECONDS);
+            return;
+          });
+      assertTrue(running.await(10, TimeUnit.SECONDS), "the batch must have started");
+
+      AtomicReference<Throwable> thrown = new AtomicReference<>();
+      AtomicBoolean returnedNormally = new AtomicBoolean(false);
+      Thread awaiter = new Thread(() -> {
+        try {
+          pool.awaitAll(dispatch, "test");
+          returnedNormally.set(true);
+        } catch (Throwable t) {
+          thrown.set(t);
+        }
+      }, "awaiter");
+      awaiter.start();
+
+      // When that thread is interrupted while parked in awaitAll.
+      Thread.sleep(200);
+      awaiter.interrupt();
+      awaiter.join(10_000);
+      release.countDown();
+
+      // Then it reports a failure rather than a clean batch.
+      assertFalse(returnedNormally.get(),
+          "awaitAll must not report success when the wait was interrupted; the batch's "
+              + "work was cancelled or is still in flight");
+      assertNotNull(thrown.get(), "the interruption must surface as a thrown failure");
+    } finally {
+      release.countDown();
       pool.close();
     }
   }

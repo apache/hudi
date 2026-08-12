@@ -281,7 +281,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   /**
    * A partition to drop with its extractor-derived values already resolved, so worker
    * threads never touch the shared {@link PartitionValueExtractor}. Immutable: the
-   * {@code values} list is wrapped unmodifiable at construction.
+   * {@code values} list is copied and wrapped unmodifiable at construction.
    */
   private static final class PartitionToDrop {
     private final String path;
@@ -290,7 +290,10 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
     private PartitionToDrop(String path, List<String> values, String clause) {
       this.path = path;
-      this.values = Collections.unmodifiableList(values);
+      // Copied, not just wrapped: PartitionValueExtractor may hand back a buffer it reuses
+      // across calls, and unmodifiableList would leave every entry aliasing the last
+      // extraction. partitionExists would then check the wrong partition and skip drops.
+      this.values = Collections.unmodifiableList(new ArrayList<>(values));
       this.clause = clause;
     }
   }

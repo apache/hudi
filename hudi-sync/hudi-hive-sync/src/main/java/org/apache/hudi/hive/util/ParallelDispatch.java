@@ -122,7 +122,12 @@ public final class ParallelDispatch {
       done.await();
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
-      aborted.set(true);
+      // Recorded as the abort cause, not just flagged: cancelPending() below can mark
+      // every remaining future CANCELLED, so the drain in awaitOutcome() would see only
+      // CancellationExceptions, leave firstError null, and report the batch as a success.
+      // A caller that then advances the last-synced commit marker would be recording work
+      // that was cancelled or is still in flight.
+      abort(ie);
     }
   }
 
