@@ -344,15 +344,23 @@ public class HoodieTableConfig extends HoodieConfig {
           + "When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
 
+  // NOTE: deliberately carries no sinceVersion. validateConfigVersion() silently *removes* any
+  // property whose sinceVersion exceeds the table's version (see the props.remove call in
+  // dropInvalidConfigs), so declaring one here would strip the mode from every table below that
+  // version on load -- reverting it to ALL without a word. Meta-field population is not a v10
+  // concept: a table as old as v6 can carry a selective mode, set at creation or through the
+  // hudi-cli, and 1.x supports writing to those tables. v6 is the floor only because that is the
+  // oldest version 1.x can write. Anything that keys meta-field behavior on table version rather
+  // than on this property will therefore be wrong for those tables.
   public static final ConfigProperty<String> META_FIELDS_MODE = ConfigProperty
       .key("hoodie.meta.fields.mode")
       .defaultValue("")
       .withDocumentation("Which Hudi meta columns are physically populated on disk. Allowed values are "
           + "ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY and COMMIT_TIME_AND_FILE_NAME. This supersedes the "
           + "deprecated hoodie.populate.meta.fields boolean, which is consulted only when this property is unset "
-          + "(true maps to ALL, false maps to NONE). Set only at table creation, "
-          + "via the hudi-cli, or during table upgrade — the property is immutable at runtime because it is a "
-          + "physical-storage decision baked into files at write time.");
+          + "(true maps to ALL, false maps to NONE). Supported on any table version 1.x can write, not just the "
+          + "latest. Set only at table creation, via the hudi-cli, or during table upgrade — the property is "
+          + "immutable at runtime because it is a physical-storage decision baked into files at write time.");
 
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
