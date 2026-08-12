@@ -401,8 +401,8 @@ This is the task that carries the review risk (spec §13). It adds an overload o
 - Create: `hudi-common/src/main/java/org/apache/hudi/metadata/RecordIndexLookupStatsCollector.java`
 - Modify: `hudi-common/src/main/java/org/apache/hudi/metadata/HoodieTableMetadata.java:247-266`
 - Modify: `hudi-common/src/main/java/org/apache/hudi/metadata/HoodieBackedTableMetadata.java:271-353`
-- Modify: `hudi-common/src/main/java/org/apache/hudi/metadata/FileSystemBackedTableMetadata.java:336-345`
-- Modify: `hudi-common/src/main/java/org/apache/hudi/common/table/view/NoOpTableMetadata.java:115-124`
+
+`FileSystemBackedTableMetadata` and `NoOpTableMetadata` are **not** modified — see the `default` method below.
 - Test: `hudi-common/src/test/java/org/apache/hudi/metadata/TestRecordIndexLookupStatsCollection.java`
 
 **Interfaces:**
@@ -507,13 +507,20 @@ Modify `hudi-common/src/main/java/org/apache/hudi/metadata/HoodieTableMetadata.j
    * @param collector          receives one {@link RecordIndexShardLookupStats} per shard actually
    *                           read. Pass {@link RecordIndexLookupStatsCollector#NOOP} to disable.
    */
-  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(
+  default HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(
       HoodieData<String> recordKeys,
       Option<String> dataTablePartition,
-      RecordIndexLookupStatsCollector collector);
+      RecordIndexLookupStatsCollector collector) {
+    return readRecordIndexLocationsWithKeys(recordKeys, dataTablePartition);
+  }
 ```
 
-In each of the three implementations, add the new method and make the existing 2-arg method delegate.
+**It must be `default`, not abstract.** `HoodieTableMetadata` is a public `hudi-common` interface
+with implementations outside this repository; an abstract method would break their compilation,
+turning a local feature into a compatibility question. As a `default` it is purely additive —
+every existing implementation and caller is untouched, and only `HoodieBackedTableMetadata`, the
+one implementation that actually reads a record index, overrides it. `FileSystemBackedTableMetadata`
+and `NoOpTableMetadata` need no changes at all.
 
 `HoodieBackedTableMetadata.java` — replace the body of the existing 2-arg override at `:338-353` with a delegation, and add the 3-arg implementation:
 
@@ -639,16 +646,10 @@ Note the early `return Collections.emptyIterator()` above: a shard with no keys 
 
 Apply the same wrapping to the single-slice branch at `:291-293`, using shard index `0` and `fileSlices.get(0).getFileId()`.
 
-`FileSystemBackedTableMetadata.java` and `NoOpTableMetadata.java` — add the 3-arg override delegating to the existing 2-arg behaviour and ignoring the collector, since neither reads a record index:
-
-```java
-  @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(
-      HoodieData<String> recordKeys, Option<String> dataTablePartition,
-      RecordIndexLookupStatsCollector collector) {
-    return readRecordIndexLocationsWithKeys(recordKeys, dataTablePartition);
-  }
-```
+`FileSystemBackedTableMetadata.java` and `NoOpTableMetadata.java` — **no change required.** Neither
+reads a record index, so the interface `default` is exactly the behaviour they want. Leaving them
+untouched keeps the diff to two files in `hudi-common` and is the strongest possible answer to the
+"does this widen a public interface?" review question.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -669,8 +670,6 @@ Expected: BUILD SUCCESS for both.
 git add hudi-common/src/main/java/org/apache/hudi/metadata/RecordIndexLookupStatsCollector.java \
         hudi-common/src/main/java/org/apache/hudi/metadata/HoodieTableMetadata.java \
         hudi-common/src/main/java/org/apache/hudi/metadata/HoodieBackedTableMetadata.java \
-        hudi-common/src/main/java/org/apache/hudi/metadata/FileSystemBackedTableMetadata.java \
-        hudi-common/src/main/java/org/apache/hudi/common/table/view/NoOpTableMetadata.java \
         hudi-common/src/test/java/org/apache/hudi/metadata/TestRecordIndexLookupStatsCollection.java
 git commit -m "feat(metadata): add record index lookup stats collector seam"
 ```

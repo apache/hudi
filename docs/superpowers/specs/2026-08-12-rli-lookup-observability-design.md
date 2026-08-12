@@ -162,19 +162,25 @@ it is the entire contract Flink's adapter will implement.
 
 ### Interface change — `HoodieTableMetadata`
 
-Add one overload:
+Add one overload, as a **`default`** method:
 
 ```java
-HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(
+default HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(
     HoodieData<String> recordKeys,
     Option<String> dataTablePartition,
-    RecordIndexLookupStatsCollector collector);
+    RecordIndexLookupStatsCollector collector) {
+  return readRecordIndexLocationsWithKeys(recordKeys, dataTablePartition);
+}
 ```
 
-The existing 1-arg and 2-arg signatures (`HoodieTableMetadata.java:247`, `:259`) remain and
-delegate with `NOOP`. No source or binary breakage for the three implementations
-(`HoodieBackedTableMetadata`, `FileSystemBackedTableMetadata`, `NoOpTableMetadata`) or for
-any existing caller. This matters for review velocity as much as for compatibility.
+`default` rather than abstract is load-bearing, not stylistic. `HoodieTableMetadata` is a
+public `hudi-common` interface with **implementations outside this repository**; adding an
+abstract method would break their compilation and turn a local feature into a compatibility
+question. As a `default` the change is purely additive: every existing implementation and
+caller is untouched, and only `HoodieBackedTableMetadata` — the one implementation that
+actually reads a record index — overrides it. `FileSystemBackedTableMetadata` and
+`NoOpTableMetadata` need no change, which keeps the `hudi-common` diff to two files and is
+the strongest available answer to the "does this widen a public interface?" review question.
 
 Inside `HoodieBackedTableMetadata`, the collector threads down to `lookupIndexRecords`
 (`:271`), where the file slice being read is in scope. The result iterator is wrapped in a
