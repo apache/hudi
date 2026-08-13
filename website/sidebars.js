@@ -138,6 +138,7 @@ module.exports = {
                         'jfs_hoodie',
                         'oci_hoodie',
                         'ks3_hoodie',
+                        'goosefs_hoodie',
                     ],
                 },
             ],

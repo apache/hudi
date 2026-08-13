@@ -3,7 +3,7 @@ title: Cloud Storage
 keywords: [hudi, aws, gcp, oss, azure, cloud, juicefs]
 summary: "In this page, we introduce how Hudi work with different Cloud providers."
 toc: true
-last_modified_at: 2021-10-12T10:50:00+08:00
+last_modified_at: 2026-08-13T21:00:51+05:30
 ---
 
 ## Talking to Cloud Storage
@@ -31,6 +31,8 @@ to cloud stores.
    Configurations required for OCI and Hudi co-operability.
 * [KS3 File System](ks3_hoodie.md) <br/>
    Configurations required for KS3 FS and Hudi co-operability.
+* [Tencent Cloud GooseFS](goosefs_hoodie.md) <br/>
+   Configurations required for GooseFS and Hudi co-operability.
 
 :::note 
 Many cloud object storage systems like [Amazon S3](https://docs.aws.amazon.com/s3/) allow you to set
