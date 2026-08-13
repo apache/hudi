@@ -54,6 +54,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase implements Serializable {
   private static final Comparator<HoodieRecord<? extends HoodieRecordPayload>> KEY_COMPARATOR =
@@ -239,6 +240,34 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         records1, true, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator), true);
     testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(config),
         records2, true, true, true, generateExpectedPartitionNumRecords(records2), Option.of(columnComparator), true);
+  }
+
+  /**
+   * On the Spark clustering / bulk-insert record path a binary sort column arrives as a
+   * raw byte[], which is not {@link Comparable}. {@code FlatLists.ofComparableArray} casts every
+   * element to Comparable, so this threw "ClassCastException: [B cannot be cast to
+   * java.lang.Comparable" and wedged every clustering attempt. {@code wrapArrayOfObjects} must wrap
+   * byte[] into a Comparable that preserves the Avro path's byte-lexicographic (ByteBuffer) ordering:
+   * signed bytes, shorter-prefix-first.
+   */
+  @Test
+  public void testSortColumnsWithBinaryValueAreComparable() {
+    // Before the fix each sortKeyOf(...) threw ClassCastException: [B cannot be cast to java.lang.Comparable.
+    assertTrue(sortKeyOf(new byte[] {0x01, 0x02}).compareTo(sortKeyOf(new byte[] {0x01, 0x03})) < 0,
+        "byte[] sort key must order like the Avro ByteBuffer path");
+    assertTrue(sortKeyOf(new byte[] {0x01, 0x03}).compareTo(sortKeyOf(new byte[] {0x01, 0x02})) > 0);
+    assertEquals(0, sortKeyOf(new byte[] {0x01, 0x02}).compareTo(sortKeyOf(new byte[] {0x01, 0x02})));
+    // ByteBuffer.compareTo is signed, so 0x80 (-128) sorts before 0x7F (127); lock in the sign.
+    assertTrue(sortKeyOf(new byte[] {(byte) 0x80}).compareTo(sortKeyOf(new byte[] {0x7F})) < 0,
+        "0x80 must sort before 0x7F under the Avro path's signed byte ordering");
+    // A shorter value that is a prefix of a longer one sorts first.
+    assertTrue(sortKeyOf(new byte[] {0x01, 0x02}).compareTo(sortKeyOf(new byte[] {0x01, 0x02, 0x00})) < 0);
+    // Empty binary sorts first.
+    assertTrue(sortKeyOf(new byte[] {}).compareTo(sortKeyOf(new byte[] {0x00})) < 0);
+  }
+
+  private static FlatLists.ComparableList sortKeyOf(byte[] value) {
+    return FlatLists.ofComparableArray(UTF8STRING_FACTORY.wrapArrayOfObjects(new Object[] {value}));
   }
 
   private Comparator<HoodieRecord<? extends HoodieRecordPayload>> getCustomColumnComparator(HoodieSchema schema, boolean prependPartitionPath, String[] sortColumns) {
