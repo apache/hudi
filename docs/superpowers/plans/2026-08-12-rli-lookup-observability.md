@@ -15,6 +15,10 @@
 - **Do NOT run `mvn test` in a Claude Code session.** CLAUDE.md forbids it. Agentic executors stop at `mvn install -pl <module> -am -DskipTests -Dspark3.5` and hand test execution to the user. The `mvn test` commands in each task are for the human running them.
 - `JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-11.jdk/Contents/Home` — the default `JAVA_HOME` in this environment is broken.
 - Build flags: `-Dspark3.5 -Dscala-2.12`.
+- **Every new `.java` file must start with the ASF license header.** The code blocks in this plan omit it for brevity — copying them verbatim produces a build that fails RAT, because the root `pom.xml` sets `<numUnapprovedLicenses>0</numUnapprovedLicenses>` with `<excludeSubProjects>false</excludeSubProjects>`. Neither `mvn checkstyle:check` nor `mvn install -DskipTests` surfaces this. Verify with:
+  ```bash
+  mvn -o apache-rat:check -pl hudi-common,hudi-client/hudi-client-common,hudi-client/hudi-spark-client -Dspark3.5
+  ```
 - **Never use `var`** in Java. Explicit types only.
 - Package names use `hudi`; class names use `hoodie`.
 - **Every metric gauge value must be a `Long`.** `PushGatewayReporter.java:160` casts `(Long)`, `DatadogReporter.java:96-97` casts `(long)`. A `String` gauge throws at report time on Datadog and Prometheus.
