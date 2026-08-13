@@ -1423,6 +1423,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withRecordIndexLookupStats(boolean enable) {
+      metadataConfig.setValue(RECORD_INDEX_LOOKUP_STATS_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
