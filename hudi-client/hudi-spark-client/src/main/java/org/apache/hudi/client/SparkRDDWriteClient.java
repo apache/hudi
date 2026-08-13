@@ -212,6 +212,18 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
+  String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
+    // Stats are drained at preCommit, which a commit that aborts earlier never reaches. Clearing at
+    // the start of each data table commit means counts from an abandoned attempt cannot be attributed
+    // to the next one, without having to catch every abort path. Metadata table commits are skipped:
+    // they are nested inside a data table commit whose counts are still accumulating.
+    if (!metaClient.isMetadataTable() && recordIndexLookupStatsAccumulator != null) {
+      recordIndexLookupStatsAccumulator.reset();
+    }
+    return super.startCommit(providedInstantTime, actionType, metaClient);
+  }
+
+  @Override
   protected void preCommit(HoodieCommitMetadata metadata) {
     super.preCommit(metadata);
     reportRecordIndexLookupStats(metadata);

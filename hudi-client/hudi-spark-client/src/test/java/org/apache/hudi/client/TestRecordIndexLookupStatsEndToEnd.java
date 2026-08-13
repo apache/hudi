@@ -69,10 +69,16 @@ public class TestRecordIndexLookupStatsEndToEnd extends HoodieClientTestBase {
             .build());
   }
 
-  /** Reads the stats payload written into the latest commit, or null if absent. */
+  /**
+   * Reads the stats payload written into the latest commit, or null if absent.
+   *
+   * <p>Scoped to the commits timeline rather than every completed instant: abandoning a commit makes
+   * the next write roll it back, and a rollback instant is not commit metadata.
+   */
   private String latestLookupStatsPayload() throws java.io.IOException {
     HoodieTableMetaClient reloaded = HoodieTableMetaClient.reload(metaClient);
-    Option<HoodieInstant> latest = reloaded.getActiveTimeline().filterCompletedInstants().lastInstant();
+    Option<HoodieInstant> latest = reloaded.getActiveTimeline()
+        .getCommitsTimeline().filterCompletedInstants().lastInstant();
     assertTrue(latest.isPresent(), "expected a completed commit");
     HoodieCommitMetadata commitMetadata = reloaded.getActiveTimeline()
         .readCommitMetadata(latest.get());
@@ -210,6 +216,36 @@ public class TestRecordIndexLookupStatsEndToEnd extends HoodieClientTestBase {
       String payload = latestLookupStatsPayload();
       assertNotNull(payload, "history must not depend on having a metrics backend");
       assertEquals(20L, valueOf(payload, "lookup_record_index_key_hit_count"), payload);
+    }
+  }
+
+  @Test
+  public void testAbandonedCommitDoesNotLeakIntoTheNext() throws Exception {
+    // Stats drain at preCommit, which an aborted commit never reaches. The counts it collected must
+    // not then be attributed to whatever commits next.
+    HoodieWriteConfig config = writeConfig(true);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      String firstCommit = WriteClientTestUtils.createNewInstantTime();
+      List<HoodieRecord> inserts = dataGen.generateInserts(firstCommit, 100);
+      WriteClientTestUtils.startCommitWithTime(client, firstCommit);
+      client.commit(firstCommit, client.upsert(jsc.parallelize(inserts, 2), firstCommit));
+
+      // Tag 80 keys and then walk away without committing.
+      String abandoned = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, abandoned);
+      client.upsert(jsc.parallelize(dataGen.generateUpdates(abandoned, inserts.subList(0, 80)), 2), abandoned)
+          .collect();
+
+      // The next commit touches only 10 keys and must report only those.
+      String next = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, next);
+      client.commit(next, client.upsert(
+          jsc.parallelize(dataGen.generateUpdates(next, inserts.subList(0, 10)), 2), next));
+
+      String payload = latestLookupStatsPayload();
+      assertEquals(10L, valueOf(payload, "lookup_record_index_key_count"),
+          "the abandoned attempt's 80 keys must not appear here: " + payload);
+      assertEquals(10L, valueOf(payload, "lookup_record_index_key_hit_count"), payload);
     }
   }
 
