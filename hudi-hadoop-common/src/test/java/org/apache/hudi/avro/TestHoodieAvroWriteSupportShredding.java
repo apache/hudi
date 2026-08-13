@@ -22,6 +22,7 @@ package org.apache.hudi.avro;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +32,10 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 class TestHoodieAvroWriteSupportShredding {
 
@@ -67,5 +71,44 @@ class TestHoodieAvroWriteSupportShredding {
         .map(HoodieSchemaField::name)
         .collect(Collectors.toList());
     assertEquals(Arrays.asList("a", "b", "c"), shreddedFieldNames);
+  }
+
+  /**
+   * Disabling shredding over an already-shredded schema - the clustering/compaction case
+   * {@link HoodieAvroWriteSupport#generateEffectiveSchema} calls out - has to strip typed_value
+   * without tripping Avro's "Field already used". Rebuilding a record while reusing a
+   * {@code Schema.Field} still bound to the source record throws, so any table with a shredded
+   * variant AND at least one other column failed here. #18938 fixed exactly that defect in the
+   * sibling HoodieVariantReconstruction and left this twin behind. Nested variants must be
+   * stripped too, since the row writer shreds at any depth.
+   */
+  @Test
+  void disablingShreddingStripsTypedValueAtEveryDepth() {
+    HoodieSchema record = HoodieSchema.createRecord(
+        "test_record", "org.apache.hudi.test", null, Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("v", HoodieSchema.createVariantShredded(
+                "v", "org.apache.hudi.test", null, HoodieSchema.create(HoodieSchemaType.INT))),
+            HoodieSchemaField.of("nested", HoodieSchema.createRecord(
+                "nested_record", "org.apache.hudi.test", null,
+                Collections.singletonList(HoodieSchemaField.of("nv", HoodieSchema.createVariantShredded(
+                    "nv", "org.apache.hudi.test", null, HoodieSchema.create(HoodieSchemaType.INT))))))));
+
+    Properties props = new Properties();
+    props.setProperty(HoodieStorageConfig.PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.key(), "false");
+
+    HoodieSchema effective = assertDoesNotThrow(
+        () -> HoodieAvroWriteSupport.generateEffectiveSchema(record, props),
+        "stripping shredding must rebuild the record with fresh Avro fields");
+
+    assertEquals("id", effective.getFields().get(0).name(), "non-variant fields must survive the rebuild");
+    assertUnshredded(effective.getField("v").get().schema(), "top-level variant");
+    assertUnshredded(effective.getField("nested").get().schema().getField("nv").get().schema(), "nested variant");
+  }
+
+  private static void assertUnshredded(HoodieSchema fieldSchema, String label) {
+    HoodieSchema unwrapped = fieldSchema.isNullable() ? fieldSchema.getNonNullType() : fieldSchema;
+    assertInstanceOf(HoodieSchema.Variant.class, unwrapped, label + " should still be a variant");
+    assertFalse(((HoodieSchema.Variant) unwrapped).isShredded(), label + " should no longer be shredded");
   }
 }

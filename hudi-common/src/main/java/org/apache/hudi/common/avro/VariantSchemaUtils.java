@@ -40,10 +40,14 @@ public class VariantSchemaUtils {
   /**
    * Strips shredding from the variant fields in {@code schema}, replacing each shredded variant
    * with its unshredded form (dropping {@code typed_value}). Variants nested inside records, array
-   * elements and map values are stripped too, since the row writer shreds at any depth
-   * ({@code HoodieRowParquetWriteSupport.processNestedDataType}). Non-variant fields and
-   * already-unshredded variants pass through unchanged; returns {@code schema} as-is when nothing
-   * changes.
+   * elements and map values are stripped too; see {@link #swapShreddedVariantFields} for when such
+   * a schema can arise. Non-variant fields and already-unshredded variants pass through unchanged;
+   * returns {@code schema} as-is when nothing changes.
+   *
+   * <p>Every field of a rebuilt record is copied via {@code withSchema}, including the untouched
+   * ones: reusing an Avro {@code Field} still bound to the source record makes
+   * {@code Schema.setFields} throw "Field already used" (the defect #18938 fixed in the sibling
+   * HoodieVariantReconstruction).
    */
   public static HoodieSchema stripVariantShredding(HoodieSchema schema) {
     if (schema.getType() != HoodieSchemaType.RECORD) {
@@ -166,11 +170,19 @@ public class VariantSchemaUtils {
 
   /**
    * Walks {@code base} against its matching {@code other} fields by name, replacing every shredded
-   * variant position with the other side's schema. Recurses through records, array elements and map
-   * values, since the row writer shreds variants at any depth
-   * ({@code HoodieRowParquetWriteSupport.processNestedDataType}). {@code baseIsFile} says which of
-   * the two is the file side, which is what {@link #isShreddedVariantTarget} needs to anchor
-   * detection. Returns {@code base} when nothing matches.
+   * variant position with the other side's schema. {@code baseIsFile} says which of the two is the
+   * file side, which is what {@link #isShreddedVariantTarget} needs to anchor detection. Returns
+   * {@code base} when nothing matches.
+   *
+   * <p>The walk recurses through records, array elements and map values because the row writer
+   * shreds at any depth its write schema asks it to
+   * ({@code HoodieRowParquetWriteSupport.processNestedDataType}). Note what can actually produce
+   * such a file today: the forced-shredding test hook is top-level only in BOTH write supports
+   * ({@code HoodieAvroWriteSupport.applyForcedShreddingSchema} and the top-level loop in
+   * {@code generateShreddedSchema}), so no DDL or table property reaches depth - only a
+   * hand-authored write schema that declares {@code typed_value} below the top level. Recursing
+   * anyway keeps the read side symmetric with what the writer can emit; it is not dead code, but
+   * it is not DDL-reachable either.
    */
   private static HoodieSchema swapShreddedVariantFields(HoodieSchema base, HoodieSchema other, boolean baseIsFile) {
     List<HoodieSchemaField> newFields = new ArrayList<>();

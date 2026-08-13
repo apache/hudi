@@ -199,8 +199,11 @@ class TestHoodieVariantReconstruction {
 
   @Test
   void reconstructsShreddedVariantsNestedInRecordsArraysAndMaps(@TempDir Path tmp) {
-    // HoodieRowParquetWriteSupport.processNestedDataType shreds variants at any depth, so a nested
-    // variant reaches this reader as a plain {metadata, value, typed_value} record too. Detection
+    // The row writer shreds at any depth its write schema asks it to
+    // (HoodieRowParquetWriteSupport.processNestedDataType), so a nested variant can reach this
+    // reader as a plain {metadata, value, typed_value} record too. Such a file needs a
+    // hand-authored write schema today - the forced-shredding hook is top-level only in both write
+    // supports - which is why this is a unit test and not an end-to-end one. Detection
     // and rebuild must descend into records, array elements and map values, or the nested payload
     // is dropped the way #19567 dropped the top-level one - and silently, since nothing at the top
     // level looks shredded and neither fail-fast branch is reached.
