@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -90,11 +91,41 @@ class TestRecordIndexLookupStats {
   }
 
   @Test
-  void testMergeIsCommutative() {
-    RecordIndexLookupStats a = RecordIndexLookupStats.of(shard(0, 10L, 4L));
-    RecordIndexLookupStats b = RecordIndexLookupStats.of(shard(1, 20L, 11L));
+  void testMergeIsCommutativeForTheSameShard() {
+    // Disjoint shards would only prove that HashMap union commutes. The case that matters is two
+    // conflicting reports of the SAME shard: last-writer-wins would make this order-dependent.
+    RecordIndexShardLookupStats early = new RecordIndexShardLookupStats(1, "fg-1", 80L, 20L, 1L, 400L, 30L);
+    RecordIndexShardLookupStats late = new RecordIndexShardLookupStats(1, "fg-1", 80L, 75L, 4L, 1600L, 8L);
 
-    assertEquals(a.merge(b).getShardStats(), b.merge(a).getShardStats());
+    RecordIndexLookupStats forward = RecordIndexLookupStats.of(early).merge(RecordIndexLookupStats.of(late));
+    RecordIndexLookupStats backward = RecordIndexLookupStats.of(late).merge(RecordIndexLookupStats.of(early));
+
+    assertEquals(forward.getShardStats(), backward.getShardStats());
+    // And pin the resolved value, so the test fails if merge degrades to "pick one".
+    assertEquals(75L, forward.getKeysHit());
+    assertEquals(4L, forward.getLogFilesRead());
+    assertEquals(1600L, forward.getBytesInShardsRead());
+    assertEquals(30L, forward.getShardStats().get(1).getLookupMillis());
+  }
+
+  @Test
+  void testMergeIsCommutativeAcrossEveryPairOrdering() {
+    // Exhaustive over a small set: every unordered pair must agree in both directions, including
+    // pairs that collide on a shard.
+    List<RecordIndexShardLookupStats> reports = Arrays.asList(
+        new RecordIndexShardLookupStats(0, "fg-0", 10L, 4L, 1L, 100L, 2L),
+        new RecordIndexShardLookupStats(0, "fg-0", 10L, 9L, 3L, 900L, 1L),
+        new RecordIndexShardLookupStats(1, "fg-1", 20L, 11L, 2L, 250L, 7L),
+        new RecordIndexShardLookupStats(2, "fg-2", 30L, 30L, 0L, 50L, 4L));
+
+    for (RecordIndexShardLookupStats left : reports) {
+      for (RecordIndexShardLookupStats right : reports) {
+        RecordIndexLookupStats forward = RecordIndexLookupStats.of(left).merge(RecordIndexLookupStats.of(right));
+        RecordIndexLookupStats backward = RecordIndexLookupStats.of(right).merge(RecordIndexLookupStats.of(left));
+        assertEquals(forward.getShardStats(), backward.getShardStats(),
+            "order-dependent merge for " + left + " and " + right);
+      }
+    }
   }
 
   @Test
