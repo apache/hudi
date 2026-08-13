@@ -293,4 +293,26 @@ class TestHoodieMetadataConfig {
     assertTrue(config.isMetricsEnabled());
     assertTrue(config.isDetailedMetricsEnabled());
   }
+
+  @Test
+  void testRecordIndexLookupStatsConfig() {
+    assertEquals("hoodie.metadata.record.index.lookup.stats.enable",
+        HoodieMetadataConfig.RECORD_INDEX_LOOKUP_STATS_ENABLE.key());
+
+    // Off by default, consistent with every neighbouring metrics knob.
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertFalse(config.isRecordIndexLookupStatsEnabled());
+
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.RECORD_INDEX_LOOKUP_STATS_ENABLE.key(), true);
+    config = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
+    assertTrue(config.isRecordIndexLookupStatsEnabled());
+
+    // Independent of the metadata metrics gate: enabling that one must not enable this.
+    props = new Properties();
+    props.put(HoodieMetadataConfig.METRICS_ENABLE.key(), true);
+    config = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
+    assertTrue(config.isMetricsEnabled());
+    assertFalse(config.isRecordIndexLookupStatsEnabled());
+  }
 }

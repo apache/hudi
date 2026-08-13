@@ -714,6 +714,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "file counts. Emitting these requires building a HoodieTableFileSystemView for the metadata table on "
           + "the driver, which adds memory pressure at scale; leave disabled unless you need the breakdown.");
 
+  public static final ConfigProperty<Boolean> RECORD_INDEX_LOOKUP_STATS_ENABLE = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.lookup.stats.enable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Collects per-commit counts for the record level index lookup phase of a write — shards "
+          + "read, log files read, bytes resident in those shards, keys submitted and keys hit — and publishes them "
+          + "to the configured metrics reporters and to commit metadata under the key 'hoodie.rli.lookup.stats'. "
+          + "Counts are gathered on executors and aggregated on the driver, costing a handful of counters per shard "
+          + "read. Note that the byte count is the footprint of the shards touched, an upper bound on the I/O rather "
+          + "than the I/O itself, since key lookups read only part of each shard. Disabled by default.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -1061,6 +1073,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isDetailedMetricsEnabled() {
     return getBoolean(ENABLE_DETAILED_METRICS);
+  }
+
+  public boolean isRecordIndexLookupStatsEnabled() {
+    return getBoolean(RECORD_INDEX_LOOKUP_STATS_ENABLE);
   }
 
   public static class Builder {
