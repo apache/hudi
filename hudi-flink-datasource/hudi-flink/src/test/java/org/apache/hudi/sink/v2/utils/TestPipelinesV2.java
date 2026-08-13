@@ -48,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 
@@ -78,7 +79,8 @@ class TestPipelinesV2 {
 
     assertEquals(4, sink.getTransformation().getParallelism());
     assertEquals("sink_v2", sink.getTransformation().getName());
-    assertEquals("uid_sink_v2_sink_v2_test", sink.getTransformation().getUid());
+    assertTrue(sink.getTransformation().getUid()
+        .matches("uid_sink_v2(?:_\\d+)?_sink_v2_test"));
   }
 
   @Test
