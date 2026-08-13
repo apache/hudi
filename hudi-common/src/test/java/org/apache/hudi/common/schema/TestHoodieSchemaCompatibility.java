@@ -254,6 +254,20 @@ public class TestHoodieSchemaCompatibility {
         HoodieSchemaField.of("v", HoodieSchema.createNullable(footerUnshredded))));
     assertSame(unshreddedFileSchema,
         VariantSchemaUtils.alignShreddedVariants(unshreddedFileSchema, writerSchema));
+
+    // The row writer shreds variants at any depth, so the alignment has to descend as well:
+    // a variant nested in a struct hits the same lossy rewrite when it is left unaligned.
+    HoodieSchema nestedFileSchema = HoodieSchema.createRecord("rec", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("nested", HoodieSchema.createRecord("nested_rec", "example.schema", null,
+            Arrays.asList(HoodieSchemaField.of("v", HoodieSchema.createNullable(footerShredded)))))));
+    HoodieSchema nestedWriterSchema = HoodieSchema.createRecord("rec", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("nested", HoodieSchema.createRecord("nested_rec", "example.schema", null,
+            Arrays.asList(HoodieSchemaField.of("v", HoodieSchema.createNullable(HoodieSchema.createVariant())))))));
+    assertFalse(HoodieSchemaCompatibility.isStrictProjectionOf(nestedFileSchema, nestedWriterSchema));
+    assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(
+        VariantSchemaUtils.alignShreddedVariants(nestedFileSchema, nestedWriterSchema), nestedWriterSchema));
   }
 
   @Test

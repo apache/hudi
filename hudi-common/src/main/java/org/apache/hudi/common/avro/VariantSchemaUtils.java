@@ -38,8 +38,10 @@ public class VariantSchemaUtils {
   }
 
   /**
-   * Strips shredding from top-level variant fields in {@code schema}, replacing each shredded
-   * variant with its unshredded form (dropping {@code typed_value}). Non-variant fields and
+   * Strips shredding from the variant fields in {@code schema}, replacing each shredded variant
+   * with its unshredded form (dropping {@code typed_value}). Variants nested inside records, array
+   * elements and map values are stripped too, since the row writer shreds at any depth
+   * ({@code HoodieRowParquetWriteSupport.processNestedDataType}). Non-variant fields and
    * already-unshredded variants pass through unchanged; returns {@code schema} as-is when nothing
    * changes.
    */
@@ -47,41 +49,69 @@ public class VariantSchemaUtils {
     if (schema.getType() != HoodieSchemaType.RECORD) {
       return schema;
     }
+    return stripRecordVariantShredding(schema);
+  }
 
-    List<HoodieSchemaField> fields = schema.getFields();
+  private static HoodieSchema stripRecordVariantShredding(HoodieSchema record) {
     List<HoodieSchemaField> newFields = new ArrayList<>();
     boolean changed = false;
-
-    for (HoodieSchemaField field : fields) {
+    for (HoodieSchemaField field : record.getFields()) {
       HoodieSchema fieldSchema = field.schema();
-      boolean wasNullable = fieldSchema.isNullable();
-      HoodieSchema unwrapped = wasNullable ? fieldSchema.getNonNullType() : fieldSchema;
-
-      if (unwrapped.getType() == HoodieSchemaType.VARIANT) {
-        HoodieSchema.Variant variant = (HoodieSchema.Variant) unwrapped;
-        if (variant.isShredded()) {
-          HoodieSchema.Variant unshredded = HoodieSchema.createVariant(
-              unwrapped.getAvroSchema().getName(),
-              unwrapped.getAvroSchema().getNamespace(),
-              unwrapped.getAvroSchema().getDoc());
-          HoodieSchema replacement = wasNullable ? HoodieSchema.createNullable(unshredded) : unshredded;
-          newFields.add(field.withSchema(replacement));
-          changed = true;
-          continue;
-        }
+      HoodieSchema replacement = stripVariantShreddingAt(fieldSchema);
+      if (replacement != fieldSchema) {
+        changed = true;
       }
-      newFields.add(field);
+      // withSchema makes a fresh Avro Field: reusing one already bound to this record would fail
+      // Schema.setFields with "Field already used" when building the replacement record below.
+      newFields.add(field.withSchema(replacement));
     }
-
     if (!changed) {
+      return record;
+    }
+    return HoodieSchema.createRecord(
+        record.getAvroSchema().getName(),
+        record.getAvroSchema().getNamespace(),
+        record.getAvroSchema().getDoc(),
+        newFields);
+  }
+
+  /** Strips shredding at one schema position, returning the argument instance when nothing changes. */
+  private static HoodieSchema stripVariantShreddingAt(HoodieSchema schema) {
+    boolean wasNullable = schema.isNullable();
+    HoodieSchema unwrapped = wasNullable ? schema.getNonNullType() : schema;
+    HoodieSchema replacement;
+    switch (unwrapped.getType()) {
+      case VARIANT:
+        if (!((HoodieSchema.Variant) unwrapped).isShredded()) {
+          return schema;
+        }
+        replacement = HoodieSchema.createVariant(
+            unwrapped.getAvroSchema().getName(),
+            unwrapped.getAvroSchema().getNamespace(),
+            unwrapped.getAvroSchema().getDoc());
+        break;
+      case RECORD:
+        replacement = stripRecordVariantShredding(unwrapped);
+        break;
+      case ARRAY: {
+        HoodieSchema elementType = unwrapped.getElementType();
+        HoodieSchema strippedElement = stripVariantShreddingAt(elementType);
+        replacement = strippedElement == elementType ? unwrapped : HoodieSchema.createArray(strippedElement);
+        break;
+      }
+      case MAP: {
+        HoodieSchema valueType = unwrapped.getValueType();
+        HoodieSchema strippedValue = stripVariantShreddingAt(valueType);
+        replacement = strippedValue == valueType ? unwrapped : HoodieSchema.createMap(strippedValue);
+        break;
+      }
+      default:
+        return schema;
+    }
+    if (replacement == unwrapped) {
       return schema;
     }
-
-    return HoodieSchema.createRecord(
-        schema.getAvroSchema().getName(),
-        schema.getAvroSchema().getNamespace(),
-        schema.getAvroSchema().getDoc(),
-        newFields);
+    return wasNullable ? HoodieSchema.createNullable(replacement) : replacement;
   }
 
   /**
@@ -106,7 +136,7 @@ public class VariantSchemaUtils {
   }
 
   /**
-   * Returns {@code fileSchema} with each top-level shredded variant column (per
+   * Returns {@code fileSchema} with each shredded variant column (per
    * {@link #isShreddedVariantTarget}) replaced by its requested counterpart, for projection or
    * compatibility checks against {@code requestedSchema}. A footer-derived shredded variant column
    * surfaces as a plain {@code {metadata, value, typed_value}} record and so can never look like a
@@ -117,28 +147,96 @@ public class VariantSchemaUtils {
     if (fileSchema.getType() != HoodieSchemaType.RECORD || requestedSchema.getType() != HoodieSchemaType.RECORD) {
       return fileSchema;
     }
+    return swapShreddedVariantFields(fileSchema, requestedSchema, true);
+  }
+
+  /**
+   * The dual of {@link #alignShreddedVariants}: returns {@code requestedSchema} with each shredded
+   * variant column swapped to its on-disk (typed_value-bearing) form taken from {@code fileSchema}.
+   * This is the schema to read the file at, so parquet materializes {@code typed_value} for the
+   * reader to reconstruct from. Returns {@code requestedSchema} as-is when nothing matches, which
+   * is how callers detect that the file has no shredded variant column to reconstruct.
+   */
+  public static HoodieSchema toShreddedReadSchema(HoodieSchema requestedSchema, HoodieSchema fileSchema) {
+    if (fileSchema.getType() != HoodieSchemaType.RECORD || requestedSchema.getType() != HoodieSchemaType.RECORD) {
+      return requestedSchema;
+    }
+    return swapShreddedVariantFields(requestedSchema, fileSchema, false);
+  }
+
+  /**
+   * Walks {@code base} against its matching {@code other} fields by name, replacing every shredded
+   * variant position with the other side's schema. Recurses through records, array elements and map
+   * values, since the row writer shreds variants at any depth
+   * ({@code HoodieRowParquetWriteSupport.processNestedDataType}). {@code baseIsFile} says which of
+   * the two is the file side, which is what {@link #isShreddedVariantTarget} needs to anchor
+   * detection. Returns {@code base} when nothing matches.
+   */
+  private static HoodieSchema swapShreddedVariantFields(HoodieSchema base, HoodieSchema other, boolean baseIsFile) {
     List<HoodieSchemaField> newFields = new ArrayList<>();
     boolean changed = false;
-    for (HoodieSchemaField fileField : fileSchema.getFields()) {
-      Option<HoodieSchemaField> requestedField = requestedSchema.getField(fileField.name());
-      if (requestedField.isPresent() && isShreddedVariantTarget(fileField.schema(), requestedField.get().schema())) {
-        newFields.add(fileField.withSchema(requestedField.get().schema()));
+    for (HoodieSchemaField baseField : base.getFields()) {
+      HoodieSchema baseFieldSchema = baseField.schema();
+      Option<HoodieSchemaField> otherField = other.getField(baseField.name());
+      HoodieSchema replacement = otherField.isPresent()
+          ? swapShreddedVariantsAt(baseFieldSchema, otherField.get().schema(), baseIsFile)
+          : baseFieldSchema;
+      if (replacement != baseFieldSchema) {
         changed = true;
-      } else {
-        // Copy untouched fields too (withSchema makes a fresh Avro Field): reusing a field already
-        // bound to the file's record would fail Schema.setFields with "Field already used" when
-        // building the aligned record below.
-        newFields.add(fileField.withSchema(fileField.schema()));
       }
+      // Copy untouched fields too (withSchema makes a fresh Avro Field): reusing a field already
+      // bound to the base record would fail Schema.setFields with "Field already used" when
+      // building the swapped record below.
+      newFields.add(baseField.withSchema(replacement));
     }
     if (!changed) {
-      return fileSchema;
+      return base;
     }
     return HoodieSchema.createRecord(
-        fileSchema.getAvroSchema().getName(),
-        fileSchema.getAvroSchema().getNamespace(),
-        fileSchema.getAvroSchema().getDoc(),
+        base.getAvroSchema().getName(),
+        base.getAvroSchema().getNamespace(),
+        base.getAvroSchema().getDoc(),
         newFields);
+  }
+
+  /** Swaps at one schema position, returning the {@code base} instance when nothing changes. */
+  private static HoodieSchema swapShreddedVariantsAt(HoodieSchema base, HoodieSchema other, boolean baseIsFile) {
+    if (baseIsFile ? isShreddedVariantTarget(base, other) : isShreddedVariantTarget(other, base)) {
+      // Take the other side's schema wholesale, nullability included.
+      return other;
+    }
+    boolean wasNullable = base.isNullable();
+    HoodieSchema baseInner = wasNullable ? base.getNonNullType() : base;
+    HoodieSchema otherInner = other.isNullable() ? other.getNonNullType() : other;
+    if (baseInner.getType() != otherInner.getType()) {
+      return base;
+    }
+    HoodieSchema replacement;
+    switch (baseInner.getType()) {
+      // VARIANT is deliberately absent: a variant that is not a target here is either unshredded or
+      // has no requested-side anchor, and its typed_value internals are the provider's business.
+      case RECORD:
+        replacement = swapShreddedVariantFields(baseInner, otherInner, baseIsFile);
+        break;
+      case ARRAY: {
+        HoodieSchema baseElement = baseInner.getElementType();
+        HoodieSchema swappedElement = swapShreddedVariantsAt(baseElement, otherInner.getElementType(), baseIsFile);
+        replacement = swappedElement == baseElement ? baseInner : HoodieSchema.createArray(swappedElement);
+        break;
+      }
+      case MAP: {
+        HoodieSchema baseValue = baseInner.getValueType();
+        HoodieSchema swappedValue = swapShreddedVariantsAt(baseValue, otherInner.getValueType(), baseIsFile);
+        replacement = swappedValue == baseValue ? baseInner : HoodieSchema.createMap(swappedValue);
+        break;
+      }
+      default:
+        return base;
+    }
+    if (replacement == baseInner) {
+      return base;
+    }
+    return wasNullable ? HoodieSchema.createNullable(replacement) : replacement;
   }
 
   /** The on-disk shredded variant shape: a record of exactly {metadata: bytes, value: [nullable] bytes, typed_value}. */

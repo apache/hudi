@@ -39,6 +39,9 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -194,13 +197,121 @@ class TestHoodieVariantReconstruction {
         storageWithReadingShredded(tmp, false)));
   }
 
+  @Test
+  void reconstructsShreddedVariantsNestedInRecordsArraysAndMaps(@TempDir Path tmp) {
+    // HoodieRowParquetWriteSupport.processNestedDataType shreds variants at any depth, so a nested
+    // variant reaches this reader as a plain {metadata, value, typed_value} record too. Detection
+    // and rebuild must descend into records, array elements and map values, or the nested payload
+    // is dropped the way #19567 dropped the top-level one - and silently, since nothing at the top
+    // level looks shredded and neither fail-fast branch is reached.
+    HoodieSchema fileSchema = recordWithNestedVariants(
+        footerStylePlainShreddedSchema("nested_v"),
+        footerStylePlainShreddedSchema("element_v"),
+        footerStylePlainShreddedSchema("map_v"));
+    HoodieSchema requestedSchema = recordWithNestedVariants(
+        HoodieSchema.createVariant("nested_v", "org.apache.hudi.test", null),
+        HoodieSchema.createVariant("element_v", "org.apache.hudi.test", null),
+        HoodieSchema.createVariant("map_v", "org.apache.hudi.test", null));
+    HoodieStorage storage = storageWithReadingShredded(tmp, true);
+    storage.getConf().set(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(),
+        TestVariantShreddingProvider.class.getName());
+
+    HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(
+        fileSchema, requestedSchema, storage);
+    assertNotNull(reconstruction, "A variant nested below the top level must engage reconstruction");
+
+    // The file's shredded shape must reach every nested position of the read schema, otherwise
+    // parquet never materializes typed_value there.
+    Schema intermediateAvro = reconstruction.intermediateSchema().toAvroSchema();
+    Schema nestedAvro = intermediateAvro.getField("nested").schema();
+    Schema itemsAvro = intermediateAvro.getField("items").schema();
+    Schema tagsAvro = intermediateAvro.getField("tags").schema();
+    assertNotNull(nestedAvro.getField("v").schema().getField("typed_value"));
+    assertNotNull(itemsAvro.getElementType().getField("typed_value"));
+    assertNotNull(tagsAvro.getValueType().getField("typed_value"));
+
+    GenericRecord nested = new GenericData.Record(nestedAvro);
+    nested.put("v", shreddedVariantRecord(nestedAvro.getField("v").schema(), 7));
+    GenericData.Array<Object> items = new GenericData.Array<>(2, itemsAvro);
+    items.add(shreddedVariantRecord(itemsAvro.getElementType(), 8));
+    // A null element must survive the descent untouched rather than blow up the rebuild.
+    items.add(null);
+    Map<String, Object> tags = new HashMap<>();
+    tags.put("a", shreddedVariantRecord(tagsAvro.getValueType(), 9));
+
+    GenericRecord input = new GenericData.Record(intermediateAvro);
+    input.put("id", "record-1");
+    input.put("nested", nested);
+    input.put("items", items);
+    input.put("tags", tags);
+
+    IndexedRecord output = reconstruction.reconstruct(input);
+    assertEquals("record-1", output.get(0).toString());
+    // The fake provider folds typed_value into value, so a rebuilt variant carries it there.
+    assertEquals(ByteBuffer.wrap(new byte[] {7}),
+        ((GenericRecord) ((GenericRecord) output.get(1)).get("v")).get("value"));
+    assertEquals(ByteBuffer.wrap(new byte[] {8}),
+        ((GenericRecord) ((List<?>) output.get(2)).get(0)).get("value"));
+    assertNull(((List<?>) output.get(2)).get(1));
+    assertEquals(ByteBuffer.wrap(new byte[] {9}),
+        ((GenericRecord) ((Map<?, ?>) output.get(3)).get("a")).get("value"));
+
+    // Empty containers have nothing to rebuild and must come back empty, not null.
+    input.put("items", new GenericData.Array<>(0, itemsAvro));
+    input.put("tags", new HashMap<String, Object>());
+    IndexedRecord emptied = reconstruction.reconstruct(input);
+    assertTrue(((List<?>) emptied.get(2)).isEmpty());
+    assertTrue(((Map<?, ?>) emptied.get(3)).isEmpty());
+  }
+
+  @Test
+  void returnsNullForNestedFooterDerivedPlainUnshreddedShape(@TempDir Path tmp) {
+    // The nested twin of returnsNullForFooterDerivedPlainUnshreddedShape: descending into nested
+    // positions must not make an ordinary unshredded variant look like a reconstruction target.
+    HoodieSchema fileSchema = recordWithNestedVariants(
+        footerStylePlainUnshreddedSchema("nested_v"),
+        footerStylePlainUnshreddedSchema("element_v"),
+        footerStylePlainUnshreddedSchema("map_v"));
+    HoodieSchema requestedSchema = recordWithNestedVariants(
+        HoodieSchema.createVariant("nested_v", "org.apache.hudi.test", null),
+        HoodieSchema.createVariant("element_v", "org.apache.hudi.test", null),
+        HoodieSchema.createVariant("map_v", "org.apache.hudi.test", null));
+    assertNull(HoodieVariantReconstruction.create(fileSchema, requestedSchema,
+        storageWithReadingShredded(tmp, false)));
+  }
+
+  private static GenericRecord shreddedVariantRecord(Schema shreddedSchema, int typedValue) {
+    GenericRecord shredded = new GenericData.Record(shreddedSchema);
+    shredded.put("metadata", ByteBuffer.wrap(new byte[] {1}));
+    shredded.put("value", null);
+    shredded.put("typed_value", typedValue);
+    return shredded;
+  }
+
+  /** A record carrying a variant inside a struct, inside an array and as a map value. */
+  private static HoodieSchema recordWithNestedVariants(HoodieSchema nestedVariant,
+                                                       HoodieSchema elementVariant,
+                                                       HoodieSchema mapVariant) {
+    HoodieSchema nested = HoodieSchema.createRecord("nested_record", "org.apache.hudi.test", null,
+        Collections.singletonList(HoodieSchemaField.of("v", nestedVariant)));
+    return HoodieSchema.createRecord("test_nested_record", "org.apache.hudi.test", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("nested", nested),
+        HoodieSchemaField.of("items", HoodieSchema.createArray(elementVariant)),
+        HoodieSchemaField.of("tags", HoodieSchema.createMap(mapVariant))));
+  }
+
   /**
    * The shape a shredded variant column has after the parquet footer MessageType is converted
    * back to a schema: a plain record of {metadata, value, typed_value} with no variant logical
    * type attached.
    */
   private static HoodieSchema footerStylePlainShreddedSchema() {
-    return HoodieSchema.createRecord("v", "org.apache.hudi.test", null, Arrays.asList(
+    return footerStylePlainShreddedSchema("v");
+  }
+
+  private static HoodieSchema footerStylePlainShreddedSchema(String name) {
+    return HoodieSchema.createRecord(name, "org.apache.hudi.test", null, Arrays.asList(
         HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
         HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
         HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.INT))));
@@ -211,7 +322,11 @@ class TestHoodieVariantReconstruction {
    * back to a schema: a plain record of {metadata, value} with no variant logical type attached.
    */
   private static HoodieSchema footerStylePlainUnshreddedSchema() {
-    return HoodieSchema.createRecord("v", "org.apache.hudi.test", null, Arrays.asList(
+    return footerStylePlainUnshreddedSchema("v");
+  }
+
+  private static HoodieSchema footerStylePlainUnshreddedSchema(String name) {
+    return HoodieSchema.createRecord(name, "org.apache.hudi.test", null, Arrays.asList(
         HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
         HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES))));
   }
