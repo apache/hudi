@@ -28,6 +28,61 @@ Hudi works with Spark 3.3 and above versions. You can follow instructions [here]
 The *default build* Spark version indicates how we build `hudi-spark3-bundle`.
 :::
 
+### Reading Hudi tables on the Databricks runtime
+
+The matrix above is for Apache Spark. The Databricks Runtime (DBR) ships a modified Spark, and a couple of the
+internals Hudi's Spark datasource builds on differ there. Hudi detects those differences at runtime and adapts,
+so there is no Databricks-specific Hudi config to set.
+
+#### Cluster setup
+
+1. **Install the Hudi bundle as a cluster library.** In the cluster's **Libraries** tab, add
+   `org.apache.hudi:hudi-spark<spark.version>-bundle_<scala.version>:<hudi.version>` as Maven coordinates, or
+   upload the jar directly. Pick the bundle that matches the Spark version your DBR release ships — see the
+   support matrix above.
+2. **Set Hudi's Spark configs** in the cluster's **Spark config** box. These are the same four values the
+   quick start passes with `--conf`, in the `key value` form the Databricks UI expects:
+
+   ```
+   spark.serializer org.apache.spark.serializer.KryoSerializer
+   spark.sql.catalog.spark_catalog org.apache.spark.sql.hudi.catalog.HoodieCatalog
+   spark.sql.extensions org.apache.spark.sql.hudi.HoodieSparkSessionExtension
+   spark.kryo.registrator org.apache.spark.HoodieSparkKryoRegistrar
+   ```
+
+3. Read as usual — no extra option is required:
+
+   ```python
+   spark.read.format("hudi").load(basePath)
+   ```
+
+#### What Hudi adapts, and in which release
+
+* **`FileStatusCache`** — DBR changed this API. `SparkHoodieTableFileIndex` checks reflectively for the
+  `putLeafFiles(Path, FileStatus[])` signature before using it and falls back when it is absent, rather than
+  failing with `NoSuchMethodError`. This guard lives in the shared Spark module and has been present since
+  0.15.x, so it applies on the 1.0.x and 1.1.x lines as well.
+* **`PartitionDirectory`** — DBR's Spark 3.4 runtime backports `FileStatusWithMetadata` from Spark 3.5, so
+  `PartitionDirectory` takes a `Seq[FileStatusWithMetadata]` rather than a `Seq[FileStatus]`. That type wraps
+  `FileStatus` by composition instead of extending it, so the elements cannot be cast; Hudi constructs the
+  wrapper reflectively. This adaptation lives in the Spark 3.4 module and **ships in 1.2.0**, so a DBR release
+  built on Spark 3.4 needs Hudi 1.2.0 or later.
+
+:::caution
+Community guides for older Hudi releases tell you to set `hoodie.file.index.enable=false` when reading on
+Databricks. That was the workaround before the adaptations above existed: it falls back from `HoodieFileIndex`
+to `HoodieROTablePathFilter`, which sidesteps the incompatible Spark internals but disables the file index for
+**every** table in the session, losing the listing optimisation it exists for. The config is also deprecated
+(since 0.11.0). On 1.2.0 and later you should not need it; if a read still fails, it remains a fallback, and
+please report the failure.
+:::
+
+:::note
+Individual DBR versions are not part of Hudi's CI matrix, so the above documents the compatibility Hudi
+implements rather than a certified DBR version list. If you hit a read failure on a DBR release, please open an
+issue with the DBR version and the stack trace.
+:::
+
 ### Spark Shell/SQL
 
 <Tabs
