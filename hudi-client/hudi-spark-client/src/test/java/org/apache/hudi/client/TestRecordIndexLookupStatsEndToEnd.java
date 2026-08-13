@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -26,6 +27,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metrics.Metrics;
+import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.RecordIndexLookupStatsReporter;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -34,6 +37,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,6 +53,10 @@ public class TestRecordIndexLookupStatsEndToEnd extends HoodieClientTestBase {
   private static final int NUM_SHARDS = 4;
 
   private HoodieWriteConfig writeConfig(boolean statsEnabled) {
+    return writeConfigBuilder(statsEnabled).build();
+  }
+
+  private HoodieWriteConfig.Builder writeConfigBuilder(boolean statsEnabled) {
     return getConfigBuilder()
         .withIndexConfig(org.apache.hudi.config.HoodieIndexConfig.newBuilder()
             .withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build())
@@ -58,8 +66,7 @@ public class TestRecordIndexLookupStatsEndToEnd extends HoodieClientTestBase {
             .withEnableGlobalRecordLevelIndex(true)
             .withRecordIndexFileGroupCount(NUM_SHARDS, NUM_SHARDS)
             .withRecordIndexLookupStats(statsEnabled)
-            .build())
-        .build();
+            .build());
   }
 
   /** Reads the stats payload written into the latest commit, or null if absent. */
@@ -134,6 +141,75 @@ public class TestRecordIndexLookupStatsEndToEnd extends HoodieClientTestBase {
 
       assertFalse(latestLookupStatsPayload() != null,
           "no payload when the feature is off");
+    }
+  }
+
+  @Test
+  public void testMetricsReporterReceivesGaugesWhenMetricsAreOn() throws Exception {
+    // Regression guard: the commit-metadata half of this feature can pass while the reporter half
+    // throws, because HoodieMetrics only builds its Metrics instance when hoodie.metrics.on is
+    // true — which is off by default, and off in this harness.
+    HoodieWriteConfig config = writeConfigBuilder(true)
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder()
+            .on(true)
+            .withReporterType(MetricsReporterType.INMEMORY.name())
+            .build())
+        .build();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      String firstCommit = WriteClientTestUtils.createNewInstantTime();
+      List<HoodieRecord> inserts = dataGen.generateInserts(firstCommit, 60);
+      WriteClientTestUtils.startCommitWithTime(client, firstCommit);
+      client.commit(firstCommit, client.upsert(jsc.parallelize(inserts, 2), firstCommit));
+
+      String secondCommit = WriteClientTestUtils.createNewInstantTime();
+      List<HoodieRecord> upserts = new ArrayList<>(dataGen.generateUpdates(secondCommit, inserts.subList(0, 30)));
+      WriteClientTestUtils.startCommitWithTime(client, secondCommit);
+      client.commit(secondCommit, client.upsert(jsc.parallelize(upserts, 2), secondCommit));
+
+      assertNotNull(latestLookupStatsPayload(), "commit metadata is still written");
+
+      Set<String> gaugeNames = Metrics.getInstance(config.getMetricsConfig(), storage)
+          .getRegistry().getGauges().keySet();
+      assertTrue(gaugeNames.stream().anyMatch(n -> n.endsWith("lookup_record_index_key_count")),
+          "key count gauge must reach the registry, saw: " + gaugeNames);
+      assertTrue(gaugeNames.stream().anyMatch(n -> n.endsWith("lookup_record_index_key_hit_count")),
+          "hit count gauge must reach the registry, saw: " + gaugeNames);
+      assertTrue(gaugeNames.stream().anyMatch(n -> n.endsWith("lookup_record_index_shards_read")),
+          "shards read gauge must reach the registry, saw: " + gaugeNames);
+
+      // Names must be qualified the way every other Hudi metric is. An unqualified name would
+      // collide across tables reporting into one backend, which is the whole point of the prefix.
+      assertFalse(gaugeNames.contains("lookup_record_index_key_count"),
+          "gauge must not be emitted unqualified, saw: " + gaugeNames);
+      assertTrue(gaugeNames.stream()
+              .filter(n -> n.endsWith("lookup_record_index_key_count"))
+              .allMatch(n -> n.contains(".")),
+          "gauge name must carry the configured reporter prefix, saw: " + gaugeNames);
+    }
+  }
+
+  @Test
+  public void testCommitMetadataStillWrittenWhenMetricsAreOff() throws Exception {
+    // hoodie.metrics.on defaults to false. Collecting stats must still populate commit metadata,
+    // and must not blow up on the reporter path.
+    HoodieWriteConfig config = writeConfig(true);
+    assertFalse(config.isMetricsOn(), "this test is only meaningful with metrics off");
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      String firstCommit = WriteClientTestUtils.createNewInstantTime();
+      List<HoodieRecord> inserts = dataGen.generateInserts(firstCommit, 40);
+      WriteClientTestUtils.startCommitWithTime(client, firstCommit);
+      client.commit(firstCommit, client.upsert(jsc.parallelize(inserts, 2), firstCommit));
+
+      String secondCommit = WriteClientTestUtils.createNewInstantTime();
+      List<HoodieRecord> upserts = new ArrayList<>(dataGen.generateUpdates(secondCommit, inserts.subList(0, 20)));
+      WriteClientTestUtils.startCommitWithTime(client, secondCommit);
+      client.commit(secondCommit, client.upsert(jsc.parallelize(upserts, 2), secondCommit));
+
+      String payload = latestLookupStatsPayload();
+      assertNotNull(payload, "history must not depend on having a metrics backend");
+      assertEquals(20L, valueOf(payload, "lookup_record_index_key_hit_count"), payload);
     }
   }
 

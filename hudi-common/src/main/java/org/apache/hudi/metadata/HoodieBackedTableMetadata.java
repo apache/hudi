@@ -694,13 +694,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return FileGroupRecordBufferLoader.createReusable(readerContext);
   }
 
-  private HoodieData<HoodieRecord<HoodieMetadataPayload>> readSliceAndFilterByKeysIntoList(String partitionName,
-                                                                                           Collection<String> sortedKeys,
-                                                                                           FileSlice fileSlice,
-                                                                                           boolean isFullKey) {
-    return HoodieListData.lazy(lookupRecordsItr(partitionName, sortedKeys, fileSlice, isFullKey));
-  }
-
   private ClosableIterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>> readSliceAndFilterByKeys(String partitionName,
                                                                                                        List<String> sortedKeys,
                                                                                                        FileSlice fileSlice) {

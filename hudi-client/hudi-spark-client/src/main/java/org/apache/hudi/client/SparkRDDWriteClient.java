@@ -240,7 +240,7 @@ public class SparkRDDWriteClient<T> extends
       }
       metadata.addMetadata(RecordIndexLookupStatsReporter.COMMIT_METADATA_KEY,
           RecordIndexLookupStatsReporter.toJson(reportable));
-      reportable.forEach((name, value) -> metrics.getMetrics().registerGauge(name, value));
+      metrics.updateRecordIndexLookupMetrics(reportable);
     } catch (Exception e) {
       log.warn("Failed to publish record index lookup stats; the write is unaffected", e);
     }

@@ -45,7 +45,12 @@ public class RecordIndexLookupStatsAccumulator
   /** Name shown in the Spark UI's accumulator list. */
   static final String ACCUMULATOR_NAME = "hoodie.record.index.lookup.stats";
 
-  private RecordIndexLookupStats stats = RecordIndexLookupStats.empty();
+  /**
+   * Volatile because {@link #value()} and {@link #copy()} read it without holding the lock that
+   * {@link #add}, {@link #merge} and {@link #drain} take. Safe to publish this way precisely because
+   * the value is immutable — every mutation swaps the reference rather than editing in place.
+   */
+  private volatile RecordIndexLookupStats stats = RecordIndexLookupStats.empty();
 
   /**
    * Registers with the given context if not already registered. Driver-side only, and idempotent so
