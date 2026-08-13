@@ -267,13 +267,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                             RecordIndexLookupStatsCollector collector,
                                                             int shardIndex,
                                                             FileSlice fileSlice,
-                                                            long keysSubmitted) {
+                                                            long keysSubmitted,
+                                                            long startMillis) {
     if (collector == RecordIndexLookupStatsCollector.NOOP) {
       return lookupResult;
     }
     return new RecordIndexLookupStatsCollectingIterator<>(lookupResult, collector, shardIndex,
         fileSlice.getFileId(), keysSubmitted, fileSlice.getLogFiles().count(),
-        fileSlice.getTotalFileSize(), System.currentTimeMillis());
+        fileSlice.getTotalFileSize(), startMillis);
   }
 
   private static TreeSet<String> getDistinctSortedKeysForSingleSlice(HoodieData<String> keys) {
@@ -306,9 +307,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       TreeSet<String> distinctSortedKeys = getDistinctSortedKeysForSingleSlice(keys);
       int fileGroupIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(distinctSortedKeys.stream().findFirst().get(), fileSlicesForDataPartition.size());
       FileSlice fileSlice = fileSlicesForDataPartition.get(fileGroupIndex);
+      long startMillis = System.currentTimeMillis();
       return HoodieListData.lazy(collectLookupStats(
           lookupRecordsItr(partitionName, distinctSortedKeys, fileSlice, true),
-          collector, fileGroupIndex, fileSlice, distinctSortedKeys.size()));
+          collector, fileGroupIndex, fileSlice, distinctSortedKeys.size(), startMillis));
     } else if (partitionName.equals(RECORD_INDEX.getPartitionPath()) && !fileSlices.isEmpty() && HoodieTableMetadataUtil.verifyRLIFile(fileSlices.get(0).getFileId(), true)) {
       if (keys.isEmpty()) {
         return HoodieListData.lazy(Collections.emptyList());
@@ -319,9 +321,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     final int numFileSlices = fileSlices.size();
     if (numFileSlices == 1) {
       TreeSet<String> distinctSortedKeys = getDistinctSortedKeysForSingleSlice(keys);
+      long startMillis = System.currentTimeMillis();
       return HoodieListData.lazy(collectLookupStats(
           lookupRecordsItr(partitionName, distinctSortedKeys, fileSlices.get(0), !isSecondaryIndex),
-          collector, 0, fileSlices.get(0), distinctSortedKeys.size()));
+          collector, 0, fileSlices.get(0), distinctSortedKeys.size(), startMillis));
     }
 
     // For SI v2, there are 2 cases require different implementation:
@@ -350,8 +353,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           }
           int shardIndex = mappingFunction.apply(keysList.get(0), numFileSlices);
           FileSlice fileSlice = fileSlices.get(shardIndex);
+          long startMillis = System.currentTimeMillis();
           return collectLookupStats(lookupRecordsItr(partitionName, keysList, fileSlice, !isSecondaryIndex),
-              collector, shardIndex, fileSlice, keysList.size());
+              collector, shardIndex, fileSlice, keysList.size(), startMillis);
         };
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     return getEngineContext().mapGroupsByKey(persistedInitialPairData, processFunction, keySpace, true);
@@ -371,11 +375,24 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys, Option<String> dataTablePartition) {
-    return readRecordIndexLocationsWithKeys(recordKeys, dataTablePartition, RecordIndexLookupStatsCollector.NOOP);
+    return lookupRecordIndexLocations(recordKeys, dataTablePartition, RecordIndexLookupStatsCollector.NOOP);
   }
 
   @Override
   public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(
+      HoodieData<String> recordKeys, Option<String> dataTablePartition,
+      RecordIndexLookupStatsCollector collector) {
+    return lookupRecordIndexLocations(recordKeys, dataTablePartition, collector);
+  }
+
+  /**
+   * The single implementation both public overloads route to.
+   *
+   * <p>Neither overload calls the other on purpose. The interface's {@code default} delegates
+   * 3-arg to 2-arg; if this class delegated 2-arg to 3-arg, an implementation that copied that
+   * pattern without also overriding the 3-arg method would recurse until it blew the stack.
+   */
+  private HoodiePairData<String, HoodieRecordGlobalLocation> lookupRecordIndexLocations(
       HoodieData<String> recordKeys, Option<String> dataTablePartition,
       RecordIndexLookupStatsCollector collector) {
     // If record index is not initialized yet, we cannot return an empty result here unlike the code for reading from other

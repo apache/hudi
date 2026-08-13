@@ -266,6 +266,11 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * outside this repository, and an abstract method would break their compilation. The default
    * ignores the collector and delegates, so implementations that do not read a record index need no
    * change; the record-index-backed implementation overrides it.
+   * <p>
+   * <b>Invariant for implementers:</b> this default delegates to the 2-arg overload, so an
+   * implementation must NOT make its 2-arg overload delegate to this one unless it also overrides
+   * this method — that pairing recurses until the stack overflows. Route both overloads to a shared
+   * private method instead, as {@code HoodieBackedTableMetadata} does.
    *
    * @param recordKeys         list of record keys to look up in the index
    * @param dataTablePartition option of the data table partition to look up from, for partitioned rli
