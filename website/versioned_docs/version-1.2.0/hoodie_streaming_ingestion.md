@@ -687,7 +687,9 @@ Note that the two halves spell MySQL differently: the source is `Mysql...` while
 
 Both sources read Avro and require a schema registry, so set `--schemaprovider-class` to
 `org.apache.hudi.utilities.schema.SchemaRegistryProvider` and point `hoodie.streamer.schemaprovider.registry.url` at the
-subject for the topic. The Kafka value deserializer already defaults to
+subject for the topic. The registry has to be given to the Kafka consumer a second time, as a plain
+`schema.registry.url`, because Hudi drops every `hoodie.*` property before it constructs the consumer and the schema
+provider's URL therefore never reaches the deserializer. The value deserializer itself already defaults to
 `io.confluent.kafka.serializers.KafkaAvroDeserializer`, so `hoodie.streamer.source.kafka.value.deserializer.class` only
 needs setting in order to override it.
 
@@ -698,6 +700,7 @@ hoodie.streamer.source.kafka.topic=postgres.public.customers
 hoodie.streamer.schemaprovider.registry.url=http://localhost:8081/subjects/postgres.public.customers-value/versions/latest
 bootstrap.servers=localhost:9092
 auto.offset.reset=earliest
+schema.registry.url=http://localhost:8081
 
 hoodie.datasource.write.recordkey.field=id
 ```
