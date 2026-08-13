@@ -1,3 +1,20 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
 # RLI Lookup Observability Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -15,9 +32,10 @@
 - **Do NOT run `mvn test` in a Claude Code session.** CLAUDE.md forbids it. Agentic executors stop at `mvn install -pl <module> -am -DskipTests -Dspark3.5` and hand test execution to the user. The `mvn test` commands in each task are for the human running them.
 - `JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-11.jdk/Contents/Home` — the default `JAVA_HOME` in this environment is broken.
 - Build flags: `-Dspark3.5 -Dscala-2.12`.
-- **Every new `.java` file must start with the ASF license header.** The code blocks in this plan omit it for brevity — copying them verbatim produces a build that fails RAT, because the root `pom.xml` sets `<numUnapprovedLicenses>0</numUnapprovedLicenses>` with `<excludeSubProjects>false</excludeSubProjects>`. Neither `mvn checkstyle:check` nor `mvn install -DskipTests` surfaces this. Verify with:
+- **Every new file must carry the ASF license header — `.java` *and* `.md`.** Markdown uses an HTML comment block (see `rfc/README.md`); `docs/` is not in RAT's excludes and CI's `validate-source` job runs `apache-rat:check` from the repo root, so a headerless doc fails the build. The code blocks in this plan omit it for brevity — copying them verbatim produces a build that fails RAT, because the root `pom.xml` sets `<numUnapprovedLicenses>0</numUnapprovedLicenses>` with `<excludeSubProjects>false</excludeSubProjects>`. Neither `mvn checkstyle:check` nor `mvn install -DskipTests` surfaces this. Verify with:
+  Per-module checks are not enough — CI scans from the root:
   ```bash
-  mvn -o apache-rat:check -pl hudi-common,hudi-client/hudi-client-common,hudi-client/hudi-spark-client -Dspark3.5
+  mvn -o apache-rat:check -N -Dspark3.5   # root, matches CI validate-source
   ```
 - **Never use `var`** in Java. Explicit types only.
 - Package names use `hudi`; class names use `hoodie`.
