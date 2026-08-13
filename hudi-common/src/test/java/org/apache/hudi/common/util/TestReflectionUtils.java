@@ -29,6 +29,7 @@ import org.apache.hudi.storage.StoragePathFilter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -82,7 +83,7 @@ public class TestReflectionUtils {
   void testGetTopLevelClassesInClasspathFromDirectory(@TempDir Path tempDir) throws Exception {
     String scanned = ReflectionUtils.class.getPackage().getName();
     Path root = tempDir.resolve("classes");
-    Path pkgDir = root.resolve(scanned.replace('.', java.io.File.separatorChar));
+    Path pkgDir = root.resolve(scanned.replace('.', File.separatorChar));
     Files.createDirectories(pkgDir.resolve("nested"));
     Files.write(pkgDir.resolve("Alpha.class"), new byte[] {1});
     Files.write(pkgDir.resolve("Beta.class"), new byte[] {1});
@@ -116,7 +117,7 @@ public class TestReflectionUtils {
 
   /**
    * Classes packaged in a jar are reached over the "jar" protocol, whose URLs are not hierarchical
-   * and so cannot be turned into a {@link java.io.File}. Every caller of this method is a bundle
+   * and so cannot be turned into a {@link File}. Every caller of this method is a bundle
    * Main class, which is exactly the packaged case.
    * <p>
    * The jar is built under the scanned class's own package, and the loader is given no parent, so
