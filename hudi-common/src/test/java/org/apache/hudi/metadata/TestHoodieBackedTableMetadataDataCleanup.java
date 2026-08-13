@@ -101,12 +101,15 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     // Setup mock behavior
     when(mockMetadata.readIndexRecordsWithKeys(any(), any())).thenReturn(mockPairData);
     when(mockMetadata.readIndexRecordsWithKeys(any(), any(), any())).thenReturn(mockPairData);
+    // The stats-collecting overload is the one the read path actually routes through.
+    when(mockMetadata.readIndexRecordsWithKeys(any(), any(), any(), any())).thenReturn(mockPairData);
     when(mockPairData.mapToPair(any())).thenReturn(mockResult);
-    
+
     // Call real method on the mock
     when(mockMetadata.readRecordIndexLocationsWithKeys(recordKeys)).thenCallRealMethod();
     when(mockMetadata.readRecordIndexLocationsWithKeys(recordKeys, Option.empty())).thenCallRealMethod();
-    
+    when(mockMetadata.readRecordIndexLocationsWithKeys(any(), any(), any())).thenCallRealMethod();
+
     // Execute the method
     HoodiePairData result = mockMetadata.readRecordIndexLocationsWithKeys(recordKeys);
     
@@ -226,7 +229,8 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     // Call real method on the mock
     when(mockMetadata.readRecordIndexLocationsWithKeys(any())).thenCallRealMethod();
     when(mockMetadata.readRecordIndexLocationsWithKeys(any(), any())).thenCallRealMethod();
-    
+    when(mockMetadata.readRecordIndexLocationsWithKeys(any(), any(), any())).thenCallRealMethod();
+
     // Execute and verify exception is propagated
     HoodieData<String> recordKeys = HoodieListData.eager(Arrays.asList("key1"));
     try {

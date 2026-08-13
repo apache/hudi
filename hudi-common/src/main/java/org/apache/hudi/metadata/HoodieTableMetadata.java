@@ -259,6 +259,27 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys, Option<String> dataTablePartition);
 
   /**
+   * Same as {@link #readRecordIndexLocationsWithKeys(HoodieData, Option)}, additionally reporting
+   * per-shard lookup stats to the supplied collector.
+   * <p>
+   * Declared {@code default} rather than abstract on purpose: this interface has implementations
+   * outside this repository, and an abstract method would break their compilation. The default
+   * ignores the collector and delegates, so implementations that do not read a record index need no
+   * change; the record-index-backed implementation overrides it.
+   *
+   * @param recordKeys         list of record keys to look up in the index
+   * @param dataTablePartition option of the data table partition to look up from, for partitioned rli
+   * @param collector          receives one {@link RecordIndexShardLookupStats} per shard actually read.
+   *                           Pass {@link RecordIndexLookupStatsCollector#NOOP} to collect nothing.
+   * @return map from record key to the location of the record that was read from the index
+   */
+  default HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(
+      HoodieData<String> recordKeys, Option<String> dataTablePartition,
+      RecordIndexLookupStatsCollector collector) {
+    return readRecordIndexLocationsWithKeys(recordKeys, dataTablePartition);
+  }
+
+  /**
    * Returns the location of record keys which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    */
