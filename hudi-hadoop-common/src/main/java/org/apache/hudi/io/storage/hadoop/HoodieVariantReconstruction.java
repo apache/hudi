@@ -101,7 +101,7 @@ final class HoodieVariantReconstruction {
       // Detection is anchored by the requested side because the file schema usually comes from
       // converting the parquet footer MessageType, which loses the variant logical type; see
       // VariantSchemaUtils.isShreddedVariantTarget (#19567).
-      if (fileField.isPresent() && VariantSchemaUtils.isShreddedVariantTarget(requestedField.schema(), fileField.get().schema())) {
+      if (fileField.isPresent() && VariantSchemaUtils.isShreddedVariantTarget(fileField.get().schema(), requestedField.schema())) {
         isTarget[i] = true;
         anyTarget = true;
         // Read this column in its on-disk shredded shape.

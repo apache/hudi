@@ -92,8 +92,11 @@ public class VariantSchemaUtils {
    * so the on-disk side is detected by SHAPE, anchored by the requested side: the requested column
    * (from the table schema, logical type intact) must be a variant for the shape match to count,
    * leaving plain user structs of the same shape alone (#19567).
+   *
+   * @param fileFieldSchema      the column as it sits in the file schema
+   * @param requestedFieldSchema the same column as requested, carrying the variant logical type
    */
-  public static boolean isShreddedVariantTarget(HoodieSchema requestedFieldSchema, HoodieSchema fileFieldSchema) {
+  public static boolean isShreddedVariantTarget(HoodieSchema fileFieldSchema, HoodieSchema requestedFieldSchema) {
     HoodieSchema file = fileFieldSchema.getNonNullType();
     if (file.getType() == HoodieSchemaType.VARIANT && ((HoodieSchema.Variant) file).isShredded()) {
       return true;
@@ -118,7 +121,7 @@ public class VariantSchemaUtils {
     boolean changed = false;
     for (HoodieSchemaField fileField : fileSchema.getFields()) {
       Option<HoodieSchemaField> requestedField = requestedSchema.getField(fileField.name());
-      if (requestedField.isPresent() && isShreddedVariantTarget(requestedField.get().schema(), fileField.schema())) {
+      if (requestedField.isPresent() && isShreddedVariantTarget(fileField.schema(), requestedField.get().schema())) {
         newFields.add(fileField.withSchema(requestedField.get().schema()));
         changed = true;
       } else {
