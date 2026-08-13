@@ -133,9 +133,11 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
           getPartitionColumnsAsInternalRow(file.getPathInfo), file.getPathInfo.getPath, 0, file.getFileSize)
       }
 
-      // These values are empty unless the partition columns are omitted from the data files, which is
-      // exactly when a reader has to splice them back into the rows it produces. A log-only slice still
-      // lives in the partition directory, so a log file's path resolves them just as the base file does.
+      // Non-empty exactly when a reader has to take the partition columns off the path rather than the
+      // data files, i.e. on any of shouldExtractPartitionValuesFromPartitionPath's triggers: dropped
+      // partition columns, the extract-from-path read option (which also covers tables that do persist
+      // them), or a bootstrap data-queries-only read. A log-only slice still lives in the partition
+      // directory, so a log file's path resolves them just as the base file does.
       // NOTE: HoodieLogFile#getPathInfo is transient and null for log files built from a path.
       val partitionValues = partitionedBaseFile.map(_.partitionValues).getOrElse {
         logFiles.headOption.map(f => getPartitionColumnsAsInternalRow(f.getPath)).getOrElse(InternalRow.empty)

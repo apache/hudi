@@ -286,8 +286,10 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       // Incremental round trip over the shredded table: batch incremental reads the
       // shredded base file through the file-group-reader file format with a catalyst
       // schema, a stack nothing else in this suite pins for variant columns. The
-      // no-catalyst-schema legs (CDC, and streaming with
-      // hoodie.file.group.reader.enabled=false) are tracked in #19578.
+      // no-catalyst-schema legs are covered by the CDC round trip below and, for
+      // streaming with hoodie.file.group.reader.enabled=false, by
+      // TestStreamingSource#"test mor stream source reads shredded variant with legacy
+      // file group reader disabled".
       val incRows = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
         .option(DataSourceReadOptions.START_COMMIT.key, "000")

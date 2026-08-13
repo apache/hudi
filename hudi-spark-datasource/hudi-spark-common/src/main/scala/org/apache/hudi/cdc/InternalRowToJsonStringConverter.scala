@@ -21,6 +21,7 @@ package org.apache.hudi.cdc
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
+import com.fasterxml.jackson.databind.util.RawValue
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
@@ -33,6 +34,9 @@ class InternalRowToJsonStringConverter(schema: StructType) {
     val _mapper = new ObjectMapper
     _mapper.setSerializationInclusion(Include.NON_ABSENT)
     _mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+    // The variant branch below embeds its input verbatim once readTree accepts it, and readTree on
+    // its own is happy to parse a valid prefix and leave the rest unconsumed.
+    _mapper.configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
     _mapper.registerModule(DefaultScalaModule)
     _mapper
   }
@@ -92,15 +96,25 @@ class InternalRowToJsonStringConverter(schema: StructType) {
             case _ => value // fallback
           }
         case dt if dt.typeName == InternalRowToJsonStringConverter.VARIANT_TYPE_NAME =>
-          // VariantVal.toString renders the variant as JSON; embed it as a real JSON node so
-          // the image carries the variant's structure. Falling through to the default would
-          // serialize the VariantVal bean, i.e. its raw value/metadata bytes as base64.
+          // VariantVal.toString renders the variant as JSON; embed that rendering verbatim so the
+          // image carries the variant's structure. Falling through to the default would serialize
+          // the VariantVal bean, i.e. its raw value/metadata bytes as base64.
           // Matched on the type name rather than SparkAdapter.isVariantType: this guard is
           // evaluated for every non-string/array/map/struct field, and resolving the adapter
           // needs a version module that is not on hudi-spark-common's own test classpath.
           val variantJson = value.toString
           try {
-            mapper.readTree(variantJson)
+            // readTree is a validation gate only, and its result is discarded: embedding the parsed
+            // node instead would re-serialize the tree through the generator, and Jackson's write-side
+            // nesting cap (StreamWriteConstraints, also 1000) is enforced by writeValueAsString in
+            // convert, outside this block. A variant deep enough to clear the read limit but not the
+            // write limit once the image's own object levels are added would fail the query there.
+            // RawValue goes out through JsonGenerator.writeRawValue, which keeps no nesting context.
+            val parsed = mapper.readTree(variantJson)
+            // readTree accepts blank input as a MissingNode instead of throwing, and RawValue would
+            // then emit nothing at all, leaving a malformed image. Trailing-token input is refused by
+            // FAIL_ON_TRAILING_TOKENS above, which readTree does not check on its own.
+            if (parsed == null || parsed.isMissingNode) variantJson else new RawValue(variantJson)
           } catch {
             // A variant can hold a field name, string or nesting depth past Jackson's default
             // StreamReadConstraints (50k chars, 20M chars, 1000 levels) while staying well inside
