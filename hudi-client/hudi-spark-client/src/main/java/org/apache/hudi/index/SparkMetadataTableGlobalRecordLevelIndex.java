@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.HoodieDataUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -38,6 +39,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.RecordIndexLookupStatsCollector;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
@@ -130,7 +132,8 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
 
     // Lookup the keys in the record index
 
-    return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(new RecordIndexFileGroupLookupFunction(hoodieTable)));
+    return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(
+        new RecordIndexFileGroupLookupFunction(hoodieTable, hoodieTable.getRecordIndexLookupStatsCollector())));
   }
 
   protected Either<Integer, Map<String, Integer>> fetchFileGroupSize(HoodieTable hoodieTable) {
@@ -181,9 +184,12 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
    */
   private static class RecordIndexFileGroupLookupFunction implements PairFlatMapFunction<Iterator<String>, String, HoodieRecordGlobalLocation> {
     private final HoodieTable hoodieTable;
+    /** Resolved on the driver and serialized with this closure; executors report through it. */
+    private final RecordIndexLookupStatsCollector statsCollector;
 
-    public RecordIndexFileGroupLookupFunction(HoodieTable hoodieTable) {
+    public RecordIndexFileGroupLookupFunction(HoodieTable hoodieTable, RecordIndexLookupStatsCollector statsCollector) {
       this.hoodieTable = hoodieTable;
+      this.statsCollector = statsCollector;
     }
 
     @Override
@@ -193,7 +199,8 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
 
       // recordIndexInfo object only contains records that are present in record_index.
       HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
-          hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
+          hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(
+              HoodieListData.eager(keysToLookup), Option.empty(), statsCollector);
       try {
         List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
         return recordIndexInfo.stream()

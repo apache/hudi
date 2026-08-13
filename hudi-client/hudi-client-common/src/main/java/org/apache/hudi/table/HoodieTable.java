@@ -86,6 +86,7 @@ import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.RecordIndexLookupStatsCollector;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -143,6 +144,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   @Getter
   protected final HoodieTableMetaClient metaClient;
   private transient HoodieIndex<?, ?> index;
+  /**
+   * Driver-side handoff for record index lookup instrumentation. Transient because the collector is
+   * captured directly in the engine closure when the lookup is built; executors never read it back
+   * off the table. Defaults to a no-op so callers that never set it are unaffected.
+   */
+  private transient RecordIndexLookupStatsCollector recordIndexLookupStatsCollector;
   @Getter
   protected final TaskContextSupplier taskContextSupplier;
   private transient HoodieTableMetadata metadata;
@@ -442,6 +449,23 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       index = getIndex(config, context);
     }
     return index;
+  }
+
+  /**
+   * Sets the sink for record index lookup stats gathered during tag location. Called by the write
+   * client, which owns the collector for its whole lifetime — the table and its index are rebuilt
+   * per operation and so cannot own it themselves.
+   */
+  public void setRecordIndexLookupStatsCollector(RecordIndexLookupStatsCollector collector) {
+    this.recordIndexLookupStatsCollector = collector;
+  }
+
+  /**
+   * Returns the record index lookup stats sink, never null.
+   */
+  public RecordIndexLookupStatsCollector getRecordIndexLookupStatsCollector() {
+    return recordIndexLookupStatsCollector == null
+        ? RecordIndexLookupStatsCollector.NOOP : recordIndexLookupStatsCollector;
   }
 
   public HoodieStorageLayout getStorageLayout() {
