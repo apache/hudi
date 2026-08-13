@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
@@ -133,7 +134,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1086,6 +1089,88 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
             listMdt.size(), computeDiffSummary(listMdt, listFs, metaClient, logDetailMaxLength)),
         exception.getMessage());
     verify(spyTimeline, times(2)).readInstantContent(any(), any());
+  }
+
+  @Test
+  void testValidateFileSlicesTreatsArchivedBoundaryInstantAsCommitted() {
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    String partition = "partition10";
+    String label = "metadata item";
+
+    TimeGenerator timeGenerator = TimeGenerators
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
+            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
+    Pair<List<FileSlice>, List<FileSlice>> filelistPair = generateTwoEqualFileSliceList(5, timeGenerator);
+    List<FileSlice> listMdt = filelistPair.getLeft();
+    List<FileSlice> listFs = filelistPair.getRight();
+
+    // A single file slice present only in the file system, so its base instant is both the min and the
+    // max of the range the diff summary looks up. It is archived, hence not a missing commit.
+    FileSlice extraFileSlice = generateRandomFileSlice(
+        TimelineUtils.generateInstantTime(true, timeGenerator),
+        TimelineUtils.generateInstantTime(true, timeGenerator),
+        TimelineUtils.generateInstantTime(true, timeGenerator)).getLeft();
+    listFs.add(extraFileSlice);
+    String archivedInstantTime = extraFileSlice.getBaseInstantTime();
+
+    HoodieTableMetaClient spyMetaClient = spy(metaClient);
+    HoodieActiveTimeline spyTimeline = spy(metaClient.getActiveTimeline());
+    doReturn(spyTimeline).when(spyMetaClient).getActiveTimeline();
+    HoodieTimeline mockRollbackTimeline = mock(HoodieTimeline.class, RETURNS_DEEP_STUBS);
+    doReturn(mockRollbackTimeline).when(spyTimeline).getRollbackTimeline();
+
+    HoodieArchivedTimeline mockArchivedTimeline = mock(HoodieArchivedTimeline.class);
+    when(mockArchivedTimeline.getInstantsAsStream()).thenReturn(Stream.of(
+        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, archivedInstantTime,
+            InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)));
+    doReturn(mockArchivedTimeline).when(spyMetaClient).getArchivedTimeline(archivedInstantTime, archivedInstantTime);
+
+    assertThrows(
+        HoodieValidationException.class,
+        () -> validator.validateFileSlices(listMdt, listFs, partition, spyMetaClient, label));
+
+    // The range must be pushed down with both bounds inclusive, so the boundary instant resolves as
+    // archived and the rollback plan scan is never triggered.
+    verify(spyMetaClient).getArchivedTimeline(archivedInstantTime, archivedInstantTime);
+    verify(mockRollbackTimeline, never()).getInstantsAsStream();
+  }
+
+  @Test
+  void testValidateFileSlicesReportsMismatchWhenDiffSummaryFails() {
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    String partition = "partition10";
+    String label = "metadata item";
+
+    TimeGenerator timeGenerator = TimeGenerators
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
+            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
+    Pair<List<FileSlice>, List<FileSlice>> filelistPair = generateTwoEqualFileSliceList(5, timeGenerator);
+    List<FileSlice> listMdt = filelistPair.getLeft();
+    List<FileSlice> listFs = filelistPair.getRight();
+    listFs.add(generateRandomFileSlice(
+        TimelineUtils.generateInstantTime(true, timeGenerator),
+        TimelineUtils.generateInstantTime(true, timeGenerator),
+        TimelineUtils.generateInstantTime(true, timeGenerator)).getLeft());
+
+    HoodieTableMetaClient spyMetaClient = spy(metaClient);
+    HoodieIOException injectedFailure = new HoodieIOException("simulated timeline read failure");
+    doThrow(injectedFailure).when(spyMetaClient).getActiveTimeline();
+
+    Exception exception = assertThrows(
+        HoodieValidationException.class,
+        () -> validator.validateFileSlices(listMdt, listFs, partition, spyMetaClient, label));
+    assertEquals(
+        String.format(
+            "Validation of %s for partition %s failed for table: %s. "
+                + "Number of file slices based on the file system does not match that based on the "
+                + "metadata table. File system-based listing: %d & MDT-based listing: %d. "
+                + "Diff summary unavailable: %s",
+            label, partition, basePath, listFs.size(), listMdt.size(), injectedFailure),
+        exception.getMessage());
   }
 
   @ParameterizedTest
