@@ -187,6 +187,53 @@ class TestHoodieVariantReconstruction {
   }
 
   @Test
+  void engagesOnTwoFieldShreddedShapeWithNoValueColumn(@TempDir Path tmp) {
+    // The shredding spec lets a writer omit `value` when every row is typed, and
+    // HoodieSchema.Variant.determineIfShredded calls anything with a typed_value shredded. Shape
+    // detection is the only detector that runs on real files, since the footer strips the logical
+    // type, so requiring `value` here dropped such a column's payload silently - #19567 again by
+    // another shape. Hudi's own writer always emits three fields, so this is about files written
+    // elsewhere.
+    HoodieSchema twoFieldShredded = HoodieSchema.createRecord("v", "org.apache.hudi.test", null, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.INT))));
+    HoodieSchema fileSchema = recordWithIdAndVariant(twoFieldShredded);
+    HoodieSchema requestedSchema = recordWithIdAndVariant(HoodieSchema.createVariant());
+    HoodieStorage storage = storageWithReadingShredded(tmp, true);
+    storage.getConf().set(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(),
+        TestVariantShreddingProvider.class.getName());
+
+    HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(
+        fileSchema, requestedSchema, storage);
+    assertNotNull(reconstruction, "A shredded group with no value column must still engage");
+
+    GenericRecord shredded = new GenericData.Record(
+        reconstruction.intermediateSchema().getField("v").get().schema().getNonNullType().toAvroSchema());
+    shredded.put("metadata", ByteBuffer.wrap(new byte[] {1}));
+    shredded.put("typed_value", 42);
+    GenericRecord input = new GenericData.Record(reconstruction.intermediateSchema().toAvroSchema());
+    input.put("id", "record-1");
+    input.put("v", shredded);
+
+    GenericRecord variant = (GenericRecord) reconstruction.reconstruct(input).get(1);
+    assertEquals(ByteBuffer.wrap(new byte[] {42}), variant.get("value"));
+  }
+
+  @Test
+  void ignoresFourFieldStructThatMerelyCarriesTypedValue(@TempDir Path tmp) {
+    // The other side of relaxing the field count: a user struct that happens to hold metadata,
+    // value and typed_value plus anything else is not a variant group and must stay untouched.
+    HoodieSchema fourField = HoodieSchema.createRecord("v", "org.apache.hudi.test", null, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("extra", HoodieSchema.createNullable(HoodieSchemaType.STRING))));
+    assertNull(HoodieVariantReconstruction.create(
+        recordWithIdAndVariant(fourField), recordWithIdAndVariant(HoodieSchema.createVariant()),
+        storageWithReadingShredded(tmp, false)));
+  }
+
+  @Test
   void ignoresShreddedShapeWhenRequestedColumnIsNotVariant(@TempDir Path tmp) {
     // A user struct that merely has the {metadata, value, typed_value} shape must not be
     // treated as a shredded variant: without the requested-side variant anchor there is
