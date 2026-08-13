@@ -132,6 +132,24 @@ public class TestPipelines {
   }
 
   @Test
+  void testConsistentBucketWritePipeline() {
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE,
+        HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name());
+    conf.set(FlinkOptions.BUCKET_ASSIGN_TASKS, 2);
+    conf.set(FlinkOptions.WRITE_TASKS, 4);
+
+    DataStream<RowData> pipeline = Pipelines.hoodieStreamWrite(
+        conf, TestConfigurations.ROW_TYPE, hoodieRowInput());
+
+    assertEquals(4, pipeline.getParallelism());
+    assertTrue(pipeline.getTransformation().getName().startsWith("consistent_bucket_write:"));
+    assertTrue(transformationNames(pipeline).stream()
+        .anyMatch(name -> name.startsWith("consistent_bucket_assigner:")));
+  }
+
+  @Test
   void testBulkInsertAndAppendValidation() {
     Configuration recordIndexConf = defaultConf();
     recordIndexConf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
