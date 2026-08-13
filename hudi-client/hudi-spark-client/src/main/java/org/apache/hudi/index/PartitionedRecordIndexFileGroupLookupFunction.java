@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.RecordIndexLookupStatsCollector;
 
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 
@@ -44,9 +45,17 @@ public class PartitionedRecordIndexFileGroupLookupFunction
     implements PairFlatMapFunction<Iterator<Pair<String, String>>, String, HoodieRecordGlobalLocation> {
 
   private final HoodieTableMetadata metadataTable;
+  /** Resolved on the driver and serialized with this closure; executors report through it. */
+  private final RecordIndexLookupStatsCollector statsCollector;
 
   public PartitionedRecordIndexFileGroupLookupFunction(HoodieTableMetadata metadataTable) {
+    this(metadataTable, RecordIndexLookupStatsCollector.NOOP);
+  }
+
+  public PartitionedRecordIndexFileGroupLookupFunction(HoodieTableMetadata metadataTable,
+                                                       RecordIndexLookupStatsCollector statsCollector) {
     this.metadataTable = metadataTable;
+    this.statsCollector = statsCollector;
   }
 
   @Override
@@ -66,7 +75,7 @@ public class PartitionedRecordIndexFileGroupLookupFunction
     }
 
     HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
-        metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup), Option.of(partitionName));
+        metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup), Option.of(partitionName), statsCollector);
     try {
       Map<String, HoodieRecordGlobalLocation> recordIndexInfo = recordIndexData.collectAsList().stream()
           .collect(HashMap::new, (map, pair) -> map.put(pair.getKey(), pair.getValue()), HashMap::putAll);

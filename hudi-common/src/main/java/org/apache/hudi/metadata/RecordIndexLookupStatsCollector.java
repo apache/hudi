@@ -36,10 +36,39 @@ public interface RecordIndexLookupStatsCollector extends Serializable {
 
   /**
    * Discards everything. Used whenever collection is disabled, and as the default for callers that
-   * do not ask for stats. Identity-compared at call sites to skip instrumentation entirely.
+   * do not ask for stats.
    */
-  RecordIndexLookupStatsCollector NOOP = stats -> {
-  };
+  RecordIndexLookupStatsCollector NOOP = NoOpCollector.INSTANCE;
 
   void collect(RecordIndexShardLookupStats stats);
+
+  /**
+   * Whether this collector discards everything, letting call sites skip instrumentation entirely.
+   *
+   * <p>Exists because collectors are serialized into engine closures: a deserialized copy of
+   * {@link #NOOP} is a different object on the executor, so an identity check against it silently
+   * fails there and the disabled path stops being free. Asking the collector is transport
+   * independent.
+   */
+  default boolean collectsNothing() {
+    return false;
+  }
+
+  /**
+   * The {@link #NOOP} implementation. An enum rather than a lambda so that serialization preserves
+   * a single instance.
+   */
+  enum NoOpCollector implements RecordIndexLookupStatsCollector {
+    INSTANCE;
+
+    @Override
+    public void collect(RecordIndexShardLookupStats stats) {
+      // discarded
+    }
+
+    @Override
+    public boolean collectsNothing() {
+      return true;
+    }
+  }
 }

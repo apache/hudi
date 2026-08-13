@@ -257,7 +257,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   /**
    * Wraps a shard lookup result so one {@link RecordIndexShardLookupStats} is reported when the
    * iterator is exhausted or closed. Returns the iterator untouched when nothing is collecting, so
-   * the disabled path allocates nothing and behaves exactly as it did before.
+   * the disabled path allocates nothing and behaves exactly as it did before. The check asks the
+   * collector rather than comparing identity against NOOP, which would not survive being
+   * serialized to an executor.
    *
    * <p>The file slice is in scope here, so log file count and shard footprint are captured at the
    * point of read rather than reconstructed later — they then describe the slice that was actually
@@ -269,7 +271,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                             FileSlice fileSlice,
                                                             long keysSubmitted,
                                                             long startMillis) {
-    if (collector == RecordIndexLookupStatsCollector.NOOP) {
+    if (collector.collectsNothing()) {
       return lookupResult;
     }
     return new RecordIndexLookupStatsCollectingIterator<>(lookupResult, collector, shardIndex,
