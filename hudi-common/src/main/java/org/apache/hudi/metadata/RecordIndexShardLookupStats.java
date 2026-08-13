@@ -97,14 +97,21 @@ public class RecordIndexShardLookupStats implements Serializable {
   }
 
   /**
-   * Field-wise maximum of this and {@code other}, which must describe the same shard.
+   * Field-wise maximum of this and {@code other}, which must describe the same file group.
+   *
+   * <p>Identity is the file group id, not the shard index. A shard index is only unique within one
+   * lookup call: the partitioned record index resolves it against the slices of a single data table
+   * partition, so two different partitions both yield index 0 for two different file groups. Merging
+   * those would silently collapse two real shards into one. File group ids embed the data table
+   * partition and are globally unique, so keying on them keeps retry idempotence without conflating
+   * distinct shards.
    */
   public RecordIndexShardLookupStats merge(RecordIndexShardLookupStats other) {
-    ValidationUtils.checkArgument(shardIndex == other.shardIndex,
-        "cannot merge stats for different shards: " + shardIndex + " vs " + other.shardIndex);
+    ValidationUtils.checkArgument(Objects.equals(fileGroupId, other.fileGroupId),
+        "cannot merge stats for different file groups: " + fileGroupId + " vs " + other.fileGroupId);
     return new RecordIndexShardLookupStats(
-        shardIndex,
-        fileGroupId != null ? fileGroupId : other.fileGroupId,
+        Math.max(shardIndex, other.shardIndex),
+        fileGroupId,
         Math.max(keysSubmitted, other.keysSubmitted),
         Math.max(keysHit, other.keysHit),
         Math.max(logFilesRead, other.logFilesRead),

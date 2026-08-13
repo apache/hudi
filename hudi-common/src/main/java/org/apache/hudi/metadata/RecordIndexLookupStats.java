@@ -24,10 +24,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Aggregate record index lookup stats for one write, keyed by shard index.
+ * Aggregate record index lookup stats for one write, keyed by file group id.
  *
- * <p>Keying by shard rather than summing scalars is what gives the aggregate its idempotence under
- * task retry, speculation and RDD recomputation: re-reporting a shard replaces its entry instead of
+ * <p>Keyed by file group id rather than shard index, because a shard index is only unique within a
+ * single lookup call — the partitioned record index resolves it against one data table partition's
+ * slices, so distinct partitions collide on index 0. File group ids are globally unique.
+ *
+ * <p>Keying rather than summing scalars is what gives the aggregate its idempotence under task
+ * retry, speculation and RDD recomputation: re-reporting a shard replaces its entry instead of
  * adding to a running total. Totals are folds over the map, computed on demand.
  */
 public class RecordIndexLookupStats implements Serializable {
@@ -37,9 +41,9 @@ public class RecordIndexLookupStats implements Serializable {
   private static final RecordIndexLookupStats EMPTY =
       new RecordIndexLookupStats(Collections.emptyMap());
 
-  private final Map<Integer, RecordIndexShardLookupStats> shardStats;
+  private final Map<String, RecordIndexShardLookupStats> shardStats;
 
-  private RecordIndexLookupStats(Map<Integer, RecordIndexShardLookupStats> shardStats) {
+  private RecordIndexLookupStats(Map<String, RecordIndexShardLookupStats> shardStats) {
     this.shardStats = shardStats;
   }
 
@@ -48,7 +52,7 @@ public class RecordIndexLookupStats implements Serializable {
   }
 
   public static RecordIndexLookupStats of(RecordIndexShardLookupStats stats) {
-    return new RecordIndexLookupStats(Collections.singletonMap(stats.getShardIndex(), stats));
+    return new RecordIndexLookupStats(Collections.singletonMap(stats.getFileGroupId(), stats));
   }
 
   public RecordIndexLookupStats merge(RecordIndexLookupStats other) {
@@ -58,13 +62,13 @@ public class RecordIndexLookupStats implements Serializable {
     if (shardStats.isEmpty()) {
       return other;
     }
-    Map<Integer, RecordIndexShardLookupStats> merged = new HashMap<>(shardStats);
+    Map<String, RecordIndexShardLookupStats> merged = new HashMap<>(shardStats);
     other.shardStats.forEach(
-        (shard, stats) -> merged.merge(shard, stats, RecordIndexShardLookupStats::merge));
+        (fileGroupId, stats) -> merged.merge(fileGroupId, stats, RecordIndexShardLookupStats::merge));
     return new RecordIndexLookupStats(merged);
   }
 
-  public Map<Integer, RecordIndexShardLookupStats> getShardStats() {
+  public Map<String, RecordIndexShardLookupStats> getShardStats() {
     return Collections.unmodifiableMap(shardStats);
   }
 
@@ -73,8 +77,8 @@ public class RecordIndexLookupStats implements Serializable {
   }
 
   /**
-   * Shards genuinely read. An engine may launch one task per file group, but only a task that
-   * actually reads a shard contributes an entry, so empty tasks do not inflate this count.
+   * Distinct file groups genuinely read. An engine may launch one task per file group, but only a
+   * task that actually reads a shard contributes an entry, so empty tasks do not inflate this count.
    */
   public long getShardsRead() {
     return shardStats.size();

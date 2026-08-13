@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -91,6 +92,36 @@ class TestRecordIndexLookupStats {
   }
 
   @Test
+  void testSameShardIndexInDifferentDataPartitionsAreDistinctShards() {
+    // Partitioned RLI resolves a shard index against ONE data table partition's slices, so two
+    // different partitions both produce index 0 for two entirely different file groups. Keying on
+    // the index would collapse them by max: 1 shard read and the larger key count, instead of 2
+    // shards and the sum.
+    RecordIndexShardLookupStats partitionA =
+        new RecordIndexShardLookupStats(0, "partition-a-fg-0", 100L, 70L, 3L, 1300L, 5L);
+    RecordIndexShardLookupStats partitionB =
+        new RecordIndexShardLookupStats(0, "partition-b-fg-0", 50L, 10L, 1L, 600L, 3L);
+
+    RecordIndexLookupStats stats = RecordIndexLookupStats.of(partitionA)
+        .merge(RecordIndexLookupStats.of(partitionB));
+
+    assertEquals(2L, stats.getShardsRead(), "two different file groups are two shards");
+    assertEquals(150L, stats.getKeysSubmitted(), "counts across distinct shards add up");
+    assertEquals(80L, stats.getKeysHit());
+    assertEquals(4L, stats.getLogFilesRead());
+    assertEquals(1900L, stats.getBytesInShardsRead());
+  }
+
+  @Test
+  void testMergingDifferentFileGroupsIsRejected() {
+    // The value-level merge is only defined for one file group; the aggregate is what routes by key.
+    RecordIndexShardLookupStats a = new RecordIndexShardLookupStats(0, "fg-a", 10L, 4L, 1L, 100L, 2L);
+    RecordIndexShardLookupStats b = new RecordIndexShardLookupStats(0, "fg-b", 20L, 9L, 2L, 200L, 3L);
+
+    assertThrows(IllegalArgumentException.class, () -> a.merge(b));
+  }
+
+  @Test
   void testMergeIsCommutativeForTheSameShard() {
     // Disjoint shards would only prove that HashMap union commutes. The case that matters is two
     // conflicting reports of the SAME shard: last-writer-wins would make this order-dependent.
@@ -105,7 +136,7 @@ class TestRecordIndexLookupStats {
     assertEquals(75L, forward.getKeysHit());
     assertEquals(4L, forward.getLogFilesRead());
     assertEquals(1600L, forward.getBytesInShardsRead());
-    assertEquals(30L, forward.getShardStats().get(1).getLookupMillis());
+    assertEquals(30L, forward.getShardStats().get("fg-1").getLookupMillis());
   }
 
   @Test
