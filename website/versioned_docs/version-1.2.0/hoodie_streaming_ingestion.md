@@ -720,13 +720,22 @@ and the job that reads it:
   --continuous
 ```
 
+That example ingests PostgreSQL. For MySQL, substitute the three Debezium-specific arguments:
+
+```java
+  --source-class org.apache.hudi.utilities.sources.debezium.MysqlDebeziumSource \
+  --payload-class org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload \
+  --source-ordering-field _event_seq \
+```
+
 The record key must be the primary key of the upstream table, so that later changes to a row update it in place. A
 Merge-on-Read table suits the small, frequent writes a CDC stream produces, but Copy-on-Write works as well.
 
 **Ordering.** Change events can reach Kafka out of order, so the payload decides which version of a row wins rather than
 relying on arrival order. For PostgreSQL that is the log sequence number in `_event_lsn`, which the payload reads
 directly from the record. For MySQL the source derives an `_event_seq` column from the binlog coordinates
-`_event_bin_file` and `_event_pos`, giving the same total ordering.
+`_event_bin_file` and `_event_pos`, giving the same total ordering. Pass whichever of the two columns applies as
+`--source-ordering-field`, since the payload compares that value when it deduplicates records within a batch.
 
 **Deletes.** The flattened `_change_operation_type` column carries the Debezium operation for each event, and the value
 `d` marks a delete. The payload applies those as deletes to the Hudi table instead of writing them as rows.
