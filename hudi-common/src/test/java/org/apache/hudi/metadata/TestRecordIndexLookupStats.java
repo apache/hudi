@@ -113,6 +113,14 @@ class TestRecordIndexLookupStats {
   }
 
   @Test
+  void testNullFileGroupIdIsRejected() {
+    // The id is the aggregate's map key; a null would become a key that swallows every other
+    // null-id shard rather than failing anywhere visible.
+    assertThrows(IllegalArgumentException.class,
+        () -> new RecordIndexShardLookupStats(0, null, 10L, 4L, 1L, 100L, 2L));
+  }
+
+  @Test
   void testMergingDifferentFileGroupsIsRejected() {
     // The value-level merge is only defined for one file group; the aggregate is what routes by key.
     RecordIndexShardLookupStats a = new RecordIndexShardLookupStats(0, "fg-a", 10L, 4L, 1L, 100L, 2L);

@@ -50,6 +50,9 @@ public class RecordIndexShardLookupStats implements Serializable {
   public RecordIndexShardLookupStats(int shardIndex, String fileGroupId, long keysSubmitted,
                                      long keysHit, long logFilesRead, long bytesInShard,
                                      long lookupMillis) {
+    // fileGroupId is the identity of this value and the key of the aggregate map, so a null would
+    // not fail here but silently become a map key that swallows every other null-id shard.
+    ValidationUtils.checkArgument(fileGroupId != null, "fileGroupId is required, it identifies the shard");
     ValidationUtils.checkArgument(shardIndex >= 0, "shardIndex must be non-negative");
     ValidationUtils.checkArgument(keysHit <= keysSubmitted, "keysHit cannot exceed keysSubmitted");
     this.shardIndex = shardIndex;
