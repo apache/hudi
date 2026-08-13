@@ -21,7 +21,6 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.ByteBufferBackedInputStream;
-import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 import org.apache.hudi.io.util.IOUtils;
 
@@ -36,7 +35,6 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.WritableUtils;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,12 +44,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -78,7 +73,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHFileWriter {
   private static final Logger LOG = LoggerFactory.getLogger(TestHFileWriter.class);
-  private static final String TEST_FILE = "test.hfile";
   private static final HFileContext CONTEXT = HFileContext.builder().build();
   // Golden bytes (NONE compression, fixed input) that lock the on-disk encoding of the data block
   // and the root block-index block. Update intentionally ONLY after reviewing HBase-reader
@@ -105,21 +99,16 @@ class TestHFileWriter {
           + "616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
           + "616161616161616161616161616161616161616161007fffffffffffffff0400000000";
 
-  @AfterEach
-  public void tearDown() throws IOException {
-    Files.deleteIfExists(Paths.get(TEST_FILE));
-  }
-
   @Test
   void testOverflow() throws Exception {
     // 1. Write data.
-    writeTestFile();
+    byte[] hfile = writeThreeRecordHFile();
     // 2. Validate file size.
-    validateHFileSize();
+    validateHFileSize(hfile);
     // 3. Validate file structure.
-    validateHFileStructure();
+    validateHFileStructure(hfile);
     // 4. Validate consistency with HFileReader.
-    validateConsistencyWithHFileReader();
+    validateConsistencyWithHFileReader(hfile);
     LOG.info("All validations passed!");
   }
 
@@ -127,15 +116,14 @@ class TestHFileWriter {
   void testSameKeyLocation() throws IOException {
     // 165 bytes for data part limit.
     HFileContext context = new HFileContext.Builder().blockSize(165).build();
-    String testFile = TEST_FILE;
+    ByteArrayOutputStream hfileBytes = new ByteArrayOutputStream();
     // CREATE 4 BLOCKs:
     // Block 1: 100 records, whose keys are the same: "key00".
     // Block 2: 5   records, whose first key is "key01"
     // Block 3: 5   records, whose first key is "key06"
     // Block 4: 1   record,  whose first key is "key11",
     //              whose length is larger than the block size.
-    try (DataOutputStream outputStream =
-             new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
+    try (DataOutputStream outputStream = new DataOutputStream(hfileBytes);
         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
       // All entries for key00 are stored in the first block.
       for (int i = 0; i < 100; i++) {
@@ -155,11 +143,7 @@ class TestHFileWriter {
     }
 
     // Validate.
-    try (FileChannel channel = FileChannel.open(Paths.get(testFile), StandardOpenOption.READ)) {
-      ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
-      SeekableDataInputStream inputStream =
-          new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buf));
-      HFileReaderImpl reader = new HFileReaderImpl(inputStream, channel.size());
+    try (HFileReaderImpl reader = openReader(hfileBytes.toByteArray())) {
       reader.initializeMetadata();
       // Totally 111 records.
       assertEquals(111, reader.getNumKeyValueEntries());
@@ -194,9 +178,8 @@ class TestHFileWriter {
   void testUniqueKeyLocation() throws IOException {
     // 50 bytes for data part limit.
     HFileContext context = new HFileContext.Builder().blockSize(100).build();
-    String testFile = TEST_FILE;
-    try (DataOutputStream outputStream =
-             new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
+    ByteArrayOutputStream hfileBytes = new ByteArrayOutputStream();
+    try (DataOutputStream outputStream = new DataOutputStream(hfileBytes);
          HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
       for (int i = 0; i < 50; i++) {
         writer.append(
@@ -207,11 +190,8 @@ class TestHFileWriter {
     }
 
     // Validate.
-    try (FileChannel channel = FileChannel.open(Paths.get(testFile), StandardOpenOption.READ)) {
-      ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
-      SeekableDataInputStream inputStream =
-          new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buf));
-      HFileReaderImpl reader = new HFileReaderImpl(inputStream, channel.size());
+    byte[] hfile = hfileBytes.toByteArray();
+    try (HFileReaderImpl reader = openReader(hfile)) {
       reader.initializeMetadata();
       assertEquals(50, reader.getNumKeyValueEntries());
       HFileTrailer trailer = reader.getTrailer();
@@ -235,12 +215,11 @@ class TestHFileWriter {
       // Each data block's previous-block-offset header (8 bytes at offset 16) must chain back to
       // the prior block, and -1 for the first, so an HBase reader's seekBefore can step back across
       // blocks. The writer once set it to the block's own offset; this guards that regression.
-      byte[] file = Files.readAllBytes(Paths.get(testFile));
       List<IndexEntry> dataIndex = parseIndexBlock(
-          file, (int) trailer.getLoadOnOpenDataOffset(), trailer.getDataIndexCount());
+          hfile, (int) trailer.getLoadOnOpenDataOffset(), trailer.getDataIndexCount());
       assertTrue(dataIndex.size() > 1, "test setup: expected multiple data blocks");
       for (int i = 0; i < dataIndex.size(); i++) {
-        long prevOffset = readLongBE(file, (int) dataIndex.get(i).offset + 16);
+        long prevOffset = readLongBE(hfile, (int) dataIndex.get(i).offset + 16);
         long expected = i == 0 ? -1L : dataIndex.get(i - 1).offset;
         assertEquals(expected, prevOffset, "data block " + i + " previous-block offset");
       }
@@ -316,8 +295,7 @@ class TestHFileWriter {
    */
   private static void assertSingleBlockBytesMatchGoldenAndHBase(
       String[] keys, byte[][] values, String dataGolden, String rootGolden) throws Exception {
-    assertSingleBlockBytesMatchHBase(keys, values, dataGolden, rootGolden);
-    byte[] nativeFile = Files.readAllBytes(Paths.get(TEST_FILE));
+    byte[] nativeFile = assertSingleBlockBytesMatchHBase(keys, values, dataGolden, rootGolden);
     HFileProtos.TrailerProto trailer = validateTrailerSection(nativeFile, keys.length, 0);
     int loadOnOpen = (int) trailer.getLoadOnOpenDataOffset();
     int metaIndexOffset = loadOnOpen + HFILEBLOCK_HEADER_SIZE + readIntBE(nativeFile, loadOnOpen + 8);
@@ -331,11 +309,12 @@ class TestHFileWriter {
    * Asserts the native and HBase writers produce identical single-block data and root index bytes
    * (optionally also matching a pinned golden), and the root-index keyLength is Hadoop VInt. Used
    * without a golden for large keys, where a hardcoded golden of multi-KB key bytes adds no signal.
+   *
+   * @return the native writer's HFile bytes, so callers can assert further on the same file.
    */
-  private static void assertSingleBlockBytesMatchHBase(
+  private static byte[] assertSingleBlockBytesMatchHBase(
       String[] keys, byte[][] values, String dataGolden, String rootGolden) throws Exception {
-    writeNativeFile(TEST_FILE, HFileContext.builder().build(), keys, values, null, null);
-    byte[] nativeFile = Files.readAllBytes(Paths.get(TEST_FILE));
+    byte[] nativeFile = writeNativeHFile(HFileContext.builder().build(), keys, values, null, null);
     String[] nativeBlocks = dataAndRootIndexBlockHex(nativeFile);
     String[] hbaseBlocks = dataAndRootIndexBlockHex(writeHBaseFile(keys, values));
     assertEquals(hbaseBlocks[0], nativeBlocks[0], "native vs HBase data block bytes");
@@ -349,6 +328,7 @@ class TestHFileWriter {
     IndexEntry first =
         parseIndexBlock(nativeFile, indexOf(nativeFile, ROOT_INDEX.getMagic()), 1).get(0);
     assertVarIntIsHadoopNotProtobuf("root index keyLength", first);
+    return nativeFile;
   }
 
   /** Returns {@code [dataRegionHex, rootIndexBlockHex]} for an HFile's raw bytes. */
@@ -405,9 +385,8 @@ class TestHFileWriter {
     String metaKey = makeKey(200, 9999);
     byte[] metaValue = bytes("bloom-filter-payload-bytes");
     // Small block size forces one record per block, so the root index has multiple entries.
-    writeNativeFile(
-        TEST_FILE, new HFileContext.Builder().blockSize(100).build(), keys, values, metaKey, metaValue);
-    byte[] file = Files.readAllBytes(Paths.get(TEST_FILE));
+    byte[] file = writeNativeHFile(
+        new HFileContext.Builder().blockSize(100).build(), keys, values, metaKey, metaValue);
 
     HFileProtos.TrailerProto trailer = validateTrailerSection(file, numRecords, 1);
     int loadOnOpen = (int) trailer.getLoadOnOpenDataOffset();
@@ -415,7 +394,7 @@ class TestHFileWriter {
     int metaIndexOffset = loadOnOpen + HFILEBLOCK_HEADER_SIZE + readIntBE(file, loadOnOpen + 8);
     validateMetaIndexAndBlock(file, metaIndexOffset, metaKey, metaValue);
     validateFileInfoSection(file, metaIndexOffset, (int) trailer.getFileInfoOffset(), keys[numRecords - 1]);
-    assertAllRecordsReadBack(numRecords, keys);
+    assertAllRecordsReadBack(file, numRecords, keys);
   }
 
   /** Validates the trailer magic, protobuf framing, fields, and HFile version; returns the proto. */
@@ -503,11 +482,9 @@ class TestHFileWriter {
   }
 
   /** Reads every record back through the native reader. */
-  private static void assertAllRecordsReadBack(int numRecords, String[] keys) throws IOException {
-    try (FileChannel channel = FileChannel.open(Paths.get(TEST_FILE), StandardOpenOption.READ)) {
-      ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
-      HFileReaderImpl reader = new HFileReaderImpl(
-          new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buf)), channel.size());
+  private static void assertAllRecordsReadBack(byte[] hfile, int numRecords, String[] keys)
+      throws IOException {
+    try (HFileReaderImpl reader = openReader(hfile)) {
       reader.initializeMetadata();
       assertEquals(numRecords, reader.getNumKeyValueEntries());
       reader.seekTo();
@@ -518,12 +495,15 @@ class TestHFileWriter {
     }
   }
 
-  /** Writes the given records (and an optional single meta block) with the native HFile writer. */
-  private static void writeNativeFile(String testFile, HFileContext context, String[] keys,
-                                      byte[][] values, String metaKey, byte[] metaValue)
+  /**
+   * Writes the given records (and an optional single meta block) with the native HFile writer,
+   * returning the complete file as bytes.
+   */
+  private static byte[] writeNativeHFile(HFileContext context, String[] keys,
+                                         byte[][] values, String metaKey, byte[] metaValue)
       throws IOException {
-    try (DataOutputStream outputStream =
-             new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
+    ByteArrayOutputStream hfileBytes = new ByteArrayOutputStream();
+    try (DataOutputStream outputStream = new DataOutputStream(hfileBytes);
          HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
       for (int i = 0; i < keys.length; i++) {
         writer.append(keys[i], values[i]);
@@ -532,6 +512,13 @@ class TestHFileWriter {
         writer.appendMetaInfo(metaKey, metaValue);
       }
     }
+    return hfileBytes.toByteArray();
+  }
+
+  /** Opens the native reader over an in-memory HFile. */
+  private static HFileReaderImpl openReader(byte[] hfile) {
+    return new HFileReaderImpl(
+        new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(hfile)), hfile.length);
   }
 
   /** A parsed block index entry: block offset, on-disk size, raw keyLength vint bytes, and key. */
@@ -642,28 +629,25 @@ class TestHFileWriter {
     return v;
   }
 
-  private static void writeTestFile() throws Exception {
-    try (
-        DataOutputStream outputStream =
-             new DataOutputStream(Files.newOutputStream(Paths.get(TEST_FILE)));
-        HFileWriter writer = new HFileWriterImpl(CONTEXT, outputStream)) {
-      writer.append("key1", "value1".getBytes());
-      writer.append("key2", "value2".getBytes());
-      writer.append("key3", "value3".getBytes());
-    }
+  /** Writes a three-record HFile with the default context, returning the file bytes. */
+  private static byte[] writeThreeRecordHFile() throws Exception {
+    return writeNativeHFile(
+        CONTEXT,
+        new String[] {"key1", "key2", "key3"},
+        new byte[][] {bytes("value1"), bytes("value2"), bytes("value3")},
+        null, null);
   }
 
-  private static void validateHFileSize() throws IOException {
-    Path path = Paths.get(TEST_FILE);
-    long actualSize = Files.size(path);
+  private static void validateHFileSize(byte[] hfile) {
+    long actualSize = hfile.length;
     // Each root block-index entry carries the 10-byte HBase KeyValue suffix (column-family
     // length + timestamp + key type). This file has one index entry, so the size grows by 10.
     long expectedSize = 4547;
     assertEquals(expectedSize, actualSize);
   }
 
-  private static void validateHFileStructure() throws IOException {
-    ByteBuffer fileBuffer = mapFileToBuffer();
+  private static void validateHFileStructure(byte[] hfile) {
+    ByteBuffer fileBuffer = ByteBuffer.wrap(hfile);
 
     // 1. Validate Trailer
     validateTrailer(fileBuffer);
@@ -672,11 +656,8 @@ class TestHFileWriter {
     validateDataBlocks(fileBuffer);
   }
 
-  private static void validateConsistencyWithHFileReader() throws IOException {
-    ByteBuffer content = mapFileToBuffer();
-    try (HFileReader reader = new HFileReaderImpl(
-        new ByteArraySeekableDataInputStream(
-            new ByteBufferBackedInputStream(content)), content.limit())) {
+  private static void validateConsistencyWithHFileReader(byte[] hfile) throws IOException {
+    try (HFileReader reader = openReader(hfile)) {
       reader.initializeMetadata();
       assertEquals(3, reader.getNumKeyValueEntries());
       assertTrue(reader.getMetaInfo(LAST_KEY).isPresent());
@@ -685,12 +666,6 @@ class TestHFileWriter {
       assertEquals(8, reader.getMetaInfo(MAX_MVCC_TS_KEY).get().length);
       assertEquals(1,
           ByteBuffer.wrap(reader.getMetaInfo(KEY_VALUE_VERSION).get()).getInt());
-    }
-  }
-
-  private static ByteBuffer mapFileToBuffer() throws IOException {
-    try (FileChannel channel = FileChannel.open(Paths.get(TEST_FILE), StandardOpenOption.READ)) {
-      return channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
     }
   }
 
