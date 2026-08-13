@@ -18,15 +18,16 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.hudi.HoodieTableSchema
+import org.apache.hudi.{HoodieSparkUtils, HoodieTableSchema}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.InternalSchema
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData}
-import org.apache.spark.sql.types.{ArrayType, DataTypes, MapType, Metadata, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, DataTypes, MapType, Metadata, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
 class TestInternalRowToJsonStringConverter {
@@ -165,6 +166,80 @@ class TestInternalRowToJsonStringConverter {
     ))
     val converted = emptyMapConverter.convert(row)
     assertEquals("""{"id":8,"name":"empty_map_test","properties":{}}""", converted.toString)
+  }
+
+  @Test
+  def variantColumnEmbedsItsJson(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "VariantType requires Spark 4.0 or higher")
+    // VariantVal.toString renders the variant as JSON, so the image must carry that structure
+    // rather than a bean rendering of the raw value/metadata bytes.
+    val row = InternalRow.fromSeq(Seq(1, variantRendering("""{"key":"value1"}""")))
+    assertEquals("""{"id":1,"v":{"key":"value1"}}""",
+      new InternalRowToJsonStringConverter(variantSchema.structTypeSchema).convert(row).toString)
+  }
+
+  @Test
+  def variantColumnFallsBackToRawRenderingWhenJacksonRejectsIt(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "VariantType requires Spark 4.0 or higher")
+    // Jackson's default StreamReadConstraints cap nesting at 1000 levels, field names at 50k chars
+    // and strings at 20M; a variant can exceed all three well inside its own size limit, and
+    // VariantVal.toString renders it faithfully. The image keeps that rendering rather than failing
+    // the whole CDC query. Nesting is the cheapest of the three to provoke.
+    val tooDeeplyNested = ("[" * 1001) + "1" + ("]" * 1001)
+    val row = InternalRow.fromSeq(Seq(1, variantRendering(tooDeeplyNested)))
+    assertEquals(s"""{"id":1,"v":"$tooDeeplyNested"}""",
+      new InternalRowToJsonStringConverter(variantSchema.structTypeSchema).convert(row).toString)
+  }
+
+  @Test
+  def variantColumnSurvivesJacksonWriteSideNestingCap(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "VariantType requires Spark 4.0 or higher")
+    // Jackson caps nesting on the write side too, and the image adds its own object level on top of
+    // the variant, so a depth the read side accepts could still fail in writeValueAsString -- outside
+    // the fallback, taking the whole CDC query with it. The rendering is embedded verbatim rather
+    // than as a parsed node precisely so that write-side accounting never sees it.
+    val atReadLimit = ("[" * 1000) + "1" + ("]" * 1000)
+    val row = InternalRow.fromSeq(Seq(1, variantRendering(atReadLimit)))
+    val image = new InternalRowToJsonStringConverter(variantSchema.structTypeSchema).convert(row).toString
+    // Embedded as a real array, i.e. neither the fallback nor a write-side failure.
+    assertEquals(s"""{"id":1,"v":$atReadLimit}""", image)
+  }
+
+  @Test
+  def variantColumnFallsBackWhenRenderingHasTrailingTokens(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "VariantType requires Spark 4.0 or higher")
+    // readTree parses a valid prefix and leaves the rest, so without FAIL_ON_TRAILING_TOKENS a
+    // verbatim embed would splice the trailing text straight into the image and corrupt it.
+    val row = InternalRow.fromSeq(Seq(1, variantRendering("""{"a":1} trailing""")))
+    assertEquals("""{"id":1,"v":"{\"a\":1} trailing"}""",
+      new InternalRowToJsonStringConverter(variantSchema.structTypeSchema).convert(row).toString)
+  }
+
+  /**
+   * Stands in for a VariantVal: the converter reaches the value only through toString, which is
+   * what renders a real variant as JSON. Constructing a genuine VariantVal here would need
+   * Spark-4-only symbols, and this module compiles against Spark 3 as well; the end-to-end
+   * behaviour over real variants is covered by the CDC round trip in TestVariantDataType.
+   *
+   * Note this stands in only for renderings a real variant can produce. Spark quotes non-finite
+   * doubles (Variant.toJsonImpl guards them with isFinite and takes the appendQuoted arm), so no
+   * variant renders a bare NaN or Infinity token.
+   */
+  private def variantRendering(json: String): AnyRef = new AnyRef {
+    override def toString: String = json
+  }
+
+  private def variantSchema: HoodieTableSchema = {
+    val structTypeSchema = new StructType(Array[StructField](
+      StructField("id", DataTypes.IntegerType, nullable = false, Metadata.empty),
+      StructField("v", DataType.fromDDL("variant"), nullable = true, Metadata.empty)))
+    val avroSchemaStr: String =
+      """{"type": "record", "name": "test", "fields": [
+        |{"name": "id", "type": "int"},
+        |{"name": "v", "type": {"type": "record", "name": "variant", "logicalType": "variant",
+        |  "fields": [{"name": "metadata", "type": "bytes"}, {"name": "value", "type": "bytes"}]}}
+        |]}""".stripMargin
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
   }
 
   private def hoodieTableSchema: HoodieTableSchema = {
