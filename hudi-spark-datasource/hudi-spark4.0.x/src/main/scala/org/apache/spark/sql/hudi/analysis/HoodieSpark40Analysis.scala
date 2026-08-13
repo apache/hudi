@@ -21,7 +21,9 @@ import org.apache.hudi.{DefaultSource, EmptyRelation, HoodieBaseRelation}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
+import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
@@ -101,4 +103,11 @@ case class HoodieSpark40ResolveColumnsForInsertInto() extends HoodieSpark4Resolv
       case _ => plan
     }
   }
+
+  override protected def resolveOutputColumns(tblName: String,
+                                              expectedColumns: Seq[Attribute],
+                                              query: LogicalPlan,
+                                              byName: Boolean): LogicalPlan =
+    TableOutputResolver.resolveOutputColumns(
+      tblName, expectedColumns, query, byName, conf, supportColDefaultValue = true)
 }

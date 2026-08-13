@@ -21,6 +21,7 @@ package org.apache.hudi.integ2.testcontainers;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.integ2.testcontainers.service.HiveService;
 import org.apache.hudi.integ2.testcontainers.service.SparkService;
+import org.apache.hudi.integ2.testcontainers.service.TrinoService;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterAll;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.ComposeContainer;
 import org.testcontainers.containers.ContainerState;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -59,6 +61,7 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
   // Service objects for interacting with different components
   protected HiveService hive;
   protected SparkService sparkAdhoc1;
+  protected TrinoService trino;
 
   @BeforeAll
   public static void setupDockerCompose() {
@@ -75,6 +78,26 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
             Wait.forListeningPort().forPorts(Network.SPARK_MASTER_WEB_UI_PORT)
                 .withStartupTimeout(Timeouts.CONTAINER_STARTUP))
         .withStartupTimeout(Timeouts.CONTAINER_STARTUP);
+
+    // Activate optional compose profiles (e.g. "trino") when requested. Without this the
+    // profile-gated services stay down, which is the default hive-sync-only topology.
+    String composeProfiles = System.getProperty(SystemProps.COMPOSE_PROFILES_PROP, "");
+    if (!composeProfiles.isEmpty()) {
+      environment.withEnv("COMPOSE_PROFILES", composeProfiles);
+      if (composeProfiles.contains(SystemProps.TRINO_PROFILE)) {
+        // Stream the coordinator's log into the test output. When Trino dies during
+        // startup (plugin load or config errors) the container is torn down with the
+        // stack, so this stream is the only place the root cause survives.
+        environment.withLogConsumer(Containers.TRINO_COORDINATOR,
+            new Slf4jLogConsumer(log).withPrefix(Containers.TRINO_COORDINATOR));
+      }
+    }
+    // Point the compose stack at a host-built Trino plugin dir when supplied. The compose
+    // file falls back to an empty overlay when TRINO_PLUGIN_DIR is unset.
+    String trinoPluginDir = System.getProperty(SystemProps.TRINO_PLUGIN_DIR_PROP);
+    if (trinoPluginDir != null) {
+      environment.withEnv("TRINO_PLUGIN_DIR", trinoPluginDir);
+    }
     environment.start();
 
     log.info("Docker Compose environment started successfully");
@@ -83,7 +106,7 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
 
   /**
    * Tear down the compose stack between test classes. The docker-compose files publish
-   * host ports directly (zookeeper 2181, spark 7077, …), so leaving one
+   * host ports directly (zookeeper 2181, spark 7077, ...), so leaving one
    * stack up would make the next class's `@BeforeAll` collide on those host ports.
    * Testcontainers' Ryuk reaper only fires at JVM shutdown, which is too late when
    * failsafe reuses a JVM across classes.
@@ -106,6 +129,32 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
   protected void initializeServices() {
     this.hive = new HiveService(this);
     this.sparkAdhoc1 = new SparkService(this, Containers.ADHOC_1);
+    // Only wire the Trino service when its profile is active; otherwise the
+    // trinocoordinator container does not exist and getContainer would throw.
+    if (isTrinoProfileActive()) {
+      this.trino = new TrinoService(this);
+    }
+  }
+
+  /**
+   * Returns {@code true} when the {@link SystemProps#COMPOSE_PROFILES_PROP} system
+   * property activates the {@code trino} compose profile, i.e. the Trino coordinator
+   * container is part of the running stack.
+   */
+  protected static boolean isTrinoProfileActive() {
+    return System.getProperty(SystemProps.COMPOSE_PROFILES_PROP, "")
+        .contains(SystemProps.TRINO_PROFILE);
+  }
+
+  /**
+   * Skips the test unless the {@code trino} compose profile is active. Use in the
+   * {@code @BeforeAll} of Trino ITs so they abort cleanly on a hive-sync-only stack
+   * where the coordinator container is absent.
+   */
+  protected static void assumeTrinoProfile() {
+    Assumptions.assumeTrue(isTrinoProfileActive(),
+        "Test requires the 'trino' compose profile; run with -D"
+            + SystemProps.COMPOSE_PROFILES_PROP + "=" + SystemProps.TRINO_PROFILE);
   }
 
   /**
@@ -120,9 +169,7 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
 
   /**
    * Non-assumption variant of {@link #assumeSpark4Compose()}: returns {@code true} when the
-   * active compose prefix points at a Spark 4.x stack. Use in {@code @BeforeAll} seeding
-   * to conditionally run Spark 4-only fixtures (e.g. VARIANT) without aborting the whole
-   * test class on a Spark 3.5 run.
+   * active compose prefix points at a Spark 4.x stack, without aborting the caller.
    */
   protected static boolean isSpark4Compose() {
     String composePrefix = System.getProperty(SystemProps.COMPOSE_PREFIX, SystemProps.DEFAULT_COMPOSE_PREFIX);

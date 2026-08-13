@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.exception.HoodieException;
@@ -131,8 +132,10 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   public void write() {
     Iterator<String> keyIterator;
     if (hoodieTable.requireSortedRecords()) {
-      // Sorting the keys limits the amount of extra memory required for writing sorted records
-      keyIterator = recordMap.keySet().stream().sorted().iterator();
+      // Sorting the keys limits the amount of extra memory required for writing sorted records.
+      // requireSortedRecords() is true only for HFile base files, which order keys by UTF-8 bytes,
+      // not String (UTF-16) order, so sort with the matching comparator.
+      keyIterator = recordMap.keySet().stream().sorted(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR).iterator();
     } else {
       keyIterator = recordMap.keySet().stream().iterator();
     }

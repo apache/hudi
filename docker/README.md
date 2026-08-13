@@ -25,7 +25,7 @@ docker demo environment.
 ### Configs for assembling docker images - `/hoodie`
 
 The `/hoodie` folder contains all the configs for assembling necessary docker images. The name and repository of each
-docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-trinobase_368`, is defined in the maven configuration file `pom.xml`.
+docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-prestobase_0.232`, is defined in the maven configuration file `pom.xml`.
 
 ### Base images by Java version
 
@@ -39,9 +39,9 @@ docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-trinobase_368`, is defined in 
 The legacy Java 8 `base` module under `/hoodie/hadoop/base` is retained for historical reference only; Spark 2.x is no
 longer supported and `build_docker_images.sh` never selects it.
 
-Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `prestobase`, `trinobase`) pick the base
-via the `BASE_IMAGE_TAG` build arg (default `java11`). `build_docker_images.sh` sets it automatically; bare `docker
-build` invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=java17`.
+Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `prestobase`) pick the base via the
+`BASE_IMAGE_TAG` build arg (default `java11`). `build_docker_images.sh` sets it automatically; bare `docker build`
+invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=java17`.
 
 ### Docker compose config for the Demo - `/compose`
 
@@ -94,8 +94,8 @@ To build a single image target, you can run
 
 ```shell
 mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -pl :<image_target> -am
-# For example, to build hudi-hadoop-trinobase-docker
-mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -pl :hudi-hadoop-trinobase-docker -am
+# For example, to build hudi-hadoop-prestobase-docker
+mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -pl :hudi-hadoop-prestobase-docker -am
 ```
 
 Alternatively, you can use `docker` cli directly under `hoodie/hadoop` to build images in a faster way. If you use this
@@ -115,8 +115,8 @@ steps in the next section).
 ```shell
 # Run under hoodie/hadoop, the <tag> is optional, "latest" by default
 docker build <image_folder_name> -t <hub-user>/<repo-name>[:<tag>]
-# For example, to build trinobase
-docker build trinobase -t apachehudi/hudi-hadoop_2.8.4-trinobase_368
+# For example, to build prestobase
+docker build prestobase -t apachehudi/hudi-hadoop_2.8.4-prestobase_0.232
 ```
 
 After new images are built, you can run the following script to bring up docker demo with your local images:
@@ -133,7 +133,7 @@ Hud registry designated by its name or tag:
 ```shell
 docker push <hub-user>/<repo-name>:<tag>
 # For example
-docker push apachehudi/hudi-hadoop_2.8.4-trinobase_368
+docker push apachehudi/hudi-hadoop_2.8.4-prestobase_0.232
 ```
 
 You can also easily push the image to the Docker Hub using Docker Desktop app: go to `Images`, search for the image by
@@ -196,3 +196,30 @@ When `--multi-arch` is enabled, the script builds and pushes the amd64 and arm64
 Note that `--multi-arch` uses `docker buildx build --push` and the image names in the script are hardcoded to the
 `apachehudi/...` Docker Hub repositories, so this flow requires push access to those repositories. No Dockerfile
 changes are needed for the current amd64 plus arm64 image set in this repository.
+
+## Trino E2E image - `/trino`
+
+The Trino E2E stack does not use the `hoodie/hadoop` image tree. `docker/trino/` builds
+`apachehudi/hudi-trino_<trino-version>` directly on top of the official `trinodb/trino`
+image, baking in a locally-assembled native `trino-hudi` plugin directory and the E2E
+catalog config (`connector.name=hudi`, metastore at `thrift://hivemetastore:9083`).
+
+This image is built locally on demand (also by the `hudi_trino_e2e.yml` CI workflow) and
+is NOT published to Docker Hub. The plugin directory comes from the in-repo shim project
+at `docker/trino/shim/` (see `hudi-trino/README.md` for the full build-and-run flow):
+
+```
+# JDK 25; hudi-trino must already be installed into the local m2
+# dep.hudi.version comes from the reactor pom -- the shim is outside the reactor, so
+# cut_release_branch.sh cannot bump the literal default in its own pom.
+HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
+mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
+docker/trino/build_image.sh --plugin-dir docker/trino/shim/target/trino-hudi-481
+```
+
+The `trinocoordinator` compose service exists only in the
+`docker-compose_hadoop340_hive2310_spark402_{amd64,arm64}.yml` pair, behind the `trino`
+compose profile, so the default hive-sync flows never start it. For fast plugin
+iteration the container supports a bind-mounted overlay: point `TRINO_PLUGIN_DIR` (or
+the `-Dtrino.plugin.dir` test property) at a freshly built plugin dir and restart the
+container instead of rebuilding the image.

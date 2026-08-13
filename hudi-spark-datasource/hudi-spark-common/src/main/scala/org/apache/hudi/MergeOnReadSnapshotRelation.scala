@@ -19,8 +19,8 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.MergeOnReadSnapshotRelation.{createPartitionedFile, isProjectionCompatible}
-import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
 
@@ -42,14 +42,8 @@ case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
 case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
                                        override val optParams: Map[String, String],
                                        override val metaClient: HoodieTableMetaClient,
-                                       private val userSchema: Option[StructType],
-                                       private val prunedDataSchema: Option[StructType] = None)
-  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, userSchema, prunedDataSchema) {
-
-  override type Relation = MergeOnReadSnapshotRelation
-
-  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
-    this.copy(prunedDataSchema = Some(prunedSchema))
+                                       private val userSchema: Option[StructType])
+  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, userSchema) {
 
   override protected def shouldIncludeLogFiles(): Boolean = {
     true
@@ -67,9 +61,8 @@ case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
 abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                                optParams: Map[String, String],
                                                metaClient: HoodieTableMetaClient,
-                                               userSchema: Option[StructType],
-                                               prunedDataSchema: Option[StructType])
-  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
+                                               userSchema: Option[StructType])
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
   override type FileSplit = HoodieMergeOnReadFileSplit
 
@@ -96,12 +89,6 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
-
-  /**
-   * Determines whether relation's schema could be pruned by Spark's Optimizer
-   */
-  override def canPruneRelationSchema: Boolean =
-    super.canPruneRelationSchema && isProjectionCompatible(tableState)
 
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     tableSchema: HoodieTableSchema,
@@ -151,21 +138,6 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
 }
 
 object MergeOnReadSnapshotRelation extends SparkAdapterSupport {
-
-  /**
-   * List of [[HoodieRecordPayload]] classes capable of merging projected records:
-   * in some cases, when for example, user is only interested in a handful of columns rather
-   * than the full row we will be able to optimize data throughput by only fetching the required
-   * columns. However, to properly fulfil MOR semantic particular [[HoodieRecordPayload]] in
-   * question should be able to merge records based on just such projected representation (including
-   * columns required for merging, such as primary-key, pre-combine key, etc)
-   */
-  private val projectionCompatiblePayloadClasses: Set[String] = Seq(
-    classOf[OverwriteWithLatestAvroPayload]
-  ).map(_.getName).toSet
-
-  def isProjectionCompatible(tableState: HoodieTableState): Boolean =
-    projectionCompatiblePayloadClasses.contains(tableState.recordPayloadClassName)
 
   def createPartitionedFile(partitionValues: InternalRow,
                             filePath: StoragePath,

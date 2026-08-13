@@ -147,16 +147,16 @@ elif [[ ${SPARK_RUNTIME} == 'spark4.1.1' && ${SCALA_PROFILE} == 'scala-2.13' ]];
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1200hive313spark411scala213
-elif [[ ${SPARK_RUNTIME} == 'spark4.2.0-preview4' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
-  HADOOP_VERSION=3.4.3
+elif [[ ${SPARK_RUNTIME} == 'spark4.2.0' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
+  HADOOP_VERSION=3.5.0
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
   FLINK_VERSION=1.20.1
-  SPARK_VERSION=4.2.0-preview4
+  SPARK_VERSION=4.2.0
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1200hive313spark420previewscala213
+  IMAGE_TAG=flink1200hive313spark420scala213
 fi
 
 # Copy bundle jars to temp dir for mounting

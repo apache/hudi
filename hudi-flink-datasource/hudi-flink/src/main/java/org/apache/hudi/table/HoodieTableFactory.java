@@ -193,9 +193,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       Configuration conf) {
     HoodieTableConfig.TableStorageLayout storageLayout = OptionsResolver.getTableStorageLayout(conf);
     ValidationUtils.checkArgument(
-        !(OptionsResolver.isInsertOperation(conf) || OptionsResolver.isBulkInsertOperation(conf))
+        !OptionsResolver.isInsertOperation(conf)
             || storageLayout != HoodieTableConfig.TableStorageLayout.LSM_TREE,
-        "The LSM tree storage layout does not support insert or bulk insert operations because they allow duplicate record keys.");
+        "The LSM tree storage layout does not support insert operations because they allow duplicate record keys.");
   }
 
   /**
@@ -506,6 +506,13 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * Sets up the table exec sort options.
    */
   private void setupSortOptions(Configuration conf, ReadableConfig contextConfig) {
+    if (OptionsResolver.isBulkInsertOperation(conf)
+        && OptionsResolver.isLsmTreeStorageLayout(conf)) {
+      // An LSM run must always be ordered by its encoded record key. These options are mandatory
+      // for LSM bulk insert even when the user explicitly disables the regular bulk-insert sort.
+      conf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, true);
+      conf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, true);
+    }
     if (contextConfig.getOptional(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES).isPresent()) {
       conf.set(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES,
           contextConfig.get(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES));

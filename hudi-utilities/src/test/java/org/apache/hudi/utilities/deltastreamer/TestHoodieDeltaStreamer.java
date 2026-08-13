@@ -26,6 +26,7 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
@@ -53,6 +54,10 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchema.TimePrecision;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.Type;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -79,6 +84,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -130,6 +136,8 @@ import org.apache.hudi.utilities.transform.Transformer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -199,6 +207,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -209,6 +218,11 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  */
 @Slf4j
 public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
+
+  // Per-field verdict for the corrupt logical-repair fixtures: relabel ts_millis to millis and
+  // attach the local-timestamp logical types that 0.x dropped. ts_micros is already micros.
+  private static final String LOGICAL_REPAIR_TS_OVERRIDES =
+      "ts_millis:timestamp-millis,local_ts_millis:local-timestamp-millis,local_ts_micros:local-timestamp-micros";
 
   private void addRecordMerger(HoodieRecordType type, List<String> hoodieConfig) {
     if (type == HoodieRecordType.SPARK) {
@@ -753,6 +767,97 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(0, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts < '1980-01-01'").count());
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testLongToTimestampPromotionGated(boolean setNullForMissingColumns) throws Exception {
+    // Promoting a plain long column to a timestamp logical type is override-gated: rejected without a
+    // per-field override for every target type, and applied with one. A bare long carries no precision
+    // signal, so the override is the explicit verdict that authorizes the promotion. One bare-long seed
+    // is reused: the rejection cases all throw (table stays bare long), and the accepted case runs last.
+    String tableBasePath = basePath + "/testLongToTs" + setNullForMissingColumns;
+    defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
+
+    // Sync 0: seed the table with `seconds_since_epoch` stored as a bare long.
+    HoodieDeltaStreamer.Config seed = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT,
+        Collections.singletonList(TestIdentityTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE,
+        false, true, false, null, HoodieTableType.COPY_ON_WRITE.name());
+    seed.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    seed.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    seed.configs.add("hoodie.datasource.write.row.writer.enable=false");
+    seed.configs.add(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key() + "=" + setNullForMissingColumns);
+    new HoodieDeltaStreamer(seed, jsc).sync();
+
+    Schema tableSchema = new TableSchemaResolver(HoodieTestUtils.createMetaClient(storage, tableBasePath))
+        .getTableSchema(false).toAvroSchema();
+    assertNull(tableSchema.getField("seconds_since_epoch").schema().getLogicalType(),
+        "seconds_since_epoch must be seeded as a bare long in the table");
+    Schema baseSchema = new Schema.Parser().parse(fs.open(new Path(basePath + "/source-timestamp-millis.avsc")));
+
+    // Every target type is rejected without a per-field override.
+    for (LogicalType targetType : new LogicalType[] {LogicalTypes.timestampMillis(), LogicalTypes.timestampMicros(),
+        LogicalTypes.localTimestampMillis(), LogicalTypes.localTimestampMicros()}) {
+      String schemaFile = writePromotedSchema(baseSchema, targetType, setNullForMissingColumns);
+      HoodieDeltaStreamer.Config reject = promoteConfig(tableBasePath, schemaFile, setNullForMissingColumns, null);
+      HoodieDeltaStreamer streamer = new HoodieDeltaStreamer(reject, jsc);
+      // sync() wraps the guard's SchemaCompatibilityException in a HoodieIngestionException, so walk
+      // the cause chain to assert on the underlying exception.
+      Throwable thrown = assertThrows(Exception.class, streamer::sync,
+          "long -> " + targetType.getName() + " must be rejected without an override");
+      Throwable cause = thrown;
+      while (cause != null && !(cause instanceof SchemaCompatibilityException)) {
+        cause = cause.getCause();
+      }
+      assertTrue(cause instanceof SchemaCompatibilityException,
+          "Expected a SchemaCompatibilityException in the cause chain, got: " + thrown);
+      Type toType = SchemaChangeUtils.parseTimestampLogicalTypeOverrides("field:" + targetType.getName()).get("field");
+      assertEquals(AvroSchemaEvolutionUtils.timestampPrecisionChangeError(
+          "seconds_since_epoch", Types.LongType.get(), toType).getMessage(), cause.getMessage());
+    }
+
+    // With an override the promotion is authorized (local promotions are covered end-to-end by
+    // testCOWLogicalRepair / testMORLogicalRepair); verify a UTC promotion succeeds and lands on the
+    // table schema.
+    String utcSchemaFile = writePromotedSchema(baseSchema, LogicalTypes.timestampMicros(), setNullForMissingColumns);
+    HoodieDeltaStreamer.Config accept = promoteConfig(tableBasePath, utcSchemaFile, setNullForMissingColumns,
+        "seconds_since_epoch:timestamp-micros");
+    new HoodieDeltaStreamer(accept, jsc).sync();
+    Schema evolved = new TableSchemaResolver(HoodieTestUtils.createMetaClient(storage, tableBasePath))
+        .getTableSchema(false).toAvroSchema();
+    assertEquals("timestamp-micros", evolved.getField("seconds_since_epoch").schema().getLogicalType().getName());
+  }
+
+  private String writePromotedSchema(Schema baseSchema, LogicalType targetType, boolean setNull) throws IOException {
+    Schema incoming = replaceFieldType(baseSchema, "seconds_since_epoch",
+        targetType.addToSchema(Schema.create(Schema.Type.LONG)));
+    String schemaFile = basePath + "/promote-" + targetType.getName() + "-nul" + setNull + ".avsc";
+    UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {incoming.toString()}, storage, schemaFile);
+    return schemaFile;
+  }
+
+  private HoodieDeltaStreamer.Config promoteConfig(String tableBasePath, String schemaFile,
+                                                   boolean setNullForMissingColumns, String override) {
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT,
+        Collections.singletonList(TestIdentityTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE,
+        false, true, false, null, HoodieTableType.COPY_ON_WRITE.name());
+    cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + schemaFile);
+    cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + schemaFile);
+    cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
+    cfg.configs.add(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key() + "=" + setNullForMissingColumns);
+    if (override != null) {
+      cfg.configs.add(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key() + "=" + override);
+    }
+    return cfg;
+  }
+
+  private static Schema replaceFieldType(Schema recordSchema, String fieldName, Schema newFieldType) {
+    List<Schema.Field> fields = new ArrayList<>();
+    for (Schema.Field field : recordSchema.getFields()) {
+      Schema fieldSchema = field.name().equals(fieldName) ? newFieldType : field.schema();
+      fields.add(new Schema.Field(field.name(), fieldSchema, field.doc(), field.defaultVal()));
+    }
+    return Schema.createRecord(recordSchema.getName(), recordSchema.getDoc(), recordSchema.getNamespace(), false, fields);
+  }
+
   @Test
   public void testLogicalTypes() throws Exception {
     try {
@@ -967,6 +1072,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       String schemaPath = zipOutput + "/schema.avsc";
       cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.source.schema.file", schemaPath));
       cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.target.schema.file", schemaPath));
+      // The v6/v8 col-stats fixture reuses the same trips_logical_types_json corrupt schema as
+      // the logical-repair tests — 0.x collapsed ts_millis to timestamp-micros and dropped the
+      // local-timestamp logical types entirely. Provide the same explicit verdict so the guard
+      // in HoodieSchemaUtils.deduceWriterSchema authorizes the repair rather than rejecting the
+      // unverified precision change.
+      cfg.configs.add(String.format(("%s=%s"),
+          HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(), LOGICAL_REPAIR_TS_OVERRIDES));
       cfg.forceDisableCompaction = true;
       cfg.sourceLimit = 100_000;
       cfg.ignoreCheckpoint = "12345";
@@ -1109,8 +1221,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"SIX,AVRO,CLUSTER", "EIGHT,AVRO,CLUSTER", "CURRENT,AVRO,NONE", "CURRENT,AVRO,CLUSTER", "CURRENT,SPARK,NONE", "CURRENT,SPARK,CLUSTER"})
-  void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Exception {
+  @CsvSource(value = {
+      // Repair succeeds when a per-field verdict is set, on the default (non-reconcile) write path...
+      "SIX,AVRO,CLUSTER,false,true", "EIGHT,AVRO,CLUSTER,false,true",
+      "CURRENT,AVRO,NONE,false,true", "CURRENT,AVRO,CLUSTER,false,true",
+      "CURRENT,SPARK,NONE,false,true", "CURRENT,SPARK,CLUSTER,false,true",
+      // ...and on the reconcile path (setNullForMissingColumns=true).
+      "SIX,AVRO,CLUSTER,true,true", "EIGHT,AVRO,CLUSTER,true,true", "CURRENT,AVRO,CLUSTER,true,true",
+      // Guard: with no verdict, the mislabeled timestamp/local-timestamp columns must be rejected on
+      // the first sync, on both the reconcile path and the default path.
+      "SIX,AVRO,CLUSTER,true,false", "SIX,AVRO,CLUSTER,false,false"})
+  void testCOWLogicalRepair(String tableVersion, String recordType, String operation,
+                            boolean setNullForMissingColumns,
+                            boolean setTimestampOverride) throws Exception {
     TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String dirName = "trips_logical_types_json_cow_write";
       String dataPath = basePath + "/" + dirName;
@@ -1139,8 +1262,35 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       properties.setProperty("hoodie.parquet.small.file.limit", "-1");
       properties.setProperty("hoodie.cleaner.commits.retained", "10");
       properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
+      properties.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
+          Boolean.toString(setNullForMissingColumns));
+      if (setTimestampOverride) {
+        // Per-field verdict authorizing the repair: relabel ts_millis to millis and attach the
+        // local-timestamp logical types 0.x dropped. ts_micros stays micros (no entry needed).
+        properties.setProperty(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(),
+            LOGICAL_REPAIR_TS_OVERRIDES);
+      }
 
       Option<TypedProperties> propt = Option.of(properties);
+
+      if (!setTimestampOverride) {
+        // No per-field verdict. The mislabeled timestamp/local-timestamp columns must be rejected on
+        // the first sync rather than silently flipped, on both the reconcile and default write paths.
+        // syncOnce wraps the guard's SchemaCompatibilityException in a HoodieIngestionException, so
+        // walk the cause chain to assert on the underlying exception.
+        Throwable thrown = assertThrows(Exception.class,
+            () -> syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt));
+        Throwable cause = thrown;
+        while (cause != null && !(cause instanceof SchemaCompatibilityException)) {
+          cause = cause.getCause();
+        }
+        assertTrue(cause instanceof SchemaCompatibilityException,
+            "Expected a SchemaCompatibilityException in the cause chain, got: " + thrown);
+        assertTrue(cause.getMessage().contains("column 'ts_millis'")
+                && cause.getMessage().contains("without an explicit"),
+            "Unexpected message: " + cause.getMessage());
+        return;
+      }
 
       syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt);
 
@@ -1189,11 +1339,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"SIX,AVRO,CLUSTER,AVRO", "EIGHT,AVRO,CLUSTER,AVRO",
-      "CURRENT,AVRO,NONE,AVRO", "CURRENT,AVRO,CLUSTER,AVRO", "CURRENT,AVRO,COMPACT,AVRO",
-      "CURRENT,AVRO,NONE,PARQUET", "CURRENT,AVRO,CLUSTER,PARQUET", "CURRENT,AVRO,COMPACT,PARQUET",
-      "CURRENT,SPARK,NONE,PARQUET", "CURRENT,SPARK,CLUSTER,PARQUET", "CURRENT,SPARK,COMPACT,PARQUET"})
-  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
+  @CsvSource(value = {"SIX,AVRO,CLUSTER,AVRO,false,true", "EIGHT,AVRO,CLUSTER,AVRO,false,true",
+      "CURRENT,AVRO,NONE,AVRO,false,true", "CURRENT,AVRO,CLUSTER,AVRO,false,true", "CURRENT,AVRO,COMPACT,AVRO,false,true",
+      "CURRENT,AVRO,NONE,PARQUET,false,true", "CURRENT,AVRO,CLUSTER,PARQUET,false,true", "CURRENT,AVRO,COMPACT,PARQUET,false,true",
+      "CURRENT,SPARK,NONE,PARQUET,false,true", "CURRENT,SPARK,CLUSTER,PARQUET,false,true", "CURRENT,SPARK,COMPACT,PARQUET,false,true",
+      // Variants that exercise the schema-reconcile path (setNullForMissingColumns=true) with a verdict.
+      "SIX,AVRO,CLUSTER,AVRO,true,true", "EIGHT,AVRO,CLUSTER,AVRO,true,true", "CURRENT,AVRO,CLUSTER,AVRO,true,true",
+      // Guard: with no verdict, the first sync must throw, on both the reconcile and default paths.
+      "SIX,AVRO,CLUSTER,AVRO,true,false", "SIX,AVRO,CLUSTER,AVRO,false,false"})
+  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType,
+                            boolean setNullForMissingColumns,
+                            boolean setTimestampOverride) throws Exception {
     TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String tableSuffix;
       String logFormatValue;
@@ -1241,6 +1397,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       properties.setProperty("hoodie.cleaner.commits.retained", "10");
       properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
       properties.setProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logFormatValue);
+      properties.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
+          Boolean.toString(setNullForMissingColumns));
+      if (setTimestampOverride) {
+        properties.setProperty(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(),
+            LOGICAL_REPAIR_TS_OVERRIDES);
+      }
 
       boolean disableCompaction;
       if ("COMPACT".equals(operation)) {
@@ -1261,6 +1423,25 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
 
       Option<TypedProperties> propt = Option.of(properties);
+
+      if (!setTimestampOverride) {
+        // No per-field verdict. The mislabeled timestamp/local-timestamp columns must be rejected on
+        // the first sync rather than silently flipped, on both the reconcile and default write paths.
+        // syncOnce wraps the guard's SchemaCompatibilityException in a HoodieIngestionException, so
+        // walk the cause chain to assert on the underlying exception.
+        Throwable thrown = assertThrows(Exception.class,
+            () -> syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt));
+        Throwable cause = thrown;
+        while (cause != null && !(cause instanceof SchemaCompatibilityException)) {
+          cause = cause.getCause();
+        }
+        assertTrue(cause instanceof SchemaCompatibilityException,
+            "Expected a SchemaCompatibilityException in the cause chain, got: " + thrown);
+        assertTrue(cause.getMessage().contains("column 'ts_millis'")
+                && cause.getMessage().contains("without an explicit"),
+            "Unexpected message: " + cause.getMessage());
+        return;
+      }
 
       syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt);
 

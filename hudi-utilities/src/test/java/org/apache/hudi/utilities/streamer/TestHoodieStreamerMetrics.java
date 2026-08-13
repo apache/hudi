@@ -21,6 +21,8 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.util.HoodieStorageUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
@@ -114,5 +116,29 @@ public class TestHoodieStreamerMetrics {
     metrics.emitStreamerJobSuccessMetrics();
     metrics.emitStreamerJobFailedMetrics();
     assertNull(metrics.getMetrics());
+  }
+
+  @Test
+  public void testDeprecatedDeltaStreamerMetricsAlias() {
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
+        .on(true)
+        .withPath("/tmp/path6")
+        .withReporterType("INMEMORY")
+        .build();
+    HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(
+        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+    metrics.emitStreamerJobSuccessMetrics();
+    assertEquals(".deltastreamer.success", metrics.getMetrics().getRegistry().getGauges().firstKey());
+
+    // the write config overload reports against the metrics config derived from the write config
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/path7")
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(true).withReporterType("INMEMORY").build())
+        .build();
+    HoodieDeltaStreamerMetrics metricsFromWriteConfig = new HoodieDeltaStreamerMetrics(
+        writeConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+    metricsFromWriteConfig.emitStreamerJobFailedMetrics();
+    assertEquals(".deltastreamer.failure",
+        metricsFromWriteConfig.getMetrics().getRegistry().getGauges().firstKey());
   }
 }

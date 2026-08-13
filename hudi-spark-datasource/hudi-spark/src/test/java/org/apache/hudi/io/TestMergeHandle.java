@@ -57,6 +57,7 @@ import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -77,6 +78,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -196,6 +198,57 @@ public class TestMergeHandle extends BaseTestHandle {
     // numDeletes secondary keys related to deletes
     assertEquals(2 * numUpdates + numDeletes, writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get().size());
     validateSecondaryIndexStatsContent(writeStatus, numUpdates, numDeletes);
+  }
+
+  @Test
+  public void testSortedMergeHandleWritesBinaryKeysInUtf8Order() throws Exception {
+    // Drives HoodieSortedMergeHandle directly against a Parquet base file (requireSortedRecords() is
+    // false), validating comparator ordering only; does not cover the HoodieMergeHandleFactory
+    // selection path for HFILE base-format tables.
+    // delete and recreate
+    metaClient.getStorage().deleteDirectory(metaClient.getBasePath());
+    Properties properties = new Properties();
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+    properties.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), ORDERING_FIELD);
+    initMetaClient(getTableType(), properties);
+
+    HoodieWriteConfig config = getHoodieWriteConfigBuilder().build();
+    HoodieSparkTable.create(config, new HoodieLocalEngineContext(storageConf), metaClient);
+
+    String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
+
+    // These two keys sort in opposite order under UTF-16 (String#compareTo) vs UTF-8 bytes (HFile/MDT order).
+    String supplementaryKey = "😀_record";
+    String bmpHighKey = new String(Character.toChars(0xFFFD)) + "_record";
+    assertTrue(supplementaryKey.compareTo(bmpHighKey) < 0);
+    assertTrue(StringUtils.compareUtf8Bytes(bmpHighKey, supplementaryKey) < 0);
+
+    // Base file has the UTF-8-smaller key.
+    List<HoodieRecord> baseRecords = withRowKey(dataGenerator.generateInserts("000", 1), bmpHighKey, partitionPath);
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+    String instantTime = client.startCommit();
+    JavaRDD<WriteStatus> statuses = client.upsert(jsc.parallelize(baseRecords, 1), instantTime);
+    client.commit(instantTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.create(config, context, metaClient);
+    HoodieFileGroup fileGroup = table.getFileSystemView().getAllFileGroups(partitionPath).collect(Collectors.toList()).get(0);
+    String fileId = fileGroup.getFileGroupId().getFileId();
+
+    // Merge the UTF-8-larger key in directly via HoodieSortedMergeHandle.
+    List<HoodieRecord> newRecords = withRowKey(dataGenerator.generateInserts("001", 1), supplementaryKey, partitionPath);
+    HoodieSortedMergeHandle mergeHandle = new HoodieSortedMergeHandle(
+        config, "001", table, newRecords.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(), Option.empty());
+    mergeHandle.doMerge();
+    WriteStatus writeStatus = (WriteStatus) mergeHandle.close().get(0);
+
+    String fullPath = metaClient.getBasePath() + "/" + writeStatus.getStat().getPath();
+    List<GenericRecord> actualRecords = new ParquetUtils().readAvroRecords(metaClient.getStorage(), new StoragePath(fullPath));
+    List<String> actualKeysInOrder = actualRecords.stream().map(r -> r.get("_row_key").toString()).collect(Collectors.toList());
+    // bmpHighKey must come first when sorted by UTF-8 bytes.
+    assertEquals(Arrays.asList(bmpHighKey, supplementaryKey), actualKeysInOrder);
   }
 
   @Test
@@ -601,6 +654,12 @@ public class TestMergeHandle extends BaseTestHandle {
           HoodieRecordUtils.loadPayload(payloadClass, genericRecord, (Comparable) genericRecord.get(ORDERING_FIELD)), null,
           (Comparable) genericRecord.get(ORDERING_FIELD), isDelete);
     }).collect(Collectors.toList());
+  }
+
+  private List<HoodieRecord> withRowKey(List<HoodieRecord> records, String rowKey, String partitionPath) {
+    GenericRecord genericRecord = (GenericRecord) ((SerializableIndexedRecord) records.get(0).getData()).getData();
+    genericRecord.put("_row_key", rowKey);
+    return getHoodieRecords(OverwriteWithLatestAvroPayload.class.getName(), Collections.singletonList(genericRecord), partitionPath, false);
   }
 
   private void setCurLocation(List<HoodieRecord> records, String fileId, String instantTime) {

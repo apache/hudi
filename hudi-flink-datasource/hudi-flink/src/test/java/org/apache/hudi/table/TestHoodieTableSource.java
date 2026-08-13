@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.storage.StoragePath;
@@ -40,6 +41,9 @@ import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.connector.source.LookupTableSource;
+import org.apache.flink.table.connector.source.lookup.AsyncLookupFunctionProvider;
+import org.apache.flink.table.connector.source.lookup.LookupFunctionProvider;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -78,7 +82,10 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Test cases for HoodieTableSource.
@@ -143,6 +150,16 @@ public class TestHoodieTableSource {
         "Query type: 'incremental' should be supported");
   }
 
+  @Test
+  void testStreamingInputFormatPlanning() {
+    HoodieTableSource tableSource = getEmptyStreamingSource(false);
+
+    assertThat(tableSource.getInputFormat(true), is(instanceOf(MergeOnReadInputFormat.class)));
+
+    tableSource.getConf().set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED);
+    assertThrows(HoodieException.class, () -> tableSource.getInputFormat(true));
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testGetTableAvroSchema(boolean isSourceV2) {
@@ -158,6 +175,28 @@ public class TestHoodieTableSource {
         + "_hoodie_file_name,"
         + "uuid,name,age,ts,partition";
     assertThat(schemaFields, is(expected));
+  }
+
+  @Test
+  void testLookupRuntimeProvider() {
+    HoodieTableSource tableSource = getEmptyStreamingSource(true);
+    LookupTableSource.LookupContext lookupContext = mock(LookupTableSource.LookupContext.class);
+    when(lookupContext.getKeys()).thenReturn(new int[][] {{0}});
+
+    assertThat(
+        tableSource.getLookupRuntimeProvider(lookupContext),
+        is(instanceOf(LookupFunctionProvider.class)));
+
+    tableSource.getConf().set(FlinkOptions.LOOKUP_ASYNC, true);
+    assertThat(
+        tableSource.getLookupRuntimeProvider(lookupContext),
+        is(instanceOf(AsyncLookupFunctionProvider.class)));
+
+    LookupTableSource.LookupContext nestedLookupContext = mock(LookupTableSource.LookupContext.class);
+    when(nestedLookupContext.getKeys()).thenReturn(new int[][] {{0, 1}});
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> tableSource.getLookupRuntimeProvider(nestedLookupContext));
   }
 
   @ParameterizedTest

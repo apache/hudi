@@ -21,7 +21,6 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -31,6 +30,7 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.table.read.lsm.HoodieLsmFileGroupReader;
+import org.apache.hudi.common.table.read.lsm.LsmReaderUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -125,9 +125,8 @@ public class FormatUtils {
   /**
    * Creates the record reader matching the physical layout of the file slice.
    *
-   * <p>Pure native-log file slices in an LSM-tree table use the sorted LSM reader. Mixed file
-   * slices containing legacy inline logs continue to use the general file-group reader so table
-   * upgrades remain readable.</p>
+   * <p>LSM-tree tables use the sorted LSM reader, except for skip-merge queries which use the
+   * general file-group reader to expose record versions independently.</p>
    */
   public static HoodieRecordReader<RowData> createRecordReader(
       HoodieTableMetaClient metaClient,
@@ -141,7 +140,7 @@ public class FormatUtils {
       boolean emitDelete,
       List<ExpressionPredicates.Predicate> predicates,
       Option<InstantRange> instantRangeOption) {
-    if (!shouldUseLsmReader(metaClient, fileSlice, mergeType)) {
+    if (!LsmReaderUtils.shouldUseLsmReader(metaClient.getTableConfig(), mergeType)) {
       return createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
           tableSchema, requiredSchema, latestInstant, mergeType, emitDelete, predicates, instantRangeOption);
     }
@@ -170,18 +169,6 @@ public class FormatUtils {
         .withProps(typedProps)
         .withEmitDelete(emitDelete)
         .build();
-  }
-
-  static boolean shouldUseLsmReader(HoodieTableMetaClient metaClient, FileSlice fileSlice) {
-    return metaClient.getTableConfig().isLSMTreeStorageLayout()
-        && fileSlice.getLogFiles().allMatch(logFile -> FSUtils.isNativeLogFile(logFile.getFileName()));
-  }
-
-  static boolean shouldUseLsmReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, String mergeType) {
-    // The LSM reader collapses all sorted versions of a key. Skip-merge queries intentionally
-    // expose those versions independently, so retain the classic unmerged reader for that mode.
-    return !HoodieReaderConfig.REALTIME_SKIP_MERGE.equalsIgnoreCase(mergeType)
-        && shouldUseLsmReader(metaClient, fileSlice);
   }
 
   /**

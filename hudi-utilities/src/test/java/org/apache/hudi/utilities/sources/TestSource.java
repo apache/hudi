@@ -25,9 +25,11 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Unit tests for {@link Source#releaseResources()}.
+ * Unit tests for {@link Source}, its {@link Source#releaseResources()} contract and the typed
+ * {@link JsonSource}/{@link AvroSource} base classes.
  *
  * <p>releaseResources() is invoked from StreamSync.syncOnce()'s finally block, after the
  * write/commit has already completed. A transient Spark failure while unpersisting the
@@ -69,5 +71,26 @@ public class TestSource {
     assertDoesNotThrow(source::releaseResources,
         "A transient unpersist failure in cleanup must not propagate out of releaseResources()");
     assertEquals(1, source.unpersistCalls, "unpersist should have been attempted exactly once");
+  }
+
+  /**
+   * The typed source base classes advertise their source type and reject the deprecated
+   * fetchNewData() entry point, which their subclasses replace with readFromCheckpoint().
+   */
+  @Test
+  public void jsonAndAvroSourcesRejectDeprecatedFetchNewData() {
+    JsonSource jsonSource = new JsonSource(new TypedProperties(), null, null, null) {
+    };
+    AvroSource avroSource = new AvroSource(new TypedProperties(), null, null, null) {
+    };
+
+    assertEquals(Source.SourceType.JSON, jsonSource.getSourceType());
+    assertEquals(Source.SourceType.AVRO, avroSource.getSourceType());
+    assertThrows(UnsupportedOperationException.class, () -> jsonSource.fetchNewData(Option.empty(), 100L));
+    assertThrows(UnsupportedOperationException.class, () -> avroSource.fetchNewData(Option.empty(), 100L));
+
+    // commit callback and cleanup are no-ops for sources that cache nothing
+    assertDoesNotThrow(() -> jsonSource.onCommit("00000000000001"));
+    assertDoesNotThrow(jsonSource::releaseResources);
   }
 }

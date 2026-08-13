@@ -349,6 +349,18 @@ Copyright (c) 2005, European Commission project OneLab under contract 034819 (ht
 
  -------------------------------------------------------------------------------
 
+ This product includes code from the Google Firebase Android SDK
+
+ * org.apache.hudi.common.util.StringUtils#compareUtf8Bytes ported from
+   com.google.firebase.firestore.util.Util#compareUtf8Strings
+
+ Copyright 2018 Google LLC
+
+ Home page: https://github.com/firebase/firebase-android-sdk
+ License: https://www.apache.org/licenses/LICENSE-2.0
+
+ -------------------------------------------------------------------------------
+
  This product includes code from StreamSets Data Collector
 
   * com.streamsets.pipeline.lib.util.avroorc.AvroToOrcRecordConverter copied and modified to org.apache.hudi.common.util.AvroOrcUtils

@@ -197,6 +197,22 @@ class TestLsmFileGroupRecordIterator {
   }
 
   @Test
+  void testLoserTreeUsesUtf8Ordering() {
+    String fullWidthExclamationKey = "！";
+    String emojiKey = "😀";
+
+    LsmFileGroupRecordIterator.LoserTree<String> loserTree =
+        new LsmFileGroupRecordIterator.LoserTree<>(
+            Arrays.asList(
+                sortedRunReader(0, record(fullWidthExclamationKey, "full-width-exclamation")),
+                sortedRunReader(1, record(emojiKey, "emoji"))));
+    // UTF-16 orders the emoji first, while UTF-8 bytes order the full-width character first.
+    assertEquals(Arrays.asList(
+        fullWidthExclamationKey + ":full-width-exclamation",
+        emojiKey + ":emoji"), drain(loserTree));
+  }
+
+  @Test
   void testSelectDirectLogReadersPrioritizesDeletesThenSmallFiles() {
     List<LsmFileGroupRecordIterator.LogReaderSpec> logReaderSpecs = Arrays.asList(
         new LsmFileGroupRecordIterator.LogReaderSpec(1, logFile("file1_1-0-1_001_1.log.parquet", 10)),

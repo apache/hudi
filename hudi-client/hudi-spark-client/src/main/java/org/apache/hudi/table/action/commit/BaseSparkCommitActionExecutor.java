@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
@@ -326,10 +327,12 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     if (table.requireSortedRecords()) {
       // Partition and sort within each partition as a single step. This is faster than partitioning first and then
       // applying a sort.
+      // requireSortedRecords() is true only for HFile base files, which order keys by UTF-8 bytes,
+      // not String (UTF-16) order, so sort with the matching comparator.
       Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> comparator = (Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> & Serializable) (t1, t2) -> {
         HoodieKey key1 = t1._1;
         HoodieKey key2 = t2._1;
-        return key1.getRecordKey().compareTo(key2.getRecordKey());
+        return StringUtils.compareUtf8Bytes(key1.getRecordKey(), key2.getRecordKey());
       };
 
       partitionedRDD = mappedRDD.repartitionAndSortWithinPartitions(partitioner, comparator);

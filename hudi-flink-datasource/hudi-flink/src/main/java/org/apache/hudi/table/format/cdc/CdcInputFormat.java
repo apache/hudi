@@ -48,6 +48,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
+
 /**
  * The base InputFormat class to read Hoodie data set as change logs.
  */
@@ -157,11 +159,16 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         String logFilepath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
         MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(tablePath, logFilepath, maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getSplitRecordIterator(split);
-        return new CdcIterators.DataLogFileIterator(
-            maxCompactionMemoryInBytes, imageManager, fileSplit,
-            HoodieSchema.parse(tableState.getTableSchema()),
-            tableState.getRequiredRowType(), tableState.getRequiredPositions(),
-            recordIterator, metaClient, imageManager.getWriteConfig());
+        try {
+          return new CdcIterators.DataLogFileIterator(
+              maxCompactionMemoryInBytes, imageManager, fileSplit,
+              HoodieSchema.parse(tableState.getTableSchema()),
+              tableState.getRequiredRowType(), tableState.getRequiredPositions(),
+              recordIterator, metaClient, imageManager.getWriteConfig());
+        } catch (IOException | RuntimeException | Error e) {
+          closeSuppressing(recordIterator, e);
+          throw e;
+        }
       case REPLACE_COMMIT:
         return new CdcIterators.ReplaceCommitIterator(
             tablePath, tableState.getRequiredRowType(), tableState.getRequiredPositions(),

@@ -48,7 +48,7 @@ import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, Pa
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.{BinaryType, DataType, StructType, VariantType}
+import org.apache.spark.sql.types.{BinaryType, DataType, StructField, StructType, VariantType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.types.variant.Variant
@@ -294,6 +294,29 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def generateVariantWriteShreddingSchema(dataType: DataType, isTopLevel: Boolean, isObjectField: Boolean): StructType = {
     SparkShreddingUtils.addWriteShreddingMetadata(
       SparkShreddingUtils.variantShreddingSchema(dataType, isTopLevel, isObjectField))
+  }
+
+  /**
+   * Shared implementation behind [[SparkAdapter#buildFullVariantReadSchema]] for the 4.x
+   * adapters whose parquet reader can reconstruct shredded variants (4.1+, SPARK-54410).
+   * Spark 4.0 keeps the default None: the write-side methods above have no version gate, so
+   * it does write shredded files, but its reader cannot rebuild them and the projection
+   * shape would not help.
+   */
+  protected final def rewriteTopLevelVariantsForFullRead(schema: StructType): Option[StructType] = {
+    var rewritten = false
+    val fields = schema.fields.map { f =>
+      if (isVariantType(f.dataType)) {
+        rewritten = true
+        // Mirrors RequestedVariantField.fullVariant in PushVariantIntoScan: whole-variant
+        // access is a single child "0" at path "$" with failOnError and UTC.
+        f.copy(dataType = StructType(Array(StructField("0", VariantType,
+          metadata = VariantMetadata("$", failOnError = true, timeZoneId = "UTC").toMetadata))))
+      } else {
+        f
+      }
+    }
+    if (rewritten) Some(StructType(fields)) else None
   }
 
   override def createShreddedVariantWriter(

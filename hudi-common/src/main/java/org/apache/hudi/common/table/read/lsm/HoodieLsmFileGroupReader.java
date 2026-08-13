@@ -28,6 +28,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
@@ -141,6 +142,11 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
         .sortOutputs(false)
         .inflightInstantsAllowed(allowInflightInstants)
         .build();
+    // filter log files by instant range.
+    if (logFiles != null && readerContext.getInstantRange().isPresent()) {
+      InstantRange instantRange = readerContext.getInstantRange().get();
+      logFiles = logFiles.filter(logFile -> instantRange.isInRange(logFile.getDeltaCommitTime()));
+    }
     this.inputSplit = InputSplit.builder()
         .baseFileOption(baseFileOption)
         .logFileStream(logFiles)
@@ -161,7 +167,8 @@ public final class HoodieLsmFileGroupReader<T> implements HoodieRecordReader<T> 
       throw new IllegalArgumentException("LSM file group reader is doing log file merge but not reading from the start of the base file");
     }
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    this.props = ConfigUtils.getMergeProps(props, tableConfig);
+    props = ConfigUtils.getMergeProps(props, tableConfig);
+    this.props = props;
     readerContext.initRecordMerger(props);
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);

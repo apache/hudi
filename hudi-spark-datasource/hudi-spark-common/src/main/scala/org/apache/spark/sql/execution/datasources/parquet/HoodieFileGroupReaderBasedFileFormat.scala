@@ -21,7 +21,7 @@ import org.apache.hudi.{HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, Hoo
 import org.apache.hudi.cdc.{CDCFileGroupIterator, HoodieCDCFileGroupSplit, HoodieCDCFileIndex}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.schema.HoodieSchema
@@ -29,8 +29,9 @@ import org.apache.hudi.common.schema.HoodieSchemaRepair
 import org.apache.hudi.common.schema.HoodieSchemaUtils
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, ParquetTableSchemaResolver}
-import org.apache.hudi.common.table.read.HoodieFileGroupReader
-import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.common.table.read.{HoodieFileGroupReader, HoodieRecordReader}
+import org.apache.hudi.common.table.read.lsm.{HoodieLsmFileGroupReader, LsmReaderUtils}
+import org.apache.hudi.common.util.{ConfigUtils, Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieNotSupportedException
@@ -314,21 +315,41 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
               } else {
                 0
               }
-              val reader = HoodieFileGroupReader.builder()
-                .withReaderContext(readerContext)
-                .withHoodieTableMetaClient(metaClient)
-                .withLatestCommitTime(queryTimestamp)
-                .withBaseFileOption(fileSlice.getBaseFile)
-                .withLogFiles(fileSlice.getLogFiles)
-                .withPartitionPath(fileSlice.getPartitionPath)
-                .withDataSchema(dataSchema)
-                .withRequestedSchema(requestedSchema)
-                .withInternalSchemaOpt(internalSchemaOpt)
-                .withProps(props)
-                .withStart(file.start)
-                .withLength(baseFileLength)
-                .withShouldUseRecordPosition(shouldUseRecordPosition)
-                .build()
+              val reader: HoodieRecordReader[InternalRow] =
+                if (LsmReaderUtils.shouldUseLsmReader(
+                  metaClient.getTableConfig,
+                  ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true))) {
+                  HoodieLsmFileGroupReader.builder[InternalRow]()
+                    .withReaderContext(readerContext)
+                    .withHoodieTableMetaClient(metaClient)
+                    .withLatestCommitTime(queryTimestamp)
+                    .withBaseFileOption(fileSlice.getBaseFile)
+                    .withLogFiles(fileSlice.getLogFiles)
+                    .withPartitionPath(fileSlice.getPartitionPath)
+                    .withDataSchema(dataSchema)
+                    .withRequestedSchema(requestedSchema)
+                    .withInternalSchemaOpt(internalSchemaOpt)
+                    .withProps(props)
+                    .withStart(file.start)
+                    .withLength(baseFileLength)
+                    .build()
+                } else {
+                  HoodieFileGroupReader.builder[InternalRow]()
+                    .withReaderContext(readerContext)
+                    .withHoodieTableMetaClient(metaClient)
+                    .withLatestCommitTime(queryTimestamp)
+                    .withBaseFileOption(fileSlice.getBaseFile)
+                    .withLogFiles(fileSlice.getLogFiles)
+                    .withPartitionPath(fileSlice.getPartitionPath)
+                    .withDataSchema(dataSchema)
+                    .withRequestedSchema(requestedSchema)
+                    .withInternalSchemaOpt(internalSchemaOpt)
+                    .withProps(props)
+                    .withStart(file.start)
+                    .withLength(baseFileLength)
+                    .withShouldUseRecordPosition(shouldUseRecordPosition)
+                    .build()
+                }
               // Append partition values to rows and project to output schema
               appendPartitionAndProject(
                 reader.getClosableIterator,

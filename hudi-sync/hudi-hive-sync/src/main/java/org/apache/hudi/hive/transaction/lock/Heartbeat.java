@@ -21,21 +21,41 @@ package org.apache.hudi.hive.transaction.lock;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.NoSuchLockException;
+import org.apache.hadoop.hive.metastore.api.NoSuchTxnException;
+import org.apache.hadoop.hive.metastore.api.TxnAbortedException;
+
+import java.util.function.Consumer;
 
 @Slf4j
 class Heartbeat implements Runnable {
   private final IMetaStoreClient client;
   private final long lockId;
+  private final Consumer<Exception> onLockLost;
+  // Latches the terminal failure so that a tick already queued when the schedule was cancelled
+  // does not issue another doomed heartbeat or report the loss a second time.
+  private volatile boolean lockLost = false;
 
-  Heartbeat(IMetaStoreClient client, long lockId) {
+  Heartbeat(IMetaStoreClient client, long lockId, Consumer<Exception> onLockLost) {
     this.client = client;
     this.lockId = lockId;
+    this.onLockLost = onLockLost;
   }
 
   @Override
   public void run() {
+    if (lockLost) {
+      return;
+    }
     try {
       client.heartbeat(0, lockId);
+    } catch (NoSuchLockException | NoSuchTxnException | TxnAbortedException e) {
+      // Terminal. The metastore has already expired or aborted this lock, so no later tick can
+      // renew it. Retrying would only log once per interval while the writer keeps believing it
+      // holds exclusivity, so report the loss to the owner, which stops the schedule and drops
+      // the lock.
+      lockLost = true;
+      onLockLost.accept(e);
     } catch (Exception e) {
       // Do not rethrow. This task is scheduled via ScheduledExecutorService.scheduleAtFixedRate,
       // where a thrown exception permanently cancels all subsequent executions and is only

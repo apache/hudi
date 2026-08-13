@@ -18,13 +18,22 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
+import com.google.api.gax.rpc.UnaryCallable;
 import com.google.cloud.ServiceOptions;
 import com.google.cloud.monitoring.v3.MetricServiceClient;
+import com.google.cloud.pubsub.v1.stub.GrpcSubscriberStub;
+import com.google.cloud.pubsub.v1.stub.SubscriberStub;
+import com.google.cloud.pubsub.v1.stub.SubscriberStubSettings;
 import com.google.monitoring.v3.ListTimeSeriesRequest;
 import com.google.monitoring.v3.Point;
 import com.google.monitoring.v3.TimeSeries;
 import com.google.monitoring.v3.TypedValue;
+import com.google.protobuf.Empty;
 import com.google.protobuf.util.Timestamps;
+import com.google.pubsub.v1.AcknowledgeRequest;
+import com.google.pubsub.v1.PullRequest;
+import com.google.pubsub.v1.PullResponse;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -32,13 +41,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class TestPubsubQueueClient {
@@ -74,6 +86,47 @@ class TestPubsubQueueClient {
       long durationMs = Timestamps.toMillis(request.getInterval().getEndTime()) - Timestamps.toMillis(request.getInterval().getStartTime());
       assertEquals(120_000, durationMs);
       assertEquals("metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\" AND resource.label.subscription_id=\"subscriptionId\"", request.getFilter());
+    }
+  }
+
+  @Test
+  void makePullRequest() {
+    SubscriberStub subscriber = mock(SubscriberStub.class);
+    UnaryCallable<PullRequest, PullResponse> pullCallable = mock(UnaryCallable.class);
+    PullResponse expectedResponse = PullResponse.newBuilder().build();
+    ArgumentCaptor<PullRequest> requestCaptor = ArgumentCaptor.forClass(PullRequest.class);
+    when(subscriber.pullCallable()).thenReturn(pullCallable);
+    when(pullCallable.call(requestCaptor.capture())).thenReturn(expectedResponse);
+
+    PullResponse actualResponse = new PubsubQueueClient().makePullRequest(subscriber, "projects/project/subscriptions/subscription", 10);
+
+    assertSame(expectedResponse, actualResponse);
+    assertEquals("projects/project/subscriptions/subscription", requestCaptor.getValue().getSubscription());
+    assertEquals(10, requestCaptor.getValue().getMaxMessages());
+  }
+
+  @Test
+  void makeAckRequest() {
+    SubscriberStub subscriber = mock(SubscriberStub.class);
+    UnaryCallable<AcknowledgeRequest, Empty> acknowledgeCallable = mock(UnaryCallable.class);
+    ArgumentCaptor<AcknowledgeRequest> requestCaptor = ArgumentCaptor.forClass(AcknowledgeRequest.class);
+    when(subscriber.acknowledgeCallable()).thenReturn(acknowledgeCallable);
+
+    new PubsubQueueClient().makeAckRequest(subscriber, "projects/project/subscriptions/subscription", Arrays.asList("ack1", "ack2"));
+
+    verify(acknowledgeCallable).call(requestCaptor.capture());
+    assertEquals("projects/project/subscriptions/subscription", requestCaptor.getValue().getSubscription());
+    assertEquals(Arrays.asList("ack1", "ack2"), requestCaptor.getValue().getAckIdsList());
+  }
+
+  @Test
+  void getSubscriber() throws Exception {
+    SubscriberStubSettings subscriberStubSettings = mock(SubscriberStubSettings.class);
+    GrpcSubscriberStub expectedSubscriber = mock(GrpcSubscriberStub.class);
+    try (MockedStatic<GrpcSubscriberStub> mockedStaticSubscriberStub = Mockito.mockStatic(GrpcSubscriberStub.class)) {
+      mockedStaticSubscriberStub.when(() -> GrpcSubscriberStub.create(subscriberStubSettings)).thenReturn(expectedSubscriber);
+
+      assertSame(expectedSubscriber, new PubsubQueueClient().getSubscriber(subscriberStubSettings));
     }
   }
 }

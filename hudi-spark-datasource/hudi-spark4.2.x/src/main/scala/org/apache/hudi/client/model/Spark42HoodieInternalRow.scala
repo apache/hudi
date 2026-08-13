@@ -19,7 +19,7 @@
 package org.apache.hudi.client.model
 
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.unsafe.types.{GeographyVal, GeometryVal, UTF8String}
+import org.apache.spark.unsafe.types.{BinaryView, UTF8String}
 
 class Spark42HoodieInternalRow(
     metaFields: Array[UTF8String],
@@ -27,14 +27,9 @@ class Spark42HoodieInternalRow(
     sourceContainsMetaFields: Boolean)
   extends Spark4HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields) {
 
-  override def getGeography(ordinal: Int): GeographyVal = {
-    ruleOutMetaFieldsAccess(ordinal, classOf[GeographyVal])
-    sourceRow.getGeography(rebaseOrdinal(ordinal))
-  }
-
-  override def getGeometry(ordinal: Int): GeometryVal = {
-    ruleOutMetaFieldsAccess(ordinal, classOf[GeometryVal])
-    sourceRow.getGeometry(rebaseOrdinal(ordinal))
+  override def getBinaryView(ordinal: Int): BinaryView = {
+    ruleOutMetaFieldsAccess(ordinal, classOf[BinaryView])
+    sourceRow.getBinaryView(rebaseOrdinal(ordinal))
   }
 
   override protected def newInternalRow(metaFields: Array[UTF8String],

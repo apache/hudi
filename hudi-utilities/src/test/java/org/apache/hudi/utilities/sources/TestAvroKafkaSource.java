@@ -310,4 +310,17 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     String schemaHash = Base64.encode(HashID.hash(schemaProvider.getSourceHoodieSchema().toString(), HashID.Size.BITS_128));
     assertEquals(StringUtils.concatenateWithThreshold(String.format("%s_", groupId), schemaHash, GROUP_ID_MAX_BYTES_LENGTH), newGroupId);
   }
+
+  @Test
+  void testUnknownValueDeserializerClass() {
+    final String topic = TEST_TOPIC_PREFIX + "testUnknownValueDeserializer";
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+
+    props.put("hoodie.streamer.source.kafka.value.deserializer.class", "org.apache.hudi.NotADeserializer");
+    // the deserializer class is resolved while constructing the source, i.e. before touching kafka
+    HoodieReadFromSourceException exception = assertThrows(HoodieReadFromSourceException.class,
+        () -> new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics));
+    assertTrue(exception.getMessage().contains(
+        "Could not load custom avro kafka deserializer: org.apache.hudi.NotADeserializer"), exception.getMessage());
+  }
 }

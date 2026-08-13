@@ -47,7 +47,7 @@ import java.util.Map;
 public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
   public static final String FILE_GROUP_META_FIELD = "_fg";
 
-  private final int recordArity;
+  protected final int recordArity;
 
   private String lastFileId; // for efficient code path
 
@@ -63,17 +63,25 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
       String recordKey = keyGen.getRecordKey(record);
       String partitionPath = keyGen.getPartitionPath(record);
       String fileId = tuple.getString(0).toString();
-      if ((lastFileId == null) || !lastFileId.equals(fileId)) {
-        log.info("Creating new file for partition path {}", partitionPath);
-        handle = getRowCreateHandle(partitionPath, fileId);
-        lastFileId = fileId;
-      }
-      handle.write(recordKey, partitionPath, record);
+      writeRecord(recordKey, partitionPath, fileId, record);
     } catch (Throwable throwable) {
       IOException ioException = new IOException("Exception happened when bulk insert.", throwable);
       log.error("Global error thrown while trying to write records in HoodieRowDataCreateHandle", ioException);
       throw ioException;
     }
+  }
+
+  protected void writeRecord(
+      String recordKey,
+      String partitionPath,
+      String fileId,
+      RowData record) throws IOException {
+    if ((lastFileId == null) || !lastFileId.equals(fileId)) {
+      log.info("Creating new file for partition path {}", partitionPath);
+      handle = getRowCreateHandle(partitionPath, fileId);
+      lastFileId = fileId;
+    }
+    handle.write(recordKey, partitionPath, record);
   }
 
   private HoodieRowDataCreateHandle getRowCreateHandle(String partitionPath, String fileId) throws IOException {
@@ -93,19 +101,30 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
     return new SortOperatorGen(rowType, new String[] {FILE_GROUP_META_FIELD});
   }
 
-  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, List<String> indexKeyFields,
-                                  NumBucketsFunction numBucketsFunction, boolean needFixedFileIdSuffix) {
-    String recordKey = keyGen.getRecordKey(record);
-    String partition = keyGen.getPartitionPath(record);
-    final int numBuckets = numBucketsFunction.getNumBuckets(partition);
+  static String getFileId(
+      Map<String, String> bucketIdToFileId,
+      String recordKey,
+      String partitionPath,
+      List<String> indexKeyFields,
+      NumBucketsFunction numBucketsFunction,
+      boolean needFixedFileIdSuffix) {
+    final int numBuckets = numBucketsFunction.getNumBuckets(partitionPath);
     final int bucketNum = BucketIdentifier.getBucketId(recordKey, indexKeyFields, numBuckets);
-    String bucketId = partition + bucketNum;
+    String bucketId = partitionPath + bucketNum;
     return bucketIdToFileId.computeIfAbsent(bucketId, k -> needFixedFileIdSuffix ? BucketIdentifier.newBucketFileIdForNBCC(bucketNum) : BucketIdentifier.newBucketFileIdPrefix(bucketNum));
   }
 
   public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, List<String> indexKeyFields,
                                       NumBucketsFunction numBucketsFunction, boolean needFixedFileIdSuffix) {
-    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeyFields, numBucketsFunction, needFixedFileIdSuffix);
+    String recordKey = keyGen.getRecordKey(record);
+    String partitionPath = keyGen.getPartitionPath(record);
+    final String fileId = getFileId(
+        bucketIdToFileId,
+        recordKey,
+        partitionPath,
+        indexKeyFields,
+        numBucketsFunction,
+        needFixedFileIdSuffix);
     return GenericRowData.of(StringData.fromString(fileId), record);
   }
 

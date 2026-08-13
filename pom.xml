@@ -59,7 +59,6 @@
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-utilities-slim-bundle</module>
     <module>packaging/hudi-timeline-server-bundle</module>
-    <module>packaging/hudi-trino-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink-datasource</module>
     <module>hudi-kafka-connect</module>
@@ -107,6 +106,7 @@
     <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
     <kafka.version>2.0.0</kafka.version>
     <pulsar.version>3.0.2</pulsar.version>
+    <tika.version>3.3.2</tika.version>
     <kafka.connect.api.version>2.5.0</kafka.connect.api.version>
     <kafka.spark3.version>2.8.2</kafka.spark3.version>
     <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
@@ -137,7 +137,7 @@
     <orc.spark.version>1.6.0</orc.spark.version>
     <orc.flink.version>1.5.6</orc.flink.version>
     <roaringbitmap.version>0.9.47</roaringbitmap.version>
-    <airlift.version>0.27</airlift.version>
+    <airlift.version>2.0.3</airlift.version>
     <tally.version>0.13.0</tally.version>
     <prometheus.version>0.16.0</prometheus.version>
     <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
@@ -178,7 +178,7 @@
     <spark35.version>3.5.5</spark35.version>
     <spark40.version>4.0.2</spark40.version>
     <spark41.version>4.1.1</spark41.version>
-    <spark42.version>4.2.0-preview4</spark42.version>
+    <spark42.version>4.2.0</spark42.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>1.11.4</avro.version>
@@ -706,8 +706,9 @@
               <exclude>**/banner.txt</exclude>
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
-              <exclude>.mvn/**</exclude>
-              <exclude>hudi-trino-plugin/**</exclude>
+              <!-- .mvn at any depth: nested ones are tracked without an ASF header
+                   (hudi-trino/.mvn/modernizer/*.xml) and the source release strips .gitignore. -->
+              <exclude>**/.mvn/**</exclude>
             </excludes>
           </configuration>
           <executions>
@@ -2351,6 +2352,13 @@
       </modules>
     </profile>
     <profile>
+      <!-- RFC-105: non-shaded Trino connector. JDK 25 + Trino SPI; off by default. -->
+      <id>hudi-trino</id>
+      <modules>
+        <module>hudi-trino</module>
+      </modules>
+    </profile>
+    <profile>
       <id>integration-tests</id>
       <activation>
         <property>
@@ -3002,7 +3010,7 @@
         <!-- This glob has to include hudi-spark4-common -->
         <hudi.spark.common.module>hudi-spark4-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark4.version}</scalatest.version>
-        <hadoop.version>3.4.3</hadoop.version>
+        <hadoop.version>3.5.0</hadoop.version>
         <kafka.version>3.9.2</kafka.version>
         <hive.storage.version>2.8.1</hive.storage.version>
         <!-- TODO: Enable lance tests on Spark 4.2 -->
@@ -3031,7 +3039,7 @@
              both provide the same net.jpountz.lz4 package so we must use the Spark-provided one
              to avoid classpath conflicts (the newer version adds LZ4BlockInputStream.newBuilder()) -->
         <lz4.groupId>at.yawk.lz4</lz4.groupId>
-        <lz4.version>1.10.4</lz4.version>
+        <lz4.version>1.11.0</lz4.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
       </properties>
