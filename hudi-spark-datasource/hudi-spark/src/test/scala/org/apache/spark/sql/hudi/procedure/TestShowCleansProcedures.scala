@@ -18,6 +18,11 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
+import java.io.IOException
+
+import scala.collection.JavaConverters._
 
 class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
 
@@ -208,78 +213,6 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
             assert(cleanMetadata.getLong(10) >= 0) // time_taken_in_millis
             assert(cleanMetadata.getInt(11) >= 0) // total_files_deleted
           }
-        }
-      }
-    }
-  }
-
-  test("Test show procedures with showArchived parameter") {
-    withTempDir { tmp =>
-      Seq("COPY_ON_WRITE").foreach { tableType =>
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        val extraConf = if (HoodieSparkUtils.gteqSpark3_4) {
-          Map("spark.sql.defaultColumn.enabled" -> "false")
-        } else {
-          Map.empty[String, String]
-        }
-        withSQLConf(extraConf.toSeq: _*) {
-          spark.sql(
-            s"""
-               |create table $tableName (
-               | id int,
-               | name string,
-               | price double,
-               | ts long
-               | ) using hudi
-               | location '$tablePath'
-               | tblproperties (
-               |   primaryKey = 'id',
-               |   type = '$tableType',
-               |   preCombineField = 'ts'
-               | )
-               |""".stripMargin)
-
-          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-          spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
-          spark.sql(s"update $tableName set price = 11 where id = 1")
-
-          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-            .collect()
-
-          // showArchived=false (default - active timeline only)
-          val activeCleans = spark.sql(s"call show_cleans(table => '$tableName', showArchived => false)")
-            .collect()
-          spark.sql(s"call show_cleans(table => '$tableName', showArchived => false)").show(false)
-
-          val activePlans = spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => false)")
-            .collect()
-          spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => false)").show(false)
-
-          val activeMetadata = spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => false)")
-            .collect()
-          spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => false)").show(false)
-
-          // showArchived=true (both active + archived timelines merged)
-          val allCleans = spark.sql(s"call show_cleans(table => '$tableName', showArchived => true)")
-            .collect()
-          spark.sql(s"call show_cleans(table => '$tableName', showArchived => true)").show(false)
-
-          val allPlans = spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => true)")
-            .collect()
-          spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => true)").show(false)
-
-          val allMetadata = spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => true)")
-            .collect()
-          spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => true)").show(false)
-
-          assert(activeCleans.length >= 1, "Active timeline should have clean instances")
-          assert(activePlans.length >= 1, "Active timeline should have clean plans")
-
-          // showArchived=true should include at least the same data as active timeline
-          assert(allCleans.length >= activeCleans.length, "Active + Archived should have at least as many instances as active only")
-          assert(allPlans.length >= activePlans.length, "Active + Archived should have at least as many plans as active only")
-          assert(allMetadata.length >= activeMetadata.length, "Active + Archived should have at least as much metadata as active only")
         }
       }
     }
@@ -544,6 +477,165 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
             assert(filteredResult.length > 0, s"Filter '$description' should execute successfully")
           }
         }
+      }
+    }
+  }
+
+  test("Test show_clean_plans with an archived clean instant") {
+    withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.archive.automatic" -> "false") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = tmp.getCanonicalPath
+        spark.sql(
+          s"""
+             |create table $tableName (
+             | id int,
+             | name string,
+             | price double,
+             | ts long
+             | ) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |   primaryKey = 'id',
+             |   type = 'cow',
+             |   preCombineField = 'ts',
+             |   hoodie.metadata.enable = 'false'
+             | )
+             |""".stripMargin)
+
+        def rowCount(procedure: String, showArchived: Boolean): Int =
+          spark.sql(s"call $procedure(table => '$tableName', showArchived => $showArchived)").collect().length
+
+        // Six write commits with a clean in the middle: the first clean sits before the last
+        // commit that archival will move, so it gets archived along with those commits, while
+        // the second clean stays on the active timeline.
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"update $tableName set price = 11 where id = 1")
+        spark.sql(s"update $tableName set price = 12 where id = 1")
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)").collect()
+        spark.sql(s"update $tableName set price = 13 where id = 1")
+        spark.sql(s"update $tableName set price = 14 where id = 1")
+        spark.sql(s"update $tableName set price = 15 where id = 1")
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)").collect()
+
+        // Nothing has been archived yet, so showArchived => true here only exercises the merge of
+        // the active timeline with an empty archived one. All three procedures succeed and see
+        // both cleans, which is what makes the failures asserted after archival attributable to
+        // the archived instants themselves rather than to the merged read path. Two rows for
+        // show_cleans_metadata as well, since that procedure emits one row per partition per
+        // clean and this table is not partitioned.
+        assertResult(2)(rowCount("show_cleans", showArchived = true))
+        assertResult(2)(rowCount("show_cleans_metadata", showArchived = true))
+        assertResult(2)(rowCount("show_clean_plans", showArchived = true))
+
+        spark.sql(s"call archive_commits(table => '$tableName', min_commits => 2, max_commits => 3," +
+          " retain_commits => 1, enable_metadata => false)").collect()
+
+        // Precondition: archival must have split the two cleans across the two timelines,
+        // otherwise the archived branch below is never exercised and the test passes vacuously.
+        val metaClient = createMetaClient(spark, tablePath)
+        val archivedCleans = metaClient.getArchivedTimeline.getCleanerTimeline
+          .getInstants.asScala.map(_.requestedTime).toSeq
+        val activeCleans = metaClient.getActiveTimeline.getCleanerTimeline
+          .getInstants.asScala.map(_.requestedTime).toSeq
+        assert(archivedCleans.length == 1, s"expected exactly 1 archived clean, got $archivedCleans")
+        assert(activeCleans.length == 1, s"expected exactly 1 active clean, got $activeCleans")
+        assert(archivedCleans.head.compareTo(activeCleans.head) < 0,
+          "the archived clean must be the older of the two")
+
+        // Sibling-procedure controls, pinning what the other two procedures do with the very same
+        // archived clean. On the active timeline all three agree: one row for the one active
+        // clean. With showArchived => true they diverge, and neither sibling is correct today.
+        assertResult(1)(rowCount("show_cleans", showArchived = false))
+        assertResult(1)(rowCount("show_cleans_metadata", showArchived = false))
+        assertResult(1)(rowCount("show_clean_plans", showArchived = false))
+
+        // The other half of #19639, which covers all three clean procedures. show_cleans and its
+        // show_cleans_metadata variant do route to getArchivedTimeline, but the archived instants
+        // carry no content there, so readCleanMetadata cannot deserialize them and the call fails
+        // outright rather than degrading to a partial row. Same missing-archived-content cause as
+        // the all-null plan rows asserted below, just a harsher symptom. Pinned as observed.
+        Seq("show_cleans", "show_cleans_metadata").foreach { procedure =>
+          val e = intercept[IOException](rowCount(procedure, showArchived = true))
+          assert(e.getMessage.contains(archivedCleans.head),
+            s"$procedure over the archived timeline should fail on the archived clean" +
+              s" ${archivedCleans.head}, but failed with: ${e.getMessage}")
+        }
+
+        val plans = spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => true)").collect()
+        assertResult(2)(plans.length)
+        val planTimes = plans.map(_.getString(0)).mkString(", ")
+        val activePlan = plans.find(_.getString(0) == activeCleans.head)
+          .getOrElse(fail(s"no plan row for the active clean ${activeCleans.head}, got plan_times: $planTimes"))
+        val archivedPlan = plans.find(_.getString(0) == archivedCleans.head)
+          .getOrElse(fail(s"no plan row for the archived clean ${archivedCleans.head}, got plan_times: $planTimes"))
+
+        // Fields that come from the cleaner plan itself, resolved by name off the row schema so
+        // that a change in output-schema ordering cannot silently re-point these assertions.
+        // extra_metadata is left out: it is null for both rows, so it does not discriminate.
+        val planFields = Seq(
+          "earliest_instant_to_retain",
+          "last_completed_commit_timestamp",
+          "policy",
+          "version",
+          "total_partitions_to_clean",
+          "total_partitions_to_delete")
+
+        // The active clean plan is read correctly.
+        assertResult("COMPLETED")(activePlan.getString(1))
+        assertResult("clean")(activePlan.getString(2))
+        planFields.foreach { name =>
+          assert(!activePlan.isNullAt(activePlan.fieldIndex(name)), s"active clean plan should have a non-null $name")
+        }
+
+        // Known limitation, see #19639: getCleanerPlans collects the archived clean instants but
+        // then hands every instant to processCleanPlan against the ACTIVE timeline, so the
+        // archived instant's .clean.requested file is not found, the read falls back to
+        // createErrorRow and every plan field comes back null. Only plan_time/state/action
+        // survive, because those are taken from the instant and not from the plan. A fix has to
+        // read the archived instant's own content and would flip the null assertions below to
+        // non-null; merely routing to getArchivedTimeline the way the sibling ShowCleansProcedure
+        // does is not enough, since that path throws today (pinned above).
+        assertResult("COMPLETED")(archivedPlan.getString(1))
+        assertResult("clean")(archivedPlan.getString(2))
+        planFields.foreach { name =>
+          assert(archivedPlan.isNullAt(archivedPlan.fieldIndex(name)),
+            s"archived clean plan is expected to return a null $name today (#19639)")
+        }
+      }
+    }
+  }
+
+  test("Test show_clean_plans validates its inputs") {
+    withSQLConf("hoodie.clean.automatic" -> "false") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             | id int,
+             | name string,
+             | price double,
+             | ts long
+             | ) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |   primaryKey = 'id',
+             |   type = 'cow',
+             |   preCombineField = 'ts'
+             | )
+             |""".stripMargin)
+
+        // No insert needed: both validations run before any table data is read.
+        // A non-positive limit is rejected.
+        checkExceptionContain(s"call show_clean_plans(table => '$tableName', limit => 0)")(
+          "Limit must be positive")
+
+        // A filter that references an unknown column is rejected before the plans are read; the
+        // column-reference message discriminates this branch from a filter parse failure.
+        checkExceptionContain(
+          s"""call show_clean_plans(table => '$tableName', filter => "nonexistent_col > 1")""")(
+          "Invalid column references: nonexistent_col")
       }
     }
   }
