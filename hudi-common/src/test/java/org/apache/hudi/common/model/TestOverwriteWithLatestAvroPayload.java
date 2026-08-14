@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.OrderingValues;
+
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
@@ -46,6 +48,20 @@ public class TestOverwriteWithLatestAvroPayload {
         new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
         new Schema.Field("_hoodie_is_deleted", Schema.create(Type.BOOLEAN), "", false)
     ));
+  }
+
+  @Test
+  public void testNullOrderingValueCoercedToDefault() {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("partition", "partition0");
+    record.put("ts", 0L);
+    record.put("_hoodie_is_deleted", false);
+
+    // A null ordering value (e.g. a nullable ordering column) must not throw; it is coerced
+    // to the default ordering value (natural order) by BaseAvroPayload.
+    OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(record, null);
+    assertEquals(OrderingValues.getDefault(), payload.getOrderingValue());
   }
 
   @Test
