@@ -153,6 +153,34 @@ class TestRepairClusteringPlanProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test repair_clustering_plan with backup disabled") {
+    withTempDir { tmp =>
+      withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        val (instant, plannedFiles) = createTableWithPendingClusteringPlan(tableName, basePath)
+
+        // With backup => false the requested instant file is deleted and rewritten in place with no
+        // copy taken first, which is a distinct arm from the default backup => true path the other
+        // tests cover. The restore-on-failure arm (a backed up instant restored after the rewrite
+        // throws) remains uncovered, since it needs an injected storage failure.
+        val fileToRemove = plannedFiles.head
+        val rows = spark.sql(
+          s"call repair_clustering_plan(table => '$tableName', instant => '${instant.requestedTime}', " +
+            s"op => 'delete', invalid_parquet_files => '$fileToRemove', backup => false, dry_run => false)").collect()
+        assertRepairResult(rows, instant.requestedTime, fileToRemove, "REMOVED_FROM_PLAN", deleted = false, "USER_REQUESTED")
+
+        val repairedPlan = getLatestRequestedClusteringPlan(basePath)
+        assertEquals(instant.requestedTime, repairedPlan.getLeft.requestedTime)
+        assertFalse(getPlanDataFiles(repairedPlan.getRight).contains(fileToRemove))
+
+        val metaClient = createMetaClient(spark, basePath)
+        assertFalse(metaClient.getStorage.exists(new StoragePath(metaClient.getMetaPath, ".repair")),
+          "Expected no backup under .repair when backup => false")
+      }
+    }
+  }
+
   private def createTableWithPendingClusteringPlan(tableName: String, basePath: String): (HoodieInstant, Seq[String]) = {
     spark.sql(
       s"""

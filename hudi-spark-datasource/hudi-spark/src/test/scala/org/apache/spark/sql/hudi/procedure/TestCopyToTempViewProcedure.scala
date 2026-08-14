@@ -170,11 +170,25 @@ class TestCopyToTempViewProcedure extends HoodieSparkSqlTestBase {
       val row2 = spark.sql(s"""call copy_to_temp_view(table=>'$tableName',view_name=>'$viewName',global=>true,replace=>true)""").collectAsList()
       assert(row2.size() == 1 && row2.get(0).get(0) == 0)
 
+      // 4: the global view is visible from another session through the global_temp database
       newSession = spark.newSession()
-      // 4: query view in other session
-      val newViewCount = spark.sql(s"""select count(1) from $viewName""").collectAsList()
+      val newViewCount = newSession.sql(s"""select count(1) from global_temp.$viewName""").collectAsList()
       assert(newViewCount.size() == 1 && newViewCount.get(0).get(0) == 4)
 
+      // 5: copyToTempView with global=true and replace=false goes through createGlobalTempView
+      val globalViewName = generateTableName
+      val row3 = spark.sql(s"""call copy_to_temp_view(table=>'$tableName',view_name=>'$globalViewName',global=>true,replace=>false)""").collectAsList()
+      assert(row3.size() == 1 && row3.get(0).get(0) == 0)
+      val globalViewCount = spark.newSession().sql(s"""select count(1) from global_temp.$globalViewName""").collectAsList()
+      assert(globalViewCount.size() == 1 && globalViewCount.get(0).get(0) == 4)
+
+      // 6: re-creating the same global view without replace fails
+      val globalViewExistsErrorMsg = if (HoodieSparkUtils.gteqSpark3_4) {
+        s"[TEMP_TABLE_OR_VIEW_ALREADY_EXISTS] Cannot create the temporary view `$globalViewName` because it already exists."
+      } else {
+        s"Temporary view '$globalViewName' already exists"
+      }
+      checkExceptionContain(s"""call copy_to_temp_view(table=>'$tableName',view_name=>'$globalViewName',global=>true,replace=>false)""")(globalViewExistsErrorMsg)
     }
   }
 
@@ -211,10 +225,11 @@ class TestCopyToTempViewProcedure extends HoodieSparkSqlTestBase {
         s"call copy_to_temp_view(table => '$tableName', view_name => '$incViewName', query_type => 'incremental')")(
         "begin_instance_time and end_instance_time can not be null")
 
-      // Incremental reads filter on *completion* time with both bounds inclusive. begin => '000'
-      // sits below every completion time, so it drops nothing; end_instance_time is the last
-      // commit's *requested* time, which is below that commit's own completion time, so the last
-      // commit is excluded and only the first commit's record (id = 1) survives.
+      // Incremental reads filter on *completion* time, start exclusive and end inclusive
+      // (RangeType.OPEN_CLOSED). begin => '000' sits below every completion time, so it drops
+      // nothing; end_instance_time is the last commit's *requested* time, which is below that
+      // commit's own completion time, so the last commit is excluded and only the first commit's
+      // record (id = 1) survives.
       val incResult = spark.sql(
         s"""call copy_to_temp_view(table => '$tableName', view_name => '$incViewName',
            | query_type => 'incremental', begin_instance_time => '000', end_instance_time => '${commits.last}')"""

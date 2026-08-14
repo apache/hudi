@@ -66,8 +66,8 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(2)(keep(scalarRows, "id <= 2", scalarSchema).length)
     assertResult(Seq(scalarRows(1)))(keep(scalarRows, "id != 1", scalarSchema))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "name = 'a1'", scalarSchema))
-    // The literal must match the column type: a plain 15.0 parses as decimal, and the util does not
-    // coerce a double column against a decimal literal, so use an explicit double literal here.
+    // The literal must match the column type, so use an explicit double literal here; the plain
+    // 15.0 (decimal) form is pinned in the numeric-coercion test below.
     assertResult(Seq(scalarRows(1)))(keep(scalarRows, "price > 15.0d", scalarSchema))
     // Bare boolean column evaluates to a Boolean result directly.
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "flag", scalarSchema))
@@ -87,6 +87,55 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     val bigRow = Seq(Row(3, "c3", 30.0d, 3000000000L, true, -9,
       Date.valueOf("2024-03-16"), Timestamp.valueOf("2024-03-16 12:30:00")))
     assertResult(Seq.empty)(keep(bigRow, "ts > 2000", scalarSchema))
+    // Known limitation: the coercion only matches column-on-left, so a literal-on-left comparison
+    // never coerces and drops every row instead of mirroring the equivalent column-on-left filter.
+    // Pinned here so a fix flips these assertions; see #19632.
+    assertResult(Seq.empty)(keep(scalarRows, "1500 < ts", scalarSchema))
+    assertResult(Seq.empty)(keep(scalarRows, "1000 = ts", scalarSchema))
+  }
+
+  test("evaluateFilter does not coerce other numeric column/literal type pairs") {
+    // Known limitation: applyTypeCoercion only special-cases a Long column against an Int literal.
+    // Every other numeric column/literal pair is left alone, so the mismatched comparison fails to
+    // evaluate; the per-row Try swallows the failure and drops the row. The filter therefore
+    // returns no rows instead of erroring on the type mismatch.
+    // Pinned here so a fix flips the Seq.empty assertions; see #19632.
+    val schema = schemaOf(
+      "f" -> FloatType,
+      "sh" -> ShortType,
+      "by" -> ByteType,
+      "dec" -> DecimalType(10, 2))
+    val rows = Seq(Row(2.5f, 3.toShort, 4.toByte, new java.math.BigDecimal("3.00")))
+
+    // Literals whose parsed type already matches the column type evaluate correctly.
+    assertResult(rows)(keep(rows, "f > 1.0f", schema))
+    assertResult(rows)(keep(rows, "dec > 1.00", schema))
+
+    // Mismatched literal types no-match even though the values would satisfy the predicate.
+    assertResult(Seq.empty)(keep(rows, "sh = 3", schema))
+    assertResult(Seq.empty)(keep(rows, "by = 4", schema))
+    assertResult(Seq.empty)(keep(rows, "f > 1.0d", schema))
+    assertResult(Seq.empty)(keep(rows, "dec > 1", schema))
+    // Same gap for a double column: a plain 15.0 parses as decimal, not double.
+    assertResult(Seq.empty)(keep(scalarRows, "price > 15.0", scalarSchema))
+  }
+
+  test("evaluateFilter silently drops rows for functions outside the resolution table") {
+    // Known limitation: a function missing from the resolution table falls through as an
+    // UnresolvedFunction. validateFilterExpression only checks column references, so nothing
+    // rejects it; instead evaluation fails per row and the row is dropped, which looks like an
+    // empty result rather than an error. Pinned here so a fix flips these; see #19638.
+    assertResult(Seq.empty)(keep(scalarRows, "concat(name, 'x') = 'a1x'", scalarSchema))
+    assertResult(Seq.empty)(keep(scalarRows, "instr(name, 'a') = 1", scalarSchema))
+    assertResult(Right(()))(
+      HoodieProcedureFilterUtils.validateFilterExpression("concat(name, 'x') = 'a1x'", scalarSchema, spark))
+    // if() is parsed as a function call and hits the same gap, while the equivalent CASE WHEN is
+    // lowered by the parser without an UnresolvedFunction and evaluates fine.
+    assertResult(Seq.empty)(keep(scalarRows, "if(name = 'a1', true, false)", scalarSchema))
+    assertResult(Seq(scalarRows.head))(
+      keep(scalarRows, "case when name = 'a1' then true else false end", scalarSchema))
+    // Control: a function that is in the resolution table resolves and matches.
+    assertResult(Seq(scalarRows.head))(keep(scalarRows, "upper(name) = 'A1'", scalarSchema))
   }
 
   test("evaluateFilter handles AND / OR / NOT / IN / BETWEEN") {
