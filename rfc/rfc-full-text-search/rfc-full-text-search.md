@@ -286,24 +286,57 @@ invoked through Spark SQL or the Java API. A future Hudi RS writer API may add
 `create_text_index` only after it can publish the corresponding MDT timeline
 changes safely.
 
+The three query entry points share one query model and coverage planner, but
+their result contracts differ:
+
+```mermaid
+flowchart LR
+    SQL["Spark SQL<br/>hudi_match(...)"]
+    SNAPSHOT["Hudi RS Python<br/>read_snapshot(full_text_query=...)"]
+    SEARCH["Hudi RS Python<br/>search_text(...).limit(k)"]
+    MODEL["Shared query objects,<br/>analyzer contract, and snapshot pinning"]
+    MATCHES["Complete unordered<br/>match set"]
+    RANKED["BM25-ranked top-k<br/>with _score"]
+
+    SQL --> MODEL
+    SNAPSHOT --> MODEL
+    SEARCH --> MODEL
+    MODEL -->|"predicate semantics"| MATCHES
+    MODEL -->|"ranked-search semantics"| RANKED
+```
+
 ### Architecture
 
-```text
-                         .hoodie/.index/index.json
-                                     |
-                                     v
-Hudi timeline ---> text_index_<name> MDT partition ---> query coverage planner
-                       |          |                         |          |
-              segment records  coverage records            |          |
-                       |                                    |          |
-                       v                                    v          v
-.hoodie/metadata/.aux/text-index/.../segment/       indexed splits  raw splits
-  metadata.hfts  part_*.tokens.hfts                       \          /
-  part_*.docs.hfts  part_*.postings.hfts                match-set union
-  part_*.positions.hfts                                          |
-                                                    materialize/filter rows
-                                                               |
-                                             optional Hudi RS ranked top-k
+```mermaid
+flowchart TD
+    TIMELINE["Hudi data timeline<br/>snapshot S"]
+    DEFINITION["Index definition<br/>.hoodie/.index/index.json"]
+    MDT["MDT partition<br/>text_index_&lt;name&gt;"]
+    CONTROL["HEAD, SEGMENT, COVERAGE,<br/>and TOMBSTONE records"]
+    SIDECARS["Immutable sidecars<br/>tokens, docs, postings, positions"]
+    PLANNER["Snapshot coverage planner"]
+    INDEXED["Exactly covered<br/>source slices"]
+    RAW["Changed or uncovered<br/>raw source slices"]
+    INDEX_SCAN["Posting-list and<br/>position evaluation"]
+    RAW_SCAN["Normal Hudi scan with<br/>the same analyzer/query"]
+    UNION["Union and deduplicate<br/>document addresses"]
+    ROWS["Materialize rows and<br/>apply residual filters"]
+    RANK["Optional Hudi RS<br/>global BM25 top-k"]
+
+    TIMELINE --> PLANNER
+    DEFINITION --> MDT
+    MDT --> CONTROL
+    CONTROL --> SIDECARS
+    CONTROL --> PLANNER
+    PLANNER --> INDEXED
+    PLANNER --> RAW
+    INDEXED --> INDEX_SCAN
+    SIDECARS --> INDEX_SCAN
+    RAW --> RAW_SCAN
+    INDEX_SCAN --> UNION
+    RAW_SCAN --> UNION
+    UNION --> ROWS
+    UNION --> RANK
 ```
 
 The SQL definition is stored in `.hoodie/.index/index.json`. A dynamic MDT
@@ -475,6 +508,32 @@ indexer compares current fingerprints with coverage records and builds segments
 for new or changed slices. Unchanged slices retain their existing segment and
 source-mask membership.
 
+The publication order prevents a partially written segment from becoming
+visible:
+
+```mermaid
+sequenceDiagram
+    participant I as Text indexer
+    participant D as Hudi data timeline
+    participant S as Sidecar storage
+    participant M as Metadata table
+    participant Q as Query reader
+
+    I->>D: Pin completed instant S
+    I->>D: Enumerate and fingerprint source slices
+    I->>S: Write immutable payloads to UUID paths
+    S-->>I: Return checksums and descriptors
+    I->>M: Commit HEAD, SEGMENT, and COVERAGE records
+    M-->>I: MDT commit completes atomically
+    Q->>M: Pin MDT snapshot compatible with S
+    M-->>Q: Return visible descriptors
+    Q->>S: Range-read only published payloads
+```
+
+If payload writing fails, no MDT descriptor is committed and readers cannot
+discover the orphan. If the MDT commit fails, retry validation may reuse the
+payload; otherwise the orphan cleaner removes it after the grace interval.
+
 ### Consolidation, rollback, and cleaning
 
 Small segments are consolidated when configurable count, byte, or deleted-
@@ -492,6 +551,36 @@ published descriptor are deleted after a separate grace period. `DROP INDEX`
 first removes visibility and emits tombstones, then cleans asynchronously.
 
 ### Query execution
+
+At query time, exact source-slice coverage determines whether each slice uses
+the index or the correctness-preserving raw path:
+
+```mermaid
+flowchart TD
+    START["Pin data and MDT snapshots"]
+    ENUMERATE["Enumerate eligible source slices"]
+    COMPAT{"Exact fingerprint and<br/>compatible analyzer/format?"}
+    POSTINGS["Evaluate postings<br/>and positions"]
+    RAW["Scan source slice and<br/>evaluate the same query"]
+    MERGE["Union and deduplicate matches"]
+    CONTRACT{"Requested API contract?"}
+    SQL["Spark SQL or read_snapshot<br/>return every matching row"]
+    STATS["Collect global corpus statistics<br/>from index and raw tail"]
+    TOPK["Run block-max WAND,<br/>merge top-k, return _score"]
+    INCOMPLETE["Optional explicit incomplete mode<br/>skip raw tail and mark is_complete=false"]
+
+    START --> ENUMERATE
+    ENUMERATE --> COMPAT
+    COMPAT -->|"yes"| POSTINGS
+    COMPAT -->|"no"| RAW
+    POSTINGS --> MERGE
+    RAW --> MERGE
+    MERGE --> CONTRACT
+    CONTRACT -->|"predicate"| SQL
+    CONTRACT -->|"complete ranked search"| STATS
+    STATS --> TOPK
+    CONTRACT -.->|"allow_incomplete_index=true"| INCOMPLETE
+```
 
 Spark SQL predicate evaluation executes in four phases:
 
