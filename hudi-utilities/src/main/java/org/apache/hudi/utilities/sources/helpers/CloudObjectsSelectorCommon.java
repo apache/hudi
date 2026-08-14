@@ -353,7 +353,7 @@ public class CloudObjectsSelectorCommon {
         throw new HoodieException(String.format("Column '%s' already exists in the dataset. Dataset columns: [%s]",
             SOURCE_PATH_COLUMN, String.join(", ", dataset.schema().fieldNames())));
       }
-      LOG.info("Adding source path field to dataset");
+      log.info("Adding source path field to dataset");
       dataset = dataset.selectExpr("input_file_name() AS " + SOURCE_PATH_COLUMN, "*");
     }
 
