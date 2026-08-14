@@ -39,13 +39,12 @@ public class OrderingValues {
    */
   public static Comparable create(Comparable[] orderingValues) {
     if (orderingValues.length == 1) {
-      return nullToDefault(orderingValues[0]);
-    } else {
-      for (int i = 0; i < orderingValues.length; i++) {
-        orderingValues[i] = nullToDefault(orderingValues[i]);
-      }
-      return new ArrayComparable(orderingValues);
+      return handleNullValue(orderingValues[0]);
     }
+    for (int i = 0; i < orderingValues.length; i++) {
+      orderingValues[i] = handleNullValue(orderingValues[i]);
+    }
+    return new ArrayComparable(orderingValues);
   }
 
   /**
@@ -55,15 +54,16 @@ public class OrderingValues {
   public static Comparable create(List<String> orderingFields, Function<String, Comparable> fieldMappingFunction) {
     if (orderingFields.isEmpty()) {
       return DEFAULT_VALUE;
-    } else if (orderingFields.size() == 1) {
-      return nullToDefault(fieldMappingFunction.apply(orderingFields.get(0)));
-    } else {
-      Comparable[] orderingValues = new Comparable[orderingFields.size()];
-      for (int i = 0; i < orderingFields.size(); i++) {
-        orderingValues[i] = nullToDefault(fieldMappingFunction.apply(orderingFields.get(i)));
-      }
-      return new ArrayComparable(orderingValues);
     }
+    Function<String, Comparable> nullSafeMappingFunction = fieldMappingFunction.andThen(OrderingValues::handleNullValue);
+    if (orderingFields.size() == 1) {
+      return nullSafeMappingFunction.apply(orderingFields.get(0));
+    }
+    Comparable[] orderingValues = new Comparable[orderingFields.size()];
+    for (int i = 0; i < orderingFields.size(); i++) {
+      orderingValues[i] = nullSafeMappingFunction.apply(orderingFields.get(i));
+    }
+    return new ArrayComparable(orderingValues);
   }
 
   /**
@@ -73,15 +73,16 @@ public class OrderingValues {
   public static Comparable create(String[] orderingFields, Function<String, Comparable> fieldMappingFunction) {
     if (orderingFields.length == 0) {
       return DEFAULT_VALUE;
-    } else if (orderingFields.length == 1) {
-      return nullToDefault(fieldMappingFunction.apply(orderingFields[0]));
-    } else {
-      Comparable[] orderingValues = new Comparable[orderingFields.length];
-      for (int i = 0; i < orderingFields.length; i++) {
-        orderingValues[i] = nullToDefault(fieldMappingFunction.apply(orderingFields[i]));
-      }
-      return new ArrayComparable(orderingValues);
     }
+    Function<String, Comparable> nullSafeMappingFunction = fieldMappingFunction.andThen(OrderingValues::handleNullValue);
+    if (orderingFields.length == 1) {
+      return nullSafeMappingFunction.apply(orderingFields[0]);
+    }
+    Comparable[] orderingValues = new Comparable[orderingFields.length];
+    for (int i = 0; i < orderingFields.length; i++) {
+      orderingValues[i] = nullSafeMappingFunction.apply(orderingFields[i]);
+    }
+    return new ArrayComparable(orderingValues);
   }
 
   /**
@@ -123,7 +124,7 @@ public class OrderingValues {
 
   // Replaces a null field value (e.g. a nullable ordering column) with the default ordering value (0)
   // so that downstream compareTo calls never throw NullPointerException.
-  private static Comparable nullToDefault(Comparable value) {
+  private static Comparable handleNullValue(Comparable value) {
     return value != null ? value : DEFAULT_VALUE;
   }
 }
