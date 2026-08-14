@@ -15,7 +15,7 @@
   limitations under the License.
 -->
 
-# RFC-110: Native Full-Text Search Index
+# RFC: Hudi Full-Text Search Index
 
 ## Proposers
 
@@ -29,80 +29,79 @@
 
 Issue: TBD
 
-> The RFC number is provisional until the community assigns an issue and
-> accepts the proposal. RFC-109 is the highest numbered proposal in this
-> checkout, so this draft uses RFC-110 to make repository review practical.
+> This proposal intentionally does not claim an RFC number. The number and
+> catalog entry will be reserved through the separate RFC-number process.
 
 ## Abstract
 
-This RFC proposes a native, relevance-ranked full-text index for Apache Hudi.
-It supports token and phrase search over string columns, exposes search through
-a Spark table-valued function (TVF), and builds and maintains indexes through
-the Hudi metadata table (MDT) indexing lifecycle.
+This RFC proposes a full-text index for Apache Hudi. It supports token, phrase,
+and multi-column search over string columns, exposes standard predicates through
+Spark SQL, and offers a Lance-style direct table API through Hudi RS Python.
+Indexes are built and maintained through the Hudi metadata table (MDT)
+indexing lifecycle.
 
 The search engine follows Lance's useful architectural choices without making
 Lance a storage dependency: immutable segments, a compact term dictionary,
 compressed posting lists, document-length statistics, BM25 ranking, positions,
-and block-max WAND. Hudi owns the analyzer contract and on-disk format. The
-format and hot search path are implemented in a Rust crate kept in the Hudi
-repository and called through a narrow Java native boundary.
+and block-max WAND. Hudi owns the analyzer contract and on-disk format. Spark
+integration remains in the main Hudi repository; Rust and Python implementation
+work belongs in Hudi RS and consumes the same versioned format.
 
 The MDT remains authoritative for index definitions, visibility, coverage,
 rollbacks, and cleaning. Large immutable posting payloads are sidecar files in
 an auxiliary directory owned by the MDT rather than values embedded in HFiles.
 An MDT commit atomically publishes descriptors for already durable payloads.
 
-Queries are snapshot-safe. The default `complete` mode combines native index
-results with a raw scan of source file slices not covered by a compatible
-segment. An opt-in `fast` mode searches only covered data and reports that it
-may omit matches.
+Queries are snapshot-safe. SQL predicates always combine index results with a
+raw scan of source file slices not covered by a compatible segment, so using an
+index never changes SQL results. The direct search API also defaults to complete
+results and may offer an explicitly incomplete low-latency mode.
 
 ## Background
 
 Hudi indexes currently answer questions such as which files might contain a
 record key or a value range. Full-text search has a different contract: analyze
 free text into terms, locate matching documents, optionally verify positions,
-and rank the best documents. Sending this workload to Elasticsearch or
-OpenSearch is effective, but creates a second ingestion pipeline and a second
-source of snapshot and retention truth.
+and, for direct search APIs, rank the best documents. Sending this workload to
+Elasticsearch or OpenSearch is effective, but creates a second ingestion
+pipeline and a second source of snapshot and retention truth.
 
 This proposal builds on:
 
 - [RFC-45](../rfc-45/rfc-45.md), which introduced asynchronous MDT indexing;
 - [RFC-77](../rfc-77/rfc-77.md), which established dynamically named secondary
   index partitions and index definitions;
-- [RFC-102](../rfc-102/rfc-102.md), whose vector-search TVF provides a useful
-  SQL precedent; and
+- the standard Spark SQL predicate model, which keeps index acceleration
+  transparent to relational queries; and
 - RFC-109, the native vector-index proposal listed in the RFC catalog. Text and
-  vector search should eventually share native artifact packaging, storage
-  adapters, and top-k execution utilities, but their persistent formats remain
-  independent.
+  vector search may share Hudi RS storage adapters and top-k utilities, but
+  their persistent formats remain independent.
 
 ### Design principles
 
 1. The Hudi timeline is the source of snapshot truth.
 2. Index creation, visibility, rollback, and cleaning use MDT components.
 3. Immutable payloads support object-store range reads and safe caching.
-4. Ranking is independent of how the index is physically partitioned.
-5. Freshness and incompleteness are explicit query properties.
-6. The Java/native interface is small enough to replace without changing SQL.
+4. Index use never changes the result of a Spark SQL predicate.
+5. Ranking is independent of how the index is physically partitioned.
+6. JVM and Hudi RS clients share query semantics and format versions.
 
 ### Goals
 
-- Rank token, boolean, prefix, fuzzy, and phrase queries on one string column.
+- Match token, boolean, prefix, fuzzy, phrase, and multi-column queries.
 - Support copy-on-write (COW) and merge-on-read (MOR) tables.
 - Build asynchronously and incrementally using the MDT indexer lifecycle.
-- Guarantee snapshot-correct results in the default search mode.
-- Provide an object-store-friendly native format with bounded memory usage.
-- Keep the initial Rust implementation inside the Hudi repository.
+- Guarantee snapshot-correct results for SQL and the default direct API mode.
+- Provide an object-store-friendly text-index format with bounded memory usage.
+- Provide a direct Hudi RS Python API alongside Spark SQL.
 
 ### Non-goals
 
 - Elasticsearch API, aggregation, highlighting, or percolator compatibility.
-- Multi-column relevance models in the first format version.
+- Highlighting and custom relevance models in the first format version.
 - Updating posting lists in place.
 - Replacing SQL predicate indexes or the record index.
-- A general Rust rewrite of Hudi readers.
+- Adding Rust code or native build integration to the main Hudi repository.
 
 ### Alternatives considered
 
@@ -171,39 +170,121 @@ The existing `HoodieIndexDefinition` is populated as follows:
 }
 ```
 
-Search is exposed as a Spark TVF rather than a boolean predicate because score
-and top-k are part of its semantics:
+#### Spark SQL predicates
+
+The primary Spark interface follows the conventional index experience: a
+boolean predicate in `WHERE`. Whether the optimizer uses the text index is not
+observable in query results.
 
 ```sql
-SELECT _hoodie_record_key, title, _score
-FROM hudi_text_search(
-  table => 'articles',
-  column => 'body',
-  query => '{"match":{"query":"lakehouse indexing","operator":"and"}}',
-  k => 20,
-  options => map('search_mode', 'complete')
-);
+SELECT _hoodie_record_key, title
+FROM articles
+WHERE hudi_match(body, 'lakehouse indexing', 'operator=AND');
 ```
 
-A phrase query is expressed as:
+Phrase and multi-column queries use companion predicates:
 
-```json
-{"phrase":{"query":"metadata table","slop":1}}
+```sql
+SELECT _hoodie_record_key, title
+FROM articles
+WHERE hudi_match_phrase(body, 'metadata table', 1)
+  AND category = 'engineering';
+
+SELECT _hoodie_record_key, title
+FROM articles
+WHERE hudi_multi_match('lakehouse indexing', title, body);
 ```
 
-The initial JSON query DSL contains `match`, `phrase`, `and`, `or`, and `not`.
-Prefix and bounded edit-distance expansion are options on `match`. Unknown
-fields and operators are rejected instead of ignored. Output includes the Hudi
-record, `_score`, and `_hoodie_text_index` diagnostic metadata. Ties are ordered
-by score descending, then partition path, record key, and file ID ascending.
+The v1 signatures are:
 
-`search_mode` has three values:
+```text
+hudi_match(column, query [, 'key=value,...']) -> boolean
+hudi_match_phrase(column, query [, slop]) -> boolean
+hudi_multi_match(query [, 'operator=AND|OR'], column, ...) -> boolean
+```
 
-- `complete` (default): search compatible segments and raw-scan uncovered
-  source slices. Its result must equal a full raw search at the pinned snapshot.
-- `fast`: search only compatible covered slices. The result metadata includes
-  coverage and sets `is_complete=false` when anything is skipped.
-- `flat`: bypass the native index, useful as a correctness oracle and fallback.
+`hudi_match` options include `operator`, `fuzziness`, `prefix_length`, and
+`max_expansions`. Unknown options are rejected. The functions compose with
+normal SQL predicates. Conjunctive text predicates can be pushed into index
+planning; expressions whose `OR` semantics cannot be preserved are evaluated
+by Spark without index pushdown.
+
+SQL predicate evaluation is always complete. Compatible segments accelerate
+covered source slices, while uncovered or incompatible slices are evaluated by
+the normal Hudi scan. There is no `_score` column and `LIMIT` does not imply
+relevance order. Ranked top-k is a separate direct-search contract.
+
+#### Hudi RS Python table API
+
+Python users should not need to construct Spark SQL strings. Hudi RS extends
+its existing `HudiTableBuilder` and `read_snapshot` API with the same structured
+query model used by the index. The proposed predicate-style API is:
+
+```python
+import pyarrow as pa
+
+from hudi import HudiTableBuilder
+from hudi.search import FullTextOperator, MatchQuery, PhraseQuery
+
+table = (
+    HudiTableBuilder
+    .from_base_uri("s3://warehouse/articles")
+    .build()
+)
+
+query = MatchQuery(
+    "lakehouse indexing",
+    column="body",
+    operator=FullTextOperator.AND,
+)
+
+batches = table.read_snapshot(
+    columns=["_hoodie_record_key", "title", "body"],
+    filters=[("category", "=", "engineering")],
+    full_text_query=query,
+)
+articles = pa.Table.from_batches(batches)
+```
+
+Structured queries compose without inventing a second query language:
+
+```python
+query = (
+    MatchQuery("metadata table", column="body")
+    & PhraseQuery("incremental indexing", column="body", slop=1)
+)
+
+batches = table.read_snapshot(full_text_query=query)
+```
+
+For search applications, a Lance-style fluent API exposes ranked top-k and an
+explicit score:
+
+```python
+results = (
+    table.search_text(
+        MatchQuery("lakehouse indexing", column="body"),
+    )
+    .where([("category", "=", "engineering")])
+    .select(["_hoodie_record_key", "title", "body"])
+    .limit(20)
+    .to_arrow()
+)
+
+# Ranked by BM25 descending; `_score` is included in `results`.
+```
+
+`read_snapshot(full_text_query=...)` has predicate semantics and returns every
+match. `search_text(...).limit(k)` has ranked-search semantics and returns
+`_score`. Both pin one Hudi snapshot, use identical analyzer/query objects, and
+raw-scan uncovered source slices by default. The fluent API may expose
+`allow_incomplete_index=True`, but it must mark the result metadata as
+incomplete rather than silently changing defaults.
+
+Index creation remains an MDT table-service operation in the initial release,
+invoked through Spark SQL or the Java API. A future Hudi RS writer API may add
+`create_text_index` only after it can publish the corresponding MDT timeline
+changes safely.
 
 ### Architecture
 
@@ -216,11 +297,13 @@ Hudi timeline ---> text_index_<name> MDT partition ---> query coverage planner
               segment records  coverage records            |          |
                        |                                    |          |
                        v                                    v          v
-.hoodie/metadata/.aux/text-index/.../segment/       native splits   raw splits
+.hoodie/metadata/.aux/text-index/.../segment/       indexed splits  raw splits
   metadata.hfts  part_*.tokens.hfts                       \          /
-  part_*.docs.hfts  part_*.postings.hfts                    top-k merge
+  part_*.docs.hfts  part_*.postings.hfts                match-set union
   part_*.positions.hfts                                          |
-                                                           materialize rows
+                                                    materialize/filter rows
+                                                               |
+                                             optional Hudi RS ranked top-k
 ```
 
 The SQL definition is stored in `.hoodie/.index/index.json`. A dynamic MDT
@@ -301,7 +384,7 @@ rebuilt. A segment created from a later state is not used for an older snapshot.
 This avoids attempting to delete or mutate old postings after compaction,
 clustering, rollback, or MOR updates.
 
-### Native payload format
+### Text-index payload format
 
 All files begin with an eight-byte `HUDIFTS1` magic value followed by little-
 endian format version, feature flags, variable-header length, and header
@@ -329,63 +412,42 @@ Each block records maximum term frequency and minimum document length; these
 values provide a conservative BM25 upper bound for block-max WAND. Positions
 are stored only when enabled by the immutable index definition.
 
-No Rust or collection serialization format is persisted directly. Every field
-is defined by the Hudi format specification, so upgrading a dependency cannot
-silently change files.
+No implementation-specific collection serialization is persisted directly.
+Every field is defined by the Hudi format specification, so upgrading a Java or
+Rust dependency cannot silently change files.
 
-### Rust implementation and Java boundary
+### Implementation ownership
 
-The first implementation is a top-level crate at `hudi-native-text-index`. The
-module plan is:
+The main Hudi repository owns the SQL extension, MDT index lifecycle, Spark
+planning, and the language-neutral persistent format. It does not add an
+in-tree Rust crate or JNI build for this feature.
+
+Any Rust reader, builder, tokenizer, or Python binding is developed and released
+from Hudi RS. Hudi RS already owns Hudi's Rust implementation and Python
+bindings, so this keeps native code, packaging, and Python API compatibility in
+the appropriate project. The two repositories coordinate through versioned
+contracts rather than source-code coupling:
 
 ```text
-format       versioned headers, footers, checksums, block readers
-analysis     tokenizer and immutable analyzer pipeline
-builder      bounded-memory runs and segment construction
-dictionary   FST construction and lookup
-postings     compression, positions, and block-max metadata
-query        validated query AST and term expansion
-scoring      global-statistics BM25
-search       conjunction, disjunction, phrase verification, top-k WAND
-ffi          opaque handles and panic-safe C ABI
+Main Hudi repository                 Hudi RS repository
+--------------------                 ------------------
+Spark SQL predicates                 Python query objects
+MDT indexer lifecycle                read_snapshot(full_text_query=...)
+HoodieIndexDefinition                search_text(...) fluent API
+HoodieTextIndexInfo Avro schema      payload builder/reader implementation
+normative payload specification      Rust tests and Python bindings
 ```
 
-The prototype committed with this RFC intentionally implements only document
-addresses, segment statistics, BM25, and the fixed binary envelope. It makes
-core formulas and compatibility failures executable while the wider design is
-under review.
+The shared contracts are the analyzer fingerprint, query AST semantics,
+payload format version, segment descriptor schema, document-address encoding,
+and completeness rules. Hudi RS must reject unsupported required feature bits;
+the Spark implementation must do the same. Neither implementation may infer
+compatibility from a library version alone.
 
-The Java side exposes storage-neutral interfaces:
-
-```java
-interface TextIndexInput {
-  long length();
-  ByteBuffer readFully(long position, int length);
-}
-
-interface TextIndexWriter {
-  SegmentDescriptor build(Iterator<TextDocument> documents, BuildOptions options);
-}
-
-interface TextIndexReader extends AutoCloseable {
-  TermStatistics collectStatistics(QueryPlan query, SourceMask sources);
-  SearchResult search(QueryPlan query, GlobalStatistics stats,
-                      SourceMask sources, int limit);
-}
-```
-
-`TextIndexInput` is backed by `HoodieStorage`, preserving Hudi credentials,
-range reads, retries, and metrics. Version 1 uses JNI, which supports Hudi's
-Java 8/11 compatibility better than the Foreign Function and Memory API.
-Native functions use opaque handles, explicit byte buffers, numeric error
-codes, and a panic boundary; no C++ standard-library or Rust-owned collection
-crosses the ABI.
-
-Native artifacts are published only for declared OS/architecture combinations
-and selected through the existing Maven profile and classifier conventions.
-When a native library is unavailable, `flat` search remains available. Hudi
-must never silently interpret a persistent native segment using an incompatible
-fallback reader.
+The JVM side uses `HoodieStorage` for range reads, credentials, retries, and
+metrics. A future optimization may consume Hudi RS artifacts through a separately
+reviewed integration, but this RFC does not establish a JNI ABI or native
+artifact packaging inside the main repository.
 
 ### Build and publication lifecycle
 
@@ -395,7 +457,8 @@ A bootstrap build performs these steps:
 2. Enumerate source file slices and construct their fingerprints.
 3. Use Hudi's merged reader to emit stable record key, text, source ordinal,
    and optional row-position hint.
-4. Analyze documents and build bounded-memory sorted runs in Rust.
+4. Analyze documents and build bounded-memory sorted runs using the selected
+   implementation.
 5. Merge runs into dictionaries, document tables, postings, and positions.
 6. Write payload blocks to UUID-scoped temporary paths.
 7. Finalize checksums, statistics, and source descriptors.
@@ -428,29 +491,36 @@ that no supported query can see the descriptor. Orphan payloads without a
 published descriptor are deleted after a separate grace period. `DROP INDEX`
 first removes visibility and emits tombstones, then cleans asynchronously.
 
-### Distributed query execution
+### Query execution
 
-The Spark planner executes text search in four phases:
+Spark SQL predicate evaluation executes in four phases:
 
 1. Pin data and MDT snapshots. Resolve each eligible source slice to one exact
    compatible segment source mask or a `RawTextSearchSplit`.
-2. Collect corpus statistics for all expanded query terms from both native and
-   raw splits. Reduce document count, total token count, and document frequency,
-   then broadcast the global statistics.
-3. Search native splits using block-max WAND and raw splits using the identical
-   analyzer and score formula. Each split returns a bounded local top-k.
-4. Merge deterministic global top-k addresses and materialize rows, grouping by
-   partition and file ID and validating record keys. Row-position hints are used
-   only with an exact source fingerprint.
+2. Evaluate compatible posting lists and positions to produce matching document
+   addresses for covered slices.
+3. Evaluate the same query object and analyzer while scanning raw splits.
+4. Union and deduplicate addresses, materialize rows by partition and file ID,
+   then evaluate residual Spark predicates. Row-position hints are used only
+   with an exact source fingerprint.
 
-The statistics phase is required for ranking correctness. Scoring each segment
-with local inverse document frequency would make ranks change when the same
-documents are repartitioned or consolidated.
+This path produces a match set, not a ranked candidate set. It must preserve
+normal Spark SQL semantics for `AND`, `OR`, time travel, and `LIMIT`. Unsupported
+pushdown shapes fall back to normal predicate evaluation rather than returning
+an incomplete match set.
 
-When `complete` mode has a raw tail, collecting exact document frequencies
-requires analyzing that tail once per query. This preserves the stated ranking
-contract but can dominate latency; metrics expose this cost. Operators that
-prefer bounded latency can wait for catch-up or explicitly select `fast` mode.
+The Hudi RS `search_text` API adds two ranking phases. It collects corpus
+statistics for expanded query terms across active index sources and the raw
+tail, then searches each source using block-max WAND and merges deterministic
+local top-k candidates. Scoring each segment with local inverse document
+frequency would make ranks change when documents are repartitioned or segments
+are consolidated, so BM25 statistics are global to the pinned snapshot.
+
+When complete ranked search has a raw tail, collecting exact document
+frequencies requires analyzing that tail. This preserves ranking correctness
+but can dominate latency; the API exposes coverage and scan metrics. An
+explicit `allow_incomplete_index=True` may skip the raw tail, but the returned
+metadata must set `is_complete=false`.
 
 For term `q` and document `d`, version 1 uses:
 
@@ -483,18 +553,22 @@ replaced according to an immutable option.
 
 ### Filtering and materialization
 
-Partition predicates are pushed into coverage resolution. Arbitrary row filters
-are applied after materialization in version 1, so a filtered query may return
-fewer than `k` rows. The TVF reports this behavior. A future version may combine
-record-ID masks from expression, secondary, or bitmap MDT indexes before WAND;
-the persistent text format reserves no dependency on a particular mask index.
+Spark partition predicates are pushed into coverage resolution. Other
+conjunctive predicates remain normal Spark filters and are evaluated without
+changing the text predicate's truth value. The optimizer may intersect record
+identifiers from expression, secondary, or bitmap MDT indexes, but the
+persistent text format does not depend on a particular companion index.
+
+Hudi RS `.where(...)` uses prefilter semantics by default: structured filters
+restrict the corpus before ranking, so `limit(k)` returns the best `k` documents
+within that filter when enough matches exist. Postfilter semantics are deferred
+until the API can represent their potentially short result sets explicitly.
 
 ### Configuration
 
 | Property | Default | Description |
 | --- | --- | --- |
 | `hoodie.metadata.index.text.enable` | `false` | Enables the MDT text-index component. |
-| `hoodie.text.index.search.mode` | `complete` | `complete`, `fast`, or `flat`. |
 | `hoodie.text.index.build.memory.mb` | `512` | Builder memory before spilling sorted runs. |
 | `hoodie.text.index.posting.block.size` | `128` | Documents per posting block. Immutable per index. |
 | `hoodie.text.index.segment.target.mb` | `512` | Approximate target segment size. |
@@ -504,35 +578,36 @@ the persistent text format reserves no dependency on a particular mask index.
 
 ### Observability and failure behavior
 
-`EXPLAIN` and `_hoodie_text_index` expose the selected index, analyzer
-fingerprint, data/MDT instants, search mode, covered and raw source counts,
-segment count, payload bytes read, posting blocks skipped, native time, raw-scan
-time, and whether results are complete.
+Spark `EXPLAIN` and query metrics expose the selected index, analyzer
+fingerprint, data/MDT instants, covered and raw source counts, segment count,
+payload bytes read, posting blocks skipped, and raw-scan time. Hudi RS ranked
+results additionally expose `is_complete`, indexed/raw source counts, and
+scoring time through query metadata.
 
-Checksum failure, unsupported format, missing payload, native panic, or source
-fingerprint mismatch marks the affected source uncovered. In `complete` mode,
-the planner raw-scans it when the source data is available; in `fast` mode, the
-query fails by default rather than silently dropping additional data. A separate
-explicit option may permit partial diagnostic results.
+Checksum failure, unsupported format, missing payload, or source-fingerprint
+mismatch marks the affected source uncovered. Spark SQL and complete Hudi RS
+queries raw-scan it when source data is available. Only an explicit
+`allow_incomplete_index=True` direct query may skip it, and that query must
+return `is_complete=false`.
 
 ### Security and resource limits
 
 - Validate all descriptor paths against table UUID and configured payload root.
 - Verify header and block checksums before use.
 - Bound query clauses, term expansions, phrase positions, header sizes, decoded
-  posting counts, and native memory per task.
-- Treat index bytes and query JSON as untrusted input.
-- Convert Rust panics to errors and never unwind through JNI.
-- Do not place credentials or storage clients in native global state.
+  posting counts, and reader memory per task.
+- Treat index bytes and structured query inputs as untrusted input.
+- Hudi RS converts native failures into typed Python/Rust errors.
+- Do not place credentials or storage clients in process-global state.
 
 ### Compatibility
 
 Four versions are independent and explicit:
 
 1. MDT Avro schema version;
-2. native payload format and required feature bits;
+2. payload format and required feature bits;
 3. analyzer implementation/fingerprint version; and
-4. SQL query DSL/API version.
+4. Spark predicate and Hudi RS query-object API version.
 
 Readers may accept older payload versions through dedicated decoders. Writers
 produce only the configured current version. An upgrade that changes analyzed
@@ -541,28 +616,32 @@ compatibility.
 
 ## Rollout/Adoption Plan
 
-### Phase 0: format prototype
+### Phase 0: process and shared contracts
 
-- Merge the dependency-free Rust contract crate with golden binary fixtures.
-- Finalize Avro descriptors, analyzer canonicalization, and payload format.
-- Establish native CI, artifact signing, and supported-platform policy.
+- Reserve the RFC number through a separate process PR.
+- Finalize Avro descriptors, analyzer canonicalization, query objects, and the
+  language-neutral payload format.
+- Agree with Hudi RS maintainers on ownership, release compatibility, and
+  cross-repository golden fixtures.
 
 ### Phase 1: Spark bootstrap preview
 
 - Add `TEXT_INDEX`, `TextSearchIndexer`, MDT records, and bootstrap creation.
-- Support `match`, `and`, `or`, BM25, `complete`, and `flat` modes.
+- Add `hudi_match`, `hudi_match_phrase`, and `hudi_multi_match` predicates with
+  complete raw-scan fallback.
 - Ship behind `hoodie.metadata.index.text.enable=false`.
 
 ### Phase 2: incremental and optimized search
 
 - Add source-slice incremental rebuild, consolidation, positions/phrase search,
   prefix/fuzzy expansion, and block-max WAND.
-- Add `fast` mode and complete observability.
+- Add Hudi RS `read_snapshot(full_text_query=...)` and ranked `search_text()`
+  with Python bindings and complete observability.
 
 ### Phase 3: broader engine integration
 
-- Add Flink and Java APIs.
-- Share native packaging and top-k utilities with vector search where practical.
+- Add Flink and additional Java APIs.
+- Share Hudi RS top-k utilities with vector search where practical.
 - Investigate pre-WAND filtering with other MDT indexes and hybrid text/vector
   ranking.
 
@@ -572,11 +651,11 @@ side-by-side rebuilds followed by descriptor switchover and cleanup.
 
 ## Test Plan
 
-### Rust unit and compatibility tests
+### Format and Hudi RS compatibility tests
 
 - Golden little-endian headers, footers, dictionaries, postings, and positions.
 - Unknown version/feature rejection, length limits, checksum corruption, and
-  fuzzing of every decoder.
+  fuzzing of Java and Hudi RS decoders.
 - Analyzer golden cases for Unicode, case, stop words, stemming, invalid UTF-8,
   and token-length limits.
 - Compression round trips, posting monotonicity, positional verification, and
@@ -589,28 +668,29 @@ side-by-side rebuilds followed by descriptor switchover and cleanup.
   clean, drop, and recreate.
 - Dynamic MDT partition creation and deletion through the indexer lifecycle.
 - Exact coverage selection for old and current time-travel snapshots.
-- Analyzer/schema incompatibility and native-library-unavailable behavior.
+- Analyzer/schema incompatibility and unsupported payload-version behavior.
+- Cross-client compatibility between Spark-built segments and Hudi RS reads.
 - Orphan, partial upload, retry, duplicate build, and tombstone cleanup cases.
 - Record keys containing arbitrary UTF-8 and binary-safe encoded metadata keys.
 
 ### Distributed correctness tests
 
-The primary oracle is:
+The primary Spark SQL oracle is:
 
 ```text
-hudi_text_search(search_mode = complete)
-  == hudi_text_search(search_mode = flat)
+indexed evaluation of hudi_match(...)
+  == forced full-scan evaluation of hudi_match(...)
 ```
 
-Compare addresses, scores within a specified floating-point tolerance, and
-deterministic order across different Spark partition counts, segment layouts,
-consolidations, active-source masks, and mixtures of indexed and raw sources.
-Also verify that phrase, boolean, prefix, and fuzzy queries cannot bypass source
-or snapshot constraints.
+Compare record identities across different Spark partition counts, segment
+layouts, consolidations, active-source masks, and mixtures of indexed and raw
+sources. Verify normal `AND`/`OR` composition and time travel. Separately compare
+Hudi RS ranked output against an exhaustive BM25 scorer, including score
+tolerance and deterministic tie ordering.
 
 ### Performance tests
 
-- Build throughput, peak Java/native memory, spill volume, and object-store
+- Build throughput, peak Java/Hudi RS memory, spill volume, and object-store
   writes on small and skewed terms.
 - Cold/warm top-k latency, range-read count, bytes read, cache hit rate, and WAND
   block skips at multiple selectivities.
@@ -627,13 +707,16 @@ or snapshot constraints.
 3. Which source checksums are reliably available on every supported storage?
 4. Should the first release support only `simple` and `whitespace` tokenizers to
    keep analyzer resources deterministic?
-5. Can native artifact packaging be shared with RFC-109 before either feature
-   establishes a public compatibility promise?
-6. Should filtered top-k over arbitrary predicates be deferred explicitly or
-   implemented using an oversampling contract in v1?
+5. Which Hudi RS release first consumes the format, and how long must mixed
+   Spark/Hudi RS versions remain compatible?
+6. When Hudi RS gains MDT write support, should Python expose
+   `create_text_index`, or keep table-service operations in Spark/Java?
 
 ### References
 
 - [Lance full-text search specification](https://lance.org/format/index/scalar/fts/)
+- [Lance Python full-text search](https://lance.org/quickstart/full-text-search/)
+- [Lance Spark SQL full-text search](https://lance.org/integrations/spark/operations/dql/fts/)
 - [Lance Rust inverted-index implementation](https://github.com/lance-format/lance/tree/main/rust/lance-index/src/scalar/inverted)
 - [Apache Hudi metadata documentation](https://hudi.apache.org/docs/metadata/)
+- [Hudi RS Python/Rust quick start](https://hudi.apache.org/docs/next/python-rust-quick-start-guide/)
