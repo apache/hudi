@@ -181,13 +181,13 @@ public class VariantSchemaUtils {
    *
    * <p>The walk recurses through records, array elements and map values because the row writer
    * shreds at any depth its write schema asks it to
-   * ({@code HoodieRowParquetWriteSupport.processNestedDataType}). Note what can actually produce
-   * such a file today: the forced-shredding test hook is top-level only in BOTH write supports
-   * ({@code HoodieAvroWriteSupport.applyForcedShreddingSchema} and the top-level loop in
-   * {@code generateShreddedSchema}), so no DDL or table property reaches depth - only a
-   * hand-authored write schema that declares {@code typed_value} below the top level. Recursing
-   * anyway keeps the read side symmetric with what the writer can emit; it is not dead code, but
-   * it is not DDL-reachable either.
+   * ({@code HoodieRowParquetWriteSupport.processNestedDataType} recurses into structs, array
+   * elements and map values, and {@code generateShreddedSchema} re-reads the forced-shredding DDL
+   * on every entry, so {@code struct<v variant>} plus
+   * {@code hoodie.parquet.variant.force.shredding.schema.for.test} does shred at depth on the ROW
+   * path). The AVRO path is the narrower one: {@code HoodieAvroWriteSupport.applyForcedShreddingSchema}
+   * walks top-level fields only, so on that path a nested shredded column needs a hand-authored
+   * write schema that declares {@code typed_value} below the top level.
    */
   private static HoodieSchema swapShreddedVariantFields(HoodieSchema base, HoodieSchema other, boolean baseIsFile) {
     List<HoodieSchemaField> baseFields = base.getFields();

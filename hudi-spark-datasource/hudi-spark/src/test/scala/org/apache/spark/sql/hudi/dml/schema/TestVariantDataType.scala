@@ -1185,9 +1185,6 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   }
 
   /**
-   * Lists data parquet files in the table directory, excluding Hudi metadata files.
-   */
-  /**
    * Pins the on-disk layout of the `v` column across every base file. Without it a leg meant to
    * exercise the shredded path can silently degenerate into the unshredded one, or the reverse,
    * and the branch it was written for goes uncovered.
@@ -1215,6 +1212,9 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       s"[$leg] insert should bin-pack into the first file group via the small-file merge, got: $fileGroupIds")
   }
 
+  /**
+   * Lists data parquet files in the table directory, excluding Hudi metadata files.
+   */
   private def listDataParquetFiles(tablePath: String): Seq[String] = {
     val conf = spark.sparkContext.hadoopConfiguration
     val fs = FileSystem.get(new HadoopPath(tablePath).toUri, conf)

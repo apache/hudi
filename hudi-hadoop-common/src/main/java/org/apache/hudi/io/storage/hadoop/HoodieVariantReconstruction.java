@@ -131,7 +131,8 @@ final class HoodieVariantReconstruction {
    * variant logical type; see VariantSchemaUtils.isShreddedVariantTarget (#19567). Records, array
    * elements and map values are all descended into, matching what the row writer can emit; see
    * {@code VariantSchemaUtils.swapShreddedVariantFields} for what actually produces a nested
-   * shredded file today (not DDL - only a hand-authored write schema).
+   * shredded file today (the row path shreds at depth off the forced-shredding property; the AVRO
+   * path needs a hand-authored write schema).
    */
   private static Rebuilder buildRebuilder(HoodieSchema outputSchema, HoodieSchema fileSchema) {
     if (VariantSchemaUtils.isShreddedVariantTarget(fileSchema, outputSchema)) {
