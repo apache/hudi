@@ -39,8 +39,11 @@ public class OrderingValues {
    */
   public static Comparable create(Comparable[] orderingValues) {
     if (orderingValues.length == 1) {
-      return orderingValues[0];
+      return nullToDefault(orderingValues[0]);
     } else {
+      for (int i = 0; i < orderingValues.length; i++) {
+        orderingValues[i] = nullToDefault(orderingValues[i]);
+      }
       return new ArrayComparable(orderingValues);
     }
   }
@@ -53,11 +56,11 @@ public class OrderingValues {
     if (orderingFields.isEmpty()) {
       return DEFAULT_VALUE;
     } else if (orderingFields.size() == 1) {
-      return fieldMappingFunction.apply(orderingFields.get(0));
+      return nullToDefault(fieldMappingFunction.apply(orderingFields.get(0)));
     } else {
       Comparable[] orderingValues = new Comparable[orderingFields.size()];
       for (int i = 0; i < orderingFields.size(); i++) {
-        orderingValues[i] = fieldMappingFunction.apply(orderingFields.get(i));
+        orderingValues[i] = nullToDefault(fieldMappingFunction.apply(orderingFields.get(i)));
       }
       return new ArrayComparable(orderingValues);
     }
@@ -71,11 +74,11 @@ public class OrderingValues {
     if (orderingFields.length == 0) {
       return DEFAULT_VALUE;
     } else if (orderingFields.length == 1) {
-      return fieldMappingFunction.apply(orderingFields[0]);
+      return nullToDefault(fieldMappingFunction.apply(orderingFields[0]));
     } else {
       Comparable[] orderingValues = new Comparable[orderingFields.length];
       for (int i = 0; i < orderingFields.length; i++) {
-        orderingValues[i] = fieldMappingFunction.apply(orderingFields[i]);
+        orderingValues[i] = nullToDefault(fieldMappingFunction.apply(orderingFields[i]));
       }
       return new ArrayComparable(orderingValues);
     }
@@ -116,5 +119,11 @@ public class OrderingValues {
 
   public static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
     return orderingValue == null || OrderingValues.isDefault(orderingValue);
+  }
+
+  // Replaces a null field value (e.g. a nullable ordering column) with the default ordering value (0)
+  // so that downstream compareTo calls never throw NullPointerException.
+  private static Comparable nullToDefault(Comparable value) {
+    return value != null ? value : DEFAULT_VALUE;
   }
 }
