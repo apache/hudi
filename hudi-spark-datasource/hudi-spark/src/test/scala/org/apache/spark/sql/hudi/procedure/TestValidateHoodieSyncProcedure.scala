@@ -25,9 +25,9 @@ import java.sql.SQLException
  * Tests for [[org.apache.spark.sql.hudi.command.procedures.ValidateHoodieSyncProcedure]].
  *
  * The "complete" / "latestPartitions" modes count records over JDBC, but they do not need a live
- * Hive/JDBC endpoint to be exercised negatively: pointed at an unreachable URL, both fail fast in
- * the driver's URI parsing without touching the network. The last test pins those two failure
- * shapes, one of which is the connection-failure masking bug of #19635.
+ * Hive/JDBC endpoint to be exercised negatively: pointed at a portless URL, both fail fast in the
+ * driver's transport setup, which rejects the invalid port before any network connect. The last
+ * test pins those two failure shapes, one of which is the connection-failure masking bug of #19635.
  *
  * The other tests pass 'noop', which short-circuits the record counting (record counts stay 0)
  * while still exercising the timeline comparison, the catch-up-commit computation and the result
@@ -149,6 +149,37 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call sync_validate when the target table has never been written (sentinel commit)") {
+    withTempDir { tmp =>
+      withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+        val srcTable = generateTableName
+        val dstTable = generateTableName
+        createTable(srcTable, s"${tmp.getCanonicalPath}/$srcTable")
+        spark.sql(s"insert into $srcTable select 1, 'a1', 10, 1000")
+        spark.sql(s"insert into $srcTable select 2, 'a2', 20, 2000")
+
+        // The destination is created but never written, so its commits timeline is empty.
+        createTable(dstTable, s"${tmp.getCanonicalPath}/$dstTable")
+
+        val result = spark.sql(
+          s"""call sync_validate(src_table => '$srcTable', dst_table => '$dstTable',
+             | mode => 'noop', hive_server_url => 'jdbc:hive2://unused', hive_pass => 'x')"""
+            .stripMargin).collect()
+
+        assertResult(1)(result.length)
+        // The procedure prints the unqualified table name, while generateTableName is db-qualified.
+        val srcName = srcTable.stripPrefix("default.")
+        val dstName = dstTable.stripPrefix("default.")
+        // An empty destination timeline falls back to the sentinel latest commit "0", the realistic
+        // "target not yet synced" shape. The sentinel is never greater than the source's latest, so
+        // the else branch runs, and findInstantsAfter("0") makes the whole source timeline the
+        // catch-up set: both inserts are counted.
+        assertResult(s"Count difference now is count($srcName) - count($dstName) == 0. Catach up count is 2")(
+          result.head.getString(0))
+      }
+    }
+  }
+
   test("Test Call sync_validate when the target table is mor (known limitation)") {
     withTempDir { tmp =>
       val srcTable = generateTableName
@@ -184,7 +215,8 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
 
       // The mode dispatch counts records before the timelines are compared, so a single table as
       // both source and target is enough here: neither call survives the record counting.
-      // Nothing reaches the network either, both modes die parsing the port out of the jdbc url.
+      // Nothing reaches the network either: the url carries no port, so the authority resolves to
+      // unused:-1 and the driver's transport setup rejects that port before any connect.
 
       // mode = 'complete' routes to the countRecords overload that declares its connection as
       // `var conn: Connection = null` and closes it in an unguarded `finally { conn.close() }`.

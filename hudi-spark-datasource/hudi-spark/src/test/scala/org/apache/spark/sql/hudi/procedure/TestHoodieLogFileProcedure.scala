@@ -25,6 +25,15 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
 
+  /**
+   * The throwable and its causes, in order. Null-terminated, and capped so a self-referential
+   * cause cannot spin forever.
+   */
+  private def causeChain(t: Throwable): Seq[Throwable] =
+    Iterator.iterate(t)(_.getCause).takeWhile(_ != null).take(16).toSeq
+
+  private def chainTypes(t: Throwable): String = causeChain(t).map(_.getClass.getName).mkString(" <- ")
+
   private def createMorTable(tableName: String, tablePath: String, tableVersion: Option[Int] = None): Unit = {
     val versionProperty = tableVersion.map(version => s", hoodie.write.table.version = '$version'").getOrElse("")
     spark.sql(
@@ -165,10 +174,12 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1000")
       // One statement that both updates and deletes, so the delta commit appends a data block and a
       // delete block to the same log file. Standalone deletes are not the only way to trip the NPE:
-      // show_logfile_records resolves its reader schema from the LAST globbed log file
-      // (Objects.requireNonNull(readSchemaFromLogFile(...logFilePaths.last))), so any glob whose last
-      // file carries no data block dies the same way, merged or unmerged. The CLI twin fixed this in
-      // HUDI-6694 (#9445) with per-file null tolerance and a backward scan for the schema; see #19634.
+      // both branches of show_logfile_records requireNonNull a schema read off a log file, they just
+      // pick the file differently. The merged branch resolves the reader schema once from the last
+      // globbed file; the unmerged branch re-reads it per file and dies on the first file without a
+      // data block (or not at all, if `limit` is filled by earlier files first). With the single-file
+      // glob asserted below, both land on the same file. The CLI twin fixed this in HUDI-6694 (#9445)
+      // with per-file null tolerance and a backward scan for the schema; see #19634.
       spark.sql(
         s"""
            |merge into $tableName as target
@@ -205,6 +216,40 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
       checkExceptionContain(
         s"""call show_logfile_metadata(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10)""")(
         deleteBlockMatchError)
+    }
+  }
+
+  test("Test Call show_logfile_records Procedure over a delete-only log file") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // Table version 9 keeps deletes inline in the *.log.* files; under the v10 native log default
+      // they land in separate *.deletes.* files that the log glob below would not match.
+      createMorTable(tableName, tablePath, Some(9))
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1000")
+      spark.sql(s"delete from $tableName where id = 1")
+
+      val pattern = s"$tablePath/*/*.log.*"
+      // The inserts go to a base file, so the only log file the glob matches holds just the delete
+      // block -- the shape the pin below depends on.
+      val globbedLogFiles = FSUtils.getGlobStatusExcludingMetaFolder(
+        createMetaClient(spark, tablePath).getStorage, new StoragePath(pattern))
+      assertResult(1, "the delete block must be alone in the only log file")(globbedLogFiles.size())
+
+      // Known limitation: the unmerged path requireNonNulls the schema it reads per log file, and a
+      // delete-only log file carries none, so the call dies with an NPE; see #19634 crash 4. A fix
+      // -- porting HUDI-6694's per-file null tolerance and backward schema scan -- flips this to
+      // returning the delete-block file gracefully.
+      // Assert the exception TYPE over the cause chain, message-agnostic: NPE is in the
+      // internal-error wrap set of every Spark version, so it arrives as an [INTERNAL_ERROR]
+      // SparkException rather than bare, and the NPE itself carries no message of its own
+      // (Objects.requireNonNull with no message argument), with no helpful-NPE text on JDK 11.
+      val failure = intercept[Throwable] {
+        spark.sql(
+          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10)""".stripMargin).collect()
+      }
+      assert(causeChain(failure).exists(_.isInstanceOf[NullPointerException]), chainTypes(failure))
     }
   }
 }

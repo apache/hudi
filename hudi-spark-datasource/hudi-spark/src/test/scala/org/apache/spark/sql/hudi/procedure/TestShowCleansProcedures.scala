@@ -503,6 +503,9 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
              | )
              |""".stripMargin)
 
+        def rowCount(procedure: String, showArchived: Boolean): Int =
+          spark.sql(s"call $procedure(table => '$tableName', showArchived => $showArchived)").collect().length
+
         // Six write commits with a clean in the middle: the first clean sits before the last
         // commit that archival will move, so it gets archived along with those commits, while
         // the second clean stays on the active timeline.
@@ -514,6 +517,16 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         spark.sql(s"update $tableName set price = 14 where id = 1")
         spark.sql(s"update $tableName set price = 15 where id = 1")
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)").collect()
+
+        // Nothing has been archived yet, so showArchived => true here only exercises the merge of
+        // the active timeline with an empty archived one. All three procedures succeed and see
+        // both cleans, which is what makes the failures asserted after archival attributable to
+        // the archived instants themselves rather than to the merged read path. Two rows for
+        // show_cleans_metadata as well, since that procedure emits one row per partition per
+        // clean and this table is not partitioned.
+        assertResult(2)(rowCount("show_cleans", showArchived = true))
+        assertResult(2)(rowCount("show_cleans_metadata", showArchived = true))
+        assertResult(2)(rowCount("show_clean_plans", showArchived = true))
 
         spark.sql(s"call archive_commits(table => '$tableName', min_commits => 2, max_commits => 3," +
           " retain_commits => 1, enable_metadata => false)").collect()
@@ -530,9 +543,6 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         assert(archivedCleans.head.compareTo(activeCleans.head) < 0,
           "the archived clean must be the older of the two")
 
-        def rowCount(procedure: String, showArchived: Boolean): Int =
-          spark.sql(s"call $procedure(table => '$tableName', showArchived => $showArchived)").collect().length
-
         // Sibling-procedure controls, pinning what the other two procedures do with the very same
         // archived clean. On the active timeline all three agree: one row for the one active
         // clean. With showArchived => true they diverge, and neither sibling is correct today.
@@ -540,10 +550,11 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         assertResult(1)(rowCount("show_cleans_metadata", showArchived = false))
         assertResult(1)(rowCount("show_clean_plans", showArchived = false))
 
-        // show_cleans and its show_cleans_metadata variant do route to getArchivedTimeline, but
-        // the archived instants carry no content there, so readCleanMetadata cannot deserialize
-        // them and the call fails outright rather than degrading to a partial row. Pinned as
-        // observed: this is a harsher sibling of the #19639 limitation asserted below.
+        // The other half of #19639, which covers all three clean procedures. show_cleans and its
+        // show_cleans_metadata variant do route to getArchivedTimeline, but the archived instants
+        // carry no content there, so readCleanMetadata cannot deserialize them and the call fails
+        // outright rather than degrading to a partial row. Same missing-archived-content cause as
+        // the all-null plan rows asserted below, just a harsher symptom. Pinned as observed.
         Seq("show_cleans", "show_cleans_metadata").foreach { procedure =>
           val e = intercept[IOException](rowCount(procedure, showArchived = true))
           assert(e.getMessage.contains(archivedCleans.head),
