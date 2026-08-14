@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
@@ -64,7 +65,7 @@ public class HoodieTestLogAppender extends AbstractAppender {
    * Starts this appender and attaches it to the logger of the given class.
    */
   public HoodieTestLogAppender attachTo(Class<?> clazz) {
-    attachedLogger = (Logger) org.apache.logging.log4j.LogManager.getLogger(clazz);
+    attachedLogger = (Logger) LogManager.getLogger(clazz);
     start();
     attachedLogger.addAppender(this);
     return this;
