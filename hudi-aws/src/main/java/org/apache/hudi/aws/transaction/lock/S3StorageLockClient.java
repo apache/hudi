@@ -21,19 +21,19 @@
 package org.apache.hudi.aws.transaction.lock;
 
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
+import org.apache.hudi.client.transaction.lock.LockGetResult;
+import org.apache.hudi.client.transaction.lock.LockUpsertResult;
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
-import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
-import org.apache.hudi.client.transaction.lock.models.StorageLockData;
-import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
+import org.apache.hudi.client.transaction.lock.StorageLockData;
+import org.apache.hudi.client.transaction.lock.StorageLockFile;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkClientException;
@@ -63,10 +63,9 @@ import static org.apache.hudi.config.StorageBasedLockConfig.VALIDITY_TIMEOUT_SEC
  * S3-based distributed lock client using ETag checks (AWS SDK v2).
  * See RFC: <a href="https://github.com/apache/hudi/blob/master/rfc/rfc-91/rfc-91.md">RFC-91</a>
  */
+@Slf4j
 @ThreadSafe
 public class S3StorageLockClient implements StorageLockClient {
-
-  private static final Logger LOG = LoggerFactory.getLogger(S3StorageLockClient.class);
   private static final int PRECONDITION_FAILURE_ERROR_CODE = 412;
   private static final int NOT_FOUND_ERROR_CODE = 404;
   private static final int CONDITIONAL_REQUEST_CONFLICT_ERROR_CODE = 409;
@@ -87,7 +86,7 @@ public class S3StorageLockClient implements StorageLockClient {
    * @param props       The properties for the lock config, can be used to customize client.
    */
   public S3StorageLockClient(String ownerId, String lockFileUri, Properties props) {
-    this(ownerId, lockFileUri, props, createDefaultS3Client(), LOG);
+    this(ownerId, lockFileUri, props, createDefaultS3Client(), log);
   }
 
   @VisibleForTesting
@@ -194,6 +193,7 @@ public class S3StorageLockClient implements StorageLockClient {
       logger.info("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFilePath);
     } else if (status == RATE_LIMIT_ERROR_CODE) {
       logger.warn("OwnerId: {}, Rate limit exceeded for: {}", ownerId, lockFilePath);
+      return LockUpsertResult.THROTTLED;
     } else if (status >= INTERNAL_SERVER_ERROR_CODE_MIN) {
       logger.warn("OwnerId: {}, internal server error for: {}", ownerId, lockFilePath, e);
     } else {
@@ -245,10 +245,11 @@ public class S3StorageLockClient implements StorageLockClient {
   }
 
   private static S3Client createS3Client(Region region, long timeoutSecs, Properties props) {
-    // Set the timeout, credentials, and region
+    // Set the timeout, credentials, and region with no retries
     return S3Client.builder()
         .overrideConfiguration(
-            b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs)))
+            b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs))
+                  .retryStrategy(r -> r.maxAttempts(1)))
         .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
         .region(region).build();
   }

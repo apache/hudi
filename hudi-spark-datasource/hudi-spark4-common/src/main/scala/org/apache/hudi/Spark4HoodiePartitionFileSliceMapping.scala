@@ -23,10 +23,15 @@ import org.apache.hudi.common.model.FileSlice
 
 import org.apache.spark.sql.catalyst.InternalRow
 
-class Spark4HoodiePartitionFileSliceMapping(values: InternalRow,
-                                            slices: Map[String, FileSlice])
-  extends Spark4HoodiePartitionValues(values)
-  with HoodiePartitionFileSliceMapping {
+/**
+ * Implementation of [[HoodiePartitionFileSliceMapping]] shared by all Spark 4.x
+ * versions, mixed into the version-specific partition values classes.
+ */
+trait Spark4HoodiePartitionFileSliceMapping extends HoodiePartitionFileSliceMapping {
+
+  def values: InternalRow
+
+  protected def slices: Map[String, FileSlice]
 
   override def getSlice(fileId: String): Option[FileSlice] = {
     slices.get(fileId)

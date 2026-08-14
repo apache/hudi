@@ -19,13 +19,12 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, PartitionStatsIndexSupport}
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSchemaConversionUtils, PartitionStatsIndexSupport}
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.avro.model.HoodieCleanMetadata
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -34,6 +33,7 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAv
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider
 import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
@@ -146,6 +146,25 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     // there should not be any partition stats
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath))
+  }
+
+  /**
+   * Test case to validate that on a partitioned table, partition stats can be disabled independently while column
+   * stats remains enabled: the column stats index is still built but the partition stats index is not.
+   */
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testColumnStatsEnabledWithPartitionStatsDisabled(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false")
+    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Overwrite, validate = false)
+    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Append, validate = false)
+    // column stats should be built, but partition stats should not be present in the MDT
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val metadataPartitions = metaClient.getTableConfig.getMetadataPartitions
+    assertTrue(metadataPartitions.contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath))
+    assertFalse(metadataPartitions.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath))
   }
 
   /**
@@ -426,7 +445,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     // Add more ingests and trigger a clean to remove files from first ingestion.
     val writeOpt = hudiOpts ++ Map(
       HoodieCleanConfig.AUTO_CLEAN.key -> "true",
-      HoodieCleanConfig.CLEAN_MAX_COMMITS.key -> "1",
+      HoodieCleanConfig.CLEAN_TRIGGER_MAX_COMMITS.key -> "1",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key -> "2")
     // Do three more ingestion to trigger clean operation.
     for (i <- 0 until 3) {
@@ -464,7 +483,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     val partitionStatsIndex = new PartitionStatsIndexSupport(
       spark,
       latestDf.schema,
-      AvroConversionUtils.convertStructTypeToAvroSchema(latestDf.schema, "record", ""),
+      HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(latestDf.schema, "record", ""),
       HoodieMetadataConfig.newBuilder()
         .enable(true)
         .build(),
@@ -475,10 +494,10 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       .collectAsList()
     assertTrue(partitionStats.size() > 0)
     // Assert column stats after restore.
-    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(latestDf.schema, "record", "")
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(latestDf.schema, "record", "")
     val columnStatsIndex = new ColumnStatsIndexSupport(
       spark, latestDf.schema,
-      avroSchema,
+      hoodieSchema,
       HoodieMetadataConfig.newBuilder()
         .enable(true)
         .build(),
@@ -514,7 +533,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
     // validate MDT compaction instant
-    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable
+    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getTableMetadata
       .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
     try {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()

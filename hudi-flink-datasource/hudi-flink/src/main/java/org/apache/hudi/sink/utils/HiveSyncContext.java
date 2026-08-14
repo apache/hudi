@@ -19,6 +19,8 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -34,6 +36,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 
 import java.util.Properties;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
@@ -46,7 +49,6 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERT
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.METASTORE_URIS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
@@ -79,8 +81,8 @@ public class HiveSyncContext {
     HiveSyncMode syncMode = HiveSyncMode.of(props.getProperty(HIVE_SYNC_MODE.key()));
     if (syncMode == HiveSyncMode.GLUE) {
       return ((HiveSyncTool) ReflectionUtils.loadClass(AWS_GLUE_CATALOG_SYNC_TOOL_CLASS,
-          new Class<?>[] {Properties.class, org.apache.hadoop.conf.Configuration.class},
-          props, hiveConf));
+          new Class<?>[] {Properties.class, org.apache.hadoop.conf.Configuration.class, Option.class},
+          props, hiveConf, Option.<HoodieTableMetaClient>empty()));
     }
     return new HiveSyncTool(props, hiveConf);
   }
@@ -100,9 +102,9 @@ public class HiveSyncContext {
   @VisibleForTesting
   public static Properties buildSyncConfig(Configuration conf) {
     TypedProperties props = StreamerUtil.flinkConf2TypedProperties(conf);
+    props.setPropertyIfNonNull(BASE_PATH.key(), conf.get(FlinkOptions.PATH));
     props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), conf.get(FlinkOptions.PATH));
     props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), conf.get(FlinkOptions.HIVE_SYNC_FILE_FORMAT));
-    props.setPropertyIfNonNull(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     props.setPropertyIfNonNull(META_SYNC_DATABASE_NAME.key(), conf.get(FlinkOptions.HIVE_SYNC_DB));
     props.setPropertyIfNonNull(META_SYNC_TABLE_NAME.key(), conf.get(FlinkOptions.HIVE_SYNC_TABLE));
     props.setPropertyIfNonNull(HIVE_SYNC_MODE.key(), conf.get(FlinkOptions.HIVE_SYNC_MODE));

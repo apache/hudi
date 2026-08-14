@@ -32,8 +32,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ConcurrentModificationException;
 import java.util.HashSet;
@@ -41,6 +40,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
@@ -48,10 +48,9 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * This class is a basic implementation of a conflict resolution strategy for concurrent writes {@link ConflictResolutionStrategy}.
  */
+@Slf4j
 public class SimpleConcurrentFileWritesConflictResolutionStrategy
     implements ConflictResolutionStrategy {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SimpleConcurrentFileWritesConflictResolutionStrategy.class);
 
   @Override
   public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
@@ -132,17 +131,52 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
 
   @Override
   public boolean hasConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
+    // Check for rollback conflicts first
+    if (isRollbackConflict(thisOperation, otherOperation)) {
+      return true;
+    }
+
     // TODO : UUID's can clash even for insert/insert, handle that case.
     Set<Pair<String, String>> partitionAndFileIdsSetForFirstInstant = thisOperation.getMutatedPartitionAndFileIds();
     Set<Pair<String, String>> partitionAndFileIdsSetForSecondInstant = otherOperation.getMutatedPartitionAndFileIds();
     Set<Pair<String, String>> intersection = new HashSet<>(partitionAndFileIdsSetForFirstInstant);
     intersection.retainAll(partitionAndFileIdsSetForSecondInstant);
     if (!intersection.isEmpty()) {
-      LOG.info("Found conflicting writes between first operation = " + thisOperation
-          + ", second operation = " + otherOperation + " , intersecting file ids " + intersection);
+      log.info("Found conflicting writes between first operation = {}, second operation = {} , intersecting file ids {}", thisOperation, otherOperation, intersection);
       return true;
     }
     return false;
+  }
+
+  /**
+   * Check whether there is a rollback operation in progress that tries to rollback the commit created by this
+   * operation.
+   *
+   * @param thisOperation first concurrent commit operation
+   * @param otherOperation concurrent rollback operation
+   * @return true if there is a rollback conflict, false otherwise
+   */
+  private boolean isRollbackConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
+    // Check if otherOperation is rollback
+    if (isRollbackOperation(otherOperation)) {
+      String rolledbackCommit = otherOperation.getRolledbackCommit();
+      String thisCommitTimestamp = thisOperation.getInstantTimestamp();
+      if (rolledbackCommit != null && rolledbackCommit.equals(thisCommitTimestamp)) {
+        log.error("Found rollback conflict: rollback operation {} is rolling back commit {} created by operation {}", otherOperation, thisCommitTimestamp, thisOperation);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check if the given operation is a rollback operation.
+   *
+   * @param operation concurrent operation to check
+   * @return true if it's a rollback operation, false otherwise
+   */
+  private boolean isRollbackOperation(ConcurrentOperation operation) {
+    return ROLLBACK_ACTION.equals(operation.getInstantActionType());
   }
 
   @Override
@@ -165,9 +199,67 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
       // Conflict arises only if the log compaction commit has a lesser timestamp compared to compaction commit.
       return thisOperation.getCommitMetadataOption();
     }
-    // just abort the current write if conflicts are found
-    throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes between first operation = " + thisOperation
-        + ", second operation = " + otherOperation));
+    // just abort the current write if conflicts are found (failed for rollback conflicts).
+    throw new HoodieWriteConflictException(new ConcurrentModificationException(buildConflictErrorMessage(thisOperation, otherOperation)));
+  }
+
+  /**
+   * Builds a detailed error message for write conflicts based on the operation types involved.
+   */
+  private String buildConflictErrorMessage(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
+    boolean thisIsTableService = WriteOperationType.isTableService(thisOperation.getOperationType());
+    boolean otherIsTableService = WriteOperationType.isTableService(otherOperation.getOperationType());
+    String thisOperationDescription = formatOperationDescription(thisOperation);
+    String otherOperationDescription = formatOperationDescription(otherOperation);
+    // If either operation is a table service, provide specific retry guidance
+    if (thisIsTableService || otherIsTableService) {
+      ConcurrentOperation tableServiceOperation = thisIsTableService ? thisOperation : otherOperation;
+      String tableServiceDescription = thisIsTableService ? thisOperationDescription : otherOperationDescription;
+      String regularOperationDescription = thisIsTableService ? otherOperationDescription : thisOperationDescription;
+      String serviceType = getTableServiceDisplayName(tableServiceOperation.getOperationType());
+      return String.format(
+          "Cannot resolve conflicts for overlapping writes. %s is currently running and has overlapping file groups with %s. "
+              + "Please retry the write operation after the %s completes.",
+          tableServiceDescription, regularOperationDescription, serviceType.toLowerCase()
+      );
+    }
+    // For regular write operations conflicting with each other
+    return String.format(
+        "Cannot resolve conflicts for overlapping writes. %s has overlapping file groups with %s.",
+        thisOperationDescription, otherOperationDescription
+    );
+  }
+
+  /**
+   * Formats a description of an operation including its type, instant, and state.
+   */
+  private String formatOperationDescription(ConcurrentOperation operation) {
+    String operationName = WriteOperationType.isTableService(operation.getOperationType())
+        ? "Table " + getTableServiceDisplayName(operation.getOperationType())
+        : operation.getOperationType().value() + " operation";
+
+    return String.format("%s (instant: %s, state: %s)",
+        operationName,
+        operation.getInstantTimestamp(),
+        operation.getInstantActionState());
+  }
+
+  /**
+   * Returns a user-friendly display name for table service operations.
+   */
+  private String getTableServiceDisplayName(WriteOperationType operationType) {
+    switch (operationType) {
+      case COMPACT:
+        return "Compaction";
+      case CLUSTER:
+        return "Clustering";
+      case LOG_COMPACT:
+        return "Log Compaction";
+      case INDEX:
+        return "Indexing";
+      default:
+        return operationType.value();
+    }
   }
 
   @Override

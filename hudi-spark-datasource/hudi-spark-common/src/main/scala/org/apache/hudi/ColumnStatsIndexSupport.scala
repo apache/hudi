@@ -25,20 +25,21 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.function.SerializableFunction
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieIndexVersion, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getValidIndexedColumns
-import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
-import org.apache.hudi.stats.ValueMetadata.getValueMetadata
+import org.apache.hudi.metadata.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
+import org.apache.hudi.metadata.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Conversions.DecimalConversion
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -57,7 +58,7 @@ import scala.collection.parallel.mutable.ParHashMap
 
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
-                              avroSchema: Schema,
+                              schema: HoodieSchema,
                               @transient metadataConfig: HoodieMetadataConfig,
                               @transient metaClient: HoodieTableMetaClient,
                               allowCaching: Boolean = false)
@@ -95,7 +96,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       //       when loading the Column Statistics Index
       val prunedFileNamesOpt = if (shouldPushDownFilesFilter) Some(prunedFileNames) else None
       val getValidIndexedColumnsFunc: HoodieIndexDefinition => Seq[String] = { indexDefinition =>
-        getValidIndexedColumns(indexDefinition, avroSchema, metaClient.getTableConfig).asScala.toSeq
+        getValidIndexedColumns(indexDefinition, schema, metaClient.getTableConfig).asScala.toSeq
       }
       loadTransposed(queryReferencedColumns, readInMemory, Some(prunedPartitions), prunedFileNamesOpt) { transposedColStatsDF =>
         Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames, getValidIndexedColumnsFunc))
@@ -324,7 +325,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns, Option.empty, shouldReadInMemory)
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(JFunction.toJavaSerializableFunction(it => {
-        val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
+        val converter = HoodieSchemaConversionUtils.createGenericRecordToInternalRowConverter(HoodieSchema.fromAvroSchema(HoodieMetadataColumnStats.SCHEMA$), columnStatsRecordStructType)
         it.asScala.map(r => converter(r).orNull).asJava
       }), false)
 
@@ -384,7 +385,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
     val requiredIndexColumns =
       targetColumnStatsIndexColumns.map(colName =>
-        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.${colName}"))
+        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.$colName"))
 
     colStatsDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
       .select(requiredIndexColumns: _*)
@@ -410,7 +411,7 @@ object ColumnStatsIndexSupport {
     HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME
   )
 
-  private val columnStatsRecordStructType: StructType = AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataColumnStats.SCHEMA$)
+  private val columnStatsRecordStructType: StructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieSchema.fromAvroSchema(HoodieMetadataColumnStats.SCHEMA$))
 
   /**
    * @VisibleForTesting

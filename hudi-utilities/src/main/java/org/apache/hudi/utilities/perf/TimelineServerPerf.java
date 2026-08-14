@@ -40,10 +40,9 @@ import com.beust.jcommander.Parameter;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.UniformReservoir;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -62,10 +61,10 @@ import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
+@Slf4j
 public class TimelineServerPerf implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(TimelineServerPerf.class);
   private final Config cfg;
   private transient TimelineService timelineServer;
   private final boolean useExternalTimelineServer;
@@ -84,15 +83,15 @@ public class TimelineServerPerf implements Serializable {
   private void setHostAddrFromSparkConf(SparkConf sparkConf) {
     String hostAddr = sparkConf.get("spark.driver.host", null);
     if (hostAddr != null) {
-      LOG.info("Overriding hostIp to ({}) found in spark-conf. It was {}", hostAddr, this.hostAddr);
+      log.info("Overriding hostIp to ({}) found in spark-conf. It was {}", hostAddr, this.hostAddr);
       this.hostAddr = hostAddr;
     } else {
-      LOG.warn("Unable to find driver bind address from spark config");
+      log.warn("Unable to find driver bind address from spark config");
     }
   }
 
   public void run() throws IOException {
-    JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster, cfg.enableHiveSupport);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     if (!useExternalTimelineServer) {
@@ -281,6 +280,9 @@ public class TimelineServerPerf implements Serializable {
 
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = "local[2]";
+
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
 
     @Parameter(names = {"--server-port", "-p"}, description = " Server Port")
     public Integer serverPort = 26754;

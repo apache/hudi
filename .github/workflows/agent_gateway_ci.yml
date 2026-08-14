@@ -1,0 +1,91 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Agent Gateway CI
+
+on:
+  push:
+    branches:
+      - master
+      - 'release-*'
+    paths:
+      - 'hudi-agent-gateway/**'
+      - 'hudi-lakehouse/**'
+      - '.github/workflows/agent_gateway_ci.yml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'hudi-agent-gateway/**'
+      - 'hudi-lakehouse/**'
+      - '.github/workflows/agent_gateway_ci.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  gateway-tests:
+    name: gateway pytest + lint (python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12']
+    defaults:
+      run:
+        working-directory: hudi-agent-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: hudi-agent-gateway/pyproject.toml
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Test
+        run: python -m pytest tests -q
+      - name: Lint
+        run: ruff check src tests
+      - name: Type-check
+        run: mypy src
+
+  chart-lint:
+    name: helm lint + template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # helm is preinstalled on GitHub-hosted ubuntu runners. Do NOT add
+      # azure/setup-helm or other third-party actions here: the apache org
+      # allowlist only permits GitHub-created actions (actions/*) and a
+      # curated set, and anything else startup-fails the whole workflow.
+      - name: Lint charts
+        run: |
+          # hudi-trino intentionally fails fast on default values (metastore
+          # uri is required), so render with local-dev values when present.
+          for chart in hudi-lakehouse/charts/*/; do
+            helm lint "$chart"
+            if [ -f "$chart/values-local-dev.yaml" ]; then
+              helm lint "$chart" -f "$chart/values-local-dev.yaml"
+              helm template "$chart" -f "$chart/values-local-dev.yaml" > /dev/null
+            else
+              helm template "$chart" > /dev/null
+            fi
+          done

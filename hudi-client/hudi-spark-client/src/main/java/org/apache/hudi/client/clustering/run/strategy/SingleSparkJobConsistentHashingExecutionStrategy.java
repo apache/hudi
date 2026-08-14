@@ -18,11 +18,8 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.LazyConcatenatingIterator;
-import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -32,25 +29,27 @@ import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.LazyConcatenatingIterator;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.execution.ExecutorFactory;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.io.WriteHandleFactory;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
-import org.apache.hudi.util.ExecutorFactory;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -68,23 +67,24 @@ import java.util.function.Supplier;
  * <li> <b>Split</b>: Split a bucket into multiple buckets
  * <li> <b>Merge</b>: Merge multiple buckets into a single bucket
  */
+@Slf4j
 public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleSparkJobExecutionStrategy<T> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SingleSparkJobConsistentHashingExecutionStrategy.class);
-
-  private final String indexKeyFields;
-  private final Schema readerSchema;
+  // parsed once; the per-record bucket lookup uses the List overload of getBucket so the
+  // comma-separated config string is not re-split per record
+  private final List<String> indexKeyFieldList;
+  private final HoodieSchema readerSchema;
 
   public SingleSparkJobConsistentHashingExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext,
                                                           HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
-    this.indexKeyFields = table.getConfig().getBucketIndexHashField();
-    this.readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
+    this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(table.getConfig().getBucketIndexHashField());
+    this.readerSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(writeConfig.getSchema()));
   }
 
   @Override
   protected List<WriteStatus> performClusteringForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
-                                                        boolean preserveHoodieMetadata, SerializableSchema schema, TaskContextSupplier taskContextSupplier, String instantTime) {
+                                                        boolean preserveHoodieMetadata, HoodieSchema schema, TaskContextSupplier taskContextSupplier, String instantTime) {
     // deal with split / merge operations
     ValidationUtils.checkArgument(clusteringGroup.getNumOutputGroups() >= 1, "Number of output groups should be at least 1");
     if (clusteringGroup.getNumOutputGroups() == 1) {
@@ -109,12 +109,13 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
 
   private List<WriteStatus> performBucketMergeForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
                                                        TaskContextSupplier taskContextSupplier, String instantTime) {
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, writeConfig);
-    LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
+    long maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(taskContextSupplier, writeConfig);
+    log.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
     Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
     ValidationUtils.checkArgument(extraMetadata.isPresent(), "Extra metadata should be present for consistent hashing operations");
     String partition = extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
-    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(partition), "Partition should not be null or empty");
+    // Note: partition can be an empty string for non-partitioned tables, so only check for null here.
+    ValidationUtils.checkArgument(partition != null, "Partition should not be null");
     List<ConsistentHashingNode> nodes = decodeConsistentHashingNodes(clusteringGroup);
     Option<ConsistentHashingNode> newBucket = Option.fromJavaOptional(nodes.stream().filter(node -> node.getTag() == ConsistentHashingNode.NodeTag.REPLACE).findFirst());
     ValidationUtils.checkArgument(newBucket.isPresent(), "New bucket should be present for merge operation");
@@ -149,10 +150,10 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     private final boolean recordsSorted;
     private final Map<String/*fileIdPrefix*/, HoodieWriteHandle> writeHandles;
     private final Function<HoodieRecord, String> fileIdPrefixExtractor;
-    private final Schema schema;
+    private final HoodieSchema schema;
 
     public InsertHandler(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable, TaskContextSupplier taskContextSupplier,
-                         WriteHandleFactory writeHandleFactory, boolean recordsSorted, Function<HoodieRecord, String> fileIdPrefixExtractor, Schema schema) {
+                         WriteHandleFactory writeHandleFactory, boolean recordsSorted, Function<HoodieRecord, String> fileIdPrefixExtractor, HoodieSchema schema) {
       this.config = config;
       this.instantTime = instantTime;
       this.hoodieTable = hoodieTable;
@@ -200,15 +201,16 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
     ValidationUtils.checkArgument(extraMetadata.isPresent(), "Extra metadata should be present for consistent hashing operations");
     String partition = extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
-    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(partition), "Partition should not be null or empty");
+    // Note: partition can be an empty string for non-partitioned tables, so only check for null here.
+    ValidationUtils.checkArgument(partition != null, "Partition should not be null");
     List<ConsistentHashingNode> nodes = decodeConsistentHashingNodes(clusteringGroup);
     Integer seqNo = Integer.parseInt(extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_SEQUENCE_NUMBER_KEY));
     HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata((short) 0, partition, instantTime, 0, seqNo + 1, Collections.emptyList());
     metadata.setChildrenNodes(nodes);
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
     ClusteringOperation operation = clusteringGroup.getOperations().get(0);
-    ClosableIterator<HoodieRecord<T>> iterator = getRecordIterator(readerContextFactory, operation, instantTime, IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), writeConfig));
-    Function<HoodieRecord<T>, String> fileIdPrefixExtractor = record -> identifier.getBucket(record.getRecordKey(), this.indexKeyFields).getFileIdPrefix();
+    ClosableIterator<HoodieRecord<T>> iterator = getRecordIterator(readerContextFactory, operation, instantTime, MergeUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), writeConfig));
+    Function<HoodieRecord<T>, String> fileIdPrefixExtractor = record -> identifier.getBucket(record.getRecordKey(), this.indexKeyFieldList).getFileIdPrefix();
 
     HoodieConsumer<HoodieRecord<T>, List<WriteStatus>> insertHandler =
         new InsertHandler(writeConfig, instantTime, getHoodieTable(), taskContextSupplier, new FixedIdSuffixCreateHandleFactory(), false, fileIdPrefixExtractor, readerSchema);

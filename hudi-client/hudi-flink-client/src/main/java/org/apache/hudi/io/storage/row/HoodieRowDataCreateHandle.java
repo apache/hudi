@@ -23,14 +23,18 @@ import org.apache.hudi.client.model.HoodieRowData;
 import org.apache.hudi.client.model.HoodieRowDataCreation;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -38,26 +42,30 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Create handle with RowData for datasource implementation of bulk insert.
  */
+@Slf4j
 public class HoodieRowDataCreateHandle implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRowDataCreateHandle.class);
   private static final AtomicLong SEQGEN = new AtomicLong(1);
 
   private final String instantTime;
@@ -72,15 +80,20 @@ public class HoodieRowDataCreateHandle implements Serializable {
   private final String fileId;
   private final boolean preserveHoodieMetadata;
   private final boolean skipMetadataWrite;
+  // The schema (with meta fields appended when required) used to create the file writer.
+  private final HoodieSchema writerSchema;
   private final HoodieStorage storage;
   protected final WriteStatus writeStatus;
   private final HoodieRecordLocation newRecordLocation;
 
   private final HoodieTimer currTimer;
 
+  // Event time tracking for min/max event time metrics (when hoodie.payload.event.time.field is set)
+  private final RowData.FieldGetter eventTimeFieldGetter;
+
   public HoodieRowDataCreateHandle(HoodieTable table, HoodieWriteConfig writeConfig, String partitionPath, String fileId,
                                    String instantTime, int taskPartitionId, long taskId, long taskEpochId,
-                                   RowType rowType, boolean preserveHoodieMetadata, boolean skipMetadataWrite) {
+                                   HoodieSchema schema, boolean preserveHoodieMetadata, boolean skipMetadataWrite) {
     this.partitionPath = partitionPath;
     this.table = table;
     this.writeConfig = writeConfig;
@@ -92,9 +105,11 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.skipMetadataWrite = skipMetadataWrite;
+    this.writerSchema = schema;
     this.currTimer = HoodieTimer.start();
     this.storage = table.getStorage();
     this.path = makeNewPath(partitionPath);
+    this.eventTimeFieldGetter = initEventTimeFieldGetter(writeConfig, HoodieSchemaConverter.convertToRowType(writerSchema));
 
     this.writeStatus = new WriteStatus(table.shouldTrackSuccessRecords(),
         writeConfig.getWriteStatusFailureFraction());
@@ -111,11 +126,11 @@ public class HoodieRowDataCreateHandle implements Serializable {
               table.getPartitionMetafileFormat());
       partitionMetadata.trySave();
       createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, getWriteToken(), this.fileId, table.getBaseFileExtension()));
-      this.fileWriter = createNewFileWriter(path, table, writeConfig, rowType, this.instantTime);
+      this.fileWriter = createNewFileWriter(path, table, writeConfig, this.instantTime);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
-    LOG.info("New handle created for partition :" + partitionPath + " with fileId " + fileId);
+    log.info("New handle created for partition :{} with fileId {}", partitionPath, fileId);
   }
 
   /**
@@ -145,18 +160,72 @@ public class HoodieRowDataCreateHandle implements Serializable {
       } else {
         rowData = record;
       }
+      // Extract event time metadata when metadata is written (rowData matches rowType with event time field)
+      Option<Map<String, String>> recordMetadata = !skipMetadataWrite
+          ? extractEventTimeMetadata(rowData)
+          : Option.empty();
       try {
         fileWriter.writeRow(recordKey, rowData);
         HoodieRecordDelegate recordDelegate = writeStatus.isTrackingSuccessfulWrites()
             ? HoodieRecordDelegate.create(recordKey, partitionPath, null, newRecordLocation) : null;
-        writeStatus.markSuccess(recordDelegate, Option.empty());
+        writeStatus.markSuccess(recordDelegate, recordMetadata);
       } catch (Throwable t) {
+        log.error("Error writing record {}", record, t);
+        if (!writeConfig.getIgnoreWriteFailed()) {
+          throw new HoodieException(t.getMessage(), t);
+        }
         writeStatus.markFailure(recordKey, partitionPath, t);
       }
     } catch (Throwable ge) {
       writeStatus.setGlobalError(ge);
       throw ge;
     }
+  }
+
+  /**
+   * Initializes event time field getter from config (hoodie.payload.event.time.field).
+   * Supports DOUBLE and BIGINT only. Returns null if not configured, not found, or unsupported type.
+   */
+  private static RowData.FieldGetter initEventTimeFieldGetter(HoodieWriteConfig writeConfig, RowType rowType) {
+    String eventTimeField = writeConfig.getPayloadConfig().getProps().getProperty(
+        HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY);
+    if (eventTimeField == null || eventTimeField.isEmpty()) {
+      return null;
+    }
+    for (int i = 0; i < rowType.getFieldCount(); i++) {
+      if (rowType.getFieldNames().get(i).equals(eventTimeField)) {
+        RowType.RowField field = rowType.getFields().get(i);
+        LogicalTypeRoot root = field.getType().getTypeRoot();
+        if (root == LogicalTypeRoot.DOUBLE || root == LogicalTypeRoot.BIGINT) {
+          return RowData.createFieldGetter(field.getType(), i);
+        }
+        log.warn("Event time field '{}' has unsupported type {}. Only DOUBLE and BIGINT are supported. "
+            + "Event time metrics will be unavailable.", eventTimeField, root);
+        return null;
+      }
+    }
+    log.warn("Event time field '{}' configured but not found in schema. Event time metrics will be unavailable.",
+        eventTimeField);
+    return null;
+  }
+
+  /**
+   * Extracts event time from rowData using the event time field getter.
+   * Value is converted to long then string (no unit interpretation); WriteStatus infers unit by string length.
+   */
+  private Option<Map<String, String>> extractEventTimeMetadata(RowData rowData) {
+    if (eventTimeFieldGetter == null) {
+      return Option.empty();
+    }
+    try {
+      Object val = eventTimeFieldGetter.getFieldOrNull(rowData);
+      if (val instanceof Number) {
+        return Option.of(Collections.singletonMap(METADATA_EVENT_TIME_KEY, String.valueOf(((Number) val).longValue())));
+      }
+    } catch (Exception e) {
+      log.debug("Failed to extract event time", e);
+    }
+    return Option.empty();
   }
 
   /**
@@ -227,10 +296,16 @@ public class HoodieRowDataCreateHandle implements Serializable {
   }
 
   protected HoodieRowDataFileWriter createNewFileWriter(
-      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, RowType rowType, String instantTime)
+      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, String instantTime)
       throws IOException {
     StoragePath storagePath = new StoragePath(path.toUri());
-    return (HoodieRowDataFileWriter) new HoodieRowDataFileWriterFactory(hoodieTable.getStorage())
-        .newParquetFileWriter(instantTime, storagePath, config, rowType, hoodieTable.getTaskContextSupplier());
+    return (HoodieRowDataFileWriter) HoodieFileWriterFactory.getFileWriter(
+        instantTime,
+        storagePath,
+        hoodieTable.getStorage(),
+        config,
+        writerSchema,
+        hoodieTable.getTaskContextSupplier(),
+        HoodieRecord.HoodieRecordType.FLINK);
   }
 }

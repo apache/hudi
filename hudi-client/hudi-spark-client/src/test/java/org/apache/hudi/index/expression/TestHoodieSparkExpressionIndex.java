@@ -40,10 +40,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.BLOOM_FILTER_TYPE;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.DYNAMIC_BLOOM_MAX_ENTRIES;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.FALSE_POSITIVE_RATE;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.BLOOM_FILTER_TYPE;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.DYNAMIC_BLOOM_MAX_ENTRIES;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.FALSE_POSITIVE_RATE;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.spark.sql.functions.col;

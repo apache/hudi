@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
@@ -42,10 +43,8 @@ import org.apache.hudi.table.action.cluster.ClusteringTestUtils;
 import org.apache.hudi.table.action.deltacommit.SparkUpsertDeltaCommitPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -61,10 +60,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 public class TestUpsertPartitioner extends HoodieClientTestBase {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestUpsertPartitioner.class);
-  private static final Schema SCHEMA = getSchemaFromResource(TestUpsertPartitioner.class, "/exampleSchema.avsc");
+  private static final HoodieSchema SCHEMA = getSchemaFromResource(TestUpsertPartitioner.class, "/exampleSchema.avsc");
 
   private UpsertPartitioner getUpsertPartitioner(int smallFileSize, int numInserts, int numUpdates, int fileSize,
       String testPartitionPath, boolean autoSplitInserts) throws Exception {

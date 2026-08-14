@@ -20,21 +20,22 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieLogFile, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.log.HoodieLogFileReader
+import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex.IndexType.{BUCKET, SIMPLE}
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
-import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
@@ -352,27 +353,31 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
                                         shouldContainRecordPosition: Boolean,
                                         logFileList: List[HoodieLogFile],
                                         shouldBaseFileInstantTimeMatch: Boolean): Unit = {
-    val schema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    val schema = new TableSchemaResolver(metaClient).getTableSchema
     val fsv = FileSystemViewManager.createInMemoryFileSystemView(
       context(), metaClient, HoodieMetadataConfig.newBuilder().build())
     logFileList.foreach(filename => {
-      val logFormatReader = new HoodieLogFileReader(metaClient.getStorage, filename, schema, 81920)
-      var numBlocks = 0
-      while (logFormatReader.hasNext) {
-        val logBlock = logFormatReader.next()
-        val recordPositions = logBlock.getRecordPositions
-        assertEquals(shouldContainRecordPosition, !recordPositions.isEmpty)
-        if (shouldContainRecordPosition) {
-          val baseFile = fsv.getLatestBaseFile("", filename.getFileId)
-          assertTrue(baseFile.isPresent)
-          assertEquals(
-            shouldBaseFileInstantTimeMatch,
-            baseFile.get().getCommitTime.equals(logBlock.getBaseFileInstantTimeOfPositions))
+      val logFormatReader = HoodieLogFormat.newReader(metaClient, filename, schema)
+      try {
+        var numBlocks = 0
+        while (logFormatReader.hasNext) {
+          val logBlock = logFormatReader.next()
+          val recordPositions = logBlock.getRecordPositionList
+
+          assertEquals(shouldContainRecordPosition, !recordPositions.isEmpty)
+          if (shouldContainRecordPosition) {
+            val baseFile = fsv.getLatestBaseFile("", filename.getFileId)
+            assertTrue(baseFile.isPresent)
+            assertEquals(
+              shouldBaseFileInstantTimeMatch,
+              baseFile.get().getCommitTime.equals(logBlock.getBaseFileInstantTimeOfPositions))
+          }
+          numBlocks += 1
         }
-        numBlocks += 1
+        assertTrue(numBlocks > 0)
+      } finally {
+        logFormatReader.close()
       }
-      logFormatReader.close()
-      assertTrue(numBlocks > 0)
     })
   }
 }

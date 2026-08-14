@@ -33,6 +33,7 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
 import com.amazonaws.services.dynamodbv2.LockItem;
 import com.amazonaws.services.dynamodbv2.model.LockNotGrantedException;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.regions.Region;
@@ -75,12 +76,11 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
   protected final AmazonDynamoDBLockClient client;
   protected final String tableName;
   protected final String dynamoDBPartitionKey;
+  @Getter
   protected volatile LockItem lock;
 
   protected DynamoDBBasedLockProviderBase(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, DynamoDbClient dynamoDB) {
-    this.dynamoDbBasedLockConfig = new DynamoDbBasedLockConfig.Builder()
-        .fromProperties(lockConfiguration.getConfig())
-        .build();
+    this.dynamoDbBasedLockConfig = DynamoDbBasedLockConfig.from(lockConfiguration.getConfig());
     this.tableName = dynamoDbBasedLockConfig.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME);
     long leaseDuration = dynamoDbBasedLockConfig.getInt(DynamoDbBasedLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY);
     dynamoDBPartitionKey = getDynamoDBPartitionKey(lockConfiguration);
@@ -154,11 +154,6 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
     } catch (Exception e) {
       LOG.error(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
     }
-  }
-
-  @Override
-  public LockItem getLock() {
-    return lock;
   }
 
   private static DynamoDbClient getDynamoDBClient(DynamoDbBasedLockConfig dynamoDbBasedLockConfig) {

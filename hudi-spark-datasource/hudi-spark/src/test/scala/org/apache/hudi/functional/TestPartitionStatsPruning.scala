@@ -22,8 +22,8 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, IOType}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
@@ -389,10 +389,13 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
 
     // re-create marker for the deleted file.
     if (tableType == HoodieTableType.MERGE_ON_READ) {
+      val ioType = if (metaClient.getTableConfig.getTableVersion
+        .greaterThanOrEquals(HoodieTableVersion.EIGHT)) IOType.CREATE else IOType.APPEND
+      val markerSuffix = HoodieTableMetaClient.MARKER_EXTN + "." + ioType.name()
       if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/" + logFileName + ".marker.APPEND"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/" + logFileName + markerSuffix))
       } else {
-        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/9/" + logFileName + ".marker.APPEND"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/9/" + logFileName + markerSuffix))
       }
     } else {
       if (StringUtils.isNullOrEmpty(partitionCol)) {

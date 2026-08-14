@@ -19,7 +19,9 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieInstantInfo;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -29,27 +31,32 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.io.storage.HoodieFileWriter;
-import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,19 +69,20 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_STR;
-import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD_STR;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS;
+import static org.apache.hudi.common.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_STR;
+import static org.apache.hudi.common.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD_STR;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.apache.hudi.metadata.HoodieIndexVersion.V2;
@@ -132,12 +140,10 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     hoodieTestTable = hoodieTestTable.addCommit(instant1);
     String instant2 = "20230918121110000";
     hoodieTestTable = hoodieTestTable.addCommit(instant2);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+    List<FileSliceAndPartition> partitionFileSlicePairs = new ArrayList<>();
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
       try {
-        URI partitionMetaFile = FileCreateUtilsLegacy.createPartitionMetaFile(basePath, p);
-        StoragePath partitionMetadataPath = new StoragePath(partitionMetaFile);
         String fileId1 = UUID.randomUUID().toString();
         FileSlice fileSlice1 = new FileSlice(p, instant1, fileId1);
         StoragePath storagePath1 = new StoragePath(hoodieTestTable.getBaseFilePath(p, fileId1).toUri());
@@ -160,8 +166,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             engineContext);
         HoodieBaseFile baseFile2 = new HoodieBaseFile(hoodieTestTable.getBaseFilePath(p, fileId2).toString());
         fileSlice2.setBaseFile(baseFile2);
-        partitionFileSlicePairs.add(Pair.of(p, fileSlice1));
-        partitionFileSlicePairs.add(Pair.of(p, fileSlice2));
+        partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice1));
+        partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice2));
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -176,7 +182,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             .withPartitionStatsIndexParallelism(1)
             .build(),
         metaClient,
-        Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)),
+        Lazy.eagerly(Option.of(HOODIE_SCHEMA_WITH_METADATA_FIELDS)),
         Option.empty());
     // Validate the result.
     validatePartitionStats(result, instant1, instant2);
@@ -243,7 +249,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     hoodieTestTable = hoodieTestTable.addCommit(instant1, Option.of(commitMetadata));
     String instant2 = "20230918121110000";
     hoodieTestTable = hoodieTestTable.addCommit(instant2);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+    List<FileSliceAndPartition> partitionFileSlicePairs = new ArrayList<>();
     List<String> columnsToIndex = Arrays.asList("rider", "driver");
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
@@ -261,11 +267,11 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         FileSlice fileSlice2 = new FileSlice(p, instant2, fileId1);
         fileSlice2.setBaseFile(baseFile1);
         StoragePath storagePath2 = new StoragePath(partitionMetadataPath.getParent(), hoodieTestTable.getLogFileNameById(fileId1, 1));
-        writeLogFiles(new StoragePath(metaClient.getBasePath(), p), HoodieTestDataGenerator.AVRO_SCHEMA, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS,
+        writeLogFiles(new StoragePath(metaClient.getBasePath(), p), HOODIE_SCHEMA, HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS,
             dataGen.generateInsertsForPartition(instant2, 10, p), 1, metaClient.getStorage(), new Properties(), fileId1, instant2);
         fileSlice2.addLogFile(new HoodieLogFile(storagePath2.toUri().toString()));
-        partitionFileSlicePairs.add(Pair.of(p, fileSlice1));
-        partitionFileSlicePairs.add(Pair.of(p, fileSlice2));
+        partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice1));
+        partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice2));
         // NOTE: we need to set table config as we are not using write client explicitly and these configs are needed for log record reader
         metaClient.getTableConfig().setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
         metaClient.getTableConfig().setValue(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
@@ -275,7 +281,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             p,
             metaClient,
             columnsToIndex,
-            Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
+            Option.of(HOODIE_SCHEMA_WITH_METADATA_FIELDS),
             HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue());
         // there must be two ranges for rider and driver
         assertEquals(2, columnRangeMetadataLogFile.size());
@@ -293,7 +299,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             .withPartitionStatsIndexParallelism(1)
             .build(),
         metaClient,
-        Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)),
+        Lazy.eagerly(Option.of(HOODIE_SCHEMA_WITH_METADATA_FIELDS)),
         Option.empty());
     // Validate the result.
     validatePartitionStats(result, instant1, instant2, 6);
@@ -333,12 +339,13 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         path,
         metaClient.getStorage(),
         metaClient.getTableConfig(),
-        HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS,
+        HOODIE_SCHEMA_WITH_METADATA_FIELDS,
         engineContext.getTaskContextSupplier(),
         HoodieRecord.HoodieRecordType.AVRO);
     for (HoodieRecord record : records) {
       writer.writeWithMetadata(record.getKey(),
-          record.rewriteRecordWithNewSchema(AVRO_SCHEMA, CollectionUtils.emptyProps(), AVRO_SCHEMA_WITH_METADATA_FIELDS), HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS);
+              record.rewriteRecordWithNewSchema(HOODIE_SCHEMA, CollectionUtils.emptyProps(), HOODIE_SCHEMA_WITH_METADATA_FIELDS),
+              HOODIE_SCHEMA_WITH_METADATA_FIELDS);
     }
     writer.close();
   }
@@ -429,17 +436,25 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("col_11");
     expected.add("col_12.col12_1");
 
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("col_1")
-        .requiredString("col_7")
-        .requiredString("col_11")
-        .name("col_12").type().record("NestedRecord")
-        .fields()
-        .requiredString("col12_1")
-        .endRecord()
-        .noDefault()
-        .endRecord();
+    HoodieSchema nestedRecordSchema = HoodieSchema.createRecord(
+        "NestedRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("col12_1", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("col_1", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("col_7", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("col_11", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("col_12", nestedRecordSchema)
+        )
+    );
 
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(Option.of(schema)), false, V1).keySet()));
@@ -475,7 +490,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         Lazy.eagerly(Option.of(getTableSchema(expected))), false, V1).keySet()));
 
     //test with avro schema
-    schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR);
+    schema = HoodieSchema.parse(SCHEMA_WITH_AVRO_TYPES_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withColumnStatsIndexForColumns("booleanField,decimalField,localTimestampMillisField")
@@ -488,7 +503,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         Lazy.eagerly(Option.of(schema)), true, V1).keySet()));
 
     //test with avro schema and nested fields and unsupported types
-    schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
+    schema = HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withColumnStatsIndexForColumns("firstname,student.lastnameNested,student")
@@ -500,7 +515,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         Lazy.eagerly(Option.of(schema)), false, V1).keySet()));
 
     //test with avro schema with max cols set
-    schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR);
+    schema = HoodieSchema.parse(SCHEMA_WITH_AVRO_TYPES_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withMaxColumnsToIndexForColStats(2)
@@ -510,11 +525,12 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("intField");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(Option.of(schema)), false, V1).keySet()));
-    //test with avro schema with meta cols
+    //test schema with meta cols
+    HoodieSchema hoodieSchemaWithMetadataFields = HoodieSchemaUtils.addMetadataFields(schema);
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(HoodieAvroUtils.addMetadataFields(schema))), false, V1).keySet()));
+        Lazy.eagerly(Option.of(hoodieSchemaWithMetadataFields)), false, V1).keySet()));
 
-    //test with avro schema with type filter
+    //test schema with type filter
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withMaxColumnsToIndexForColStats(100)
@@ -536,11 +552,11 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("current_ts");
     expected.add("_hoodie_is_deleted");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA)), false, V1).keySet()));
+        Lazy.eagerly(Option.of(HOODIE_SCHEMA)), false, V1).keySet()));
     //test with avro schema with meta cols
     assertListEquality(expected,
         new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-            Lazy.eagerly(Option.of(HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA))), false, V1).keySet()));
+            Lazy.eagerly(Option.of(HOODIE_SCHEMA_WITH_METADATA_FIELDS)), false, V1).keySet()));
 
     //test with meta cols disabled
     tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
@@ -593,75 +609,84 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     }
   }
 
-  private Schema getTableSchema(List<String> fieldNames) {
-    List<Schema.Field> fields = fieldNames.stream()
-        .map(fieldName -> new Schema.Field(fieldName, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE)).collect(Collectors.toList());
-    return Schema.createRecord("Test_Hoodie_Record", "", "", false, fields);
+  private HoodieSchema getTableSchema(List<String> fieldNames) {
+    List<HoodieSchemaField> fields = fieldNames.stream()
+        .map(fieldName -> HoodieSchemaField.of(fieldName, HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE))
+        .collect(Collectors.toList());
+    return HoodieSchema.createRecord("Test_Hoodie_Record", "", "", false, fields);
   }
 
   @Test
   public void testValidateDataTypeForPartitionStats() {
     // Create a dummy schema with both complex and primitive types
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("stringField")
-        .optionalInt("intField")
-        .optionalBoolean("booleanField")
-        .optionalFloat("floatField")
-        .optionalDouble("doubleField")
-        .optionalLong("longField")
-        .optionalBytes("bytesField")
-        .name("unionIntField").type().unionOf().nullType().and().intType().endUnion().noDefault()
-        .name("arrayField").type().array().items().stringType().noDefault()
-        .name("mapField").type().map().values().intType().noDefault()
-        .name("structField").type().record("NestedRecord")
-        .fields()
-        .requiredString("nestedString")
-        .endRecord()
-        .noDefault()
-        .endRecord();
+    HoodieSchema nestedRecordSchema = HoodieSchema.createRecord(
+        "NestedRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("nestedString", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("stringField", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("intField", HoodieSchema.createNullable(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("booleanField", HoodieSchema.createNullable(HoodieSchemaType.BOOLEAN)),
+            HoodieSchemaField.of("floatField", HoodieSchema.createNullable(HoodieSchemaType.FLOAT)),
+            HoodieSchemaField.of("doubleField", HoodieSchema.createNullable(HoodieSchemaType.DOUBLE)),
+            HoodieSchemaField.of("longField", HoodieSchema.createNullable(HoodieSchemaType.LONG)),
+            HoodieSchemaField.of("bytesField", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
+            HoodieSchemaField.of("unionIntField", HoodieSchema.createNullable(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("arrayField", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING))),
+            HoodieSchemaField.of("mapField", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT))),
+            HoodieSchemaField.of("structField", nestedRecordSchema)
+        )
+    );
 
     // Test for primitive fields
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("stringField").schema(), Option.empty(), V1));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("intField").schema(), Option.empty(), V1));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("booleanField").schema(), Option.empty(), V1));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("floatField").schema(), Option.empty(), V1));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("doubleField").schema(), Option.empty(), V1));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("longField").schema(), Option.empty(), V1));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("unionIntField").schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("stringField").get().schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("intField").get().schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("booleanField").get().schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("floatField").get().schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("doubleField").get().schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("longField").get().schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("unionIntField").get().schema(), Option.empty(), V1));
 
     // Test for unsupported fields
-    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("arrayField").schema(), Option.empty(), V1));
-    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("mapField").schema(), Option.empty(), V1));
-    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("structField").schema(), Option.empty(), V1));
-    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("bytesField").schema(), Option.of(HoodieRecord.HoodieRecordType.SPARK), V1));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("arrayField").get().schema(), Option.empty(), V1));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("mapField").get().schema(), Option.empty(), V1));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("structField").get().schema(), Option.empty(), V1));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("bytesField").get().schema(), Option.of(HoodieRecord.HoodieRecordType.SPARK), V1));
 
     // Test for logical types
-    Schema dateFieldSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
-    schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .name("dateField").type(dateFieldSchema).noDefault()
-        .endRecord();
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("dateField").schema(), Option.empty(), V1));
+    HoodieSchema dateFieldSchema = HoodieSchema.createDate();
+    schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("dateField", dateFieldSchema)
+        )
+    );
+
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("dateField").get().schema(), Option.empty(), V1));
 
     // Test for logical decimal type with allowed precision and scale
-    schema = Schema.create(Schema.Type.BYTES);
-    LogicalTypes.Decimal decimalType = LogicalTypes.decimal(30, 15);
-    decimalType.addToSchema(schema);
+    schema = HoodieSchema.createDecimal(30, 15);
     // Expect the column to be supported.
     assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO), V1));
 
     // Test for logical decimal type with precision and scale exceeding the limit
-    schema = Schema.create(Schema.Type.BYTES);
-    decimalType = LogicalTypes.decimal(35, 20);
-    decimalType.addToSchema(schema);
+    schema = HoodieSchema.createDecimal(35, 20);
     // Expect the column to be unsupported.
     assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO), V1));
 
     // Test for logical decimal type with precision exceeding limit after upscaling
-    schema = Schema.create(Schema.Type.BYTES);
-    decimalType = LogicalTypes.decimal(28, 10);
-    decimalType.addToSchema(schema);
+    schema = HoodieSchema.createDecimal(28, 10);
     // Expect the column to be unsupported.
     assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO), V1));
   }
@@ -676,7 +701,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
     // Expected Results
     Set<String> expectedRevivedKeys = new HashSet<>(Collections.singletonList("K4")); // Revived: Deleted in previous but now valid
-    Set<String> expectedDeletedKeys = new HashSet<>(Collections.singletonList("K1")); // Deleted: Valid in previous but now deleted
+    Set<String> expectedDeletedKeys = new HashSet<>(Arrays.asList("K1", "K7")); // Deleted: Valid in previous but now deleted
 
     // Compute Revived and Deleted Keys
     Pair<Set<String>, Set<String>> result = computeRevivedAndDeletedKeys(validKeysForPreviousLogs, deletedKeysForPreviousLogs, validKeysForAllLogs, deletedKeysForAllLogs);
@@ -853,5 +878,104 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             0
         )
     );
+  }
+
+  /**
+   * Tests getValidInstantTimestamps rollback handling:
+   * - Without MDT compaction, all rollback metadata is read (rolled-back commits appear in valid timestamps).
+   * - With MDT compaction, only post-compaction rollback metadata is read (pre-compaction rollbacks are skipped
+   *   because those log blocks are already merged into base files).
+   */
+  @Test
+  void testGetValidInstantTimestampsSkipsPreCompactionRollbacks() throws Exception {
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+
+    String commit1 = "20260101010101000";
+    String commit1CompletionTime = "20260101010101001";
+    String commit2 = "20260201010101000";
+    String commit2CompletionTime = "20260201010101001";
+    String commit3 = "20260301010101000";
+    String commit3CompletionTime = "20260301010101001";
+    String commit4 = "20260501010101000";
+    String commit4CompletionTime = "20260501010101001";
+    String commit5 = "20260601010101000";
+    String commit5CompletionTime = "20260601010101001";
+    testTable.addCommit(commit1, Option.of(commit1CompletionTime), Option.empty());
+    testTable.addCommit(commit2, Option.of(commit2CompletionTime), Option.empty());
+    testTable.addCommit(commit3, Option.of(commit3CompletionTime), Option.empty());
+    testTable.addCommit(commit4, Option.of(commit4CompletionTime), Option.empty());
+    testTable.addCommit(commit5, Option.of(commit5CompletionTime), Option.empty());
+
+    // Rollbacks before MDT compaction time
+    addCompletedRollback(testTable, "20260202010101000", commit2);
+    addCompletedRollback(testTable, "20260302010101000", commit3);
+    // Rollback after MDT compaction time
+    addCompletedRollback(testTable, "20260502010101000", commit4);
+
+    // Delete rolled-back commit instants from the timeline to simulate real rollback behavior.
+    // In a real system, the commit instant file is removed when a rollback completes, so the
+    // only way these timestamps appear in validInstantTimestamps is via rollback metadata reading.
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    for (Pair<String, String> rolledBack : Arrays.asList(
+        Pair.of(commit2, commit2CompletionTime),
+        Pair.of(commit3, commit3CompletionTime),
+        Pair.of(commit4, commit4CompletionTime))) {
+      HoodieInstant completedCommit = metaClient.getInstantGenerator()
+          .createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
+              rolledBack.getKey(), rolledBack.getValue());
+      metaClient.getActiveTimeline().deleteInstantFileIfExists(completedCommit);
+    }
+
+    // Create MDT metaClient with NO compaction initially (only delta commits)
+    HoodieTableMetaClient mdtMetaClient = createMdtMetaClient();
+    HoodieTestTable mdtTestTable = HoodieTestTable.of(mdtMetaClient);
+    mdtTestTable.addDeltaCommit("20260101020101000");
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    mdtMetaClient = HoodieTableMetaClient.reload(mdtMetaClient);
+
+    // Without MDT compaction, all rollback metadata is read — rolled-back commits appear
+    Set<String> validTimestamps = HoodieTableMetadataUtil.getValidInstantTimestamps(metaClient, mdtMetaClient);
+    assertTrue(validTimestamps.contains(commit1), "commit1 should be in valid timestamps");
+    assertTrue(validTimestamps.contains(commit2), "commit2 should be in valid timestamps (from rollback metadata read)");
+    assertTrue(validTimestamps.contains(commit3), "commit3 should be in valid timestamps (from rollback metadata read)");
+    assertTrue(validTimestamps.contains(commit4), "commit4 should be in valid timestamps (from rollback metadata read)");
+    assertTrue(validTimestamps.contains(commit5), "commit5 should be in valid timestamps");
+
+    // Now add a compaction commit to MDT at a time between rollback2 and rollback3
+    mdtTestTable.addCommit("20260401010101000");
+    mdtTestTable.addDeltaCommit("20260501020101000");
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    mdtMetaClient = HoodieTableMetaClient.reload(mdtMetaClient);
+
+    // With MDT compaction, only post-compaction rollback (commit4) metadata is read;
+    // pre-compaction rollbacks for commit2 and commit3 are skipped
+    validTimestamps = HoodieTableMetadataUtil.getValidInstantTimestamps(metaClient, mdtMetaClient);
+    assertTrue(validTimestamps.contains(commit1), "commit1 should be in valid timestamps");
+    assertTrue(validTimestamps.contains(commit5), "commit5 should be in valid timestamps");
+    assertTrue(validTimestamps.contains(commit4), "commit4 should be in valid timestamps (from post-compaction rollback)");
+    assertFalse(validTimestamps.contains(commit2), "commit2 should NOT be in valid timestamps (pre-compaction rollback skipped)");
+    assertFalse(validTimestamps.contains(commit3), "commit3 should NOT be in valid timestamps (pre-compaction rollback skipped)");
+  }
+
+  private void addCompletedRollback(HoodieTestTable testTable, String rollbackTime, String rolledBackCommit) throws Exception {
+    Map<String, List<String>> emptyPartitionFiles = new HashMap<>();
+    emptyPartitionFiles.put("partition1", Collections.emptyList());
+    HoodieRollbackMetadata rollbackMeta = testTable.getRollbackMetadata(rolledBackCommit, emptyPartitionFiles, false);
+    HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
+    rollbackPlan.setInstantToRollback(new HoodieInstantInfo(rolledBackCommit, HoodieTimeline.COMMIT_ACTION));
+    rollbackPlan.setRollbackRequests(Collections.emptyList());
+    testTable.addRollback(rollbackTime, rollbackMeta, rollbackPlan);
+    testTable.addRollbackCompleted(rollbackTime, rollbackMeta, false);
+  }
+
+  private HoodieTableMetaClient createMdtMetaClient() throws IOException {
+    String mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath().toString());
+    HoodieTestUtils.init(mdtBasePath, HoodieTableType.MERGE_ON_READ);
+    return HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf())
+        .setBasePath(mdtBasePath)
+        .build();
   }
 }

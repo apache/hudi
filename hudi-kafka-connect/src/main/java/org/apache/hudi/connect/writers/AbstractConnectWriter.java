@@ -29,31 +29,39 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Base Hudi Writer that manages reading the raw Kafka records and
  * converting them to {@link HoodieRecord}s that can be written to Hudi by
  * the derived implementations of this class.
  */
+@Slf4j
 public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus> {
 
   public static final String KAFKA_AVRO_CONVERTER = "io.confluent.connect.avro.AvroConverter";
   public static final String KAFKA_JSON_CONVERTER = "org.apache.kafka.connect.json.JsonConverter";
   public static final String KAFKA_STRING_CONVERTER = "org.apache.kafka.connect.storage.StringConverter";
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractConnectWriter.class);
   protected final String instantTime;
 
   private final KeyGenerator keyGenerator;
   private final SchemaProvider schemaProvider;
   protected final KafkaConnectConfigs connectConfigs;
+  private final String kafkaValueConverter;
+  // Reused across all records of this writer (one writer is created per commit, single-threaded),
+  // instead of re-parsing the schema and rebuilding the converter on every record.
+  private AvroConvertor convertor;
+  // Cache fileId per partition path; kafkaPartition is invariant for a writer (the participant is
+  // bound to a single TopicPartition), so the digest input is stable for a given partition path.
+  private final Map<String, String> fileIdByPartitionPath = new HashMap<>();
 
   public AbstractConnectWriter(KafkaConnectConfigs connectConfigs,
                                KeyGenerator keyGenerator,
@@ -62,28 +70,36 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
     this.keyGenerator = keyGenerator;
     this.schemaProvider = schemaProvider;
     this.instantTime = instantTime;
+    this.kafkaValueConverter = connectConfigs.getKafkaValueConverter();
   }
 
   @Override
   public void writeRecord(SinkRecord record) throws IOException {
-    AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceSchema());
     Option<GenericRecord> avroRecord;
-    switch (connectConfigs.getKafkaValueConverter()) {
+    switch (kafkaValueConverter) {
       case KAFKA_AVRO_CONVERTER:
         avroRecord = Option.of((GenericRecord) record.value());
         break;
       case KAFKA_STRING_CONVERTER:
+        if (convertor == null) {
+          convertor = new AvroConvertor(schemaProvider.getSourceHoodieSchema());
+        }
         avroRecord = Option.of(convertor.fromJson((String) record.value()));
         break;
       case KAFKA_JSON_CONVERTER:
         throw new UnsupportedEncodingException("Currently JSON objects are not supported");
       default:
-        throw new IOException("Unsupported Kafka Format type (" + connectConfigs.getKafkaValueConverter() + ")");
+        throw new IOException("Unsupported Kafka Format type (" + kafkaValueConverter + ")");
     }
 
     // Tag records with a file ID based on kafka partition and hudi partition.
     HoodieRecord<?> hoodieRecord = new HoodieAvroRecord<>(keyGenerator.getKey(avroRecord.get()), new HoodieAvroPayload(avroRecord));
-    String fileId = KafkaConnectUtils.hashDigest(String.format("%s-%s", record.kafkaPartition(), hoodieRecord.getPartitionPath()));
+    String partitionPath = hoodieRecord.getPartitionPath();
+    String fileId = fileIdByPartitionPath.get(partitionPath);
+    if (fileId == null) {
+      fileId = KafkaConnectUtils.hashDigest(record.kafkaPartition() + "-" + partitionPath);
+      fileIdByPartitionPath.put(partitionPath, fileId);
+    }
     hoodieRecord.unseal();
     hoodieRecord.setCurrentLocation(new HoodieRecordLocation(instantTime, fileId));
     hoodieRecord.setNewLocation(new HoodieRecordLocation(instantTime, fileId));

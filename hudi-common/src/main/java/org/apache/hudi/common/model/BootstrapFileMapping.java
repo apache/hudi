@@ -20,12 +20,20 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
 
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
+
 import java.io.Serializable;
-import java.util.Objects;
 
 /**
  * Value stored in the bootstrap index.
  */
+@AllArgsConstructor
+@Getter
+@EqualsAndHashCode
+@ToString
 public class BootstrapFileMapping implements Serializable, Comparable<BootstrapFileMapping> {
 
   private final String bootstrapBasePath;
@@ -34,67 +42,6 @@ public class BootstrapFileMapping implements Serializable, Comparable<BootstrapF
 
   private final String partitionPath;
   private final String fileId;
-
-  public BootstrapFileMapping(String bootstrapBasePath, String bootstrapPartitionPath, String partitionPath,
-                              HoodieFileStatus bootstrapFileStatus, String fileId) {
-    this.bootstrapBasePath = bootstrapBasePath;
-    this.bootstrapPartitionPath = bootstrapPartitionPath;
-    this.partitionPath = partitionPath;
-    this.bootstrapFileStatus = bootstrapFileStatus;
-    this.fileId = fileId;
-  }
-
-  @Override
-  public String toString() {
-    return "BootstrapFileMapping{"
-        + "bootstrapBasePath='" + bootstrapBasePath + '\''
-        + ", bootstrapPartitionPath='" + bootstrapPartitionPath + '\''
-        + ", bootstrapFileStatus=" + bootstrapFileStatus
-        + ", partitionPath='" + partitionPath + '\''
-        + ", fileId='" + fileId + '\''
-        + '}';
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    BootstrapFileMapping mapping = (BootstrapFileMapping) o;
-    return Objects.equals(bootstrapBasePath, mapping.bootstrapBasePath)
-        && Objects.equals(bootstrapPartitionPath, mapping.bootstrapPartitionPath)
-        && Objects.equals(partitionPath, mapping.partitionPath)
-        && Objects.equals(bootstrapFileStatus, mapping.bootstrapFileStatus)
-        && Objects.equals(fileId, mapping.fileId);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(bootstrapBasePath, bootstrapPartitionPath, partitionPath, bootstrapFileStatus, fileId);
-  }
-
-  public String getBootstrapBasePath() {
-    return bootstrapBasePath;
-  }
-
-  public String getBootstrapPartitionPath() {
-    return bootstrapPartitionPath;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public HoodieFileStatus getBootstrapFileStatus() {
-    return bootstrapFileStatus;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
 
   public HoodieFileGroupId getFileGroupId() {
     return new HoodieFileGroupId(partitionPath, fileId);

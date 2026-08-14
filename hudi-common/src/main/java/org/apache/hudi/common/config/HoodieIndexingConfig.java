@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -79,6 +80,14 @@ public class HoodieIndexingConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Function to be used for building the expression index.");
 
+  public static final ConfigProperty<String> EXPRESSION_INDEX_RANGE_METADATA_STORAGE_LEVEL_VALUE = ConfigProperty
+      .key("hoodie.expression.index.range.metadata.storage.level")
+      .defaultValue("MEMORY_AND_DISK_SER")
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Determine what level of persistence is used to cache range metadata RDDs created to compute expression index. "
+          + "Refer to org.apache.spark.storage.StorageLevel for different values");
+
   public static final ConfigProperty<String> INDEX_DEFINITION_CHECKSUM = ConfigProperty
       .key("hoodie.table.checksum")
       .noDefaultValue()
@@ -86,10 +95,14 @@ public class HoodieIndexingConfig extends HoodieConfig {
       .withDocumentation("Index definition checksum is used to guard against partial writes in HDFS. "
           + "It is added as the last entry in index.properties and then used to validate while reading table config.");
 
-  private static final String INDEX_DEFINITION_CHECKSUM_FORMAT = "%s.%s"; // <index_name>.<index_type>
+  private static final String INDEX_DEFINITION_CHECKSUM_FORMAT = "%s.%s"; // <index_type>.<index_name>
 
   public HoodieIndexingConfig() {
     super();
+  }
+
+  public String getExpressionIndexRangeMetadataStorageLevel() {
+    return getStringOrDefault(EXPRESSION_INDEX_RANGE_METADATA_STORAGE_LEVEL_VALUE).toUpperCase(Locale.ROOT);
   }
 
   public static void update(HoodieStorage storage, StoragePath metadataFolder,
@@ -195,9 +208,9 @@ public class HoodieIndexingConfig extends HoodieConfig {
     if (!props.containsKey(INDEX_NAME.key())) {
       throw new IllegalArgumentException(INDEX_NAME.key() + " property needs to be specified");
     }
-    String table = props.getProperty(INDEX_NAME.key());
-    String database = props.getProperty(INDEX_TYPE.key(), "");
-    return BinaryUtil.generateChecksum(getUTF8Bytes(String.format(INDEX_DEFINITION_CHECKSUM_FORMAT, database, table)));
+    String indexName = props.getProperty(INDEX_NAME.key());
+    String indexType = props.getProperty(INDEX_TYPE.key(), "");
+    return BinaryUtil.generateChecksum(getUTF8Bytes(String.format(INDEX_DEFINITION_CHECKSUM_FORMAT, indexType, indexName)));
   }
 
   public static boolean validateChecksum(Properties props) {

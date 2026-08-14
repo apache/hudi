@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -25,19 +26,15 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -46,6 +43,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A simplified versions of Apache commons - PropertiesConfiguration, that supports limited field types and hierarchical
@@ -57,9 +55,8 @@ import java.util.Set;
  *
  * Note: Not reusing commons-configuration since it has too many conflicting runtime deps.
  */
+@Slf4j
 public class DFSPropertiesConfiguration extends PropertiesConfig {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DFSPropertiesConfiguration.class);
 
   public static final String DEFAULT_PROPERTIES_FILE = "hudi-defaults.conf";
   public static final String CONF_FILE_DIR_ENV_NAME = "HUDI_CONF_DIR";
@@ -67,8 +64,13 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   public static final StoragePath DEFAULT_PATH = new StoragePath(
       DEFAULT_CONF_FILE_DIR, DEFAULT_PROPERTIES_FILE);
 
-  // props read from hudi-defaults.conf
-  private static TypedProperties GLOBAL_PROPS = loadGlobalProps();
+  /**
+   * Holder class for lazy initialization of global properties.
+   * Initialized on first access to avoid exceptions during class loading.
+   */
+  private static class GlobalPropsHolder {
+    static final AtomicReference<TypedProperties> INSTANCE = new AtomicReference<>(null);
+  }
 
   @Nullable
   private final Configuration hadoopConfig;
@@ -116,46 +118,73 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
             String.format("Failed to read %s from class loader", DEFAULT_PROPERTIES_FILE), ioe);
       }
     }
-    // Try loading the external config file from local file system
+    // Try loading the external config file from local file system. Both DEFAULT_PATH and
+    // HUDI_CONF_DIR are optional global config locations — use the tolerant overload so a
+    // missing file does not propagate as an exception (preserves prior silent-ignore behavior
+    // for optional global-defaults paths).
     try {
-      conf.addPropsFromFile(DEFAULT_PATH);
+      conf.addPropsFromFile(DEFAULT_PATH, true);
     } catch (Exception e) {
-      LOG.warn("Cannot load default config file: {}", DEFAULT_PATH, e);
+      log.warn("Cannot load default config file: {}", DEFAULT_PATH, e);
     }
     Option<StoragePath> defaultConfPath = getConfPathFromEnv();
     if (defaultConfPath.isPresent() && !defaultConfPath.get().equals(DEFAULT_PATH)) {
-      conf.addPropsFromFile(defaultConfPath.get());
+      conf.addPropsFromFile(defaultConfPath.get(), true);
     }
     return conf.getProps();
   }
 
   public static void refreshGlobalProps() {
-    GLOBAL_PROPS = loadGlobalProps();
+    TypedProperties fresh = loadGlobalProps();
+    GlobalPropsHolder.INSTANCE.set(fresh);
   }
 
   public static void clearGlobalProps() {
-    GLOBAL_PROPS = new TypedProperties();
+    GlobalPropsHolder.INSTANCE.set(new TypedProperties());
   }
 
   /**
-   * Add properties from external configuration files.
+   * Add properties from an external configuration file. A missing file is tolerated only when the
+   * caller's path equals {@link #DEFAULT_PATH} (the optional global {@code hudi-defaults.conf}); any
+   * other missing file fails fast with {@link HoodieIOException}, so a typo in an explicit
+   * user-supplied path (e.g. {@code --props /path/...}) is surfaced rather than silently loading
+   * empty properties.
+   *
+   * <p>For include-resolved paths use {@link #addPropsFromFile(StoragePath, boolean)} with
+   * {@code tolerateMissing=true}.
    *
    * @param filePath file path for configuration file.
    */
   public void addPropsFromFile(StoragePath filePath) {
+    addPropsFromFile(filePath, filePath.equals(DEFAULT_PATH));
+  }
+
+  /**
+   * Add properties from an external configuration file.
+   *
+   * @param filePath         file path for configuration file.
+   * @param tolerateMissing  when {@code true}, a missing file is logged at {@code debug} and
+   *                         ignored (used for optional global-defaults paths and {@code include=}
+   *                         recursion). When {@code false}, missing files raise
+   *                         {@link HoodieIOException} so explicit user-supplied paths fail fast.
+   */
+  void addPropsFromFile(StoragePath filePath, boolean tolerateMissing) {
     if (visitedFilePaths.contains(filePath.toString())) {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
 
-    HoodieStorage storage = new HoodieHadoopStorage(
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
         filePath,
         HadoopFSUtils.getStorageConf(Option.ofNullable(hadoopConfig).orElseGet(Configuration::new))
     );
 
     try {
-      if (filePath.equals(DEFAULT_PATH) && !storage.exists(filePath)) {
-        LOG.debug("Properties file {} not found. Ignoring to load props file", filePath);
-        return;
+      if (!storage.exists(filePath)) {
+        if (tolerateMissing) {
+          log.debug("Properties file {} not found. Ignoring to load props file", filePath);
+          return;
+        }
+        throw new HoodieIOException("Properties file does not exist: " + filePath);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Cannot check if the properties file exist: " + filePath, ioe);
@@ -165,7 +194,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       visitedFilePaths.add(filePath.toString());
       addPropsFromStream(reader, filePath);
     } catch (IOException ioe) {
-      LOG.error("Error reading in properties from dfs from file " + filePath);
+      log.error("Error reading in properties from dfs from file {}", filePath);
       throw new HoodieIOException("Cannot read properties from dfs from file " + filePath, ioe);
     }
   }
@@ -192,7 +221,9 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
               && cfgFilePath != null) {
             providedPath = new StoragePath(cfgFilePath.getParent(), split[1]);
           }
-          addPropsFromFile(providedPath);
+          // include= references may legitimately point to optional files (e.g. environment-
+          // specific overrides); skip silently when missing rather than failing the whole load.
+          addPropsFromFile(providedPath, true);
         } else {
           hoodieConfig.setValue(split[0], split[1]);
         }
@@ -209,15 +240,32 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   }
 
   public static TypedProperties getGlobalProps() {
-    final TypedProperties globalProps = new TypedProperties();
-    globalProps.putAll(GLOBAL_PROPS);
-    return globalProps;
+    TypedProperties props = GlobalPropsHolder.INSTANCE.get();
+
+    if (props == null) {
+      TypedProperties loaded = loadGlobalProps();
+      if (GlobalPropsHolder.INSTANCE.compareAndSet(null, loaded)) {
+        log.info("Loaded global properties from configuration");
+      }
+      props = GlobalPropsHolder.INSTANCE.get();
+    }
+
+    final TypedProperties copy = new TypedProperties();
+    copy.putAll(props);
+    return copy;
   }
 
   // test only
   public static TypedProperties addToGlobalProps(String key, String value) {
-    GLOBAL_PROPS.put(key, value);
-    return GLOBAL_PROPS;
+    if (GlobalPropsHolder.INSTANCE.get() == null) {
+      getGlobalProps();
+    }
+    TypedProperties current = GlobalPropsHolder.INSTANCE.get();
+    TypedProperties updated = new TypedProperties();
+    updated.putAll(current);
+    updated.put(key, value);
+    GlobalPropsHolder.INSTANCE.set(updated);
+    return updated;
   }
 
   public TypedProperties getProps() {
@@ -231,13 +279,13 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   private static Option<StoragePath> getConfPathFromEnv() {
     String confDir = System.getenv(CONF_FILE_DIR_ENV_NAME);
     if (confDir == null) {
-      LOG.debug("Environment variable " + CONF_FILE_DIR_ENV_NAME + ", not set. If desired, set it to the folder containing: " + DEFAULT_PROPERTIES_FILE);
+      log.debug("Environment variable {}, not set. If desired, set it to the folder containing: {}", CONF_FILE_DIR_ENV_NAME, DEFAULT_PROPERTIES_FILE);
       return Option.empty();
     }
     if (StringUtils.isNullOrEmpty(URI.create(confDir).getScheme())) {
       confDir = "file://" + confDir;
     }
-    return Option.of(new StoragePath(confDir + File.separator + DEFAULT_PROPERTIES_FILE));
+    return Option.of(new StoragePath(confDir + "/" + DEFAULT_PROPERTIES_FILE));
   }
 
   private String[] splitProperty(String line) {

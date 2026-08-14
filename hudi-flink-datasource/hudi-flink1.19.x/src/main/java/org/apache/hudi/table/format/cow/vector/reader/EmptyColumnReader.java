@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.cow.vector.reader;
 
+import lombok.NoArgsConstructor;
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
 
@@ -30,10 +31,8 @@ import java.io.IOException;
  * When reading a parquet file with the latest schema, parquet file might not have the new field.
  * The EmptyColumnReader is used to handle such scenarios.
  */
+@NoArgsConstructor
 public class EmptyColumnReader implements ColumnReader<WritableColumnVector> {
-
-  public EmptyColumnReader() {
-  }
 
   @Override
   public void readToVector(int readNumber, WritableColumnVector vector) throws IOException {

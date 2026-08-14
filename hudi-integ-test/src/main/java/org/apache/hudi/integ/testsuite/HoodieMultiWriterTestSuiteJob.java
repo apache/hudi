@@ -23,10 +23,9 @@ import org.apache.hudi.utilities.UtilHelpers;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,10 +51,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Writer 1 DeltaStreamer ingesting data into partitions 0 to 10, Writer 2 Spark datasource ingesting data into partitions 100 to 110.
  * Multiple spark datasource writers, each writing to exclusive set of partitions.
  *
- * TODO: [HUDI-8294]
  * Example command
  * spark-submit
- * --packages org.apache.spark:spark-avro_2.11:2.4.0
+ * --packages org.apache.spark:spark-avro_2.12:3.5.5
  * --conf spark.task.cpus=3
  * --conf spark.executor.cores=3
  * --conf spark.task.maxFailures=100
@@ -93,9 +91,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Example command that works w/ docker.
  *
  */
+@Slf4j
 public class HoodieMultiWriterTestSuiteJob {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMultiWriterTestSuiteJob.class);
 
   public static void main(String[] args) throws Exception {
     final HoodieMultiWriterTestSuiteConfig cfg = new HoodieMultiWriterTestSuiteConfig();
@@ -106,7 +103,7 @@ public class HoodieMultiWriterTestSuiteJob {
     }
 
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-writer-test-run-" + cfg.outputTypeName
-        + "-" + cfg.inputFormatName, cfg.sparkMaster);
+        + "-" + cfg.inputFormatName, cfg.sparkMaster, cfg.enableHiveSupport);
 
     String[] inputPaths = cfg.inputBasePaths.split(",");
     String[] yamls = cfg.workloadYamlPaths.split(",");
@@ -147,7 +144,7 @@ public class HoodieMultiWriterTestSuiteJob {
       try {
         // start each job at 20 seconds interval so that metaClient instantiation does not overstep
         Thread.sleep(waitTimes.get(counter.get()));
-        LOG.info("Starting job " + hoodieTestSuiteConfig.toString());
+        log.info("Starting job {}", hoodieTestSuiteConfig.toString());
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
@@ -155,13 +152,13 @@ public class HoodieMultiWriterTestSuiteJob {
         boolean toReturn = true;
         try {
           new HoodieTestSuiteJob(hoodieTestSuiteConfig, jssc, false).runTestSuite();
-          LOG.info("Job completed successfully");
+          log.info("Job completed successfully");
         } catch (Exception e) {
           if (!jobFailed.getAndSet(true)) {
-            LOG.error("Exception thrown " + e.getMessage() + ", cause : " + e.getCause());
+            log.error("Exception thrown {}, cause : {}", e.getMessage(), e.getCause());
             throw new RuntimeException("HoodieTestSuiteJob Failed " + e.getCause() + ", and msg " + e.getMessage(), e);
           } else {
-            LOG.info("Already a job failed. so, not throwing any exception ");
+            log.info("Already a job failed. so, not throwing any exception ");
           }
         }
         return toReturn;
@@ -169,15 +166,15 @@ public class HoodieMultiWriterTestSuiteJob {
       counter.getAndIncrement();
     });
 
-    LOG.info("Going to await until all jobs complete");
+    log.info("Going to await until all jobs complete");
     try {
       CompletableFuture completableFuture = allOfTerminateOnFailure(completableFutureList);
       completableFuture.get();
     } finally {
       executor.shutdownNow();
       if (jssc != null) {
-        LOG.info("Completed and shutting down spark context ");
-        LOG.info("Shutting down spark session and JavaSparkContext");
+        log.info("Completed and shutting down spark context ");
+        log.info("Shutting down spark session and JavaSparkContext");
         SparkSession.builder().config(jssc.getConf()).enableHiveSupport().getOrCreate().stop();
         jssc.close();
       }

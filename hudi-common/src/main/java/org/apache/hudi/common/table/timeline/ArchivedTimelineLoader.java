@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -45,4 +46,41 @@ public interface ArchivedTimelineLoader extends Serializable {
       HoodieArchivedTimeline.LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter,
       BiConsumer<String, GenericRecord> recordConsumer);
+
+  /**
+   * Loads the instants from the timeline with optional limit for early termination.
+   *
+   * @param metaClient     The meta client.
+   * @param filter         The time range filter where the target instant belongs to.
+   * @param loadMode       The load mode.
+   * @param commitsFilter  Filter of the instant type.
+   * @param recordConsumer Consumer of the instant record payload.
+   * @param limit          Optional maximum number of instants to load. Empty for no limit.
+   */
+  default void loadInstants(
+      HoodieTableMetaClient metaClient,
+      @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+      HoodieArchivedTimeline.LoadMode loadMode,
+      Function<GenericRecord, Boolean> commitsFilter,
+      BiConsumer<String, GenericRecord> recordConsumer,
+      Option<Integer> limit) {
+    // Default implementation calls the method without limit for backward compatibility
+    loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer);
+  }
+
+  /**
+   * Loads all the instants from the files in the timeline that match the given range filter
+   *
+   * @param metaClient     The meta client.
+   * @param fileFilter     The time range filter for limiting the files to be loaded.
+   * @param loadMode       The load mode.
+   * @param recordConsumer Consumer of the instant record payload.
+   * @return the last instant time loaded or empty if no instant is loaded.
+   */
+  Option<String>  loadAllInstantsFromFilesInRange(
+        HoodieTableMetaClient metaClient,
+        HoodieArchivedTimeline.TimeRangeFilter fileFilter,
+        HoodieArchivedTimeline.LoadMode loadMode,
+        BiConsumer<String, GenericRecord> recordConsumer
+  );
 }

@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.NoArgsConstructor;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -27,10 +28,8 @@ import org.apache.avro.generic.IndexedRecord;
 /**
  * Empty payload used for deletions.
  */
+@NoArgsConstructor
 public class EmptyHoodieRecordPayload implements HoodieRecordPayload<EmptyHoodieRecordPayload> {
-
-  public EmptyHoodieRecordPayload() {
-  }
 
   public EmptyHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
   }

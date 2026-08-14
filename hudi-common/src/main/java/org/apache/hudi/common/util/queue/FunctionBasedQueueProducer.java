@@ -18,8 +18,7 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.function.Function;
 
@@ -28,9 +27,8 @@ import java.util.function.Function;
  *
  * @param <I> Type of entry produced for queue
  */
+@Slf4j
 public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FunctionBasedQueueProducer.class);
 
   private final Function<HoodieMessageQueue<I, ?>, Boolean> producerFunction;
 
@@ -40,9 +38,9 @@ public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
 
   @Override
   public void produce(HoodieMessageQueue<I, ?> queue) {
-    LOG.info("Starting to produce records into the queue");
+    log.info("Starting to produce records into the queue");
     producerFunction.apply(queue);
-    LOG.info("Finished producing records into the queue");
+    log.info("Finished producing records into the queue");
   }
 
   @Override

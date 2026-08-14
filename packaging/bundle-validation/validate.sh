@@ -80,7 +80,7 @@ use_default_java_runtime () {
 test_spark_hadoop_mr_bundles () {
     echo "::warning::validate.sh setting up hive metastore for spark & hadoop-mr bundles validation"
 
-    if [ "$SPARK_VERSION" = "4.0.0" ]; then
+    if [[ "$SPARK_VERSION" == 4.* ]]; then
         change_java_runtime_version
     fi
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
@@ -112,7 +112,7 @@ test_spark_hadoop_mr_bundles () {
     numRecordsHiveQL=$(cat $hiveqlresultsdir/*.csv | wc -l)
     if [ "$numRecordsHiveQL" -ne 10 ]; then
         echo "::error::validate.sh HiveQL validation failed."
-        if [ "$SPARK_VERSION" = "4.0.0" ]; then
+        if [[ "$SPARK_VERSION" == 4.* ]]; then
             echo "::error::validate.sh Debug info for Spark4 validation failure:"
             $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
                       -u jdbc:hive2://localhost:10000/default --showHeader=true --outputformat=csv2 \
@@ -259,7 +259,7 @@ test_metaserver_bundle () {
     java -jar $JARS_DIR/metaserver.jar &
     local METASEVER_PID=$!
 
-    if [ "$SPARK_VERSION" = "4.0.0" ]; then
+    if [[ "$SPARK_VERSION" == 4.* ]]; then
             change_java_runtime_version
     fi
     echo "::warning::validate.sh Start hive server"
@@ -300,10 +300,7 @@ test_metaserver_bundle () {
 ##
 test_cli_bundle() {
     echo "::warning::validate.sh setting up CLI bundle validation"
-
-    if [ "$SPARK_VERSION" = "4.0.0" ]; then
-        change_java_runtime_version
-    fi
+    change_java_runtime_version
 
     # Create a temporary directory for CLI commands output
     CLI_TEST_DIR="/tmp/hudi-bundles/tests/log"
@@ -362,14 +359,14 @@ test_cli_bundle() {
 # Execute tests
 ############################
 
-# run flink bundle test only for flink2.0 case, since there is problem for java 11 and spark3.5 bundle (HUDI-8608).
-if [[ "${FLINK_HOME}" == *"2.0"* ]]; then
+# run flink bundle test only for flink2.x case, since there is problem for java 11 and spark3.5 bundle (HUDI-8608).
+if [[ "${FLINK_HOME}" == *"2.0"* || "${FLINK_HOME}" == *"2.1"* ]]; then
     echo "::warning::validate.sh validating flink 2.0 bundle"
     test_flink_bundle
     if [ "$?" -ne 0 ]; then
         exit 1
     fi
-    echo "::warning::validate.sh done validating flink 2.0 bundle"
+    echo "::warning::validate.sh done validating flink 2.x bundle"
     exit 0
 fi
 
@@ -380,7 +377,7 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
-if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* ]]
+if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* || $SPARK_HOME == *"spark-4.1"* ]]
 then
   echo "::warning::validate.sh validating cli bundle"
   test_cli_bundle
@@ -392,7 +389,7 @@ else
   echo "::warning::validate.sh skip validating cli bundle for Spark < 3.5 build"
 fi
 
-if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* ]]
+if [[ $SPARK_HOME == *"spark-3.5"* ]]
 then
   echo "::warning::validate.sh validating utilities bundle"
   test_utilities_bundle $JARS_DIR/utilities.jar
@@ -411,7 +408,7 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
-if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' && ${SCALA_PROFILE} != 'scala-2.13' ]]; then
+if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk11' && ${SCALA_PROFILE} != 'scala-2.13' ]]; then
   echo "::warning::validate.sh validating flink bundle"
   test_flink_bundle
   if [ "$?" -ne 0 ]; then

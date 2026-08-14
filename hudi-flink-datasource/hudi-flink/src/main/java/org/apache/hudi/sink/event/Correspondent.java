@@ -22,23 +22,28 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.util.SerializedValue;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Correspondent between a write task with the coordinator.
  */
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Getter
 public class Correspondent {
+
   private final OperatorID operatorID;
   private final TaskOperatorEventGateway gateway;
-
-  private Correspondent(OperatorID operatorID, TaskOperatorEventGateway gateway) {
-    this.operatorID = operatorID;
-    this.gateway = gateway;
-  }
 
   @VisibleForTesting
   protected Correspondent() {
@@ -71,49 +76,81 @@ public class Correspondent {
     }
   }
 
-  public OperatorID getOperatorID() {
-    return operatorID;
+  /**
+   * Sends a writing metadata event to the coordinator.
+   */
+  public void sendWriteMetadataEvent(WriteMetadataEvent writeMetadataEvent) {
+    try {
+      this.gateway.sendOperatorEventToCoordinator(this.operatorID, new SerializedValue<>(writeMetadataEvent));
+    } catch (IOException e) {
+      throw new HoodieException("Error sending write metadata event to the coordinator", e);
+    }
   }
 
-  public TaskOperatorEventGateway getGateway() {
-    return gateway;
+  /**
+   * Sends a request to the coordinator to fetch the inflight instants.
+   */
+  public Map<Long, String> requestInflightInstants() {
+    try {
+      InflightInstantsResponse response = CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
+          new SerializedValue<>(InflightInstantsRequest.getInstance())).get());
+      return response.getInflightInstants();
+    } catch (Exception e) {
+      throw new HoodieException("Error requesting the instant time from the coordinator", e);
+    }
   }
 
   /**
    * A request for instant time with a given checkpoint id.
    */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @Getter
   public static class InstantTimeRequest implements CoordinationRequest {
-    private final long checkpointId;
 
-    private InstantTimeRequest(long checkpointId) {
-      this.checkpointId = checkpointId;
-    }
+    private final long checkpointId;
 
     public static InstantTimeRequest getInstance(long checkpointId) {
       return new InstantTimeRequest(checkpointId);
-    }
-
-    public long getCheckpointId() {
-      return checkpointId;
     }
   }
 
   /**
    * A response with instant time.
    */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @Getter
   public static class InstantTimeResponse implements CoordinationResponse {
-    private final String instant;
 
-    private InstantTimeResponse(String instant) {
-      this.instant = instant;
-    }
+    private final String instant;
 
     public static InstantTimeResponse getInstance(String instant) {
       return new InstantTimeResponse(instant);
     }
+  }
 
-    public String getInstant() {
-      return instant;
+  /**
+   * A request for the current inflight instants in the coordinator.
+   */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @Getter
+  public static class InflightInstantsRequest implements CoordinationRequest {
+
+    public static InflightInstantsRequest getInstance() {
+      return new InflightInstantsRequest();
+    }
+  }
+
+  /**
+   * A response with instant time.
+   */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @Getter
+  public static class InflightInstantsResponse implements CoordinationResponse {
+
+    private final HashMap<Long, String> inflightInstants;
+
+    public static InflightInstantsResponse getInstance(HashMap<Long, String> inflightInstants) {
+      return new InflightInstantsResponse(inflightInstants);
     }
   }
 }

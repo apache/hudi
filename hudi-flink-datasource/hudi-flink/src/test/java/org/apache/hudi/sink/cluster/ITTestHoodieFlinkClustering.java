@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -38,16 +39,15 @@ import org.apache.hudi.sink.clustering.ClusteringPlanSourceFunction;
 import org.apache.hudi.sink.clustering.FlinkClusteringConfig;
 import org.apache.hudi.sink.clustering.HoodieFlinkClusteringJob;
 import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
 
-import org.apache.avro.Schema;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
@@ -65,7 +65,6 @@ import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
-import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.Row;
@@ -84,6 +83,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.sink.utils.FlinkTransformationUtils.setManagedMemoryWeight;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -180,8 +180,8 @@ public class ITTestHoodieFlinkClustering {
       HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
-      final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
-      final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+      final HoodieSchema tableSchema = StreamerUtil.getTableSchema(table.getMetaClient(), false);
+      final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
       DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime.get(), clusteringPlan, conf))
@@ -193,7 +193,7 @@ public class ITTestHoodieFlinkClustering {
               new ClusteringOperator(conf, rowType))
           .setParallelism(clusteringPlan.getInputGroups().size());
 
-      ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+      setManagedMemoryWeight(dataStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
       dataStream
@@ -383,8 +383,8 @@ public class ITTestHoodieFlinkClustering {
       HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(firstClusteringInstant.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
-      final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
-      final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+      final HoodieSchema tableAvroSchema = StreamerUtil.getTableSchema(table.getMetaClient(), false);
+      final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableAvroSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
       DataStream<ClusteringCommitEvent> dataStream =
@@ -398,7 +398,7 @@ public class ITTestHoodieFlinkClustering {
                   new ClusteringOperator(conf, rowType))
               .setParallelism(clusteringPlan.getInputGroups().size());
 
-      ExecNodeUtil.setManagedMemoryWeight(
+      setManagedMemoryWeight(
           dataStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
@@ -661,7 +661,7 @@ public class ITTestHoodieFlinkClustering {
               new ClusteringOperator(conf, rowType))
           .setParallelism(clusteringPlan.getInputGroups().size());
 
-      ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+      setManagedMemoryWeight(dataStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
       dataStream
@@ -752,8 +752,8 @@ public class ITTestHoodieFlinkClustering {
       HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
-      final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
-      final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+      final HoodieSchema tableAvroSchema = StreamerUtil.getTableSchema(table.getMetaClient(), false);
+      final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableAvroSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
       DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime.get(), clusteringPlan, conf))
@@ -765,7 +765,7 @@ public class ITTestHoodieFlinkClustering {
               new ClusteringOperator(conf, rowType))
           .setParallelism(clusteringPlan.getInputGroups().size());
 
-      ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+      setManagedMemoryWeight(dataStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
       dataStream

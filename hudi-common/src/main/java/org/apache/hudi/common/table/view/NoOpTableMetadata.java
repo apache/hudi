@@ -23,19 +23,20 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.expression.Expression;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.schema.internal.Types;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.expression.Expression;
-import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.RawKey;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.IOException;
@@ -72,6 +73,11 @@ class NoOpTableMetadata implements HoodieTableMetadata {
 
   @Override
   public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths) throws IOException {
+    throw new HoodieMetadataException("Unsupported operation: getAllFilesInPartitions!");
+  }
+
+  @Override
+  public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths, Option<StoragePathFilter> pathFilterOption) throws IOException {
     throw new HoodieMetadataException("Unsupported operation: getAllFilesInPartitions!");
   }
 

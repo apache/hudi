@@ -24,57 +24,41 @@ import org.apache.hudi.client.SparkRDDMetadataWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.client.utils.SparkMetadataWriterUtils;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieSparkIndexClient;
-import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
-import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
+import org.apache.hudi.metadata.index.SparkIndexerSupport;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
 
+@Slf4j
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieBackedTableMetadataWriter.class);
 
   /**
    * Return a Spark based implementation of {@code HoodieTableMetadataWriter} which can be used to
@@ -126,7 +110,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp,
                                        boolean streamingWrites) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, streamingWrites);
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext,
+        new SparkIndexerSupport(engineContext, writeConfig), inflightInstantTimestamp, streamingWrites);
   }
 
   @Override
@@ -140,15 +125,15 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       } else {
         registry = Registry.getRegistry("HoodieMetadata");
       }
-      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), dataMetaClient.getStorage()));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), dataMetaClient.getStorage(), dataWriteConfig.getMetadataConfig().isDetailedMetricsEnabled()));
     } else {
       this.metrics = Option.empty();
     }
   }
 
   @Override
-  protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
-    commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
+  protected void commit(String instantTime, List<IndexPartitionAndRecords> partitionRecords) {
+    commitInternal(instantTime, partitionRecords, false, Option.empty());
   }
 
   @Override
@@ -210,82 +195,19 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void bulkCommit(String instantTime, String partitionPath, HoodieData<HoodieRecord> records,
       MetadataTableFileGroupIndexParser indexParser) {
     SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(indexParser);
-    commitInternal(instantTime, Collections.singletonMap(partitionPath, records), true, Option.of(partitioner));
+    commitInternal(instantTime, Collections.singletonList(IndexPartitionAndRecords.of(partitionPath, records)), true, Option.of(partitioner));
   }
 
   @Override
   public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
     List<String> partitionsToDrop = partitions.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
-    LOG.info("Deleting Metadata Table partitions: {}", partitionsToDrop);
+    log.info("Deleting Metadata Table partitions: {}", partitionsToDrop);
 
     SparkRDDWriteClient writeClient = (SparkRDDWriteClient) getWriteClient();
     String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
     writeClient.startCommitForMetadataTable(metadataMetaClient, instantTime, actionType);
     HoodieWriteResult result = writeClient.deletePartitions(partitionsToDrop, instantTime);
     writeClient.commit(instantTime, result.getWriteStatuses(), Option.empty(), REPLACE_COMMIT_ACTION, result.getPartitionToReplaceFileIds());
-  }
-
-  /**
-   * Loads the file slices touched by the commit due to given instant time and returns the records for the expression index.
-   * This generates partition stat record updates along with EI column stat update records. Partition stat record updates are generated
-   * by reloading the affected partitions column range metadata from EI and then merging it with partition stat record from the updated data.
-   *
-   * @param commitMetadata {@code HoodieCommitMetadata}
-   * @param indexPartition partition name of the expression index
-   * @param instantTime    timestamp at of the current update commit
-   */
-  @Override
-  protected HoodieData<HoodieRecord> getExpressionIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
-    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
-    boolean isExprIndexUsingColumnStats = indexDefinition.getIndexType().equals(PARTITION_NAME_COLUMN_STATS);
-    Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt = Option.empty();
-    if (isExprIndexUsingColumnStats) {
-      // Fetch column range metadata for affected partitions in the commit
-      HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> exprIndexPartitionStatUpdates =
-          SparkMetadataWriterUtils.getExpressionIndexPartitionStatsForExistingFiles(
-                  commitMetadata, indexPartition, engineContext, getTableMetadata(), dataMetaClient, dataWriteConfig.getMetadataConfig(),
-                  Option.of(dataWriteConfig.getRecordMerger().getRecordType()), instantTime, dataWriteConfig)
-              .flatMapValues(List::iterator);
-      // The function below merges the column range metadata from the updated data with latest column range metadata of affected partition computed above
-      partitionRecordsFunctionOpt = Option.of(rangeMetadata ->
-          HoodieTableMetadataUtil.collectAndProcessExprIndexPartitionStatRecords(exprIndexPartitionStatUpdates.union(rangeMetadata), true, Option.of(indexDefinition.getIndexName())));
-    }
-
-    // Step 1: Generate partition name, file path and size triplets from the newly created files in the commit metadata
-    List<Pair<String, Pair<String, Long>>> partitionFilePathPairs = new ArrayList<>();
-    commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> writeStats.forEach(writeStat -> partitionFilePathPairs.add(
-        Pair.of(writeStat.getPartitionPath(), Pair.of(new StoragePath(dataMetaClient.getBasePath(), writeStat.getPath()).toString(), writeStat.getFileSizeInBytes())))));
-    int parallelism = Math.min(partitionFilePathPairs.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
-    Schema tableSchema = new TableSchemaResolver(dataMetaClient).getTableAvroSchema();
-    Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient, tableSchema);
-    // Step 2: Compute the expression index column stat and partition stat records for these newly created files
-    // partitionRecordsFunctionOpt - Function used to generate partition stats. These stats are generated only for expression index created using column stats
-    //
-    // In the partitionRecordsFunctionOpt function we merge the expression index records from the new files created in the commit metadata
-    // with the expression index records from the unmodified files to get the new partition stat records
-    HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata expressionIndexComputationMetadata =
-        SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, tableSchema, readerSchema, instantTime, engineContext, dataWriteConfig,
-            partitionRecordsFunctionOpt);
-    return expressionIndexComputationMetadata.getPartitionStatRecordsOption().isPresent()
-        ? expressionIndexComputationMetadata.getExpressionIndexRecords().union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get())
-        : expressionIndexComputationMetadata.getExpressionIndexRecords();
-  }
-
-  @Override
-  protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
-                                                               HoodieIndexDefinition indexDefinition,
-                                                               HoodieTableMetaClient metaClient, int parallelism,
-                                                               Schema tableSchema, Schema readerSchema, StorageConfiguration<?> storageConf,
-                                                               String instantTime) {
-    ExpressionIndexComputationMetadata expressionIndexComputationMetadata = SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathAndSizeTriplet, indexDefinition,
-        metaClient, parallelism, tableSchema, readerSchema, instantTime, engineContext, dataWriteConfig,
-        Option.of(rangeMetadata ->
-            HoodieTableMetadataUtil.collectAndProcessExprIndexPartitionStatRecords(rangeMetadata, true, Option.of(indexDefinition.getIndexName()))));
-    HoodieData<HoodieRecord> exprIndexRecords = expressionIndexComputationMetadata.getExpressionIndexRecords();
-    if (indexDefinition.getIndexType().equals(PARTITION_NAME_COLUMN_STATS)) {
-      exprIndexRecords = exprIndexRecords.union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get());
-    }
-    return exprIndexRecords;
   }
 
   protected SparkRDDMetadataWriteClient getSparkWriteClient(Option<BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>>> writeClientOpt) {

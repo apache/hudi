@@ -33,8 +33,7 @@ import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Locale;
@@ -46,9 +45,8 @@ import java.util.Objects;
  * This factory will try {@link HoodieWriteConfig#KEYGENERATOR_CLASS_NAME} firstly, this ensures the class prop
  * will not be overwritten by {@link KeyGeneratorType}
  */
+@Slf4j
 public class HoodieAvroKeyGeneratorFactory {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroKeyGeneratorFactory.class);
 
   public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
     // keyGenerator class name has higher priority
@@ -62,7 +60,7 @@ public class HoodieAvroKeyGeneratorFactory {
         props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), null);
 
     if (StringUtils.isNullOrEmpty(keyGeneratorType)) {
-      LOG.info("The value of {} is empty, using SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE.key());
+      log.info("The value of {} is empty, using SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE.key());
       keyGeneratorType = KeyGeneratorType.SIMPLE.name();
     }
 

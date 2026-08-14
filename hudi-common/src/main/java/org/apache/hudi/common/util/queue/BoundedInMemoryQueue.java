@@ -24,8 +24,7 @@ import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Iterator;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -49,6 +48,7 @@ import java.util.function.Function;
  * @param <I> input payload data type
  * @param <O> output payload data type
  */
+@Slf4j
 public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Iterable<O> {
 
   /** Interval used for polling records in the queue. **/
@@ -59,8 +59,6 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
 
   /** Maximum records that will be cached. **/
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
-
-  private static final Logger LOG = LoggerFactory.getLogger(BoundedInMemoryQueue.class);
 
   /**
    * It indicates number of records to cache. We will be using sampled record's average size to
@@ -150,7 +148,7 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
     this.iterator = new QueueIterator();
     this.recordSamplingRate = recordSamplingRate;
     this.recordCacheLimit = recordCacheLimit;
-    LOG.info("recordSamplingRate: {}, recordCacheLimit: {}", recordSamplingRate, recordCacheLimit);
+    log.info("recordSamplingRate: {}, recordCacheLimit: {}", recordSamplingRate, recordCacheLimit);
   }
 
   @Override
@@ -239,7 +237,7 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
           break;
         }
       } catch (InterruptedException e) {
-        LOG.error("error reading records from queue", e);
+        log.error("error reading records from queue", e);
         throw new HoodieException(e);
       }
     }

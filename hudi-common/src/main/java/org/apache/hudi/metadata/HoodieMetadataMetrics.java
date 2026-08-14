@@ -18,21 +18,20 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metrics.HoodieGauge;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.storage.HoodieStorage;
 
 import com.codahale.metrics.MetricRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -46,6 +45,7 @@ import java.util.stream.Collectors;
 /**
  * Metrics for metadata.
  */
+@Slf4j
 public class HoodieMetadataMetrics implements Serializable {
 
   // Metric names
@@ -67,6 +67,7 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String INITIALIZE_STR = "initialize";
   public static final String REBOOTSTRAP_STR = "rebootstrap_count";
   public static final String BOOTSTRAP_ERR_STR = "bootstrap_error";
+  public static final String SKIPPED_ZERO_SIZE_FILES_ON_INITIALIZE_STR = "skipped_zero_size_files_on_initialize";
 
   // Stats names
   public static final String STAT_TOTAL_BASE_FILE_SIZE = "totalBaseFileSizeInBytes";
@@ -79,15 +80,18 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String TABLE_SERVICE_EXECUTION_STATUS = "table_service_execution_status";
   public static final String TABLE_SERVICE_EXECUTION_DURATION = "table_service_execution_duration";
   public static final String ASYNC_INDEXER_CATCHUP_TIME = "async_indexer_catchup_time";
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataMetrics.class);
+  public static final String COMPACTION_FAILURES = "compaction_failures";
+  public static final String LOG_COMPACTION_FAILURES = "logcompaction_failures";
+  public static final String PENDING_COMPACTIONS_FAILURES = "pending_compactions_failures";
 
   private final transient MetricRegistry metricsRegistry;
   private final transient Metrics metrics;
+  private final boolean detailedMetricsEnabled;
 
-  public HoodieMetadataMetrics(HoodieMetricsConfig metricsConfig, HoodieStorage storage) {
+  public HoodieMetadataMetrics(HoodieMetricsConfig metricsConfig, HoodieStorage storage, boolean detailedMetricsEnabled) {
     this.metrics = Metrics.getInstance(metricsConfig, storage);
     this.metricsRegistry = metrics.getRegistry();
+    this.detailedMetricsEnabled = detailedMetricsEnabled;
   }
 
   public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
@@ -98,6 +102,10 @@ public class HoodieMetadataMetrics implements Serializable {
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to get metadata stats.", ioe);
     }
+  }
+
+  public boolean isDetailedMetricsEnabled() {
+    return detailedMetricsEnabled;
   }
 
   private Map<String, String> getStats(HoodieTableFileSystemView fsView, boolean detailed, HoodieTableMetadata tableMetadata, Set<String> metadataPartitions)
@@ -159,12 +167,12 @@ public class HoodieMetadataMetrics implements Serializable {
   }
 
   protected void incrementMetric(String action, long value) {
-    LOG.debug("Updating metadata metrics ({}={}) in {}", action, value, metricsRegistry);
+    log.debug("Updating metadata metrics ({}={}) in {}", action, value, metricsRegistry);
     Option<HoodieGauge<Long>> gaugeOpt = metrics.registerGauge(action);
     gaugeOpt.ifPresent(gauge -> gauge.setValue(gauge.getValue() + value));
   }
 
-  protected void setMetric(String action, long value) {
+  public void setMetric(String action, long value) {
     metrics.registerGauge(action, value);
   }
 

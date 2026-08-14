@@ -32,8 +32,9 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -42,16 +43,20 @@ import java.util.NoSuchElementException;
  * Abstract class to implement merging records from base file with incoming records or records from log blocks
  * at a file group level.
  */
+@Slf4j
 public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> implements HoodieMergeHandle<T, I, K, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieAbstractMergeHandle.class);
 
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected StoragePath newFilePath;
+  @Getter
   protected StoragePath oldFilePath;
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
   protected HoodieBaseFile baseFileToMerge;
+  @Getter
+  @Setter
   protected Option<String[]> partitionFields = Option.empty();
+  @Getter
+  @Setter
   protected Object[] partitionValues = new Object[0];
 
   /**
@@ -85,11 +90,6 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
   }
 
   @Override
-  public StoragePath getOldFilePath() {
-    return oldFilePath;
-  }
-
-  @Override
   public IOType getIOType() {
     return IOType.MERGE;
   }
@@ -99,27 +99,11 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     return baseFileToMerge;
   }
 
-  public void setPartitionFields(Option<String[]> partitionFields) {
-    this.partitionFields = partitionFields;
-  }
-
-  public Option<String[]> getPartitionFields() {
-    return this.partitionFields;
-  }
-
-  public void setPartitionValues(Object[] partitionValues) {
-    this.partitionValues = partitionValues;
-  }
-
-  public Object[] getPartitionValues() {
-    return this.partitionValues;
-  }
-
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
   private void initPartitionMetadataAndFilePaths(String partitionPath) {
-    LOG.info("partitionPath:{}, targetFileId to be merged: {}", partitionPath, fileId);
+    log.info("partitionPath:{}, targetFileId to be merged: {}", partitionPath, fileId);
     String latestValidFilePath = baseFileToMerge == null ? null : baseFileToMerge.getFileName();
     HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(
         storage,
@@ -133,7 +117,7 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     oldFilePath = makeNewFilePath(partitionPath, latestValidFilePath);
     newFilePath = makeNewFilePath(partitionPath, newFileName);
 
-    LOG.info(
+    log.info(
         "Merging new data into oldPath: {}, as newPath: {}",
         oldFilePath.toString(), newFilePath.toString());
 
@@ -155,7 +139,7 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.getStat().setPartitionPath(partitionPath);
     writeStatus.getStat().setFileId(fileId);
-    LOG.debug("Initializing Write status with fileId {} partitionPath {}", fileId, partitionPath);
+    log.debug("Initializing Write status with fileId {} partitionPath {}", fileId, partitionPath);
     setWriteStatusPath();
   }
 

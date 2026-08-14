@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.avro.AvroRecordContext;
+import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -27,6 +27,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -42,13 +44,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -81,10 +81,10 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  * This results in two I/O passes over the log file.
  */
 @NotThreadSafe
+@Slf4j
 public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     implements Iterable<HoodieRecord>, Closeable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordScanner.class);
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
   // Map of compacted/merged records
@@ -92,15 +92,17 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
   private final Set<String> scannedPrefixes;
   // count of merged records in log
+  @Getter
   private long numMergedRecordsInLog;
   private final long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
+  @Getter
   private long totalTimeTakenToReadAndMergeBlocks;
   private final String[] orderingFields;
   private final DeleteContext deleteContext;
 
   @SuppressWarnings("unchecked")
-  protected HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
+  protected HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, HoodieSchema readerSchema,
                                          String latestInstantTime, Long maxMemorySizeInBytes,
                                          boolean reverseReader, int bufferSize, String spillableMapBasePath,
                                          Option<InstantRange> instantRange,
@@ -110,11 +112,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
                                          Option<String> partitionName,
                                          InternalSchema internalSchema,
                                          Option<String> keyFieldOverride,
-                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
+                                         HoodieRecordMerger recordMerger,
                                          Option<HoodieTableMetaClient> hoodieTableMetaClientOption,
                                          boolean allowInflightInstants) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
-        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
+        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, recordMerger,
         hoodieTableMetaClientOption);
     try {
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
@@ -220,8 +222,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = records.size();
 
-    if (LOG.isInfoEnabled()) {
-      LOG.info("Scanned {} log files with stats: MaxMemoryInBytes => {}, MemoryBasedMap => {} entries, {} total bytes, DiskBasedMap => {} entries, {} total bytes",
+    if (log.isInfoEnabled()) {
+      log.info("Scanned {} log files with stats: MaxMemoryInBytes => {}, MemoryBasedMap => {} entries, {} total bytes, DiskBasedMap => {} entries, {} total bytes",
           logFilePaths.size(), maxMemorySizeInBytes, records.getInMemoryMapNumEntries(), records.getCurrentInMemoryMapSize(),
           records.getDiskBasedMapNumEntries(), records.getSizeOfFileOnDiskInBytes());
     }
@@ -240,10 +242,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     return recordMerger.getRecordType();
   }
 
-  public long getNumMergedRecordsInLog() {
-    return numMergedRecordsInLog;
-  }
-
   /**
    * Returns the builder for {@code HoodieMergedLogRecordScanner}.
    */
@@ -258,8 +256,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     if (prevRecord != null) {
       // Merge and store the combined record
       RecordContext recordContext = AvroRecordContext.getFieldAccessorInstance();
-      BufferedRecord<T> prevBufferedRecord = BufferedRecords.fromHoodieRecord(prevRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields, deleteContext);
-      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields, deleteContext);
+      BufferedRecord<T> prevBufferedRecord = BufferedRecords.fromHoodieRecord(prevRecord, readerSchema,
+          recordContext, this.getPayloadProps(), orderingFields, deleteContext);
+      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, readerSchema,
+          recordContext, this.getPayloadProps(), orderingFields, deleteContext);
       BufferedRecord<T> combinedRecord = recordMerger.merge(prevBufferedRecord, newBufferedRecord, recordContext, this.getPayloadProps());
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getRecord() != prevRecord.getData()) {
@@ -311,10 +311,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     }
   }
 
-  public long getTotalTimeTakenToReadAndMergeBlocks() {
-    return totalTimeTakenToReadAndMergeBlocks;
-  }
-
   @Override
   public void close() {
     if (records != null) {
@@ -339,7 +335,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     private HoodieStorage storage;
     private String basePath;
     private List<String> logFilePaths;
-    private Schema readerSchema;
+    private HoodieSchema readerSchema;
     private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
     private String latestInstantTime;
     private boolean reverseReader;
@@ -357,7 +353,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     private String keyFieldOverride;
     // By default, we're doing a full-scan
     private boolean forceFullScan = true;
-    private boolean enableOptimizedLogBlocksScan = false;
     protected boolean allowInflightInstants = false;
     private HoodieRecordMerger recordMerger = new HoodiePreCombineAvroRecordMerger();
     protected HoodieTableMetaClient hoodieTableMetaClient;
@@ -389,7 +384,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     }
 
     @Override
-    public Builder withReaderSchema(Schema schema) {
+    public Builder withReaderSchema(HoodieSchema schema) {
       this.readerSchema = schema;
       return this;
     }
@@ -456,12 +451,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     }
 
     @Override
-    public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
-      this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
-      return this;
-    }
-
-    @Override
     public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
       this.recordMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger);
       return this;
@@ -500,7 +489,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
           latestInstantTime, maxMemorySizeInBytes, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
-          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger,
+          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), recordMerger,
           Option.ofNullable(hoodieTableMetaClient), allowInflightInstants);
     }
   }

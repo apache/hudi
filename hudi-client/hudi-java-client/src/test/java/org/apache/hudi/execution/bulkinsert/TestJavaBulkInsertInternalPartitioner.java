@@ -19,7 +19,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -70,7 +70,7 @@ public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestH
     cfg.setValue(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME, "partition_path");
     cfg.setValue(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED, "false");
     testBulkInsertInternalPartitioner(
-        new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, cfg),
+        new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.HOODIE_SCHEMA, cfg),
         records, true, generatePartitionNumRecords(records), Option.of(columnComparator));
   }
 

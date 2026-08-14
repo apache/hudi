@@ -21,9 +21,10 @@ import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
+import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier

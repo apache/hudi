@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.bootstrap.index;
 
-import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -27,6 +26,7 @@ import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Assertions;
@@ -74,7 +74,7 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
     public TestLocalIndex(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, TypedProperties configProperties, HoodieTableQueryType queryType,
                           List<StoragePath> queryPaths, Option<String> specifiedQueryInstant, boolean shouldIncludePendingCommits, boolean shouldValidateInstant,
                           FileStatusCache fileStatusCache, boolean shouldListLazily, Option<String> startCompletionTime, Option<String> endCompletionTime) {
-      super(engineContext, metaClient, configProperties, queryType, queryPaths, specifiedQueryInstant, shouldIncludePendingCommits, shouldValidateInstant, fileStatusCache, shouldListLazily,
+      super(engineContext, metaClient, configProperties, queryType, queryPaths, specifiedQueryInstant, false, shouldIncludePendingCommits, shouldValidateInstant, fileStatusCache, shouldListLazily,
           startCompletionTime, endCompletionTime);
     }
 

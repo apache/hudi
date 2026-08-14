@@ -20,13 +20,14 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.ParquetUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -112,7 +113,7 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
     // Mock ParquetUtils to return file schema
     try (MockedConstruction<ParquetUtils> parquetUtilsConstruction = mockConstruction(ParquetUtils.class, 
         (mock, context) -> {
-          when(mock.readSchema(eq(storage), eq(inputFiles.get(0)))).thenReturn(fileSchema);
+          when(mock.readMessageType(eq(storage), eq(inputFiles.get(0)))).thenReturn(fileSchema);
         })) {
       
       // When: Creating HoodieBinaryCopyHandle (we can't instantiate directly due to complex dependencies,
@@ -184,17 +185,11 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
   /**
    * Testable subclass that exposes the getWriteSchema method for testing.
    */
+  @Setter
   private static class TestableHoodieBinaryCopyHandle {
+
     private Schema writeSchemaWithMetaFields;
     private boolean simulateFileReadError = false;
-    
-    public void setWriteSchemaWithMetaFields(Schema schema) {
-      this.writeSchemaWithMetaFields = schema;
-    }
-    
-    public void setSimulateFileReadError(boolean simulateError) {
-      this.simulateFileReadError = simulateError;
-    }
     
     public MessageType testGetWriteSchema(HoodieWriteConfig config, List<StoragePath> inputFiles, 
                                          Configuration conf, HoodieTable<?, ?, ?, ?> table) {
@@ -206,7 +201,7 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
             throw new IOException("Simulated file read error");
           }
           ParquetUtils parquetUtils = new ParquetUtils();
-          MessageType fileSchema = parquetUtils.readSchema(table.getStorage(), inputFiles.get(0));
+          MessageType fileSchema = parquetUtils.readMessageType(table.getStorage(), inputFiles.get(0));
           return fileSchema;
         } catch (Exception e) {
           throw new HoodieIOException("Failed to read schema from input file when schema evolution is disabled: " + inputFiles.get(0),

@@ -22,28 +22,27 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.metadata.HoodieIndexVersion;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
@@ -244,8 +243,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     assertEquals(3, mdtCommitMetadata.getPartitionToWriteStats().size());
     assertEquals(1, mdtCommitMetadata.getPartitionToWriteStats().get(FILES.getPartitionPath()).size());
     assertEquals(10, mdtCommitMetadata.getPartitionToWriteStats().get(RECORD_INDEX.getPartitionPath()).size());
-    assertEquals(metaClient.getTableConfig().getTableVersion().equals(HoodieTableVersion.NINE) ? 1 : 10,
-        mdtCommitMetadata.getPartitionToWriteStats().get(SECONDARY_INDEX.getPartitionPath()
+    assertEquals(1, mdtCommitMetadata.getPartitionToWriteStats().get(SECONDARY_INDEX.getPartitionPath()
         + config.getMetadataConfig().getSecondaryIndexName()).size());
   }
 

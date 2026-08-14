@@ -23,7 +23,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 /**
- * Simpler Wrapper to assist with auto commiting with action executor layer.
+ * Simpler Wrapper to assist with auto committing with action executor layer.
  * Only bootstrap, PartitionTTL action executors are leveraging this at the moment.
  */
 public class SparkAutoCommitExecutor {

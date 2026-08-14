@@ -29,6 +29,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.HoodieBucketIndex;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -57,7 +58,9 @@ public class SparkPartitionBucketIndexPartitioner<T> extends SparkHoodiePartitio
 
   private final int totalPartitions;
   private final NumBucketsFunction numBucketsFunction;
-  private final String indexKeyField;
+  // parsed once; the per-record getPartition path uses the List overload of getBucketId so the
+  // comma-separated config string is not re-split per record
+  private final List<String> indexKeyFieldList;
   private final int totalPartitionPaths;
   private final List<String> partitionPaths;
   /**
@@ -96,7 +99,7 @@ public class SparkPartitionBucketIndexPartitioner<T> extends SparkHoodiePartitio
     HoodieWriteConfig writeConfig = table.getConfig();
     this.numBucketsFunction = NumBucketsFunction.fromWriteConfig(writeConfig);
 
-    this.indexKeyField = config.getBucketIndexHashField();
+    this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(config.getBucketIndexHashField());
     this.totalPartitionPaths = profile.getPartitionPaths().size();
     partitionPaths = new ArrayList<>(profile.getPartitionPaths());
     partitionPathOffset = new HashMap<>();
@@ -160,7 +163,7 @@ public class SparkPartitionBucketIndexPartitioner<T> extends SparkHoodiePartitio
     Option<HoodieRecordLocation> location = keyLocation._2;
     int bucketId = location.isPresent()
         ? BucketIdentifier.bucketIdFromFileId(location.get().getFileId())
-        : BucketIdentifier.getBucketId(keyLocation._1.getRecordKey(), indexKeyField, numBucketsFunction.getNumBuckets(partitionPath));
+        : BucketIdentifier.getBucketId(keyLocation._1.getRecordKey(), indexKeyFieldList, numBucketsFunction.getNumBuckets(partitionPath));
     return partitionPathOffset.get(partitionPath) + bucketId;
   }
 }

@@ -22,12 +22,17 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.util.IOUtils;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+
 import java.util.Map;
 
 /**
  * Represents the HFile info read from {@link HFileBlockType#FILE_INFO} block.
  */
+@Getter
 public class HFileInfo {
+
   private static final String RESERVED_PREFIX = "hfile.";
   static final UTF8StringKey LAST_KEY =
       new UTF8StringKey(RESERVED_PREFIX + "LASTKEY");
@@ -43,6 +48,7 @@ public class HFileInfo {
       new UTF8StringKey(RESERVED_PREFIX + "AVG_VALUE_LEN");
   static final int KEY_VALUE_VERSION_WITH_MVCC_TS = 1;
 
+  @Getter(AccessLevel.NONE)
   private final Map<UTF8StringKey, byte[]> infoMap;
   private final long fileCreationTime;
   private final Option<Key> lastKey;
@@ -56,14 +62,6 @@ public class HFileInfo {
       // Parsing MVCC timestamps is not supported.
       throw new UnsupportedOperationException("HFiles with MVCC timestamps are not supported");
     }
-  }
-
-  public long getFileCreationTime() {
-    return fileCreationTime;
-  }
-
-  public Option<Key> getLastKey() {
-    return lastKey;
   }
 
   public byte[] get(UTF8StringKey key) {

@@ -20,9 +20,12 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 
+import lombok.Value;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.Serializable;
@@ -34,6 +37,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -239,6 +248,106 @@ public class TestRocksDBDAO {
   }
 
   /**
+   * Test that concurrent access to RocksDBDAO does not cause ConcurrentModificationException.
+   * This test verifies the thread-safety of the columnFamilySerializers map which is accessed
+   * via getSerializerForColumnFamily() during get/put operations.
+   */
+  @Test
+  public void testConcurrentAccess() throws InterruptedException {
+    int numThreads = 10;
+    int numOperationsPerThread = 100;
+    int numColumnFamilies = 5;
+
+    List<String> columnFamilies = new ArrayList<>();
+    for (int i = 0; i < numColumnFamilies; i++) {
+      String family = "concurrent_family_" + i;
+      columnFamilies.add(family);
+      dbManager.addColumnFamily(family);
+    }
+
+    ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+    try {
+      CountDownLatch startLatch = new CountDownLatch(1);
+      CountDownLatch doneLatch = new CountDownLatch(numThreads);
+      AtomicReference<Throwable> error = new AtomicReference<>(null);
+
+      // Spawn threads that concurrently access different column families
+      for (int t = 0; t < numThreads; t++) {
+        final int threadId = t;
+        executor.submit(() -> {
+          try {
+            // Wait for all threads to be ready
+            startLatch.await();
+
+            for (int i = 0; i < numOperationsPerThread; i++) {
+              // Each thread accesses different column families to trigger
+              // concurrent calls to getSerializerForColumnFamily()
+              String family = columnFamilies.get((threadId + i) % numColumnFamilies);
+              String key = "key_" + threadId + "_" + i;
+              String value = "value_" + threadId + "_" + i;
+
+              dbManager.put(family, key, value);
+              String retrieved = dbManager.get(family, key);
+              assertEquals(value, retrieved, "Value mismatch for key: " + key);
+            }
+          } catch (Throwable t1) {
+            error.compareAndSet(null, t1);
+          } finally {
+            doneLatch.countDown();
+          }
+        });
+      }
+
+      startLatch.countDown();
+
+      // Wait for all threads to complete
+      boolean completed = doneLatch.await(60, TimeUnit.SECONDS);
+
+      assertTrue(completed, "Test timed out - threads did not complete in time");
+      assertNull(error.get(), "Concurrent access caused an exception: "
+          + (error.get() != null ? error.get().getMessage() : ""));
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testDisableWalAtDaoLevel(boolean disableWAL) {
+    RocksDBDAO dbManager = new RocksDBDAO("/dummy/path/" + UUID.randomUUID(),
+        FileSystemViewStorageConfig.newBuilder().build().newBuilder().build().getRocksdbBasePath(),
+        new ConcurrentHashMap<>(),
+        disableWAL);
+
+    String family = "family_disable_wal";
+    dbManager.dropColumnFamily(family);
+    dbManager.addColumnFamily(family);
+
+    String key1 = "key1";
+    String key2 = "key2";
+    String key3 = "key3";
+    String value1 = "value1";
+    String value2 = "value2";
+    String value3 = "value3";
+
+    dbManager.put(family, key1, value1);
+    dbManager.writeBatch(batch -> {
+      dbManager.putInBatch(batch, family, key2, value2);
+      dbManager.putInBatch(batch, family, key3, value3);
+    });
+    dbManager.delete(family, key2);
+
+    assertEquals(value1, dbManager.get(family, key1));
+    assertNull(dbManager.get(family, key2));
+    assertEquals(value3, dbManager.get(family, key3));
+
+    File rocksDbDir = new File(dbManager.getRocksDBBasePath());
+    File[] walFiles = rocksDbDir.listFiles((dir, name) -> name.matches("\\d+\\.log"));
+    long walFileSize = walFiles == null ? 0 : Arrays.stream(walFiles).mapToLong(File::length).sum();
+    assertEquals(disableWAL, walFileSize == 0, "WAL log total size should be 0 when disableWAL=true");
+  }
+
+  /**
    * Payload key object.
    */
   public static class PayloadKey implements Serializable {
@@ -274,52 +383,12 @@ public class TestRocksDBDAO {
   /**
    * A payload definition for {@link TestRocksDBDAO}.
    */
+  @Value
   public static class Payload<T> implements Serializable {
 
-    private final String prefix;
-    private final T key;
-    private final String val;
-    private final String family;
-
-    public Payload(String prefix, T key, String val, String family) {
-      this.prefix = prefix;
-      this.key = key;
-      this.val = val;
-      this.family = family;
-    }
-
-    public String getPrefix() {
-      return prefix;
-    }
-
-    public T getKey() {
-      return key;
-    }
-
-    public String getVal() {
-      return val;
-    }
-
-    public String getFamily() {
-      return family;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      Payload payload = (Payload) o;
-      return Objects.equals(prefix, payload.prefix) && Objects.equals(key, payload.key)
-          && Objects.equals(val, payload.val) && Objects.equals(family, payload.family);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(prefix, key, val, family);
-    }
+    String prefix;
+    T key;
+    String val;
+    String family;
   }
 }

@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
@@ -82,6 +83,22 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   }
 
   /**
+   * Creates an archived timeline without loading any instants.
+   * Instants can be loaded later using methods like loadCompletedInstantDetailsInMemory, loadCompactionDetailsInMemory, etc.
+   */
+  public ArchivedTimelineV2(HoodieTableMetaClient metaClient, boolean shouldLoadInstants) {
+    this.metaClient = metaClient;
+    if (shouldLoadInstants) {
+      setInstants(this.loadInstants());
+      this.cursorInstant = firstInstant().map(HoodieInstant::requestedTime).orElse(null);
+    } else {
+      setInstants(new ArrayList<>());
+      this.cursorInstant = null;
+    }
+    this.instantReader = this;
+  }
+
+  /**
    * Loads completed instants from startTs(inclusive).
    * Note that there is no lazy loading, so this may not work if really early startTs is specified.
    */
@@ -131,10 +148,30 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
 
   public void loadCompactionDetailsInMemory(String startTs, String endTs) {
     // load compactionPlan
-    loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.PLAN,
+    List<HoodieInstant> loadedInstants = loadInstants(new HoodieArchivedTimeline.ClosedClosedTimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.PLAN,
         record -> record.get(ACTION_ARCHIVED_META_FIELD).toString().equals(COMMIT_ACTION)
             && record.get(PLAN_ARCHIVED_META_FIELD) != null
     );
+    appendLoadedInstants(loadedInstants);
+  }
+
+  @Override
+  public void loadCompactionDetailsInMemory(int limit) {
+    loadAndCacheInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.PLAN,
+        record -> record.get(ACTION_ARCHIVED_META_FIELD).toString().equals(COMMIT_ACTION)
+            && record.get(PLAN_ARCHIVED_META_FIELD) != null
+    );
+  }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(String startTs, String endTs) {
+    List<HoodieInstant> loadedInstants = loadInstants(new HoodieArchivedTimeline.ClosedClosedTimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.METADATA);
+    appendLoadedInstants(loadedInstants);
+  }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(int limit) {
+    loadAndCacheInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.METADATA, r -> true);
   }
 
   @Override
@@ -181,9 +218,27 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     }
   }
 
+  /**
+   * The completion time of an archived instant, falling back to its instant time when the record carries
+   * none.
+   *
+   * <p>{@code completionTime} is declared {@code ["null","string"]} with a null default in
+   * {@code HoodieLSMTimelineInstant} and has no value for instants archived before the field existed, so it
+   * must not be dereferenced. Defaulting to the instant time is the fallback
+   * {@code CompletionTimeQueryViewV2#setCompletionTime} already documents for the same records.
+   *
+   * @param record       an LSM timeline record.
+   * @param instantTime  the instant time to fall back to.
+   * @return the completion time, never null as long as {@code instantTime} is not.
+   */
+  public static String completionTimeOrInstantTime(GenericRecord record, String instantTime) {
+    String completionTime = StringUtils.objToString(record.get(COMPLETION_TIME_ARCHIVED_META_FIELD));
+    return completionTime != null ? completionTime : instantTime;
+  }
+
   private HoodieInstant readCommit(String instantTime, GenericRecord record, Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer) {
     final String action = record.get(ACTION_ARCHIVED_META_FIELD).toString();
-    final String completionTime = record.get(COMPLETION_TIME_ARCHIVED_META_FIELD).toString();
+    final String completionTime = completionTimeOrInstantTime(record, instantTime);
     instantDetailsConsumer.ifPresent(consumer -> consumer.accept(instantTime, record));
     return instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime);
   }
@@ -236,10 +291,25 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
     Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
     timelineLoader.loadInstants(metaClient, filter, loadMode, commitsFilter,
-        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)));
+        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)), Option.empty());
     List<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
     Collections.sort(result);
     return result;
+  }
+
+  /**
+   * Loads instants with a limit on the number of instants to load.
+   * This is used for limit-based loading where we only want to load the N most recent instants.
+   */
+  private void loadAndCacheInstantsWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode,
+      Function<GenericRecord, Boolean> commitsFilter) {
+    Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
+    Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
+    timelineLoader.loadInstants(metaClient, null, loadMode, commitsFilter,
+        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)), Option.of(limit));
+    List<HoodieInstant> collectedInstants = new ArrayList<>(instantsInRange.values());
+    Collections.sort(collectedInstants);
+    appendLoadedInstants(collectedInstants);
   }
 
   @Override

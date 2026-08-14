@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
@@ -56,7 +57,7 @@ import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -73,8 +74,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -96,9 +95,10 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@Slf4j
 public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
-  private static final Schema GCS_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
+  private static final HoodieSchema GCS_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
       TestGcsEventsHoodieIncrSource.class, "/streamer-config/gcs-metadata.avsc", false);
   private static final String IGNORE_FILE_EXTENSION = ".ignore";
 
@@ -121,8 +121,6 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   protected Option<SchemaProvider> schemaProvider;
   private HoodieTableMetaClient metaClient;
   private JavaSparkContext jsc;
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestGcsEventsHoodieIncrSource.class);
 
   @BeforeEach
   public void setUp() throws IOException {
@@ -396,7 +394,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
         + "?generation=%s&alt=media", bucketName, filename, generation);
     String selfLink = String.format("https://www.googleapis.com/storage/v1/b/%s/o/%s", bucketName, filename);
 
-    GenericRecord rec = new GenericData.Record(GCS_METADATA_SCHEMA);
+    GenericRecord rec = new GenericData.Record(GCS_METADATA_SCHEMA.toAvroSchema());
     rec.put("_row_key", id);
     rec.put("partition_path", bucketName);
     rec.put("timestamp", Long.parseLong(commitTime));

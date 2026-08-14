@@ -23,6 +23,7 @@ import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
+import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
 import org.apache.spark.sql.types.StructType
 
 
@@ -33,7 +34,7 @@ class SparkBasicSchemaEvolution(fileSchema: StructType,
                                 requiredSchema: StructType,
                                 sessionLocalTimeZone: String) {
 
-  val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(fileSchema, requiredSchema)
+  val (implicitTypeChangeInfo, sparkRequestSchema) = SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileSchema, requiredSchema)
 
   def getRequestSchema: StructType = {
     if (implicitTypeChangeInfo.isEmpty) {
@@ -45,7 +46,7 @@ class SparkBasicSchemaEvolution(fileSchema: StructType,
 
   def generateUnsafeProjection(): UnsafeProjection = {
     val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
-    HoodieParquetFileFormatHelper.generateUnsafeProjection(schemaUtils.toAttributes(requiredSchema), Some(sessionLocalTimeZone),
+    SparkSchemaTransformUtils.generateUnsafeProjection(schemaUtils.toAttributes(requiredSchema), Some(sessionLocalTimeZone),
       implicitTypeChangeInfo, requiredSchema, new StructType(), schemaUtils)
   }
 }

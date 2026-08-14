@@ -21,7 +21,7 @@
     <parent>
         <artifactId>hudi-examples</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>1.2.0-SNAPSHOT</version>
+        <version>1.3.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -42,15 +42,10 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
-                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>3.1.2</version>
                 <executions>
                     <execution>
                         <goals>
@@ -123,6 +118,12 @@
             <artifactId>kryo-shaded</artifactId>
         </dependency>
 
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>${hudi.flink.module}</artifactId>
@@ -159,6 +160,12 @@
             <scope>compile</scope>
         </dependency>
         <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-base</artifactId>
+            <version>${flink.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
             <version>${kafka.version}</version>
@@ -189,12 +196,6 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>${flink.table.runtime.artifactId}</artifactId>
-            <version>${flink.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>${flink.table.planner.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
         </dependency>
@@ -368,6 +369,13 @@
             <version>${flink.version}</version>
             <scope>test</scope>
             <type>test-jar</type>
+        </dependency>
+        <!-- Required by TableEnvironmentImpl in TestHoodieFlinkQuickstart to discover ExecutorFactory. -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>${flink.table.planner.artifactId}</artifactId>
+            <version>${flink.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>

@@ -34,6 +34,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
+
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -199,16 +201,12 @@ public class CompactionTestUtils {
    */
   public static class DummyHoodieBaseFile extends HoodieBaseFile {
 
+    @Getter
     private final String path;
 
     public DummyHoodieBaseFile(String path) {
       super(path);
       this.path = path;
-    }
-
-    @Override
-    public String getPath() {
-      return path;
     }
 
     @Override

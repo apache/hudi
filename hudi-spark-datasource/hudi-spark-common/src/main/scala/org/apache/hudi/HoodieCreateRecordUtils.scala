@@ -19,11 +19,12 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.INSERT_DROP_DUPS
-import org.apache.hudi.avro.{AvroRecordContext, AvroSchemaCache, HoodieAvroUtils}
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.avro.{AvroRecordContext, AvroSchemaCache, HoodieAvroUtils}
+import org.apache.hudi.common.config.{RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.WriteOperationType.isChangingRecords
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCache}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.DeleteContext
 import org.apache.hudi.common.util.{ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues}
@@ -33,7 +34,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.util.JFunction
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.TaskContext
 import org.apache.spark.api.java.JavaRDD
@@ -55,8 +55,8 @@ object HoodieCreateRecordUtils {
                                        parameters: Map[String, String],
                                        recordName: String,
                                        recordNameSpace: String,
-                                       writerSchema: Schema,
-                                       dataFileSchema: Schema,
+                                       writerSchema: HoodieSchema,
+                                       dataFileSchema: HoodieSchema,
                                        operation: WriteOperationType,
                                        instantTime: String,
                                        preppedSparkSqlWrites: Boolean,
@@ -78,6 +78,12 @@ object HoodieCreateRecordUtils {
     val preppedSparkSqlMergeInto = args.preppedSparkSqlMergeInto
     val preppedWriteOperation = args.preppedWriteOperation
     val orderingFields = args.tableConfig.getOrderingFields
+    val recordMergeMode = args.tableConfig.getRecordMergeMode
+    val payloadClass = config.getPayloadClass
+    // Ordering values are not required for COMMIT_TIME_ORDERING or OverwriteWithLatestAvroPayload.
+    // Table version 6 may not have a merge mode set, so the payload class check is still needed.
+    val requiresOrderingValue = !((recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING)
+      || classOf[OverwriteWithLatestAvroPayload].getName.equals(payloadClass))
 
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
@@ -115,8 +121,7 @@ object HoodieCreateRecordUtils {
     recordType match {
       case HoodieRecord.HoodieRecordType.AVRO =>
         // avroRecords will contain meta fields when isPrepped is true.
-        val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, recordName, recordNameSpace,
-          Some(writerSchema))
+        val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, recordName, recordNameSpace, Some(writerSchema))
 
         avroRecords.mapPartitions(it => {
           val sparkPartitionId = TaskContext.getPartitionId()
@@ -126,7 +131,7 @@ object HoodieCreateRecordUtils {
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
           }
           val keyGenerator : Option[BaseKeyGenerator] = if (usePreppedInsteadOfKeyGen) None else Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(keyGenProps).asInstanceOf[BaseKeyGenerator])
-          val dataFileSchema = new Schema.Parser().parse(dataFileSchemaStr)
+          val dataFileSchema = HoodieSchema.parse(dataFileSchemaStr)
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
@@ -140,22 +145,19 @@ object HoodieCreateRecordUtils {
             val (hoodieKey: HoodieKey, recordLocation: HOption[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
               preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto)
             val avroRecWithoutMeta: GenericRecord = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
-              HoodieAvroUtils.rewriteRecord(avroRec, HoodieAvroUtils.removeMetadataFields(dataFileSchema))
+              HoodieAvroUtils.rewriteRecord(avroRec, org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(dataFileSchema).toAvroSchema)
             } else {
               avroRec
             }
 
             val processedRecord = if (shouldDropPartitionColumns) {
-              HoodieAvroUtils.rewriteRecord(avroRecWithoutMeta, dataFileSchema)
+              HoodieAvroUtils.rewriteRecord(avroRecWithoutMeta, dataFileSchema.getAvroSchema)
             } else {
               avroRecWithoutMeta
             }
             val hoodieRecord = if (shouldCombine && !orderingFields.isEmpty) {
-              val orderingVal = OrderingValues.create(
-                orderingFields,
-                JFunction.toJavaFunction[String, Comparable[_]](
-                  field => HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
-                    consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
+              val orderingVal = getOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey,
+                consistentLogicalTimestampEnabled, requiresOrderingValue)
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, null, recordLocation, requiresPayload, isDelete)
             } else {
@@ -167,9 +169,9 @@ object HoodieCreateRecordUtils {
         }).toJavaRDD()
 
       case HoodieRecord.HoodieRecordType.SPARK =>
-        val dataFileSchema = AvroSchemaCache.intern(new Schema.Parser().parse(dataFileSchemaStr))
+        val dataFileSchema = HoodieSchemaCache.intern(HoodieSchema.parse(dataFileSchemaStr))
         val dataFileStructType = HoodieInternalRowUtils.getCachedSchema(dataFileSchema)
-        val writerStructType = HoodieInternalRowUtils.getCachedSchema(AvroSchemaCache.intern(writerSchema))
+        val writerStructType = HoodieInternalRowUtils.getCachedSchema(HoodieSchemaCache.intern(writerSchema))
         val sourceStructType = df.schema
 
         df.queryExecution.toRdd.mapPartitions { it =>
@@ -282,5 +284,35 @@ object HoodieCreateRecordUtils {
     }
 
     (new HoodieKey(recordKey, partitionPath), recordLocation)
+  }
+
+  /**
+   * Gets the ordering value from the ordering fields of an Avro record.
+   * When `requiresOrderingValue` is false (e.g., COMMIT_TIME_ORDERING or OverwriteWithLatestAvroPayload),
+   * null values are allowed and a default ordering value is used.
+   * Otherwise, throws IllegalArgumentException if any ordering field has a null value.
+   */
+  private def getOrderingValue(orderingFields: java.util.List[String],
+                               avroRec: GenericRecord,
+                               recordKey: String,
+                               consistentLogicalTimestampEnabled: Boolean,
+                               requiresOrderingValue: Boolean): Comparable[_] = {
+    OrderingValues.create(
+      orderingFields,
+      JFunction.toJavaFunction[String, Comparable[_]](field => {
+        val fieldVal = HoodieAvroUtils.getNestedFieldVal(avroRec, field, false, consistentLogicalTimestampEnabled)
+        if (fieldVal == null) {
+          if (requiresOrderingValue) {
+            throw new IllegalArgumentException(
+              s"Ordering field '$field' has null value for record key '$recordKey'. " +
+                s"Please ensure all records have non-null values for the ordering field, " +
+                s"or use a payload class that doesn't require ordering (e.g., OverwriteWithLatestAvroPayload).")
+          }
+          // Return default ordering value for payloads that don't require ordering
+          OrderingValues.getDefault.asInstanceOf[Comparable[_]]
+        } else {
+          fieldVal.asInstanceOf[Comparable[_]]
+        }
+      }))
   }
 }

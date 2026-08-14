@@ -19,12 +19,12 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
-import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -39,12 +39,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.avro.Schema;
-
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -72,7 +68,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   @Override
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
-    Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
+    Pair<ClosableIterator<T>, HoodieSchema> recordsIteratorSchemaPair =
         getRecordsIterator(dataBlock, keySpecOpt);
     if (dataBlock.containsPartialUpdates() && !enablePartialMerging) {
       // When a data block contains partial updates, subsequent record merging must always use
@@ -89,7 +85,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
           partialUpdateModeOpt);
     }
 
-    Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());
+    HoodieSchema schema = HoodieSchemaCache.intern(recordsIteratorSchemaPair.getRight());
 
     RecordContext<T> recordContext = readerContext.getRecordContext();
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
@@ -102,8 +98,19 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     }
   }
 
+  /**
+   * Merges the incoming record with whatever is already buffered under {@code recordKey} and stores the
+   * result. Subclasses choose the identifier a record is buffered under (a record key here, a record
+   * position in {@link PositionBasedFileGroupRecordBuffer}), but cannot replace this merge-then-store
+   * step itself, hence the {@code final}.
+   *
+   * <p>This is not the only way {@code records} is mutated. The map is {@code protected}, and
+   * {@link PositionBasedFileGroupRecordBuffer} writes to it directly where merging would be wrong: when
+   * re-keying already-merged entries in its key-based fallback, and when overwriting delete markers under
+   * commit-time ordering.
+   */
   @Override
-  public void processNextDataRecord(BufferedRecord<T> record, Serializable recordKey) throws IOException {
+  public final void processNextDataRecord(BufferedRecord<T> record, Serializable recordKey) throws IOException {
     BufferedRecord<T> existingRecord = records.get(recordKey);
     totalLogRecords++;
     bufferedRecordMerger.deltaMerge(record, existingRecord).ifPresent(bufferedRecord ->
@@ -112,20 +119,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
-    Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
-    while (it.hasNext()) {
-      DeleteRecord record = it.next();
-      processNextDeletedRecord(record, record.getRecordKey());
+    for (BufferedRecord<T> record : deleteBlock.getRecordsToDelete(readerContext)) {
+      processNextDataRecord(record, record.getRecordKey());
     }
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordIdentifier) {
-    BufferedRecord<T> existingRecord = records.get(recordIdentifier);
-    totalLogRecords++;
-    Option<DeleteRecord> recordOpt = bufferedRecordMerger.deltaMerge(deleteRecord, existingRecord);
-    recordOpt.ifPresent(deleteRec ->
-        records.put(recordIdentifier, BufferedRecords.fromDeleteRecord(deleteRec, readerContext.getRecordContext())));
   }
 
   @Override
@@ -154,7 +150,12 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     return hasNextLogRecord();
   }
 
-  public boolean isPartialMergingEnabled() {
+  /**
+   * Whether partial merging has been switched on for this buffer. Subclasses cannot replace this accessor,
+   * hence the {@code final}; they may still set the underlying {@code enablePartialMerging} flag while
+   * processing a data block, as {@link PositionBasedFileGroupRecordBuffer} does.
+   */
+  public final boolean isPartialMergingEnabled() {
     return enablePartialMerging;
   }
 }

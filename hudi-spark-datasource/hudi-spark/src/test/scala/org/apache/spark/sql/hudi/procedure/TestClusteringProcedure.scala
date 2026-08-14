@@ -65,79 +65,81 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
        """.stripMargin)
         // disable automatic inline compaction so that HoodieDataSourceHelpers.allCompletedCommitsCompactions
         // does not count compaction instants
-        spark.sql("set hoodie.compact.inline=false")
-        spark.sql("set hoodie.compact.schedule.inline=false")
+        withSQLConf(
+          "hoodie.compact.inline" -> "false",
+          "hoodie.compact.schedule.inline" -> "false"
+        ) {
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 1001)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1002)")
+          val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+          // Generate the first clustering plan
+          val firstScheduleInstant = client.scheduleClustering(HOption.empty()).get()
 
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
-        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 1001)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1002)")
-        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
-        // Generate the first clustering plan
-        val firstScheduleInstant = client.scheduleClustering(HOption.empty()).get()
+          // Generate the second clustering plan
+          spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003, 1003)")
+          val secondScheduleInstant = client.scheduleClustering(HOption.empty()).get()
+          checkAnswer(s"call show_clustering('$tableName')")(
+            Seq(secondScheduleInstant, 1, HoodieInstant.State.REQUESTED.name(), "*"),
+            Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
+          )
 
-        // Generate the second clustering plan
-        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003, 1003)")
-        val secondScheduleInstant = client.scheduleClustering(HOption.empty()).get()
-        checkAnswer(s"call show_clustering('$tableName')")(
-          Seq(secondScheduleInstant, 1, HoodieInstant.State.REQUESTED.name(), "*"),
-          Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
-        )
+          // Do clustering for all clustering plan generated above, and no new clustering
+          // instant will be generated because of there is no commit after the second
+          // clustering plan generated
+          checkAnswer(s"call run_clustering(table => '$tableName', order => 'partition', show_involved_partition => true)")(
+            Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "partition=1003"),
+            Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "partition=1000,partition=1001,partition=1002")
+          )
 
-        // Do clustering for all clustering plan generated above, and no new clustering
-        // instant will be generated because of there is no commit after the second
-        // clustering plan generated
-        checkAnswer(s"call run_clustering(table => '$tableName', order => 'partition', show_involved_partition => true)")(
-          Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "partition=1003"),
-          Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "partition=1000,partition=1001,partition=1002")
-        )
+          // No new commits
+          val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
+          assertResult(false)(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, secondScheduleInstant))
 
-        // No new commits
-        val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
-        assertResult(false)(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, secondScheduleInstant))
+          // Check the number of finished clustering instants
+          val finishedClustering = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
+            .getInstants
+            .iterator().asScala
+            .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
+            .toSeq
+          assertResult(2)(finishedClustering.size)
 
-        // Check the number of finished clustering instants
-        val finishedClustering = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
-          .getInstants
-          .iterator().asScala
-          .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
-          .toSeq
-        assertResult(2)(finishedClustering.size)
+          checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
+            Seq(1, "a1", 10.0, 1000, 1000),
+            Seq(2, "a2", 10.0, 1001, 1001),
+            Seq(3, "a3", 10.0, 1002, 1002),
+            Seq(4, "a4", 10.0, 1003, 1003)
+          )
 
-        checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
-          Seq(1, "a1", 10.0, 1000, 1000),
-          Seq(2, "a2", 10.0, 1001, 1001),
-          Seq(3, "a3", 10.0, 1002, 1002),
-          Seq(4, "a4", 10.0, 1003, 1003)
-        )
+          // After clustering there should be no pending clustering and all clustering instants should be completed
+          checkAnswer(s"call show_clustering(table => '$tableName')")(
+            Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "*"),
+            Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "*")
+          )
 
-        // After clustering there should be no pending clustering and all clustering instants should be completed
-        checkAnswer(s"call show_clustering(table => '$tableName')")(
-          Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "*"),
-          Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "*")
-        )
+          // Do clustering without manual schedule(which will do the schedule if no pending clustering exists)
+          spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004, 1004)")
+          spark.sql(s"insert into $tableName values(6, 'a6', 10, 1005, 1005)")
+          spark.sql(s"call run_clustering(table => '$tableName', order => 'partition', show_involved_partition => true)").show()
 
-        // Do clustering without manual schedule(which will do the schedule if no pending clustering exists)
-        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004, 1004)")
-        spark.sql(s"insert into $tableName values(6, 'a6', 10, 1005, 1005)")
-        spark.sql(s"call run_clustering(table => '$tableName', order => 'partition', show_involved_partition => true)").show()
+          val thirdClusteringInstant = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
+            .findInstantsAfter(secondScheduleInstant)
+            .getInstants
+            .iterator().asScala
+            .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
+            .toSeq
+          // Should have a new replace commit after the second clustering command.
+          assertResult(1)(thirdClusteringInstant.size)
 
-        val thirdClusteringInstant = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
-          .findInstantsAfter(secondScheduleInstant)
-          .getInstants
-          .iterator().asScala
-          .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
-          .toSeq
-        // Should have a new replace commit after the second clustering command.
-        assertResult(1)(thirdClusteringInstant.size)
-
-        checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
-          Seq(1, "a1", 10.0, 1000, 1000),
-          Seq(2, "a2", 10.0, 1001, 1001),
-          Seq(3, "a3", 10.0, 1002, 1002),
-          Seq(4, "a4", 10.0, 1003, 1003),
-          Seq(5, "a5", 10.0, 1004, 1004),
-          Seq(6, "a6", 10.0, 1005, 1005)
-        )
+          checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
+            Seq(1, "a1", 10.0, 1000, 1000),
+            Seq(2, "a2", 10.0, 1001, 1001),
+            Seq(3, "a3", 10.0, 1002, 1002),
+            Seq(4, "a4", 10.0, 1003, 1003),
+            Seq(5, "a5", 10.0, 1004, 1004),
+            Seq(6, "a6", 10.0, 1005, 1005)
+          )
+        }
       }
     }
   }

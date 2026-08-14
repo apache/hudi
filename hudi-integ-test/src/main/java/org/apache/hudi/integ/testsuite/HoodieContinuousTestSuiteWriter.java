@@ -27,12 +27,11 @@ import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Map;
@@ -41,9 +40,8 @@ import java.util.Properties;
 /**
  * Test suite Writer that assists in testing async table operations with Deltastreamer continuous mode.
  *
- * TODO: [HUDI-8294]
  * Sample command
- * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+ * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.12:3.5.5 \
  *  --conf spark.task.cpus=1 --conf spark.executor.cores=1 \
  * --conf spark.task.maxFailures=100 \
  * --conf spark.memory.fraction=0.4 \
@@ -78,9 +76,8 @@ import java.util.Properties;
  * --test-continuous-mode \
  * --min-sync-interval-seconds 20
  */
+@Slf4j
 public class HoodieContinuousTestSuiteWriter extends HoodieTestSuiteWriter {
-
-  private static Logger log = LoggerFactory.getLogger(HoodieContinuousTestSuiteWriter.class);
 
   public HoodieContinuousTestSuiteWriter(JavaSparkContext jsc, Properties props, HoodieTestSuiteJob.HoodieTestSuiteConfig cfg, String schema) throws Exception {
     super(jsc, props, cfg, schema);

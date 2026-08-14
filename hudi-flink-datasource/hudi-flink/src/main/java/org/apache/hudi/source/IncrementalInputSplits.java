@@ -39,16 +39,18 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.types.logical.RowType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -63,7 +65,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Utilities to generate incremental input splits {@link MergeOnReadInputSplit}.
@@ -77,11 +78,10 @@ import java.util.stream.Stream;
  *   <li>use the file paths from #step 3 as the back-up of the filesystem view.</li>
  * </ol>
  */
+@Slf4j
 public class IncrementalInputSplits implements Serializable {
 
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(IncrementalInputSplits.class);
   private final Configuration conf;
   private final Path path;
   private final RowType rowType;
@@ -147,7 +147,7 @@ public class IncrementalInputSplits implements Serializable {
     IncrementalQueryAnalyzer.QueryContext analyzingResult = analyzer.analyze();
 
     if (analyzingResult.isEmpty()) {
-      LOG.info("No new instant found for the table under path " + path + ", skip reading");
+      log.info("No new instant found for the table under path {}, skip reading", path);
       return Result.EMPTY;
     }
     final HoodieTimeline commitTimeline = analyzingResult.getActiveTimeline();
@@ -180,11 +180,16 @@ public class IncrementalInputSplits implements Serializable {
       FileIndex fileIndex = getFileIndex(metaClient);
       readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
       if (readPartitions.isEmpty()) {
-        LOG.warn("No partitions found for reading in user provided path.");
+        log.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
       fileInfoList = fileIndex.getFilesInPartitions();
-      List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
+      // Use the full commits-and-compaction timeline rather than the (possibly compaction-filtered)
+      // activeTimeline carried by the QueryContext. Otherwise, on a MOR table with
+      // 'read.streaming.skip_compaction = true', file slice boundaries would be wrongly
+      // computed and log files could be missed, causing data loss.
+      List<FileSlice> allFileSlices = getFileSlices(metaClient, getFullCommitsTimeline(metaClient),
+          readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
       fileSlices = fileIndex.filterFileSlices(allFileSlices);
     } else {
       if (cdcEnabled) {
@@ -200,24 +205,28 @@ public class IncrementalInputSplits implements Serializable {
           .collect(Collectors.toList());
       readPartitions = getReadPartitions(metadataList);
       if (readPartitions.isEmpty()) {
-        LOG.warn("No partitions found for reading in user provided path.");
+        log.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
       List<StoragePathInfo> files = WriteProfiles.getFilesFromMetadata(
           path, (org.apache.hadoop.conf.Configuration) metaClient.getStorageConf().unwrap(),
           metadataList, metaClient.getTableType(), false);
       if (files == null) {
-        LOG.warn("Found deleted files in metadata, falling back to full table scan.");
+        log.warn("Found deleted files in metadata, falling back to full table scan.");
         // fallback to full table scan
         // reading from the earliest, scans the partitions and files directly.
         FileIndex fileIndex = getFileIndex(metaClient);
         readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
         if (readPartitions.isEmpty()) {
-          LOG.warn("No partitions found for reading in user provided path.");
+          log.warn("No partitions found for reading in user provided path.");
           return Result.EMPTY;
         }
         fileInfoList = fileIndex.getFilesInPartitions();
-        List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
+        // Same reason as the full-table-scan branch above: build the FileSystemView with the
+        // complete commits-and-compaction timeline to avoid losing data when 'skip_compaction'
+        // is enabled.
+        List<FileSlice> allFileSlices = getFileSlices(metaClient, getFullCommitsTimeline(metaClient),
+            readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
         fileSlices = fileIndex.filterFileSlices(allFileSlices);
       } else {
         fileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, files, analyzingResult.getMaxCompletionTime(), false);
@@ -225,7 +234,7 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     if (fileSlices.isEmpty()) {
-      LOG.warn("No files found for reading in user provided path.");
+      log.warn("No files found for reading in user provided path.");
       return Result.EMPTY;
     }
 
@@ -246,6 +255,11 @@ public class IncrementalInputSplits implements Serializable {
       HoodieTableMetaClient metaClient,
       @Nullable String issuedOffset,
       boolean cdcEnabled) {
+
+    if (metaClient == null) {
+      throw new IllegalArgumentException("metaClient must not be null");
+    }
+
     metaClient.reloadActiveTimeline();
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
@@ -262,7 +276,7 @@ public class IncrementalInputSplits implements Serializable {
     IncrementalQueryAnalyzer.QueryContext queryContext = analyzer.analyze();
 
     if (queryContext.isEmpty()) {
-      LOG.info("No new instant found for the table under path " + path + ", skip reading");
+      log.info("No new instant found for the table under path {}, skip reading", path);
       return Result.EMPTY;
     }
 
@@ -281,16 +295,19 @@ public class IncrementalInputSplits implements Serializable {
 
       Set<String> readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
       if (readPartitions.isEmpty()) {
-        LOG.warn("No partitions found for reading under path: {}", path);
+        log.warn("No partitions found for reading under path: {}", path);
         return Result.EMPTY;
       }
 
       List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
       if (pathInfoList.isEmpty()) {
-        LOG.warn("No files found for reading under path: {}", path);
+        log.warn("No files found for reading under path: {}", path);
         return Result.EMPTY;
       }
-      List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, pathInfoList, offsetToIssue, false);
+      // Same reason as the batch full-table-scan branch:
+      // see getFullCommitsTimeline() for why a compaction-filtered timeline must not be used here.
+      List<FileSlice> allFileSlices = getFileSlices(metaClient, getFullCommitsTimeline(metaClient),
+          readPartitions, pathInfoList, offsetToIssue, false);
       List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices);
 
       List<MergeOnReadInputSplit> inputSplits = getInputSplits(fileSlices, metaClient, endInstant, null);
@@ -302,6 +319,39 @@ public class IncrementalInputSplits implements Serializable {
           commitTimeline, queryContext, instantRange.get(), endInstant, cdcEnabled);
       return Result.instance(inputSplits, endInstant, offsetToIssue);
     }
+  }
+
+  /**
+   * Returns the incremental Hoodie source split batch.
+   *
+   * @param metaClient    The meta client
+   * @param startInstant  The start Instant of the splits
+   * @param cdcEnabled    Whether cdc is enabled
+   *
+   * @return The list of incremental input splits or empty if there are no new instants
+   */
+  public HoodieContinuousSplitBatch inputHoodieSourceSplits(
+      HoodieTableMetaClient metaClient,
+      @Nullable String startInstant,
+      boolean cdcEnabled) {
+    Result result = inputSplits(metaClient, startInstant, cdcEnabled);
+
+
+    return HoodieContinuousSplitBatch.fromResult(result);
+  }
+
+  /**
+   * Returns Hoodie source split batch for batch incremental query.
+   *
+   * @param metaClient the meta client
+   * @param cdcEnabled whether CDC is enabled
+   * @return the list of incremental input splits or empty if there are no new instants
+   */
+  public HoodieContinuousSplitBatch batchHoodieSourceSplits(
+      HoodieTableMetaClient metaClient,
+      boolean cdcEnabled) {
+    Result result = inputSplits(metaClient, cdcEnabled);
+    return HoodieContinuousSplitBatch.fromResult(result);
   }
 
   /**
@@ -327,7 +377,7 @@ public class IncrementalInputSplits implements Serializable {
     List<HoodieCommitMetadata> archivedMetadataList = queryContext.getArchivedInstants().stream()
         .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, queryContext.getArchivedTimeline())).collect(Collectors.toList());
     if (archivedMetadataList.size() > 0) {
-      LOG.warn("\n"
+      log.warn("\n"
           + "--------------------------------------------------------------------------------\n"
           + "---------- caution: the reader has fallen behind too much from the writer,\n"
           + "---------- update 'read.tasks' option to add parallelism of read tasks.\n"
@@ -338,7 +388,7 @@ public class IncrementalInputSplits implements Serializable {
 
     Set<String> readPartitions = getReadPartitions(metadataList);
     if (readPartitions.isEmpty()) {
-      LOG.warn("No partitions found for reading under path: {}", path);
+      log.warn("No partitions found for reading under path: {}", path);
       return Collections.emptyList();
     }
     List<StoragePathInfo> pathInfoList = WriteProfiles.getFilesFromMetadata(
@@ -346,11 +396,28 @@ public class IncrementalInputSplits implements Serializable {
     List<FileSlice> fileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, pathInfoList, queryContext.getMaxCompletionTime(), skipCompaction);
 
     if (fileSlices.isEmpty()) {
-      LOG.warn("No files found for reading under path: {}", path);
+      log.warn("No files found for reading under path: {}", path);
       return Collections.emptyList();
     }
 
     return getInputSplits(fileSlices, metaClient, endInstant, instantRange);
+  }
+
+  /**
+   * Returns the full commit timeline (including completed compaction instants) for building
+   * a {@link HoodieTableFileSystemView} during full table scan.
+   *
+   * <p>NOTE: when streaming/batch read enables {@code skip_compaction}, the {@code activeTimeline}
+   * carried by {@link IncrementalQueryAnalyzer.QueryContext} has already filtered out the
+   * compaction instants. Using such a partial timeline to construct a {@link HoodieTableFileSystemView}
+   * would mis-classify the file slice boundaries on a MOR table (since file slice boundaries
+   * are derived from compaction instants), leading to data loss when reading from the earliest
+   * or after start commit got archived. For full table scan we should always rely on the
+   * complete commits-and-compaction timeline; the {@code skip_compaction} semantics is preserved
+   * by the instant range filtering applied later on the generated input splits.
+   */
+  private static HoodieTimeline getFullCommitsTimeline(HoodieTableMetaClient metaClient) {
+    return metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
   }
 
   private List<FileSlice> getFileSlices(
@@ -383,9 +450,9 @@ public class IncrementalInputSplits implements Serializable {
       // the latest commit is used as the limit of the log reader instant upper threshold,
       // it must be at least the latest instant time of the file slice to avoid data loss.
       String latestCommit = InstantComparison.minInstant(fileSlice.getLatestInstantTime(), endInstant);
-      return new MergeOnReadInputSplit(cnt.getAndAdd(1),
-          basePath, logPaths, latestCommit,
-          metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
+      return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
+          metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, instantRange,
+          fileSlice.getFileId(), fileSlice.getPartitionPath());
     }).sorted(Comparator.comparing(MergeOnReadInputSplit::getLatestCommit)).collect(Collectors.toList());
   }
 
@@ -396,7 +463,7 @@ public class IncrementalInputSplits implements Serializable {
     Map<HoodieFileGroupId, List<HoodieCDCFileSplit>> fileSplits = extractor.extractCDCFileSplits();
 
     if (fileSplits.isEmpty()) {
-      LOG.warn("No change logs found for reading in path: {}", path);
+      log.warn("No change logs found for reading in path: {}", path);
       return Collections.emptyList();
     }
 
@@ -404,17 +471,9 @@ public class IncrementalInputSplits implements Serializable {
     return fileSplits.entrySet().stream()
         .map(splits ->
             new CdcInputSplit(cnt.getAndAdd(1), metaClient.getBasePath().toString(), maxCompactionMemoryInBytes,
-                splits.getKey().getFileId(), splits.getValue().stream().sorted().toArray(HoodieCDCFileSplit[]::new)))
+                splits.getKey().getFileId(), splits.getKey().getPartitionPath(),
+                splits.getValue().stream().sorted().toArray(HoodieCDCFileSplit[]::new)))
         .collect(Collectors.toList());
-  }
-
-  private static Stream<FileSlice> getFileSlices(
-      HoodieTableFileSystemView fsView,
-      String relPartitionPath,
-      String endInstant,
-      boolean skipBaseFiles) {
-    return skipBaseFiles ? fsView.getAllLogsMergedFileSliceBeforeOrOn(relPartitionPath, endInstant)
-        : fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, endInstant);
   }
 
   private FileIndex getFileIndex(HoodieTableMetaClient metaClient) {
@@ -442,8 +501,7 @@ public class IncrementalInputSplits implements Serializable {
       double total = partitions.size();
       double selectedNum = selectedPartitions.size();
       double percentPruned = total == 0 ? 0 : (1 - selectedNum / total) * 100;
-      LOG.info("Selected " + selectedNum + " partitions out of " + total
-          + ", pruned " + percentPruned + "% partitions.");
+      log.info("Selected {} partitions out of {}, pruned {}% partitions.", selectedNum, total, percentPruned);
       return selectedPartitions;
     }
     return partitions;
@@ -469,7 +527,9 @@ public class IncrementalInputSplits implements Serializable {
    * Represents a result of calling {@link #inputSplits}.
    */
   public static class Result {
+    @Getter
     private final List<MergeOnReadInputSplit> inputSplits; // input splits
+    @Getter
     private final String endInstant; // end instant to consume to
     private final String offset;     // monotonic increasing consumption offset
 
@@ -477,14 +537,6 @@ public class IncrementalInputSplits implements Serializable {
 
     public boolean isEmpty() {
       return this.inputSplits.size() == 0;
-    }
-
-    public List<MergeOnReadInputSplit> getInputSplits() {
-      return this.inputSplits;
-    }
-
-    public String getEndInstant() {
-      return this.endInstant;
     }
 
     @Nullable
@@ -510,6 +562,7 @@ public class IncrementalInputSplits implements Serializable {
   /**
    * Builder for {@link IncrementalInputSplits}.
    */
+  @NoArgsConstructor
   public static class Builder {
     private Configuration conf;
     private Path path;
@@ -523,9 +576,6 @@ public class IncrementalInputSplits implements Serializable {
     private boolean skipClustering = false;
     // skip insert overwrite
     private boolean skipInsertOverwrite = false;
-
-    public Builder() {
-    }
 
     public Builder conf(Configuration conf) {
       this.conf = conf;

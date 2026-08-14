@@ -22,6 +22,10 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.Types;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -31,18 +35,16 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanSourceFunction;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.FlinkMiniCluster;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -56,8 +58,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -65,6 +65,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -75,9 +76,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
+import static org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType.BEFORE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.BEFORE;
 import static org.apache.hudi.utils.TestConfigurations.ROW_TYPE_EVOLUTION_AFTER;
 import static org.apache.hudi.utils.TestConfigurations.ROW_TYPE_EVOLUTION_BEFORE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -85,8 +86,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings({"SqlDialectInspection", "SqlNoDataSourceInspection"})
 @ExtendWith(FlinkMiniCluster.class)
+@Slf4j
 public class ITTestSchemaEvolution {
-  private static final Logger LOG = LoggerFactory.getLogger(ITTestSchemaEvolution.class);
 
   @TempDir File tempFile;
   private StreamTableEnvironment tEnv;
@@ -245,15 +246,24 @@ public class ITTestSchemaEvolution {
         doCompact(conf);
       }
 
-      Schema intType = SchemaBuilder.unionOf().nullType().and().intType().endUnion();
-      Schema longType = SchemaBuilder.unionOf().nullType().and().longType().endUnion();
-      Schema doubleType = SchemaBuilder.unionOf().nullType().and().doubleType().endUnion();
-      Schema stringType = SchemaBuilder.unionOf().nullType().and().stringType().endUnion();
-      Schema structType = SchemaBuilder.builder().record("new_row_col").fields()
-              .name("f0").type(longType).noDefault()
-              .name("f1").type(stringType).noDefault().endRecord();
-      Schema arrayType = Schema.createUnion(SchemaBuilder.builder().array().items(stringType), SchemaBuilder.builder().nullType());
-      Schema mapType = Schema.createUnion(SchemaBuilder.builder().map().values(stringType), SchemaBuilder.builder().nullType());
+      // Create nullable primitive types using HoodieSchema
+      HoodieSchema intType = HoodieSchema.createNullable(HoodieSchemaType.INT);
+      HoodieSchema longType = HoodieSchema.createNullable(HoodieSchemaType.LONG);
+      HoodieSchema doubleType = HoodieSchema.createNullable(HoodieSchemaType.DOUBLE);
+      HoodieSchema stringType = HoodieSchema.createNullable(HoodieSchemaType.STRING);
+
+      // Create struct type with fields
+      List<HoodieSchemaField> structFields = Arrays.asList(
+          HoodieSchemaField.of("f0", longType, null, HoodieSchema.NULL_VALUE),
+          HoodieSchemaField.of("f1", stringType, null, HoodieSchema.NULL_VALUE)
+      );
+      HoodieSchema structType = HoodieSchema.createRecord("new_row_col", null, null, structFields);
+
+      // Create nullable array type
+      HoodieSchema arrayType = HoodieSchema.createNullable(HoodieSchema.createArray(stringType));
+
+      // Create nullable map type
+      HoodieSchema mapType = HoodieSchema.createNullable(HoodieSchema.createMap(stringType));
 
       writeClient.addColumn("salary", doubleType, null, "name", AFTER);
       writeClient.deleteColumns("gender");
@@ -303,7 +313,7 @@ public class ITTestSchemaEvolution {
   private void writeTableWithSchema2(TableOptions tableOptions) throws ExecutionException, InterruptedException {
     tableOptions.withOption(
         FlinkOptions.SOURCE_AVRO_SCHEMA.key(),
-        AvroSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_AFTER, "hoodie.t1.t1_record"));
+        HoodieSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_AFTER, "hoodie.t1.t1_record"));
 
     //language=SQL
     tEnv.executeSql("drop table t1");
@@ -374,7 +384,7 @@ public class ITTestSchemaEvolution {
         KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition",
         KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), true,
         FlinkOptions.WRITE_BATCH_SIZE.key(), 0.000001, // each record triggers flush
-        FlinkOptions.SOURCE_AVRO_SCHEMA.key(), AvroSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_BEFORE),
+        FlinkOptions.SOURCE_AVRO_SCHEMA.key(), HoodieSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_BEFORE),
         FlinkOptions.READ_TASKS.key(), 1,
         FlinkOptions.WRITE_TASKS.key(), 1,
         FlinkOptions.INDEX_BOOTSTRAP_TASKS.key(), 1,
@@ -457,7 +467,7 @@ public class ITTestSchemaEvolution {
 
   private void doCompact(Configuration conf) throws Exception {
     // use sync compaction to ensure compaction finished.
-    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 
@@ -522,12 +532,12 @@ public class ITTestSchemaEvolution {
 
     for (String expectedItem : expected) {
       if (!actual.contains(expectedItem)) {
-        LOG.info("Not in actual: {}", expectedItem);
+        log.info("Not in actual: {}", expectedItem);
       }
     }
     for (String actualItem : actual) {
       if (!expected.contains(actualItem)) {
-        LOG.info("Not in expected: {}", actualItem);
+        log.info("Not in expected: {}", actualItem);
       }
     }
     assertEquals(expected, actual);

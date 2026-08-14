@@ -41,16 +41,8 @@ public class HFileMetaIndexBlock extends HFileIndexBlock {
       for (BlockIndexEntry entry : entries) {
         outputStream.writeLong(entry.getOffset());
         outputStream.writeInt(entry.getSize());
-        // Key length.
-        try {
-          byte[] keyLength = getVariableLengthEncodedBytes(entry.getFirstKey().getLength());
-          outputStream.write(keyLength);
-        } catch (IOException e) {
-          throw new RuntimeException(
-              "Failed to serialize number: " + entry.getFirstKey().getLength());
-        }
-        // Note that: NO two-bytes for encoding key length.
-        // Key.
+        outputStream.write(getVarIntBytes(entry.getFirstKey().getLength()));
+        // Unlike the data index, the meta key is stored as-is with no 2-byte row-length prefix.
         outputStream.write(entry.getFirstKey().getBytes());
       }
     }

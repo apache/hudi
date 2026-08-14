@@ -66,7 +66,7 @@ public class TestBufferedConnectWriter {
     writeConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath("/tmp")
-        .withSchema(schemaProvider.getSourceSchema().toString())
+        .withSchema(schemaProvider.getSourceHoodieSchema().toString())
         .build();
   }
 

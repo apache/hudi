@@ -19,6 +19,8 @@
 package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -27,7 +29,7 @@ import org.apache.hudi.utilities.schema.HiveSchemaProvider;
 import org.apache.hudi.utilities.testutils.SparkClientFunctionalTestHarnessWithHiveSupport;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException;
 import org.junit.jupiter.api.Assertions;
@@ -35,19 +37,18 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Basic tests against {@link HiveSchemaProvider}.
  */
+@Slf4j
 @Tag("functional")
 public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWithHiveSupport {
-  private static final Logger LOG = LoggerFactory.getLogger(TestHiveSchemaProvider.class);
+
   private static final TypedProperties PROPS = new TypedProperties();
   private static final String SOURCE_SCHEMA_TABLE_NAME = "schema_registry.source_schema_tab";
   private static final String TARGET_SCHEMA_TABLE_NAME = "schema_registry.target_schema_tab";
@@ -64,17 +65,17 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
   public void testSourceSchema() throws Exception {
     try {
       createSchemaTable(SOURCE_SCHEMA_TABLE_NAME);
-      Schema sourceSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getSourceSchema();
+      HoodieSchema sourceSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getSourceHoodieSchema();
 
-      Schema originalSchema = new Schema.Parser().parse(
+      HoodieSchema originalSchema = HoodieSchema.parse(
               UtilitiesTestBase.Helpers.readFile("streamer-config/hive_schema_provider_source.avsc")
       );
-      for (Schema.Field field : sourceSchema.getFields()) {
-        Schema.Field originalField = originalSchema.getField(field.name());
-        assertTrue(originalField != null);
+      for (HoodieSchemaField field : sourceSchema.getFields()) {
+        HoodieSchemaField originalField = originalSchema.getField(field.name()).get();
+        assertNotNull(originalField);
       }
     } catch (HoodieException e) {
-      LOG.error("Failed to get source schema. ", e);
+      log.error("Failed to get source schema. ", e);
       throw e;
     }
   }
@@ -88,15 +89,15 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
       PROPS.setProperty("hoodie.streamer.schemaprovider.target.schema.hive.table", dbAndTableName.getRight());
       createSchemaTable(SOURCE_SCHEMA_TABLE_NAME);
       createSchemaTable(TARGET_SCHEMA_TABLE_NAME);
-      Schema targetSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getTargetSchema();
-      Schema originalSchema = new Schema.Parser().parse(
+      HoodieSchema targetSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getTargetHoodieSchema();
+      HoodieSchema originalSchema = HoodieSchema.parse(
           UtilitiesTestBase.Helpers.readFile("streamer-config/hive_schema_provider_target.avsc"));
-      for (Schema.Field field : targetSchema.getFields()) {
-        Schema.Field originalField = originalSchema.getField(field.name());
-        assertTrue(originalField != null);
+      for (HoodieSchemaField field : targetSchema.getFields()) {
+        HoodieSchemaField originalField = originalSchema.getField(field.name()).get();
+        assertNotNull(originalField);
       }
     } catch (HoodieException e) {
-      LOG.error("Failed to get source/target schema. ", e);
+      log.error("Failed to get source/target schema. ", e);
       throw e;
     }
   }
@@ -108,7 +109,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
     PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.hive.table", wrongName);
     Assertions.assertThrows(NoSuchTableException.class, () -> {
       try {
-        UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getSourceSchema();
+        UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getSourceHoodieSchema();
       } catch (Throwable exception) {
         while (exception.getCause() != null) {
           exception = exception.getCause();

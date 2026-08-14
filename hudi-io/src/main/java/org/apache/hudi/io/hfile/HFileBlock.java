@@ -22,7 +22,9 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.compress.CompressionCodec;
 
-import com.google.protobuf.CodedOutputStream;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -33,6 +35,7 @@ import java.nio.ByteBuffer;
 
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT64;
 import static org.apache.hudi.io.util.IOUtils.readInt;
@@ -53,6 +56,12 @@ public abstract class HFileBlock {
   static final int CHECKSUM_SIZE = SIZEOF_INT32;
   private static final int DEFAULT_BYTES_PER_CHECKSUM = 16 * 1024;
   private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
+  // Hudi does not set a version timestamp on key-value pairs, so the latest timestamp is used.
+  private static final long LATEST_TIMESTAMP = Long.MAX_VALUE;
+  // Key type is constant Put (4) in Hudi.
+  private static final byte KEY_TYPE_PUT = (byte) 4;
+  // KeyValue key suffix beyond the row: column-family length (1) + timestamp (8) + type (1).
+  private static final int KEY_METADATA_SUFFIX_LENGTH = SIZEOF_BYTE + SIZEOF_INT64 + SIZEOF_BYTE;
 
   static class Header {
     // Format of header is:
@@ -75,10 +84,12 @@ public abstract class HFileBlock {
   }
 
   protected final HFileContext context;
+  @Getter
   protected final byte[] byteBuff;
   protected final int startOffsetInBuff;
   protected final int sizeCheckSum;
   protected final int uncompressedEndOffset;
+  @Getter
   private final HFileBlockType blockType;
   protected final int onDiskSizeWithoutHeader;
   protected final int uncompressedSizeWithoutHeader;
@@ -88,6 +99,8 @@ public abstract class HFileBlock {
   protected int startOffsetInCompressedBuff;
 
   // Write properties
+  @Getter(AccessLevel.PROTECTED)
+  @Setter(AccessLevel.PROTECTED)
   private long startOffsetInBuffForWrite = -1;
   private long previousBlockOffsetForWrite = -1;
 
@@ -200,14 +213,6 @@ public abstract class HFileBlock {
     return (int) numChunks;
   }
 
-  public HFileBlockType getBlockType() {
-    return blockType;
-  }
-
-  public byte[] getByteBuff() {
-    return byteBuff;
-  }
-
   public int getOnDiskSizeWithHeader() {
     return onDiskSizeWithoutHeader + HFILEBLOCK_HEADER_SIZE;
   }
@@ -309,20 +314,6 @@ public abstract class HFileBlock {
   }
 
   /**
-   * Sets start offset of the block in the buffer.
-   */
-  protected void setStartOffsetInBuffForWrite(long startOffsetInBuffForWrite) {
-    this.startOffsetInBuffForWrite = startOffsetInBuffForWrite;
-  }
-
-  /**
-   * Gets start offset of the block in the buffer.
-   */
-  protected long getStartOffsetInBuffForWrite() {
-    return this.startOffsetInBuffForWrite;
-  }
-
-  /**
    * Returns checksum bytes if checksum type is not NULL.
    * Note that current HFileReaderImpl does not support non-NULL checksum.
    */
@@ -334,16 +325,37 @@ public abstract class HFileBlock {
   }
 
   /**
-   * Returns the bytes of the variable length encoding for an integer.
-   * @param length       an integer, normally representing a length.
-   * @return             variable length encoding.
-   * @throws IOException upon error.
+   * Returns the serialized length of the KeyValue key for a row: the 2-byte row-length prefix, the
+   * row, and the 10-byte metadata suffix (column-family length, timestamp, key type).
+   *
+   * <p>The data block and the root index block both write the full KeyValue key (not just the row)
+   * so that a reader can parse and point-look-up either block: a point lookup compares index keys
+   * against data keys, so the two must use byte-identical key encoding.
+   *
+   * @param rowLength length of the row (key content) in bytes.
+   * @return the KeyValue key length.
    */
-  static byte[] getVariableLengthEncodedBytes(int length) throws IOException {
-    ByteArrayOutputStream varintBuffer = new ByteArrayOutputStream();
-    CodedOutputStream varintOutput = CodedOutputStream.newInstance(varintBuffer);
-    varintOutput.writeUInt32NoTag(length);
-    varintOutput.flush();
-    return varintBuffer.toByteArray();
+  protected static int keyValueKeyLength(int rowLength) {
+    return SIZEOF_INT16 + rowLength + KEY_METADATA_SUFFIX_LENGTH;
+  }
+
+  /**
+   * Writes the KeyValue key for a row:
+   * {@code [2-byte rowLen][row][1-byte cfLen=0][8-byte ts=LATEST][1-byte type=Put]}. See
+   * {@link #keyValueKeyLength(int)} for why the data and index blocks share this encoding.
+   *
+   * @param out       output stream to write to.
+   * @param row       buffer holding the row (key content) bytes.
+   * @param offset    start of the row within {@code row}; a key may be a view into a larger buffer.
+   * @param rowLength number of row bytes to write; passed explicitly because a key's backing array
+   *                  may be larger than its content length.
+   */
+  protected static void writeKey(DataOutputStream out, byte[] row, int offset, int rowLength)
+      throws IOException {
+    out.writeShort((short) rowLength);
+    out.write(row, offset, rowLength);
+    out.write(0);                     // column-family length
+    out.writeLong(LATEST_TIMESTAMP);  // timestamp
+    out.write(KEY_TYPE_PUT);          // key type
   }
 }

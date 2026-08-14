@@ -31,16 +31,15 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.JavaScalaConverters;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
@@ -50,12 +49,12 @@ import com.beust.jcommander.IValueValidator;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameWriter;
@@ -64,8 +63,6 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -77,11 +74,11 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
 
 /**
  * Export the latest records of Hudi dataset to a set of external files (e.g., plain parquet files).
  */
+@Slf4j
 public class HoodieSnapshotExporter {
 
   @FunctionalInterface
@@ -90,8 +87,6 @@ public class HoodieSnapshotExporter {
     DataFrameWriter<Row> partition(Dataset<Row> source);
 
   }
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSnapshotExporter.class);
 
   public static class OutputFormatValidator implements IValueValidator<String> {
 
@@ -142,6 +137,10 @@ public class HoodieSnapshotExporter {
     @Parameter(names = {"--transformer-sql-file"}, description = "File with a SQL query to be executed during write."
             + " The query should reference the source as a table named \"<SRC>\".")
     public String transformerSqlFile = null;
+
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
+
   }
 
   public void export(JavaSparkContext jsc, Config cfg) throws IOException {
@@ -158,15 +157,16 @@ public class HoodieSnapshotExporter {
         .<HoodieSnapshotExporterException>orElseThrow(() -> {
           throw new HoodieSnapshotExporterException("No commits present. Nothing to snapshot.");
         });
-    LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
-        latestCommitTimestamp));
+    log.info("Starting to snapshot latest version files which are also no-late-than {}.", latestCommitTimestamp);
 
     final HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    final List<String> partitions = getPartitions(engineContext, cfg, new HoodieHadoopStorage(sourceFs));
+    final List<String> partitions = getPartitions(engineContext, cfg, HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(new Path(cfg.sourceBasePath)),
+        HadoopFSUtils.getStorageConf(sourceFs.getConf())));
     if (partitions.isEmpty()) {
       throw new HoodieSnapshotExporterException("The source dataset has 0 partition to snapshot.");
     }
-    LOG.info(String.format("The job needs to export %d partitions.", partitions.size()));
+    log.info("The job needs to export {} partitions.", partitions.size());
 
     if (cfg.outputFormat.equals(OutputFormatValidator.HUDI)) {
       exportAsHudi(jsc, sourceFs, cfg, partitions, latestCommitTimestamp, tableMetadata);
@@ -191,7 +191,7 @@ public class HoodieSnapshotExporter {
   private void createSuccessTag(FileSystem fs, Config cfg) throws IOException {
     Path successTagPath = new Path(cfg.targetOutputPath + "/_SUCCESS");
     if (!fs.exists(successTagPath)) {
-      LOG.info(String.format("Creating _SUCCESS under target output path: %s", cfg.targetOutputPath));
+      log.info("Creating _SUCCESS under target output path: {}", cfg.targetOutputPath);
       fs.createNewFile(successTagPath);
     }
   }
@@ -282,7 +282,7 @@ public class HoodieSnapshotExporter {
     }, parallelism);
 
     // Also copy the .commit files
-    LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
+    log.info("Copying .commit files which are no-late-than {}.", latestCommitTimestamp);
     List<FileStatus> commitFilesListToCopy =
         Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME)))
             .filter(fileStatus -> {
@@ -340,9 +340,8 @@ public class HoodieSnapshotExporter {
       System.exit(1);
     }
 
-    SparkConf sparkConf = buildSparkConf("Hoodie-snapshot-exporter", "local[*]");
-    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
-    LOG.info("Initializing spark job.");
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-snapshot-exporter", "local[*]", cfg.enableHiveSupport);
+    log.info("Initializing spark job.");
 
     try {
       new HoodieSnapshotExporter().export(jsc, cfg);
@@ -357,13 +356,13 @@ public class HoodieSnapshotExporter {
       switch (config.transformerClassName) {
         case "org.apache.hudi.utilities.transform.SqlQueryBasedTransformer":
           if (StringUtils.isNullOrEmpty(config.transformerSql)) {
-            LOG.error("--transformer-sql is required when using SqlQueryBasedTransformer");
+            log.error("--transformer-sql is required when using SqlQueryBasedTransformer");
             valid = false;
           }
           break;
         case "org.apache.hudi.utilities.transform.SqlFileBasedTransformer":
           if (StringUtils.isNullOrEmpty(config.transformerSqlFile)) {
-            LOG.error("--transformer-sql-file is required when using SqlFileBasedTransformer");
+            log.error("--transformer-sql-file is required when using SqlFileBasedTransformer");
             valid = false;
           }
           break;

@@ -41,11 +41,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -69,8 +69,7 @@ import org.apache.hudi.table.action.commit.FlinkUpsertPreppedCommitActionExecuto
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -86,10 +85,9 @@ import java.util.Map;
  * <p>
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
+@Slf4j
 public class HoodieFlinkCopyOnWriteTable<T>
     extends HoodieFlinkTable<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCopyOnWriteTable.class);
 
   public HoodieFlinkCopyOnWriteTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -415,7 +413,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
     config.setRecordMergerClass(HoodieAvroRecordMerger.class.getName());
     // these are updates
     HoodieMergeHandle mergeHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
-    return IOUtils.runMerge(mergeHandle, instantTime, fileId);
+    return MergeUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,

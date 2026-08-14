@@ -18,20 +18,19 @@
 
 package org.apache.hudi.cli.testutils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class ShellEvaluationResultUtil {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ShellEvaluationResultUtil.class);
-
-  private ShellEvaluationResultUtil() {
-  }
 
   public static boolean isSuccess(Object shellEvaluationResult) {
     boolean hasError = shellEvaluationResult instanceof Throwable;
     if (hasError) {
       Throwable throwable = (Throwable) shellEvaluationResult;
-      LOGGER.error(throwable.toString());
+      log.error(throwable.toString());
     }
     return !hasError;
   }

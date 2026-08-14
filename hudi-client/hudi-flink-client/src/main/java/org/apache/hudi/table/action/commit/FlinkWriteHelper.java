@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -34,10 +35,9 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.avro.Schema;
-
 import java.time.Duration;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -101,10 +101,11 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, Iterator<HoodieRe
                                                       String[] orderingFieldNames) {
     // If index used is global, then records are expected to differ in their partitionPath
     Map<Object, List<HoodieRecord<T>>> keyedRecords = CollectionUtils.toStream(records)
-        .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
+        .collect(Collectors.groupingBy(
+            record -> record.getKey().getRecordKey(), LinkedHashMap::new, Collectors.toList()));
 
     // caution that the avro schema is not serializable
-    final Schema schema = new Schema.Parser().parse(schemaStr);
+    final HoodieSchema schema = HoodieSchema.parse(schemaStr);
     DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
     return keyedRecords.values().stream().map(x -> x.stream().reduce((previous, next) ->
       reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext(), deleteContext)

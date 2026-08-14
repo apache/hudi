@@ -19,28 +19,29 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieSchemaConversionUtils, HoodieSparkUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase.hoodieRecordsToIndexedRecords
+import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase.{hoodieRecordsToIndexedRecords, supportedFileFormats}
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
-import org.apache.hudi.common.util.{CollectionUtils, Option => HOption, OrderingValues}
+import org.apache.hudi.common.util.{Option => HOption, OrderingValues}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.avro.{Schema, SchemaBuilder}
-import org.apache.avro.generic.{GenericRecord, IndexedRecord}
+import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
@@ -88,6 +89,11 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     sparkConf.set(LEGACY_RESPECT_NULLABILITY_IN_TEXT_DATASET_CONVERSION.key, "true")
     HoodieSparkKryoRegistrar.register(sparkConf)
     spark = SparkSession.builder.config(sparkConf).getOrCreate
+    supportedFileFormats = if (HoodieSparkUtils.gteqSpark3_4) {
+      util.Arrays.asList(HoodieFileFormat.PARQUET, HoodieFileFormat.ORC, HoodieFileFormat.LANCE)
+    } else {
+      util.Arrays.asList(HoodieFileFormat.PARQUET, HoodieFileFormat.ORC)
+    }
   }
 
   @AfterEach
@@ -105,39 +111,51 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     tempDir.toAbsolutePath.toUri.toString
   }
 
-  override def getHoodieReaderContext(tablePath: String, avroSchema: Schema, storageConf: StorageConfiguration[_], metaClient: HoodieTableMetaClient): HoodieReaderContext[InternalRow] = {
+  override def getHoodieReaderContext(tablePath: String, schema: HoodieSchema, storageConf: StorageConfiguration[_], metaClient: HoodieTableMetaClient): HoodieReaderContext[InternalRow] = {
     val parquetReader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
-    val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(avroSchema);
+    val dataSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val orcReader = sparkAdapter.createOrcFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]), dataSchema)
-    val multiFormatReader = new MultipleColumnarFileFormatReader(parquetReader, orcReader)
+    val lanceReader = sparkAdapter.createLanceFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration])).orNull
+    val vortexReader = sparkAdapter.createVortexFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration])).orNull
+    val multiFormatReader = new MultipleColumnarFileFormatReader(parquetReader, orcReader, lanceReader, vortexReader)
     new SparkFileFormatInternalRowReaderContext(multiFormatReader, Seq.empty, Seq.empty, getStorageConf, metaClient.getTableConfig)
   }
 
-  override def commitToTable(recordList: util.List[HoodieRecord[_]],
+  override def commitProcessedRecordsToTable(recordList: util.List[HoodieRecord[_]],
                              operation: String,
                              firstCommit: Boolean,
                              options: util.Map[String, String],
                              schemaStr: String): Unit = {
-    val schema = new Schema.Parser().parse(schemaStr)
+    val schema = HoodieSchema.parse(schemaStr)
     val genericRecords = spark.sparkContext.parallelize((hoodieRecordsToIndexedRecords(recordList, schema)
       .stream().map[GenericRecord](entry => entry.getValue.asInstanceOf[GenericRecord])
       .collect(Collectors.toList[GenericRecord])).asScala.toSeq, 2)
     val inputDF: Dataset[Row] = AvroConversionUtils.createDataFrame(genericRecords, schemaStr, spark);
 
-    inputDF.write.format("hudi")
+    // Check if Lance format is being used and add required configuration
+    val baseFileFormat = options.getOrDefault(HoodieTableConfig.BASE_FILE_FORMAT.key(), "")
+    val isLanceFormat = baseFileFormat.equalsIgnoreCase("LANCE")
+
+    var writer = inputDF.write.format("hudi")
       .options(options)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option("hoodie.datasource.write.operation", operation)
       .option("hoodie.datasource.write.table.type", "MERGE_ON_READ")
-      .mode(if (firstCommit) SaveMode.Overwrite else SaveMode.Append)
+
+    // Lance requires DefaultSparkRecordMerger for Spark InternalRow compatibility
+    if (isLanceFormat) {
+      writer = writer.option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+    }
+
+    writer.mode(if (firstCommit) SaveMode.Overwrite else SaveMode.Append)
       .save(getBasePath)
   }
 
   override def getCustomPayload: String = classOf[CustomPayloadForTesting].getName
 
-  override def assertRecordsEqual(schema: Schema, expected: InternalRow, actual: InternalRow): Unit = {
+  override def assertRecordsEqual(schema: HoodieSchema, expected: InternalRow, actual: InternalRow): Unit = {
     assertEquals(expected.numFields, actual.numFields)
-    val expectedStruct = sparkAdapter.getAvroSchemaConverters.toSqlType(schema)._1.asInstanceOf[StructType]
+    val expectedStruct = HoodieSparkSchemaConverters.toSqlType(schema)._1.asInstanceOf[StructType]
 
     expected.toSeq(expectedStruct).zip(actual.toSeq(expectedStruct)).zipWithIndex.foreach {
       case ((v1, v2), i) =>
@@ -215,7 +233,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   def testCustomDelete(useFgReader: String,
                        tableType: String,
                        positionUsed: String,
-                       mergeMode: String): Unit = {
+                       mergeMode: String,
+                       markerFromTableConfigOnly: String): Unit = {
     val payloadClass = "org.apache.hudi.common.table.read.CustomPayloadForTesting"
     val fgReaderOpts: Map[String, String] = Map(
       HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
@@ -225,13 +244,17 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     )
     val deleteOpts: Map[String, String] = Map(
       DELETE_KEY -> "op", DELETE_MARKER -> "d")
-    val readOpts = if (mergeMode.equals("CUSTOM")) {
-      fgReaderOpts ++ deleteOpts ++ Map(
-        HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> payloadClass)
+    val payloadOpts = if (mergeMode.equals("CUSTOM")) {
+      Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> payloadClass)
     } else {
-      fgReaderOpts ++ deleteOpts
+      Map.empty[String, String]
     }
-    val opts = readOpts
+    val opts = fgReaderOpts ++ deleteOpts ++ payloadOpts
+    // The write persists the marker on the table under the record-merge property prefix. When the query does
+    // not restate the delete options, the table config is the only place the reader can learn about them -
+    // which is what a query that just loads the path looks like.
+    val tableConfigOnly = markerFromTableConfigOnly.equals("true")
+    val readOpts = if (tableConfigOnly) fgReaderOpts ++ payloadOpts else opts
     val columns = Seq("ts", "key", "rider", "driver", "fare", "op")
 
     val data = Seq(
@@ -253,6 +276,11 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val metaClient = HoodieTableMetaClient
       .builder().setConf(getStorageConf).setBasePath(getBasePath).build
     assertEquals((1, 0), getFileCount(metaClient, getBasePath))
+    if (tableConfigOnly) {
+      assertTrue(metaClient.getTableConfig.getProps.containsKey(
+        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY),
+        "the delete marker must be persisted on the table, otherwise the read side has nothing to pick up")
+    }
 
     // Delete using delete markers.
     val updateData = Seq(
@@ -310,7 +338,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                                    avroSchema: Schema,
                                    orderingColumn: String,
                                    expectedOrderingValue: Comparable[_]): Unit = {
-    assertEquals(expectedOrderingValue, sparkReaderContext.getRecordContext.getOrderingValue(row, avroSchema, Collections.singletonList(orderingColumn)))
+    assertEquals(expectedOrderingValue, sparkReaderContext.getRecordContext.getOrderingValue(row, HoodieSchema.fromAvroSchema(avroSchema), Collections.singletonList(orderingColumn)))
   }
 
   @Test
@@ -328,7 +356,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .endRecord()
     val key = "my_key"
     val row = InternalRow.fromSeq(Seq(UTF8String.fromString(key), UTF8String.fromString("value2")))
-    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, HoodieSchema.fromAvroSchema(schema)))
   }
 
   @Test
@@ -350,7 +378,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .endRecord()
     val key = "key"
     val row = InternalRow.fromSeq(Seq(UTF8String.fromString(key), UTF8String.fromString("other")))
-    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, HoodieSchema.fromAvroSchema(schema)))
   }
 
   @Test
@@ -365,7 +393,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val key = "outer1.field1:compound,outer1.field2:__empty__,outer1.field3:__null__"
     val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("compound"), UTF8String.fromString(""), null))
     val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
-    assertEquals(key, sparkReaderContext.getRecordContext.getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext.getRecordKey(row, HoodieSchema.fromAvroSchema(schema)))
   }
 
   @Test
@@ -378,7 +406,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val schema: Schema = buildMultiLevelSchema
     val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("nested_value"), UTF8String.fromString(""), null))
     val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
-    assertEquals("nested_value", sparkReaderContext.getRecordContext().getValue(row, schema, "outer1.field1").toString)
+    assertEquals("nested_value", sparkReaderContext.getRecordContext().getValue(row, HoodieSchema.fromAvroSchema(schema), "outer1.field1").toString)
   }
 
   private def buildMultiLevelSchema = {
@@ -397,7 +425,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     schema
   }
 
-  override def assertRecordMatchesSchema(schema: Schema, record: InternalRow): Unit = {
+  override def assertRecordMatchesSchema(schema: HoodieSchema, record: InternalRow): Unit = {
     val structType = HoodieInternalRowUtils.getCachedSchema(schema)
     assertRecordMatchesSchema(structType, record)
   }
@@ -440,12 +468,15 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 object TestHoodieFileGroupReaderOnSpark {
   def customDeleteTestParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
-      Arguments.of("true", "MERGE_ON_READ", "false", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "true", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "false", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "true", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "false", "CUSTOM"),
-      Arguments.of("true", "MERGE_ON_READ", "true", "CUSTOM"))
+      Arguments.of("true", "MERGE_ON_READ", "false", "EVENT_TIME_ORDERING", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "EVENT_TIME_ORDERING", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "false", "COMMIT_TIME_ORDERING", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "COMMIT_TIME_ORDERING", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "false", "CUSTOM", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "CUSTOM", "false"),
+      // The query does not restate the delete options, so the table config is the reader's only source.
+      Arguments.of("true", "MERGE_ON_READ", "false", "EVENT_TIME_ORDERING", "true"),
+      Arguments.of("true", "MERGE_ON_READ", "false", "COMMIT_TIME_ORDERING", "true"))
   }
 
   def getFileCount(metaClient: HoodieTableMetaClient, basePath: String): (Long, Long) = {

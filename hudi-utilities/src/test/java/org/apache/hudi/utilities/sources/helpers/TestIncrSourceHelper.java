@@ -26,6 +26,8 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -42,7 +44,6 @@ import org.apache.hudi.utilities.sources.TestS3EventsHoodieIncrSource;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -72,7 +73,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
   private JavaSparkContext jsc;
   private HoodieTableMetaClient metaClient;
 
-  private static final Schema S3_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
+  private static final HoodieSchema S3_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
       TestS3EventsHoodieIncrSource.class, "/streamer-config/s3-metadata.avsc", true);
 
   @BeforeEach
@@ -125,6 +126,20 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
         emptyDataset, 50L, queryInfo, new CloudObjectIncrCheckpoint(null, null));
     assertEquals("commit2", result.getKey().toString());
     assertTrue(!result.getRight().isPresent());
+  }
+
+  @Test
+  void testCloudObjectIncrCheckpointSerialization() {
+    // neither commit nor key: falls back to the sentinel start timestamp
+    assertEquals(IncrSourceHelper.DEFAULT_START_TIMESTAMP, new CloudObjectIncrCheckpoint(null, null).toString());
+
+    CloudObjectIncrCheckpoint commitOnly = new CloudObjectIncrCheckpoint("commit1", null);
+    assertEquals("commit1", commitOnly.toString());
+    assertEquals("commit1", commitOnly.getCommit());
+
+    CloudObjectIncrCheckpoint commitAndKey = new CloudObjectIncrCheckpoint("commit1", "path/to/file1.json");
+    assertEquals("commit1#path/to/file1.json", commitAndKey.toString());
+    assertEquals("path/to/file1.json", commitAndKey.getKey());
   }
 
   @Test
@@ -285,24 +300,155 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     assertTrue(!result.getRight().isPresent());
   }
 
+  /**
+   * Files-limit must produce a contiguous prefix of the ordered set even when the source dataset
+   * is spread across many Spark partitions. Spans 50 files across 8 partitions; iterates 5 syncs
+   * with numFilesLimit = 10 and asserts every file is consumed exactly once in order.
+   */
+  @Test
+  void testFilesLimitContiguousAcrossManyPartitions() {
+    List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
+    for (int i = 0; i < 50; i++) {
+      // zero-pad so lexicographic key order matches insertion order
+      filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file%02d.json", i), 100L, "commit1"));
+    }
+    Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime, 8);
+
+    QueryInfo queryInfo = new QueryInfo(
+        QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit0", "commit0",
+        "commit1", "_hoodie_commit_time",
+        "s3.object.key", "s3.object.size");
+
+    CloudObjectIncrCheckpoint cursor = new CloudObjectIncrCheckpoint("commit0", null);
+    List<String> consumedKeys = new ArrayList<>();
+    long byteLimit = 1_000_000L;
+    long filesLimit = 10L;
+    for (int batch = 0; batch < 5; batch++) {
+      Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result =
+          IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(inputDs, byteLimit, filesLimit, queryInfo, cursor);
+      assertTrue(result.getRight().isPresent(), "batch " + batch + " unexpectedly empty");
+      List<Row> rows = result.getRight().get()
+          .select("s3.object.key")
+          .collectAsList();
+      assertEquals(filesLimit, rows.size(), "batch " + batch + " did not respect filesLimit");
+      for (Row r : rows) {
+        consumedKeys.add(r.getString(0));
+      }
+      cursor = result.getKey();
+    }
+    assertEquals(50, consumedKeys.size());
+    // Verify keys are returned in the exact order produced; if .limit() on an unordered dataset
+    // had been used, a multi-partition input would yield duplicates or gaps under any
+    // non-deterministic order.
+    for (int i = 0; i < 50; i++) {
+      assertEquals(String.format("path/to/file%02d.json", i), consumedKeys.get(i),
+          "file at position " + i + " is out of order");
+    }
+  }
+
+  /**
+   * Files-limit hits mid-commit. After the truncated batch, next sync must resume from the
+   * exact next file in the same commit without skipping or re-reading.
+   */
+  @Test
+  void testFilesLimitCrossesCommitBoundary() {
+    List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
+    // commit1: 3 files; commit2: 3 files
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file1.json", 100L, "commit1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 100L, "commit1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file3.json", 100L, "commit1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file4.json", 100L, "commit2"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file5.json", 100L, "commit2"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file6.json", 100L, "commit2"));
+    Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime, 4);
+
+    QueryInfo queryInfo = new QueryInfo(
+        QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit0", "commit0",
+        "commit2", "_hoodie_commit_time",
+        "s3.object.key", "s3.object.size");
+
+    // First batch: filesLimit = 4 truncates at file4 (first file of commit2)
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> first = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+        inputDs, 1_000_000L, 4L, queryInfo, new CloudObjectIncrCheckpoint("commit0", null));
+    assertEquals("commit2#path/to/file4.json", first.getKey().toString());
+    assertEquals(4, first.getRight().get().count());
+
+    // Second batch: resume from the prior checkpoint; remaining files are file5 and file6
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> second = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+        inputDs, 1_000_000L, 4L, queryInfo, first.getKey());
+    assertEquals("commit2#path/to/file6.json", second.getKey().toString());
+    assertEquals(2, second.getRight().get().count());
+  }
+
+  /**
+   * Files-limit alone (when bytes-limit is non-binding) still selects a contiguous prefix.
+   */
+  @Test
+  void testFilesLimitBindingOverByteLimit() {
+    List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
+    for (int i = 0; i < 10; i++) {
+      filePathSizeAndCommitTime.add(Triple.of(String.format("path/to/file%02d.json", i), 100L, "commit1"));
+    }
+    Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime, 4);
+
+    QueryInfo queryInfo = new QueryInfo(
+        QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit0", "commit0",
+        "commit1", "_hoodie_commit_time",
+        "s3.object.key", "s3.object.size");
+
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+        inputDs, 1_000_000L, 3L, queryInfo, new CloudObjectIncrCheckpoint("commit0", null));
+    assertEquals("commit1#path/to/file02.json", result.getKey().toString());
+    assertEquals(3, result.getRight().get().count());
+  }
+
+  /**
+   * Files-limit larger than dataset: byte-limit drives the checkpoint as if no files-limit
+   * existed. Guards against the previous size-based recalculation branch silently breaking
+   * the byte-only path.
+   */
+  @Test
+  void testFilesLimitLargerThanAvailable() {
+    List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file1.json", 100L, "commit1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 100L, "commit1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file3.json", 100L, "commit1"));
+    Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime, 2);
+
+    QueryInfo queryInfo = new QueryInfo(
+        QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit0", "commit0",
+        "commit1", "_hoodie_commit_time",
+        "s3.object.key", "s3.object.size");
+
+    Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+        inputDs, 1_000_000L, 1000L, queryInfo, new CloudObjectIncrCheckpoint("commit0", null));
+    assertEquals("commit1#path/to/file3.json", result.getKey().toString());
+    assertEquals(3, result.getRight().get().count());
+  }
+
+  private Dataset<Row> generateDataset(List<Triple<String, Long, String>> filePathSizeAndCommitTime, int numPartitions) {
+    JavaRDD<String> testRdd = jsc.parallelize(getSampleS3ObjectKeys(filePathSizeAndCommitTime), numPartitions);
+    return spark().read().json(testRdd);
+  }
+
   private HoodieRecord generateS3EventMetadata(String commitTime, String bucketName, String objectKey, Long objectSize) {
     String partitionPath = bucketName;
-    Schema schema = S3_METADATA_SCHEMA;
-    GenericRecord rec = new GenericData.Record(schema);
-    Schema.Field s3Field = schema.getField("s3");
-    Schema s3Schema = s3Field.schema().getTypes().get(1); // Assuming the record schema is the second type
+    HoodieSchema schema = S3_METADATA_SCHEMA;
+    GenericRecord rec = new GenericData.Record(schema.toAvroSchema());
+    HoodieSchemaField s3Field = schema.getField("s3").get();
+    HoodieSchema s3Schema = s3Field.schema().getTypes().get(1); // Assuming the record schema is the second type
     // Create a generic record for the "s3" field
-    GenericRecord s3Record = new GenericData.Record(s3Schema);
+    GenericRecord s3Record = new GenericData.Record(s3Schema.toAvroSchema());
 
-    Schema.Field s3BucketField = s3Schema.getField("bucket");
-    Schema s3Bucket = s3BucketField.schema().getTypes().get(1); // Assuming the record schema is the second type
-    GenericRecord s3BucketRec = new GenericData.Record(s3Bucket);
+    HoodieSchemaField s3BucketField = s3Schema.getField("bucket").get();
+    HoodieSchema s3Bucket = s3BucketField.schema().getTypes().get(1); // Assuming the record schema is the second type
+    GenericRecord s3BucketRec = new GenericData.Record(s3Bucket.toAvroSchema());
     s3BucketRec.put("name", bucketName);
 
 
-    Schema.Field s3ObjectField = s3Schema.getField("object");
-    Schema s3Object = s3ObjectField.schema().getTypes().get(1); // Assuming the record schema is the second type
-    GenericRecord s3ObjectRec = new GenericData.Record(s3Object);
+    HoodieSchemaField s3ObjectField = s3Schema.getField("object").get();
+    HoodieSchema s3Object = s3ObjectField.schema().getTypes().get(1); // Assuming the record schema is the second type
+    GenericRecord s3ObjectRec = new GenericData.Record(s3Object.toAvroSchema());
     s3ObjectRec.put("key", objectKey);
     s3ObjectRec.put("size", objectSize);
 
@@ -366,7 +512,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     String limitColumn = "s3.object.size";
     QueryInfo queryInfo = IncrSourceHelper.generateQueryInfo(jsc, basePath(), 5,
         Option.of(new StreamerCheckpointV1(startInstant)), null,
-        TimelineUtils.HollowCommitHandling.BLOCK, orderColumn, keyColumn, limitColumn, true, Option.empty());
+        TimelineUtils.HollowCommitHandling.BLOCK, orderColumn, keyColumn, limitColumn, true, Option.empty(), Option.empty());
     assertEquals(String.valueOf(Integer.parseInt(commitTimeForReads) - 1), queryInfo.getPreviousInstant());
     assertEquals(commitTimeForReads, queryInfo.getStartInstant());
     assertEquals(commitTimeForWrites, queryInfo.getEndInstant());
@@ -374,7 +520,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     startInstant = commitTimeForWrites;
     queryInfo = IncrSourceHelper.generateQueryInfo(jsc, basePath(), 5,
         Option.of(new StreamerCheckpointV1(startInstant)), null,
-        TimelineUtils.HollowCommitHandling.BLOCK, orderColumn, keyColumn, limitColumn, true, Option.empty());
+        TimelineUtils.HollowCommitHandling.BLOCK, orderColumn, keyColumn, limitColumn, true, Option.empty(), Option.empty());
     assertEquals(commitTimeForReads, queryInfo.getPreviousInstant());
     assertEquals(commitTimeForWrites, queryInfo.getStartInstant());
     assertEquals(commitTimeForWrites, queryInfo.getEndInstant());

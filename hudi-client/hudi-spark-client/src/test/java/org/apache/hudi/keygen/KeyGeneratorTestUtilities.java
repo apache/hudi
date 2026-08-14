@@ -19,9 +19,9 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.util.JavaScalaConverters;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
@@ -101,14 +101,14 @@ class KeyGeneratorTestUtilities {
   }
 
   public static GenericRecord getNestedColRecord(String prop1Value, Long prop2Value) {
-    GenericRecord nestedColRecord = new GenericData.Record(new Schema.Parser().parse(NESTED_COL_SCHEMA));
+    GenericRecord nestedColRecord = new GenericData.Record(HoodieSchema.parse(NESTED_COL_SCHEMA).getAvroSchema());
     nestedColRecord.put("prop1", prop1Value);
     nestedColRecord.put("prop2", prop2Value);
     return nestedColRecord;
   }
 
   public static GenericRecord getRecord(GenericRecord nestedColRecord) {
-    GenericRecord avroRecord = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    GenericRecord avroRecord = new GenericData.Record(HoodieSchema.parse(EXAMPLE_SCHEMA).getAvroSchema());
     avroRecord.put("timestamp", 4357686L);
     avroRecord.put("_row_key", "key1");
     avroRecord.put("ts_ms", "2020-03-21");

@@ -22,9 +22,7 @@ import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
-import org.apache.hudi.common.HoodieSchemaNotFoundException;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
@@ -39,6 +37,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -49,8 +48,8 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.CommitUtils;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -59,8 +58,12 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieSchemaEvolutionConflictException;
+import org.apache.hudi.exception.HoodieSchemaNotFoundException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -70,7 +73,6 @@ import org.apache.hudi.table.marker.SimpleTransactionDirectMarkerBasedDetectionS
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy;
 
-import org.apache.avro.Schema;
 import org.apache.curator.test.TestingServer;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
@@ -83,6 +85,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -135,8 +138,21 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Tag("functional")
 public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
+  // Pin the tolerable heartbeat misses used by the early-conflict-detection test so its
+  // heartbeat-expiry wait does not depend on the global default
+  // (hoodie.client.heartbeat.tolerable.misses), which changed from 2 to 10 in #18904.
+  private static final int EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES = 2;
+
+  static {
+    // ZooKeeper's embedded admin server binds the fixed default port 8080 (Curator only
+    // randomizes the client port), so a concurrent or leaked TestingServer in a reused
+    // fork collides with "Address already in use". The admin server is unused here.
+    System.setProperty("zookeeper.admin.enableServer", "false");
+  }
+
   private Properties lockProperties = null;
 
+  private TestingServer zkTestingServer = null;
 
   /**
    * super is not thread safe!!
@@ -173,6 +189,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   @AfterEach
   public void clean() throws IOException {
+    if (zkTestingServer != null) {
+      zkTestingServer.close();
+      zkTestingServer = null;
+    }
     cleanupResources();
   }
 
@@ -319,7 +339,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       // Validate table schema in the end.
       TableSchemaResolver r = new TableSchemaResolver(metaClient);
       // Assert no table schema is defined.
-      assertThrows(HoodieSchemaNotFoundException.class, () -> r.getTableAvroSchema(false));
+      assertThrows(HoodieSchemaNotFoundException.class, () -> r.getTableSchema(false));
     }
 
     // Start txn 002 altering table schema
@@ -410,8 +430,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Validate table schema in the end.
     TableSchemaResolver r = new TableSchemaResolver(metaClient);
-    Schema s = r.getTableAvroSchema(false);
-    assertEquals(s, new Schema.Parser().parse(expectedTableSchemaAfterResolution));
+    HoodieSchema s = r.getTableSchema(false);
+    assertEquals(s, HoodieSchema.parse(expectedTableSchemaAfterResolution));
 
     FileIOUtils.deleteDirectory(new File(basePath));
     client1.close();
@@ -457,17 +477,17 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       setUpMORTestTable();
     }
 
-    int heartBeatIntervalForCommit4 = 10 * 1000;
+    int heartBeatIntervalForCommit4 = 3 * 1000;
 
     HoodieWriteConfig writeConfig;
-    TestingServer server = null;
     if (earlyConflictDetectionStrategy.equalsIgnoreCase(SimpleTransactionDirectMarkerBasedDetectionStrategy.class.getName())) {
       // need to setup zk related env there. Bcz SimpleTransactionDirectMarkerBasedDetectionStrategy is only support zk lock for now.
-      server = new TestingServer();
+      // zkTestingServer is closed in @AfterEach so a failing assertion cannot leak it (and its port-8080 admin server).
+      zkTestingServer = new TestingServer();
       Properties properties = new Properties();
       properties.setProperty(ZK_BASE_PATH_PROP_KEY, basePath);
-      properties.setProperty(ZK_CONNECT_URL_PROP_KEY, server.getConnectString());
-      properties.setProperty(ZK_BASE_PATH_PROP_KEY, server.getTempDirectory().getAbsolutePath());
+      properties.setProperty(ZK_CONNECT_URL_PROP_KEY, zkTestingServer.getConnectString());
+      properties.setProperty(ZK_BASE_PATH_PROP_KEY, zkTestingServer.getTempDirectory().getAbsolutePath());
       properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP_KEY, "10000");
       properties.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, "10000");
       properties.setProperty(ZK_LOCK_KEY_PROP_KEY, "key");
@@ -481,71 +501,83 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       writeConfig = buildWriteConfigForEarlyConflictDetect(markerType, properties, InProcessLockProvider.class, earlyConflictDetectionStrategy);
     }
 
-    final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig);
+    SparkRDDWriteClient client1 = null;
+    SparkRDDWriteClient client2 = null;
+    SparkRDDWriteClient client3 = null;
+    SparkRDDWriteClient client4 = null;
+    try {
+      client1 = getHoodieWriteClient(writeConfig);
 
-    // Create the first commit
-    final String nextCommitTime1 = "001";
-    createCommitWithInserts(writeConfig, client1, "000", nextCommitTime1, 200);
+      // Create the first commit
+      final String nextCommitTime1 = "001";
+      createCommitWithInserts(writeConfig, client1, "000", nextCommitTime1, 200);
 
-    final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig);
-    final SparkRDDWriteClient client3 = getHoodieWriteClient(writeConfig);
+      client2 = getHoodieWriteClient(writeConfig);
+      client3 = getHoodieWriteClient(writeConfig);
 
-    final String nextCommitTime2 = "002";
+      final String nextCommitTime2 = "002";
 
-    // start to write commit 002
-    final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client2, nextCommitTime2, 100);
+      // start to write commit 002
+      final SparkRDDWriteClient finalClient2 = client2;
+      final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client2, nextCommitTime2, 100);
 
-    // start to write commit 003
-    // this commit 003 will fail quickly because early conflict detection before create marker.
-    final String nextCommitTime3 = "003";
-    assertThrows(SparkException.class, () -> {
-      final JavaRDD<WriteStatus> writeStatusList3 =
-          startCommitForUpdate(writeConfig, client3, nextCommitTime3, 100);
-      client3.commit(nextCommitTime3, writeStatusList3);
-    }, "Early conflict detected but cannot resolve conflicts for overlapping writes");
+      // start to write commit 003
+      // this commit 003 will fail quickly because early conflict detection before create marker.
+      final String nextCommitTime3 = "003";
+      final SparkRDDWriteClient finalClient3 = client3;
+      assertThrows(SparkException.class, () -> {
+        final JavaRDD<WriteStatus> writeStatusList3 =
+            startCommitForUpdate(writeConfig, finalClient3, nextCommitTime3, 100);
+        finalClient3.commit(nextCommitTime3, writeStatusList3);
+      }, "Early conflict detected but cannot resolve conflicts for overlapping writes");
 
-    // start to commit 002 and success
-    assertDoesNotThrow(() -> {
-      client2.commit(nextCommitTime2, writeStatusList2);
-    });
+      // start to commit 002 and success
+      assertDoesNotThrow(() -> {
+        finalClient2.commit(nextCommitTime2, writeStatusList2);
+      });
 
-    HoodieWriteConfig config4 =
-        HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps())
-            .withHeartbeatIntervalInMs(heartBeatIntervalForCommit4).build();
-    final SparkRDDWriteClient client4 = getHoodieWriteClient(config4);
+      HoodieWriteConfig config4 =
+          HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps())
+              .withHeartbeatIntervalInMs(heartBeatIntervalForCommit4).build();
+      client4 = getHoodieWriteClient(config4);
 
-    StoragePath heartbeatFilePath = new StoragePath(
-        HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + StoragePath.SEPARATOR + nextCommitTime3);
-    storage.create(heartbeatFilePath, true);
+      StoragePath heartbeatFilePath = new StoragePath(
+          HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + StoragePath.SEPARATOR + nextCommitTime3);
+      storage.create(heartbeatFilePath, true);
 
-    // Wait for heart beat expired for failed commitTime3 "003"
-    // Otherwise commit4 still can see conflict between failed write 003.
-    Thread.sleep(heartBeatIntervalForCommit4 * 2);
+      // Wait for heart beat expired for failed commitTime3 "003"
+      // Otherwise commit4 still can see conflict between failed write 003. The early-conflict
+      // check treats 003 as alive until its heartbeat is older than
+      // (tolerable misses * heartbeat interval); tolerable misses is pinned in
+      // buildWriteConfigForEarlyConflictDetect, so wait one interval past that window.
+      Thread.sleep(heartBeatIntervalForCommit4 * (EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES + 1));
 
-    final String nextCommitTime4 = "004";
-    assertDoesNotThrow(() -> {
-      final JavaRDD<WriteStatus> writeStatusList4 =
-          startCommitForUpdate(writeConfig, client4, nextCommitTime4, 100);
-      client4.commit(nextCommitTime4, writeStatusList4);
-    });
+      final String nextCommitTime4 = "004";
+      final SparkRDDWriteClient finalClient4 = client4;
+      assertDoesNotThrow(() -> {
+        final JavaRDD<WriteStatus> writeStatusList4 =
+            startCommitForUpdate(writeConfig, finalClient4, nextCommitTime4, 100);
+        finalClient4.commit(nextCommitTime4, writeStatusList4);
+      });
 
-    List<String> completedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants().getInstants().stream()
-        .map(HoodieInstant::requestedTime).collect(Collectors.toList());
+      List<String> completedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
+          .filterCompletedInstants().getInstants().stream()
+          .map(HoodieInstant::requestedTime).collect(Collectors.toList());
 
-    assertEquals(3, completedInstant.size());
-    assertTrue(completedInstant.contains(nextCommitTime1));
-    assertTrue(completedInstant.contains(nextCommitTime2));
-    assertTrue(completedInstant.contains(nextCommitTime4));
+      assertEquals(3, completedInstant.size());
+      assertTrue(completedInstant.contains(nextCommitTime1));
+      assertTrue(completedInstant.contains(nextCommitTime2));
+      assertTrue(completedInstant.contains(nextCommitTime4));
 
-    FileIOUtils.deleteDirectory(new File(basePath));
-    if (server != null) {
-      server.close();
+      FileIOUtils.deleteDirectory(new File(basePath));
+    } finally {
+      // Close the write clients on every exit path, including failed assertions.
+      // The TestingServer itself is closed by @AfterEach (see zkTestingServer above).
+      FileIOUtils.closeQuietly(client1 == null ? null : (Closeable) client1::close);
+      FileIOUtils.closeQuietly(client2 == null ? null : (Closeable) client2::close);
+      FileIOUtils.closeQuietly(client3 == null ? null : (Closeable) client3::close);
+      FileIOUtils.closeQuietly(client4 == null ? null : (Closeable) client4::close);
     }
-    client1.close();
-    client2.close();
-    client3.close();
-    client4.close();
   }
 
   @Test
@@ -703,19 +735,19 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Create the first commit
     SparkRDDWriteClient<?> client = getHoodieWriteClient(cfg);
-    createCommitWithInsertsForPartition(cfg, client, "000", "001", 100, "2016/03/01");
+    String firstCommitTime = InProcessTimeGenerator.createNewInstantTime();
+    createCommitWithInsertsForPartition(cfg, client, "000", firstCommitTime, 100, "2016/03/01");
     client.close();
     int numConcurrentWriters = 5;
     ExecutorService executors = Executors.newFixedThreadPool(numConcurrentWriters);
 
     List<Future<?>> futures = new ArrayList<>(numConcurrentWriters);
     for (int loop = 0; loop < numConcurrentWriters; loop++) {
-      String newCommitTime = "00" + (loop + 2);
       String partition = "2016/03/0" + (loop + 2);
       futures.add(executors.submit(() -> {
         try {
           SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg);
-          createCommitWithInsertsForPartition(cfg, writeClient, "001", newCommitTime, 100, partition);
+          createCommitWithInsertsForPartition(cfg, writeClient, "001", InProcessTimeGenerator.createNewInstantTime(), 100, partition);
           writeClient.close();
         } catch (Exception e) {
           throw new RuntimeException(e);
@@ -912,6 +944,386 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     client1.close();
     client2.close();
     client3.close();
+  }
+
+  /**
+   * Test that when two writers attempt to execute the same compaction plan concurrently,
+   * at least one will succeed and create a completed compaction. Verifies that the timeline
+   * has compaction requested and completed instant files.
+   *
+   * This test uses a MOR table with multiwriter/optimistic concurrent control enabled.
+   */
+  @Test
+  public void testConcurrentCompactionExecutionOnSamePlan() throws Exception {
+    // Set up MOR table
+    setUpMORTestTable();
+
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
+
+    // Build write config with multiwriter/OCC enabled
+    HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
+        .withHeartbeatIntervalInMs(60 * 1000)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoClean(false).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .withAutoArchive(false).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(2).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
+            .build())
+        .withProperties(properties);
+
+    HoodieWriteConfig cfg = writeConfigBuilder.build();
+
+    // Create initial commit with inserts (creates base files)
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithInserts(cfg, client, "000", firstCommitTime, 200);
+
+    // Create delta commits (upserts create log files which are needed for compaction)
+    String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, firstCommitTime, Option.empty(), secondCommitTime, 100);
+    String thirdCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, secondCommitTime, Option.empty(), thirdCommitTime, 100);
+
+    // Schedule compaction - this creates the compaction plan (requested instant)
+    Option<String> compactionInstantOpt = client.scheduleTableService(Option.empty(), Option.empty(), TableServiceType.COMPACT);
+    assertTrue(compactionInstantOpt.isPresent(), "Compaction should be scheduled");
+    String compactionInstantTime = compactionInstantOpt.get();
+
+    // Verify compaction is in requested state before execution
+    HoodieTimeline pendingCompactionTimeline = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline();
+    assertTrue(pendingCompactionTimeline.containsInstant(compactionInstantTime),
+        "Compaction instant should be in pending state after scheduling");
+
+    // Two clients attempting to execute the same compaction plan concurrently
+    final int threadCount = 2;
+    final ExecutorService executors = Executors.newFixedThreadPool(threadCount);
+    final CyclicBarrier cyclicBarrier = new CyclicBarrier(threadCount);
+    final AtomicBoolean writer1Succeeded = new AtomicBoolean(false);
+    final AtomicBoolean writer2Succeeded = new AtomicBoolean(false);
+
+    SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
+    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+
+    Future<?> future1 = executors.submit(() -> {
+      try {
+        // Wait for both writers to be ready
+        cyclicBarrier.await();
+
+        // Attempt to execute compaction with auto-complete
+        client1.compact(compactionInstantTime, true);
+        writer1Succeeded.set(true);
+      } catch (Exception e) {
+        // Expected - one writer may fail due to concurrent execution
+        LOG.info("Writer 1 failed with exception: {}", e.getMessage());
+        writer1Succeeded.set(false);
+      }
+    });
+
+    Future<?> future2 = executors.submit(() -> {
+      try {
+        // Wait for both writers to be ready
+        cyclicBarrier.await();
+
+        // Attempt to execute compaction with auto-complete
+        client2.compact(compactionInstantTime, true);
+        writer2Succeeded.set(true);
+      } catch (Exception e) {
+        // Expected - one writer may fail due to concurrent execution
+        LOG.info("Writer 2 failed with exception: {}", e.getMessage());
+        writer2Succeeded.set(false);
+      }
+    });
+
+    // Wait for both futures to complete
+    future1.get();
+    future2.get();
+
+    // Verify at least one writer succeeded
+    assertTrue(writer1Succeeded.get() || writer2Succeeded.get(),
+        "At least one writer should succeed in executing the compaction");
+
+    // Verify exactly one writer succeeded
+    assertTrue(writer1Succeeded.get() ^ writer2Succeeded.get(),
+        "Exactly one writer should succeed in executing the compaction");
+
+    // Reload timeline and verify compaction is completed
+    HoodieTimeline reloadedTimeline = metaClient.reloadActiveTimeline();
+
+    // Verify compaction instant is completed
+    HoodieTimeline completedCompactionTimeline = reloadedTimeline.filterCompletedInstants().getCommitTimeline();
+
+    // Verify there is a completed compaction instant
+    boolean hasCompletedCompaction = completedCompactionTimeline.getInstantsAsStream()
+        .anyMatch(instant -> instant.requestedTime().equals(compactionInstantTime));
+    assertTrue(hasCompletedCompaction,
+        "The completed compaction instant should be in the timeline");
+
+    // Verify no pending compaction exists for this instant (it should be completed)
+    HoodieTimeline finalPendingCompactionTimeline = reloadedTimeline.filterPendingCompactionTimeline();
+    assertFalse(finalPendingCompactionTimeline.containsInstant(compactionInstantTime),
+        "Compaction instant should no longer be pending after execution");
+
+    // Clean up
+    executors.shutdown();
+    client.close();
+    client1.close();
+    client2.close();
+    FileIOUtils.deleteDirectory(new File(basePath));
+  }
+
+  /**
+   * Test that when writer1 starts compaction (with auto commit enabled) execution and fails mid-way,
+   * and after sometime writer2 starts and is able to rollback and execute the failed compaction
+   * (after heartbeat expired).
+   *
+   * This test uses a MOR table with multiwriter/optimistic concurrent control enabled.
+   */
+  @Test
+  public void testCompactionRecoveryAfterWriterFailureWithHeartbeatExpiry() throws Exception {
+    // Set up MOR table
+    setUpMORTestTable();
+
+    // Use short heartbeat interval so we can wait for expiry in test
+    int heartbeatIntervalMs = 2000;
+    int numTolerableHeartbeatMisses = 1;
+
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
+
+    // Build write config with multiwriter/OCC enabled and short heartbeat
+    HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
+        .withHeartbeatIntervalInMs(heartbeatIntervalMs)
+        .withHeartbeatTolerableMisses(numTolerableHeartbeatMisses)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoClean(false).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .withAutoArchive(false).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(2).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
+            .build())
+        .withProperties(properties);
+
+    HoodieWriteConfig cfg = writeConfigBuilder.build();
+
+    // Create initial commit with inserts (creates base files)
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithInserts(cfg, client, "000", firstCommitTime, 200);
+
+    // Create delta commits (upserts create log files which are needed for compaction)
+    String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, firstCommitTime, Option.empty(), secondCommitTime, 100);
+    String thirdCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, secondCommitTime, Option.empty(), thirdCommitTime, 100);
+
+    // Schedule compaction - this creates the compaction plan (requested instant)
+    Option<String> compactionInstantOpt = client.scheduleTableService(Option.empty(), Option.empty(), TableServiceType.COMPACT);
+    assertTrue(compactionInstantOpt.isPresent(), "Compaction should be scheduled");
+    String compactionInstantTime = compactionInstantOpt.get();
+    client.close();
+
+    // Verify compaction is in requested state before execution
+    HoodieTimeline pendingCompactionTimeline = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline();
+    assertTrue(pendingCompactionTimeline.containsInstant(compactionInstantTime),
+        "Compaction instant should be in pending state after scheduling");
+
+    // Writer1: Start compaction with auto-commit, but simulate failure by starting heartbeat
+    // and then stopping the writer without completing the compaction
+    SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
+
+    // Simulate writer1 starting compaction but failing mid-way:
+    // 1. Start heartbeat for the compaction instant
+    // 2. Transition the compaction to inflight state (simulating that execution started)
+    // 3. Then "fail" by stopping heartbeat and closing the client without completing
+
+    // Start heartbeat for this compaction instant (simulating writer1 started execution)
+    client1.getHeartbeatClient().start(compactionInstantTime);
+
+    // Transition compaction from requested to inflight (simulating execution started)
+    HoodieInstant requestedInstant = metaClient.reloadActiveTimeline()
+        .filterPendingCompactionTimeline()
+        .getInstantsAsStream()
+        .filter(i -> i.requestedTime().equals(compactionInstantTime))
+        .findFirst()
+        .get();
+    metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(requestedInstant);
+
+    // Verify compaction is now inflight
+    HoodieTimeline reloadedTimeline = metaClient.reloadActiveTimeline();
+    HoodieInstant inflightInstant = INSTANT_GENERATOR.getCompactionInflightInstant(compactionInstantTime);
+    assertTrue(reloadedTimeline.filterPendingCompactionTimeline().containsInstant(inflightInstant),
+        "Compaction instant should be in inflight state");
+
+    // Simulate writer1 failure by stopping heartbeat (deletes heartbeat file from DFS, so it is immediately
+    // considered expired when writer2 checks)
+    client1.getHeartbeatClient().stop(compactionInstantTime);
+    client1.close();
+
+    // Writer2: Now comes in after heartbeat expired, should be able to rollback and execute compaction
+    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+
+    // Writer2 attempts to execute the compaction with auto-commit
+    // This should detect expired heartbeat, rollback the inflight compaction, and re-execute it
+    assertDoesNotThrow(() -> {
+      client2.compact(compactionInstantTime, true);
+    }, "Writer2 should be able to rollback and execute the failed compaction after heartbeat expires");
+
+    // Reload timeline and verify compaction is completed
+    HoodieTimeline finalTimeline = metaClient.reloadActiveTimeline();
+
+    // Verify compaction instant is completed
+    HoodieTimeline completedCompactionTimeline = finalTimeline.filterCompletedInstants().getCommitTimeline();
+    boolean hasCompletedCompaction = completedCompactionTimeline.getInstantsAsStream()
+        .anyMatch(instant -> instant.requestedTime().equals(compactionInstantTime));
+    assertTrue(hasCompletedCompaction,
+        "The compaction instant should be completed after writer2 recovery");
+
+    // Verify no pending compaction exists for this instant (it should be completed)
+    HoodieTimeline finalPendingCompactionTimeline = finalTimeline.filterPendingCompactionTimeline();
+    assertFalse(finalPendingCompactionTimeline.containsInstant(compactionInstantTime),
+        "Compaction instant should no longer be pending after recovery execution");
+
+    // Verify no inflight rollback instants remain
+    HoodieTimeline inflightRollbacks = finalTimeline.getRollbackTimeline().filterInflights();
+    assertEquals(0, inflightRollbacks.countInstants(),
+        "There should be no inflight rollback instants after recovery");
+
+    // Verify exactly 1 completed rollback instant (from rolling back writer1's failed compaction)
+    assertEquals(1, finalTimeline.getRollbackTimeline().filterCompletedInstants().countInstants(),
+        "There should be exactly 1 completed rollback instant from rolling back the failed compaction");
+
+    // Clean up
+    client2.close();
+    FileIOUtils.deleteDirectory(new File(basePath));
+  }
+
+  /**
+   * Test that when a writer starts compaction but the compaction instant is no longer in the
+   * active timeline (either already completed or removed), it should throw an appropriate error.
+   *
+   * This test uses a MOR table with multiwriter/optimistic concurrent control enabled.
+   */
+  @Test
+  public void testCompactionFailsWhenInstantNotInActiveTimeline() throws Exception {
+    // Set up MOR table
+    setUpMORTestTable();
+
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
+
+    // Build write config with multiwriter/OCC enabled
+    HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
+        .withHeartbeatIntervalInMs(60 * 1000)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoClean(false).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .withAutoArchive(false).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(2).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
+            .build())
+        .withProperties(properties);
+
+    HoodieWriteConfig cfg = writeConfigBuilder.build();
+
+    // Create initial commit with inserts (creates base files)
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithInserts(cfg, client, "000", firstCommitTime, 200);
+
+    // Create delta commits (upserts create log files which are needed for compaction)
+    String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, firstCommitTime, Option.empty(), secondCommitTime, 100);
+    String thirdCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, secondCommitTime, Option.empty(), thirdCommitTime, 100);
+
+    // Schedule compaction - this creates the compaction plan (requested instant)
+    Option<String> compactionInstantOpt = client.scheduleTableService(Option.empty(), Option.empty(), TableServiceType.COMPACT);
+    assertTrue(compactionInstantOpt.isPresent(), "Compaction should be scheduled");
+    String compactionInstantTime = compactionInstantOpt.get();
+    client.close();
+
+    // Verify compaction is in pending state
+    HoodieTimeline pendingCompactionTimeline = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline();
+    assertTrue(pendingCompactionTimeline.containsInstant(compactionInstantTime),
+        "Compaction instant should be in pending state after scheduling");
+
+    // Now, simulate the scenario where the compaction instant is removed from the active timeline
+    // This could happen if another writer already completed the compaction and it was archived,
+    // or the instant was manually deleted. We simulate this by deleting the compaction instant files.
+    HoodieInstant requestedInstant = metaClient.reloadActiveTimeline()
+        .filterPendingCompactionTimeline()
+        .getInstantsAsStream()
+        .filter(i -> i.requestedTime().equals(compactionInstantTime))
+        .findFirst()
+        .get();
+
+    // Delete the compaction instant from timeline (simulating it's no longer in active timeline)
+    metaClient.getActiveTimeline().deletePending(requestedInstant);
+
+    // Verify compaction instant is no longer in the timeline
+    pendingCompactionTimeline = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline();
+    assertFalse(pendingCompactionTimeline.containsInstant(compactionInstantTime),
+        "Compaction instant should no longer be in pending timeline after deletion");
+
+    // Writer attempts to execute the compaction that is no longer in the timeline
+    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+
+    // Attempting to compact should throw HoodieException since the instant is not in active timeline
+    HoodieException exception = assertThrows(HoodieException.class, () -> {
+      client2.compact(compactionInstantTime, true);
+    }, "Compaction should throw an error when instant is not in active timeline");
+
+    // Verify the error message indicates the compaction instant is not in active timeline
+    assertTrue(exception.getMessage().contains("is not present as pending or already completed in the active timeline"),
+        "Exception message should indicate compaction instant is not in active timeline. Actual: " + exception.getMessage());
+
+    // Clean up
+    client2.close();
+    FileIOUtils.deleteDirectory(new File(basePath));
   }
 
   @ParameterizedTest
@@ -1116,9 +1528,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           try {
             ingestBatch(writeFn, client1, newCommitTime1, writeRecords1, runCountDownLatch);
           } catch (IOException e) {
-            LOG.error("IOException thrown " + e.getMessage());
+            LOG.error("IOException thrown {}", e.getMessage());
           } catch (InterruptedException e) {
-            LOG.error("Interrupted Exception thrown " + e.getMessage());
+            LOG.error("Interrupted Exception thrown {}", e.getMessage());
           } catch (Exception e) {
             client1Succeeded.set(false);
           }
@@ -1129,9 +1541,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           try {
             ingestBatch(writeFn, client2, newCommitTime2, writeRecords2, runCountDownLatch);
           } catch (IOException e) {
-            LOG.error("IOException thrown " + e.getMessage());
+            LOG.error("IOException thrown {}", e.getMessage());
           } catch (InterruptedException e) {
-            LOG.error("Interrupted Exception thrown " + e.getMessage());
+            LOG.error("Interrupted Exception thrown {}", e.getMessage());
           } catch (Exception e) {
             client2Succeeded.set(false);
           }
@@ -1389,6 +1801,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     if (markerType.equalsIgnoreCase(MarkerType.DIRECT.name())) {
       return getConfigBuilder()
           .withHeartbeatIntervalInMs(60 * 1000)
+          .withHeartbeatTolerableMisses(EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES)
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withStorageType(FileSystemViewStorageType.MEMORY)
               .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
@@ -1409,6 +1822,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       return getConfigBuilder()
           .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(20 * 1024).build())
           .withHeartbeatIntervalInMs(60 * 1000)
+          .withHeartbeatTolerableMisses(EARLY_CONFLICT_HEARTBEAT_TOLERABLE_MISSES)
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withStorageType(FileSystemViewStorageType.MEMORY)
               .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())

@@ -21,6 +21,11 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.common.util.Option;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
@@ -31,10 +36,15 @@ import java.util.stream.Collectors;
  * Encapsulates all the needed information about a clustering group. This is needed because spark serialization
  * does not work with avro objects.
  */
+@NoArgsConstructor
+@Getter
+@Setter
 public class ClusteringGroupInfo implements Serializable {
 
   private List<ClusteringOperation> operations;
   private int numOutputGroups;
+  @Getter(AccessLevel.NONE)
+  @Setter(AccessLevel.NONE)
   private Map<String, String> extraMetadata;
 
   public static ClusteringGroupInfo create(HoodieClusteringGroup clusteringGroup) {
@@ -44,36 +54,11 @@ public class ClusteringGroupInfo implements Serializable {
 
     return new ClusteringGroupInfo(operations, clusteringGroup.getNumOutputFileGroups(), extraMetadata);
   }
-  
-  // Only for serialization/de-serialization
-  @Deprecated
-  public ClusteringGroupInfo() {
-  }
-  
-  private ClusteringGroupInfo(final List<ClusteringOperation> operations, final int numOutputGroups) {
-    this(operations, numOutputGroups, null);
-  }
 
   private ClusteringGroupInfo(final List<ClusteringOperation> operations, final int numOutputGroups, final Map<String, String> extraMetadata) {
     this.operations = operations;
     this.numOutputGroups = numOutputGroups;
     this.extraMetadata = extraMetadata;
-  }
-
-  public List<ClusteringOperation> getOperations() {
-    return this.operations;
-  }
-
-  public void setOperations(final List<ClusteringOperation> operations) {
-    this.operations = operations;
-  }
-
-  public int getNumOutputGroups() {
-    return this.numOutputGroups;
-  }
-
-  public void setNumOutputGroups(final int numOutputGroups) {
-    this.numOutputGroups = numOutputGroups;
   }
 
   public Option<Map<String, String>> getExtraMetadata() {

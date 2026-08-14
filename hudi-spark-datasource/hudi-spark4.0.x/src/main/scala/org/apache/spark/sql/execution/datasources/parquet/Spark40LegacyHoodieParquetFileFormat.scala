@@ -19,17 +19,17 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.schema.internal.InternalSchema
+import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger
+import org.apache.hudi.common.schema.internal.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineLayout
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.InternalSchemaCache
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger
-import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
@@ -177,7 +177,7 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       val fileSchema = if (shouldUseInternalSchema) {
         val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
         val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
-        val storage = new HoodieHadoopStorage(tablePath, sharedConf)
+        val storage = HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(sharedConf))
         //TODO: HARDCODED TIMELINE OBJECT
         val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
         InternalSchemaCache.getInternalSchemaByVersionId(
@@ -329,7 +329,9 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         }
       } else {
         logDebug(s"Falling back to parquet-mr")
-        val readSupport = new HoodieParquetReadSupport(
+        // Spark40 subclass reorders variant group fields to [value, metadata] for Spark 4.0's
+        // positional variant converter (#18334); base class no longer applies the reorder.
+        val readSupport = new Spark40HoodieParquetReadSupport(
           convertTz,
           enableVectorizedReader = false,
           enableTimestampFieldRepair = true,

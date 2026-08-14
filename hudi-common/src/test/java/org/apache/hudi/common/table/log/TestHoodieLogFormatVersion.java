@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,43 +30,57 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHoodieLogFormatVersion {
   private static HoodieLogFormatVersion verDefault = 
       new HoodieLogFormatVersion(HoodieLogFormatVersion.DEFAULT_VERSION);
-  private static HoodieLogFormatVersion verCurrent = 
+  private static HoodieLogFormatVersion verInline = 
+      new HoodieLogFormatVersion(HoodieLogFormat.INLINE_LOG_FORMAT_VERSION);
+  private static HoodieLogFormatVersion verCurrent =
       new HoodieLogFormatVersion(HoodieLogFormat.CURRENT_VERSION);
+
+  @Test
+  public void testCurrentVersionValues() {
+    assertEquals(1, HoodieLogFormat.INLINE_LOG_FORMAT_VERSION);
+    assertEquals(2, HoodieLogFormat.CURRENT_VERSION);
+  }
 
   @Test
   public void testHasMagicHeader() {
     assertTrue(verDefault.hasMagicHeader());
+    assertTrue(verInline.hasMagicHeader());
     assertTrue(verCurrent.hasMagicHeader());
   }
 
   @Test
   public void testHasContent() {
     assertTrue(verDefault.hasContent());
+    assertTrue(verInline.hasContent());
     assertTrue(verCurrent.hasContent());
   }
 
   @Test
   public void testHasContentLength() {
     assertTrue(verDefault.hasContentLength());
+    assertTrue(verInline.hasContentLength());
     assertTrue(verCurrent.hasContentLength());
   }
 
   @Test
   public void testHasOrdinal() {
     assertTrue(verDefault.hasOrdinal());
+    assertTrue(verInline.hasOrdinal());
     assertTrue(verCurrent.hasOrdinal());
   }
 
   @Test
   public void testHasHeader() {
     assertFalse(verDefault.hasHeader());
+    assertTrue(verInline.hasHeader());
     assertTrue(verCurrent.hasHeader());
   }
 
   @Test
   public void testHasFooter() {
     assertFalse(verDefault.hasFooter());
-    assertTrue(verCurrent.hasFooter());
+    assertTrue(verInline.hasFooter());
+    assertFalse(verCurrent.hasFooter());
 
     HoodieLogFormatVersion verNew =  
             new HoodieLogFormatVersion(HoodieLogFormat.CURRENT_VERSION + 1);
@@ -75,7 +90,8 @@ public class TestHoodieLogFormatVersion {
   @Test
   public void testHasLogBlockLength() {
     assertFalse(verDefault.hasLogBlockLength());
-    assertTrue(verCurrent.hasLogBlockLength());
+    assertTrue(verInline.hasLogBlockLength());
+    assertFalse(verCurrent.hasLogBlockLength());
 
     HoodieLogFormatVersion verNew =  
             new HoodieLogFormatVersion(HoodieLogFormat.CURRENT_VERSION + 1);

@@ -35,7 +35,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 import org.scalatest.Assertions.assertThrows
 
 import scala.jdk.CollectionConverters._
@@ -191,6 +191,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
           option(OPERATION.key(), "upsert").
           option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
           option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+          option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
           option(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(),
             classOf[MySqlDebeziumAvroPayload].getName).
           mode(SaveMode.Append).
@@ -207,6 +208,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "delete").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
       options(serviceOpts).
       mode(SaveMode.Append).
       save(basePath)
@@ -215,7 +217,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val insertData = Seq(
       (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
       (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
-    performInsert(insertData, columns, serviceOpts, basePath)
+    performInsert(insertData, columns, serviceOpts, basePath,
+      Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "9"))
 
     // Final validation of table management operations after all writes
     metaClient = HoodieTableMetaClient.builder()
@@ -324,6 +327,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
       option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), "2048").
       option(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "1024").
       options(serviceOpts).
@@ -353,7 +357,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (11, 1L, "rider-X", "driver-X", 19.10, "i", "11.1", 11, 1, "i"),
       (12, 1L, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
       (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"))
-    performUpsert(firstUpdateData, columns, serviceOpts, Map.empty, basePath)
+    performUpsert(firstUpdateData, columns, serviceOpts, Map.empty, basePath,
+      tableVersion = Some("9"))
     // Validate table version.
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -376,7 +381,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
       // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
       (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
-    performUpsert(mixedOrderingData, columns, serviceOpts, opts, basePath)
+    performUpsert(mixedOrderingData, columns, serviceOpts, opts, basePath,
+      tableVersion = Some("9"))
     // Validate table version is still 9 after mixed ordering batch
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -397,7 +403,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (9, 4L, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
       (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
     performUpsert(secondUpdateData, columns, serviceOpts, Map.empty, basePath,
-      compactionEnabled = compactionEnabled)
+      tableVersion = Some("9"), compactionEnabled = compactionEnabled)
     // Validate table version as 9.
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -416,6 +422,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
           option(OPERATION.key(), "upsert").
           option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
           option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+          option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
           option(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(),
             classOf[MySqlDebeziumAvroPayload].getName).
           mode(SaveMode.Append).
@@ -432,6 +439,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "delete").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
       options(serviceOpts).
       mode(SaveMode.Append).
       save(basePath)
@@ -440,7 +448,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val insertData = Seq(
       (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
       (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
-    performInsert(insertData, columns, serviceOpts, basePath)
+    performInsert(insertData, columns, serviceOpts, basePath,
+      Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "9"))
 
     // Final validation of table management operations after all writes
     metaClient = HoodieTableMetaClient.builder()
@@ -495,6 +504,76 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
   }
 
   /**
+   * COW pre-v9 Postgres-Debezium table whose payload class is set only via the write config
+   * (hoodie.datasource.write.payload.class), not the table properties. A Debezium delete
+   * (_change_operation_type='d') for a key absent from the base file must be classified as a delete
+   * and become a no-op, rather than failing when the reader derives the delete markers.
+   *
+   * stripPayloadClass=true removes the payload class from the table properties (the failing case
+   * before the fix); stripPayloadClass=false keeps it and acts as the control.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("true", "false"))
+  def testDebeziumDeleteForAbsentKeyWithPayloadClassNotInTableConfig(stripPayloadClassStr: String): Unit = {
+    val stripPayloadClass = stripPayloadClassStr.toBoolean
+    val payloadClazz = classOf[PostgresDebeziumAvroPayload].getName
+    // Payload class supplied only as a write option, not as a table property.
+    val opts: Map[String, String] = Map(
+      HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz,
+      HoodieMetadataConfig.ENABLE.key() -> "false")
+    // Single-bucket index so the delete key hashes to the existing file group and is merged against
+    // its base file, rather than creating a fresh insert file group.
+    val indexOpts: Map[String, String] = Map(
+      "hoodie.index.type" -> "BUCKET",
+      "hoodie.index.bucket.engine" -> "SIMPLE",
+      "hoodie.bucket.index.num.buckets" -> "1",
+      "hoodie.bucket.index.hash.field" -> "_event_lsn")
+
+    val columns = Seq("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq",
+      DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME)
+
+    // 1. Insert base rows (lsn 1,2,3) into a COW table at table version 8.
+    val data = Seq(
+      (10, 1L, "rider-A", "driver-A", 19.10, "i", "10.1", 10, 1, "i"),
+      (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1, "i"),
+      (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"))
+    spark.createDataFrame(data).toDF(columns: _*).write.format("hudi")
+      .option(RECORDKEY_FIELD.key(), "_event_lsn")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key(), "_event_lsn")
+      .option(TABLE_TYPE.key(), HoodieTableType.COPY_ON_WRITE.name())
+      .option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table")
+      .option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8")
+      .options(indexOpts)
+      .options(opts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    var metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf()).build()
+    assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
+
+    if (stripPayloadClass) {
+      // Remove any persisted payload-class keys so the payload class lives only in the write config.
+      val payloadKeys = metaClient.getTableConfig.getProps.asScala.keys
+        .filter(k => k.toString.contains("payload.class")).map(_.toString).toSet
+      HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath, payloadKeys.asJava)
+      metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf()).build()
+      assertFalse(metaClient.getTableConfig.getPayloadClassIfPresent.isPresent)
+    }
+
+    // 2. Upsert a Debezium delete ('d') for a key ABSENT from the base file (lsn 99).
+    val deleteData = Seq(
+      (12, 99L, "rider-Z", "driver-Z", 20.10, "D", "12.1", 12, 1, "d"))
+    performUpsert(deleteData, columns, indexOpts, opts, basePath,
+      tableVersion = Some("8"), orderingFields = Some("_event_lsn"))
+
+    // 3. Base rows intact and the absent-key delete is a no-op.
+    val df = spark.read.format("hudi").load(basePath)
+    assertEquals(3, df.count())
+    assertEquals(0, df.filter("_event_lsn = 99").count())
+  }
+
+  /**
    * Helper method to perform upsert operations with configurable options
    */
   def performUpsert(data: Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)],
@@ -534,12 +613,14 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
   def performInsert(data: Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)],
                     columns: Seq[String],
                     serviceOpts: Map[String, String],
-                    basePath: String): Unit = {
+                    basePath: String,
+                    writeOpts: Map[String, String] = Map.empty): Unit = {
     val dataFrame = spark.createDataFrame(data).toDF(columns: _*)
     dataFrame.write.format("hudi")
       .option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
       .options(serviceOpts)
+      .options(writeOpts)
       .mode(SaveMode.Append)
       .save(basePath)
   }
@@ -584,7 +665,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     // 10. Add post-downgrade upsert to verify table functionality
     performUpsert(
       Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i")),
-      columns, serviceOpts, Map.empty, basePath)
+      columns, serviceOpts, Map.empty, basePath, tableVersion = Some("8"))
 
     // Validate data consistency after downgrade including new row
     val downgradeDf = spark.read.format("hudi").load(basePath)

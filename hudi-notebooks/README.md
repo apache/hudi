@@ -19,21 +19,22 @@
 
 This project provides a ready-to-use Docker Compose environment for running Apache Spark with Hudi, Hive Metastore, and MinIO (S3-compatible storage) for data lake development and testing. JupyterLab is included for interactive development.
 
-![](Spark_Hudi.png)
+![Spark Hudi Logo](notebooks/common/images/Spark_Hudi.jpg)
 
 ## 🛠️ Services
 
-- **spark-hudi**: Spark with Hudi and JupyterLab
+- **spark-hudi**: Spark 3 (Java 11 + Scala 2.12) with Hudi and JupyterLab
+- **spark4-hudi**: Spark 4 (Java 17 + Scala 2.13) with Hudi and JupyterLab
 - **hive-metastore**: Hive Metastore (backed by Derby)
 - **minio**: S3-compatible object storage
 
 ## 📂 Directory Structure
 
-- `Dockerfile.spark` / `Dockerfile.hive`: Custom Dockerfiles for Spark and Hive
+- `Dockerfile.spark` / `Dockerfile.spark4` / `Dockerfile.hive`: Custom Dockerfiles for Spark 3, Spark 4, and Hive
 - `build.sh`: Build all Docker images
 - `run_spark_hudi.sh`: Start/stop/restart the stack
 - `conf/`: Configuration files for Spark, Hive, and Hudi
-- `notebooks/`: Jupyter notebooks (mounted in Spark container)
+- `notebooks/`: Jupyter notebooks — `common/` (shared, baked into both images), `spark3/` and `spark4/` (per-version `utils.py` and version-specific notebooks, e.g. the Spark 4 `hudi-rs` example)
 - `data/`: Persistent data for MinIO, Spark event logs, etc.
 
 ## ⚡ Quick Start
@@ -64,8 +65,10 @@ This project provides a ready-to-use Docker Compose environment for running Apac
 
 ## 🌐 Accessing Services
 
-- **JupyterLab** → [http://localhost:8888](http://localhost:8888)
-- **Spark UI** → [http://localhost:4040](http://localhost:4040)
+- **JupyterLab (Spark 3)** → [http://localhost:8888](http://localhost:8888)
+- **Spark UI (Spark 3)** → [http://localhost:4040](http://localhost:4040)
+- **JupyterLab (Spark 4)** → [http://localhost:8889](http://localhost:8889)
+- **Spark UI (Spark 4)** → [http://localhost:4041](http://localhost:4041)
 - **MinIO Console** → [http://localhost:9001](http://localhost:9001)
   - User: `admin` 
   - Password: `password`

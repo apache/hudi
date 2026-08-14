@@ -28,11 +28,11 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 import org.apache.hudi.table.action.cluster.util.ConsistentHashingUpdateStrategyUtils;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -49,12 +49,16 @@ import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
  */
 public class SparkConsistentBucketDuplicateUpdateStrategy<T> extends UpdateStrategy<T, HoodieData<HoodieRecord<T>>> {
 
-  public SparkConsistentBucketDuplicateUpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
-    super(engineContext, table, fileGroupsInPendingClustering);
+  public SparkConsistentBucketDuplicateUpdateStrategy(HoodieEngineContext engineContext, HoodieTable table,
+                                                       Set<HoodieFileGroupId> fileGroupsInPendingClustering,
+                                                       Set<HoodieFileGroupId> fileGroupsToBeReplaced) {
+    super(engineContext, table, fileGroupsInPendingClustering, fileGroupsToBeReplaced);
   }
 
   @Override
   public Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> handleUpdate(HoodieData<HoodieRecord<T>> taggedRecordsRDD) {
+    // TODO: also consider fileGroupsToBeReplaced so INSERT_OVERWRITE overlapping with pending
+    // clustering is handled here for the consistent-bucket duplicate-update strategy.
     if (fileGroupsInPendingClustering.isEmpty()) {
       return Pair.of(taggedRecordsRDD, Collections.emptySet());
     }
@@ -74,7 +78,7 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T> extends UpdateStrat
         ConsistentHashingUpdateStrategyUtils.constructPartitionToIdentifier(partitions, table);
 
     // Produce records tagged with new record location
-    List<String> indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
+    List<String> indexKeyFields = KeyGenUtils.getIndexKeyFields(table.getConfig().getBucketIndexHashField());
     HoodieData<HoodieRecord<T>> redirectedRecordsRDD = filteredRecordsRDD.map(r -> {
       Pair<String, ConsistentBucketIdentifier> identifierPair = partitionToIdentifier.get(r.getPartitionPath());
       ConsistentHashingNode node = identifierPair.getValue().getBucket(r.getKey(), indexKeyFields);

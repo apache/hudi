@@ -20,6 +20,7 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -33,8 +34,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.partitioner.index.GlobalRecordLevelIndexBackend;
+import org.apache.hudi.sink.partitioner.index.IndexBackend;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -86,6 +90,8 @@ public class TestWriteBase {
 
   protected static final Map<String, List<String>> EXPECTED5 = new HashMap<>();
 
+  protected static final Map<String, String> EXPECTED6 = new HashMap<>();
+
   static {
     EXPECTED1.put("par1", "[id1,par1,id1,Danny,23,1,par1, id2,par1,id2,Stephen,33,2,par1]");
     EXPECTED1.put("par2", "[id3,par2,id3,Julian,53,3,par2, id4,par2,id4,Fabian,31,4,par2]");
@@ -119,6 +125,11 @@ public class TestWriteBase {
         "id1,par1,id1,Danny,23,3,par1",
         "id1,par1,id1,Danny,23,4,par1",
         "id1,par1,id1,Danny,23,4,par1"));
+
+    EXPECTED6.put("par1", "[id1,par1,id1,Danny,24,1,par1, id2,par1,id2,Stephen,34,2,par1]");
+    EXPECTED6.put("par2", "[]");
+    EXPECTED6.put("par3", "[id3,par3,id3,Julian,54,3,par3, id4,par3,id4,Fabian,32,4,par3, id5,par3,id5,Sophia,18,5,par3, id6,par3,id6,Emma,20,6,par3, id9,par3,id9,Jane,19,6,par3]");
+    EXPECTED6.put("par4", "[id10,par4,id10,Ella,38,7,par4, id11,par4,id11,Phoebe,52,8,par4, id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
   }
 
   // -------------------------------------------------------------------------
@@ -176,6 +187,17 @@ public class TestWriteBase {
       return this;
     }
 
+    public TestHarness preparePipelineWithObjectReuse(File basePath, Configuration conf) throws Exception {
+      this.baseFile = basePath;
+      this.basePath = this.baseFile.getAbsolutePath();
+      this.conf = conf;
+      this.pipeline = TestData.getWritePipelineWithObjectReuse(this.basePath, conf);
+      // open the function and ingest data
+      this.pipeline.openFunction();
+      HoodieWriteConfig writeConfig = this.pipeline.getCoordinator().getWriteClient().getConfig();
+      return this;
+    }
+
     public TestHarness consume(List<RowData> inputs) throws Exception {
       for (RowData rowData : inputs) {
         this.pipeline.invoke(rowData);
@@ -201,6 +223,9 @@ public class TestWriteBase {
      */
     public TestHarness initialEventBuffer() {
       assertNull(this.pipeline.getEventBuffer()[0], "The coordinator events buffer expect to be initialized");
+      if (pipeline.supportStreamingWriteIndex()) {
+        assertNull(this.pipeline.getIndexEventBuffer()[0], "The coordinator events buffer expect to be initialized");
+      }
       return this;
     }
 
@@ -261,6 +286,30 @@ public class TestWriteBase {
     }
 
     /**
+     * Assert the next index write event exists.
+     *
+     * @param expectedPartitions     The written index partitions reported by the event
+     */
+    public TestHarness assertIndexEvent(String expectedPartitions) {
+      if (!pipeline.supportStreamingWriteIndex()) {
+        return this;
+      }
+      assertNotNull(this.pipeline.getIndexEventBuffer(), "The coordinator missed the event");
+      WriteMetadataEvent indexWriteEvent = this.pipeline.getIndexEventBuffer()[0];
+      assertNotNull(indexWriteEvent, "The index write event should not be null");
+      assertTrue(indexWriteEvent.isMetadataTable(), "The event should be an index write event");
+      List<WriteStatus> writeStatuses = indexWriteEvent.getWriteStatuses();
+      String writePartitions =
+          writeStatuses.stream()
+              .map(WriteStatus::getPartitionPath)
+              .sorted(Comparator.naturalOrder())
+              .distinct()
+              .collect(Collectors.joining(","));
+      assertEquals(expectedPartitions, writePartitions);
+      return this;
+    }
+
+    /**
      * Assert the next event exists and handle over it to the coordinator.
      *
      * <p>Validates that the write metadata reported by the event is empty.
@@ -314,6 +363,17 @@ public class TestWriteBase {
     }
 
     /**
+     * Asserts the num of inflight caches record index cache in bucket assigner.
+     */
+    public TestHarness assertInflightCachesOfBucketAssigner(int expected) {
+      IndexBackend indexBackend = pipeline.getBucketAssignFunction().getIndexBackend();
+      if (indexBackend instanceof GlobalRecordLevelIndexBackend) {
+        assertEquals(expected, ((GlobalRecordLevelIndexBackend) indexBackend).getRecordIndexCache().getCaches().size());
+      }
+      return this;
+    }
+
+    /**
      * Checkpoints the pipeline, which triggers the data write and event send.
      */
     public TestHarness checkpoint(long checkpointId) throws Exception {
@@ -333,6 +393,10 @@ public class TestWriteBase {
     public TestHarness allDataFlushed() {
       Map<String, List<HoodieRecord>> dataBuffer = this.pipeline.getDataBuffer();
       assertThat("All data should be flushed out", dataBuffer.size(), is(0));
+      if (this.pipeline.supportStreamingWriteIndex()) {
+        List<HoodieRecord> indexDataBuffer = this.pipeline.getIndexDataBuffer();
+        assertThat("All index data should be flushed out", indexDataBuffer.size(), is(0));
+      }
       return this;
     }
 
@@ -431,6 +495,11 @@ public class TestWriteBase {
       return this;
     }
 
+    public TestHarness assertGlobalFailure(boolean failed) {
+      assertEquals(failed, this.pipeline.getCoordinatorContext().isJobFailed());
+      return this;
+    }
+
     public TestHarness checkpointThrows(long checkpointId, String message) {
       // this returns early because there is no inflight instant
       assertThrows(HoodieException.class, () -> checkpoint(checkpointId), message);
@@ -518,7 +587,7 @@ public class TestWriteBase {
             }
           } else {
             if (ignoreLogs) {
-              if (!file.getName().startsWith(".")) {
+              if (FSUtils.isBaseFile(file.getName())) {
                 return true;
               }
             } else {
@@ -564,6 +633,14 @@ public class TestWriteBase {
       return this;
     }
 
+    public TestHarness checkIndexNotLoaded(HoodieKey... keys) {
+      for (HoodieKey key : keys) {
+        assertFalse(this.pipeline.isKeyInState(key),
+            "Key: " + key + " assumes to not in the index state");
+      }
+      return this;
+    }
+
     public TestHarness assertBootstrapped() throws Exception {
       assertTrue(this.pipeline.isAlreadyBootstrap());
       return this;
@@ -571,7 +648,25 @@ public class TestWriteBase {
 
     public TestHarness rollbackLastCompleteInstantToInflight() throws Exception {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-      HoodieTimeline timeline = OptionsResolver.isMorTable(conf)
+      // rollback for data table
+      rollbackLastCompleteInstantToInflight(conf, metaClient, false);
+      // rollback for metadata table
+      if (this.pipeline.supportStreamingWriteIndex()) {
+        // Also update the metadata table timeline
+        String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+        // Update the configuration to point to the metadata table base path
+        Configuration metadataConf = new Configuration(conf);
+        metadataConf.set(FlinkOptions.PATH, metadataTableBasePath);
+        HoodieTableMetaClient metadataTableMetaClient = StreamerUtil.createMetaClient(metadataConf);
+        rollbackLastCompleteInstantToInflight(metadataConf, metadataTableMetaClient, true);
+      }
+      this.lastPending = this.lastComplete;
+      this.lastComplete = lastCompleteInstant();
+      return this;
+    }
+
+    private void rollbackLastCompleteInstantToInflight(Configuration conf, HoodieTableMetaClient metaClient, boolean isMDT) throws Exception {
+      HoodieTimeline timeline = OptionsResolver.isMorTable(conf) || isMDT
           ? metaClient.getActiveTimeline().getDeltaCommitTimeline()
           : metaClient.getActiveTimeline().getCommitTimeline();
       Option<HoodieInstant> lastCompletedInstant = timeline
@@ -581,16 +676,13 @@ public class TestWriteBase {
           metaClient.getInstantFileNameGenerator());
       // refresh the heartbeat in case it is timed out.
       OutputStream outputStream = metaClient.getStorage().create(new StoragePath(
-          HoodieTableMetaClient.getHeartbeatFolderPath(basePath)
+          HoodieTableMetaClient.getHeartbeatFolderPath(metaClient.getBasePath().toString())
               + StoragePath.SEPARATOR + this.lastComplete), true);
       outputStream.close();
-      this.lastPending = this.lastComplete;
-      this.lastComplete = lastCompleteInstant();
-      return this;
     }
 
     public TestHarness checkLastPendingInstantCompleted() {
-      this.pipeline.checkpointComplete(3);
+      this.pipeline.checkpointComplete(4);
       checkInstantState(HoodieInstant.State.COMPLETED, this.lastPending);
       this.lastComplete = lastPending;
       this.lastPending = lastPendingInstant();

@@ -19,16 +19,41 @@
 # under the License.
 #
 
-# fail immediately
+# Run this from the root of a source release tree, i.e. the output of
+# create_source_directory.sh (see the validate-source job in bot.yml) or an
+# extracted source tarball (see validate_staged_release.sh). Paths that never
+# reach the source release are excluded by create_source_directory.sh, not here.
+
+# fail immediately; pipefail so that a broken `file` invocation can never again
+# yield an empty pipeline that reads as "no binary files found"
 set -o errexit
 set -o nounset
+set -o pipefail
 
 echo "Checking for binary files in the source files"
-numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "release/" | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
 
-if [ "$numBinaryFiles" -gt "0" ]; then
+# `--mime` is the long option for both GNU file's `-i` and BSD file's `-I`, so it
+# is the only spelling that works on Linux CI and on a release manager's macOS.
+# Its charset field answers the question directly: libmagic reports
+# charset=binary for anything that is not text. Matching on the charset rather
+# than on a list of permitted MIME types keeps this robust against libmagic's
+# growing type vocabulary, which already labels the JSON test data
+# application/x-ndjson and misdetects at least one .java source as
+# application/javascript.
+mimeTypes=$(find . -type f -print0 | xargs -0 file --mime)
+
+# An empty file reports as inode/x-empty; charset=binary, and is neither binary nor
+# a licensing concern. The top-level release/ holds the release guide's screenshot;
+# src/test/ holds the binary fixtures (parquet, avro, hfile) that tests read. Every
+# stage carries -a so a non-UTF-8 filename can never flip a grep into binary mode and
+# drop a line. release/ is anchored to the top-level dir; src/test/ stays a substring
+# because those fixtures live under every module's src/test/.
+binaryFiles=$(echo "$mimeTypes" | grep -a 'charset=binary' | grep -av 'inode/x-empty' \
+  | grep -av '^\./release/' | grep -av '/src/test/' || true)
+
+if [ -n "$binaryFiles" ]; then
   echo -e "There were non-text files in source release. [ERROR]\n Please check below\n"
-  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "release/release_guide" | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' |  grep -va 'application/xml'
+  echo "$binaryFiles"
   exit 1
 fi
 echo -e "\t\tNo Binary Files in the source files? - [OK]\n"

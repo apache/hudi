@@ -20,14 +20,14 @@ package org.apache.hudi.integ.testsuite.generator;
 
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Fixed;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -44,9 +44,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * This is a GenericRecord payload generator that generates full generic records {@link GenericRecord}. Every field of a generic record created using this generator contains a random value.
  */
+@Slf4j
 public class GenericRecordFullPayloadGenerator implements Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(GenericRecordFullPayloadGenerator.class);
   public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 10; // 10 KB
   public static final int DEFAULT_NUM_DATE_PARTITIONS = 50;
   public static final String DEFAULT_HOODIE_IS_DELETED_COL = "_hoodie_is_deleted";
@@ -60,6 +59,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   // The index of partition for which records are being generated
   private int partitionIndex = 0;
   // The size of a full record where every field of a generic record created contains 1 random value
+  @Getter
   private int estimatedFullPayloadSize;
   // Number of extra entries to add in a complex/collection field to achieve the desired record size
   Map<String, Integer> extraEntriesMap = new HashMap<>();
@@ -96,7 +96,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     if (estimatedFullPayloadSize < minPayloadSize) {
       int numberOfComplexFields = sizeInfo.getRight();
       if (numberOfComplexFields < 1) {
-        LOG.warn("The schema does not have any collections/complex fields. Cannot achieve minPayloadSize : {}",
+        log.warn("The schema does not have any collections/complex fields. Cannot achieve minPayloadSize : {}",
             minPayloadSize);
       }
       determineExtraEntriesRequired(numberOfComplexFields, minPayloadSize - estimatedFullPayloadSize);
@@ -356,10 +356,6 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   protected Schema getNonNull(Schema schema) {
     List<Schema> types = schema.getTypes();
     return types.get(0).getType().equals(Schema.Type.NULL) ? types.get(1) : types.get(0);
-  }
-
-  public int getEstimatedFullPayloadSize() {
-    return estimatedFullPayloadSize;
   }
 
   private int getSize(Schema elementSchema) {

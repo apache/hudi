@@ -31,12 +31,12 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 
@@ -63,7 +63,9 @@ import static org.apache.hudi.common.table.HoodieTableConfig.NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
+@Slf4j
 public class ConfigUtils {
+
   public static final String STREAMER_CONFIG_PREFIX = "hoodie.streamer.";
   @Deprecated
   public static final String DELTA_STREAMER_CONFIG_PREFIX = "hoodie.deltastreamer.";
@@ -83,8 +85,6 @@ public class ConfigUtils {
   public static final String TABLE_SERDE_PATH = "path";
 
   public static final HoodieConfig DEFAULT_HUDI_CONFIG_FOR_READER = new HoodieConfig();
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConfigUtils.class);
 
   /**
    * Get ordering field.
@@ -151,7 +151,13 @@ public class ConfigUtils {
    * Ensures that the prefixed merge properties are populated for mergers.
    */
   public static TypedProperties getMergeProps(TypedProperties props, HoodieTableConfig tableConfig) {
-    Map<String, String> mergeProps = tableConfig.getTableMergeProperties();
+    // Prefer the payload class persisted in the table config, falling back to the reader/write props
+    // (e.g. hoodie.datasource.write.payload.class) when the table never persisted it. This keeps the
+    // persisted payload authoritative (no query-side shadowing) while pre-v9 delete markers still derive.
+    String payloadClass = tableConfig.getPayloadClassIfPresent()
+        .orElseGet(() -> HoodieRecordPayload.getPayloadClassNameIfPresent(props)
+            .orElseGet(tableConfig::getPayloadClass));
+    Map<String, String> mergeProps = tableConfig.getTableMergeProperties(payloadClass);
     if (mergeProps.isEmpty()) {
       return props;
     }
@@ -412,6 +418,32 @@ public class ConfigUtils {
   }
 
   /**
+   * Gets the raw value for a {@link ConfigProperty} config using a key mapping function. The key
+   * and alternative keys are used to fetch the config. Unlike
+   * {@link #getStringWithAltKeys(Function, ConfigProperty)}, this does not fall back to the
+   * config's default value when the config is not found.
+   *
+   * @param keyMapper      Mapper function to map the key to values.
+   * @param configProperty {@link ConfigProperty} config to fetch.
+   * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
+   */
+  public static Option<Object> getRawValueWithAltKeys(Function<String, Object> keyMapper,
+                                                      ConfigProperty<?> configProperty) {
+    Object value = keyMapper.apply(configProperty.key());
+    if (value != null) {
+      return Option.of(value);
+    }
+    for (String alternative : configProperty.getAlternatives()) {
+      Object altValue = keyMapper.apply(alternative);
+      if (altValue != null) {
+        deprecationWarning(alternative, configProperty);
+        return Option.of(altValue);
+      }
+    }
+    return Option.empty();
+  }
+
+  /**
    * Gets the raw value for a {@link ConfigProperty<T>} config from properties with the option
    * of using default value.
    *
@@ -535,7 +567,7 @@ public class ConfigUtils {
   }
 
   private static void deprecationWarning(String alternative, ConfigProperty<?> configProperty) {
-    LOG.warn("The configuration key '{}' has been deprecated and may be removed in the future."
+    log.warn("The configuration key '{}' has been deprecated and may be removed in the future."
         + " Please use the new key '{}' instead.", alternative, configProperty.key());
   }
 
@@ -681,9 +713,14 @@ public class ConfigUtils {
           }
           return props;
         } catch (IOException e) {
-          LOG.warn("Could not read properties from {}: {}", path, e);
+          if (HoodieExceptionUtil.isPermissionDeniedException(e)) {
+            log.error("Permission denied for {} file.", path, e);
+            throw new HoodieIOException("Permission denied for " + path + " file path. User does not have read access on the dataset.", e);
+          } else {
+            log.warn("Could not read properties from {}: {}", path, e);
+          }
         } catch (IllegalArgumentException e) {
-          LOG.warn("Invalid properties file {}: {}", path, props);
+          log.warn("Invalid properties file {}: {}", path, props);
         }
       }
 
@@ -691,7 +728,7 @@ public class ConfigUtils {
       try {
         Thread.sleep(maxReadRetryDelayInMs);
       } catch (InterruptedException e) {
-        LOG.warn("Interrupted while waiting");
+        log.warn("Interrupted while waiting");
       }
     }
 
@@ -742,7 +779,7 @@ public class ConfigUtils {
           // need to delete the backup as anyway reads will also fail
           // subsequent writes will recover and update
           storage.deleteFile(backupCfgPath);
-          LOG.error("Invalid properties file {}: {}", backupCfgPath, backupProps);
+          log.error("Invalid properties file {}: {}", backupCfgPath, backupProps);
           throw new IOException("Corrupted backup file");
         }
         // copy over from backup
@@ -853,6 +890,10 @@ public class ConfigUtils {
         metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
         metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
+    props.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(),
+        metadataConfig.getStringOrDefault(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB));
+    props.setProperty(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key(),
+        metadataConfig.getStringOrDefault(HoodieMetadataConfig.BLOOM_FILTER_ENABLE));
     return props;
   }
 }

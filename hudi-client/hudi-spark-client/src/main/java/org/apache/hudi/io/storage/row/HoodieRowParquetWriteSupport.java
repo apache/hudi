@@ -18,22 +18,25 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchema.TimePrecision;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
@@ -44,7 +47,7 @@ import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
 import org.apache.parquet.schema.Types;
-import org.apache.spark.sql.HoodieUTF8StringFactory;
+import org.apache.spark.SparkEnv;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.SpecializedGetters;
 import org.apache.spark.sql.catalyst.util.ArrayData;
@@ -67,17 +70,23 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.YearMonthIntervalType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.apache.spark.util.VersionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 import scala.Enumeration;
 import scala.Function1;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_VARIANT_ALLOW_READING_SHREDDED;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_VARIANT_WRITE_SHREDDING_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD;
 import static org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_STRING;
 import static org.apache.hudi.config.HoodieWriteConfig.INTERNAL_SCHEMA_STRING;
@@ -105,12 +114,20 @@ import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
  */
 public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
-  private static final Schema MAP_KEY_SCHEMA = Schema.create(Schema.Type.STRING);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRowParquetWriteSupport.class);
+  private static final HoodieSchema MAP_KEY_SCHEMA = HoodieSchema.create(HoodieSchemaType.STRING);
   private static final String MAP_REPEATED_NAME = "key_value";
   private static final String MAP_KEY_NAME = "key";
   private static final String MAP_VALUE_NAME = "value";
+  private static final String SPARK_VARIANT_WRITE_SHREDDING_ENABLED = "spark.sql.variant.writeShredding.enabled";
+  private static final String SPARK_VARIANT_ALLOW_READING_SHREDDED = "spark.sql.variant.allowReadingShredded";
 
+  private static final String SESSION_LOCAL_TIME_ZONE_KEY = "spark.sql.session.timeZone";
+  private static final String PARQUET_METADATA_TIME_ZONE_KEY = "org.apache.spark.timeZone";
+
+  @Getter
   private final Configuration hadoopConf;
+  private final Map<String, String> footerMetadata = new HashMap<>();
   private final Option<HoodieBloomFilterWriteSupport<UTF8String>> bloomFilterWriteSupportOpt;
   private final byte[] decimalBuffer = new byte[Decimal.minBytesForPrecision()[DecimalType.MAX_PRECISION()]];
   private final Enumeration.Value datetimeRebaseMode = (Enumeration.Value) SparkAdapterSupport$.MODULE$.sparkAdapter().getDateTimeRebaseMode();
@@ -118,8 +135,16 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   private final Function1<Object, Object> timestampRebaseFunction = DataSourceUtils.createTimestampRebaseFuncInWrite(datetimeRebaseMode, "Parquet");
   private final boolean writeLegacyListFormat;
   private final ValueWriter[] rootFieldWriters;
-  private final Schema avroSchema;
+  private final HoodieSchema schema;
   private final StructType structType;
+  /**
+   * The shredded schema. When Variant columns are configured for shredding, this schema has those VariantType columns replaced with their shredded struct schemas.
+   * <p>
+   * For non-shredded cases, this is identical to structType.
+   */
+  private final StructType shreddedSchema;
+  private final boolean variantWriteShreddingEnabled;
+  private final String variantForceShreddingSchemaForTest;
   private RecordConsumer recordConsumer;
 
   public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
@@ -128,31 +153,249 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     hadoopConf.set("spark.sql.parquet.writeLegacyFormat", writeLegacyFormatEnabled);
     hadoopConf.set("spark.sql.parquet.outputTimestampType", config.getStringOrDefault(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE));
     hadoopConf.set("spark.sql.parquet.fieldId.write.enabled", config.getStringOrDefault(PARQUET_FIELD_ID_WRITE_ENABLED));
+
+    // Variant shredding configs
+    this.variantWriteShreddingEnabled = config.getBooleanOrDefault(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED);
+    this.variantForceShreddingSchemaForTest = config.getString(PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST);
+    hadoopConf.setBoolean(SPARK_VARIANT_WRITE_SHREDDING_ENABLED, variantWriteShreddingEnabled);
+    hadoopConf.setBoolean(SPARK_VARIANT_ALLOW_READING_SHREDDED, config.getBooleanOrDefault(PARQUET_VARIANT_ALLOW_READING_SHREDDED));
+    if (variantForceShreddingSchemaForTest != null && !variantForceShreddingSchemaForTest.isEmpty()) {
+      hadoopConf.set("spark.sql.variant.forceShreddingSchemaForTest", variantForceShreddingSchemaForTest);
+    }
+
     this.writeLegacyListFormat = Boolean.parseBoolean(writeLegacyFormatEnabled)
         || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
     this.structType = structType;
     // The avro schema is used to determine the precision for timestamps
-    this.avroSchema = SerDeHelper.fromJson(config.getString(INTERNAL_SCHEMA_STRING)).map(internalSchema -> AvroInternalSchemaConverter.convert(internalSchema, "spark_schema"))
+    this.schema = SerDeHelper.fromJson(config.getString(INTERNAL_SCHEMA_STRING)).map(internalSchema -> InternalSchemaConverter.convert(internalSchema, "spark_schema"))
         .orElseGet(() -> {
           String schemaString = Option.ofNullable(config.getString(WRITE_SCHEMA_OVERRIDE)).orElseGet(() -> config.getString(AVRO_SCHEMA_STRING));
-          Schema parsedSchema = new Schema.Parser().parse(schemaString);
-          return HoodieAvroUtils.addMetadataFields(parsedSchema, config.getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD));
+          HoodieSchema parsedSchema = HoodieSchema.parse(schemaString);
+          return HoodieSchemaUtils.addMetadataFields(parsedSchema, config.getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD));
         });
+    // Generate shredded schema if there are shredded Variant columns.
+    // Falls back to the provided schema if no shredded Variant columns are present.
+    this.shreddedSchema = generateShreddedSchema(structType, schema);
     ParquetWriteSupport.setSchema(structType, hadoopConf);
-    this.rootFieldWriters = getFieldWriters(structType, avroSchema);
+    // Use shreddedSchema for creating writers when shredded Variants are present
+    this.rootFieldWriters = getFieldWriters(shreddedSchema, schema);
     this.hadoopConf = hadoopConf;
     this.bloomFilterWriteSupportOpt = bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new);
   }
 
-  private ValueWriter[] getFieldWriters(StructType schema, Schema avroSchema) {
-    return Arrays.stream(schema.fields()).map(field -> {
-      Schema.Field avroField = avroSchema == null ? null : avroSchema.getField(field.name());
-      return makeWriter(avroField == null ? null : avroField.schema(), field.dataType());
-    }).toArray(ValueWriter[]::new);
+  /**
+   * Generates a shredded schema from the given structType and hoodieSchema.
+   * <p>
+   * For Variant fields that are configured for shredding (based on HoodieSchema.Variant.isShredded()), the VariantType is replaced with a shredded struct schema.
+   * <p>
+   * Shredding behavior is controlled by:
+   * <ul>
+   *   <li>{@code hoodie.parquet.variant.write.shredding.enabled} - Master switch for shredding (default: true).
+   *       When false, no shredding happens regardless of schema configuration.</li>
+   *   <li>{@code hoodie.parquet.variant.force.shredding.schema.for.test} - When set, forces this DDL schema
+   *       as the typed_value schema for ALL variant columns, overriding schema-driven shredding.</li>
+   * </ul>
+   *
+   * This method recursively processes nested struct fields to handle Variant fields at any depth.
+   *
+   * @param structType The original Spark StructType
+   * @param hoodieSchema The HoodieSchema containing shredding information
+   * @return A StructType with shredded Variant fields replaced by their shredded schemas
+   */
+  private StructType generateShreddedSchema(StructType structType, HoodieSchema hoodieSchema) {
+    // If write shredding is disabled, skip shredding entirely
+    if (!variantWriteShreddingEnabled) {
+      return structType;
+    }
+
+    // Parse forced shredding schema if configured
+    StructType forcedShreddingSchema = null;
+    if (variantForceShreddingSchemaForTest != null && !variantForceShreddingSchemaForTest.isEmpty()) {
+      forcedShreddingSchema = StructType.fromDDL(variantForceShreddingSchemaForTest);
+    }
+
+    StructField[] fields = structType.fields();
+    StructField[] shreddedFields = new StructField[fields.length];
+    boolean hasShredding = false;
+
+    for (int i = 0; i < fields.length; i++) {
+      StructField field = fields[i];
+      DataType dataType = field.dataType();
+
+      // If a forced shredding schema is configured, use it for all variant columns
+      if (forcedShreddingSchema != null
+          && SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(dataType)) {
+        StructType markedShreddedStruct = SparkAdapterSupport$.MODULE$.sparkAdapter()
+            .generateVariantWriteShreddingSchema(forcedShreddingSchema, true, false);
+        shreddedFields[i] = new StructField(field.name(), markedShreddedStruct, field.nullable(), field.metadata());
+        hasShredding = true;
+        continue;
+      }
+
+      // Get the HoodieSchema for this field (if available)
+      // Use getNonNullType() to unwrap nullable unions (e.g., ["null", "string"] -> "string")
+      HoodieSchema fieldHoodieSchema = Option.ofNullable(hoodieSchema)
+          .map(HoodieSchema::getNonNullType)
+          .flatMap(s -> s.hasFields() ? s.getField(field.name()) : Option.empty())
+          .map(HoodieSchemaField::schema)
+          .orElse(null);
+
+      if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(dataType)) {
+        if (fieldHoodieSchema != null && fieldHoodieSchema.getType() == HoodieSchemaType.VARIANT) {
+          HoodieSchema.Variant variantSchema = (HoodieSchema.Variant) fieldHoodieSchema;
+          // If typed_value field exists, the variant is shredded
+          if (variantSchema.getTypedValueField().isPresent()) {
+            // Use plain types for SparkShreddingUtils (unwraps nested {value, typed_value} structs if present)
+            HoodieSchema typedValueSchema = variantSchema.getPlainTypedValueSchema().get();
+            DataType typedValueDataType = HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(typedValueSchema);
+
+            // Generate the shredding schema with write metadata using SparkAdapter
+            StructType markedShreddedStruct = SparkAdapterSupport$.MODULE$.sparkAdapter()
+                .generateVariantWriteShreddingSchema(typedValueDataType, true, false);
+
+            shreddedFields[i] = new StructField(field.name(), markedShreddedStruct, field.nullable(), field.metadata());
+            hasShredding = true;
+            continue;
+          }
+        } else {
+          LOG.warn("Variant field '{}' has no corresponding HoodieSchema; "
+              + "shredding will be skipped. This may indicate a schema mismatch.", field.name());
+        }
+      }
+
+      // Recursively process nested fields (for VariantType without shredding, or for nested structures like StructType/ArrayType/MapType)
+      DataType processedDataType = processNestedDataType(field.dataType(), fieldHoodieSchema);
+      if (processedDataType != field.dataType()) {
+        shreddedFields[i] = new StructField(field.name(), processedDataType, field.nullable(), field.metadata());
+        hasShredding = true;
+      } else {
+        // No shredding in this field or its nested fields
+        shreddedFields[i] = field;
+      }
+    }
+
+    return hasShredding ? new StructType(shreddedFields) : structType;
   }
 
-  public Configuration getHadoopConf() {
-    return hadoopConf;
+  /**
+   * Recursively processes nested data types (structs, arrays, maps) to handle Variant shredding at any depth.
+   *
+   * @param dataType The data type to process
+   * @param hoodieSchema The corresponding HoodieSchema
+   * @return The processed data type with shredded Variants, or the original if no shredding needed
+   */
+  private DataType processNestedDataType(DataType dataType, HoodieSchema hoodieSchema) {
+    // Unwrap nullable unions (e.g., ["null", "map"] -> "map") before type checks,
+    // consistent with generateShreddedSchema and makeWriter
+    HoodieSchema resolvedSchema = hoodieSchema != null ? hoodieSchema.getNonNullType() : null;
+
+    // Check if this is a Variant type that should be shredded.
+    // Both the Spark DataType and HoodieSchema must agree that this is a Variant,
+    // consistent with generateShreddedSchema which also checks both.
+    if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(dataType)
+        && resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.VARIANT) {
+      HoodieSchema.Variant variantSchema = (HoodieSchema.Variant) resolvedSchema;
+      // If typed_value field exists, the variant is shredded
+      if (variantSchema.getTypedValueField().isPresent()) {
+        // Use plain types for SparkShreddingUtils (unwraps nested {value, typed_value} structs if present)
+        HoodieSchema typedValueSchema = variantSchema.getPlainTypedValueSchema().get();
+        DataType typedValueDataType = HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(typedValueSchema);
+
+        // Generate the shredding schema with write metadata using SparkAdapter.
+        // isTopLevel=true: this is the top level of the variant's own shredding structure.
+        // isObjectField=false: this is a standalone variant column, not a field inside another variant's typed_value.
+        return SparkAdapterSupport$.MODULE$.sparkAdapter()
+            .generateVariantWriteShreddingSchema(typedValueDataType, true, false);
+      }
+      return dataType;
+    }
+
+    if (dataType instanceof StructType) {
+      StructType structType = (StructType) dataType;
+      return generateShreddedSchema(structType, resolvedSchema);
+    } else if (dataType instanceof ArrayType) {
+      ArrayType arrayType = (ArrayType) dataType;
+      HoodieSchema elementSchema = resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.ARRAY
+          ? resolvedSchema.getElementType()
+          : null;
+      DataType processedElementType = processNestedDataType(arrayType.elementType(), elementSchema);
+      if (processedElementType != arrayType.elementType()) {
+        return new ArrayType(processedElementType, arrayType.containsNull());
+      }
+    } else if (dataType instanceof MapType) {
+      MapType mapType = (MapType) dataType;
+      HoodieSchema valueSchema = resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.MAP
+          ? resolvedSchema.getValueType()
+          : null;
+      DataType processedValueType = processNestedDataType(mapType.valueType(), valueSchema);
+      if (processedValueType != mapType.valueType()) {
+        return new MapType(mapType.keyType(), processedValueType, mapType.valueContainsNull());
+      }
+    }
+    return dataType;
+  }
+
+  /**
+   * Creates field writers for each field in the schema.
+   *
+   * @param schema The schema to create writers for (may contain shredded Variant struct types)
+   * @param hoodieSchema The HoodieSchema for type information
+   * @return Array of ValueWriters for each field
+   */
+  private ValueWriter[] getFieldWriters(StructType schema, HoodieSchema hoodieSchema) {
+    StructField[] fields = schema.fields();
+    ValueWriter[] writers = new ValueWriter[fields.length];
+
+    for (int i = 0; i < fields.length; i++) {
+      StructField field = fields[i];
+
+      HoodieSchema fieldSchema = Option.ofNullable(hoodieSchema)
+          .map(HoodieSchema::getNonNullType)
+          .flatMap(s -> s.hasFields() ? s.getField(field.name()) : Option.empty())
+          // Note: Cannot use HoodieSchemaField::schema method reference due to Java 17 compilation ambiguity
+          .map(f -> f.schema())
+          .orElse(null);
+
+      writers[i] = makeWriter(fieldSchema, field.dataType());
+    }
+
+    return writers;
+  }
+
+  /**
+   * Resolves the session-local timezone string. {@code SQLConf.get()} on a Spark
+   * executor task thread that is NOT inside a SQL execution context returns a
+   * fresh fallback {@code SQLConf} with default values — meaning the user's
+   * {@code spark.sql.session.timeZone} override on the SparkSession is invisible.
+   * This method falls back to {@code SparkEnv.get().conf()} (SparkConf is
+   * broadcast to every executor) so the override is honored in compaction-style
+   * code paths that dispatch via vanilla {@code parallelize().map()}.
+   *
+   * <p>Visible-for-testing: unit tests covering the SQLConf-not-propagated-to-executor
+   * behavior invoke this method directly from inside a Spark task closure without
+   * reflection.
+   */
+  public static String resolveSessionLocalTimeZone() {
+    // Resolution order:
+    //   1. SQLConf override (so `spark.conf.set("spark.sql.session.timeZone",
+    //      ...)` on the SparkSession takes effect on the driver and inside
+    //      Spark SQL execution contexts).
+    //   2. SparkConf (SparkEnv.get.conf) — broadcast to every executor at
+    //      startup, so the override is honored on executor tasks outside a SQL
+    //      execution context.
+    //   3. SQLConf.get.sessionLocalTimeZone — the JVM-default fallback.
+    String fromSqlConf = SQLConf.get().getConfString(SESSION_LOCAL_TIME_ZONE_KEY, null);
+    if (fromSqlConf != null) {
+      return fromSqlConf;
+    }
+    SparkEnv env = SparkEnv.get();
+    if (env != null) {
+      String fromSparkConf = env.conf().get(SESSION_LOCAL_TIME_ZONE_KEY, null);
+      if (fromSparkConf != null) {
+        return fromSparkConf;
+      }
+    }
+    return SQLConf.get().sessionLocalTimeZone();
   }
 
   @Override
@@ -161,11 +404,17 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     metadata.put("org.apache.spark.version", VersionUtils.shortVersion(HoodieSparkUtils.getSparkVersion()));
     if (SparkAdapterSupport$.MODULE$.sparkAdapter().isLegacyBehaviorPolicy(datetimeRebaseMode)) {
       metadata.put("org.apache.spark.legacyDateTime", "");
-      metadata.put("org.apache.spark.timeZone", SQLConf.get().sessionLocalTimeZone());
+      metadata.put(PARQUET_METADATA_TIME_ZONE_KEY, resolveSessionLocalTimeZone());
+    }
+    String vectorMeta = HoodieSchema.buildVectorColumnsMetadataValue(schema);
+    if (!vectorMeta.isEmpty()) {
+      metadata.put(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY, vectorMeta);
     }
     Configuration configurationCopy = new Configuration(configuration);
     configurationCopy.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, Boolean.toString(writeLegacyListFormat));
-    MessageType messageType = convert(structType, avroSchema);
+    // Use shreddedSchema for Parquet schema conversion when shredding is enabled
+    // This ensures the Parquet file structure includes the shredded typed_value columns
+    MessageType messageType = convert(shreddedSchema, schema);
     return new WriteContext(messageType, metadata);
   }
 
@@ -184,8 +433,16 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     Map<String, String> extraMetadata =
         bloomFilterWriteSupportOpt.map(HoodieBloomFilterWriteSupport::finalizeMetadata)
             .orElse(Collections.emptyMap());
+    if (!footerMetadata.isEmpty()) {
+      extraMetadata = new HashMap<>(extraMetadata);
+      extraMetadata.putAll(footerMetadata);
+    }
 
     return new WriteSupport.FinalizedWriteContext(extraMetadata);
+  }
+
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    this.footerMetadata.putAll(footerMetadata);
   }
 
   public void add(UTF8String recordKey) {
@@ -225,9 +482,36 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     }
   }
 
-  private ValueWriter makeWriter(Schema avroSchema, DataType dataType) {
-    Schema resolvedSchema = avroSchema == null ? null : getNonNullTypeFromUnion(avroSchema);
-    LogicalType logicalType = resolvedSchema != null ? resolvedSchema.getLogicalType() : null;
+  /**
+   * Fixed-length byte width for a decimal column: honor the declared Avro {@code fixed} size when
+   * present (it may be wider than the precision-minimal width), otherwise the precision-minimal width.
+   */
+  static int resolveDecimalByteLength(HoodieSchema resolvedSchema, int precision) {
+    if (resolvedSchema instanceof HoodieSchema.Decimal) {
+      HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) resolvedSchema;
+      if (decimalSchema.isFixed()) {
+        int fixedSize = decimalSchema.getFixedSize();
+        ValidationUtils.checkArgument(fixedSize >= Decimal.minBytesForPrecision()[precision],
+            () -> String.format("Avro fixed size %s is too small for decimal precision %s (need >= %s bytes)",
+                fixedSize, precision, Decimal.minBytesForPrecision()[precision]));
+        return fixedSize;
+      }
+    }
+    return Decimal.minBytesForPrecision()[precision];
+  }
+
+  static byte[] padDecimalToFixedLength(byte[] unscaledBytes, int numBytes, byte[] paddingBuffer) {
+    if (unscaledBytes.length == numBytes) {
+      return unscaledBytes;
+    }
+    byte signByte = (unscaledBytes[0] < 0) ? (byte) -1 : (byte) 0;
+    Arrays.fill(paddingBuffer, 0, numBytes - unscaledBytes.length, signByte);
+    System.arraycopy(unscaledBytes, 0, paddingBuffer, numBytes - unscaledBytes.length, unscaledBytes.length);
+    return paddingBuffer;
+  }
+
+  private ValueWriter makeWriter(HoodieSchema schema, DataType dataType) {
+    HoodieSchema resolvedSchema = schema == null ? null : schema.getNonNullType();
 
     if (dataType == DataTypes.BooleanType) {
       return (row, ordinal) -> recordConsumer.addBoolean(row.getBoolean(ordinal));
@@ -240,20 +524,36 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType == DataTypes.LongType || dataType instanceof DayTimeIntervalType) {
       return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
     } else if (dataType == DataTypes.TimestampType) {
-      if (logicalType == null || logicalType.getName().equals(LogicalTypes.timestampMicros().getName())) {
-        return (row, ordinal) -> recordConsumer.addLong((long) timestampRebaseFunction.apply(row.getLong(ordinal)));
-      } else if (logicalType.getName().equals(LogicalTypes.timestampMillis().getName())) {
-        return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis((long) timestampRebaseFunction.apply(row.getLong(ordinal))));
+      if (resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.TIMESTAMP) {
+        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) resolvedSchema;
+        if (timestampSchema.getPrecision() == TimePrecision.MICROS) {
+          return (row, ordinal) -> recordConsumer.addLong((long) timestampRebaseFunction.apply(row.getLong(ordinal)));
+        } else if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
+          return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis((long) timestampRebaseFunction.apply(row.getLong(ordinal))));
+        } else {
+          throw new UnsupportedOperationException("Unsupported timestamp precision for TimestampType: " + timestampSchema.getPrecision());
+        }
       } else {
-        throw new UnsupportedOperationException("Unsupported Avro logical type for TimestampType: " + logicalType);
+        // Default to micros precision when no timestamp schema is available
+        return (row, ordinal) -> recordConsumer.addLong((long) timestampRebaseFunction.apply(row.getLong(ordinal)));
       }
     } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isTimestampNTZType(dataType)) {
-      if (logicalType == null || logicalType.getName().equals(LogicalTypes.localTimestampMicros().getName())) {
-        return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
-      } else if (logicalType.getName().equals(LogicalTypes.localTimestampMillis().getName())) {
-        return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis(row.getLong(ordinal)));
+      if (resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.TIMESTAMP) {
+        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) resolvedSchema;
+        if (!timestampSchema.isUtcAdjusted()) {
+          if (timestampSchema.getPrecision() == TimePrecision.MICROS) {
+            return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
+          } else if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
+            return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis(row.getLong(ordinal)));
+          } else {
+            throw new UnsupportedOperationException("Unsupported timestamp precision for TimestampNTZType: " + timestampSchema.getPrecision());
+          }
+        } else {
+          throw new UnsupportedOperationException("TimestampNTZType requires local timestamp schema, but got UTC-adjusted: " + timestampSchema.getName());
+        }
       } else {
-        throw new UnsupportedOperationException("Unsupported Avro logical type for TimestampNTZType: " + logicalType);
+        // Default to micros precision when no timestamp schema is available
+        return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
       }
     } else if (dataType == DataTypes.FloatType) {
       return (row, ordinal) -> recordConsumer.addFloat(row.getFloat(ordinal));
@@ -265,29 +565,71 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType == DataTypes.BinaryType) {
       return (row, ordinal) -> recordConsumer.addBinary(
           Binary.fromReusedByteArray(row.getBinary(ordinal)));
-    } else if (dataType instanceof DecimalType) {
+    } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(dataType)) {
+      // Maps VariantType to a Parquet group with 'metadata' and 'value' binary fields.
+      // Field order follows the Parquet spec (metadata at index 0, value at index 1).
+      // Note: We intentionally omit 'typed_value' for shredded variants as this writer only accesses raw binary blobs.
+      BiConsumer<SpecializedGetters, Integer> variantWriter = SparkAdapterSupport$.MODULE$.sparkAdapter().createVariantValueWriter(
+          dataType,
+          valueBytes -> consumeField(HoodieSchema.Variant.VARIANT_VALUE_FIELD, 1, () -> recordConsumer.addBinary(Binary.fromConstantByteArray(valueBytes))),
+          metadataBytes -> consumeField(HoodieSchema.Variant.VARIANT_METADATA_FIELD, 0, () -> recordConsumer.addBinary(Binary.fromConstantByteArray(metadataBytes)))
+      );
       return (row, ordinal) -> {
-        int precision = ((DecimalType) dataType).precision();
-        ValidationUtils.checkArgument(precision <= DecimalType.MAX_PRECISION(),
-            () -> String.format("Decimal precision %s exceeds max precision %s", precision, DecimalType.MAX_PRECISION()));
-        int scale = ((DecimalType) dataType).scale();
+        consumeGroup(() -> variantWriter.accept(row, ordinal));
+      };
+    } else if (dataType instanceof DecimalType) {
+      int precision = ((DecimalType) dataType).precision();
+      ValidationUtils.checkArgument(precision <= DecimalType.MAX_PRECISION(),
+          () -> String.format("Decimal precision %s exceeds max precision %s", precision, DecimalType.MAX_PRECISION()));
+      int scale = ((DecimalType) dataType).scale();
+      // Honor the declared Avro `fixed` size so the row/bulk-insert/clustering/compaction write
+      // path preserves the schema width instead of narrowing to the precision-minimal one.
+      int numBytes = resolveDecimalByteLength(resolvedSchema, precision);
+      // Padding buffer resolved once per column, not per record: reuse the shared decimalBuffer when
+      // it is wide enough, otherwise allocate one dedicated buffer here (an over-allocated Avro fixed
+      // size can exceed the shared buffer's capacity).
+      byte[] paddingBuffer = numBytes <= decimalBuffer.length ? decimalBuffer : new byte[numBytes];
+      return (row, ordinal) -> {
         byte[] bytes = row.getDecimal(ordinal, precision, scale).toJavaBigDecimal().unscaledValue().toByteArray();
-        int numBytes = Decimal.minBytesForPrecision()[precision];
-        byte[] fixedLengthBytes;
-        if (bytes.length == numBytes) {
-          // If the length of the underlying byte array of the unscaled `BigInteger` happens to be
-          // `numBytes`, just reuse it, so that we don't bother copying it to `decimalBuffer`.
-          fixedLengthBytes = bytes;
-        } else {
-          // Otherwise, the length must be less than `numBytes`.  In this case we copy contents of
-          // the underlying bytes with padding sign bytes to `decimalBuffer` to form the result
-          // fixed-length byte array.
-          byte signByte = (bytes[0] < 0) ? (byte) -1 : (byte) 0;
-          Arrays.fill(decimalBuffer, 0, numBytes - bytes.length, signByte);
-          System.arraycopy(bytes, 0, decimalBuffer, numBytes - bytes.length, bytes.length);
-          fixedLengthBytes = decimalBuffer;
+        recordConsumer.addBinary(Binary.fromReusedByteArray(
+            padDecimalToFixedLength(bytes, numBytes, paddingBuffer), 0, numBytes));
+      };
+    } else if (dataType instanceof ArrayType
+            && resolvedSchema != null
+            && resolvedSchema.getType() == HoodieSchemaType.VECTOR) {
+      HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) resolvedSchema;
+      int dimension = vectorSchema.getDimension();
+      HoodieSchema.Vector.VectorElementType elemType = vectorSchema.getVectorElementType();
+      int bufferSize = Math.multiplyExact(dimension, elemType.getElementSize());
+      // Buffer is reused across rows without copying. Binary.fromReusedByteArray wraps the
+      // same backing array. This is safe because Parquet's ColumnWriteStoreV2 consumes the
+      // bytes before the next write call (same pattern as the decimal path with decimalBuffer).
+      ByteBuffer buffer = ByteBuffer.allocate(bufferSize).order(HoodieSchema.VectorLogicalType.VECTOR_BYTE_ORDER);
+      return (row, ordinal) -> {
+        ArrayData array = row.getArray(ordinal);
+        ValidationUtils.checkArgument(array.numElements() == dimension,
+            () -> String.format("Vector dimension mismatch: schema expects %d elements but got %d", dimension, array.numElements()));
+        buffer.clear();
+        switch (elemType) {
+          case FLOAT:
+            for (int i = 0; i < dimension; i++) {
+              buffer.putFloat(array.getFloat(i));
+            }
+            break;
+          case DOUBLE:
+            for (int i = 0; i < dimension; i++) {
+              buffer.putDouble(array.getDouble(i));
+            }
+            break;
+          case INT8:
+            for (int i = 0; i < dimension; i++) {
+              buffer.put(array.getByte(i));
+            }
+            break;
+          default:
+            throw new UnsupportedOperationException("Unsupported vector element type: " + elemType);
         }
-        recordConsumer.addBinary(Binary.fromReusedByteArray(fixedLengthBytes, 0, numBytes));
+        recordConsumer.addBinary(Binary.fromReusedByteArray(buffer.array()));
       };
     } else if (dataType instanceof ArrayType) {
       ValueWriter elementWriter = makeWriter(resolvedSchema == null ? null : resolvedSchema.getElementType(), ((ArrayType) dataType).elementType());
@@ -321,6 +663,9 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
           }
         });
       };
+    } else if (dataType instanceof StructType
+        && SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantShreddingStruct((StructType) dataType)) {
+      return makeShreddedVariantWriter((StructType) dataType);
     } else if (dataType instanceof StructType) {
       StructType structType = (StructType) dataType;
       ValueWriter[] fieldWriters = getFieldWriters(structType, resolvedSchema);
@@ -331,6 +676,33 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else {
       throw new UnsupportedOperationException("Unsupported type: " + dataType);
     }
+  }
+
+  /**
+   * Creates a ValueWriter for a shredded Variant column.
+   * This writer converts a Variant value into its shredded components (metadata, value, typed_value) and writes them to Parquet.
+   *
+   * @param shreddedStructType The shredded StructType (with shredding metadata)
+   * @return A ValueWriter that handles shredded Variant writing
+   */
+  private ValueWriter makeShreddedVariantWriter(StructType shreddedStructType) {
+    // Create writers for the shredded struct fields
+    // The shreddedStructType contains: metadata (binary), value (binary), typed_value (optional)
+    ValueWriter[] shreddedFieldWriters = Arrays.stream(shreddedStructType.fields())
+        .map(field -> makeWriter(null, field.dataType()))
+        .toArray(ValueWriter[]::new);
+
+    // Use the SparkAdapter to create a shredded variant writer that converts Variant to shredded components
+    BiConsumer<SpecializedGetters, Integer> shreddedWriter = SparkAdapterSupport$.MODULE$.sparkAdapter()
+        .createShreddedVariantWriter(
+            shreddedStructType,
+            shreddedRow -> {
+              // Write the shredded row as a group
+              consumeGroup(() -> writeFields(shreddedRow, shreddedStructType, shreddedFieldWriters));
+            }
+        );
+
+    return shreddedWriter::accept;
   }
 
   private ValueWriter twoLevelArrayWriter(String repeatedFieldName, ValueWriter elementWriter) {
@@ -368,34 +740,6 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     };
   }
 
-  private static class HoodieBloomFilterRowWriteSupport extends HoodieBloomFilterWriteSupport<UTF8String> {
-
-    private static final HoodieUTF8StringFactory UTF8STRING_FACTORY =
-        SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory();
-
-    public HoodieBloomFilterRowWriteSupport(BloomFilter bloomFilter) {
-      super(bloomFilter);
-    }
-
-    @Override
-    protected int compareRecordKey(UTF8String a, UTF8String b) {
-      return UTF8STRING_FACTORY.wrapUTF8String(a).compareTo(UTF8STRING_FACTORY.wrapUTF8String(b));
-    }
-
-    @Override
-    protected byte[] getUTF8Bytes(UTF8String key) {
-      return key.getBytes();
-    }
-
-    @Override
-    protected UTF8String dereference(UTF8String key) {
-      // NOTE: [[clone]] is performed here (rather than [[copy]]) to only copy underlying buffer in
-      //       cases when [[UTF8String]] is pointing into a buffer storing the whole containing record,
-      //       and simply do a pass over when it holds a (immutable) buffer holding just the string
-      return key.clone();
-    }
-  }
-
   public static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(Configuration conf, StructType structType,
                                                                              Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
     return (HoodieRowParquetWriteSupport) ReflectionUtils.loadClass(
@@ -408,29 +752,31 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
    * Constructs the Parquet schema based on the given Spark schema and Avro schema.
    * The Avro schema is used to determine the precision of timestamps.
    * @param structType Spark StructType
-   * @param avroSchema Avro schema
+   * @param schema Hoodie schema
    * @return Parquet MessageType with field ids propagated from Spark StructType if available
    */
-  private MessageType convert(StructType structType, Schema avroSchema) {
+  private MessageType convert(StructType structType, HoodieSchema schema) {
     return Types.buildMessage()
         .addFields(Arrays.stream(structType.fields()).map(field -> {
-          Schema.Field avroField = avroSchema.getField(field.name());
-          return convertField(avroField == null ? null : avroField.schema(), field);
+          // Note: Cannot use HoodieSchemaField::schema method reference due to Java 17 compilation ambiguity
+          HoodieSchema fieldSchema = schema.getField(field.name())
+              .map(f -> f.schema())
+              .orElse(null);
+          return convertField(fieldSchema, field);
         }).toArray(Type[]::new))
         .named("spark_schema");
   }
 
-  private Type convertField(Schema avroFieldSchema, StructField structField) {
-    Type type = convertField(avroFieldSchema, structField, structField.nullable() ? OPTIONAL : REQUIRED);
+  private Type convertField(HoodieSchema fieldSchema, StructField structField) {
+    Type type = convertField(fieldSchema, structField, structField.nullable() ? OPTIONAL : REQUIRED);
     if (ParquetUtils.hasFieldId(structField)) {
       return type.withId(ParquetUtils.getFieldId(structField));
     }
     return type;
   }
 
-  private Type convertField(Schema avroFieldSchema, StructField structField, Type.Repetition repetition) {
-    Schema resolvedSchema = avroFieldSchema == null ? null : getNonNullTypeFromUnion(avroFieldSchema);
-    LogicalType logicalType = resolvedSchema != null ? resolvedSchema.getLogicalType() : null;
+  private Type convertField(HoodieSchema fieldSchema, StructField structField, Type.Repetition repetition) {
+    HoodieSchema resolvedSchema = fieldSchema == null ? null : fieldSchema.getNonNullType();
 
     DataType dataType = structField.dataType();
     if (dataType == DataTypes.BooleanType) {
@@ -446,24 +792,42 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType == DataTypes.LongType || dataType instanceof DayTimeIntervalType) {
       return Types.primitive(INT64, repetition).named(structField.name());
     } else if (dataType == DataTypes.TimestampType) {
-      if (logicalType == null || logicalType.getName().equals(LogicalTypes.timestampMicros().getName())) {
+      if (resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.TIMESTAMP) {
+        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) resolvedSchema;
+        if (timestampSchema.getPrecision() == TimePrecision.MICROS) {
+          return Types.primitive(INT64, repetition)
+              .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
+        } else if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
+          return Types.primitive(INT64, repetition)
+              .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MILLIS)).named(structField.name());
+        } else {
+          throw new UnsupportedOperationException("Unsupported timestamp precision for TimestampType: " + timestampSchema.getPrecision());
+        }
+      } else {
+        // Default to micros precision when no timestamp schema is available
         return Types.primitive(INT64, repetition)
             .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
-      } else if (logicalType.getName().equals(LogicalTypes.timestampMillis().getName())) {
-        return Types.primitive(INT64, repetition)
-            .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MILLIS)).named(structField.name());
-      } else {
-        throw new UnsupportedOperationException("Unsupported timestamp type: " + logicalType);
       }
     } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isTimestampNTZType(dataType)) {
-      if (logicalType == null || logicalType.getName().equals(LogicalTypes.localTimestampMicros().getName())) {
+      if (resolvedSchema != null && resolvedSchema.getType() == HoodieSchemaType.TIMESTAMP) {
+        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) resolvedSchema;
+        if (!timestampSchema.isUtcAdjusted()) {
+          if (timestampSchema.getPrecision() == TimePrecision.MICROS) {
+            return Types.primitive(INT64, repetition)
+                .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
+          } else if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
+            return Types.primitive(INT64, repetition)
+                .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MILLIS)).named(structField.name());
+          } else {
+            throw new UnsupportedOperationException("Unsupported timestamp precision for TimestampNTZType: " + timestampSchema.getPrecision());
+          }
+        } else {
+          throw new UnsupportedOperationException("TimestampNTZType requires local timestamp schema, but got UTC-adjusted: " + timestampSchema.getName());
+        }
+      } else {
+        // Default to micros precision when no timestamp schema is available
         return Types.primitive(INT64, repetition)
             .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
-      } else if (logicalType.getName().equals(LogicalTypes.localTimestampMillis().getName())) {
-        return Types.primitive(INT64, repetition)
-            .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MILLIS)).named(structField.name());
-      } else {
-        throw new UnsupportedOperationException("Unsupported timestamp type: " + logicalType);
       }
     } else if (dataType == DataTypes.FloatType) {
       return Types.primitive(FLOAT, repetition).named(structField.name());
@@ -474,24 +838,39 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
           .as(LogicalTypeAnnotation.stringType()).named(structField.name());
     } else if (dataType == DataTypes.BinaryType) {
       return Types.primitive(BINARY, repetition).named(structField.name());
+    } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(dataType)) {
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().convertVariantFieldToParquetType(
+          dataType,
+          structField.name(),
+          resolvedSchema,
+          repetition
+      );
     } else if (dataType instanceof DecimalType) {
       int precision = ((DecimalType) dataType).precision();
       int scale = ((DecimalType) dataType).scale();
       return Types
           .primitive(FIXED_LEN_BYTE_ARRAY, repetition)
           .as(LogicalTypeAnnotation.decimalType(scale, precision))
-          .length(Decimal.minBytesForPrecision()[precision])
+          .length(resolveDecimalByteLength(resolvedSchema, precision))
           .named(structField.name());
+    } else if (dataType instanceof ArrayType
+            && resolvedSchema != null
+            && resolvedSchema.getType() == HoodieSchemaType.VECTOR) {
+      HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) resolvedSchema;
+      int fixedSize = Math.multiplyExact(vectorSchema.getDimension(),
+              vectorSchema.getVectorElementType().getElementSize());
+      return Types.primitive(FIXED_LEN_BYTE_ARRAY, repetition)
+              .length(fixedSize).named(structField.name());
     } else if (dataType instanceof ArrayType) {
       ArrayType arrayType = (ArrayType) dataType;
       DataType elementType = arrayType.elementType();
-      Schema avroElementSchema = resolvedSchema == null ? null : resolvedSchema.getElementType();
+      HoodieSchema elementSchema = resolvedSchema == null ? null : resolvedSchema.getElementType();
       if (!writeLegacyListFormat) {
         return Types
             .buildGroup(repetition).as(LogicalTypeAnnotation.listType())
             .addField(
                 Types.repeatedGroup()
-                    .addField(convertField(avroElementSchema, new StructField("element", elementType, arrayType.containsNull(), Metadata.empty())))
+                    .addField(convertField(elementSchema, new StructField("element", elementType, arrayType.containsNull(), Metadata.empty())))
                     .named("list"))
             .named(structField.name());
       } else if ((arrayType.containsNull())) {
@@ -500,18 +879,18 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
             .addField(Types
                 .buildGroup(REPEATED)
                 // "array" is the name chosen by parquet-hive (1.7.0 and prior version)
-                .addField(convertField(avroElementSchema, new StructField("array", elementType, true, Metadata.empty())))
+                .addField(convertField(elementSchema, new StructField("array", elementType, true, Metadata.empty())))
                 .named("bag"))
             .named(structField.name());
       } else {
         return Types
             .buildGroup(repetition).as(LogicalTypeAnnotation.listType())
             // "array" is the name chosen by parquet-avro (1.7.0 and prior version)
-            .addField(convertField(avroElementSchema, new StructField("array", elementType, false, Metadata.empty()), REPEATED))
+            .addField(convertField(elementSchema, new StructField("array", elementType, false, Metadata.empty()), REPEATED))
             .named(structField.name());
       }
     } else if (dataType instanceof MapType) {
-      Schema avroValueSchema = resolvedSchema == null ? null : resolvedSchema.getValueType();
+      HoodieSchema valueSchema = resolvedSchema == null ? null : resolvedSchema.getValueType();
       MapType mapType = (MapType) dataType;
       return Types
           .buildGroup(repetition).as(LogicalTypeAnnotation.mapType())
@@ -519,14 +898,18 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
               Types
                   .repeatedGroup()
                   .addField(convertField(MAP_KEY_SCHEMA, new StructField(MAP_KEY_NAME, DataTypes.StringType, false, Metadata.empty())))
-                  .addField(convertField(avroValueSchema, new StructField(MAP_VALUE_NAME, mapType.valueType(), mapType.valueContainsNull(), Metadata.empty())))
+                  .addField(convertField(valueSchema, new StructField(MAP_VALUE_NAME, mapType.valueType(), mapType.valueContainsNull(), Metadata.empty())))
                   .named(MAP_REPEATED_NAME))
           .named(structField.name());
     } else if (dataType instanceof StructType) {
       Types.GroupBuilder<GroupType> groupBuilder = Types.buildGroup(repetition);
       Arrays.stream(((StructType) dataType).fields()).forEach(field -> {
-        Schema.Field avroField = resolvedSchema == null ? null : resolvedSchema.getField(field.name());
-        groupBuilder.addField(convertField(avroField == null ? null : avroField.schema(), field));
+        // Note: Cannot use HoodieSchemaField::schema method reference due to Java 17 compilation ambiguity
+        HoodieSchema nestedFieldSchema = Option.ofNullable(resolvedSchema)
+            .flatMap(s -> s.getField(field.name()))
+            .map(f -> f.schema())
+            .orElse(null);
+        groupBuilder.addField(convertField(nestedFieldSchema, field));
       });
       return groupBuilder.named(structField.name());
     } else {

@@ -27,8 +27,7 @@ import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ConcurrentModificationException;
@@ -42,9 +41,8 @@ import java.util.stream.Stream;
  * It will use fileSystem api like list and exist directly to check if there is any marker file
  * conflict, without any locking.
  */
+@Slf4j
 public class SimpleDirectMarkerBasedDetectionStrategy extends DirectMarkerBasedDetectionStrategy {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SimpleDirectMarkerBasedDetectionStrategy.class);
   private final String basePath;
   private final boolean checkCommitConflict;
   private final Set<HoodieInstant> completedCommitInstants;
@@ -66,7 +64,7 @@ public class SimpleDirectMarkerBasedDetectionStrategy extends DirectMarkerBasedD
       return checkMarkerConflict(basePath, maxAllowableHeartbeatIntervalInMs)
           || (checkCommitConflict && MarkerUtils.hasCommitConflict(activeTimeline, Stream.of(fileId).collect(Collectors.toSet()), completedCommitInstants));
     } catch (IOException e) {
-      LOG.error("Exception occurs during create marker file in eager conflict detection mode.", e);
+      log.error("Exception occurs during create marker file in eager conflict detection mode.", e);
       throw new HoodieIOException("Exception occurs during create marker file in eager conflict detection mode.", e);
     }
   }

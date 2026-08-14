@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieDataUtils
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
 import org.apache.hudi.storage.StoragePath
 
@@ -38,7 +39,7 @@ import scala.collection.JavaConverters._
 
 class SecondaryIndexSupport(spark: SparkSession,
                             metadataConfig: HoodieMetadataConfig,
-                            metaClient: HoodieTableMetaClient) extends RecordLevelIndexSupport(spark, metadataConfig, metaClient) {
+                            metaClient: HoodieTableMetaClient) extends GlobalRecordLevelIndexSupport(spark, metadataConfig, metaClient) {
   override def getIndexName: String = SecondaryIndexSupport.INDEX_NAME
 
   override def computeCandidateFileNames(fileIndex: HoodieFileIndex,

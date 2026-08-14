@@ -20,7 +20,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.2.0-SNAPSHOT</version>
+    <version>1.3.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -99,6 +99,15 @@
           </imports>
         </configuration>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <!-- Required to support older Hive versions that still use Java 8 -->
+          <target>8</target>
+          <release>8</release>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 
@@ -113,6 +122,13 @@
     <dependency>
       <groupId>org.openjdk.jol</groupId>
       <artifactId>jol-core</artifactId>
+    </dependency>
+
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Logging -->
@@ -162,6 +178,7 @@
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
     </dependency>
+
 
     <!-- Orc -->
     <dependency>
@@ -218,13 +235,6 @@
     </dependency>
 
     <dependency>
-      <groupId>com.github.stefanbirkner</groupId>
-      <artifactId>system-rules</artifactId>
-      <version>1.17.2</version>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
       <groupId>org.eclipse.jetty</groupId>
       <artifactId>jetty-server</artifactId>
     </dependency>
@@ -249,9 +259,9 @@
 
     <!-- LZ4 Hash Utils -->
     <dependency>
-      <groupId>org.lz4</groupId>
+      <groupId>${lz4.groupId}</groupId>
       <artifactId>lz4-java</artifactId>
-      <version>1.8.0</version>
+      <version>${lz4.version}</version>
     </dependency>
 
     <dependency>

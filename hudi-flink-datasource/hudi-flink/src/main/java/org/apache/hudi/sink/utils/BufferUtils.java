@@ -26,6 +26,7 @@ import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
+import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.RowType;
 
 /**
@@ -50,5 +51,27 @@ public class BufferUtils {
         new BinaryRowDataSerializer(rowType.getFieldCount()),
         recordComparator,
         memorySegmentPool);
+  }
+
+  /**
+   * Returns whether code-generated typed-field sorting preserves encoded hoodie recordKey ordering.
+   *
+   * <p>Code-generated sorting uses normalized keys and a generated comparator, and is much more
+   * efficient than repeatedly encoding record keys during comparison. Most tables use a single
+   * string record key, so this fast path covers the common case.
+   *
+   * <p>A single string field has the same order as its encoded record key regardless of the
+   * complex key generator encoding. With the new encoding the record key is the field value
+   * itself; the compatible encoding may produce {@code <field>:<value>}, but {@code <field>:} is
+   * identical for every record and therefore does not affect ordering. Numeric and composite keys
+   * can have a different typed-field order and must use encoded-key comparison.
+   */
+  public static boolean canUseCodegenSorting(RowType rowType, String[] recordKeyFields) {
+    if (recordKeyFields.length != 1) {
+      return false;
+    }
+    int fieldIndex = rowType.getFieldIndex(recordKeyFields[0]);
+    LogicalTypeRoot typeRoot = rowType.getTypeAt(fieldIndex).getTypeRoot();
+    return typeRoot == LogicalTypeRoot.CHAR || typeRoot == LogicalTypeRoot.VARCHAR;
   }
 }

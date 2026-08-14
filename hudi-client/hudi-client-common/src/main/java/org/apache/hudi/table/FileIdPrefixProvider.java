@@ -20,17 +20,14 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.config.TypedProperties;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+@AllArgsConstructor
+@Getter
 public abstract class FileIdPrefixProvider {
 
   private final TypedProperties props;
-
-  public FileIdPrefixProvider(TypedProperties props) {
-    this.props = props;
-  }
-
-  public TypedProperties getProps() {
-    return props;
-  }
 
   public abstract String createFilePrefix(String partitionPath);
 }

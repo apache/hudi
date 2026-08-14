@@ -53,8 +53,12 @@ object HoodieWriterUtils {
    * Add default options for unspecified write options keys.
    */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
+    // Strip the `spark.` prefix from `spark.hoodie.*` keys so write/hive_sync configs
+    // forwarded from SparkConf reach Hudi under their canonical names. Mirrors what
+    // parametersWithReadDefaults does for the read path.
+    val normalizedParams = DataSourceOptionsHelper.normalizeSparkHoodiePrefix(parameters)
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
-    val props = TypedProperties.fromMap(parameters.asJava)
+    val props = TypedProperties.fromMap(normalizedParams.asJava)
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
@@ -87,7 +91,7 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(RECONCILE_SCHEMA)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
-    Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
+    Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(normalizedParams)
   }
 
   /**
@@ -322,6 +326,16 @@ object HoodieWriterUtils {
         if (null != datasourcePartitionFields && null != tableConfigPartitionFields
           && currentPartitionFields != tableConfigPartitionFields) {
           diffConfigs.append(s"PartitionPath:\t$currentPartitionFields\t$tableConfigPartitionFields\n")
+        }
+
+        // Validate partition value extractor
+        val currentPartitionValueExtractor = params.getOrElse(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key(), null)
+        if (currentPartitionValueExtractor != null) {
+          val tableConfigPartitionValueExtractor = tableConfig.getString(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS)
+          if (tableConfigPartitionValueExtractor != null &&
+            !currentPartitionValueExtractor.equals(tableConfigPartitionValueExtractor)) {
+            diffConfigs.append(s"PartitionValueExtractor:\t$currentPartitionValueExtractor\t$tableConfigPartitionValueExtractor\n")
+          }
         }
         // The value of `HoodieTableConfig.RECORD_MERGE_STRATEGY_ID` can be NULL or non-NULL.
         // The non-NULL value has been validated above in the regular code path.

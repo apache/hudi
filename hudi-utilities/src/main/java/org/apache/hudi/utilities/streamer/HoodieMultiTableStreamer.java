@@ -20,7 +20,6 @@
 package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -31,6 +30,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.util.OperationConverter;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
@@ -39,12 +39,13 @@ import org.apache.hudi.utilities.sources.JsonDFSSource;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -69,11 +70,12 @@ import static org.apache.hudi.utilities.config.HoodieStreamerConfig.TRANSFORMER_
  * Helps with ingesting incremental data into hoodie datasets for multiple tables.
  * Supports COPY_ON_WRITE and MERGE_ON_READ storage types.
  */
+@Getter
+@Slf4j
 public class HoodieMultiTableStreamer {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMultiTableStreamer.class);
-
   private final List<TableExecutionContext> tableExecutionContexts;
+  @Getter(AccessLevel.NONE)
   private transient JavaSparkContext jssc;
   private final Set<String> successTables;
   private final Set<String> failedTables;
@@ -120,7 +122,7 @@ public class HoodieMultiTableStreamer {
   //commonProps are passed as parameter which contain table to config file mapping
   private void populateTableExecutionContextList(TypedProperties properties, String configFolder, FileSystem fs, Config config) throws IOException {
     List<String> tablesToBeIngested = getTablesToBeIngested(properties);
-    LOG.info("tables to be ingested via MultiTableDeltaStreamer : " + tablesToBeIngested);
+    log.info("tables to be ingested via MultiTableDeltaStreamer : {}", tablesToBeIngested);
     TableExecutionContext executionContext;
     for (String table : tablesToBeIngested) {
       String[] tableWithDatabase = table.split("\\.");
@@ -271,15 +273,15 @@ public class HoodieMultiTableStreamer {
     }
 
     if (config.enableHiveSync) {
-      LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
+      log.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
 
     if (config.targetTableName != null) {
-      LOG.warn("--target-table is deprecated and will be removed in a future release due to it's useless;"
+      log.warn("--target-table is deprecated and will be removed in a future release due to it's useless;"
           + " please use {} to configure multiple target tables", HoodieStreamerConfig.TABLES_TO_BE_INGESTED.key());
     }
 
-    JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-streamer", Constants.LOCAL_SPARK_MASTER);
+    JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-streamer", Constants.LOCAL_SPARK_MASTER, config.enableHiveSupport);
     int exitCode = 0;
     try {
       new HoodieMultiTableStreamer(config, jssc).sync();
@@ -370,6 +372,9 @@ public class HoodieMultiTableStreamer {
     @Parameter(names = {"--sync-tool-classes"}, description = "Meta sync client tool, using comma to separate multi tools")
     public String syncClientToolClassNames = HiveSyncTool.class.getName();
 
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.")
+    public Boolean enableHiveSupport = true;
+
     @Parameter(names = {"--max-pending-compactions"},
         description = "Maximum number of outstanding inflight/requested compactions. Delta Sync will not happen unless"
             + "outstanding compactions is less than this number")
@@ -459,18 +464,25 @@ public class HoodieMultiTableStreamer {
    */
   public void sync() {
     for (TableExecutionContext context : tableExecutionContexts) {
+      HoodieStreamer streamer = null;
       try {
-        new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
+        streamer = new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
+        streamer.sync();
         successTables.add(Helpers.getTableWithDatabase(context));
+        streamer.shutdownGracefully();
       } catch (Exception e) {
-        LOG.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
+        log.error("error while running MultiTableDeltaStreamer for table: {}", context.getTableName(), e);
         failedTables.add(Helpers.getTableWithDatabase(context));
+      } finally {
+        if (streamer != null) {
+          streamer.shutdownGracefully();
+        }
       }
     }
 
-    LOG.info("Ingestion was successful for topics: " + successTables);
+    log.info("Ingestion was successful for topics: {}", successTables);
     if (!failedTables.isEmpty()) {
-      LOG.info("Ingestion failed for topics: " + failedTables);
+      log.info("Ingestion failed for topics: {}", failedTables);
     }
   }
 
@@ -485,17 +497,5 @@ public class HoodieMultiTableStreamer {
     private static final String DELIMITER = ".";
     private static final String UNDERSCORE = "_";
     private static final String COMMA_SEPARATOR = ",";
-  }
-
-  public Set<String> getSuccessTables() {
-    return successTables;
-  }
-
-  public Set<String> getFailedTables() {
-    return failedTables;
-  }
-
-  public List<TableExecutionContext> getTableExecutionContexts() {
-    return this.tableExecutionContexts;
   }
 }

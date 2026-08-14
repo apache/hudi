@@ -942,7 +942,7 @@ dataType
     | INTERVAL from=(YEAR | MONTH) (TO to=MONTH)?               #yearMonthIntervalDataType
     | INTERVAL from=(DAY | HOUR | MINUTE | SECOND)
       (TO to=(HOUR | MINUTE | SECOND))?                         #dayTimeIntervalDataType
-    | identifier ('(' INTEGER_VALUE (',' INTEGER_VALUE)* ')')?  #primitiveDataType
+    | typeName=identifier ('(' (INTEGER_VALUE | identifier) (',' (INTEGER_VALUE | identifier))* ')')?  #primitiveDataType
     ;
 
 qualifiedColTypeWithPositionList

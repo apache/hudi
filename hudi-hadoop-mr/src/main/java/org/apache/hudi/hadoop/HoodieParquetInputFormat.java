@@ -19,15 +19,16 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -105,7 +106,8 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     try {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(job);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      HoodieStorage storage = HoodieStorageUtils.getStorage(
+          HadoopFSUtils.convertToStoragePath(inputPath), HadoopFSUtils.getStorageConf(fs.getConf()));
       return getTablePath(storage, convertToStoragePath(inputPath))
           .map(path -> isHoodieTablePath(storage, path)).orElse(false);
     } catch (IOException e) {
@@ -206,7 +208,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     List<Pair<String, String>> colNamesWithTypesForExternal = colNameWithTypes.stream()
         .filter(p -> !HoodieRecord.HOODIE_META_COLUMNS.contains(p.getKey())).collect(Collectors.toList());
 
-    LOG.info("colNameWithTypes =" + colNameWithTypes + ", Num Entries =" + colNameWithTypes.size());
+    LOG.info("colNameWithTypes ={}, Num Entries ={}", colNameWithTypes, colNameWithTypes.size());
 
     if (hoodieColsProjected.isEmpty()) {
       return getRecordReaderInternal(eSplit.getBootstrapFileSplit(), job, reporter);
@@ -223,7 +225,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       jobConfCopy.unset(TableScanDesc.FILTER_EXPR_CONF_STR);
       jobConfCopy.unset(ConvertAstToSearchArg.SARG_PUSHDOWN);
 
-      LOG.info("Generating column stitching reader for " + eSplit.getPath() + " and " + rightSplit.getPath());
+      LOG.info("Generating column stitching reader for {} and {}", eSplit.getPath(), rightSplit.getPath());
       return new BootstrapColumnStichingRecordReader(getRecordReaderInternal(eSplit, jobConfCopy, reporter),
           HoodieRecord.HOODIE_META_COLUMNS.size(),
           getRecordReaderInternal(rightSplit, jobConfCopy, reporter),

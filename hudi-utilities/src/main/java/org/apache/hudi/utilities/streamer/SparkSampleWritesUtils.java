@@ -25,6 +25,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -36,15 +37,15 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.SAMPLE_WRITES_FOLDER_PATH;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -58,31 +59,30 @@ import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SAMPLE_WRITE
  * <p>
  * TODO handle sample_writes sub-path clean-up w.r.t. rollback and insert overwrite. (HUDI-6044)
  */
+@Slf4j
 public class SparkSampleWritesUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkSampleWritesUtils.class);
 
   public static Option<HoodieWriteConfig> getWriteConfigWithRecordSizeEstimate(JavaSparkContext jsc, Option<JavaRDD<HoodieRecord>> recordsOpt, HoodieWriteConfig writeConfig) {
     if (!writeConfig.getBoolean(SAMPLE_WRITES_ENABLED)) {
-      LOG.debug("Skip overwriting record size estimate as it's disabled.");
+      log.debug("Skip overwriting record size estimate as it's disabled.");
       return Option.empty();
     }
     HoodieTableMetaClient metaClient = getMetaClient(jsc, writeConfig.getBasePath());
     if (metaClient.isTimelineNonEmpty()) {
-      LOG.info("Skip overwriting record size estimate due to timeline is non-empty.");
+      log.info("Skip overwriting record size estimate due to timeline is non-empty.");
       return Option.empty();
     }
     try {
       Pair<Boolean, String> result = doSampleWrites(jsc, recordsOpt, writeConfig);
       if (result.getLeft()) {
         long avgSize = getAvgSizeFromSampleWrites(jsc, result.getRight());
-        LOG.info("Overwriting record size estimate to {}", avgSize);
+        log.info("Overwriting record size estimate to {}", avgSize);
         TypedProperties props = writeConfig.getProps();
         props.put(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(avgSize));
         return Option.of(HoodieWriteConfig.newBuilder().withProperties(props).build());
       }
     } catch (IOException e) {
-      LOG.error(String.format("Not overwriting record size estimate for table %s due to error when doing sample writes.", writeConfig.getTableName()), e);
+      log.error("Not overwriting record size estimate for table {} due to error when doing sample writes.", writeConfig.getTableName(), e);
     }
     return Option.empty();
   }
@@ -110,20 +110,24 @@ public class SparkSampleWritesUtils {
     try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
       int size = writeConfig.getIntOrDefault(SAMPLE_WRITES_SIZE);
       return recordsOpt.map(records -> {
-        List<HoodieRecord> samples = records.coalesce(1).take(size);
+        // Empty partition path so all sampled records write to a single non-partitioned file,
+        // instead of fanning out into one tiny file per source partition and skewing the estimate.
+        List<HoodieRecord> samples = records.coalesce(1).take(size).stream()
+            .map(r -> r.newInstance(new HoodieKey(r.getRecordKey(), "")))
+            .collect(Collectors.toList());
         if (samples.isEmpty()) {
           return emptyRes;
         }
         String instantTime = sampleWriteClient.startCommit();
         JavaRDD<WriteStatus> writeStatusRDD = sampleWriteClient.bulkInsert(jsc.parallelize(samples, 1), instantTime);
         if (writeStatusRDD.filter(WriteStatus::hasErrors).count() > 0) {
-          LOG.error("sample writes for table {} failed with errors.", writeConfig.getTableName());
-          if (LOG.isTraceEnabled()) {
-            LOG.trace("Printing out the top 100 errors");
+          log.error("sample writes for table {} failed with errors.", writeConfig.getTableName());
+          if (log.isTraceEnabled()) {
+            log.trace("Printing out the top 100 errors");
             writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
-              LOG.trace("Global error :", ws.getGlobalError());
+              log.trace("Global error :", ws.getGlobalError());
               ws.getErrors().forEach((key, throwable) ->
-                  LOG.trace(String.format("Error for key: %s", key), throwable));
+                  log.trace("Error for key: {}", key, throwable));
             });
           }
           return emptyRes;

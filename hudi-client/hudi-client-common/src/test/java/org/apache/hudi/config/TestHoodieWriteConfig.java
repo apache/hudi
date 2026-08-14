@@ -19,8 +19,6 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
-import org.apache.hudi.client.transaction.lock.NoopLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -37,6 +35,9 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.core.transaction.lock.NoopLockProvider;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -49,6 +50,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -96,7 +98,7 @@ public class TestHoodieWriteConfig {
   @Test
   public void testSupportedTableWriteVersions() {
     Set<HoodieTableVersion> supportedVersions = CollectionUtils.createSet(
-        HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE
+        HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, HoodieTableVersion.TEN
     );
     Arrays.stream(HoodieTableVersion.values())
         .filter(version -> !supportedVersions.contains(version))
@@ -121,6 +123,27 @@ public class TestHoodieWriteConfig {
           assertEquals(version, HoodieWriteConfig.newBuilder()
               .withPath("/tmp").withProperties(props).build().getWriteVersion());
         });
+  }
+
+  @Test
+  public void testPartitionTTLStatsMaxParallelismMustBePositive() {
+    // A non-positive value (0 or negative) is a misconfiguration and must fail fast at build time,
+    // rather than being silently coerced when TTL stats collection runs.
+    for (int invalid : new int[] {0, -5}) {
+      IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+          () -> HoodieWriteConfig.newBuilder().withPath("/tmp")
+              .withProps(Collections.singletonMap(
+                  HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), String.valueOf(invalid)))
+              .build());
+      assertTrue(e.getMessage().contains(HoodieTTLConfig.STATS_MAX_PARALLELISM.key()),
+          "Validation error should mention the offending config key");
+    }
+
+    // A positive value builds successfully.
+    assertEquals(8, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withProps(java.util.Collections.singletonMap(
+            HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), "8"))
+        .build().getPartitionTTLStatsMaxParallelism());
   }
 
   @Test
@@ -553,7 +576,7 @@ public class TestHoodieWriteConfig {
       }
     });
 
-    // validate the the configured lock provider is honored by the TimeGeneratorConfig as well.
+    // validate the configured lock provider is honored by the TimeGeneratorConfig as well.
     assertEquals(NoopLockProvider.class.getName(), writeConfig.getTimeGeneratorConfig().getLockConfiguration().getConfig().getProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
 
     // if auto adjust lock config is enabled, for a single writer w/ all inline table services, InProcessLockProvider is overriden
@@ -617,6 +640,25 @@ public class TestHoodieWriteConfig {
         .withLayoutConfig(HoodieLayoutConfig.newBuilder().withLayoutPartitioner("org.apache.hudi.table.action.commit.UpsertPartitioner").build())
         .build();
     assertEquals("org.apache.hudi.table.action.commit.UpsertPartitioner", overwritePartitioner.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME));
+  }
+
+  @Test
+  public void testBucketIndexKeyFieldValidationTrimsFields() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid, name");
+
+    HoodieIndexConfig indexConfig = HoodieIndexConfig.newBuilder()
+        .fromProperties(props)
+        .withIndexType(HoodieIndex.IndexType.BUCKET)
+        .withIndexKeyField(" name")
+        .build();
+    assertEquals(" name", indexConfig.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD));
+
+    assertThrows(HoodieIndexException.class, () -> HoodieIndexConfig.newBuilder()
+        .fromProperties(props)
+        .withIndexType(HoodieIndex.IndexType.BUCKET)
+        .withIndexKeyField("missing")
+        .build());
   }
 
   @Test
@@ -824,5 +866,88 @@ public class TestHoodieWriteConfig {
     assertEquals(expectedConcurrencyMode, writeConfig.getWriteConcurrencyMode());
     assertEquals(expectedCleanPolicy, writeConfig.getFailedWritesCleanPolicy());
     assertEquals(expectedLockProviderName, writeConfig.getLockProviderClass());
+  }
+
+  @Test
+  public void testClusteringExpirationDefaultsToFalse() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .build();
+    assertFalse(writeConfig.isExpirationOfClusteringEnabled());
+    assertEquals(60L, writeConfig.getClusteringExpirationThresholdMins());
+  }
+
+  @Test
+  public void testClusteringExpirationExplicitlyEnabled() {
+    Properties props = new Properties();
+    props.setProperty(HoodieClusteringConfig.ENABLE_EXPIRATIONS.key(), "true");
+    props.setProperty(HoodieClusteringConfig.EXPIRATION_THRESHOLD_MINS.key(), "30");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .build();
+    assertTrue(writeConfig.isExpirationOfClusteringEnabled());
+    assertEquals(30L, writeConfig.getClusteringExpirationThresholdMins());
+  }
+
+  @Test
+  public void testClusteringExpirationNotInferredFromPreferWriterStrategy() {
+    Properties props = new Properties();
+    props.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(),
+        "org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .build();
+    assertFalse(writeConfig.isExpirationOfClusteringEnabled());
+  }
+
+  @Test
+  public void testUpdatesStrategyDefaultsToRejectStrategy() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .build();
+    assertEquals(HoodieClusteringConfig.SPARK_REJECT_UPDATE_STRATEGY_CLASS_NAME,
+        writeConfig.getClusteringUpdatesStrategyClass());
+  }
+
+  @Test
+  public void testUpdatesStrategyRejectWithOtherConflictStrategy() {
+    Properties props = new Properties();
+    props.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(),
+        "org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .build();
+    assertEquals(HoodieClusteringConfig.SPARK_REJECT_UPDATE_STRATEGY_CLASS_NAME,
+        writeConfig.getClusteringUpdatesStrategyClass());
+  }
+
+  @Test
+  public void testUpdatesStrategyInferredFromPreferWriterStrategy() {
+    Properties props = new Properties();
+    props.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(),
+        "org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .build();
+    assertEquals(HoodieClusteringConfig.SPARK_ALLOW_UPDATE_STRATEGY_CLASS_NAME,
+        writeConfig.getClusteringUpdatesStrategyClass());
+  }
+
+  @Test
+  public void testUpdatesStrategyNotOverriddenWhenExplicitlySet() {
+    Properties props = new Properties();
+    props.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(),
+        "org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy");
+    String customStrategy = "org.apache.hudi.custom.MyCustomStrategy";
+    props.setProperty(HoodieClusteringConfig.UPDATES_STRATEGY.key(), customStrategy);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .build();
+    assertEquals(customStrategy, writeConfig.getClusteringUpdatesStrategyClass());
   }
 }

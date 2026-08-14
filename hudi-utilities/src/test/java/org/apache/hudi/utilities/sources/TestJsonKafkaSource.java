@@ -19,13 +19,13 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.HoodieSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
@@ -43,8 +43,6 @@ import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -277,8 +275,8 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     List<GenericRecord> recs = fetch1.getBatch().get().collect();
     assertEquals(10, recs.size());
 
-    Schema deducedSchema =
-        HoodieSchemaUtils.deduceWriterSchema(schemaProvider.getSourceSchema(), Option.empty(), Option.empty(), props);
+    HoodieSchema deducedSchema =
+        HoodieSchemaUtils.deduceWriterSchema(schemaProvider.getSourceHoodieSchema(), Option.empty(), Option.empty(), props);
     verifyDecimalValue(recs, deducedSchema, "decfield");
     verifyDecimalValue(recs, deducedSchema, "lowprecision");
     verifyDecimalValue(recs, deducedSchema, "highprecision");
@@ -293,13 +291,12 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
         .filter("highprecision < 100000000000000000000.0").filter("highprecision > 10000000000000000000.0").count());
   }
 
-  private static void verifyDecimalValue(List<GenericRecord> records, Schema schema, String fieldname) {
-    Schema fieldSchema = schema.getField(fieldname).schema();
-    LogicalTypes.Decimal decField = (LogicalTypes.Decimal) fieldSchema.getLogicalType();
-    double maxVal = Math.pow(10, decField.getPrecision() - decField.getScale());
+  private static void verifyDecimalValue(List<GenericRecord> records, HoodieSchema schema, String fieldname) {
+    HoodieSchema.Decimal decSchema = (HoodieSchema.Decimal) schema.getField(fieldname).get().schema();
+    double maxVal = Math.pow(10, decSchema.getPrecision() - decSchema.getScale());
     double minVal = maxVal * 0.1;
     for (GenericRecord record : records) {
-      BigDecimal dec = HoodieAvroUtils.convertBytesToBigDecimal(((ByteBuffer) record.get(fieldname)).array(), decField);
+      BigDecimal dec = org.apache.hudi.common.schema.HoodieSchemaUtils.convertBytesToBigDecimal(((ByteBuffer) record.get(fieldname)).array(), decSchema);
       double doubleValue = dec.doubleValue();
       assertTrue(doubleValue <= maxVal && doubleValue >= minVal);
     }
@@ -437,7 +434,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     return new BaseErrorTableWriter<ErrorEvent<String>>(new HoodieDeltaStreamer.Config(),
         spark(), props, new HoodieSparkEngineContext(jsc()), fs()) {
       @Override
-      public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option<String> commitedInstantTime) {
+      public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option<String> committedInstantTime) {
         return null;
       }
 
@@ -454,12 +451,12 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
       }
 
       @Override
-      public Option<JavaRDD<HoodieRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+      public Option<JavaRDD<HoodieRecord>> getErrorEvents(String baseTableInstantTime, Option committedInstantTime) {
         return Option.of(errorEvents.stream().reduce((rdd1, rdd2) -> rdd1.union(rdd2)).get());
       }
 
       @Override
-      public boolean upsertAndCommit(String baseTableInstantTime, Option commitedInstantTime) {
+      public boolean upsertAndCommit(String baseTableInstantTime, Option committedInstantTime) {
         return false;
       }
     };

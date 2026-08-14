@@ -21,20 +21,24 @@ package org.apache.hudi.timeline.service.handlers.marker;
 import org.apache.hudi.common.util.HoodieTimer;
 
 import io.javalin.http.Context;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.CompletableFuture;
 
 /**
  * Future for async marker creation request.
  */
+@Getter
+@Slf4j
 public class MarkerCreationFuture extends CompletableFuture<String> {
-  private static final Logger LOG = LoggerFactory.getLogger(MarkerCreationFuture.class);
+
   private final Context context;
   private final String markerDirPath;
   private final String markerName;
-  private boolean result;
+  private boolean isSuccessful;
+  @Getter(AccessLevel.NONE)
   private final HoodieTimer timer;
 
   public MarkerCreationFuture(Context context, String markerDirPath, String markerName) {
@@ -43,27 +47,11 @@ public class MarkerCreationFuture extends CompletableFuture<String> {
     this.context = context;
     this.markerDirPath = markerDirPath;
     this.markerName = markerName;
-    this.result = false;
+    this.isSuccessful = false;
   }
 
-  public Context getContext() {
-    return context;
-  }
-
-  public String getMarkerDirPath() {
-    return markerDirPath;
-  }
-
-  public String getMarkerName() {
-    return markerName;
-  }
-
-  public boolean isSuccessful() {
-    return result;
-  }
-
-  public void setResult(boolean result) {
-    LOG.debug("Request queued for {} ms", timer.endTimer());
-    this.result = result;
+  public void setIsSuccessful(boolean isSuccessful) {
+    log.debug("Request queued for {} ms", timer.endTimer());
+    this.isSuccessful = isSuccessful;
   }
 }

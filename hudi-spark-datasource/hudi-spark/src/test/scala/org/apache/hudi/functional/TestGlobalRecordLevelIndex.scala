@@ -30,9 +30,9 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config._
+import org.apache.hudi.core.index.record.HoodieRecordIndex
 import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.index.HoodieIndex
-import org.apache.hudi.index.record.HoodieRecordIndex
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JavaConversions
 
@@ -595,7 +595,7 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    assertTrue(metadataWriter(getWriteConfig(hudiOpts)).getEnabledPartitionTypes.containsAll(metadataPartitions.asJava))
+    assertTrue(metadataWriter(getWriteConfig(hudiOpts)).getEnabledIndexerMap.keySet().containsAll(metadataPartitions.asJava))
   }
 
   @ParameterizedTest
@@ -656,7 +656,7 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable
+    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getTableMetadata
       .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
     val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
     val lastCompactionInstant = compactionTimeline

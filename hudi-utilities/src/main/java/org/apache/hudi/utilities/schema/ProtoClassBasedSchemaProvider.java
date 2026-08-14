@@ -21,8 +21,8 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil;
 
@@ -72,7 +72,7 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
     String className = getStringWithAltKeys(config, PROTO_SCHEMA_CLASS_NAME);
     ProtoConversionUtil.SchemaConfig schemaConfig = ProtoConversionUtil.SchemaConfig.fromProperties(props);
     try {
-      schemaString = ProtoConversionUtil.getAvroSchemaForMessageClass(ReflectionUtils.getClass(className), schemaConfig).toString();
+      schemaString = ProtoConversionUtil.getSchemaForMessageClass(ReflectionUtils.getClass(className), schemaConfig).toString();
     } catch (Exception e) {
       throw new HoodieSchemaException(String.format("Error reading proto source schema for class: %s", className), e);
     }

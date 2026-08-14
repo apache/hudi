@@ -21,7 +21,8 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.expression.Expression;
+import org.apache.hudi.common.expression.Predicates;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -33,8 +34,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.expression.Expression;
-import org.apache.hudi.expression.Predicates;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -121,11 +120,6 @@ public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
     throw new HoodieNotSupportedException("Reusable record buffer does not perform the processing of the delete blocks");
 
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord record, Serializable index) {
-    throw new HoodieNotSupportedException("Reusable record buffer does not process the delete records from the logs");
   }
 
   @Override

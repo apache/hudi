@@ -25,15 +25,19 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
@@ -41,8 +45,11 @@ import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
 /**
  * Types of {@link org.apache.hudi.keygen.KeyGenerator}.
  */
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter
 @EnumDescription("Key generator type, indicating the key generator class to use, that implements "
     + "`org.apache.hudi.keygen.KeyGenerator`.")
+@Slf4j
 public enum KeyGeneratorType {
 
   @EnumFieldDescription("Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
@@ -104,14 +111,12 @@ public enum KeyGeneratorType {
   USER_PROVIDED(StringUtils.EMPTY_STRING);
 
   private String className;
-  private static final Logger LOG = LoggerFactory.getLogger(KeyGeneratorType.class);
 
-  KeyGeneratorType(String className) {
-    this.className = className;
-  }
+  private static final Set<KeyGeneratorType> NO_METAFIELDS_KEYGEN_ALLOWLIST =
+      new HashSet<>(Arrays.asList(SIMPLE, SIMPLE_AVRO, COMPLEX, COMPLEX_AVRO,NON_PARTITION, NON_PARTITION_AVRO));
 
-  public String getClassName() {
-    return className;
+  public static boolean isKeyGenValidForDisabledMetaFields(String keyGenClass) {
+    return NO_METAFIELDS_KEYGEN_ALLOWLIST.contains(KeyGeneratorType.fromClassName(keyGenClass));
   }
 
   public static KeyGeneratorType fromClassName(String className) {
@@ -150,7 +155,7 @@ public enum KeyGeneratorType {
       return keyGeneratorType.getClassName();
     }
     // No key generator information is provided.
-    LOG.info("No key generator type is set properly");
+    log.info("No key generator type is set properly");
     return null;
   }
 

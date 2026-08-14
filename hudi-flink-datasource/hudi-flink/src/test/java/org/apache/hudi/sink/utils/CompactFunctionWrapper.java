@@ -88,7 +88,7 @@ public class CompactFunctionWrapper {
 
   public void openFunction() throws Exception {
     compactionPlanOperator = new CompactionPlanOperator(conf);
-    planEventOutput =  new CollectOutputAdapter<>();
+    planEventOutput = new CollectOutputAdapter<>();
     compactionPlanOperator.setup(streamTask, streamConfig, planEventOutput);
     compactionPlanOperator.open();
 
@@ -109,7 +109,6 @@ public class CompactFunctionWrapper {
 
   public void compact(long checkpointID) throws Exception {
     // collect the CompactEvents.
-    compactionPlanOperator.setOutput(planEventOutput);
     compactionPlanOperator.notifyCheckpointComplete(checkpointID);
     // collect the CompactCommitEvents
     for (CompactionPlanEvent event : planEventOutput.getRecords()) {
@@ -119,6 +118,11 @@ public class CompactFunctionWrapper {
     for (CompactionCommitEvent event : commitEventOutput.getRecords()) {
       commitSink.invoke(event, null);
     }
+    // reset collector
+    planEventOutput = new CollectOutputAdapter<>();
+    compactionPlanOperator.setOutput(planEventOutput);
+    commitEventOutput = new CollectOutputAdapter<>();
+    compactOperator.setOutput(commitEventOutput);
   }
 
   public void close() throws Exception {

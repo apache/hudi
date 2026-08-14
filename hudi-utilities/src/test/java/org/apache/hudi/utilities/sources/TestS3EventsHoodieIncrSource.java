@@ -348,6 +348,42 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
   }
 
   @Test
+  public void testFilesLimitCheckpointConsistency() throws IOException {
+    String commitTimeForWrites = "2";
+    String commitTimeForReads = "1";
+
+    writeS3MetadataRecords(commitTimeForReads);
+    writeS3MetadataRecords(commitTimeForWrites);
+
+    // 5 files all within the same commit with 100 bytes each
+    List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file1.json", 100L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 100L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file3.json", 100L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file4.json", 100L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file5.json", 100L, "1"));
+
+    Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
+
+    setMockQueryRunner(inputDs);
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
+
+    // With a large byte limit all 5 files fit, but SOURCE_MAX_FILES_PER_SYNC=3 caps processing to
+    // the first 3 files. The checkpoint must be recalculated to reflect the last file actually
+    // processed (file3), not the byte-limit checkpoint (file5).
+    TypedProperties propsWithFilesLimit = setProps(READ_UPTO_LATEST_COMMIT);
+    propsWithFilesLimit.setProperty(CloudSourceConfig.SOURCE_MAX_FILES_PER_SYNC.key(), "3");
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 10000L,
+        "1#path/to/file3.json", propsWithFilesLimit);
+
+    // Without a files limit, all 5 files are processed and the checkpoint points to the last file.
+    TypedProperties propsWithoutFilesLimit = setProps(READ_UPTO_LATEST_COMMIT);
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 10000L,
+        "1#path/to/file5.json", propsWithoutFilesLimit);
+  }
+
+  @Test
   public void testUnsupportedCheckpoint() {
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
     S3EventsHoodieIncrSource incrSource = new S3EventsHoodieIncrSource(typedProperties, jsc(),

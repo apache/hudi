@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
-import org.apache.hudi.client.utils.LegacyArchivedMetaEntryReader;
+import org.apache.hudi.client.timeline.LSMTimelineWriter;
+import org.apache.hudi.client.timeline.LegacyArchivedMetaEntryReader;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -55,8 +55,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -80,9 +79,8 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.checkAndHandle
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
  * Version 8 is the placeholder version to track 1.x.
  */
+@Slf4j
 public class SevenToEightUpgradeHandler implements UpgradeHandler {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SevenToEightUpgradeHandler.class);
 
   @Override
   public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
@@ -103,7 +101,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     try {
       HoodieTableMetaClient.createTableLayoutOnStorage(context.getStorageConf(), new StoragePath(config.getBasePath()), config.getProps(), TimelineLayoutVersion.VERSION_2, false);
     } catch (IOException e) {
-      LOG.error("Failed to create table layout on storage for timeline layout version {}", TimelineLayoutVersion.VERSION_2, e);
+      log.error("Failed to create table layout on storage for timeline layout version {}", TimelineLayoutVersion.VERSION_2, e);
       throw new HoodieIOException("Failed to create table layout on storage", e);
     }
 
@@ -124,7 +122,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       instants = metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(),
           ActiveTimelineV1.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
     } catch (IOException ioe) {
-      LOG.error("Failed to get instants from filesystem", ioe);
+      log.error("Failed to get instants from filesystem", ioe);
       throw new HoodieIOException("Failed to get instants from filesystem", ioe);
     }
 
@@ -139,7 +137,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       }, instants.size());
     }
 
-    upgradeToLSMTimeline(table, context, config);
+    upgradeToLSMTimeline(table, config);
 
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.emptySet());
   }
@@ -251,7 +249,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  static void upgradeToLSMTimeline(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
+  static void upgradeToLSMTimeline(HoodieTable table, HoodieWriteConfig config) {
     table.getMetaClient().getTableConfig().getTimelineLayoutVersion().ifPresent(
         timelineLayoutVersion -> ValidationUtils.checkState(TimelineLayoutVersion.LAYOUT_VERSION_1.equals(timelineLayoutVersion),
             "Upgrade to LSM timeline is only supported for layout version 1. Given version: " + timelineLayoutVersion));
@@ -259,7 +257,12 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       LegacyArchivedMetaEntryReader reader = new LegacyArchivedMetaEntryReader(table.getMetaClient());
       StoragePath archivePath = new StoragePath(table.getMetaClient().getMetaPath(), "timeline/history");
       LSMTimelineWriter lsmTimelineWriter = LSMTimelineWriter.getInstance(config, table, Option.of(archivePath));
-      int batchSize = config.getCommitArchivalBatchSize();
+      // Use a dedicated, larger batch size for the one-time migration to minimize the number of parquet
+      // files created on remote storage. Each write() call involves multiple remote storage operations
+      // (exists check, parquet write, manifest update); the regular archival batch size is much smaller
+      // than what migration needs, so with hundreds of actions it creates excessive I/O that
+      // significantly increases the migration time.
+      int batchSize = config.getMigrationCommitArchivalBatchSize();
       List<ActiveAction> activeActionsBatch = new ArrayList<>(batchSize);
       try (ClosableIterator<ActiveAction> iterator = reader.getActiveActionsIterator()) {
         while (iterator.hasNext()) {
@@ -267,7 +270,6 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
           // If the batch is full, write it to the LSM timeline
           if (activeActionsBatch.size() == batchSize) {
             lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty(), Option.empty());
-            lsmTimelineWriter.compactAndClean(engineContext);
             activeActionsBatch.clear();
           }
         }
@@ -275,14 +277,13 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
         // Write any remaining actions in the final batch
         if (!activeActionsBatch.isEmpty()) {
           lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty(), Option.empty());
-          lsmTimelineWriter.compactAndClean(engineContext);
         }
       }
     } catch (Exception e) {
       if (config.isFailOnTimelineArchivingEnabled()) {
         throw new HoodieException("Failed to upgrade to LSM timeline", e);
       } else {
-        LOG.warn("Failed to upgrade to LSM timeline", e);
+        log.warn("Failed to upgrade to LSM timeline", e);
       }
     }
   }
@@ -306,7 +307,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     try {
       return rewriteTimelineV1InstantFileToV2Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV1, commitMetadataSerDeV2, activeTimelineV2);
     } catch (IOException e) {
-      LOG.warn("Can not to complete the upgrade from version seven to version eight", e);
+      log.warn("Can not to complete the upgrade from version seven to version eight", e);
     }
     return false;
   }

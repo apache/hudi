@@ -22,13 +22,16 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.v2.RowDataLogWriteHandle;
+import org.apache.hudi.io.v2.RowDataInlineLogWriteHandle;
+import org.apache.hudi.io.v2.RowDataNativeLogWriteHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
+import org.apache.hudi.util.CommonClientUtils;
 
 import org.apache.hadoop.fs.Path;
 
@@ -152,6 +155,10 @@ public class FlinkWriteHandleFactory {
     return FileGroupReaderBasedMergeHandle.class.getName().equalsIgnoreCase(mergeHandleClass);
   }
 
+  static boolean isLsmTreeStorageLayout(HoodieTable<?, ?, ?, ?> table) {
+    return table.getMetaClient().getTableConfig().isLSMTreeStorageLayout();
+  }
+
   /**
    * Write handle factory for commit.
    */
@@ -173,7 +180,10 @@ public class FlinkWriteHandleFactory {
         String partitionPath,
         String fileId,
         StoragePath basePath) {
-      if (isFileGroupReaderBasedHandle(config)) {
+      if (isLsmTreeStorageLayout(table)) {
+        return new FlinkLsmFileGroupReaderBasedIncrementalMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
+            table.getTaskContextSupplier(), basePath);
+      } else if (isFileGroupReaderBasedHandle(config)) {
         return new FlinkFileGroupReaderBasedIncrementalMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
             table.getTaskContextSupplier(), basePath);
       } else {
@@ -190,7 +200,10 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr,
         String partitionPath,
         String fileId) {
-      if (isFileGroupReaderBasedHandle(config)) {
+      if (isLsmTreeStorageLayout(table)) {
+        return new FlinkLsmFileGroupReaderBasedMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
+            fileId, table.getTaskContextSupplier());
+      } else if (isFileGroupReaderBasedHandle(config)) {
         return new FlinkFileGroupReaderBasedMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
             fileId, table.getTaskContextSupplier());
       } else {
@@ -259,7 +272,10 @@ public class FlinkWriteHandleFactory {
         String partitionPath,
         String fileId,
         StoragePath basePath) {
-      if (isFileGroupReaderBasedHandle(config)) {
+      if (isLsmTreeStorageLayout(table)) {
+        return new FlinkLsmFileGroupReaderBasedIncrementalMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
+            table.getTaskContextSupplier(), basePath);
+      } else if (isFileGroupReaderBasedHandle(config)) {
         return new FlinkFileGroupReaderBasedIncrementalMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
             table.getTaskContextSupplier(), basePath);
       } else {
@@ -276,7 +292,10 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr,
         String partitionPath,
         String fileId) {
-      if (isFileGroupReaderBasedHandle(config)) {
+      if (isLsmTreeStorageLayout(table)) {
+        return new FlinkLsmFileGroupReaderBasedMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
+            fileId, table.getTaskContextSupplier());
+      } else if (isFileGroupReaderBasedHandle(config)) {
         return new FlinkFileGroupReaderBasedMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
             fileId, table.getTaskContextSupplier());
       } else {
@@ -308,7 +327,15 @@ public class FlinkWriteHandleFactory {
       final String fileID = bucketInfo.getFileIdPrefix();
       final String partitionPath = bucketInfo.getPartitionPath();
       final TaskContextSupplier contextSupplier = table.getTaskContextSupplier();
-      return new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, bucketInfo.getBucketType(), recordItr, contextSupplier);
+      if (CommonClientUtils.shouldWriteNativeLogs(config)) {
+        if (table.requireSortedRecords()) {
+          recordItr = HoodieRecordUtils.sortRecordsByRecordKey(recordItr);
+        }
+        return new FlinkNativeLogAppendHandle<>(config, instantTime, table, partitionPath, fileID,
+            bucketInfo.getBucketType(), recordItr, contextSupplier);
+      }
+      return new FlinkInlineLogAppendHandle<>(config, instantTime, table, partitionPath, fileID,
+          bucketInfo.getBucketType(), recordItr, contextSupplier);
     }
   }
 
@@ -331,7 +358,18 @@ public class FlinkWriteHandleFactory {
         String instantTime,
         HoodieTable<T, I, K, O> table,
         Iterator<HoodieRecord<T>> recordIterator) {
-      return new RowDataLogWriteHandle<>(
+      if (CommonClientUtils.shouldWriteNativeLogs(config)) {
+        return new RowDataNativeLogWriteHandle<>(
+            config,
+            instantTime,
+            table,
+            recordIterator,
+            bucketInfo.getFileIdPrefix(),
+            bucketInfo.getPartitionPath(),
+            bucketInfo.getBucketType(),
+            table.getTaskContextSupplier());
+      }
+      return new RowDataInlineLogWriteHandle<>(
           config,
           instantTime,
           table,

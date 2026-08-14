@@ -55,13 +55,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -92,9 +91,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests incremental file system view sync.
  */
+@Slf4j
 public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestIncrementalFSViewSync.class);
   private static final int NUM_FILE_IDS_PER_PARTITION = 10;
   private static final String TEST_WRITE_TOKEN = "1-0-1";
   private static final List<String> PARTITIONS = Arrays.asList("2018/01/01", "2018/01/02", "2019/03/01");
@@ -528,7 +527,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     final int netFilesAddedPerInstant = numFilesAddedPerInstant - numFilesReplacedPerInstant;
     assertEquals(newCleanerInstants.size(), cleanedInstants.size());
     long exp = PARTITIONS.stream().mapToLong(p1 -> view.getAllFileSlices(p1).count()).findAny().getAsLong();
-    LOG.info("Initial File Slices :" + exp);
+    log.info("Initial File Slices :{}", exp);
     for (int idx = 0; idx < newCleanerInstants.size(); idx++) {
       String instant = cleanedInstants.get(idx);
       try {
@@ -545,8 +544,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         assertEquals(State.COMPLETED, view.getLastInstant().get().getState());
         assertEquals(HoodieTimeline.CLEAN_ACTION, view.getLastInstant().get().getAction());
         PARTITIONS.forEach(p -> {
-          LOG.info("PARTITION : " + p);
-          LOG.info("\tFileSlices :" + view.getAllFileSlices(p).collect(Collectors.toList()));
+          log.info("PARTITION : {}", p);
+          log.info("\tFileSlices :{}", view.getAllFileSlices(p).collect(Collectors.toList()));
         });
 
         final int instantIdx = newCleanerInstants.size() - idx;
@@ -594,7 +593,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
             isDeltaCommit ? initialFileSlices : initialFileSlices - ((idx + 1) * (FILE_IDS_PER_PARTITION.size() - totalReplacedFileSlicesPerPartition));
         view.sync();
         assertTrue(view.getLastInstant().isPresent());
-        LOG.info("Last Instant is :" + view.getLastInstant().get());
+        log.info("Last Instant is :{}", view.getLastInstant().get());
         if (isRestore) {
           assertEquals(newRestoreInstants.get(idx), view.getLastInstant().get().requestedTime());
           assertEquals(HoodieTimeline.RESTORE_ACTION, view.getLastInstant().get().getAction());
@@ -630,10 +629,15 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       throws IOException {
     Map<String, List<String>> partitionToFiles = deleteFiles(files);
     List<HoodieCleanStat> cleanStats = partitionToFiles.entrySet().stream().map(e ->
-        new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, e.getKey(), e.getValue(), e.getValue(),
-            new ArrayList<>(),
-            instant.length() < 3 ? String.valueOf(Integer.parseInt(instant) + 1) : HoodieInstantTimeGenerator.instantTimePlusMillis(instant, 1),
-            "")).collect(Collectors.toList());
+        HoodieCleanStat.builder()
+            .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .withPartitionPath(e.getKey())
+            .withDeletePathPatterns(e.getValue())
+            .withSuccessDeleteFiles(e.getValue())
+            .withFailedDeleteFiles(Collections.emptyList())
+            .withEarliestCommitToRetain(instant.length() < 3 ? String.valueOf(Integer.parseInt(instant) + 1) : HoodieInstantTimeGenerator.instantTimePlusMillis(instant, 1))
+            .withLastCompletedCommitTimestamp("")
+            .build()).collect(Collectors.toList());
 
     HoodieInstant cleanInflightInstant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, cleanInstant);
     metaClient.getActiveTimeline().createNewInstant(cleanInflightInstant);
@@ -877,7 +881,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     int multiple = begin;
     for (int idx = 0; idx < instants.size(); idx++) {
       String instant = instants.get(idx);
-      LOG.info("Adding instant=" + instant);
+      log.info("Adding instant={}", instant);
       HoodieInstant lastInstant = lastInstants.get(idx);
       // Add a non-empty ingestion to COW table
       List<String> filePaths = addInstant(metaClient, instant, deltaCommit);
@@ -983,7 +987,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     return PARTITIONS.stream().flatMap(p -> fileIds.stream().map(f -> {
       try {
         java.nio.file.Path filePath = Paths.get(basePath, p, deltaCommit
-            ? FSUtils.makeLogFileName(f, ".log", instant, 0, TEST_WRITE_TOKEN)
+            ? FSUtils.makeInlineLogFileName(f, ".log", instant, 0, TEST_WRITE_TOKEN)
             : FSUtils.makeBaseFileName(instant, TEST_WRITE_TOKEN, f, BASE_FILE_EXTENSION));
         Files.createFile(filePath);
         HoodieWriteStat w = new HoodieWriteStat();

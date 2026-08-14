@@ -29,6 +29,7 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
@@ -38,17 +39,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -65,8 +64,8 @@ import static org.apache.hudi.util.JavaScalaConverters.convertJavaPropertiesToSc
  * CLI command to display archived commits and stats if available.
  */
 @ShellComponent
+@Slf4j
 public class ArchivedCommitsCommand {
-  private static final Logger LOG = LoggerFactory.getLogger(ArchivedCommitsCommand.class);
   @ShellMethod(key = "trigger archival", value = "trigger archival")
   public String triggerArchival(
       @ShellOption(value = {"--minCommits"},
@@ -116,8 +115,8 @@ public class ArchivedCommitsCommand {
     List<Comparable[]> allStats = new ArrayList<>();
     for (StoragePathInfo pathInfo : pathInfoList) {
       // read the archived file
-      try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(pathInfo.getPath()),
-          HoodieArchivedMetaEntry.getClassSchema())) {
+      try (Reader reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(pathInfo.getPath()),
+          HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
         List<IndexedRecord> readRecords = new ArrayList<>();
         // read the avro blocks
         while (reader.hasNext()) {
@@ -182,16 +181,15 @@ public class ArchivedCommitsCommand {
 
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
-    StoragePath basePath = metaClient.getBasePath();
     StoragePath archivePath =
         new StoragePath(metaClient.getArchivePath(), ".commits_.archive*");
-    List<StoragePathInfo> pathInfoList =
-        HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
+    HoodieStorage storage = metaClient.getStorage();
+    List<StoragePathInfo> pathInfoList = storage.globEntries(archivePath);
     List<Comparable[]> allCommits = new ArrayList<>();
     for (StoragePathInfo pathInfo : pathInfoList) {
       // read the archived file
-      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf),
-          new HoodieLogFile(pathInfo.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
+      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient,
+          new HoodieLogFile(pathInfo.getPath()), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
         List<IndexedRecord> readRecords = new ArrayList<>();
         // read the avro blocks
         while (reader.hasNext()) {

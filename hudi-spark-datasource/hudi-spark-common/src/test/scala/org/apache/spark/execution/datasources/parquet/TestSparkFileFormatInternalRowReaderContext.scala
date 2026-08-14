@@ -19,23 +19,18 @@
 
 package org.apache.spark.execution.datasources.parquet
 
-import org.apache.hudi.SparkFileFormatInternalRowReaderContext
+import org.apache.hudi.{SparkFileFormatInternalRecordContext, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, filterIsSafeForPrimaryKey}
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
-import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
-import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
 import org.apache.spark.sql.sources.{And, IsNotNull, Or}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito
-import org.mockito.Mockito.when
 
-class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalTestHarness {
+class TestSparkFileFormatInternalRowReaderContext {
 
   @Test
   def testBootstrapFilters(): Unit = {
@@ -104,19 +99,16 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
 
   @Test
   def testConvertValueToEngineType(): Unit = {
-    val reader = Mockito.mock(classOf[SparkColumnarFileReader])
     val stringValue = "string_value"
-    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
-    when(tableConfig.populateMetaFields()).thenReturn(true)
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
-    assertEquals(1, sparkReaderContext.getRecordContext().convertValueToEngineType(1))
-    assertEquals(1L, sparkReaderContext.getRecordContext().convertValueToEngineType(1L))
-    assertEquals(1.1f, sparkReaderContext.getRecordContext().convertValueToEngineType(1.1f))
-    assertEquals(1.1d, sparkReaderContext.getRecordContext().convertValueToEngineType(1.1d))
+    val recordContext = SparkFileFormatInternalRecordContext.apply()
+    assertEquals(1, recordContext.convertValueToEngineType(1))
+    assertEquals(1L, recordContext.convertValueToEngineType(1L))
+    assertEquals(1.1f, recordContext.convertValueToEngineType(1.1f))
+    assertEquals(1.1d, recordContext.convertValueToEngineType(1.1d))
     assertEquals(UTF8String.fromString(stringValue),
-      sparkReaderContext.getRecordContext().convertPartitionValueToEngineType(stringValue))
+      recordContext.convertValueToEngineType(stringValue))
     val utf8StringValue = UTF8String.fromString(stringValue)
     assertEquals(utf8StringValue,
-      sparkReaderContext.getRecordContext().convertPartitionValueToEngineType(utf8StringValue))
+      recordContext.convertValueToEngineType(utf8StringValue))
   }
 }

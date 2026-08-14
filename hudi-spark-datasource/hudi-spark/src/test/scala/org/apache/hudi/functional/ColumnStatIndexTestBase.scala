@@ -18,13 +18,14 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSparkUtils, PartitionStatsIndexSupport}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSchemaConversionUtils, HoodieSparkUtils, PartitionStatsIndexSupport}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogFile, HoodieTableType}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
@@ -47,11 +48,9 @@ import java.math.{BigDecimal => JBigDecimal, BigInteger}
 import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
 import java.util
-import java.util.List
 import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
-import scala.collection.convert.ImplicitConversions.`map AsJavaMap`
 import scala.collection.immutable.TreeSet
 import scala.util.Random
 
@@ -70,7 +69,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .add("c7", StringType) // HUDI-8909. To support Byte w/ partition stats index.
       .add("c8", ByteType)
 
-  val sourceTableAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceTableSchema, "reocrd", "")
+  val sourceTableHoodieSchema: HoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(sourceTableSchema, "record", "")
 
   @BeforeEach
   override def setUp() {
@@ -246,16 +245,16 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
         baseFilesDf.union(getColStatsFromLogFiles(allLogFiles, latestCompletedCommit,
           scala.collection.JavaConverters.seqAsJavaList(colsToGenerateStats),
           metaClient,
-          writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
+          writerSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
           HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue(),
           indexSchema))
       }
     }
   }
 
-  protected def getColStatsFromLogFiles(logFiles: List[HoodieLogFile], latestCommit: String, columnsToIndex: util.List[String],
+  protected def getColStatsFromLogFiles(logFiles: util.List[HoodieLogFile], latestCommit: String, columnsToIndex: util.List[String],
                                         datasetMetaClient: HoodieTableMetaClient,
-                                        writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
+                                        writerSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
                                         maxBufferSize: Integer,
                                         indexSchema: StructType): DataFrame = {
     val colStatsEntries = logFiles.stream().map[org.apache.hudi.common.util.Option[Row]](logFile => {
@@ -273,7 +272,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
                                        latestCommit: String,
                                        columnsToIndex: util.List[String],
                                        datasetMetaClient: HoodieTableMetaClient,
-                                       writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
+                                       writerSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
                                        maxBufferSize: Integer
                                       ): org.apache.hudi.common.util.Option[Row] = {
     LogFileColStatsTestUtil.getLogFileColumnRangeMetadata(logFilePath, datasetMetaClient, latestCommit,
@@ -299,8 +298,8 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .build()
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val tableSchema = schemaUtil.getTableAvroSchema(false)
-    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
+    val tableSchema = schemaUtil.getTableSchema(false)
+    val localSourceTableSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchema)
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, localSourceTableSchema, tableSchema, metadataConfig, metaClient)
     val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
@@ -341,8 +340,8 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .fromProperties(toProperties(metadataOpts))
       .build()
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val tableSchema = schemaUtil.getTableAvroSchema(false)
-    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
+    val tableSchema = schemaUtil.getTableSchema(false)
+    val localSourceTableSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchema)
 
     val pStatsIndex = new PartitionStatsIndexSupport(spark, localSourceTableSchema, tableSchema, metadataConfig, metaClient)
     val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
@@ -375,7 +374,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       assertEquals(asJson(sort(pExpectedColStatsIndexTableDf.drop(colsToDrop: _*), pValidationSortColumns)),
         asJson(sort(pTransposedColStatsDF.drop(colsToDrop: _*), pValidationSortColumns)))
 
-      val convertedSchema = AvroConversionUtils.convertAvroSchemaToStructType(AvroConversionUtils.convertStructTypeToAvroSchema(pExpectedColStatsSchema, "col_stats_schema"))
+      val convertedSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(pExpectedColStatsSchema, "col_stats_schema"))
 
       if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
         val manualColStatsTableDF =
@@ -460,6 +459,7 @@ object ColumnStatIndexTestBase {
 
   def testMetadataColumnStatsIndexParams(testV6: Boolean): java.util.stream.Stream[Arguments] = {
     val currentVersionCode = HoodieTableVersion.current().versionCode()
+    val v9VersionCode = HoodieTableVersion.NINE.versionCode()
     java.util.stream.Stream.of(
       HoodieTableType.values().toStream.flatMap { tableType =>
         val v6Seq = if (testV6) {
@@ -474,6 +474,8 @@ object ColumnStatIndexTestBase {
         v6Seq ++ Seq(
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 8)),
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = 8)),
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = v9VersionCode)),
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = v9VersionCode)),
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = currentVersionCode)),
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = currentVersionCode))
         )
@@ -492,6 +494,7 @@ object ColumnStatIndexTestBase {
 
   def testMetadataColumnStatsIndexParamsInMemory(testV6: Boolean): java.util.stream.Stream[Arguments] = {
     val currentVersionCode = HoodieTableVersion.current().versionCode()
+    val v9VersionCode = HoodieTableVersion.NINE.versionCode()
     java.util.stream.Stream.of(
       HoodieTableType.values().toStream.flatMap { tableType =>
         val v6Seq = if (testV6) {
@@ -502,6 +505,7 @@ object ColumnStatIndexTestBase {
 
         v6Seq ++ Seq(
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 8)),
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = v9VersionCode)),
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = currentVersionCode))
         )
       }: _*
@@ -520,6 +524,7 @@ object ColumnStatIndexTestBase {
 
   def testMetadataColumnStatsIndexParamsForMOR(testV6: Boolean): java.util.stream.Stream[Arguments] = {
     val currentVersionCode = HoodieTableVersion.current().versionCode()
+    val v9VersionCode = HoodieTableVersion.NINE.versionCode()
     java.util.stream.Stream.of(
       (if (testV6) Seq(
         Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = 6)),
@@ -527,6 +532,8 @@ object ColumnStatIndexTestBase {
       ) else Seq.empty) ++ Seq(
         Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = 8)),
         Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = 8)),
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = v9VersionCode)),
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = v9VersionCode)),
         Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = currentVersionCode)),
         Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = currentVersionCode))
       ): _*
@@ -545,6 +552,7 @@ object ColumnStatIndexTestBase {
 
   def testTableTypePartitionTypeParams(testV6: Boolean): java.util.stream.Stream[Arguments] = {
     val currentVersionCode = HoodieTableVersion.current().versionCode().toString
+    val v9VersionCode = HoodieTableVersion.NINE.versionCode().toString
     val v6Seq = if (testV6) {
       Seq(
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8", "6"),
@@ -563,6 +571,12 @@ object ColumnStatIndexTestBase {
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "", "8"),
         Arguments.arguments(HoodieTableType.MERGE_ON_READ, "c8", "8"),
         Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", "8"),
+
+        // Table version 9
+        Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8", v9VersionCode),
+        Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "", v9VersionCode),
+        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "c8", v9VersionCode),
+        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", v9VersionCode),
 
         // Table version current
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8", currentVersionCode),

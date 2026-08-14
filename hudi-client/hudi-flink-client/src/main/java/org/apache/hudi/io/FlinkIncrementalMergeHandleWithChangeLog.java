@@ -23,17 +23,18 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.cdc.HoodieCDCLogWriter;
+import org.apache.hudi.io.cdc.HoodieCDCLogWriterFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -45,30 +46,42 @@ import java.util.List;
  * <p>The cdc about logic is copied from {@link HoodieMergeHandleWithChangeLog},
  * we should refactor it out when there are good abstractions.
  */
+@Slf4j
 public class FlinkIncrementalMergeHandleWithChangeLog<T, I, K, O>
     extends FlinkIncrementalMergeHandle<T, I, K, O> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkIncrementalMergeHandleWithChangeLog.class);
-
-  private final HoodieCDCLogger cdcLogger;
+  private final HoodieCDCLogWriter<IndexedRecord> cdcLogger;
 
   public FlinkIncrementalMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                   Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                                                   TaskContextSupplier taskContextSupplier, StoragePath basePath) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, basePath);
-    this.cdcLogger = new HoodieCDCLogger(
+    this.cdcLogger = createCDCLogWriter(instantTime, config, hoodieTable, partitionPath, fileId, taskContextSupplier);
+  }
+
+  private HoodieCDCLogWriter<IndexedRecord> createCDCLogWriter(
+      String instantTime,
+      HoodieWriteConfig config,
+      HoodieTable<T, I, K, O> hoodieTable,
+      String partitionPath,
+      String fileId,
+      TaskContextSupplier taskContextSupplier) {
+    return HoodieCDCLogWriterFactory.createAvroCDCLogWriter(
         instantTime,
         config,
-        hoodieTable.getMetaClient().getTableConfig(),
+        hoodieTable,
         partitionPath,
         getStorage(),
         getWriterSchema(),
-        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
-        IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
+        fileId,
+        writeToken,
+        getLogCreationCallback(),
+        taskContextSupplier,
+        () -> createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()));
   }
 
   @Override
-  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, Schema writerSchema)
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, HoodieSchema writerSchema)
       throws IOException {
     // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
     HoodieRecord savedCombineRecord = combineRecord.newInstance();
@@ -84,7 +97,7 @@ public class FlinkIncrementalMergeHandleWithChangeLog<T, I, K, O>
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
-    Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    HoodieSchema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     // TODO Remove these unnecessary newInstance invocations
     HoodieRecord<T> savedRecord = newRecord.newInstance();
     super.writeInsertRecord(newRecord);

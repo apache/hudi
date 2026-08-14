@@ -19,7 +19,8 @@
 package org.apache.hudi.table.action.ttl.strategy;
 
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
+
+import lombok.Getter;
 
 import javax.annotation.Nullable;
 
@@ -37,14 +38,11 @@ public enum PartitionTTLStrategyType {
   KEEP_BY_TIME("org.apache.hudi.table.action.ttl.strategy.KeepByTimeStrategy"),
   KEEP_BY_CREATION_TIME("org.apache.hudi.table.action.ttl.strategy.KeepByCreationTimeStrategy");
 
+  @Getter
   private final String className;
 
   PartitionTTLStrategyType(String className) {
     this.className = className;
-  }
-
-  public String getClassName() {
-    return className;
   }
 
   public static PartitionTTLStrategyType fromClassName(String className) {
@@ -68,7 +66,7 @@ public enum PartitionTTLStrategyType {
     if (config.contains(PARTITION_TTL_STRATEGY_CLASS_NAME)) {
       return config.getString(PARTITION_TTL_STRATEGY_CLASS_NAME);
     } else if (config.contains(PARTITION_TTL_STRATEGY_TYPE)) {
-      return KeyGeneratorType.valueOf(config.getString(PARTITION_TTL_STRATEGY_TYPE)).getClassName();
+      return PartitionTTLStrategyType.valueOf(config.getString(PARTITION_TTL_STRATEGY_TYPE)).getClassName();
     }
     return null;
   }

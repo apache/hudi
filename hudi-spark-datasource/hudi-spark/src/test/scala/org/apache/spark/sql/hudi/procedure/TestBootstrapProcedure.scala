@@ -55,7 +55,8 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
 
       withSQLConf(
         "hoodie.bootstrap.parallelism" -> "20",
-        "hoodie.metadata.index.column.stats.enable" -> "false") {
+        "hoodie.metadata.index.column.stats.enable" -> "false"
+      ) {
         checkAnswer(
           s"""call run_bootstrap(
              |table => '$tableName',
@@ -67,35 +68,35 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
              |bootstrap_overwrite => true)""".stripMargin) {
           Seq(0)
         }
-      }
 
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName using hudi
-           |location '$tablePath'
-           |tblproperties(primaryKey = '$RECORD_KEY_FIELD')
-           |""".stripMargin)
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName using hudi
+             |location '$tablePath'
+             |tblproperties(primaryKey = '$RECORD_KEY_FIELD')
+             |""".stripMargin)
 
-      // show bootstrap's index partitions
-      var result = spark.sql(s"""call show_bootstrap_partitions(table => '$tableName')""".stripMargin).collect()
-      assertResult(3) {
-        result.length
-      }
+        // show bootstrap's index partitions
+        var result = spark.sql(s"""call show_bootstrap_partitions(table => '$tableName')""".stripMargin).collect()
+        assertResult(3) {
+          result.length
+        }
 
-      // show bootstrap's index mapping
-      result = spark.sql(
-        s"""call show_bootstrap_mapping(table => '$tableName')""".stripMargin).collect()
-      assertResult(10) {
-        result.length
-      }
+        // show bootstrap's index mapping
+        result = spark.sql(
+          s"""call show_bootstrap_mapping(table => '$tableName')""".stripMargin).collect()
+        assertResult(10) {
+          result.length
+        }
 
-      // cluster with row writer disabled and assert that records match with that before clustering
-      // NOTE: the row writer path is already tested in TestDataSourceForBootstrap
-      val beforeClusterDf = spark.sql(s"select * from $tableName")
-      withSQLConf("hoodie.datasource.write.row.writer.enable" -> "false") {
-        spark.sql(s"""call run_clustering(table => '$tableName')""".stripMargin)
-        assertResult(0)(spark.sql(s"select * from $tableName").except(beforeClusterDf).count())
+        // cluster with row writer disabled and assert that records match with that before clustering
+        // NOTE: the row writer path is already tested in TestDataSourceForBootstrap
+        val beforeClusterDf = spark.sql(s"select * from $tableName")
+        withSQLConf("hoodie.datasource.write.row.writer.enable" -> "false") {
+          spark.sql(s"""call run_clustering(table => '$tableName')""".stripMargin)
+          assertResult(0)(spark.sql(s"select * from $tableName").except(beforeClusterDf).count())
+        }
       }
     }
   }
@@ -124,7 +125,8 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
 
       withSQLConf(
         "hoodie.bootstrap.parallelism" -> "20",
-        "hoodie.metadata.index.column.stats.enable" -> "false") {
+        "hoodie.metadata.index.column.stats.enable" -> "false"
+      ) {
         checkAnswer(
           s"""call run_bootstrap(
              |table => '$tableName',
@@ -137,34 +139,34 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
              |bootstrap_overwrite => true)""".stripMargin) {
           Seq(0)
         }
+
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName using hudi
+             |location '$tablePath'
+             |tblproperties(primaryKey = '$RECORD_KEY_FIELD')
+             |""".stripMargin)
+
+        // show bootstrap's index partitions
+        var result = spark.sql(s"""call show_bootstrap_partitions(table => '$tableName')""".stripMargin).collect()
+        assertResult(3) {
+          result.length
+        }
+
+        // show bootstrap's index mapping
+        result = spark.sql(
+          s"""call show_bootstrap_mapping(table => '$tableName')""".stripMargin).collect()
+        assertResult(10) {
+          result.length
+        }
+
+        val metaClient = createMetaClient(spark, tablePath)
+
+        assertResult("true") {
+          metaClient.getTableConfig.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)
+        }
       }
-
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName using hudi
-           |location '$tablePath'
-           |tblproperties(primaryKey = '$RECORD_KEY_FIELD')
-           |""".stripMargin)
-
-      // show bootstrap's index partitions
-      var result = spark.sql(s"""call show_bootstrap_partitions(table => '$tableName')""".stripMargin).collect()
-      assertResult(3) {
-        result.length
-      }
-
-      // show bootstrap's index mapping
-      result = spark.sql(
-        s"""call show_bootstrap_mapping(table => '$tableName')""".stripMargin).collect()
-      assertResult(10) {
-        result.length
-      }
-
-      val metaClient = createMetaClient(spark, tablePath)
-
-      assertResult("true") {
-        metaClient.getTableConfig.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)
-      };
     }
   }
 
@@ -188,7 +190,8 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
 
       withSQLConf(
         "hoodie.bootstrap.parallelism" -> "20",
-        "hoodie.metadata.index.column.stats.enable" -> "false") {
+        "hoodie.metadata.index.column.stats.enable" -> "false"
+      ) {
         // run bootstrap
         checkAnswer(
           s"""call run_bootstrap(
@@ -201,29 +204,29 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
              |bootstrap_overwrite => true)""".stripMargin) {
           Seq(0)
         }
+
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName using hudi
+             |location '$tablePath'
+             |tblproperties(primaryKey = '$RECORD_KEY_FIELD')
+             |""".stripMargin)
+
+        // use new hudi table
+        val originCount = spark.sql(s"select count(*) from $tableName").collect()(0).getLong(0)
+        spark.sql(s"delete from $tableName where _row_key = 'trip_0'")
+        val afterDeleteCount = spark.sql(s"select count(*) from $tableName").collect()(0).getLong(0)
+        assert(originCount != afterDeleteCount)
+
+        // cluster with row writer disabled and assert that records match with that before clustering
+        // NOTE: the row writer path is already tested in TestDataSourceForBootstrap
+        val beforeClusterDf = spark.sql(s"select * from $tableName")
+        withSQLConf("hoodie.datasource.write.row.writer.enable" -> "false") {
+          spark.sql(s"""call run_clustering(table => '$tableName')""".stripMargin)
+          assertResult(0)(spark.sql(s"select * from $tableName").except(beforeClusterDf).count())
+        }
       }
-
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName using hudi
-           |location '$tablePath'
-           |tblproperties(primaryKey = '$RECORD_KEY_FIELD')
-           |""".stripMargin)
-
-      // use new hudi table
-      val originCount = spark.sql(s"select count(*) from $tableName").collect()(0).getLong(0)
-      spark.sql(s"delete from $tableName where _row_key = 'trip_0'")
-      val afterDeleteCount = spark.sql(s"select count(*) from $tableName").collect()(0).getLong(0)
-      assert(originCount != afterDeleteCount)
-
-      // cluster with row writer disabled and assert that records match with that before clustering
-      // NOTE: the row writer path is already tested in TestDataSourceForBootstrap
-      val beforeClusterDf = spark.sql(s"select * from $tableName")
-      withSQLConf("hoodie.datasource.write.row.writer.enable" -> "false") {
-        spark.sql(s"""call run_clustering(table => '$tableName')""".stripMargin)
-      }
-      assertResult(0)(spark.sql(s"select * from $tableName").except(beforeClusterDf).count())
     }
   }
 
@@ -252,7 +255,9 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       withSQLConf(
         "hoodie.bootstrap.parallelism" -> "20",
         "hoodie.table.ordering.fields" -> "timestamp",
-        "hoodie.metadata.index.column.stats.enable" -> "false") {
+        "hoodie.metadata.index.column.stats.enable" -> "false"
+      ) {
+
         checkAnswer(
           s"""call run_bootstrap(
              |table => '$tableName',

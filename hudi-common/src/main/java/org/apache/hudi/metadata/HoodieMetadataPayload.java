@@ -18,13 +18,13 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
+import org.apache.hudi.common.avro.AvroSchemaCache;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -32,20 +32,22 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
+import org.apache.hudi.core.index.expression.HoodieExpressionIndex;
+import org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.index.expression.HoodieExpressionIndex;
-import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -58,6 +60,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -102,7 +105,12 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStats
  * During compaction on the table, the deletions are merged with additions and hence records are pruned.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
-  private static final Schema HOODIE_METADATA_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
+
+  // Note: Variable is unused, but caching is required.
+  private static final HoodieSchema HOODIE_METADATA_SCHEMA = HoodieSchemaCache.intern(
+      HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema()));
+  // Cache the Avro schema reference for O(1) equality checks during Avro.Schema -> HoodieSchema migration
+  private static final Schema HOODIE_METADATA_AVRO_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
   /**
    * Field offsets when metadata fields are present
    */
@@ -310,7 +318,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     int size = filesAdded.size() + filesDeleted.size();
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>(size, 1);
-    filesAdded.forEach((fileName, fileSize) -> fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false)));
+    filesAdded.forEach((fileName, fileSize) -> {
+      // Assert that the file-size of the file being added is positive, since Hudi
+      // should not be creating empty files
+      checkState(fileSize > 0, "File name " + fileName
+          + ", is a 0 byte file. It does not have any contents");
+      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false));
+    });
 
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
 
@@ -410,7 +424,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return Option.empty();
     }
 
-    if (schema == null || HOODIE_METADATA_SCHEMA == schema) {
+    // TODO: feature(schema): Swap this over to HOODIE_METADATA_SCHEMA after HoodieRecordPayload implementations are using HoodieSchema
+    // Uses cached Avro schema reference for O(1) equality check.
+    if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA) {
       // If the schema is same or none is provided, we can return the record directly
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
           columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
@@ -634,14 +650,46 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public static HoodieRecord<HoodieMetadataPayload> createRecordIndexUpdate(String recordKey, String partition,
                                                                             String fileId, String instantTime, int fileIdEncoding) {
+    return createRecordIndexUpdate(recordKey, partition, fileId, parseRecordIndexInstantTime(instantTime), fileIdEncoding);
+  }
 
-    HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
-    long instantTimeMillis = -1;
+  /**
+   * Parses an instant time into the epoch millis stored in record index entries.
+   * <p>
+   * Callers creating record index updates for many records of the same commit should parse the
+   * instant time once with this method and use the millis-based
+   * {@link #createRecordIndexUpdate(String, String, String, long, int)} overload per record.
+   */
+  public static long parseRecordIndexInstantTime(String instantTime) {
     try {
-      instantTimeMillis = TimelineUtils.parseDateFromInstantTime(instantTime).getTime();
+      return TimelineUtils.parseDateFromInstantTime(instantTime).getTime();
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to create metadata payload for record index. Instant time parsing for " + instantTime + " failed ", e);
     }
+  }
+
+  /**
+   * Create and return a {@code HoodieMetadataPayload} to insert or update an entry for the record index.
+   * <p>
+   * Same as {@link #createRecordIndexUpdate(String, String, String, String, int)} but takes the
+   * instant time already parsed to epoch millis, so per-commit callers parse it only once.
+   * <p>
+   * {@code instantTimeMillis} must be obtained from {@link #parseRecordIndexInstantTime(String)} (which
+   * delegates to {@link TimelineUtils#parseDateFromInstantTime(String)}); it should not be constructed by
+   * hand, so that the value stored here matches what the String overload would write. The instant-time
+   * string is interpreted in the JVM default time zone ({@link java.time.ZoneId#systemDefault()}) and the
+   * result is epoch milliseconds (since 1970-01-01T00:00:00Z).
+   *
+   * @param recordKey         Key of the record
+   * @param partition         Name of the partition which contains the record
+   * @param fileId            fileId which contains the record
+   * @param instantTimeMillis epoch millis of the instant when the record was added, as returned by
+   *                          {@link #parseRecordIndexInstantTime(String)}
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createRecordIndexUpdate(String recordKey, String partition,
+                                                                            String fileId, long instantTimeMillis, int fileIdEncoding) {
+
+    HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
     if (fileIdEncoding == 0) {
       // Data file names have a -D suffix to denote the index (D = integer) of the file written
       // In older HUID versions the file index was missing
@@ -657,8 +705,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           fileIndex = Integer.parseInt(fileId.substring(index + 1));
         }
       } catch (Exception e) {
-        throw new HoodieMetadataException(String.format("Invalid UUID or index: fileID=%s, partition=%s, instantTIme=%s",
-            fileId, partition, instantTime), e);
+        // reconstruct the instant time only on this cold error path; the hot per-record path keeps the pre-parsed millis
+        throw new HoodieMetadataException(String.format("Invalid UUID or index: fileID=%s, partition=%s, instantTime=%s",
+            fileId, partition, TimelineUtils.formatDate(new Date(instantTimeMillis))), e);
       }
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey,

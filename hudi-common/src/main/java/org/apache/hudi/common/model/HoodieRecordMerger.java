@@ -24,12 +24,11 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -127,7 +126,7 @@ public interface HoodieRecordMerger extends Serializable {
    * @return The merged record and schema. The record is expected to be non-null. If the record represents a deletion, the operation must be set as {@link HoodieOperation#DELETE}.
    * @throws IOException upon merging error.
    */
-  default <T> BufferedRecord<T> partialMerge(BufferedRecord<T> older, BufferedRecord<T> newer, Schema readerSchema, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+  default <T> BufferedRecord<T> partialMerge(BufferedRecord<T> older, BufferedRecord<T> newer, HoodieSchema readerSchema, RecordContext<T> recordContext, TypedProperties props) throws IOException {
     throw new UnsupportedOperationException("Partial merging logic is not implemented by " + this.getClass().getName());
   }
 
@@ -144,7 +143,7 @@ public interface HoodieRecordMerger extends Serializable {
   /**
    * Returns a list of fields required for mor merging. The default implementation will return the recordKey field and the ordering fields.
    */
-  default String[] getMandatoryFieldsForMerging(Schema dataSchema, HoodieTableConfig cfg, TypedProperties properties) {
+  default String[] getMandatoryFieldsForMerging(HoodieSchema dataSchema, HoodieTableConfig cfg, TypedProperties properties) {
     ArrayList<String> requiredFields = new ArrayList<>();
 
     if (cfg.populateMetaFields()) {

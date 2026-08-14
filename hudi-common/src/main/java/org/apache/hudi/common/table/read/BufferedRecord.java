@@ -20,7 +20,12 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.OrderingValues;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
 
 import javax.annotation.Nullable;
 
@@ -33,39 +38,20 @@ import java.util.function.UnaryOperator;
  *
  * @param <T> The type of the engine specific row.
  */
+@AllArgsConstructor
+@Getter
 public class BufferedRecord<T> implements Serializable {
+
   private String recordKey;
-  private T record;
   private final Comparable orderingValue;
+  private T record;
   private final Integer schemaId;
-  @Nullable private HoodieOperation hoodieOperation;
+  @Nullable
+  @Setter
+  private HoodieOperation hoodieOperation;
 
   public BufferedRecord() {
     this(null, null, null, null, null);
-  }
-
-  public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, @Nullable HoodieOperation hoodieOperation) {
-    this.recordKey = recordKey;
-    this.orderingValue = orderingValue;
-    this.record = record;
-    this.schemaId = schemaId;
-    this.hoodieOperation = hoodieOperation;
-  }
-
-  public String getRecordKey() {
-    return recordKey;
-  }
-
-  public Comparable getOrderingValue() {
-    return orderingValue;
-  }
-
-  public T getRecord() {
-    return record;
-  }
-
-  public Integer getSchemaId() {
-    return schemaId;
   }
 
   public boolean isDelete() {
@@ -80,24 +66,21 @@ public class BufferedRecord<T> implements Serializable {
     return isDelete() && OrderingValues.isDefault(orderingValue);
   }
 
-  public void setHoodieOperation(HoodieOperation hoodieOperation) {
-    this.hoodieOperation = hoodieOperation;
-  }
-
-  public HoodieOperation getHoodieOperation() {
-    return this.hoodieOperation;
-  }
-
   public BufferedRecord<T> toBinary(RecordContext<T> recordContext) {
     if (record != null) {
-      record = recordContext.seal(recordContext.toBinaryRow(recordContext.getSchemaFromBufferRecord(this), record));
+      HoodieSchema schema = recordContext.getSchemaFromBufferRecord(this);
+      // Schema can be null in test scenarios where schemas are not registered in the RecordContext (e.g. in tests)
+      if (schema != null) {
+        record = recordContext.seal(schema, recordContext.toBinaryRow(schema, record));
+      }
     }
     return this;
   }
 
   public BufferedRecord<T> seal(RecordContext<T> recordContext) {
     if (record != null) {
-      this.record = recordContext.seal(record);
+      HoodieSchema schema = recordContext.getSchemaFromBufferRecord(this);
+      this.record = recordContext.seal(schema, record);
     }
     return this;
   }
@@ -119,6 +102,8 @@ public class BufferedRecord<T> implements Serializable {
     return this;
   }
 
+  // Intentionally not using @EqualsAndHashCode: Lombok generates instanceof/canEqual based equality,
+  // while this class requires exact runtime-class equality via getClass()
   @Override
   public boolean equals(Object o) {
     if (this == o) {

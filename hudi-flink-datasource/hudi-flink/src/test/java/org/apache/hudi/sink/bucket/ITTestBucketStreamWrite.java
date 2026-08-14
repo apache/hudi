@@ -25,7 +25,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.storage.HoodieStorage;
@@ -35,10 +39,15 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
 
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.flink.types.Row;
+import org.apache.flink.util.CloseableIterator;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -48,6 +57,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +68,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Integration test cases for {@link BucketStreamWriteFunction}.
@@ -110,6 +121,66 @@ public class ITTestBucketStreamWrite {
       TestData.checkWrittenDataCOW(tempFile, EXPECTED_AS_LIST);
     } else {
       TestData.checkWrittenDataMOR(tempFile, EXPECTED, 4);
+    }
+  }
+
+  @Test
+  public void testRemotePartitioner() throws Exception {
+    String tablePath = tempFile.getAbsolutePath();
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment().setParallelism(4);
+    TableEnvironment tableEnv = StreamTableEnvironment.create(env);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tablePath);
+    options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    options.put(FlinkOptions.INDEX_TYPE.key(), IndexType.BUCKET.name());
+    options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), "4");
+    options.put(HoodieIndexConfig.BUCKET_PARTITIONER.key(), "true");
+    options.put(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
+    options.put(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED.key(), "false");
+
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tableEnv.executeSql(hoodieTableDDL);
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+    TimeUnit.SECONDS.sleep(3);
+
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+    TimeUnit.SECONDS.sleep(3);
+
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+    TimeUnit.SECONDS.sleep(3);
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(tablePath);
+    HoodieTimeline commitsTimeline = metaClient.getActiveTimeline().getCommitsTimeline();
+    List<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndMetadatas = commitsTimeline.filterCompletedInstants()
+        .getInstants().stream()
+        .sorted(Comparator.comparing(HoodieInstant::requestedTime).reversed())
+        .map(instant -> {
+          try {
+            HoodieCommitMetadata commitMetadata = commitsTimeline.readCommitMetadata(instant);
+            return Pair.of(instant, commitMetadata);
+          } catch (IOException e) {
+            throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);
+          }
+        }).collect(Collectors.toList());
+    assertEquals(3, instantAndMetadatas.size());
+
+    HashMap<String, String> latestFileIdAndRelativePaths = instantAndMetadatas.get(0).getRight().getFileIdAndRelativePaths();
+    for (Pair<HoodieInstant, HoodieCommitMetadata> instantAndMetadata : instantAndMetadatas.subList(1, instantAndMetadatas.size())) {
+      HashMap<String, String> fileIdAndRelativePaths = instantAndMetadata.getRight().getFileIdAndRelativePaths();
+      for (String fileId : fileIdAndRelativePaths.keySet()) {
+        if (!latestFileIdAndRelativePaths.containsKey(fileId)) {
+          fail("FileID should exist and be the same.");
+        }
+      }
+    }
+
+    try (CloseableIterator<Row> rows = tableEnv.executeSql("select * from t1").collect()) {
+      int count = 0;
+      while (rows.hasNext()) {
+        rows.next();
+        count++;
+      }
+      assertEquals(8, count);
     }
   }
 

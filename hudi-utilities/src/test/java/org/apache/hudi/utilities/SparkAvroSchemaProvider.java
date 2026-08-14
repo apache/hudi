@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 public class SparkAvroSchemaProvider extends SchemaProvider {
@@ -31,7 +31,7 @@ public class SparkAvroSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
-    return new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":[{\"name\": \"day\", \"type\":\"string\"}]}");
+  public HoodieSchema getSourceHoodieSchema() {
+    return HoodieSchema.parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":[{\"name\": \"day\", \"type\":\"string\"}]}");
   }
 }

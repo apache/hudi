@@ -20,6 +20,8 @@ package org.apache.hudi.common.util;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -42,6 +44,7 @@ public class FutureUtils {
    */
   public static <T> CompletableFuture<List<T>> allOf(List<CompletableFuture<T>> futures) {
     CompletableFuture<Void> union = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+    AtomicReference<Throwable> firstFailure = new AtomicReference<>();
 
     futures.forEach(future -> {
       // NOTE: We add a callback to every future, to cancel all the other not yet completed futures,
@@ -49,17 +52,29 @@ public class FutureUtils {
       //       fail other futures will be cancelled and the exception will be returned as a result
       future.whenComplete((ignored, throwable) -> {
         if (throwable != null) {
+          firstFailure.compareAndSet(null, throwable);
+          // Note that {@link CompletableFuture#cancel} does not interrupt the other underlying tasks;
+          // it only marks their futures as cancelled. The tasks will still run to completion.
           futures.forEach(f -> f.cancel(true));
-          union.completeExceptionally(throwable);
         }
       });
     });
 
-    return union.thenApply(aVoid ->
-        futures.stream()
-            // NOTE: This join wouldn't block, since all the
-            //       futures are completed at this point.
-            .map(CompletableFuture::join)
-            .collect(Collectors.toList()));
+    return union.handle((aVoid, throwable) -> {
+      Throwable realCause = firstFailure.get();
+      // Prefer the first real failure captured by the whenComplete callbacks over whatever
+      // exception the {@link CompletableFuture#allOf} BiRelay propagated, since the BiRelay may
+      // receive either the original exception or a CancellationException from cancel depending on
+      // timing. In the unexpected case that realCause is null but throwable is not null, the
+      // subsequent join call will throw it.
+      if (realCause != null) {
+        throw new CompletionException(realCause);
+      }
+      // NOTE: This join wouldn't block, since all the
+      //       futures are completed at this point (allOf guarantees this).
+      return futures.stream()
+          .map(CompletableFuture::join)
+          .collect(Collectors.toList());
+    });
   }
 }

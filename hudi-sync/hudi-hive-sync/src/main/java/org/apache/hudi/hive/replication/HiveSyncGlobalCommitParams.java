@@ -24,8 +24,7 @@ import org.apache.hudi.common.util.StringUtils;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 import com.beust.jcommander.ParametersDelegate;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -44,9 +43,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
     + "  The tool tries to be transactional but does not guarantee it. If the sync fails midway in one cluster it will try to roll back the committed "
     + "  timestamp from already successful sync on other clusters but that can also fail."
     + "  The tool does not roll back any synced partitions but only the timestamp.")
+@Slf4j
 public class HiveSyncGlobalCommitParams {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HiveSyncGlobalCommitParams.class);
 
   public static String LOCAL_HIVE_SITE_URI = "hivesyncglobal.local_hive_site_uri";
   public static String REMOTE_HIVE_SITE_URI = "hivesyncglobal.remote_hive_site_uri";
@@ -92,8 +90,7 @@ public class HiveSyncGlobalCommitParams {
     String jdbcUrl = forRemote ? loadedProps.getProperty(REMOTE_HIVE_SERVER_JDBC_URLS)
             : loadedProps.getProperty(LOCAL_HIVE_SERVER_JDBC_URLS, loadedProps.getProperty(HIVE_URL.key()));
     props.setPropertyIfNonNull(HIVE_URL.key(), jdbcUrl);
-    LOG.info("building hivesync config forRemote: " + forRemote + " " + jdbcUrl + " "
-        + basePath);
+    log.info("building hivesync config forRemote: {} {} {}", forRemote, jdbcUrl, basePath);
     return props;
   }
 

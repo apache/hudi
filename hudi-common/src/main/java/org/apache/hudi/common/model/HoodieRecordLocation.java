@@ -22,13 +22,19 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
-import java.util.Objects;
 
 /**
  * Location of a HoodieRecord within the partition it belongs to. Ultimately, this points to an actual file on disk
  */
+@AllArgsConstructor
+@NoArgsConstructor
+@Data
 public class HoodieRecordLocation implements Serializable, KryoSerializable {
   public static final long INVALID_POSITION = -1L;
 
@@ -37,72 +43,15 @@ public class HoodieRecordLocation implements Serializable, KryoSerializable {
   // Position of the record in the file, e.g., row position starting from 0 in the Parquet file
   // Valid position should be non-negative. Negative position, i.e., -1, means it's invalid
   // and should not be used
+  @EqualsAndHashCode.Exclude
   protected long position;
-
-  public HoodieRecordLocation() {
-  }
 
   public HoodieRecordLocation(String instantTime, String fileId) {
     this(instantTime, fileId, INVALID_POSITION);
   }
 
-  public HoodieRecordLocation(String instantTime, String fileId, long position) {
-    this.instantTime = instantTime;
-    this.fileId = fileId;
-    this.position = position;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    HoodieRecordLocation otherLoc = (HoodieRecordLocation) o;
-    return Objects.equals(instantTime, otherLoc.instantTime) && Objects.equals(fileId, otherLoc.fileId);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(instantTime, fileId);
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieRecordLocation {" + "instantTime=" + instantTime + ", "
-        + "fileId=" + fileId + ", "
-        + "position=" + position
-        + '}';
-  }
-
-  public String getInstantTime() {
-    return instantTime;
-  }
-
-  public void setInstantTime(String instantTime) {
-    this.instantTime = instantTime;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
   public static boolean isPositionValid(long position) {
     return position > INVALID_POSITION;
-  }
-
-  public long getPosition() {
-    return position;
-  }
-
-  public void setPosition(long position) {
-    this.position = position;
   }
 
   @Override

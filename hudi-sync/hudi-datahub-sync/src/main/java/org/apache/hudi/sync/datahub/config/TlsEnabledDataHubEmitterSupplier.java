@@ -19,18 +19,19 @@
 
 package org.apache.hudi.sync.datahub.config;
 
-import datahub.client.rest.RestEmitter;
-import datahub.shaded.org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
-import datahub.shaded.org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.sync.datahub.HoodieDataHubSyncException;
+
+import datahub.client.rest.RestEmitter;
+import datahub.shaded.org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
+import datahub.shaded.org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.SSLContexts;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLContext;
+
 import java.io.FileInputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -44,9 +45,8 @@ import java.util.Collection;
  * This class reads TLS configuration from Hudi properties and creates a RestEmitter
  * with proper SSL/TLS context for secure communication with DataHub servers.
  */
+@Slf4j
 public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TlsEnabledDataHubEmitterSupplier.class);
 
   private final TypedProperties config;
 
@@ -70,7 +70,7 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
       String truststorePath = ConfigUtils.getStringWithAltKeys(config, DataHubSyncConfig.META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH, true);
       String truststorePassword = ConfigUtils.getStringWithAltKeys(config, DataHubSyncConfig.META_SYNC_DATAHUB_TLS_TRUSTSTORE_PASSWORD, true);
 
-      LOG.info("Creating DataHub RestEmitter with TLS configuration for server: {}", serverUrl);
+      log.info("Creating DataHub RestEmitter with TLS configuration for server: {}", serverUrl);
 
       return RestEmitter.create(builder -> {
         builder.server(serverUrl);
@@ -81,7 +81,7 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
         
         // Configure TLS/SSL context if any TLS configuration is provided
         if (hasTlsConfiguration(caCertPath, keystorePath, truststorePath)) {
-          LOG.info("Configuring TLS for DataHub connection");
+          log.info("Configuring TLS for DataHub connection");
           SSLContext sslContext = createSSLContext(caCertPath, keystorePath, keystorePassword, truststorePath, truststorePassword);
           
           builder.customizeHttpAsyncClient(httpClientBuilder -> {
@@ -94,7 +94,7 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
 
             httpClientBuilder.setConnectionManager(connectionManagerBuilder.build());
           });
-          LOG.info("Successfully configured TLS for DataHub connection");
+          log.info("Successfully configured TLS for DataHub connection");
         }
       });
     } catch (Exception e) {
@@ -119,9 +119,9 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
           throw new HoodieDataHubSyncException("Keystore file not found: " + keystorePath);
         }
         if (keystorePassword == null || keystorePassword.isEmpty()) {
-          LOG.warn("No password provided for keystore {}. Using empty password - consider using password-protected keystores for better security.", keystorePath);
+          log.warn("No password provided for keystore {}. Using empty password - consider using password-protected keystores for better security.", keystorePath);
         }
-        LOG.info("Loading keystore from: {}", keystorePath);
+        log.info("Loading keystore from: {}", keystorePath);
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         char[] keystorePasswordChars = (keystorePassword != null && !keystorePassword.isEmpty()) 
             ? keystorePassword.toCharArray() : new char[0];
@@ -137,9 +137,9 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
           throw new HoodieDataHubSyncException("Truststore file not found: " + truststorePath);
         }
         if (truststorePassword == null || truststorePassword.isEmpty()) {
-          LOG.warn("No password provided for truststore {}. Using empty password - consider using password-protected truststores for better security.", truststorePath);
+          log.warn("No password provided for truststore {}. Using empty password - consider using password-protected truststores for better security.", truststorePath);
         }
-        LOG.info("Loading truststore from: {}", truststorePath);
+        log.info("Loading truststore from: {}", truststorePath);
         KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
         char[] truststorePasswordChars = (truststorePassword != null && !truststorePassword.isEmpty()) 
             ? truststorePassword.toCharArray() : new char[0];
@@ -151,7 +151,7 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
         if (!Files.exists(Paths.get(caCertPath))) {
           throw new HoodieDataHubSyncException("CA certificate file not found: " + caCertPath);
         }
-        LOG.info("Loading CA certificate from: {}", caCertPath);
+        log.info("Loading CA certificate from: {}", caCertPath);
         KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
         trustStore.load(null, null);
 
@@ -163,7 +163,7 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
             trustStore.setCertificateEntry("ca-cert-" + certIndex, caCert);
             certIndex++;
           }
-          LOG.info("Loaded {} CA certificate(s) from: {}", caCerts.size(), caCertPath);
+          log.info("Loaded {} CA certificate(s) from: {}", caCerts.size(), caCertPath);
         }
         sslContextBuilder.loadTrustMaterial(trustStore, null);
       }

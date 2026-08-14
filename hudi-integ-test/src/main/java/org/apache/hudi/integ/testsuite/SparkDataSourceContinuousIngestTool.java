@@ -28,12 +28,11 @@ import org.apache.hudi.utilities.UtilHelpers;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -44,8 +43,7 @@ import java.util.Map;
 /**
  * Sample command
  *
- * TODO: [HUDI-8294]
- * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 --driver-memory 4g   --executor-memory 4g \
+ * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.12:3.5.5 --driver-memory 4g   --executor-memory 4g \
  * --conf spark.serializer=org.apache.spark.serializer.KryoSerializer   --conf spark.sql.catalogImplementation=hive \
  * --class org.apache.hudi.integ.testsuite.SparkDSContinuousIngestTool \
  * ${HUDI_ROOT_DIR}/packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.11.0-SNAPSHOT.jar \
@@ -66,9 +64,8 @@ import java.util.Map;
  * hoodie.table.name=hudi_tbl
  */
 
+@Slf4j
 public class SparkDataSourceContinuousIngestTool {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkDataSourceContinuousIngestTool.class);
 
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
@@ -95,11 +92,12 @@ public class SparkDataSourceContinuousIngestTool {
       cmd.usage();
       System.exit(1);
     }
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("spark-datasource-continuous-ingestion-tool", cfg.sparkMaster, cfg.sparkMemory);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("spark-datasource-continuous-ingestion-tool",
+        cfg.sparkMaster, cfg.sparkMemory, false);
     try {
       new SparkDataSourceContinuousIngestTool(jsc, cfg).run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run Continuous Ingestion for spark datasource " + cfg.basePath, throwable);
+      log.error("Fail to run Continuous Ingestion for spark datasource {}", cfg.basePath, throwable);
     } finally {
       jsc.stop();
     }

@@ -15,13 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi
+package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.{DataSourceWriteOptions, ScalaAssertionSupport}
 
 import org.apache.spark.sql.AnalysisException
-import org.apache.spark.sql.hudi.ErrorMessageChecker.isIncompatibleDataException
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.ErrorMessageChecker.isIncompatibleDataException
 
 class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
@@ -573,7 +572,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         primaryKey = "id",
         orderingFields = "ts",
         tableType = "cow",
-        expectedErrorPattern = "Precombine field data type mismatch between source table and target table. Target table uses LongType for column 'ts', source table uses IntegerType for 's0.ts'"
+        expectedErrorPattern = "Ordering field data type mismatch between source table and target table. Target table uses LongType for column 'ts', source table uses IntegerType for 's0.ts'"
       )
     )
 
@@ -688,8 +687,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |location '${tmp.getCanonicalPath}/$targetTable'
              |tblproperties (
              |  type = 'cow',
-             |  primaryKey = 'id',
-             |  orderingFields = 'ts'
+             |  primaryKey = 'id'
              |)
          """.stripMargin)
 

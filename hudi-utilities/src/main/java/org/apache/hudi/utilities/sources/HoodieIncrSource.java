@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
@@ -36,10 +35,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
@@ -48,14 +48,14 @@ import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
+import org.apache.hudi.utilities.streamer.StreamerCheckpointUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -72,7 +72,7 @@ import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSI
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
 import static org.apache.hudi.DataSourceReadOptions.START_COMMIT;
-import static org.apache.hudi.common.table.checkpoint.HoodieIncrSourceCheckpointValUtils.resolveToActualCheckpointVersion;
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.resolveToActualCheckpointVersion;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
@@ -85,13 +85,13 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.coalesc
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.generateQueryInfo;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 
+@Slf4j
 public class HoodieIncrSource extends RowSource {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIncrSource.class);
   public static final Set<String> HOODIE_INCR_SOURCE_READ_OPT_KEYS =
       CollectionUtils.createImmutableSet(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key());
   private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
-  private final Option<HoodieIngestionMetrics> metricsOption;
+  protected final Option<HoodieIngestionMetrics> metricsOption;
 
   public static class Config {
 
@@ -201,8 +201,9 @@ public class HoodieIncrSource extends RowSource {
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     String srcPath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
-    HoodieTableVersion sourceTableVersion = HoodieTableConfig.loadFromHoodieProps(new HoodieHadoopStorage(srcPath, sparkContext.hadoopConfiguration()), srcPath).getTableVersion();
-    if (sourceTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) && CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, getClass().getName())) {
+    HoodieTableVersion sourceTableVersion = HoodieTableConfig.loadFromHoodieProps(
+        HoodieStorageUtils.getStorage(srcPath, HadoopFSUtils.getStorageConf(sparkContext.hadoopConfiguration())), srcPath).getTableVersion();
+    if (sourceTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) && StreamerCheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, getClass().getName())) {
       return fetchNextBatchBasedOnCompletionTime(lastCheckpoint, sourceLimit);
     } else {
       return fetchNextBatchBasedOnRequestedTime(lastCheckpoint, sourceLimit);
@@ -237,7 +238,8 @@ public class HoodieIncrSource extends RowSource {
     if (queryContext.isEmpty()
         || (endCompletionTime = queryContext.getMaxCompletionTime())
         .equals(analyzer.getStartCompletionTime().orElseGet(() -> null))) {
-      LOG.info("Already caught up. No new data to process");
+      log.info("Already caught up. No new data to process");
+      metricsOption.ifPresent(metrics -> metrics.updateHoodieIncrSourceMetrics(0, 0));
       // TODO(yihua): fix checkpoint translation here as an improvement
       return Pair.of(Option.empty(), lastCheckpoint.orElse(null));
     }
@@ -286,6 +288,12 @@ public class HoodieIncrSource extends RowSource {
           // add filtering so that only interested records are returned.
           .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               String.join("','", instantTimeList)));
+
+      // Calculate metrics for snapshot query
+      int numInstantsProcessed = instantTimeList.size();
+      int numUnprocessedInstants = (int) queryContext.getActiveTimeline()
+          .findInstantsAfter(endCompletionTime).countInstants();
+      metricsOption.ifPresent(metrics -> metrics.updateHoodieIncrSourceMetrics(numInstantsProcessed, numUnprocessedInstants));
     } else {
       String exclusiveStartCompletionTime = analyzer.getStartCompletionTime().isPresent()
           ? analyzer.getStartCompletionTime().get()
@@ -294,6 +302,13 @@ public class HoodieIncrSource extends RowSource {
               .getInstantComparator().completionTimeOrderedComparator())
           .map(HoodieInstant::getCompletionTime)
           .get()) - 1);
+
+      // Calculate metrics for instants being processed in current batch
+      int numInstantsProcessed = queryContext.getInstants().size();
+      int numUnprocessedInstants = (int) queryContext.getActiveTimeline()
+          .findInstantsAfter(endCompletionTime).countInstants();
+      metricsOption.ifPresent(metrics -> metrics.updateHoodieIncrSourceMetrics(numInstantsProcessed, numUnprocessedInstants));
+
       // normal incremental query
       source = reader
           .options(readOpts)
@@ -351,7 +366,7 @@ public class HoodieIncrSource extends RowSource {
     final int numInstantsFromConfig = getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH);
     int numInstantsPerFetch = getLatestSourceProfile().map(sourceProfile -> {
       int numInstantsFromSourceProfile = sourceProfile.getSourceSpecificContext();
-      LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}",
+      log.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}",
           numInstantsFromSourceProfile, numInstantsFromConfig);
       return numInstantsFromSourceProfile;
     }).orElse(numInstantsFromConfig);
@@ -360,10 +375,10 @@ public class HoodieIncrSource extends RowSource {
     QueryInfo queryInfo = generateQueryInfo(sparkContext, srcPath,
         numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode,
         HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        null, false, Option.empty());
+        null, false, Option.empty(), metricsOption);
 
     if (queryInfo.areStartAndEndInstantsEqual()) {
-      LOG.info("Already caught up. No new data to process");
+      log.info("Already caught up. No new data to process");
       return Pair.of(Option.empty(), new StreamerCheckpointV1(queryInfo.getEndInstant()));
     }
 

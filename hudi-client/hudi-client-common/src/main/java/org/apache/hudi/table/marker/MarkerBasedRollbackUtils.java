@@ -26,8 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -46,9 +45,8 @@ import static org.apache.hudi.common.util.MarkerUtils.readTimelineServerBasedMar
 /**
  * A utility class for marker-based rollback.
  */
+@Slf4j
 public class MarkerBasedRollbackUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(MarkerBasedRollbackUtils.class);
 
   /**
    * Gets all marker paths.
@@ -72,9 +70,18 @@ public class MarkerBasedRollbackUtils {
       WriteMarkers writeMarkers = WriteMarkersFactory.get(DIRECT, table, instant);
       try {
         return new ArrayList<>(writeMarkers.allMarkerFilePaths());
-      } catch (IOException | IllegalArgumentException e) {
-        LOG.warn("{} not present and {} marker failed with error: {}. Falling back to {} marker",
-            MARKER_TYPE_FILENAME, DIRECT, e.getMessage(), TIMELINE_SERVER_BASED);
+      } catch (IOException e) {
+        // Do NOT fall back to TIMELINE_SERVER_BASED on transient IO failures (e.g., HDFS throttling).
+        // The timeline server looks in a different location and would return 0 markers, causing the
+        // rollback to skip deleting data files and leaving orphan files on the table.
+        log.warn("{} not present and {} marker listing failed with IO error. "
+                + "Propagating exception, rollback will retry rather than fall back to {}.",
+            MARKER_TYPE_FILENAME, DIRECT, TIMELINE_SERVER_BASED, e);
+        throw e;
+      } catch (IllegalArgumentException e) {
+        // IllegalArgumentException indicates a marker path format mismatch, fall back to timeline server.
+        log.warn("{} not present and {} marker failed. Falling back to {} marker",
+            MARKER_TYPE_FILENAME, DIRECT, TIMELINE_SERVER_BASED, e);
         return getTimelineServerBasedMarkers(context, parallelism, markerDir, storage);
       }
     }

@@ -34,11 +34,11 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -47,11 +47,13 @@ import java.util.stream.Collectors;
 /**
  * Validator can be configured pre-commit. 
  */
+@Slf4j
 public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> {
-  private static final Logger LOG = LoggerFactory.getLogger(SparkPreCommitValidator.class);
 
   private final HoodieSparkTable<T> table;
+  @Getter
   private final HoodieEngineContext engineContext;
+  @Getter
   private final HoodieWriteConfig writeConfig;
   private final HoodieMetrics metrics;
 
@@ -80,9 +82,21 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
     HoodieTimer timer = HoodieTimer.start();
     try {
       validateRecordsBeforeAndAfter(before, after, getPartitionsModified(writeResult));
+    } catch (HoodieValidationException e) {
+      throw e;
+    } catch (RuntimeException e) {
+      // Unexpected bug (NPE, ClassCastException, etc.) — re-throw as-is so it propagates
+      // crash-loud with the original stack trace instead of being silently swallowed as a
+      // generic "validation failed" message.
+      log.error("Validator {} threw unexpected exception for instant {}", getClass().getName(), instantTime, e);
+      throw e;
+    } catch (Exception e) {
+      // Checked exception — promote to RuntimeException so it propagates crash-loud.
+      log.error("Validator {} threw unexpected checked exception for instant {}", getClass().getName(), instantTime, e);
+      throw new RuntimeException(e);
     } finally {
       long duration = timer.endTimer();
-      LOG.info(getClass() + " validator took " + duration + " ms" + ", metrics on? " + getWriteConfig().isMetricsOn());
+      log.info("{} validator took {} ms, metrics on? {}", getClass(), duration, getWriteConfig().isMetricsOn());
       publishRunStats(instantTime, duration);
     }
   }
@@ -113,21 +127,13 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
     return this.table;
   }
 
-  public HoodieEngineContext getEngineContext() {
-    return this.engineContext;
-  }
-
-  public HoodieWriteConfig getWriteConfig() {
-    return this.writeConfig;
-  }
-
   protected Dataset<Row> executeSqlQuery(SQLContext sqlContext,
                                          String sqlQuery,
                                          String tableName,
                                          String logLabel) {
     String queryWithTempTableName = sqlQuery.replaceAll(
         HoodiePreCommitValidatorConfig.VALIDATOR_TABLE_VARIABLE, tableName);
-    LOG.info("Running query ({}): {}", logLabel, queryWithTempTableName);
+    log.info("Running query ({}): {}", logLabel, queryWithTempTableName);
     return sqlContext.sql(queryWithTempTableName);
   }
 }

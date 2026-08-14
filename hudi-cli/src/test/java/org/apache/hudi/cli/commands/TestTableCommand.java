@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
@@ -27,6 +26,8 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -36,7 +37,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -118,7 +118,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     HoodieTimeGeneratorConfig timeGeneratorConfig = HoodieCLI.timeGeneratorConfig;
     assertEquals(tablePath, timeGeneratorConfig.getBasePath());
     assertEquals(888L, timeGeneratorConfig.getMaxExpectedClockSkewMs());
-    assertEquals("org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+    assertEquals("org.apache.hudi.core.transaction.lock.InProcessLockProvider",
         timeGeneratorConfig.getLockConfiguration().getConfig().getString(HoodieTimeGeneratorConfig.LOCK_PROVIDER_KEY));
 
     // Check default values
@@ -145,7 +145,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     HoodieTimeGeneratorConfig timeGeneratorConfig = HoodieCLI.timeGeneratorConfig;
     assertEquals(tablePath, timeGeneratorConfig.getBasePath());
     assertEquals(200L, timeGeneratorConfig.getMaxExpectedClockSkewMs());
-    assertEquals("org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+    assertEquals("org.apache.hudi.core.transaction.lock.InProcessLockProvider",
         timeGeneratorConfig.getLockConfiguration().getConfig().getString(HoodieTimeGeneratorConfig.LOCK_PROVIDER_KEY));
     assertEquals(TimeGeneratorType.valueOf("WAIT_TO_ADJUST_SKEW"), timeGeneratorConfig.getTimeGeneratorType());
   }
@@ -259,10 +259,10 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     String actualSchemaStr = result.toString().substring(result.toString().indexOf("{"));
-    Schema actualSchema = new Schema.Parser().parse(actualSchemaStr);
+    HoodieSchema actualSchema = HoodieSchema.parse(actualSchemaStr);
 
-    Schema expectedSchema = new Schema.Parser().parse(schemaStr);
-    expectedSchema = HoodieAvroUtils.addMetadataFields(expectedSchema);
+    HoodieSchema expectedSchema = HoodieSchema.parse(schemaStr);
+    expectedSchema = HoodieSchemaUtils.addMetadataFields(expectedSchema);
     assertEquals(actualSchema, expectedSchema);
 
     File file = File.createTempFile("temp", null);
@@ -270,7 +270,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     actualSchemaStr = getFileContent(file.getAbsolutePath());
-    actualSchema = new Schema.Parser().parse(actualSchemaStr);
+    actualSchema = HoodieSchema.parse(actualSchemaStr);
     assertEquals(actualSchema, expectedSchema);
   }
 

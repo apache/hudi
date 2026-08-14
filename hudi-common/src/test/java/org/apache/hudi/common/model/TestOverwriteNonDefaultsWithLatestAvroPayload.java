@@ -18,7 +18,10 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
@@ -40,25 +43,24 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
  * Unit tests {@link TestOverwriteNonDefaultsWithLatestAvroPayload}.
  */
 public class TestOverwriteNonDefaultsWithLatestAvroPayload {
-  private Schema schema;
+  private HoodieSchema schema;
 
   @BeforeEach
   public void setUp() throws Exception {
-    schema = Schema.createRecord(Arrays.asList(
-            new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
-            new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", ""),
-            new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
-            new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false),
-            new Schema.Field("city", Schema.create(Schema.Type.STRING), "", "NY"),
-            new Schema.Field("child", Schema.createArray(Schema.create(Schema.Type.STRING)), "", Collections.emptyList())
-            ));
+    schema = HoodieSchema.createRecord("TestSchema", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), "", null),
+        HoodieSchemaField.of("partition", HoodieSchema.create(HoodieSchemaType.STRING), "", ""),
+        HoodieSchemaField.of("ts", HoodieSchema.create(HoodieSchemaType.LONG), "", null),
+        HoodieSchemaField.of("_hoodie_is_deleted", HoodieSchema.create(HoodieSchemaType.BOOLEAN), "", false),
+        HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING), "", "NY"),
+        HoodieSchemaField.of("child", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING)), "", Collections.emptyList())));
   }
 
   @Test
   public void testActiveRecords() throws IOException {
-    Schema writerSchema = HoodieAvroUtils.addMetadataFields(schema);
+    HoodieSchema writerSchema = HoodieSchemaUtils.addMetadataFields(schema);
 
-    GenericRecord record1 = new GenericData.Record(schema);
+    GenericRecord record1 = new GenericData.Record(schema.toAvroSchema());
     record1.put("id", "1");
     record1.put("partition", "partition1");
     record1.put("ts", 0L);
@@ -66,7 +68,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record1.put("city", "NY0");
     record1.put("child", Collections.singletonList("A"));
 
-    GenericRecord record2 = new GenericData.Record(schema);
+    GenericRecord record2 = new GenericData.Record(schema.toAvroSchema());
     record2.put("id", "2");
     record2.put("partition", "");
     record2.put("ts", 1L);
@@ -74,7 +76,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record2.put("city", "NY");
     record2.put("child", Collections.emptyList());
 
-    GenericRecord record3 = new GenericData.Record(schema);
+    GenericRecord record3 = new GenericData.Record(schema.toAvroSchema());
     record3.put("id", "2");
     record3.put("partition", "partition1");
     record3.put("ts", 1L);
@@ -115,14 +117,14 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
 
-    assertEquals(record1, payload1.getInsertValue(schema).get());
-    assertEquals(record2, payload2.getInsertValue(schema).get());
+    assertEquals(record1, payload1.getInsertValue(schema.toAvroSchema()).get());
+    assertEquals(record2, payload2.getInsertValue(schema.toAvroSchema()).get());
 
-    IndexedRecord combinedVal1 = payload1.combineAndGetUpdateValue(record2, schema).get();
+    IndexedRecord combinedVal1 = payload1.combineAndGetUpdateValue(record2, schema.toAvroSchema()).get();
     assertEquals(combinedVal1, record1);
     assertNotSame(combinedVal1, record1);
 
-    IndexedRecord combinedVal2 = payload2.combineAndGetUpdateValue(record1, schema).get();
+    IndexedRecord combinedVal2 = payload2.combineAndGetUpdateValue(record1, schema.toAvroSchema()).get();
     assertEquals(combinedVal2, record3);
     assertNotSame(combinedVal2, record3);
 
@@ -130,19 +132,19 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     // the payload record could include the metadata fields (for compaction) or not (for normal writer path).
 
     // case1: validate normal writer path
-    IndexedRecord combinedVal3 = payload2.combineAndGetUpdateValue(record4, schema).get();
+    IndexedRecord combinedVal3 = payload2.combineAndGetUpdateValue(record4, schema.toAvroSchema()).get();
     assertEquals(combinedVal3, record3);
     assertNotSame(combinedVal3, record3);
 
     // case2: validate compaction path
-    IndexedRecord combinedVal4 = payload5.combineAndGetUpdateValue(record4, writerSchema).get();
+    IndexedRecord combinedVal4 = payload5.combineAndGetUpdateValue(record4, writerSchema.toAvroSchema()).get();
     assertEquals(combinedVal4, record6);
     assertNotSame(combinedVal4, record6);
   }
 
   @Test
   public void testDeletedRecord() throws IOException {
-    GenericRecord record1 = new GenericData.Record(schema);
+    GenericRecord record1 = new GenericData.Record(schema.toAvroSchema());
     record1.put("id", "1");
     record1.put("partition", "partition0");
     record1.put("ts", 0L);
@@ -150,7 +152,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record1.put("city", "NY0");
     record1.put("child", Collections.emptyList());
 
-    GenericRecord delRecord1 = new GenericData.Record(schema);
+    GenericRecord delRecord1 = new GenericData.Record(schema.toAvroSchema());
     delRecord1.put("id", "2");
     delRecord1.put("partition", "partition1");
     delRecord1.put("ts", 1L);
@@ -158,7 +160,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     delRecord1.put("city", "NY0");
     delRecord1.put("child", Collections.emptyList());
 
-    GenericRecord record2 = new GenericData.Record(schema);
+    GenericRecord record2 = new GenericData.Record(schema.toAvroSchema());
     record2.put("id", "1");
     record2.put("partition", "partition0");
     record2.put("ts", 0L);
@@ -172,13 +174,13 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
 
-    assertEquals(record1, payload1.getInsertValue(schema).get());
-    assertFalse(payload2.getInsertValue(schema).isPresent());
+    assertEquals(record1, payload1.getInsertValue(schema.toAvroSchema()).get());
+    assertFalse(payload2.getInsertValue(schema.toAvroSchema()).isPresent());
 
-    assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record2);
-    assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
+    assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema.toAvroSchema()).get(), record2);
+    assertFalse(payload2.combineAndGetUpdateValue(record1, schema.toAvroSchema()).isPresent());
   }
-  
+
   @Test
   public void testNullColumn() throws IOException {
     Schema avroSchema = Schema.createRecord(Arrays.asList(
@@ -209,8 +211,8 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     assertEquals(payload2.combineAndGetUpdateValue(record1, avroSchema).get(), record3);
   }
 
-  private static GenericRecord createRecordWithMetadataFields(Schema schema, String recordKey, String partitionPath) {
-    GenericRecord record = new GenericData.Record(schema);
+  private static GenericRecord createRecordWithMetadataFields(HoodieSchema schema, String recordKey, String partitionPath) {
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, "001");
     record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, "123");
     record.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);

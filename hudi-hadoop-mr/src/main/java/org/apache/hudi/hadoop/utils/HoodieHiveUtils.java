@@ -24,7 +24,6 @@ import org.apache.hudi.hadoop.utils.shims.HiveShim;
 import org.apache.hudi.hadoop.utils.shims.HiveShims;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.JobContext;
@@ -94,7 +93,7 @@ public class HoodieHiveUtils {
   public static boolean stopAtCompaction(JobContext job, String tableName) {
     String compactionPropName = String.format(HOODIE_STOP_AT_COMPACTION_PATTERN, tableName);
     boolean stopAtCompaction = job.getConfiguration().getBoolean(compactionPropName, true);
-    LOG.info("Read stop at compaction - " + stopAtCompaction);
+    LOG.info("Read stop at compaction - {}", stopAtCompaction);
     return stopAtCompaction;
   }
 
@@ -104,29 +103,14 @@ public class HoodieHiveUtils {
     if (maxCommits == MAX_COMMIT_ALL) {
       maxCommits = Integer.MAX_VALUE;
     }
-    LOG.info("Read max commits - " + maxCommits);
+    LOG.info("Read max commits - {}", maxCommits);
     return maxCommits;
   }
 
   public static String readStartCommitTime(JobContext job, String tableName) {
     String startCommitTimestampName = String.format(HOODIE_START_COMMIT_PATTERN, tableName);
-    LOG.info("Read start commit time - " + job.getConfiguration().get(startCommitTimestampName));
+    LOG.info("Read start commit time - {}", job.getConfiguration().get(startCommitTimestampName));
     return job.getConfiguration().get(startCommitTimestampName);
-  }
-
-  /**
-   * Gets the n'th parent for the Path. Assumes the path has at-least n components
-   *
-   * @param path
-   * @param n
-   * @return
-   */
-  public static Path getNthParent(Path path, int n) {
-    Path parent = path;
-    for (int i = 0; i < n; i++) {
-      parent = parent.getParent();
-    }
-    return parent;
   }
 
   /**

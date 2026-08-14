@@ -30,18 +30,20 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -50,10 +52,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.AppendMarkerHandler;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.util.CommonClientUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -74,12 +74,102 @@ import static org.apache.hudi.table.action.rollback.RollbackUtils.groupSerializa
  * Contains common methods to be used across engines for rollback operation.
  * This class is meant to be used only for table version 6. Any table version 8 and above will be using {@link RollbackHelper}.
  */
+@Slf4j
 public class RollbackHelperV1 extends RollbackHelper {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RollbackHelperV1.class);
 
   public RollbackHelperV1(HoodieTable table, HoodieWriteConfig config) {
     super(table, config);
+  }
+
+  /**
+   * Builds the lookup key for pre-computed log versions.
+   */
+  static String logVersionLookupKey(String partitionPath, String fileId, String commitTime) {
+    return partitionPath + "|" + fileId + "|" + commitTime;
+  }
+
+  /**
+   * Pre-compute the latest log version for each (partition, fileId, deltaCommitTime) tuple
+   * by listing each unique partition directory once. This replaces N per-request listing
+   * calls (one per rollback request) with P per-partition listings (where P is much less than N).
+   *
+   * <p>For file groups with no existing log files in a successfully listed partition, a sentinel
+   * of (LOGFILE_BASE_VERSION, UNKNOWN_WRITE_TOKEN) is inserted so the caller avoids a redundant
+   * per-request listing. If a partition listing fails (IOException), no sentinels are inserted
+   * and the caller falls back to per-request listing naturally.
+   */
+  Map<String, Pair<Integer, String>> preComputeLogVersions(
+      List<SerializableHoodieRollbackRequest> rollbackRequests) {
+    List<SerializableHoodieRollbackRequest> logBlockRequests = rollbackRequests.stream()
+        .filter(req -> !req.getLogBlocksToBeDeleted().isEmpty())
+        .collect(Collectors.toList());
+
+    if (logBlockRequests.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    Map<String, Set<String>> expectedKeysByPartition = new HashMap<>();
+    for (SerializableHoodieRollbackRequest req : logBlockRequests) {
+      String key = logVersionLookupKey(req.getPartitionPath(), req.getFileId(), req.getLatestBaseInstant());
+      expectedKeysByPartition.computeIfAbsent(req.getPartitionPath(), k -> new HashSet<>()).add(key);
+    }
+
+    log.info("Pre-computing log versions for {} partition(s) to avoid per-request listStatus calls",
+        expectedKeysByPartition.size());
+
+    Map<String, Pair<Integer, String>> logVersionMap = new HashMap<>();
+
+    for (Map.Entry<String, Set<String>> entry : expectedKeysByPartition.entrySet()) {
+      String relPartPath = entry.getKey();
+      Set<String> expectedKeys = entry.getValue();
+      StoragePath absolutePartPath = FSUtils.constructAbsolutePath(metaClient.getBasePath(), relPartPath);
+      try {
+        List<StoragePathInfo> statuses = metaClient.getStorage().listDirectEntries(absolutePartPath,
+            path -> FSUtils.isLogFile(path.getName()));
+
+        for (StoragePathInfo status : statuses) {
+          try {
+            HoodieLogFile logFile = new HoodieLogFile(status);
+            String key = logVersionLookupKey(relPartPath, logFile.getFileId(), logFile.getDeltaCommitTime());
+            Pair<Integer, String> existing = logVersionMap.get(key);
+            if (existing == null || logFile.getLogVersion() > existing.getLeft()) {
+              logVersionMap.put(key, Pair.of(logFile.getLogVersion(), logFile.getLogWriteToken()));
+            }
+          } catch (InvalidHoodiePathException e) {
+            log.warn("Skipping non-standard log file during pre-compute: {}", status.getPath(), e);
+          }
+        }
+
+        // Insert a sentinel for file groups with no existing log files so the caller can skip a
+        // redundant per-request FS listing. The sentinel uses a null write-token to distinguish
+        // it from a real entry whose token happens to equal UNKNOWN_WRITE_TOKEN; otherwise tests
+        // (and any callers that previously wrote logs with the legacy "1-0-1" token) would be
+        // indistinguishable from "no log file present".
+        Pair<Integer, String> sentinel = Pair.of(HoodieLogFile.LOGFILE_BASE_VERSION, null);
+        for (String expectedKey : expectedKeys) {
+          logVersionMap.putIfAbsent(expectedKey, sentinel);
+        }
+      } catch (IOException e) {
+        log.warn("Failed to pre-compute log versions for partition {}, will fall back to per-request listing",
+            relPartPath, e);
+      }
+    }
+
+    log.info("Pre-computed log versions for {} file groups across {} partition(s)",
+        logVersionMap.size(), expectedKeysByPartition.size());
+    return logVersionMap;
+  }
+
+  /**
+   * Generates the header for a rollback command block.
+   */
+  private Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String commit) {
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>(3);
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().requestedTime());
+    header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, commit);
+    header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
+    return header;
   }
 
   /**
@@ -160,7 +250,7 @@ public class RollbackHelperV1 extends RollbackHelper {
     try {
       logPaths = markerHandler.getAppendedLogPaths(context, config.getFinalizeWriteParallelism());
     } catch (FileNotFoundException fnf) {
-      LOG.info("Rollback never failed and hence no marker dir was found. Safely moving on");
+      log.info("Rollback never failed and hence no marker dir was found. Safely moving on");
     } catch (IOException e) {
       throw new HoodieRollbackException("Failed to list log file markers for previous attempt of rollback ", e);
     }
@@ -168,6 +258,23 @@ public class RollbackHelperV1 extends RollbackHelper {
     List<Pair<String, HoodieRollbackStat>> getRollbackStats = maybeDeleteAndCollectStats(context, instantTime, instantToRollback, serializableRequests, true, parallelism);
     List<HoodieRollbackStat> mergedRollbackStatByPartitionPath = context.reduceByKey(getRollbackStats, RollbackUtils::mergeRollbackStat, parallelism);
     return addLogFilesFromPreviousFailedRollbacksToStat(context, mergedRollbackStatByPartitionPath, logPaths);
+  }
+
+  /**
+   * Collect all file info that needs to be rolled back, using the V1-specific
+   * 6-param {@code maybeDeleteAndCollectStats} so V6 log-block requests are handled correctly.
+   */
+  @Override
+  public List<HoodieRollbackStat> collectRollbackStats(HoodieEngineContext context, HoodieInstant instantToRollback,
+                                                       List<HoodieRollbackRequest> rollbackRequests) {
+    int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
+    context.setJobStatus(this.getClass().getSimpleName(), "Collect rollback stats: " + config.getTableName());
+    List<SerializableHoodieRollbackRequest> serializableRequests = rollbackRequests.stream()
+        .map(SerializableHoodieRollbackRequest::new).collect(Collectors.toList());
+    return context.reduceByKey(
+        maybeDeleteAndCollectStats(context, instantToRollback.requestedTime(), instantToRollback,
+            serializableRequests, false, parallelism),
+        RollbackUtils::mergeRollbackStat, parallelism);
   }
 
   /**
@@ -189,6 +296,7 @@ public class RollbackHelperV1 extends RollbackHelper {
         metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
             ? rollbackRequests
             : groupSerializableRollbackRequestsBasedOnFileGroup(rollbackRequests);
+    final Map<String, Pair<Integer, String>> logVersionMap = preComputeLogVersions(processedRollbackRequests);
     final TaskContextSupplier taskContextSupplier = context.getTaskContextSupplier();
     return context.flatMap(processedRollbackRequests, (SerializableFunction<SerializableHoodieRollbackRequest, Stream<Pair<String, HoodieRollbackStat>>>) rollbackRequest -> {
       List<String> filesToBeDeleted = rollbackRequest.getFilesToBeDeleted();
@@ -199,7 +307,7 @@ public class RollbackHelperV1 extends RollbackHelper {
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
         HoodieLogFormat.Writer writer = null;
-        final StoragePath filePath;
+        StoragePath filePath = null;
         try {
           String partitionPath = rollbackRequest.getPartitionPath();
           String fileId = rollbackRequest.getFileId();
@@ -208,17 +316,45 @@ public class RollbackHelperV1 extends RollbackHelper {
           // Let's emit markers for rollback as well. markers are emitted under rollback instant time.
           WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instantTime);
 
-          writer = HoodieLogFormat.newWriterBuilder()
-              .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath))
-              .withFileId(fileId)
-              .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
+          HoodieLogFormatWriter.HoodieLogFormatWriterBuilder writerBuilder = HoodieLogFormatWriter.builder()
+              .withParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath))
+              .withLogFileId(fileId)
+              .withLogWriteToken(FSUtils.makeWriteToken(taskContextSupplier))
               .withInstantTime(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
                   ? instantToRollback.requestedTime() : rollbackRequest.getLatestBaseInstant()
               )
               .withStorage(metaClient.getStorage())
               .withFileCreationCallback(getRollbackLogMarkerCallback(writeMarkers, partitionPath, fileId))
               .withTableVersion(tableVersion)
-              .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+              .withFileExtension(HoodieLogFile.DELTA_EXTENSION);
+
+          // Apply pre-computed log version if available. Always keep the per-task write token
+          // generated above (via FSUtils.makeWriteToken) so that retried/repeated
+          // rollbacks do not collide on UNKNOWN_WRITE_TOKEN or inherit a prior log's write token.
+          //
+          // When doDelete=true, we actually create a new rollback log file: explicitly bump the
+          // version (latest + 1) so the new file is written with the per-task write token instead
+          // of rolling over and inheriting the existing log file's token. When doDelete=false we
+          // are only collecting stats (no append), so we let WriterBuilder.build() discover the
+          // existing version itself — bumping here would point to a non-existent path and break
+          // the downstream storage.getPathInfo lookup.
+          //
+          // The sentinel value (right == null) means "partition listed but no log file for this
+          // file group" — write at the base version.
+          String logVersionKey = logVersionLookupKey(partitionPath, fileId, rollbackRequest.getLatestBaseInstant());
+          Pair<Integer, String> preComputedVersion = logVersionMap.get(logVersionKey);
+          if (preComputedVersion != null) {
+            if (preComputedVersion.getRight() == null) {
+              writerBuilder.withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION);
+            } else if (doDelete) {
+              writerBuilder.withLogVersion(preComputedVersion.getLeft() + 1);
+            } else {
+              writerBuilder.withLogVersion(preComputedVersion.getLeft())
+                  .withLogWriteToken(preComputedVersion.getRight());
+            }
+          }
+
+          writer = writerBuilder.build();
 
           // generate metadata
           if (doDelete) {

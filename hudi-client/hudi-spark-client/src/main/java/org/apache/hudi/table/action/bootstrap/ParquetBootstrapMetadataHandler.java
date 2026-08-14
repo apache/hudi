@@ -23,19 +23,19 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.execution.ExecutorFactory;
 import org.apache.hudi.io.HoodieBootstrapHandle;
-import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.ExecutorFactory;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -65,7 +65,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   }
 
   @Override
-  Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {
+  HoodieSchema getSchema(StoragePath sourceFilePath) throws IOException {
     ParquetMetadata readFooter = ParquetFileReader.readFooter(
         (Configuration) table.getStorageConf().unwrap(), new Path(sourceFilePath.toUri()),
         ParquetMetadataConverter.NO_FILTER);
@@ -78,7 +78,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
                                   StoragePath sourceFilePath,
                                   KeyGeneratorInterface keyGenerator,
                                   String partitionPath,
-                                  Schema schema) throws Exception {
+                                  HoodieSchema schema) throws Exception {
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
 
     HoodieFileReader reader = getHoodieSparkIOFactory(table.getStorage()).getReaderFactory(recordType)
@@ -117,7 +117,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
     switch (recordType) {
       case AVRO:
-        GenericRecord avroRecord = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
+        GenericRecord avroRecord = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA.toAvroSchema());
         avroRecord.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
         return new HoodieAvroIndexedRecord(hoodieKey, avroRecord);
 

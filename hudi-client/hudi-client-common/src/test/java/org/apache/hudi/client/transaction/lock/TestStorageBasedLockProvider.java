@@ -18,12 +18,6 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
-import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
-import org.apache.hudi.client.transaction.lock.models.StorageLockData;
-import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
-import org.apache.hudi.client.transaction.lock.models.HeartbeatManager;
-import org.apache.hudi.client.transaction.lock.models.LockGetResult;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -38,6 +32,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.slf4j.Logger;
 
 import java.lang.reflect.Method;
@@ -52,9 +47,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -64,6 +59,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.refEq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -390,6 +386,127 @@ class TestStorageBasedLockProvider {
   }
 
   @Test
+  void testUnlockThrowsExceptionWhenLockAcquiredByOthers() {
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat())
+        .thenReturn(true)
+        .thenReturn(false);
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
+
+    HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
+    assertTrue(exception.getMessage().contains("FAILED_TO_RELEASE"));
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
+  }
+
+  @Test
+  void testUnlockSucceedsAfterThrottledRetry() throws InterruptedException {
+    // Simulates the GCP 1-write/sec limit: the first expire attempt gets THROTTLED,
+    // the retry (after sleeping outside the monitor) succeeds.
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    // Skip the real sleep so the test runs instantly.
+    doNothing().when(lockProvider).sleepForThrottleRetry(anyLong());
+    StorageLockFile expiredLockFile = new StorageLockFile(new StorageLockData(true, data.getValidUntil(), ownerId), "v2");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.THROTTLED, Option.empty()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(expiredLockFile)));
+
+    lockProvider.unlock();
+
+    assertNull(lockProvider.getLock(), "Lock should be null after successful unlock on retry");
+    verify(mockLockService, times(2)).tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
+  }
+
+  @Test
+  void testUnlockBailsOutWhenLockReplacedDuringRetrySleep() throws InterruptedException {
+    // Race: the first expire attempt returns THROTTLED. While unlock() is sleeping outside
+    // the monitor, the original lock expires and a concurrent tryLock() acquires a fresh
+    // lock (currentLockObj is replaced from lock1 -> lock2). The retry MUST detect this
+    // and bail out — operating on lock2 would mark a lock that another caller now holds
+    // as expired.
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile lock1 = new StorageLockFile(data, "v1");
+    StorageLockFile lock2 = new StorageLockFile(data, "v2");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lock1)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    // Skip the real sleep so the test runs instantly.
+    doNothing().when(lockProvider).sleepForThrottleRetry(anyLong());
+    // Simulate the race in the same answer that returns THROTTLED: by the time the sleep
+    // ends, getLock() returns lock2 (the lock a concurrent tryLock() would have acquired).
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lock1))))
+        .thenAnswer(inv -> {
+          doReturn(lock2).when(lockProvider).getLock();
+          return Pair.of(LockUpsertResult.THROTTLED, Option.empty());
+        });
+
+    // unlock() should return normally — the original lock is no longer the caller's
+    // responsibility, and we must not touch lock2.
+    lockProvider.unlock();
+
+    verify(mockLockService, times(1)).tryUpsertLockFile(any(), eq(Option.of(lock1)));
+    verify(mockLockService, never()).tryUpsertLockFile(any(), eq(Option.of(lock2)));
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
+  }
+
+  @Test
+  void testUnlockThrowsExceptionWhenStillThrottledAfterAllRetries() throws InterruptedException {
+    // Every attempt (initial + THROTTLE_MAX_RETRIES retries) gets THROTTLED — unlock should
+    // exhaust the retry budget, throw FAILED_TO_RELEASE, and the backoff sequence should
+    // follow the exponential schedule 1s, 2s, 4s.
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    // Capture sleep durations to verify the backoff sequence; skip the real sleep so the
+    // test runs instantly.
+    ArgumentCaptor<Long> sleepCaptor = ArgumentCaptor.forClass(Long.class);
+    doNothing().when(lockProvider).sleepForThrottleRetry(sleepCaptor.capture());
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.THROTTLED, Option.empty()));
+
+    HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
+    assertTrue(exception.getMessage().contains("FAILED_TO_RELEASE"));
+    // 1 initial attempt + THROTTLE_MAX_RETRIES retries.
+    verify(mockLockService, times(1 + StorageBasedLockProvider.THROTTLE_MAX_RETRIES))
+        .tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
+    // Backoff doubles each retry: 1s, 2s, 4s.
+    assertEquals(StorageBasedLockProvider.THROTTLE_MAX_RETRIES, sleepCaptor.getAllValues().size());
+    assertEquals(1L, sleepCaptor.getAllValues().get(0));
+    assertEquals(2L, sleepCaptor.getAllValues().get(1));
+    assertEquals(4L, sleepCaptor.getAllValues().get(2));
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
+  }
+
+  @Test
   void testCloseFailsToStopHeartbeat() {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
@@ -445,6 +562,18 @@ class TestStorageBasedLockProvider {
   }
 
   @Test
+  void testRenewLockThrottledReturnsTrue() {
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile lockFile = new StorageLockFile(data, "v1");
+    doReturn(lockFile).when(lockProvider).getLock();
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.THROTTLED, Option.empty()));
+    // Throttling is transient, renewLock should return true so the heartbeat retries later.
+    assertTrue(lockProvider.renewLock());
+    verify(mockLogger).warn("Owner {}: Unable to renew lock due to throttling, will retry on next heartbeat.", this.ownerId);
+  }
+
+  @Test
   void testRenewLockUnableToUpsertLockFileFatal() {
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile lockFile = new StorageLockFile(data, "v1");
@@ -490,8 +619,49 @@ class TestStorageBasedLockProvider {
     assertTrue(lockProvider.renewLock());
 
     verify(mockLogger).info(
-        eq("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}."),
-        eq(this.ownerId), anyLong(), eq("gs://bucket/lake/db/tbl-default/.hoodie/.locks/table_lock.json"));
+        eq("Owner {}: Lock renewal successful. The renewal completes {} ms before old expiration. The lock will expire in {} ms for lock {}."),
+        eq(this.ownerId), anyLong(), anyLong(), eq("gs://bucket/lake/db/tbl-default/.hoodie/.locks/table_lock.json"));
+  }
+
+  @Test
+  void testRenewLockMetricUsesNewLeaseExpiration() {
+    // Regression test for https://github.com/apache/hudi/issues/18493: after a successful
+    // renewal the lock.expiration.deadline metric must reflect the remaining time on the newly
+    // renewed lease, not on the previous (about-to-expire) lease.
+    TypedProperties props = new TypedProperties();
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
+    props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
+
+    HoodieLockMetrics mockMetrics = mock(HoodieLockMetrics.class);
+    try (StorageBasedLockProvider providerWithMetrics = spy(new StorageBasedLockProvider(
+        ownerId,
+        props,
+        (a, b, c) -> mockHeartbeatManager,
+        (a, b, c) -> mockLockService,
+        mockLogger,
+        mockMetrics))) {
+
+      long t0 = 100_000L;
+      when(providerWithMetrics.getCurrentEpochMs()).thenReturn(t0);
+
+      // The currently held lease is about to expire (only 100 ms left) -- this is what makes the
+      // old vs new distinction observable: the old lease would have reported ~100 ms.
+      StorageLockData oldData = new StorageLockData(false, t0 + 100, ownerId);
+      StorageLockFile oldLockFile = new StorageLockFile(oldData, "v1");
+      doReturn(oldLockFile).when(providerWithMetrics).getLock();
+
+      StorageLockData renewedLockData = new StorageLockData(false, t0 + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+      StorageLockFile renewedLockFile = new StorageLockFile(renewedLockData, "v2");
+      when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(oldLockFile))))
+          .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(renewedLockFile)));
+
+      assertTrue(providerWithMetrics.renewLock());
+
+      // New lease = t0 + 10000ms validity, evaluated at t0 -> 10000 ms remaining (the fix),
+      // not the ~100 ms remaining on the old lease (the bug).
+      verify(mockMetrics).updateLockExpirationDeadlineMetric(DEFAULT_LOCK_VALIDITY_MS);
+    }
   }
 
   @Test

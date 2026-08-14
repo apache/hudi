@@ -23,18 +23,20 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.JavaTypeConverter;
-import org.apache.hudi.common.util.LocalAvroSchemaCache;
+import org.apache.hudi.common.util.LocalHoodieSchemaCache;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.KeyGenerator;
 
-import org.apache.avro.Schema;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -61,11 +63,13 @@ public abstract class RecordContext<T> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  private final SerializableBiFunction<T, Schema, String> recordKeyExtractor;
+  private final SerializableBiFunction<T, HoodieSchema, String> recordKeyExtractor;
   // for encoding and decoding schemas to the spillable map
-  private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
+  private final LocalHoodieSchemaCache localSchemaCache = LocalHoodieSchemaCache.getInstance();
 
+  @Getter
   protected final JavaTypeConverter typeConverter;
+  @Setter
   protected String partitionPath;
 
   protected RecordContext(HoodieTableConfig tableConfig, JavaTypeConverter typeConverter) {
@@ -84,11 +88,7 @@ public abstract class RecordContext<T> implements Serializable {
     this.typeConverter = typeConverter;
   }
 
-  public void setPartitionPath(String partitionPath) {
-    this.partitionPath = partitionPath;
-  }
-
-  public T extractDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
+  public T extractDataFromRecord(HoodieRecord record, HoodieSchema schema, Properties properties) {
     return (T) record.getData();
   }
 
@@ -99,23 +99,23 @@ public abstract class RecordContext<T> implements Serializable {
    *
    * @return The avro schema if it is encoded in the metadata map, else null
    */
-  public Schema getSchemaFromBufferRecord(BufferedRecord<T> record) {
+  public HoodieSchema getSchemaFromBufferRecord(BufferedRecord<T> record) {
     return decodeAvroSchema(record.getSchemaId());
   }
 
   /**
    * Encodes the given avro schema for efficient serialization.
    */
-  public Integer encodeAvroSchema(Schema schema) {
-    return this.localAvroSchemaCache.cacheSchema(schema);
+  public Integer encodeSchema(HoodieSchema schema) {
+    return this.localSchemaCache.cacheSchema(schema);
   }
 
   /**
    * Decodes the avro schema with given version ID.
    */
   @Nullable
-  public Schema decodeAvroSchema(Object versionId) {
-    return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
+  public HoodieSchema decodeAvroSchema(Object versionId) {
+    return this.localSchemaCache.getSchema((Integer) versionId).orElse(null);
   }
 
   /**
@@ -157,7 +157,7 @@ public abstract class RecordContext<T> implements Serializable {
    * @param baseRecord       The record based on which the engine record is built.
    * @return A new instance of engine record type {@link T}.
    */
-  public abstract T mergeWithEngineRecord(Schema schema,
+  public abstract T mergeWithEngineRecord(HoodieSchema schema,
                                           Map<Integer, Object> updateValues,
                                           BufferedRecord<T> baseRecord);
 
@@ -168,11 +168,15 @@ public abstract class RecordContext<T> implements Serializable {
    * @param fieldValues  the values of all fields
    * @return A new instance of Engine record.
    */
-  public abstract T constructEngineRecord(Schema recordSchema, Object[] fieldValues);
+  public abstract T constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues);
 
-  public JavaTypeConverter getTypeConverter() {
-    return typeConverter;
-  }
+  /**
+   * Returns the engine record type produced by this context (e.g. {@code AVRO}, {@code SPARK}, {@code FLINK},
+   * {@code HIVE}). This mirrors the concrete type of records built by {@link #constructEngineRecord}, so callers that
+   * feed those engine records into a {@link org.apache.hudi.io.storage.HoodieFileWriter} can pick a writer that
+   * matches. Used by the native log delete writer, where the record object type and the writer must agree.
+   */
+  public abstract HoodieRecord.HoodieRecordType getEngineRecordType();
 
   /**
    * Gets the record key in String.
@@ -181,7 +185,7 @@ public abstract class RecordContext<T> implements Serializable {
    * @param schema The Avro schema of the record.
    * @return The record key in String.
    */
-  public String getRecordKey(T record, Schema schema) {
+  public String getRecordKey(T record, HoodieSchema schema) {
     return recordKeyExtractor.apply(record, schema);
   }
 
@@ -189,11 +193,11 @@ public abstract class RecordContext<T> implements Serializable {
    * Gets the field value.
    *
    * @param record    The record in engine-specific type.
-   * @param schema    The Avro schema of the record.
+   * @param schema    The HoodieSchema of the record.
    * @param fieldName The field name. A dot separated string if a nested field.
    * @return The field value.
    */
-  public abstract Object getValue(T record, Schema schema, String fieldName);
+  public abstract Object getValue(T record, HoodieSchema schema, String fieldName);
 
   /**
    * Get value of metadata field in a more efficient way than #getValue.
@@ -206,32 +210,32 @@ public abstract class RecordContext<T> implements Serializable {
   public abstract String getMetaFieldValue(T record, int pos);
 
   /**
-   * Returns the value to a type representation in a specific engine.
+   * Converts the value to the engine-native type representation that can be stored directly
+   * as a field value inside an engine record, e.g., {@code UTF8String} for a {@link String}
+   * value in Spark.
    * <p>
-   * This can be overridden by the reader context implementation on a specific engine to handle
-   * engine-specific field type system.  For example, Spark uses {@code UTF8String} to represent
-   * {@link String} field values, so we need to convert the values to {@code UTF8String} type
-   * in Spark for proper value comparison.
+   * NOTE: The returned value is NOT guaranteed to support comparison on every engine
+   * (e.g., Spark's {@code UTF8String} no longer supports {@code compareTo}, see SPARK-46832).
+   * Callers that need a comparable value, e.g., for ordering, should use
+   * {@link #convertOrderingValueToEngineType} or {@link #ensureComparability} instead.
    *
    * @param value {@link Comparable} value to be converted.
    *
-   * @return the converted value in a type representation in a specific engine.
+   * @return the converted value in the engine-native type representation.
    */
   public Comparable convertValueToEngineType(Comparable value) {
     return value;
   }
 
-  public Comparable convertPartitionValueToEngineType(Comparable value) {
-    return convertValueToEngineType(value);
-  }
-
   /**
-   * Converts the ordering value to the specific engine type.
+   * Converts the ordering value to the specific engine type, guaranteeing the returned
+   * value supports comparison, e.g., by wrapping engine types that do not implement
+   * {@code compareTo} (see {@link #ensureComparability}).
    */
   public Comparable convertOrderingValueToEngineType(Comparable value) {
     return value instanceof ArrayComparable
-        ? ((ArrayComparable) value).apply(this::convertValueToEngineType)
-        : convertValueToEngineType(value);
+        ? ((ArrayComparable) value).apply(val -> ensureComparability(convertValueToEngineType(val)))
+        : ensureComparability(convertValueToEngineType(value));
   }
 
   /**
@@ -242,7 +246,7 @@ public abstract class RecordContext<T> implements Serializable {
    */
   public abstract T convertAvroRecord(IndexedRecord avroRecord);
 
-  public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
+  public abstract GenericRecord convertToAvroRecord(T record, HoodieSchema schema);
 
   /**
    * Fills an empty row with record key fields and returns.
@@ -306,20 +310,20 @@ public abstract class RecordContext<T> implements Serializable {
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
    *
+   * @param schema The schema of the record.
    * @param record The record.
    * @return The record containing the same data that do not change in memory over time.
    */
-  public abstract T seal(T record);
+  public abstract T seal(HoodieSchema schema, T record);
 
   /**
    * Converts engine specific row into binary format.
    *
-   * @param avroSchema The avro schema of the row
-   * @param record     The engine row
-   *
+   * @param schema The HoodieSchema of the row
+   * @param record The engine row
    * @return row in binary format
    */
-  public abstract T toBinaryRow(Schema avroSchema, T record);
+  public abstract T toBinaryRow(HoodieSchema schema, T record);
 
   /**
    * Creates a function that will reorder records of schema "from" to schema of "to"
@@ -331,22 +335,22 @@ public abstract class RecordContext<T> implements Serializable {
    *                       the value is the old name that exists in the file
    * @return a function that takes in a record and returns the record with reordered columns
    */
-  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns);
+  public abstract UnaryOperator<T> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns);
 
-  public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
+  public final UnaryOperator<T> projectRecord(HoodieSchema from, HoodieSchema to) {
     return projectRecord(from, to, Collections.emptyMap());
   }
 
   /**
    * Gets the ordering value in particular type.
    *
-   * @param record             An option of record.
-   * @param schema             The Avro schema of the record.
+   * @param record             The record in engine-specific type.
+   * @param schema             The HoodieSchema of the record.
    * @param orderingFieldNames name of the ordering field
    * @return The ordering value.
    */
   public Comparable getOrderingValue(T record,
-                                     Schema schema,
+                                     HoodieSchema schema,
                                      List<String> orderingFieldNames) {
     if (orderingFieldNames.isEmpty()) {
       return OrderingValues.getDefault();
@@ -388,13 +392,13 @@ public abstract class RecordContext<T> implements Serializable {
   /**
    * Gets the ordering value in particular type.
    *
-   * @param record             An option of record.
-   * @param schema             The Avro schema of the record.
+   * @param record             The record in engine-specific type.
+   * @param schema             The HoodieSchema of the record.
    * @param orderingFieldNames names of the ordering fields
    * @return The ordering value.
    */
   public Comparable getOrderingValue(T record,
-                                     Schema schema,
+                                     HoodieSchema schema,
                                      String[] orderingFieldNames) {
     if (orderingFieldNames == null || orderingFieldNames.length == 0) {
       return OrderingValues.getDefault();
@@ -410,9 +414,13 @@ public abstract class RecordContext<T> implements Serializable {
   /**
    * Extracts the record position value from the record itself.
    *
+   * @param record                   The record in engine-specific type.
+   * @param schema                   The HoodieSchema of the record.
+   * @param fieldName                The field name for the record position.
+   * @param providedPositionIfNeeded The position to use if parquet row index is not supported.
    * @return the record position in the base file.
    */
-  public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
+  public long extractRecordPosition(T record, HoodieSchema schema, String fieldName, long providedPositionIfNeeded) {
     if (supportsParquetRowIndex()) {
       Object position = getValue(record, schema, fieldName);
       if (position != null) {
@@ -428,11 +436,11 @@ public abstract class RecordContext<T> implements Serializable {
     return false;
   }
 
-  private SerializableBiFunction<T, Schema, String> metadataKeyExtractor() {
+  private SerializableBiFunction<T, HoodieSchema, String> metadataKeyExtractor() {
     return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
   }
 
-  private SerializableBiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
+  private SerializableBiFunction<T, HoodieSchema, String> virtualKeyExtractor(String[] recordKeyFields) {
     if (recordKeyFields.length == 1) {
       // there might be consistency for record key encoding when partition fields are multiple for cow merging,
       // currently the incoming records are using the keys from HoodieRecord which utilities the write config and by default encodes the field name with the value

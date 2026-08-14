@@ -34,6 +34,8 @@ github:
     issues: true
     projects: true
     discussions: true
+  pull_requests:
+    allow_auto_merge: true
   enabled_merge_buttons:
     squash:  true
     merge:   false
@@ -42,10 +44,29 @@ github:
     master:
       required_pull_request_reviews:
         required_approving_review_count: 1
+      required_status_checks:
+        strict: false
+        contexts:
+          # The per-job test contexts are no longer required individually. Listing them here
+          # is what made every change to the CI matrix in .github/workflows/bot.yml a
+          # two-sided edit, and a context left without a job to report it blocks merges
+          # indefinitely. Reviewers gate on the checks the PR shows.
+          - validate-ci-baseline
+          - validate-source
+          - validate-pr
+          - validate-pr-title
+          - validate-commit-coauthor
   collaborators:
     - ad1happy2go
     - rangareddy
     - deepakpanda93
+    - cshuo
+    - HuangZhenQiu
+    - linliu-code
+    - vamsikarnika
+    - rahil-c
+    - lokeshj1703
+    - hudi-bot
 notifications:
   commits:      commits@hudi.apache.org
   issues:       commits@hudi.apache.org

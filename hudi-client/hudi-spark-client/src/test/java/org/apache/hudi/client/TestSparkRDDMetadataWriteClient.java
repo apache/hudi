@@ -18,11 +18,14 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.expression.Expression;
+import org.apache.hudi.common.expression.Literal;
+import org.apache.hudi.common.expression.Predicate;
+import org.apache.hudi.common.expression.Predicates;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -30,6 +33,8 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -40,17 +45,12 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.expression.Expression;
-import org.apache.hudi.expression.Literal;
-import org.apache.hudi.expression.Predicate;
-import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -214,18 +214,20 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
     InstantRange instantRange = InstantRange.builder()
         .rangeType(InstantRange.RangeType.EXACT_MATCH)
         .explicitInstants(validInstantTimestamps).build();
-    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
+    HoodieSchema metadataSchema = HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(metadataSchema);
 
     HoodieAvroReaderContext readerContext = new HoodieAvroReaderContext(metadataMetaClient.getStorageConf(), metadataMetaClient.getTableConfig(), Option.of(instantRange), Option.of(predicate));
-    HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
+    HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)
-        .withFileSlice(fileSlice)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
         .withLatestCommitTime(validMetadataInstant)
-        .withRequestedSchema(HoodieMetadataRecord.getClassSchema())
+        .withRequestedSchema(metadataSchema)
         .withDataSchema(schema)
         .withProps(new TypedProperties())
-        .withEnableOptimizedLogBlockScan(hoodieWriteConfig.getMetadataConfig().isOptimizedLogBlocksScanEnabled())
         .build();
     try (ClosableIterator<HoodieRecord<IndexedRecord>> records = fileGroupReader.getClosableHoodieRecordIterator()) {
       Map<String, HoodieRecord<HoodieMetadataPayload>> actualMdtRecordMap = new HashMap<>();

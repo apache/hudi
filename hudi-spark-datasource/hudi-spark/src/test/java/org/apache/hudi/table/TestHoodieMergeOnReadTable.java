@@ -34,7 +34,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieLogFileReader;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -95,7 +95,7 @@ import static org.apache.hudi.common.model.HoodieWriteStat.NULL_COMMIT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
@@ -379,7 +379,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           writeClient.getEngineContext().getStorageConf(), config, writeClient.getEngineContext())) {
         HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
-            .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
+            .of(metaClient, HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
 
         Set<String> allPartitions = lastCommit.updatedRecords.stream()
             .map(record -> record.getPartitionPath())
@@ -499,7 +499,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           writeClient.getEngineContext().getStorageConf(), config, writeClient.getEngineContext())) {
         HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
-            .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
+            .of(metaClient, HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
 
         Set<String> allPartitions = lastCommit.updatedRecords.stream()
             .map(record -> record.getPartitionPath())
@@ -507,14 +507,14 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
             .keySet();
         assertEquals(allPartitions.size(), testTable.listAllBaseFiles().size());
 
-        // Verify that all data file has one log file
+        // Verify that all data files have an update log file and a delete log file
         HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
         for (String partitionPath : dataGen.getPartitionPaths()) {
           List<FileSlice> groupedLogFiles =
               table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
           for (FileSlice fileSlice : groupedLogFiles) {
             assertEquals(2, fileSlice.getLogFiles().count(),
-                "There should be 1 log file written for the latest data file - " + fileSlice);
+                "There should be an update log file and a delete log file written for the latest data file - " + fileSlice);
           }
         }
 
@@ -523,7 +523,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.logCompact(logCompactionInstantTime, true);
         HoodieCommitMetadata compactionMetadata = metaClient.getActiveTimeline().readCommitMetadata(metaClient.getActiveTimeline().reload().getCommitsAndCompactionTimeline().lastInstant().get());
         validateCommitMetadata(compactionMetadata, firstCommitTime, 80, 80, 0, 10);
-        validateLogCompactionMetadataHeaders(compactionMetadata, metaClient.getBasePath(), "102,101");
+        validateLogCompactionMetadataHeaders(compactionMetadata, metaClient.getBasePath(), "101,102");
 
         // Verify that recently written compacted data file has no log file
         metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -538,7 +538,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
               table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
           assertEquals(1, fileSlices.size());
           for (FileSlice slice : fileSlices) {
-            assertEquals(3, slice.getLogFiles().count(), "After compaction there will still be one log file.");
+            assertEquals(4, slice.getLogFiles().count(), "Log compaction should add compacted log files to the slice.");
             assertNotNull(slice.getBaseFile(), "Base file is not created by log compaction operation.");
           }
           assertTrue(result.getCommitMetadata().get().getWritePartitionPaths().stream().anyMatch(part -> part.contentEquals(partitionPath)));
@@ -602,13 +602,16 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   }
 
   private void validateLogCompactionMetadataHeaders(HoodieCommitMetadata compactionMetadata, StoragePath basePath, String expectedCompactedBlockTimes) {
+    HoodieTableMetaClient tableMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf())
+        .setBasePath(basePath)
+        .build();
     compactionMetadata.getFileIdAndFullPaths(basePath).values().stream()
         .map(StoragePath::new)
         .filter(path -> FSUtils.isLogFile(path.getName()))
         .forEach(logFilePath -> {
-          try {
-            HoodieLogFileReader reader = new HoodieLogFileReader(hoodieStorage(), new HoodieLogFile(logFilePath), AVRO_SCHEMA, 10000, false,
-                false, "_row_key", null);
+          try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
+              tableMetaClient, new HoodieLogFile(logFilePath), HOODIE_SCHEMA)) {
             Map<HoodieLogBlock.HeaderMetadataType, String> headers = Collections.emptyMap();
             while (reader.hasNext()) {
               // Get headers from the final block

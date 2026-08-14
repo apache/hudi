@@ -22,23 +22,36 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
+import org.apache.hudi.common.table.read.lsm.HoodieLsmFileGroupReader;
+import org.apache.hudi.common.table.read.lsm.LsmReaderUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.FlinkClientUtil;
+import org.apache.hudi.util.HoodieSchemaConverter;
+import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.avro.Schema;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
@@ -49,24 +62,44 @@ import java.util.List;
 /**
  * Utilities for format.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class FormatUtils {
-  private FormatUtils() {
-  }
 
   public static GenericRecord buildAvroRecordBySchema(
       IndexedRecord record,
-      Schema requiredSchema,
+      HoodieSchema requiredSchema,
       int[] requiredPos,
       GenericRecordBuilder recordBuilder) {
-    List<Schema.Field> requiredFields = requiredSchema.getFields();
+    List<HoodieSchemaField> requiredFields = requiredSchema.getFields();
     assert (requiredFields.size() == requiredPos.length);
     Iterator<Integer> positionIterator = Arrays.stream(requiredPos).iterator();
-    requiredFields.forEach(f -> recordBuilder.set(f, getVal(record, positionIterator.next())));
+    requiredFields.forEach(f -> recordBuilder.set(f.getAvroField(), getVal(record, positionIterator.next())));
     return recordBuilder.build();
   }
 
   private static Object getVal(IndexedRecord record, int pos) {
     return pos == -1 ? null : record.get(pos);
+  }
+
+  public static ClosableIterator<RowData> getLanceRecordIterator(
+      String path,
+      List<String> fieldNames,
+      List<DataType> fieldTypes,
+      int[] selectedFields,
+      Configuration hadoopConf) {
+    DataType selectedDataType = DataTypes.ROW(Arrays.stream(selectedFields)
+            .mapToObj(i -> DataTypes.FIELD(fieldNames.get(i), fieldTypes.get(i)))
+            .toArray(DataTypes.Field[]::new))
+        .bridgedTo(RowData.class);
+    HoodieSchema requestedSchema = HoodieSchemaConverter.convertToSchema(selectedDataType.getLogicalType());
+    HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(
+        new StoragePath(path), StreamerUtil.getLanceReadConfig(hadoopConf));
+    try {
+      return reader.getRowDataIterator(selectedDataType, requestedSchema);
+    } catch (RuntimeException e) {
+      reader.close();
+      throw new HoodieException("Failed to get iterator from Lance reader: " + path, e);
+    }
   }
 
   public static ExternalSpillableMap<String, byte[]> spillableMap(
@@ -87,6 +120,55 @@ public class FormatUtils {
       throw new HoodieIOException(
           "IOException when creating ExternalSpillableMap at " + writeConfig.getSpillableMapBasePath(), e);
     }
+  }
+
+  /**
+   * Creates the record reader matching the physical layout of the file slice.
+   *
+   * <p>LSM-tree tables use the sorted LSM reader, except for skip-merge queries which use the
+   * general file-group reader to expose record versions independently.</p>
+   */
+  public static HoodieRecordReader<RowData> createRecordReader(
+      HoodieTableMetaClient metaClient,
+      HoodieWriteConfig writeConfig,
+      InternalSchemaManager internalSchemaManager,
+      FileSlice fileSlice,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
+      String latestInstant,
+      String mergeType,
+      boolean emitDelete,
+      List<ExpressionPredicates.Predicate> predicates,
+      Option<InstantRange> instantRangeOption) {
+    if (!LsmReaderUtils.shouldUseLsmReader(metaClient.getTableConfig(), mergeType)) {
+      return createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
+          tableSchema, requiredSchema, latestInstant, mergeType, emitDelete, predicates, instantRangeOption);
+    }
+
+    final FlinkRowDataReaderContext readerContext =
+        new FlinkRowDataReaderContext(
+            metaClient.getStorageConf(),
+            () -> internalSchemaManager,
+            predicates,
+            metaClient.getTableConfig(),
+            instantRangeOption);
+
+    final TypedProperties typedProps = FlinkClientUtil.getReadProps(metaClient.getTableConfig(), writeConfig);
+    typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
+
+    return HoodieLsmFileGroupReader.<RowData>builder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(latestInstant)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
+        .withDataSchema(tableSchema)
+        .withRequestedSchema(requiredSchema)
+        .withInternalSchemaOpt(Option.ofNullable(internalSchemaManager.getQuerySchema()))
+        .withProps(typedProps)
+        .withEmitDelete(emitDelete)
+        .build();
   }
 
   /**
@@ -111,8 +193,8 @@ public class FormatUtils {
       HoodieWriteConfig writeConfig,
       InternalSchemaManager internalSchemaManager,
       FileSlice fileSlice,
-      Schema tableSchema,
-      Schema requiredSchema,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
       String latestInstant,
       String mergeType,
       boolean emitDelete,
@@ -126,21 +208,23 @@ public class FormatUtils {
             predicates,
             metaClient.getTableConfig(),
             instantRangeOption);
+
     final TypedProperties typedProps = FlinkClientUtil.getReadProps(metaClient.getTableConfig(), writeConfig);
     typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
 
-    return HoodieFileGroupReader.<RowData>newBuilder()
+    return HoodieFileGroupReader.<RowData>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime(latestInstant)
-        .withFileSlice(fileSlice)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
         .withDataSchema(tableSchema)
         .withRequestedSchema(requiredSchema)
-        .withInternalSchema(Option.ofNullable(internalSchemaManager.getQuerySchema()))
+        .withInternalSchemaOpt(Option.ofNullable(internalSchemaManager.getQuerySchema()))
         .withProps(typedProps)
         .withShouldUseRecordPosition(false)
         .withEmitDelete(emitDelete)
-        .withEnableOptimizedLogBlockScan(writeConfig.enableOptimizedLogBlocksScan())
         .build();
   }
 

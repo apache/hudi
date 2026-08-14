@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.Getter;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 import java.util.function.Supplier;
@@ -31,14 +32,11 @@ import java.util.function.Supplier;
  * Flink task context supplier.
  */
 public class FlinkTaskContextSupplier extends TaskContextSupplier {
+  @Getter
   private final RuntimeContext flinkRuntimeContext;
 
   public FlinkTaskContextSupplier(RuntimeContext flinkRuntimeContext) {
     this.flinkRuntimeContext = flinkRuntimeContext;
-  }
-
-  public RuntimeContext getFlinkRuntimeContext() {
-    return flinkRuntimeContext;
   }
 
   @Override

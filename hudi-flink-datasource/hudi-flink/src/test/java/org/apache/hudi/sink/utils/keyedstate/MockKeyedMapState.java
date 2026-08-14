@@ -18,8 +18,10 @@
 
 package org.apache.hudi.sink.utils.keyedstate;
 
-import org.apache.flink.api.common.state.MapState;
 import org.apache.hudi.sink.utils.MockMapState;
+
+import org.apache.flink.api.common.state.MapState;
+
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;

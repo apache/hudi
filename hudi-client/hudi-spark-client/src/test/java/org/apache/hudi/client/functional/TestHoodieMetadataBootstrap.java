@@ -29,13 +29,12 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,10 +48,9 @@ import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 
+@Slf4j
 @Tag("functional")
 public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMetadataBootstrap.class);
 
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
@@ -106,6 +104,34 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
     // validate
     validateMetadata(testTable);
     // after bootstrap do two writes and validate it's still functional.
+    doWriteInsertAndUpsert(testTable);
+    validateMetadata(testTable);
+  }
+
+  @Test
+  public void testMetadataSkipsZeroSizeFilesOnInitialize() throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType, false);
+    doPreBootstrapWriteOperation(testTable, INSERT, "0000001");
+    doPreBootstrapWriteOperation(testTable, "0000002");
+    // Add a zero-size base file — bootstrap should skip it without failing.
+    String fileName = UUID.randomUUID().toString();
+    Path zeroSizeFilePath = FileCreateUtilsLegacy.getBaseFilePath(basePath, "p1", "0000003", fileName);
+    FileCreateUtilsLegacy.createBaseFile(basePath, "p1", "0000003", fileName, 0);
+
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withSkipZeroSizeFilesOnInitialize(true)
+            .build())
+        .build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    syncTableMetadata(writeConfig);
+
+    // Delete the zero-size file before validation — it was skipped in MDT and must not
+    // exist on disk for the filesystem-vs-MDT consistency check to pass.
+    Files.delete(zeroSizeFilePath);
+    validateMetadata(testTable);
     doWriteInsertAndUpsert(testTable);
     validateMetadata(testTable);
   }

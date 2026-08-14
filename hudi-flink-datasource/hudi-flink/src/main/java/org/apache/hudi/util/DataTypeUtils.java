@@ -19,6 +19,11 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.exception.HoodieCatalogException;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
@@ -38,13 +43,33 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * Utilities for {@link org.apache.flink.table.types.DataType}.
  */
 public class DataTypeUtils {
+
+  public static Map<String, DataType> METADATA_COLUMNS = new LinkedHashMap<String, DataType>() {{
+      put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, DataTypes.STRING());
+      put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, DataTypes.STRING());
+      put(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.STRING());
+      put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.STRING());
+      put(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.STRING());
+    }};
+
+  public static Map<String, DataType> METADATA_COLUMNS_WITH_OPERATION = new LinkedHashMap<String, DataType>() {{
+      put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, DataTypes.STRING());
+      put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, DataTypes.STRING());
+      put(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.STRING());
+      put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.STRING());
+      put(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.STRING());
+      put(HoodieRecord.OPERATION_METADATA_FIELD, DataTypes.STRING());
+    }};
+
   /**
    * Returns whether the given type is TIMESTAMP type.
    */
@@ -89,6 +114,56 @@ public class DataTypeUtils {
    */
   public static boolean isDatetimeType(DataType type) {
     return isTimestampType(type) || isDateType(type);
+  }
+
+  /**
+   * Returns projected field ordinals with given RowType and produced RowType.
+   */
+  public static int[] projectOrdinals(RowType rowType, RowType producedRowType) {
+    List<String> fieldNames = rowType.getFieldNames();
+    return producedRowType.getFieldNames().stream().mapToInt(fieldNames::indexOf).toArray();
+  }
+
+  /**
+   * Creates a hoodie schema from a Flink row type with logical metadata from the table schema.
+   *
+   * <p>When a field is a hoodie specific logical type in {@code tableSchema}, this method
+   * reuses the table schema field to preserve logical metadata that cannot be recovered from Flink
+   * {@link RowType}, for example VECTOR element type and dimension. Other fields are taken from the
+   * schema converted from {@code rowType}, so the returned schema follows the row type's field order
+   * while retaining hoodie-specific logical metadata where needed.
+   *
+   * @param rowType     Flink row type to convert
+   * @param tableSchema source table schema with hoodie logical type metadata
+   * @return hoodie schema matching the row type field order
+   */
+  public static HoodieSchema toHoodieSchema(RowType rowType, HoodieSchema tableSchema) {
+    HoodieSchema convertedSchema = HoodieSchemaConverter.convertToSchema(rowType);
+    List<HoodieSchemaField> schemaFields = new ArrayList<>(rowType.getFieldCount());
+
+    for (String fieldName : rowType.getFieldNames()) {
+      HoodieSchemaField tableField = tableSchema.getField(fieldName).orElse(null);
+      HoodieSchemaField field = tableField != null && useTableSchemaField(tableField)
+          ? tableField : convertedSchema.getField(fieldName).get();
+      schemaFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+    }
+
+    return HoodieSchema.createRecord(
+        tableSchema.getName(),
+        tableSchema.getNamespace().orElse(null),
+        tableSchema.getDoc().orElse(null),
+        schemaFields);
+  }
+
+  /**
+   * Returns whether the converted schema should reuse the field from the table schema.
+   *
+   * <p>Only types whose logical metadata cannot be fully reconstructed from Flink
+   * {@link RowType} are reused from the table schema.
+   */
+  private static boolean useTableSchemaField(HoodieSchemaField field) {
+    HoodieSchemaType fieldType = field.schema().getNonNullType().getType();
+    return fieldType == HoodieSchemaType.VECTOR;
   }
 
   /**
@@ -219,5 +294,27 @@ public class DataTypeUtils {
     mergedFields.addAll(rowType.getFields());
 
     return new RowType(false, mergedFields);
+  }
+
+  /**
+   * Return virtual metadata columns from given Schema.
+   */
+  public static List<String> getMetadataColumns(Schema schema) {
+    return schema.getColumns().stream()
+        .filter(c -> c instanceof Schema.UnresolvedMetadataColumn)
+        .peek(c -> {
+          if (!HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(c.getName())) {
+            throw new HoodieCatalogException(
+                "Hudi catalog only supports VIRTUAL metadata column, valid metadata columns: " + HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
+          }
+          if (!((Schema.UnresolvedMetadataColumn) c).isVirtual()) {
+            throw new HoodieCatalogException(
+                "Hudi catalog only supports VIRTUAL metadata column, usage: `_hoodie_commit_time STRING METADATA VIRTUAL`.");
+          }
+          if (((Schema.UnresolvedMetadataColumn) c).getMetadataKey() != null) {
+            throw new HoodieCatalogException(
+                "Hudi catalog doesn't support metadata key, usage: `_hoodie_commit_time STRING METADATA VIRTUAL`.");
+          }
+        }).map(Schema.UnresolvedColumn::getName).collect(Collectors.toList());
   }
 }

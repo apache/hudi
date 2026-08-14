@@ -39,17 +39,17 @@ the folder. Here are the docker commands to build the image by specifying differ
 ```shell
 docker build \
  --build-arg HIVE_VERSION=3.1.3 \
- --build-arg FLINK_VERSION=1.15.3 \
- --build-arg SPARK_VERSION=3.3.1 \
- --build-arg SPARK_HADOOP_VERSION=2.7 \
- -t hudi-ci-bundle-validation-base:flink1153hive313spark331 .
-docker image tag hudi-ci-bundle-validation-base:flink1153hive313spark331 apachehudi/hudi-ci-bundle-validation-base:flink1153hive313spark331
+ --build-arg FLINK_VERSION=1.18.1 \
+ --build-arg SPARK_VERSION=3.4.3 \
+ --build-arg SPARK_HADOOP_VERSION=3 \
+ -t hudi-ci-bundle-validation-base:flink1181hive313spark343 .
+docker image tag hudi-ci-bundle-validation-base:flink1181hive313spark343 apachehudi/hudi-ci-bundle-validation-base:flink1181hive313spark343
 ```
 
 To upload the image with the tag:
 
 ```shell
-docker push apachehudi/hudi-ci-bundle-validation-base:flink1153hive313spark331
+docker push apachehudi/hudi-ci-bundle-validation-base:flink1181hive313spark343
 ```
 
 Note that for each library like Hive and Spark, the download and extraction happen under one `RUN` instruction so that
@@ -57,6 +57,23 @@ only one layer is generated to limit the size of the image. However, this makes 
 image. If you need faster iteration for local build, you may use the `Dockerfile` under `base-dev/`, which uses `ADD`
 instruction for downloads, which provides caching across builds. This increases the size of the generated image compared
 to `base/` and the image should only be used for development only and not be pushed to remote.
+
+## Building Image for Azure CI
+
+The `Dockerfile` and build script for the Docker image used by Azure CI are under `azure/`. To build the image:
+
+```shell
+cd azure
+./build.sh
+```
+
+This builds and tags the image as `apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_java11`.
+
+To push the image to Docker Hub (only from a few PMCs with permissions):
+
+```shell
+docker push apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_java11
+```
 
 ## Running Bundle Validation on a Release Candidate
 

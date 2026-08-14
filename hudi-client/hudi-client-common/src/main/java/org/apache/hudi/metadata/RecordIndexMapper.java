@@ -27,17 +27,18 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Mapper for Record Level Index (RLI).
  */
+@Slf4j
 public class RecordIndexMapper extends MetadataIndexMapper {
-  private static final Logger LOG = LoggerFactory.getLogger(RecordIndexMapper.class);
 
   public RecordIndexMapper(HoodieWriteConfig dataWriteConfig) {
     super(dataWriteConfig);
@@ -46,9 +47,11 @@ public class RecordIndexMapper extends MetadataIndexMapper {
   @Override
   protected List<HoodieRecord> generateRecords(WriteStatus writeStatus) {
     List<HoodieRecord> allRecords = new ArrayList<>();
+    // delegates of one write status share at most a few distinct instants, so memoize the parse
+    Map<String, Long> instantTimeMillisCache = new HashMap<>();
     for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
       if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
-        if (recordDelegate.getIgnoreIndexUpdate()) {
+        if (recordDelegate.isIgnoreIndexUpdate()) {
           continue;
         }
         HoodieRecord hoodieRecord;
@@ -61,7 +64,7 @@ public class RecordIndexMapper extends MetadataIndexMapper {
             if (!recordDelegate.getCurrentLocation().get().getFileId().equals(newLocation.get().getFileId())) {
               final String msg = String.format("Detected update in location of record with key %s from %s to %s. The fileID should not change.",
                   recordDelegate, recordDelegate.getCurrentLocation().get(), newLocation.get());
-              LOG.error(msg);
+              log.error(msg);
               throw new HoodieMetadataException(msg);
             }
             // for updates, we can skip updating RLI partition in MDT
@@ -69,7 +72,10 @@ public class RecordIndexMapper extends MetadataIndexMapper {
             // Insert new record case
             hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
                 recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
-                newLocation.get().getFileId(), newLocation.get().getInstantTime(), dataWriteConfig.getWritesFileIdEncoding());
+                newLocation.get().getFileId(),
+                instantTimeMillisCache.computeIfAbsent(
+                    newLocation.get().getInstantTime(), HoodieMetadataPayload::parseRecordIndexInstantTime),
+                dataWriteConfig.getWritesFileIdEncoding());
             allRecords.add(hoodieRecord);
           }
         } else {

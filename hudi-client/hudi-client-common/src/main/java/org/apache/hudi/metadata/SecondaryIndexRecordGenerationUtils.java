@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -34,6 +33,8 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -47,13 +48,12 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -69,7 +69,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createSecondaryIndexRecord;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.filePath;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryResolveSchemaForTable;
 
 /**
@@ -106,7 +105,7 @@ public class SecondaryIndexRecordGenerationUtils {
       throw new HoodieIOException("Secondary index cannot support logs having inserts with current offering. Please disable secondary index.");
     }
 
-    Schema tableSchema;
+    HoodieSchema tableSchema;
     try {
       tableSchema = tryResolveSchemaForTable(dataMetaClient).get();
     } catch (Exception e) {
@@ -125,7 +124,7 @@ public class SecondaryIndexRecordGenerationUtils {
       // validate that for a given fileId, either we have 1 parquet file or N log files.
       AtomicInteger totalParquetFiles = new AtomicInteger();
       AtomicInteger totalLogFiles = new AtomicInteger();
-      writeStats.stream().forEach(writeStat -> {
+      writeStats.forEach(writeStat -> {
         if (FSUtils.isLogFile(new StoragePath(basePath, writeStat.getPath()))) {
           totalLogFiles.getAndIncrement();
         } else {
@@ -158,7 +157,7 @@ public class SecondaryIndexRecordGenerationUtils {
         } else { // log files are added in current commit
           // add new log files to existing latest file slice and compute the secondary index to primary key mapping.
           FileSlice latestFileSlice = fileSliceOption.get();
-          writeStats.stream().forEach(writeStat -> {
+          writeStats.forEach(writeStat -> {
             StoragePathInfo logFile = new StoragePathInfo(new StoragePath(basePath, writeStat.getPath()), writeStat.getFileSizeInBytes(), false, (short) 0, 0, 0);
             latestFileSlice.addLogFile(new HoodieLogFile(logFile));
           });
@@ -220,7 +219,7 @@ public class SecondaryIndexRecordGenerationUtils {
   public static <T> Map<String, String> getRecordKeyToSecondaryKey(HoodieTableMetaClient metaClient,
                                                                     HoodieReaderContext<T> readerContext,
                                                                     FileSlice fileSlice,
-                                                                    Schema tableSchema,
+                                                                    HoodieSchema tableSchema,
                                                                     HoodieIndexDefinition indexDefinition,
                                                                     String instantTime,
                                                                     TypedProperties props,
@@ -237,38 +236,39 @@ public class SecondaryIndexRecordGenerationUtils {
   }
 
   public static <T> HoodieData<HoodieRecord> readSecondaryKeysFromFileSlices(HoodieEngineContext engineContext,
-                                                                             List<Pair<String, FileSlice>> partitionFileSlicePairs,
+                                                                             List<FileSliceAndPartition> fileSlices,
                                                                              int secondaryIndexMaxParallelism,
                                                                              String activeModule, HoodieTableMetaClient metaClient,
                                                                              HoodieIndexDefinition indexDefinition,
                                                                              TypedProperties props) {
-    if (partitionFileSlicePairs.isEmpty()) {
+    if (fileSlices.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
-    final int parallelism = Math.min(partitionFileSlicePairs.size(), secondaryIndexMaxParallelism);
+    final int parallelism = Math.min(fileSlices.size(), secondaryIndexMaxParallelism);
     final StoragePath basePath = metaClient.getBasePath();
-    Schema tableSchema;
+    HoodieSchema tableSchema;
     try {
-      tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+      tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
     } catch (Exception e) {
       throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePath(), e);
     }
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
-    engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFileSlicePairs.size() + " file slices");
+    engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + fileSlices.size() + " file slices");
     HoodieFileFormat baseFileFormat = metaClient.getTableConfig().getBaseFileFormat();
-    return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
-      final String partition = partitionAndBaseFile.getKey();
-      final FileSlice fileSlice = partitionAndBaseFile.getValue();
-      Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> filePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
-      Schema readerSchema;
+    return engineContext.parallelize(fileSlices, parallelism).flatMap(partitionAndBaseFile -> {
+      final String partition = partitionAndBaseFile.getPartitionPath();
+      final FileSlice fileSlice = partitionAndBaseFile.getFileSlice();
+      Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> FSUtils.getAbsoluteFilePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
+      HoodieSchema readerSchema;
       if (dataFilePath.isPresent()) {
         readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
             .getFileFormatUtils(baseFileFormat)
-            .readAvroSchema(metaClient.getStorage(), dataFilePath.get());
+            .readSchema(metaClient.getStorage(), dataFilePath.get());
       } else {
         readerSchema = tableSchema;
       }
-      ClosableIterator<Pair<String, String>> secondaryIndexGenerator = createSecondaryIndexRecordGenerator(readerContextFactory.getContext(), metaClient, fileSlice, readerSchema, indexDefinition,
+      ClosableIterator<Pair<String, String>> secondaryIndexGenerator = createSecondaryIndexRecordGenerator(
+          readerContextFactory.getContext(), metaClient, fileSlice, readerSchema, indexDefinition,
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""), props, false);
       return new CloseableMappingIterator<>(secondaryIndexGenerator, pair -> createSecondaryIndexRecord(pair.getKey(), pair.getValue(), indexDefinition.getIndexName(), false));
     });
@@ -280,16 +280,18 @@ public class SecondaryIndexRecordGenerationUtils {
   private static <T> ClosableIterator<Pair<String, String>> createSecondaryIndexRecordGenerator(HoodieReaderContext<T> readerContext,
                                                                                                 HoodieTableMetaClient metaClient,
                                                                                                 FileSlice fileSlice,
-                                                                                                Schema tableSchema,
+                                                                                                HoodieSchema tableSchema,
                                                                                                 HoodieIndexDefinition indexDefinition,
                                                                                                 String instantTime,
                                                                                                 TypedProperties props,
                                                                                                 boolean allowInflightInstants) throws IOException {
     String secondaryKeyField = indexDefinition.getSourceFieldsKey();
-    Schema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField);
-    HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+    HoodieSchema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField);
+    HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>builder()
         .withReaderContext(readerContext)
-        .withFileSlice(fileSlice)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
         .withHoodieTableMetaClient(metaClient)
         .withProps(props)
         .withLatestCommitTime(instantTime)
@@ -340,15 +342,15 @@ public class SecondaryIndexRecordGenerationUtils {
     };
   }
 
-  private static Schema getRequestedSchemaForSecondaryIndex(HoodieTableMetaClient metaClient, Schema tableSchema, String secondaryKeyField) {
+  private static HoodieSchema getRequestedSchemaForSecondaryIndex(HoodieTableMetaClient metaClient, HoodieSchema tableSchema, String secondaryKeyField) {
     String[] recordKeyFields;
-    if (tableSchema.getField(RECORD_KEY_METADATA_FIELD) != null) {
+    if (tableSchema.getField(RECORD_KEY_METADATA_FIELD).isPresent()) {
       recordKeyFields = new String[] {RECORD_KEY_METADATA_FIELD};
     } else {
       recordKeyFields = metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0]);
     }
     String[] projectionFields = Arrays.copyOf(recordKeyFields, recordKeyFields.length + 1);
     projectionFields[recordKeyFields.length] = secondaryKeyField;
-    return HoodieAvroUtils.projectSchema(tableSchema, Arrays.asList(projectionFields));
+    return HoodieSchemaUtils.projectSchema(tableSchema, Arrays.asList(projectionFields));
   }
 }

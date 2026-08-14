@@ -22,6 +22,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.TimelineServiceClient;
+import org.apache.hudi.common.table.timeline.TimelineServiceClientBase.RequestMethod;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -31,12 +33,9 @@ import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.timeline.TimelineServiceClient;
-import org.apache.hudi.timeline.TimelineServiceClientBase.RequestMethod;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -61,8 +60,8 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PA
  * underlying files maintained by the timeline server (each file contains multiple marker
  * entries).
  */
+@Slf4j
 public class TimelineServerBasedWriteMarkers extends WriteMarkers {
-  private static final Logger LOG = LoggerFactory.getLogger(TimelineServerBasedWriteMarkers.class);
   private static final TypeReference<Boolean> BOOLEAN_TYPE_REFERENCE = new TypeReference<Boolean>() {};
   private static final TypeReference<Set<String>> SET_TYPE_REFERENCE = new TypeReference<Set<String>>() {};
   private final TimelineServiceClient timelineServiceClient;
@@ -134,8 +133,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
 
     Map<String, String> paramsMap = getConfigMap(partitionPath, markerFileName, false);
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
-    LOG.info("[timeline-server-based] Created marker file " + partitionPath + "/" + markerFileName
-        + " in " + timer.endTimer() + " ms");
+    log.info("[timeline-server-based] Created marker file {}/{} in {} ms", partitionPath, markerFileName, timer.endTimer());
     if (success) {
       return Option.of(new StoragePath(FSUtils.constructAbsolutePath(markerDirPath, partitionPath), markerFileName));
     } else {
@@ -152,8 +150,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
 
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
 
-    LOG.info("[timeline-server-based] Created marker file with early conflict detection " + partitionPath + "/" + markerFileName
-        + " in " + timer.endTimer() + " ms");
+    log.info("[timeline-server-based] Created marker file with early conflict detection {}/{} in {} ms", partitionPath, markerFileName, timer.endTimer());
 
     if (success) {
       return Option.of(new StoragePath(FSUtils.constructAbsolutePath(markerDirPath, partitionPath), markerFileName));

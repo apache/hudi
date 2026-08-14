@@ -18,13 +18,15 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
+import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+
 import java.io.Serializable;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.common.util.collection.Pair;
 
 /**
  * This is a GenericRecord payload estimator estimates the size of a full generic record {@link GenericRecord}.

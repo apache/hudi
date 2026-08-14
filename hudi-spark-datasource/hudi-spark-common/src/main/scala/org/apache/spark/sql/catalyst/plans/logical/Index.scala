@@ -58,18 +58,22 @@ case class DropIndex(table: LogicalPlan,
 
 /**
  * The logical plan of the SHOW INDEXES command.
+ *
+ * NOTE: named `HoodieShowIndexes` to avoid an FQCN collision with
+ * `org.apache.spark.sql.catalyst.plans.logical.ShowIndexes` from `lance-spark-base` (>=0.4.0),
+ * which otherwise shadows this class on the `hudi-spark3.x`/`4.x` classpath and breaks pattern matching.
  */
-case class ShowIndexes(table: LogicalPlan,
-                       override val output: Seq[Attribute] = ShowIndexes.getOutputAttrs) extends Command {
+case class HoodieShowIndexes(table: LogicalPlan,
+                             override val output: Seq[Attribute] = HoodieShowIndexes.getOutputAttrs) extends Command {
 
   override def children: Seq[LogicalPlan] = Seq(table)
 
-  def withNewChildrenInternal(newChild: IndexedSeq[LogicalPlan]): ShowIndexes = {
+  def withNewChildrenInternal(newChild: IndexedSeq[LogicalPlan]): HoodieShowIndexes = {
     copy(table = newChild.head)
   }
 }
 
-object ShowIndexes {
+object HoodieShowIndexes {
   def getOutputAttrs: Seq[Attribute] = Seq(
     AttributeReference("index_name", StringType, nullable = false)(),
     AttributeReference("index_type", StringType, nullable = false)(),

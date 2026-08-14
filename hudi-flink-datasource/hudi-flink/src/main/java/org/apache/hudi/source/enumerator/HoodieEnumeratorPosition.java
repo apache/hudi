@@ -1,0 +1,66 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.source.enumerator;
+
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
+
+import java.io.Serializable;
+
+/**
+ * The position of {@link HoodieContinuousSplitEnumerator}. The completionTime notion which is introduced in incremental
+ * read mainly for scenarios of "hollow" instants: instants start very early but finished long time after, the completion
+ * time based inc query gives clear semantics of the consumption boundaries. The instantTime is from legacy readers and
+ * now just used for logging purposes.
+ */
+@Getter
+@EqualsAndHashCode
+@ToString
+public class HoodieEnumeratorPosition implements Serializable {
+  // Max instant time consumed
+  private final Option<String> issuedInstant;
+  // Max completion time
+  private final Option<String> issuedOffset;
+
+  static HoodieEnumeratorPosition empty() {
+    return new HoodieEnumeratorPosition(Option.empty(), Option.empty());
+  }
+
+  static HoodieEnumeratorPosition of(String lastInstant, String lastInstantCompletionTime) {
+    return new HoodieEnumeratorPosition(lastInstant, lastInstantCompletionTime);
+  }
+
+  static HoodieEnumeratorPosition of(Option<String> lastInstant, Option<String> lastInstantCompletionTime) {
+    return new HoodieEnumeratorPosition(lastInstant, lastInstantCompletionTime);
+  }
+
+  private HoodieEnumeratorPosition(String issuedInstant, String issuedOffset) {
+    this.issuedInstant = StringUtils.isNullOrEmpty(issuedInstant) ? Option.empty() : Option.of(issuedInstant);
+    this.issuedOffset = StringUtils.isNullOrEmpty(issuedOffset) ? Option.empty() : Option.of(issuedOffset);
+  }
+
+  private HoodieEnumeratorPosition(Option<String> issuedInstant, Option<String> issuedOffset) {
+    this.issuedInstant = issuedInstant;
+    this.issuedOffset = issuedOffset;
+  }
+}

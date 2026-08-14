@@ -22,8 +22,7 @@ import org.apache.hudi.client.transaction.lock.StorageLockClient;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,9 +33,8 @@ import java.util.function.Supplier;
  * Storage-based audit service implementation for lock provider operations.
  * Writes audit records to a single JSONL file per transaction to track lock lifecycle events.
  */
+@Slf4j
 public class StorageLockProviderAuditService implements AuditService {
-  
-  private static final Logger LOG = LoggerFactory.getLogger(StorageLockProviderAuditService.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   
   // Audit configuration constants
@@ -102,7 +100,7 @@ public class StorageLockProviderAuditService implements AuditService {
     String filename = String.format("%d_%s.jsonl", transactionStartTime, ownerId);
     this.auditFilePath = new StoragePath(getAuditFolderPath(basePath), filename).toString();
     
-    LOG.debug("Initialized audit service for transaction starting at {} with file: {}", 
+    log.debug("Initialized audit service for transaction starting at {} with file: {}", 
         transactionStartTime, auditFilePath);
   }
   
@@ -133,7 +131,7 @@ public class StorageLockProviderAuditService implements AuditService {
     // Write the accumulated audit records to file
     writeAuditFile();
     
-    LOG.debug("Recorded audit operation: state={}, timestamp={}, file={}", 
+    log.debug("Recorded audit operation: state={}, timestamp={}, file={}", 
         state, timestamp, auditFilePath);
   }
   
@@ -150,12 +148,12 @@ public class StorageLockProviderAuditService implements AuditService {
       String content = auditBuffer.toString();
       boolean success = storageLockClient.writeObject(auditFilePath, content);
       if (success) {
-        LOG.debug("Successfully wrote audit records to: {}", auditFilePath);
+        log.debug("Successfully wrote audit records to: {}", auditFilePath);
       } else {
-        LOG.warn("Failed to write audit records to: {}", auditFilePath);
+        log.warn("Failed to write audit records to: {}", auditFilePath);
       }
     } catch (Exception e) {
-      LOG.warn("Failed to write audit records to: {}", auditFilePath, e);
+      log.warn("Failed to write audit records to: {}", auditFilePath, e);
       // Don't throw exception - audit failures should not break lock operations
     }
   }
@@ -170,7 +168,7 @@ public class StorageLockProviderAuditService implements AuditService {
   public synchronized void close() throws Exception {
     // All audit records are already written after each recordOperation()
     // No additional writes needed during close
-    LOG.debug("Closed StorageLockProviderAuditService for transaction: {}, owner: {}", 
+    log.debug("Closed StorageLockProviderAuditService for transaction: {}, owner: {}", 
         transactionStartTime, ownerId);
   }
 }

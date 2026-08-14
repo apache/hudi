@@ -21,10 +21,12 @@ package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.HFileUtils;
+import org.apache.hudi.common.util.LanceUtils;
 import org.apache.hudi.common.util.OrcUtils;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.io.storage.hadoop.HoodieHadoopIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -34,7 +36,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
-import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
+import static org.apache.hudi.common.util.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -50,6 +52,7 @@ public class TestHoodieHadoopIOFactory {
       assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.parquet")) instanceof ParquetUtils);
       assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.orc")) instanceof OrcUtils);
       assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.hfile")) instanceof HFileUtils);
+      assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.lance")) instanceof LanceUtils);
       assertThrows(
           UnsupportedOperationException.class,
           () -> ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.log")));
@@ -57,6 +60,7 @@ public class TestHoodieHadoopIOFactory {
       assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.PARQUET) instanceof ParquetUtils);
       assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.ORC) instanceof OrcUtils);
       assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.HFILE) instanceof HFileUtils);
+      assertTrue(ioFactory.getFileFormatUtils(HoodieFileFormat.LANCE) instanceof LanceUtils);
       assertThrows(
           UnsupportedOperationException.class,
           () -> ioFactory.getFileFormatUtils(HoodieFileFormat.HOODIE_LOG));

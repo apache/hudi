@@ -7,37 +7,76 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.exception;
 
+import org.apache.hudi.common.util.StringUtils;
+
 import javax.annotation.Nonnull;
 
+import java.io.IOException;
+
 /**
- * Class collecting common utilities helping in handling {@link Exception}s
+ * Util class for exception analysis.
  */
 public final class ExceptionUtil {
   private ExceptionUtil() {
   }
 
   /**
-   * Fetches inner-most cause of the provided {@link Throwable}
+   * Returns true if error message is contained in any nested exception to provided {@link Throwable}.
    */
-  @Nonnull
-  public static Throwable getRootCause(@Nonnull Throwable t) {
+  public static boolean validateErrorMsg(@Nonnull Throwable t, String errorMsg) {
+    if (StringUtils.isNullOrEmpty(errorMsg)) {
+      return false;
+    }
+
     Throwable cause = t;
-    while (cause.getCause() != null) {
+    while (cause != null) {
+      if (cause.getMessage() != null && cause.getMessage().contains(errorMsg)) {
+        return true;
+      }
       cause = cause.getCause();
     }
 
-    return cause;
+    return false;
   }
 
+  /**
+   * Returns true if any nested exception is an instance of the provided exception class.
+   */
+  public static boolean isCausedBy(@Nonnull Throwable t, @Nonnull Class<? extends Throwable> clazz) {
+    Throwable cause = t;
+    while (cause != null) {
+      if (clazz.isInstance(cause)) {
+        return true;
+      }
+      cause = cause.getCause();
+    }
+
+    return false;
+  }
+
+  /**
+   * Throws the provided exception as-is when it is an {@link IOException} or
+   * {@link RuntimeException}, otherwise wraps it in an {@link IOException}.
+   */
+  public static void throwAsIOExceptionOrRuntimeException(Throwable exception) throws IOException {
+    if (exception instanceof IOException) {
+      throw (IOException) exception;
+    }
+    if (exception instanceof RuntimeException) {
+      throw (RuntimeException) exception;
+    }
+    throw new IOException(exception);
+  }
 }

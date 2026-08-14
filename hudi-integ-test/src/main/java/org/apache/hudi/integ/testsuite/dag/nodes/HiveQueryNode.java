@@ -26,6 +26,8 @@ import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.helpers.HiveServiceProvider;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -37,6 +39,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 /**
  * A hive query node in the DAG of operations for a workflow. used to perform a hive query with given config.
  */
+@Slf4j
 public class HiveQueryNode extends BaseQueryNode {
 
   private HiveServiceProvider hiveServiceProvider;

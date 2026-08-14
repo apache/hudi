@@ -23,30 +23,30 @@ import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.LogExtensions;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.exception.InvalidHoodieFileNameException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -64,27 +64,15 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
  * Utility functions related to accessing the file storage.
  */
+@Slf4j
 public class FSUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FSUtils.class);
-  // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
-  // Archive log files are of this pattern - .commits_.archive.1_1-0-1
   public static final String PATH_SEPARATOR = "/";
-  public static final Pattern LOG_FILE_PATTERN =
-      Pattern.compile("^\\.([^._]+)_([^.]*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(\\.cdc)?)?$");
-  public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
-  private static final Pattern BASE_FILE_PATTERN = Pattern.compile("[a-zA-Z0-9-]+_[a-zA-Z0-9-]+_[0-9]+\\.[a-zA-Z0-9]+");
-
-  private static final String LOG_FILE_EXTENSION = "log";
-  private static final String LOG_FILE_START_WITH_CHARACTER = ".";
 
   private static final StoragePathFilter ALLOW_ALL_FILTER = file -> true;
 
@@ -117,6 +105,22 @@ public class FSUtils {
     return String.format("%d-%d-%d", taskPartitionId, stageId, taskAttemptId);
   }
 
+  /**
+   * Makes a write token from the engine's task context, falling back to the default
+   * token if the context is unavailable (e.g. on the driver).
+   */
+  public static String makeWriteToken(TaskContextSupplier taskContextSupplier) {
+    try {
+      return makeWriteToken(
+          taskContextSupplier.getPartitionIdSupplier().get(),
+          taskContextSupplier.getStageIdSupplier().get(),
+          taskContextSupplier.getAttemptIdSupplier().get());
+    } catch (Throwable t) {
+      log.warn("Error generating write token, using default.", t);
+      return HoodieLogFormat.DEFAULT_WRITE_TOKEN;
+    }
+  }
+
   public static String makeBaseFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, fileExtension);
   }
@@ -131,14 +135,17 @@ public class FSUtils {
   }
 
   public static String getCommitTime(String fullFileName) {
-    try {
-      if (isLogFile(fullFileName)) {
-        return fullFileName.split("_")[1].split("\\.", 2)[0];
-      }
-      return fullFileName.split("_")[2].split("\\.", 2)[0];
-    } catch (ArrayIndexOutOfBoundsException e) {
-      throw new HoodieException("Failed to get commit time from filename: " + fullFileName, e);
+    Option<FileNameParser.LogFileName> logFileName = FileNameParser.parseLogFile(fullFileName);
+    if (logFileName.isPresent()) {
+      return logFileName.get().getDeltaCommitTime();
     }
+
+    Option<FileNameParser.BaseFileName> baseFileName = FileNameParser.parseBaseFile(fullFileName);
+    if (baseFileName.isPresent()) {
+      return baseFileName.get().getCommitTime();
+    }
+
+    throw new HoodieException("Failed to get commit time from filename: " + fullFileName);
   }
 
   public static String getCommitTimeWithFullPath(String path) {
@@ -294,17 +301,6 @@ public class FSUtils {
     return UUID.randomUUID().toString();
   }
 
-  /**
-   * Returns prefix for a file group from fileId.
-   */
-  public static String getFileIdPfxFromFileId(String fileId) {
-    Matcher matcher = PREFIX_BY_FILE_ID_PATTERN.matcher(fileId);
-    if (!matcher.find()) {
-      throw new HoodieValidationException("Failed to get prefix from " + fileId);
-    }
-    return matcher.group(1);
-  }
-
   public static String createNewFileId(String idPfx, int id) {
     // format: {idPrefix}-{id}
     return new StringBuilder()
@@ -314,34 +310,42 @@ public class FSUtils {
         .toString();
   }
 
+  public static StoragePath getAbsolutePartitionPath(StoragePath basePath, String partition) {
+    return StringUtils.isNullOrEmpty(partition)
+        ? basePath : new StoragePath(basePath, partition);
+  }
+
+  public static StoragePath getAbsoluteFilePath(StoragePath basePath, String partition, String fileName) {
+    return StringUtils.isNullOrEmpty(partition)
+        ? new StoragePath(basePath, fileName)
+        : new StoragePath(basePath, partition + StoragePath.SEPARATOR + fileName);
+  }
+
   /**
    * Get the file extension from the log file.
    */
   public static String getFileExtensionFromLog(StoragePath logPath) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
-    if (!matcher.matches()) {
+    Option<FileNameParser.LogFileName> logFileName = FileNameParser.parseLogFile(logPath.getName());
+    if (!logFileName.isPresent()) {
       throw new InvalidHoodiePathException(logPath.toString(), "LogFile");
     }
-    return matcher.group(3);
+    return logFileName.get().getFileExtension();
   }
 
   public static String getFileIdFromFileName(String fileName) {
-    if (FSUtils.isLogFile(fileName)) {
-      Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
-      if (!matcher.matches()) {
-        throw new InvalidHoodieFileNameException(fileName, "LogFile");
-      }
-      return matcher.group(1);
+    Option<FileNameParser.LogFileName> logFileName = FileNameParser.parseLogFile(fileName);
+    if (logFileName.isPresent()) {
+      return logFileName.get().getFileId();
     }
     return FSUtils.getFileId(fileName);
   }
 
   public static String getFileIdFromLogPath(StoragePath path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
+    Option<FileNameParser.LogFileName> logFileName = FileNameParser.parseLogFile(path.getName());
+    if (!logFileName.isPresent()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
-    return matcher.group(1);
+    return logFileName.get().getFileId();
   }
 
   public static String getFileIdFromFilePath(StoragePath filePath) {
@@ -355,58 +359,55 @@ public class FSUtils {
    * Get the second part of the file name in the log file. That will be the delta commit time.
    */
   public static String getDeltaCommitTimeFromLogPath(StoragePath path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
+    Option<FileNameParser.LogFileName> logFileName = FileNameParser.parseLogFile(path.getName());
+    if (!logFileName.isPresent()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
-    return matcher.group(2);
+    return logFileName.get().getDeltaCommitTime();
   }
 
   /**
    * Get TaskPartitionId used in log-path.
    */
   public static Integer getTaskPartitionIdFromLogPath(StoragePath path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
+    Option<FileNameParser.LogFileName> logFileName = FileNameParser.parseLogFile(path.getName());
+    if (!logFileName.isPresent()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
-    String val = matcher.group(7);
-    return val == null ? null : Integer.parseInt(val);
+    return logFileName.get().getTaskPartitionId();
   }
 
   /**
    * Get Write-Token used in log-path.
    */
   public static String getWriteTokenFromLogPath(StoragePath path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
+    Option<FileNameParser.LogFileName> logFileName = FileNameParser.parseLogFile(path.getName());
+    if (!logFileName.isPresent()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
-    return matcher.group(6);
+    return logFileName.get().getWriteToken();
   }
 
   /**
    * Get StageId used in log-path.
    */
   public static Integer getStageIdFromLogPath(StoragePath path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
+    Option<FileNameParser.LogFileName> logFileName = FileNameParser.parseLogFile(path.getName());
+    if (!logFileName.isPresent()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
-    String val = matcher.group(8);
-    return val == null ? null : Integer.parseInt(val);
+    return logFileName.get().getStageId();
   }
 
   /**
    * Get Task Attempt Id used in log-path.
    */
   public static Integer getTaskAttemptIdFromLogPath(StoragePath path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
+    Option<FileNameParser.LogFileName> logFileName = FileNameParser.parseLogFile(path.getName());
+    if (!logFileName.isPresent()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
-    String val = matcher.group(9);
-    return val == null ? null : Integer.parseInt(val);
+    return logFileName.get().getTaskAttemptId();
   }
 
   /**
@@ -417,36 +418,47 @@ public class FSUtils {
   }
 
   public static int getFileVersionFromLog(String logFileName) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(logFileName);
-    if (!matcher.matches()) {
+    Option<FileNameParser.LogFileName> parsedLogFileName = FileNameParser.parseLogFile(logFileName);
+    if (!parsedLogFileName.isPresent()) {
       throw new HoodieIOException("Invalid log file name: " + logFileName);
     }
-    return Integer.parseInt(matcher.group(4));
+    return parsedLogFileName.get().getLogVersion();
   }
 
-  public static String makeLogFileName(String fileId, String logFileExtension, String deltaCommitTime, int version,
-      String writeToken) {
+  public static String makeInlineLogFileName(String fileId, String logFileExtension, String deltaCommitTime, int version,
+                                             String writeToken) {
     String suffix = (writeToken == null)
         ? String.format("%s_%s%s.%d", fileId, deltaCommitTime, logFileExtension, version)
         : String.format("%s_%s%s.%d_%s", fileId, deltaCommitTime, logFileExtension, version, writeToken);
     return HoodieLogFile.LOG_FILE_PREFIX + suffix;
   }
 
+  public static String makeNativeLogFileName(String fileId, String writeToken, String deltaCommitTime, int version,
+                                             String logFileExtension, HoodieFileFormat nativeFileFormat) {
+    String extension = logFileExtension.startsWith(".") ? logFileExtension.substring(1) : logFileExtension;
+    String formatSuffix = nativeFileFormat.getFileExtension().startsWith(".")
+        ? nativeFileFormat.getFileExtension().substring(1)
+        : nativeFileFormat.getFileExtension();
+    return String.format("%s_%s_%s_%d.%s.%s", fileId, writeToken, deltaCommitTime, version, extension, formatSuffix);
+  }
+
+  public static boolean isBaseFile(String path) {
+    return FileNameParser.parseBaseFile(path)
+        .map(baseFileName -> !isNativeLogFile(path)
+            && HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(baseFileName.getFileExtension()))
+        .orElse(false);
+  }
+
   public static boolean isBaseFile(StoragePath path) {
-    String extension = getFileExtension(path.getName());
-    if (HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension)) {
-      return BASE_FILE_PATTERN.matcher(path.getName()).matches();
-    }
-    return false;
+    return isBaseFile(path.getName());
   }
 
   public static String getWriteTokenFromBaseFile(String fileName) {
-    Matcher matcher = BASE_FILE_PATTERN.matcher(fileName);
-    if (!matcher.find()) {
+    Option<FileNameParser.BaseFileName> baseFileName = FileNameParser.parseBaseFile(fileName);
+    if (!baseFileName.isPresent()) {
       throw new InvalidHoodiePathException(fileName, "BaseFile");
     }
-    String[] pathParts = fileName.split("_");
-    return pathParts[1];
+    return baseFileName.get().getWriteToken();
   }
 
   public static boolean isLogFile(StoragePath logPath) {
@@ -456,11 +468,40 @@ public class FSUtils {
   }
 
   public static boolean isLogFile(String fileName) {
-    if (fileName.startsWith(LOG_FILE_START_WITH_CHARACTER)) {
-      Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
-      return matcher.matches() && matcher.group(3).equals(LOG_FILE_EXTENSION);
+    return FileNameParser.parseLogFile(fileName)
+        .map(logFileName -> logFileName.isNativeLogFile()
+            || logFileName.getFileExtension().equals(LogExtensions.DATA_LOG_EXTENSION))
+        .orElse(false);
+  }
+
+  public static boolean isInlineLogFile(StoragePath filePath) {
+    String scheme = filePath.toUri().getScheme();
+    String fileName = InLineFSUtils.SCHEME.equals(scheme)
+        ? InLineFSUtils.getOuterFilePathFromInlinePath(filePath).getName() : filePath.getName();
+    return FileNameParser.parseInlineLogFile(fileName).isPresent();
+  }
+
+  public static boolean isNativeLogFile(String fileName) {
+    return FileNameParser.parseNativeLogFile(fileName).isPresent();
+  }
+
+  public static boolean isNativeDeleteLogFile(String fileName) {
+    return FileNameParser.parseNativeLogFile(fileName)
+        .map(logFileName -> LogExtensions.DELETE_LOG_EXTENSION.equals(logFileName.getFileExtension()))
+        .orElse(false);
+  }
+
+  public static boolean isNativeCDCLogFile(String fileName) {
+    return FileNameParser.parseNativeLogFile(fileName)
+        .map(logFileName -> LogExtensions.CDC_LOG_EXTENSION.equals(logFileName.getFileExtension()))
+        .orElse(false);
+  }
+
+  public static boolean isCDCLogFile(String fileName) {
+    if (StringUtils.isNullOrEmpty(fileName)) {
+      return false;
     }
-    return false;
+    return FileNameParser.parseLogFile(fileName).map(FileNameParser.LogFileName::isCDCLogFile).orElse(false);
   }
 
   public static boolean isDataFile(StoragePath path) {
@@ -470,6 +511,13 @@ public class FSUtils {
   public static List<StoragePathInfo> getAllDataFilesInPartition(HoodieStorage storage,
                                                                  StoragePath partitionPath)
       throws IOException {
+    return getAllDataFilesInPartitionByPathFilter(storage, partitionPath, Option.empty());
+  }
+
+  public static List<StoragePathInfo> getAllDataFilesInPartitionByPathFilter(HoodieStorage storage,
+                                                                             StoragePath partitionPath,
+                                                                             Option<StoragePathFilter> pathFilterOption)
+      throws IOException {
     final Set<String> validFileExtensions = Arrays.stream(HoodieFileFormat.values())
         .map(HoodieFileFormat::getFileExtension).collect(Collectors.toCollection(HashSet::new));
     final String logFileExtension = HoodieFileFormat.HOODIE_LOG.getFileExtension();
@@ -477,7 +525,8 @@ public class FSUtils {
     try {
       return storage.listDirectEntries(partitionPath, path -> {
         String extension = FSUtils.getFileExtension(path.getName());
-        return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
+        return (validFileExtensions.contains(extension) || path.getName().contains(logFileExtension))
+            && pathFilterOption.map(filter -> filter.accept(path)).orElse(true);
       }).stream().filter(StoragePathInfo::isFile).collect(Collectors.toList());
     } catch (FileNotFoundException ex) {
       // return empty FileStatus if partition does not exist already
@@ -605,7 +654,7 @@ public class FSUtils {
                 pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), true)
         );
         boolean result = storage.deleteDirectory(dirPath);
-        LOG.info("Removed directory at {}", dirPath);
+        log.info("Removed directory at {}", dirPath);
         return result;
       }
     } catch (IOException ioe) {
@@ -683,6 +732,7 @@ public class FSUtils {
       result = hoodieEngineContext.mapToPair(subPaths,
           subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, storageConf))),
           actualParallelism);
+      hoodieEngineContext.clearJobStatus();
     }
     return result;
   }
@@ -739,6 +789,17 @@ public class FSUtils {
     return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
   }
 
+  public static StoragePathInfo toStoragePathInfo(HoodieFileStatus fileStatus) {
+    if (null == fileStatus) {
+      return null;
+    }
+
+    return new StoragePathInfo(
+        new StoragePath(fileStatus.getPath().getUri()), fileStatus.getLength(),
+        fileStatus.getIsDir() != null && fileStatus.getIsDir(),
+        fileStatus.getBlockReplication().shortValue(), fileStatus.getBlockSize(), fileStatus.getModificationTime());
+  }
+
   /**
    * Serializable function interface.
    *
@@ -751,7 +812,18 @@ public class FSUtils {
   private static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
     return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
   }
-  
+
+  /**
+   * Return the file size of a log file.
+   */
+  public static long getFileSize(HoodieStorage storage, HoodieLogFile logFile) {
+    try {
+      return logFile.getFileSize() >= 0 ? logFile.getFileSize() : storage.getPathInfo(logFile.getPath()).getLength();
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to get file size for " + logFile, e);
+    }
+  }
+
   public static Map<String, Boolean> deleteFilesParallelize(
       HoodieTableMetaClient metaClient,
       List<String> paths,
@@ -772,7 +844,7 @@ public class FSUtils {
             if (!ignoreFailed) {
               throw new HoodieIOException("Failed to delete : " + file, e);
             } else {
-              LOG.info("Ignore failed deleting : {}", file);
+              log.info("Ignore failed deleting : {}", file);
               return true;
             }
           }

@@ -28,17 +28,15 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
 /**
  * Hoodie index implementation backed by flink state.
  */
+@Slf4j
 public class FlinkInMemoryStateIndex extends HoodieIndex<List<HoodieRecord>, List<WriteStatus>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkInMemoryStateIndex.class);
 
   public FlinkInMemoryStateIndex(HoodieFlinkEngineContext context, HoodieWriteConfig config) {
     super(config);

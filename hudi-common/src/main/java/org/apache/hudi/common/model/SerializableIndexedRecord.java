@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;

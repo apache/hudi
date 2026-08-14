@@ -48,7 +48,7 @@ public class HoodieSparkParquetStreamWriter implements HoodieSparkFileWriter, Au
         .withRowGroupSize(parquetConfig.getBlockSize())
         .withPageSize(parquetConfig.getPageSize())
         .withDictionaryPageSize(parquetConfig.getPageSize())
-        .withDictionaryEncoding(parquetConfig.dictionaryEnabled())
+        .withDictionaryEncoding(parquetConfig.isDictionaryEnabled())
         .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
         .withConf(parquetConfig.getHadoopConf())
         .build();

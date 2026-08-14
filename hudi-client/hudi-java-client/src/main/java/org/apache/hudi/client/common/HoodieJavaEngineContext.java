@@ -49,6 +49,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -163,6 +164,11 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public void clearJobStatus() {
+    // no operation for now
+  }
+
+  @Override
   public void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids) {
     // no operation for now
   }
@@ -185,6 +191,30 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
   @Override
   public void cancelAllJobs() {
     // no operation for now
+  }
+
+  // Allowlist of safe system properties to include in commit metadata. Avoid wildcarding system
+  // properties since callers may pass credentials via -D flags (e.g. -Ddb.password=...).
+  private static final String[] SAFE_SYSTEM_PROPERTIES = {
+      "java.version",
+      "java.vendor",
+      "java.vm.name",
+      "java.vm.version",
+      "os.name",
+      "os.version",
+      "os.arch"
+  };
+
+  @Override
+  public Map<String, String> getEngineProperties() {
+    Map<String, String> info = new HashMap<>();
+    for (String property : SAFE_SYSTEM_PROPERTIES) {
+      String value = System.getProperty(property);
+      if (value != null) {
+        info.put(property, value);
+      }
+    }
+    return info;
   }
 
   @Override

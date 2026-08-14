@@ -18,40 +18,32 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
+import org.apache.hudi.common.table.timeline.InstantComparator;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
-import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
-import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -61,25 +53,34 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * Helper class to read table schema. ONLY USE IT FOR SimpleConcurrentFileWritesConflictResolutionStrategy.
  */
+@Slf4j
 class ConcurrentSchemaEvolutionTableSchemaGetter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConcurrentSchemaEvolutionTableSchemaGetter.class);
 
   protected final HoodieTableMetaClient metaClient;
 
-  private final Lazy<ConcurrentHashMap<HoodieInstant, Schema>> tableSchemaCache;
+  private final Lazy<ConcurrentHashMap<HoodieInstant, HoodieSchema>> tableSchemaCache;
+
+  private final InstantComparator instantComparator;
 
   private Option<HoodieInstant> latestCommitWithValidSchema = Option.empty();
 
   @VisibleForTesting
-  public ConcurrentHashMap<HoodieInstant, Schema> getTableSchemaCache() {
+  public ConcurrentHashMap<HoodieInstant, HoodieSchema> getTableSchemaCache() {
     return tableSchemaCache.get();
   }
 
   public ConcurrentSchemaEvolutionTableSchemaGetter(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
+    this.instantComparator = metaClient.getTimelineLayout().getInstantComparator();
     // Unbounded sized map. Should replace with some caching library.
     this.tableSchemaCache = Lazy.lazily(ConcurrentHashMap::new);
+  }
+
+  /**
+   * Returns the timestamp ordering the instant in the schema evolution timeline.
+   */
+  String getOrderingTime(HoodieInstant instant) {
+    return instantComparator.getOrderingTime(instant);
   }
 
   /**
@@ -88,24 +89,23 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
    * @param schema the input schema to process
    * @return the processed schema with partition columns handled appropriately
    */
-  private Schema handlePartitionColumnsIfNeeded(Schema schema) {
+  private HoodieSchema handlePartitionColumnsIfNeeded(HoodieSchema schema) {
     if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
       return metaClient.getTableConfig().getPartitionFields()
-          .map(partitionFields -> appendPartitionColumns(schema, Option.ofNullable(partitionFields)))
-          .or(() -> Option.of(schema))
-          .get();
+          .map(partitionFields -> TableSchemaResolver.appendPartitionColumns(schema, Option.ofNullable(partitionFields)))
+          .orElseGet(() -> schema);
     }
     return schema;
   }
 
-  public Option<Schema> getTableAvroSchemaIfPresent(boolean includeMetadataFields, Option<HoodieInstant> instant) {
-    return getTableAvroSchemaFromTimelineWithCache(instant) // Get table schema from schema evolution timeline.
+  public Option<HoodieSchema> getTableSchemaIfPresent(boolean includeMetadataFields, Option<HoodieInstant> instant) {
+    return getTableSchemaFromTimelineWithCache(instant) // Get table schema from schema evolution timeline.
         .or(this::getTableCreateSchemaWithoutMetaField) // Fall back: read create schema from table config.
-        .map(tableSchema -> includeMetadataFields ? HoodieAvroUtils.addMetadataFields(tableSchema, false) : HoodieAvroUtils.removeMetadataFields(tableSchema))
+        .map(tableSchema -> includeMetadataFields ? HoodieSchemaUtils.addMetadataFields(tableSchema, false) : HoodieSchemaUtils.removeMetadataFields(tableSchema))
         .map(this::handlePartitionColumnsIfNeeded);
   }
 
-  private Option<Schema> getTableCreateSchemaWithoutMetaField() {
+  private Option<HoodieSchema> getTableCreateSchemaWithoutMetaField() {
     return metaClient.getTableConfig().getTableCreateSchema();
   }
 
@@ -118,16 +118,16 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
   }
 
   @VisibleForTesting
-  Option<Schema> getTableAvroSchemaFromTimelineWithCache(Option<HoodieInstant> instantTime) {
-    return getTableAvroSchemaFromTimelineWithCache(computeSchemaEvolutionTimelineInReverseOrder(), instantTime);
+  Option<HoodieSchema> getTableSchemaFromTimelineWithCache(Option<HoodieInstant> instantTime) {
+    return getTableSchemaFromTimelineWithCache(computeSchemaEvolutionTimelineInReverseOrder(), instantTime);
   }
 
   // [HUDI-9112] simplify the logic
-  Option<Schema> getTableAvroSchemaFromTimelineWithCache(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instantTime) {
+  Option<HoodieSchema> getTableSchemaFromTimelineWithCache(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instantTime) {
     // If instantTime is empty it means read the latest one. In that case, get the cached instant if there is one.
     boolean fetchFromLastValidCommit = instantTime.isEmpty();
     Option<HoodieInstant> targetInstant = instantTime.or(getCachedLatestCommitWithValidSchema());
-    Schema cachedTableSchema = null;
+    HoodieSchema cachedTableSchema = null;
 
     // Try cache first if there is a target instant to fetch for.
     if (!targetInstant.isEmpty()) {
@@ -136,7 +136,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
 
     // Cache miss on either latestCommitWithValidSchema or commitMetadataCache. Compute the result.
     if (cachedTableSchema == null) {
-      Option<Pair<HoodieInstant, Schema>> instantWithSchema = getLastCommitMetadataWithValidSchemaFromTimeline(reversedTimelineStream, targetInstant);
+      Option<Pair<HoodieInstant, HoodieSchema>> instantWithSchema = getLastCommitMetadataWithValidSchemaFromTimeline(reversedTimelineStream, targetInstant);
       if (instantWithSchema.isPresent()) {
         targetInstant = Option.of(instantWithSchema.get().getLeft());
         cachedTableSchema = instantWithSchema.get().getRight();
@@ -165,14 +165,16 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
   }
 
   @VisibleForTesting
-  Option<Pair<HoodieInstant, Schema>> getLastCommitMetadataWithValidSchemaFromTimeline(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instant) {
+  Option<Pair<HoodieInstant, HoodieSchema>> getLastCommitMetadataWithValidSchemaFromTimeline(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instant) {
     // To find the table schema given an instant time, need to walk backwards from the latest instant in
     // the timeline finding a completed instant containing a valid schema.
-    ConcurrentHashMap<HoodieInstant, Schema> tableSchemaAtInstant = new ConcurrentHashMap<>();
+    ConcurrentHashMap<HoodieInstant, HoodieSchema> tableSchemaAtInstant = new ConcurrentHashMap<>();
     Option<HoodieInstant> instantWithTableSchema = Option.fromJavaOptional(reversedTimelineStream
-        // If a completion time is specified, find the first eligible instant in the schema evolution timeline.
-        // Should switch to completion time based.
-        .filter(s -> instant.isEmpty() || compareTimestamps(s.getCompletionTime(), LESSER_THAN_OR_EQUALS, instant.get().getCompletionTime()))
+        // Find the first eligible instant whose ordering time is no later than the target instant's;
+        // a target instant without an ordering time (not completed yet, on table version 8 and above)
+        // does not bound the lookup.
+        .filter(s -> instant.isEmpty() || StringUtils.isNullOrEmpty(getOrderingTime(instant.get()))
+            || compareTimestamps(getOrderingTime(s), LESSER_THAN_OR_EQUALS, getOrderingTime(instant.get())))
         // Make sure the commit metadata has a valid schema inside. Same caching the result for expensive operation.
         .filter(s -> {
           try {
@@ -185,11 +187,11 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
             String schemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
             boolean isValidSchemaStr = !StringUtils.isNullOrEmpty(schemaStr);
             if (isValidSchemaStr) {
-              tableSchemaAtInstant.putIfAbsent(s, new Schema.Parser().parse(schemaStr));
+              tableSchemaAtInstant.putIfAbsent(s, HoodieSchema.parse(schemaStr));
             }
             return isValidSchemaStr;
           } catch (IOException e) {
-            LOG.warn("Failed to parse commit metadata for instant {} ", s, e);
+            log.warn("Failed to parse commit metadata for instant {} ", s, e);
           }
           return false;
         })
@@ -201,38 +203,10 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
     return Option.of(Pair.of(instantWithTableSchema.get(), tableSchemaAtInstant.get(instantWithTableSchema.get())));
   }
 
-  public static Schema appendPartitionColumns(Schema dataSchema, Option<String[]> partitionFields) {
-    // In cases when {@link DROP_PARTITION_COLUMNS} config is set true, partition columns
-    // won't be persisted w/in the data files, and therefore we need to append such columns
-    // when schema is parsed from data files
-    //
-    // Here we append partition columns with {@code StringType} as the data type
-    if (!partitionFields.isPresent() || partitionFields.get().length == 0) {
-      return dataSchema;
-    }
-
-    boolean hasPartitionColNotInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> !containsFieldInSchema(dataSchema, pf));
-    boolean hasPartitionColInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> containsFieldInSchema(dataSchema, pf));
-    if (hasPartitionColNotInSchema && hasPartitionColInSchema) {
-      throw new HoodieSchemaException("Partition columns could not be partially contained w/in the data schema");
-    }
-
-    if (hasPartitionColNotInSchema) {
-      // when hasPartitionColNotInSchema is true and hasPartitionColInSchema is false, all partition columns
-      // are not in originSchema. So we create and add them.
-      List<Field> newFields = new ArrayList<>();
-      for (String partitionField : partitionFields.get()) {
-        newFields.add(new Schema.Field(
-            partitionField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
-      }
-      return appendFieldsToSchema(dataSchema, newFields);
-    }
-
-    return dataSchema;
-  }
-
   /**
    * Get timeline in REVERSE order that only contains completed instants which POTENTIALLY evolve the table schema.
+   * The stream follows the timeline layout's instant ordering, newest first (completion time for
+   * layout v2, requested time for v1).
    * For types of instants that are included and not reflecting table schema at their instant completion time please refer
    * comments inside the code.
    */
@@ -254,9 +228,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
     }
 
     // We only care committed instant when it comes to table schema.
-    TimelineLayout timelineLayout = metaClient.getTimelineLayout();
-    // Table schema getter is completion time based ordering.
-    Comparator<HoodieInstant> reversedComparator = timelineLayout.getInstantComparator().completionTimeOrderedComparator().reversed();
+    Comparator<HoodieInstant> reversedComparator = instantComparator.orderingComparator().reversed();
 
     // The timeline still contains DELTA_COMMIT_ACTION/COMMIT_ACTION which might not contain a valid schema
     // field in their commit metadata.

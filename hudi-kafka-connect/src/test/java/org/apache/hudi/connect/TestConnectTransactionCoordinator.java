@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.helper.MockConnectTransactionServices;
 import org.apache.hudi.helper.MockKafkaControlAgent;
 
+import lombok.Getter;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -107,6 +108,7 @@ public class TestConnectTransactionCoordinator {
   private static class MockParticipant implements TransactionParticipant {
 
     private final MockKafkaControlAgent kafkaControlAgent;
+    @Getter
     private final TopicPartition partition;
     private final CountDownLatch latch;
     private final TestScenarios testScenario;
@@ -146,11 +148,6 @@ public class TestConnectTransactionCoordinator {
 
     @Override
     public void processRecords() {
-    }
-
-    @Override
-    public TopicPartition getPartition() {
-      return partition;
     }
 
     @Override

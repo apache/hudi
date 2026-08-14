@@ -19,11 +19,11 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.AvroConversionUtils
+import org.apache.hudi.{AvroConversionUtils, HoodieSchemaConversionUtils, PartitionStatsIndexSupport}
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.PartitionStatsIndexSupport
 import org.apache.hudi.TestHoodieSparkUtils.dropMetaFields
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
@@ -93,7 +93,6 @@ class PartitionStatsIndexTestBase extends HoodieStatsIndexTestBase {
       .option(OPERATION.key, operation)
       .mode(saveMode)
       .save(basePath)
-    latestBatchDf.show(false)
     val deletedDf = calculateMergedDf(latestBatchDf, operation)
     deletedDf.cache()
     if (validate) {
@@ -113,7 +112,7 @@ class PartitionStatsIndexTestBase extends HoodieStatsIndexTestBase {
     val partitionStatsIndex = new PartitionStatsIndexSupport(
       spark,
       inputDf.schema,
-      AvroConversionUtils.convertStructTypeToAvroSchema(inputDf.schema, "record", ""),
+      HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(inputDf.schema, "record", ""),
       HoodieMetadataConfig.newBuilder().enable(true).build(),
       metaClient)
     val partitionStats = partitionStatsIndex.loadColumnStatsIndexRecords(List("partition", "trip_type"), shouldReadInMemory = true).collectAsList()

@@ -20,8 +20,10 @@ package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -44,7 +46,6 @@ import org.apache.hudi.utils.CatalogUtils;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
-import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.api.DataTypes;
@@ -54,6 +55,7 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogDatabase;
 import org.apache.flink.table.catalog.CatalogDatabaseImpl;
@@ -68,9 +70,12 @@ import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
+import org.apache.flink.table.catalog.exceptions.FunctionNotExistException;
 import org.apache.flink.table.catalog.exceptions.PartitionNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
+import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
+import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.hadoop.fs.FileSystem;
@@ -98,15 +103,15 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link HoodieCatalog}.
  */
-public class TestHoodieCatalog {
+public class TestHoodieCatalog extends BaseTestHoodieCatalog {
 
-  private static final String TEST_DEFAULT_DATABASE = "test_db";
   private static final String NONE_EXIST_DATABASE = "none_exist_database";
   private static final List<Column> CREATE_COLUMNS = Arrays.asList(
       Column.physical("uuid", DataTypes.VARCHAR(20)),
@@ -115,7 +120,7 @@ public class TestHoodieCatalog {
       Column.physical("tss", DataTypes.TIMESTAMP(3)),
       Column.physical("partition", DataTypes.VARCHAR(10))
   );
-  private static final UniqueConstraint CONSTRAINTS = UniqueConstraint.primaryKey("uuid", Arrays.asList("uuid"));
+
   private static final ResolvedSchema CREATE_TABLE_SCHEMA =
       new ResolvedSchema(
           CREATE_COLUMNS,
@@ -150,14 +155,6 @@ public class TestHoodieCatalog {
           .collect(Collectors.toList());
   private static final ResolvedSchema EXPECTED_TABLE_SCHEMA =
       new ResolvedSchema(EXPECTED_TABLE_COLUMNS, Collections.emptyList(), CONSTRAINTS);
-
-  private static final Map<String, String> EXPECTED_OPTIONS = new HashMap<>();
-
-  static {
-    EXPECTED_OPTIONS.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
-    EXPECTED_OPTIONS.put(FlinkOptions.INDEX_GLOBAL_ENABLED.key(), "false");
-    EXPECTED_OPTIONS.put(FlinkOptions.PRE_COMBINE.key(), "true");
-  }
 
   private static final ResolvedCatalogTable EXPECTED_CATALOG_TABLE = new ResolvedCatalogTable(
       CatalogUtils.createCatalogTable(
@@ -269,7 +266,7 @@ public class TestHoodieCatalog {
     HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(
         catalog.getTable(tablePath).getOptions().get(FlinkOptions.PATH.key()),
         HadoopConfigurations.getHadoopConf(new Configuration())).get();
-    Option<org.apache.avro.Schema> tableCreateSchema = tableConfig.getTableCreateSchema();
+    Option<HoodieSchema> tableCreateSchema = tableConfig.getTableCreateSchema();
     assertTrue(tableCreateSchema.isPresent(), "Table should have been created");
     assertThat(tableCreateSchema.get().getFullName(), is("hoodie.tb1.tb1_record"));
 
@@ -289,7 +286,7 @@ public class TestHoodieCatalog {
     final ResolvedCatalogTable singleKeyMultiplePartitionTable = new ResolvedCatalogTable(
         CatalogUtils.createCatalogTable(
             Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
-            Lists.newArrayList("par1", "par2"),
+            Arrays.asList("par1", "par2"),
             EXPECTED_OPTIONS,
             "test"),
         CREATE_TABLE_SCHEMA
@@ -307,7 +304,7 @@ public class TestHoodieCatalog {
     final ResolvedCatalogTable multipleKeySinglePartitionTable = new ResolvedCatalogTable(
         CatalogUtils.createCatalogTable(
             Schema.newBuilder().fromResolvedSchema(CREATE_MULTI_KEY_TABLE_SCHEMA).build(),
-            Lists.newArrayList("par1"),
+            Collections.singletonList("par1"),
             EXPECTED_OPTIONS,
             "test"),
         CREATE_TABLE_SCHEMA
@@ -338,6 +335,82 @@ public class TestHoodieCatalog {
         catalog.inferTablePath(catalogPathStr, nonPartitionPath));
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
+  }
+
+  @Test
+  public void testCreateAppendOnlyTableWithoutRecordKey() throws Exception {
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb_append_only_without_record_key");
+    ResolvedSchema schemaWithoutPrimaryKey = new ResolvedSchema(
+        CREATE_COLUMNS,
+        Collections.emptyList(),
+        null);
+    Map<String, String> options = new HashMap<>(EXPECTED_OPTIONS);
+    options.put(FlinkOptions.OPERATION.key(), "insert");
+    ResolvedCatalogTable catalogTable = new ResolvedCatalogTable(
+        CatalogUtils.createCatalogTable(
+            Schema.newBuilder().fromResolvedSchema(schemaWithoutPrimaryKey).build(),
+            Arrays.asList("partition"),
+            options,
+            "test"),
+        schemaWithoutPrimaryKey
+    );
+
+    catalog.createTable(tablePath, catalogTable, false);
+
+    HoodieTableMetaClient metaClient = createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())),
+        catalog.inferTablePath(catalogPathStr, tablePath));
+    assertFalse(metaClient.getTableConfig().getRecordKeyFields().isPresent());
+    assertEquals(SimpleAvroKeyGenerator.class.getName(), metaClient.getTableConfig().getKeyGeneratorClassName());
+  }
+
+  @Test
+  public void testCreateNonAppendTableWithoutRecordKey() {
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb_non_append_without_record_key");
+    ResolvedSchema schemaWithoutPrimaryKey = new ResolvedSchema(
+        CREATE_COLUMNS,
+        Collections.emptyList(),
+        null);
+    ResolvedCatalogTable catalogTable = new ResolvedCatalogTable(
+        CatalogUtils.createCatalogTable(
+            Schema.newBuilder().fromResolvedSchema(schemaWithoutPrimaryKey).build(),
+            Arrays.asList("partition"),
+            EXPECTED_OPTIONS,
+            "test"),
+        schemaWithoutPrimaryKey
+    );
+
+    CatalogException exception = assertThrows(CatalogException.class, () -> catalog.createTable(tablePath, catalogTable, false));
+    assertEquals("Primary key definition is missing", exception.getMessage());
+  }
+
+  @Test
+  public void testCreateAppendOnlyLanceTableWithoutPrimaryKey() throws Exception {
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb_lance_append_only");
+    Map<String, String> lanceOptions = new HashMap<>(EXPECTED_OPTIONS);
+    lanceOptions.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    lanceOptions.put(FlinkOptions.OPERATION.key(), "insert");
+    lanceOptions.put(FlinkOptions.PRE_COMBINE.key(), "false");
+    lanceOptions.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.LANCE.name());
+    ResolvedSchema appendOnlySchema = new ResolvedSchema(CREATE_COLUMNS, Collections.emptyList(), null);
+    ResolvedCatalogTable lanceTable = new ResolvedCatalogTable(
+        CatalogUtils.createCatalogTable(
+            Schema.newBuilder().fromResolvedSchema(appendOnlySchema).build(),
+            Arrays.asList("partition"),
+            lanceOptions,
+            "test_lance_append_only"),
+        appendOnlySchema
+    );
+
+    catalog.createTable(tablePath, lanceTable, false);
+
+    assertTrue(catalog.tableExists(tablePath));
+    CatalogBaseTable actualTable = catalog.getTable(tablePath);
+    assertFalse(actualTable.getOptions().containsKey(TableOptionProperties.PK_COLUMNS));
+    HoodieTableMetaClient metaClient = createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())),
+        catalog.inferTablePath(catalogPathStr, tablePath));
+    assertThat(metaClient.getTableConfig().getBaseFileFormat(), is(HoodieFileFormat.LANCE));
   }
 
   @Test
@@ -514,5 +587,82 @@ public class TestHoodieCatalog {
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;
     assertThat(replaceCommitMetadata.getPartitionToReplaceFileIds().size(), is(1));
     assertFalse(catalog.partitionExists(tablePath, partitionSpec));
+  }
+
+  @Test
+  void testUnsupportedCatalogOperationsAndDefaults() throws Exception {
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "missing");
+    ObjectPath functionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "function");
+    CatalogPartitionSpec partitionSpec =
+        new CatalogPartitionSpec(Collections.singletonMap("partition", "20260728"));
+    CatalogDatabase database = new CatalogDatabaseImpl(Collections.emptyMap(), null);
+
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterDatabase(TEST_DEFAULT_DATABASE, database, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.renameTable(tablePath, "renamed", false));
+    assertEquals(Collections.emptyList(), catalog.listViews(TEST_DEFAULT_DATABASE));
+    assertEquals(Collections.emptyList(), catalog.listPartitions(tablePath));
+    assertEquals(Collections.emptyList(), catalog.listPartitions(tablePath, partitionSpec));
+    assertEquals(
+        Collections.emptyList(),
+        catalog.listPartitionsByFilter(tablePath, Collections.emptyList()));
+    assertThrows(
+        PartitionNotExistException.class,
+        () -> catalog.getPartition(tablePath, partitionSpec));
+    assertFalse(catalog.partitionExists(tablePath, partitionSpec));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.createPartition(tablePath, partitionSpec, null, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterPartition(tablePath, partitionSpec, null, false));
+
+    assertEquals(Collections.emptyList(), catalog.listFunctions(TEST_DEFAULT_DATABASE));
+    assertThrows(FunctionNotExistException.class, () -> catalog.getFunction(functionPath));
+    assertFalse(catalog.functionExists(functionPath));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.createFunction(functionPath, null, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterFunction(functionPath, null, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.dropFunction(functionPath, false));
+
+    assertSame(CatalogTableStatistics.UNKNOWN, catalog.getTableStatistics(tablePath));
+    assertSame(
+        CatalogColumnStatistics.UNKNOWN,
+        catalog.getTableColumnStatistics(tablePath));
+    assertSame(
+        CatalogTableStatistics.UNKNOWN,
+        catalog.getPartitionStatistics(tablePath, partitionSpec));
+    assertSame(
+        CatalogColumnStatistics.UNKNOWN,
+        catalog.getPartitionColumnStatistics(tablePath, partitionSpec));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterTableStatistics(
+            tablePath, CatalogTableStatistics.UNKNOWN, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterTableColumnStatistics(
+            tablePath, CatalogColumnStatistics.UNKNOWN, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterPartitionStatistics(
+            tablePath, partitionSpec, CatalogTableStatistics.UNKNOWN, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterPartitionColumnStatistics(
+            tablePath, partitionSpec, CatalogColumnStatistics.UNKNOWN, false));
+  }
+
+  @Override
+  AbstractCatalog getCatalog() {
+    return catalog;
   }
 }

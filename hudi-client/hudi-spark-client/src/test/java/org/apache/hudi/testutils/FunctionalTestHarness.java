@@ -27,18 +27,19 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.providers.DFSProvider;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
 import org.apache.hudi.testutils.providers.HoodieWriteClientProvider;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.spark.HoodieSparkKryoRegistrar$;
@@ -157,7 +158,10 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
       hdfsTestService = new HdfsTestService();
       dfsCluster = hdfsTestService.start(true);
-      storage = new HoodieHadoopStorage(dfsCluster.getFileSystem());
+      FileSystem dfs = dfsCluster.getFileSystem();
+      storage = HoodieStorageUtils.getStorage(
+          HadoopFSUtils.convertToStoragePath(dfs.getWorkingDirectory()),
+          HadoopFSUtils.getStorageConf(dfs.getConf()));
       storage.createDirectory(new StoragePath("/tmp"));
 
       Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -183,7 +187,7 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
   @AfterAll
   public static synchronized void cleanUpAfterAll() throws IOException {
     StoragePath workDir = new StoragePath("/tmp");
-    HoodieStorage storage = new HoodieHadoopStorage(
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
         workDir, HadoopFSUtils.getStorageConf(hdfsTestService.getHadoopConf()));
     List<StoragePathInfo> pathInfoList = storage.listDirectEntries(workDir);
     for (StoragePathInfo f : pathInfoList) {

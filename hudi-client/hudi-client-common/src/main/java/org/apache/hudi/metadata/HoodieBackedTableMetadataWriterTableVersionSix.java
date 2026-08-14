@@ -21,8 +21,11 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -33,9 +36,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.index.EngineIndexerSupport;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -72,30 +78,42 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
                                                            HoodieWriteConfig writeConfig,
                                                            HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                            HoodieEngineContext engineContext,
+                                                           EngineIndexerSupport engineIndexerSupport,
                                                            Option<String> inflightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
-  }
-
-  @Override
-  List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
-    return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient).stream()
-        .filter(partition -> !partition.equals(MetadataPartitionType.SECONDARY_INDEX))
-        .filter(partition -> !partition.equals(MetadataPartitionType.EXPRESSION_INDEX))
-        .filter(partition -> !partition.equals(MetadataPartitionType.PARTITION_STATS))
-        .collect(Collectors.toList());
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, engineIndexerSupport, inflightInstantTimestamp);
   }
 
   @Override
   boolean shouldInitializeFromFilesystem(Set<String> pendingDataInstants, Option<String> inflightInstantTimestamp) {
-    if (pendingDataInstants.stream()
-        .anyMatch(i -> !inflightInstantTimestamp.isPresent() || !i.equals(inflightInstantTimestamp.get()))) {
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
-      LOG.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: {}",
-          Arrays.toString(pendingDataInstants.toArray()));
-      return false;
-    } else {
-      return true;
+    // Check if there are pending data instants that are not the current inflight instant
+    Set<String> blockingPendingInstants = pendingDataInstants.stream()
+        .filter(i -> !inflightInstantTimestamp.isPresent() || !i.equals(inflightInstantTimestamp.get()))
+        .collect(Collectors.toSet());
+
+    if (!blockingPendingInstants.isEmpty()) {
+      // If a pending commit is being rolled back, allow the bootstrap to proceed.
+      // Check for pending rollback instants that match the blocking pending instants.
+      Set<String> pendingRollbackInstants = dataMetaClient.getActiveTimeline()
+          .getRollbackTimeline()
+          .getInstantsAsStream()
+          .filter(i -> !i.isCompleted())
+          .map(HoodieInstant::requestedTime)
+          .collect(Collectors.toSet());
+
+      // Check if all blocking pending instants have a corresponding pending rollback
+      boolean allBlockingInstantsBeingRolledBack = !pendingRollbackInstants.isEmpty()
+          && blockingPendingInstants.stream().allMatch(pendingRollbackInstants::contains);
+
+      if (!allBlockingInstantsBeingRolledBack) {
+        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
+        LOG.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: {}",
+            Arrays.toString(blockingPendingInstants.toArray()));
+        return false;
+      }
+      LOG.info("Allowing metadata table initialization as pending instants {} are being rolled back",
+          Arrays.toString(blockingPendingInstants.toArray()));
     }
+    return true;
   }
 
   @Override
@@ -212,11 +230,11 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       // a. any log files as part of RB commit metadata that was added
       // b. log files added by the commit in DT being rolled back. By rolled back, we mean, a rollback block will be added and does not mean it will be deleted.
       // both above list should only be added to FILES partition.
-      processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
+      processAndCommit(instantTime, () -> convertMetadataToRecords(engineContext, rollbackMetadata, instantTime));
 
       String rollbackInstantTime = createRollbackTimestamp(instantTime);
-      if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
-        LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
+      if (metadataMetaClient.getActiveTimeline().containsInstant(deltaCommitInstant)) {
+        LOG.info("Rolling back MDT deltacommit {}", commitToRollbackInstantTime);
         if (!getWriteClient().rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
           throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
         }
@@ -226,6 +244,22 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       }
       closeInternal();
     }
+  }
+
+  /**
+   * Convert rollback action metadata to metadata table records.
+   * <p>
+   * We only need to handle FILES partition here as HUDI rollbacks on MOR table may end up adding a new log file. All other partitions
+   * are handled by actual rollback of the deltacommit which added records to those partitions.
+   */
+  static List<IndexPartitionAndRecords> convertMetadataToRecords(
+      HoodieEngineContext engineContext, HoodieRollbackMetadata rollbackMetadata, String instantTime) {
+
+    List<HoodieRecord> filesPartitionRecords = HoodieTableMetadataUtil.convertMetadataToRollbackRecords(rollbackMetadata, instantTime);
+    final HoodieData<HoodieRecord> rollbackRecordsRDD = filesPartitionRecords.isEmpty() ? engineContext.emptyHoodieData()
+        : engineContext.parallelize(filesPartitionRecords, filesPartitionRecords.size());
+
+    return Collections.singletonList(IndexPartitionAndRecords.of(MetadataPartitionType.FILES.getPartitionPath(), rollbackRecordsRDD));
   }
 
   private void validateRollbackVersionSix(
@@ -269,7 +303,11 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
     } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-      writeClient.compact(compactionInstantTime, true);
+      if (shouldDelegateToTableServiceManager(metadataWriteConfig, ActionType.compaction)) {
+        LOG.info("Skipping execution of compaction on MDT as it is delegated to table service manager.");
+      } else {
+        writeClient.compact(compactionInstantTime, true);
+      }
     } else if (metadataWriteConfig.isLogCompactionEnabled()) {
       // Schedule and execute log compaction with suffixes based on the same instant time. This ensures that any future
       // delta commits synced over will not have an instant time lesser than the last completed instant on the
@@ -279,7 +317,11 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
         LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
       } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
         LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
-        writeClient.logCompact(logCompactionInstantTime, true);
+        if (shouldDelegateToTableServiceManager(metadataWriteConfig, ActionType.logcompaction)) {
+          LOG.info("Skipping execution of log compaction on MDT as it is delegated to table service manager.");
+        } else {
+          writeClient.logCompact(logCompactionInstantTime, true);
+        }
       }
     }
   }

@@ -20,12 +20,11 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.SortUtils;
 import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
-
-import org.apache.avro.Schema;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -41,11 +40,11 @@ public class JavaCustomColumnsSortPartitioner<T>
     implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
 
   private final String[] sortColumnNames;
-  private final Schema schema;
+  private final HoodieSchema schema;
   private final boolean consistentLogicalTimestampEnabled;
   private final boolean suffixRecordKey;
 
-  public JavaCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
+  public JavaCustomColumnsSortPartitioner(String[] columnNames, HoodieSchema schema, HoodieWriteConfig config) {
     this.sortColumnNames = columnNames;
     this.schema = schema;
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();

@@ -22,9 +22,16 @@ import org.apache.hudi.metaserver.thrift.TAction;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
 
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
 /**
  * Instant entity for store.
  */
+@Getter
+@Setter
+@ToString
 public class InstantBean {
 
   private Long tableId;
@@ -58,47 +65,5 @@ public class InstantBean {
     instant.setAction(TAction.findByValue(action));
     instant.setState(TState.findByValue(state));
     return instant;
-  }
-
-  public Long getTableId() {
-    return tableId;
-  }
-
-  public void setTableId(Long tableId) {
-    this.tableId = tableId;
-  }
-
-  public String getTs() {
-    return ts;
-  }
-
-  public void setTs(String ts) {
-    this.ts = ts;
-  }
-
-  public Integer getAction() {
-    return action;
-  }
-
-  public void setAction(Integer action) {
-    this.action = action;
-  }
-
-  public Integer getState() {
-    return state;
-  }
-
-  public void setState(Integer state) {
-    this.state = state;
-  }
-
-  @Override
-  public String toString() {
-    return "InstantBean{"
-        + "tableId=" + tableId
-        + ", ts='" + ts + '\''
-        + ", action=" + action
-        + ", state=" + state
-        + '}';
   }
 }

@@ -18,14 +18,15 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -34,14 +35,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
-import org.apache.hudi.stats.ValueMetadata;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.metadata.stats.ValueMetadata;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -123,8 +123,8 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
   @Test
   public void testAvroRecordsFieldConversion() {
 
-    Schema avroSchema = new Schema.Parser().parse(avroSchemaString);
-    GenericRecord record = new GenericData.Record(avroSchema);
+    HoodieSchema schema = HoodieSchema.parse(avroSchemaString);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("event_date1", 18000);
     record.put("event_date2", 18001);
     record.put("event_date3", 18002);
@@ -132,9 +132,9 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
     record.put("event_organizer", "Hudi PMC");
 
     BigDecimal bigDecimal = new BigDecimal("123.184331");
-    Schema decimalSchema = avroSchema.getField("event_cost1").schema().getTypes().get(0);
+    HoodieSchema decimalSchema = schema.getField("event_cost1").get().schema().getNonNullType();
     Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
-    GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
+    GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema.toAvroSchema(), LogicalTypes.decimal(10, 6));
     record.put("event_cost1", genericFixed);
     record.put("event_cost2", genericFixed);
     record.put("event_cost3", genericFixed);

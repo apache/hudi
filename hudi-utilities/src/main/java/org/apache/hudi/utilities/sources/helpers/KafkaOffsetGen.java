@@ -20,9 +20,11 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.util.LogicalClock;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.SystemClock;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
@@ -30,9 +32,9 @@ import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.HoodieRetryingKafkaConsumer;
-import org.apache.hudi.common.util.LogicalClock;
-import org.apache.hudi.common.util.SystemClock;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -49,8 +51,6 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.spark.streaming.kafka010.OffsetRange;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -81,9 +81,9 @@ import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Checkpoin
 /**
  * Source to read data from Kafka, incrementally.
  */
+@Slf4j
 public class KafkaOffsetGen {
 
-  private static final Logger LOG = LoggerFactory.getLogger(KafkaOffsetGen.class);
   private static final String METRIC_NAME_KAFKA_DELAY_COUNT = "kafkaDelayCount";
   private static final Comparator<OffsetRange> SORT_BY_PARTITION = Comparator.comparing(OffsetRange::partition);
 
@@ -142,7 +142,7 @@ public class KafkaOffsetGen {
           .sorted(SORT_BY_PARTITION)
           .collect(Collectors.toList())
           .toArray(new OffsetRange[toOffsetMap.size()]);
-      LOG.debug("numEvents {}, minPartitions {}, ranges {}", numEvents, minPartitions, ranges);
+      log.debug("numEvents {}, minPartitions {}, ranges {}", numEvents, minPartitions, ranges);
 
       // choose the actualNumEvents with min(totalEvents, numEvents)
       long actualNumEvents = Math.min(totalNewMessages(ranges), numEvents);
@@ -203,7 +203,7 @@ public class KafkaOffsetGen {
         // We return the same ranges back in case of 0 events for checkpoint computation.
         sortedRangeArray = ranges;
       }
-      LOG.info("final ranges {}", Arrays.toString(sortedRangeArray));
+      log.info("final ranges {}", Arrays.toString(sortedRangeArray));
       return sortedRangeArray;
     }
 
@@ -235,8 +235,10 @@ public class KafkaOffsetGen {
     }
   }
 
+  @Getter
   private final Map<String, Object> kafkaParams;
   private final TypedProperties props;
+  @Getter
   protected final String topicName;
   private KafkaSourceConfig.KafkaResetOffsetStrategies autoResetValue;
   private final String kafkaCheckpointType;
@@ -277,13 +279,13 @@ public class KafkaOffsetGen {
     long numEvents;
     if (sourceLimit == Long.MAX_VALUE) {
       numEvents = maxEventsToReadFromKafka;
-      LOG.info("SourceLimit not configured, set numEvents to default value : {}", maxEventsToReadFromKafka);
+      log.info("SourceLimit not configured, set numEvents to default value : {}", maxEventsToReadFromKafka);
     } else {
       numEvents = sourceLimit;
     }
 
     long minPartitions = getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
-    LOG.info("getNextOffsetRanges set config {} to {}", KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), minPartitions);
+    log.info("getNextOffsetRanges set config {} to {}", KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), minPartitions);
 
     return getNextOffsetRanges(lastCheckpoint, numEvents, minPartitions, metrics);
   }
@@ -353,7 +355,7 @@ public class KafkaOffsetGen {
    */
   private List<PartitionInfo> fetchPartitionInfos(KafkaConsumer consumer, String topicName) {
     if (containsConfigProperty(this.props, KafkaSourceConfig.KAFKA_FETCH_PARTITION_TIME_OUT)) {
-      LOG.warn("{} is deprecated and is not taking effect anymore. Use {}, {} and {} for setting up retrying configuration of KafkaConsumer",
+      log.warn("{} is deprecated and is not taking effect anymore. Use {}, {} and {} for setting up retrying configuration of KafkaConsumer",
           KafkaSourceConfig.KAFKA_FETCH_PARTITION_TIME_OUT.key(), KafkaSourceConfig.INITIAL_RETRY_INTERVAL_MS.key(),
           KafkaSourceConfig.MAX_RETRY_INTERVAL_MS.key(), KafkaSourceConfig.MAX_RETRY_COUNT.key());
     }
@@ -394,7 +396,7 @@ public class KafkaOffsetGen {
       if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS)) {
         throw new HoodieStreamerException(message);
       } else {
-        LOG.warn("{} If you want Hudi Streamer to fail on such cases, set \"{}\" to \"true\".", message, KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key());
+        log.warn("{} If you want Hudi Streamer to fail on such cases, set \"{}\" to \"true\".", message, KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key());
       }
     }
 
@@ -433,7 +435,7 @@ public class KafkaOffsetGen {
       Long.parseUnsignedLong(lastCheckpointStr.get().getCheckpointKey());
       return true;
     } catch (NumberFormatException ex) {
-      LOG.error("Checkpoint type is set to single_offset, but provided value of checkpoint=\"{}\" is not a valid number", lastCheckpointStr.get());
+      log.error("Checkpoint type is set to single_offset, but provided value of checkpoint=\"{}\" is not a valid number", lastCheckpointStr.get());
       return false;
     }
   }
@@ -497,7 +499,7 @@ public class KafkaOffsetGen {
       // do not modify offsets if KafkaSourceConfig.OFFSET_SKIP_BUFFER_MINUTES is not set or is <= 0
       long offsetSkipIntervalMinutes = getLongWithAltKeys(this.props, KafkaSourceConfig.OFFSET_SKIP_BUFFER_MINUTES);
       if (offsetSkipIntervalMinutes <= 0) {
-        LOG.debug("Not modifying fromOffsets as {} is not configured or set to a value <= 0",
+        log.debug("Not modifying fromOffsets as {} is not configured or set to a value <= 0",
             KafkaSourceConfig.OFFSET_SKIP_BUFFER_MINUTES.key());
         return fromOffsets;
       }
@@ -505,7 +507,7 @@ public class KafkaOffsetGen {
       // do not modify offsets if topic retention by time is not set
       Long retentionMs = getTopicRetentionMs(getTopicName());
       if (retentionMs == null || retentionMs <= 0) {
-        LOG.debug("Not modifying fromOffsets as topic {} retention is missing or set to a value <= 0", getTopicName());
+        log.debug("Not modifying fromOffsets as topic {} retention is missing or set to a value <= 0", getTopicName());
         return fromOffsets;
       }
 
@@ -520,7 +522,7 @@ public class KafkaOffsetGen {
               .map(Map.Entry::getKey)
               .collect(Collectors.toList());
       if (!nullPartitions.isEmpty()) {
-        LOG.warn("OffsetAndTimestamp not available for partitions: {} since {}", nullPartitions, retentionTs);
+        log.warn("OffsetAndTimestamp not available for partitions: {} since {}", nullPartitions, retentionTs);
       }
 
       final Map<TopicPartition, Long> skippedOffsetsPerPartition = new HashMap<>();
@@ -541,11 +543,11 @@ public class KafkaOffsetGen {
                 skippedOffsetsPerPartition.put(entry.getKey(), Math.max(newOffset - offset, 0));
                 return newOffset;
               }));
-      LOG.info("Adjusted fromOffsets with retention; oldFromOffsets: {}, newFromOffsets: {}, "
+      log.info("Adjusted fromOffsets with retention; oldFromOffsets: {}, newFromOffsets: {}, "
           + "skippedOffsetsPerPartition: {}", fromOffsets, newFromOffsets, skippedOffsetsPerPartition);
       return newFromOffsets;
     } catch (KafkaException e) {
-      LOG.error("Error resolving fromOffsets with retention, falling back to fromOffsets", e);
+      log.error("Error resolving fromOffsets with retention, falling back to fromOffsets", e);
       return fromOffsets;
     }
   }
@@ -558,14 +560,6 @@ public class KafkaOffsetGen {
   public boolean checkTopicExists(KafkaConsumer consumer)  {
     Map<String, List<PartitionInfo>> result = consumer.listTopics();
     return result.containsKey(topicName);
-  }
-
-  public String getTopicName() {
-    return topicName;
-  }
-
-  public Map<String, Object> getKafkaParams() {
-    return kafkaParams;
   }
 
   public static Map<String, Object> excludeHoodieConfigs(TypedProperties props) {
@@ -595,7 +589,7 @@ public class KafkaOffsetGen {
       offsetMap.forEach((topicPartition, offset) -> offsetAndMetadataMap.put(topicPartition, new OffsetAndMetadata(offset)));
       consumer.commitSync(offsetAndMetadataMap);
     } catch (CommitFailedException | TimeoutException e) {
-      LOG.warn("Committing offsets to Kafka failed, this does not impact processing of records", e);
+      log.warn("Committing offsets to Kafka failed, this does not impact processing of records", e);
     }
   }
 
@@ -606,7 +600,7 @@ public class KafkaOffsetGen {
       if (committedOffsetAndMetadata != null) {
         fromOffsets.put(topicPartition, committedOffsetAndMetadata.offset());
       } else {
-        LOG.warn("There are no commits associated with this consumer group, starting to consume from latest offset");
+        log.warn("There are no commits associated with this consumer group, starting to consume from latest offset");
         fromOffsets = consumer.endOffsets(topicPartitions);
         break;
       }
@@ -628,15 +622,15 @@ public class KafkaOffsetGen {
       Config topicConfigs = configsResult.all().get().get(configResource);
       ConfigEntry retentionConfig = topicConfigs.get(TopicConfig.RETENTION_MS_CONFIG);
       if (retentionConfig == null || retentionConfig.value() == null) {
-        LOG.info("{} config missing for topic {}", TopicConfig.RETENTION_MS_CONFIG, topicName);
+        log.info("{} config missing for topic {}", TopicConfig.RETENTION_MS_CONFIG, topicName);
         return null;
       }
       return Long.parseLong(retentionConfig.value());
     } catch (KafkaException | ExecutionException e) {
-      LOG.error("Error getting retention config for topic {}", topicName, e);
+      log.error("Error getting retention config for topic {}", topicName, e);
       return null;
     } catch (InterruptedException ex) {
-      LOG.error("Interrupted while fetching topic {} configuration", topicName);
+      log.error("Interrupted while fetching topic {} configuration", topicName);
       Thread.currentThread().interrupt();  // set interrupt flag
       return null;
     }

@@ -27,7 +27,7 @@ import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.StreamerUtils;
 
@@ -73,7 +73,7 @@ public class HoodieFlinkStreamer {
     Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
     // Read from kafka source
     RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
+        (RowType) HoodieSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
 
     long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
@@ -97,7 +97,7 @@ public class HoodieFlinkStreamer {
       pipeline = Pipelines.append(conf, rowType, dataStream);
       if (OptionsResolver.needsAsyncClustering(conf)) {
         Pipelines.cluster(conf, rowType, pipeline);
-      } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+      } else if (OptionsResolver.isLazyFailedWritesCleaning(conf)) {
         // add clean function to rollback failed writes for lazy failed writes cleaning policy
         Pipelines.clean(conf, pipeline);
       } else {
@@ -108,8 +108,10 @@ public class HoodieFlinkStreamer {
       pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         Pipelines.compact(conf, pipeline);
-      } else {
+      } else if (OptionsResolver.needsAsyncCleaning(conf)) {
         Pipelines.clean(conf, pipeline);
+      } else {
+        Pipelines.dummySink(pipeline);
       }
     }
 

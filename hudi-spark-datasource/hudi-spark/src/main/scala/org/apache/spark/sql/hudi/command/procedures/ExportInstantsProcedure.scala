@@ -18,18 +18,20 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry
+import org.apache.hudi.common.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
-import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.specific.SpecificData
@@ -86,27 +88,29 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
     if (!new File(localFolder).isDirectory) throw new HoodieException(localFolder + " is not a valid local directory")
 
-    // The non archived instants can be listed from the Timeline.
-    val nonArchivedInstants: util.List[HoodieInstant] = metaClient
+    // The non archived instants can be listed from the Timeline. Wrap in a mutable list because the
+    // desc branch below reverses it in place via Collections.reverse, which fails on the read-only
+    // list produced by asJava over an immutable Scala collection.
+    val nonArchivedInstants: util.List[HoodieInstant] = new util.ArrayList[HoodieInstant](metaClient
       .getActiveTimeline
       .filterCompletedInstants.getInstants.iterator().asScala
       .filter((i: HoodieInstant) => actionSet.contains(i.getAction))
-      .toList.asJava
+      .toList.asJava)
 
-    // Archived instants are in the commit archive files
+    // Archived instants are in the commit archive files (also mutable, for the same reason).
     val statuses: Array[FileStatus] = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration()).globStatus(archivePath)
-    val archivedStatuses = List(statuses: _*)
-      .sortWith((f1, f2) => (f1.getModificationTime - f2.getModificationTime).toInt > 0).asJava
+    val archivedStatuses = new util.ArrayList[FileStatus](List(statuses: _*)
+      .sortWith((f1, f2) => (f1.getModificationTime - f2.getModificationTime).toInt > 0).asJava)
 
     if (desc) {
       Collections.reverse(nonArchivedInstants)
       numCopied = copyNonArchivedInstants(metaClient, nonArchivedInstants, numExports, localFolder)
       if (numCopied < numExports) {
         Collections.reverse(archivedStatuses)
-        numCopied += copyArchivedInstants(basePath, archivedStatuses, actionSet, numExports - numCopied, localFolder)
+        numCopied += copyArchivedInstants(metaClient, archivedStatuses, actionSet, numExports - numCopied, localFolder)
       }
     } else {
-      numCopied = copyArchivedInstants(basePath, archivedStatuses, actionSet, numExports, localFolder)
+      numCopied = copyArchivedInstants(metaClient, archivedStatuses, actionSet, numExports, localFolder)
       if (numCopied < numExports) numCopied += copyNonArchivedInstants(metaClient, nonArchivedInstants, numExports - numCopied, localFolder)
     }
 
@@ -114,13 +118,13 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
   }
 
   @throws[Exception]
-  private def copyArchivedInstants(basePath: String, statuses: util.List[FileStatus], actionSet: util.Set[String], limit: Int, localFolder: String) = {
+  private def copyArchivedInstants(metaClient: HoodieTableMetaClient, statuses: util.List[FileStatus], actionSet: util.Set[String], limit: Int, localFolder: String) = {
     var copyCount = 0
-    val storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
+    val storage = metaClient.getStorage
     for (fs <- statuses.asScala) {
       // read the archived file
       val reader = HoodieLogFormat.newReader(
-        storage, new HoodieLogFile(convertToStoragePath(fs.getPath)), HoodieArchivedMetaEntry.getClassSchema)
+        metaClient, new HoodieLogFile(convertToStoragePath(fs.getPath)), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema))
       // read the avro blocks
       while ( {
         reader.hasNext && copyCount < limit

@@ -20,6 +20,8 @@ package org.apache.hudi.sink.buffer;
 
 import org.apache.hudi.table.action.commit.BucketInfo;
 
+import lombok.Getter;
+import org.apache.flink.runtime.operators.sort.QuickSort;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
@@ -33,8 +35,10 @@ import java.io.IOException;
  */
 public class RowDataBucket {
   private final BinaryInMemorySortBuffer dataBuffer;
+  @Getter
   private final BucketInfo bucketInfo;
   private final BufferSizeDetector detector;
+  @Getter
   private final String bucketId;
 
   public RowDataBucket(
@@ -52,8 +56,8 @@ public class RowDataBucket {
     return dataBuffer.getIterator();
   }
 
-  public String getBucketId() {
-    return bucketId;
+  public void sort() throws IOException {
+    new QuickSort().sort(dataBuffer);
   }
 
   public boolean writeRow(RowData rowData) throws IOException {
@@ -62,10 +66,6 @@ public class RowDataBucket {
       detector.detect(rowData);
     }
     return success;
-  }
-
-  public BucketInfo getBucketInfo() {
-    return bucketInfo;
   }
 
   public long getBufferSize() {

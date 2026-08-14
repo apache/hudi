@@ -21,6 +21,9 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.DEFAULT_START_TIMESTAMP;
 
@@ -28,23 +31,12 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.DEFAULT
  * This POJO is used to craft checkpoints that supports size based batching
  * This object will be use by object based Hudi incr sources (s3/gcs)
  */
+@AllArgsConstructor
+@Getter
 public class CloudObjectIncrCheckpoint {
 
   private final String commit;
   private final String key;
-
-  public CloudObjectIncrCheckpoint(String commit, String key) {
-    this.commit = commit;
-    this.key = key;
-  }
-
-  public String getCommit() {
-    return commit;
-  }
-
-  public String getKey() {
-    return key;
-  }
 
   public static CloudObjectIncrCheckpoint fromString(Option<Checkpoint> lastCheckpoint) {
     if (lastCheckpoint.isPresent()) {

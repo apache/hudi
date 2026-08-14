@@ -18,13 +18,15 @@
 
 package org.apache.hudi.table.format.mor;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -39,7 +41,7 @@ import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.avro.Schema;
+import lombok.Getter;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.io.DefaultInputSplitAssigner;
 import org.apache.flink.api.common.io.RichInputFormat;
@@ -70,7 +72,7 @@ public class MergeOnReadInputFormat
 
   protected transient org.apache.hadoop.conf.Configuration hadoopConf;
 
-  protected final MergeOnReadTableState tableState;
+  protected final MergeOnReadTableState<MergeOnReadInputSplit> tableState;
 
   /**
    * Uniform iterator view for the underneath records.
@@ -114,8 +116,15 @@ public class MergeOnReadInputFormat
   protected boolean emitDelete;
 
   /**
+   * Table name
+   */
+  @Getter
+  private String tableName;
+
+  /**
    * Flag saying whether the input format has been closed.
    */
+  @Getter
   private boolean closed = true;
 
   protected final InternalSchemaManager internalSchemaManager;
@@ -166,6 +175,7 @@ public class MergeOnReadInputFormat
     this.metaClient = StreamerUtil.metaClientForReader(this.conf, hadoopConf);
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
     this.iterator = initIterator(split);
+    this.tableName = metaClient.getTableConfig().getTableName();
     mayShiftInputSplit(split);
   }
 
@@ -187,8 +197,10 @@ public class MergeOnReadInputFormat
             + "hoodie table path: " + split.getTablePath()
             + "flink partition Index: " + split.getSplitNumber()
             + "merge type: " + split.getMergeType());
-    final Schema tableSchema = AvroSchemaCache.intern(new Schema.Parser().parse(tableState.getAvroSchema()));
-    final Schema requiredSchema = AvroSchemaCache.intern(new Schema.Parser().parse(tableState.getRequiredAvroSchema()));
+    final HoodieSchema tableSchema = HoodieSchemaCache.intern(
+        HoodieSchema.parse(tableState.getTableSchema()));
+    final HoodieSchema requiredSchema = HoodieSchemaCache.intern(
+        HoodieSchema.parse(tableState.getRequiredSchema()));
     return getSplitRowIterator(split, tableSchema, requiredSchema, mergeType, emitDelete);
   }
 
@@ -239,10 +251,6 @@ public class MergeOnReadInputFormat
     this.closed = true;
   }
 
-  public boolean isClosed() {
-    return this.closed;
-  }
-
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -263,6 +271,10 @@ public class MergeOnReadInputFormat
   }
 
   protected ClosableIterator<RowData> getBaseFileIterator(String path) throws IOException {
+    if (path.endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+      return FormatUtils.getLanceRecordIterator(path, fieldNames, fieldTypes, requiredPos, hadoopConf);
+    }
+
     LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
         path,
         fieldNames,
@@ -289,7 +301,7 @@ public class MergeOnReadInputFormat
   }
 
   /**
-   * Get a {@link RowData} iterator using {@link HoodieFileGroupReader}.
+   * Get a {@link RowData} iterator using a {@link HoodieRecordReader}.
    *
    * @param split          input split
    * @param tableSchema    schema of the table
@@ -301,16 +313,16 @@ public class MergeOnReadInputFormat
    */
   protected ClosableIterator<RowData> getSplitRowIterator(
       MergeOnReadInputSplit split,
-      Schema tableSchema,
-      Schema requiredSchema,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
       String mergeType,
       boolean emitDelete) throws IOException {
-    HoodieFileGroupReader<RowData> fileGroupReader = createFileGroupReader(split, tableSchema, requiredSchema, mergeType, emitDelete);
-    return fileGroupReader.getClosableIterator();
+    HoodieRecordReader<RowData> recordReader = createRecordReader(split, tableSchema, requiredSchema, mergeType, emitDelete);
+    return recordReader.getClosableIterator();
   }
 
   /**
-   * Create a {@link HoodieFileGroupReader}.
+   * Create a {@link HoodieRecordReader}.
    *
    * @param split          input split
    * @param tableSchema    schema of the table
@@ -318,12 +330,12 @@ public class MergeOnReadInputFormat
    * @param mergeType      merge type for FileGroup reader
    * @param emitDelete     flag saying whether DELETE record should be emitted
    *
-   * @return A {@link HoodieFileGroupReader}.
+   * @return A {@link HoodieRecordReader}.
    */
-  protected HoodieFileGroupReader<RowData> createFileGroupReader(
+  protected HoodieRecordReader<RowData> createRecordReader(
       MergeOnReadInputSplit split,
-      Schema tableSchema,
-      Schema requiredSchema,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
       String mergeType,
       boolean emitDelete) {
     FileSlice fileSlice = new FileSlice(
@@ -333,7 +345,7 @@ public class MergeOnReadInputFormat
         "",
         split.getBasePath().map(HoodieBaseFile::new).orElse(null),
         split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()));
-    return FormatUtils.createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
+    return FormatUtils.createRecordReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
         tableSchema, requiredSchema, split.getLatestCommit(), mergeType, emitDelete, predicates, split.getInstantRange());
   }
 
@@ -348,7 +360,7 @@ public class MergeOnReadInputFormat
     protected Configuration conf;
     protected MergeOnReadTableState tableState;
     protected List<DataType> fieldTypes;
-    protected List<Predicate> predicates;
+    protected List<Predicate> predicates = Collections.emptyList();
     protected long limit = -1;
     protected boolean emitDelete = false;
     protected InternalSchemaManager internalSchemaManager = InternalSchemaManager.DISABLED;

@@ -22,12 +22,12 @@ package org.apache.hudi.table.marker;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.TimelineServiceClientBase;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.timeline.TimelineServiceClientBase;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 

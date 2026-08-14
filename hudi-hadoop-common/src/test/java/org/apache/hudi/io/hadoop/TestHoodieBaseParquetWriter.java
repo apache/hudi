@@ -23,14 +23,16 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieParquetConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -49,8 +51,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieBaseParquetWriter {
 
+  @Setter
   private static class MockHoodieParquetWriter extends HoodieBaseParquetWriter<IndexedRecord> {
 
+    @Getter
     long writtenRecordCount = 0L;
     long currentDataSize = 0L;
 
@@ -64,19 +68,6 @@ public class TestHoodieBaseParquetWriter {
     public long getDataSize() {
       return currentDataSize;
     }
-
-    @Override
-    public long getWrittenRecordCount() {
-      return writtenRecordCount;
-    }
-
-    public void setWrittenRecordCount(long writtenCount) {
-      this.writtenRecordCount = writtenCount;
-    }
-
-    public void setCurrentDataSize(long currentDataSize) {
-      this.currentDataSize = currentDataSize;
-    }
   }
 
   @TempDir
@@ -88,8 +79,8 @@ public class TestHoodieBaseParquetWriter {
         BloomFilterTypeCode.DYNAMIC_V0.name());
     StorageConfiguration conf = HoodieTestUtils.getDefaultStorageConfWithDefaults();
 
-    Schema schema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
+    HoodieSchema schema = HoodieTestDataGenerator.HOODIE_SCHEMA;
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()),
         schema, Option.of(filter), new Properties());
 
     long maxFileSize = 2 * 1024 * 1024;

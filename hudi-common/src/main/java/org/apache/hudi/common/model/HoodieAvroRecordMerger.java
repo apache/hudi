@@ -21,13 +21,13 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -56,7 +56,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
     }
     init(props);
     IndexedRecord previousAvroData = older.getRecord() == null ? null : recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
-    Schema newerSchema = recordContext.getSchemaFromBufferRecord(newer);
+    HoodieSchema newerSchema = recordContext.getSchemaFromBufferRecord(newer);
     GenericRecord newerAvroRecord = newer.getRecord() == null ? null : recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
     HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, newerAvroRecord, newer.getOrderingValue());
 
@@ -64,7 +64,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
       // No data to merge with, simply return the newer one
       return newer;
     } else {
-      Option<IndexedRecord> updatedValue = payload.combineAndGetUpdateValue(previousAvroData, newerSchema, props);
+      Option<IndexedRecord> updatedValue = payload.combineAndGetUpdateValue(previousAvroData, newerSchema != null ? newerSchema.toAvroSchema() : null, props);
       if (updatedValue.isPresent()) {
         IndexedRecord updatedRecord = updatedValue.get();
         // If there is no change in the record or the merge results in SENTINEL record (returned by expression payload when condition is not matched), then return the older record
@@ -77,7 +77,10 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
         }
         // Construct a new BufferedRecord with updated value
         T resultRecord = recordContext.convertAvroRecord(updatedRecord);
-        return BufferedRecords.fromEngineRecord(resultRecord, updatedValue.map(IndexedRecord::getSchema).orElseGet(() -> newerSchema),
+        return BufferedRecords.fromEngineRecord(resultRecord, updatedValue
+                .map(IndexedRecord::getSchema)
+                .map(HoodieSchema::fromAvroSchema)
+                .orElseGet(() -> newerSchema),
             recordContext, orderingFields, newer.getRecordKey(), updatedValue.isEmpty());
       } else {
         // If the updated value is empty, it means the result is a DELETE operation

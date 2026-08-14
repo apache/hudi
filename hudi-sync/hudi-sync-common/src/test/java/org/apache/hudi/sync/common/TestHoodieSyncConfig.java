@@ -146,6 +146,22 @@ class TestHoodieSyncConfig {
     HoodieSyncConfig config5 = new HoodieSyncConfig(props5, new Configuration());
     assertEquals("org.apache.hudi.hive.SinglePartPartitionValueExtractor",
         config5.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+
+    Properties props6 = new Properties();
+    props6.setProperty(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "foo,bar");
+    props6.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "foo");
+    HoodieSyncConfig config6 = new HoodieSyncConfig(props6, new Configuration());
+    assertEquals("org.apache.hudi.hive.SinglePartPartitionValueExtractor",
+        config6.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        String.format("should infer from %s when explicitly configured",
+            HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key()));
+
+    Properties props7 = new Properties();
+    props7.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "foo");
+    props7.setProperty(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key(), "true");
+    HoodieSyncConfig config7 = new HoodieSyncConfig(props7, new Configuration());
+    assertEquals("org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor",
+        config7.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
   }
 
   @Test

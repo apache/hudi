@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -34,6 +34,7 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.testutils.KafkaTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import com.google.crypto.tink.subtle.Base64;
@@ -49,10 +50,9 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.streaming.kafka010.KafkaTestUtils;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -87,22 +87,23 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
 
   protected SchemaProvider schemaProvider;
 
-  protected KafkaTestUtils testUtils;
+  protected static KafkaTestUtils testUtils;
 
   @BeforeAll
   public static void initClass() {
     dataGen = new HoodieTestDataGenerator(0xDEED);
-  }
-
-  @BeforeEach
-  public void setup() {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterEach
-  public void tearDown() {
+  @AfterAll
+  public static void tearDown() {
     testUtils.teardown();
+  }
+
+  @AfterEach
+  void cleanupTopics() {
+    testUtils.deleteTopics();
   }
 
   protected TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
@@ -306,7 +307,20 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     String newGroupId = avroKafkaSource.props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, "");
     assertNotEquals(groupId, newGroupId);
-    String schemaHash = Base64.encode(HashID.hash(schemaProvider.getSourceSchema().toString(), HashID.Size.BITS_128));
+    String schemaHash = Base64.encode(HashID.hash(schemaProvider.getSourceHoodieSchema().toString(), HashID.Size.BITS_128));
     assertEquals(StringUtils.concatenateWithThreshold(String.format("%s_", groupId), schemaHash, GROUP_ID_MAX_BYTES_LENGTH), newGroupId);
+  }
+
+  @Test
+  void testUnknownValueDeserializerClass() {
+    final String topic = TEST_TOPIC_PREFIX + "testUnknownValueDeserializer";
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+
+    props.put("hoodie.streamer.source.kafka.value.deserializer.class", "org.apache.hudi.NotADeserializer");
+    // the deserializer class is resolved while constructing the source, i.e. before touching kafka
+    HoodieReadFromSourceException exception = assertThrows(HoodieReadFromSourceException.class,
+        () -> new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics));
+    assertTrue(exception.getMessage().contains(
+        "Could not load custom avro kafka deserializer: org.apache.hudi.NotADeserializer"), exception.getMessage());
   }
 }

@@ -20,8 +20,8 @@
 
 package org.apache.hudi.aws.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.StorageBasedLockProviderTestBase;
 import org.apache.hudi.client.transaction.lock.StorageBasedLockProvider;
+import org.apache.hudi.client.transaction.lock.StorageBasedLockProviderTestBase;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.config.HoodieAWSConfig;
 

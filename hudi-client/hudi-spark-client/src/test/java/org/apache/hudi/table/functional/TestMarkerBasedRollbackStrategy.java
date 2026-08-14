@@ -30,9 +30,11 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -42,6 +44,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.MarkerBasedRollbackStrategy;
@@ -75,7 +78,6 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_PARALLELISM_VALUE;
@@ -116,6 +118,9 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     tearDown();
     tableType = HoodieTableType.MERGE_ON_READ;
     setUp();
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.VERSION.key(), HoodieTableVersion.SIX.versionCode());
+    initMetaClient(tableType, props);
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     String f0 = testTable.addRequestedCommit("000")
         .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
@@ -134,11 +139,22 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     tearDown();
     tableType = HoodieTableType.MERGE_ON_READ;
     setUp();
+    if (testIOType == IOType.APPEND) {
+      Properties props = new Properties();
+      props.put(HoodieTableConfig.VERSION.key(), HoodieTableVersion.SIX.versionCode());
+      initMetaClient(tableType, props);
+    }
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     String f0 = testTable.addRequestedCommit("000")
         .getFileIdWithLogFile("partA");
-    testTable.forCommit("001")
-        .withLogMarkerFile("partA", f0, testIOType);
+    testTable.forCommit("001");
+    if (testIOType == IOType.APPEND) {
+      testTable.withLogFile("partA", f0, "000", 1);
+      String logFileName = FileCreateUtils.logFileName("000", f0, 1);
+      testTable.withLogMarkerFile("partA", logFileName);
+    } else {
+      testTable.withLogMarkerFile("partA", f0, testIOType);
+    }
 
     HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
     List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
@@ -293,6 +309,9 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
   @Test
   public void testMarkerBasedRollbackFallbackToTimelineServerWhenDirectMarkerFails() throws Exception {
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.VERSION.key(), HoodieTableVersion.SIX.versionCode());
+    initMetaClient(tableType, props);
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     String f0 = testTable.addRequestedCommit("000")
         .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
@@ -317,7 +336,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     initMetaClient(tableType, props);
     String partition = "partA";
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(
-        metaClient, addMetadataFields(HoodieTestUtils.SIMPLE_RECORD_SCHEMA));
+        metaClient, HoodieSchemaUtils.addMetadataFields(HoodieTestUtils.SIMPLE_RECORD_SCHEMA));
     String fileId = UUID.randomUUID().toString();
     HoodieRecord tripRecord = createSimpleRecord("key1", "2016-01-31T03:16:41.415Z", 123);
     String instantTime1 = "001";
@@ -382,12 +401,16 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     assertEquals(1, rollbackStats.size());
     HoodieRollbackStat rollbackStat = rollbackStats.get(0);
     if (!tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      StoragePath rollbackLogPath = new StoragePath(new StoragePath(basePath, partition),
-          FileCreateUtils.logFileName(instantTime1, fileId, numLogFiles + 2));
+      // The rollback log file's write token is determined by Spark's task context at runtime,
+      // so extract the actual path from the rollback stats rather than constructing it with a
+      // hardcoded write token. Verify the file exists and its version matches the expected bump.
+      StoragePathInfo rollbackLogPathInfo =
+          rollbackStat.getCommandBlocksCount().entrySet().stream().findFirst().get().getKey();
+      StoragePath rollbackLogPath = rollbackLogPathInfo.getPath();
       assertTrue(storage.exists(rollbackLogPath));
-      assertEquals(rollbackLogPath.getPathWithoutSchemeAndAuthority(),
-          rollbackStat.getCommandBlocksCount().entrySet().stream().findFirst().get()
-              .getKey().getPath().getPathWithoutSchemeAndAuthority());
+      HoodieLogFile rollbackLogFile = new HoodieLogFile(rollbackLogPathInfo);
+      assertEquals(fileId, rollbackLogFile.getFileId());
+      assertEquals(numLogFiles + 2, rollbackLogFile.getLogVersion());
     }
     assertEquals(partition, rollbackStat.getPartitionPath());
     assertEquals(

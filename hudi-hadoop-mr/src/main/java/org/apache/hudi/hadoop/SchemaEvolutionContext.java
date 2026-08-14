@@ -19,8 +19,18 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Type;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -32,18 +42,9 @@ import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.realtime.AbstractRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -125,13 +126,13 @@ public class SchemaEvolutionContext {
     return internalSchemaOpt;
   }
 
-  public Schema getAvroSchemaFromCache() throws Exception {
-    Option<Schema> avroSchemaOpt = getCachedData(
+  public HoodieSchema getSchemaFromCache() throws Exception {
+    Option<HoodieSchema> avroSchemaOpt = getCachedData(
         HoodieCombineHiveInputFormat.SCHEMA_CACHE_KEY_PREFIX,
-        json -> Option.ofNullable(new Schema.Parser().parse(json)));
+        json -> Option.ofNullable(HoodieSchema.parse(json)));
     if (avroSchemaOpt == null) {
       // the code path should only be invoked in tests.
-      return new TableSchemaResolver(this.metaClient).getTableAvroSchema();
+      return new TableSchemaResolver(this.metaClient).getTableSchema();
     }
     return avroSchemaOpt.orElseThrow(() -> new HoodieValidationException("The avro schema cache should always be set up together with the internal schema cache"));
   }
@@ -166,7 +167,8 @@ public class SchemaEvolutionContext {
     if (split instanceof FileSplit) {
       Path path = ((FileSplit) split).getPath();
       FileSystem fs = path.getFileSystem(job);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      HoodieStorage storage = HoodieStorageUtils.getStorage(
+          HadoopFSUtils.convertToStoragePath(path), HadoopFSUtils.getStorageConf(fs.getConf()));
       return TablePathUtils.getTablePath(storage, HadoopFSUtils.convertToStoragePath(path));
     }
     return Option.empty();
@@ -176,7 +178,8 @@ public class SchemaEvolutionContext {
     try {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(job);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      HoodieStorage storage = HoodieStorageUtils.getStorage(
+          HadoopFSUtils.convertToStoragePath(inputPath), HadoopFSUtils.getStorageConf(fs.getConf()));
       Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString())
           .setConf(HadoopFSUtils.getStorageConfWithCopy(job)).build();
@@ -198,7 +201,7 @@ public class SchemaEvolutionContext {
       return;
     }
     if (internalSchemaOption.isPresent()) {
-      Schema tableAvroSchema = getAvroSchemaFromCache();
+      HoodieSchema tableSchema = getSchemaFromCache();
       List<String> requiredColumns = getRequireColumn(job);
       InternalSchema prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchemaOption.get(),
           requiredColumns);
@@ -206,12 +209,12 @@ public class SchemaEvolutionContext {
       String partitionFields = job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
       List<String> partitioningFields = !partitionFields.isEmpty() ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
           : new ArrayList<>();
-      Schema writerSchema = AvroInternalSchemaConverter.convert(internalSchemaOption.get(), tableAvroSchema.getName());
+      HoodieSchema writerSchema = InternalSchemaConverter.convert(internalSchemaOption.get(), tableSchema.getName());
       writerSchema = HoodieRealtimeRecordReaderUtils.addPartitionFields(writerSchema, partitioningFields);
-      Map<String, Schema.Field> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
+      Map<String, HoodieSchemaField> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
       // we should get HoodieParquetInputFormat#HIVE_TMP_COLUMNS,since serdeConstants#LIST_COLUMNS maybe change by HoodieParquetInputFormat#setColumnNameList
-      Schema hiveSchema = realtimeRecordReader.constructHiveOrderedSchema(writerSchema, schemaFieldsMap, job.get(HIVE_TMP_COLUMNS));
-      Schema readerSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName());
+      HoodieSchema hiveSchema = realtimeRecordReader.constructHiveOrderedSchema(writerSchema, schemaFieldsMap, job.get(HIVE_TMP_COLUMNS));
+      HoodieSchema readerSchema = InternalSchemaConverter.convert(prunedInternalSchema, tableSchema.getName());
       // setUp evolution schema
       realtimeRecordReader.setWriterSchema(writerSchema);
       realtimeRecordReader.setReaderSchema(readerSchema);

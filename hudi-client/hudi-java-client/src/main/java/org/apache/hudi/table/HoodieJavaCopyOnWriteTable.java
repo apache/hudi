@@ -44,7 +44,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -72,8 +72,7 @@ import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -81,10 +80,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class HoodieJavaCopyOnWriteTable<T>
     extends HoodieJavaTable<T> implements HoodieCompactionHandler<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaCopyOnWriteTable.class);
 
   protected HoodieJavaCopyOnWriteTable(HoodieWriteConfig config,
                                        HoodieEngineContext context,
@@ -284,7 +282,7 @@ public class HoodieJavaCopyOnWriteTable<T>
       throws IOException {
     // these are updates
     HoodieMergeHandle mergeHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
-    return IOUtils.runMerge(mergeHandle, instantTime, fileId);
+    return MergeUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,

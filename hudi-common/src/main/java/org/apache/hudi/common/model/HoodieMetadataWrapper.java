@@ -20,11 +20,16 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+
 /**
  * Wrapper for Hudi metadata.
  */
+@Getter
 public class HoodieMetadataWrapper {
 
+  @Getter(AccessLevel.NONE)
   private HoodieArchivedMetaEntry avroMetadataFromTimeline;
   private HoodieCommitMetadata commitMetadata;
   private boolean isAvroMetadata = false;
@@ -40,13 +45,5 @@ public class HoodieMetadataWrapper {
 
   public HoodieArchivedMetaEntry getMetadataFromTimeline() {
     return avroMetadataFromTimeline;
-  }
-
-  public HoodieCommitMetadata getCommitMetadata() {
-    return commitMetadata;
-  }
-
-  public boolean isAvroMetadata() {
-    return isAvroMetadata;
   }
 }

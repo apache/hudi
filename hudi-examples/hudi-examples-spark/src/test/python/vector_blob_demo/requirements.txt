@@ -1,0 +1,45 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# PySpark — match local Spark install (3.5.x).
+pyspark==3.5.*
+
+# PyArrow — write staging Parquet directly from Python to avoid PythonRDD
+# socket traffic on the macOS loopback. pyspark depends on a compatible
+# pyarrow already; pinning it explicitly keeps this script reproducible.
+pyarrow>=14.0.0
+
+# ML / DL stack (Apple Silicon-friendly).
+torch>=2.3.0
+torchvision>=0.18.0
+timm>=1.0.9
+scikit-learn>=1.4.2
+numpy>=1.26.0
+pillow>=10.3.0
+
+# Plotting.
+matplotlib>=3.8.0
+
+# Jupyter (only needed for notebooks/ — the .py scripts don't require these).
+jupyter>=1.0.0
+ipykernel>=6.29.0
+
+# NOTES:
+# - Torch 2.3+ includes Metal (MPS) backend for Apple Silicon by default.
+# - Hudi + Lance arrive as JARs, not pip packages. Point at them via:
+#     HUDI_BUNDLE_JAR=/abs/path/to/hudi-spark3.5-bundle_2.12-1.2.0-SNAPSHOT.jar
+#     LANCE_BUNDLE_JAR=/abs/path/to/lance-spark-bundle-3.5_2.12-0.0.14.jar

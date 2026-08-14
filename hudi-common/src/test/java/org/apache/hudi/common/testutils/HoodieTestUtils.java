@@ -20,6 +20,7 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -45,6 +47,7 @@ import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNamePa
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultTimelineFactory;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -52,7 +55,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -61,12 +63,13 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.junit.jupiter.api.Assumptions;
+
+import javax.annotation.Nonnull;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -89,7 +92,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
-import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
+import static org.apache.hudi.common.util.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -110,14 +113,14 @@ public class HoodieTestUtils {
   public static final InstantFileNameParser INSTANT_FILE_NAME_PARSER = new DefaultInstantFileNameParser();
   public static final CommitMetadataSerDe COMMIT_METADATA_SER_DE = new DefaultCommitMetadataSerDe();
   public static final InstantComparator INSTANT_COMPARATOR = new DefaultInstantComparator();
-  public static final Schema SIMPLE_RECORD_SCHEMA = getSchemaFromResource(HoodieTestUtils.class, "/exampleSchema.avsc", false);
+  public static final HoodieSchema SIMPLE_RECORD_SCHEMA = getSchemaFromResource(HoodieTestUtils.class, "/exampleSchema.avsc", false);
 
   public static HoodieAvroIndexedRecord createSimpleRecord(String rowKey, String time, Integer number) {
     return createSimpleRecord(rowKey, time, number, Option.empty());
   }
 
   public static HoodieAvroIndexedRecord createSimpleRecord(String rowKey, String time, Integer number, Option<String> partitionPath) {
-    GenericRecord record = new GenericData.Record(SIMPLE_RECORD_SCHEMA);
+    GenericRecord record = new GenericData.Record(SIMPLE_RECORD_SCHEMA.toAvroSchema());
     record.put("_row_key", rowKey);
     record.put("time", time);
     record.put("number", number);
@@ -149,6 +152,24 @@ public class HoodieTestUtils {
 
   public static HoodieStorage getStorage(StoragePath path) {
     return HoodieStorageUtils.getStorage(path, getDefaultStorageConf());
+  }
+
+  /**
+   * Lists all native (v2) log files (e.g. {@code *.log.parquet} / {@code *.deletes.parquet}) under
+   * the given base path, scanning recursively.
+   */
+  public static List<StoragePath> listNativeLogFiles(HoodieStorage storage, String basePath) throws IOException {
+    return storage.listFiles(new StoragePath(basePath)).stream()
+        .map(StoragePathInfo::getPath)
+        .filter(path -> FSUtils.isNativeLogFile(path.getName()))
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Whether the table at the given base path contains any native (v2) log files.
+   */
+  public static boolean hasNativeLogFiles(HoodieStorage storage, String basePath) throws IOException {
+    return !listNativeLogFiles(storage, basePath).isEmpty();
   }
 
   public static HoodieTableMetaClient init(String basePath) throws IOException {
@@ -532,5 +553,18 @@ public class HoodieTestUtils {
     });
     nonExistentConfigs.forEach(key -> assertFalse(
         tableConfig.contains(key), key + " should not be present in the table config"));
+  }
+
+  /**
+   * Fetches inner-most cause of the provided {@link Throwable}
+   */
+  @Nonnull
+  public static Throwable getRootCause(@Nonnull Throwable t) {
+    Throwable cause = t;
+    while (cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+
+    return cause;
   }
 }

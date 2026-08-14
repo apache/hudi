@@ -18,12 +18,13 @@
 
 package org.apache.hudi.metaserver.store.jdbc;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,14 +32,12 @@ import java.io.InputStream;
 /**
  * Utils for sql session's life cycle.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class SqlSessionFactoryUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(SqlSessionFactoryUtils.class);
+
   private static final String CONFIG_PATH = "mybatis-config.xml";
   private static volatile SqlSessionFactory sqlSessionFactory;
-
-  private SqlSessionFactoryUtils() {
-
-  }
 
   private static void initSqlSessionFactory() {
     if (sqlSessionFactory == null) {
@@ -47,7 +46,7 @@ public class SqlSessionFactoryUtils {
           try (InputStream inputStream = Resources.getResourceAsStream(CONFIG_PATH)) {
             sqlSessionFactory = new SqlSessionFactoryBuilder().build(inputStream);
           } catch (IOException e) {
-            LOG.error("Failed to init SQL session.", e);
+            log.error("Failed to init SQL session.", e);
           }
         }
       }

@@ -33,8 +33,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.function.Function;
 
@@ -42,9 +41,8 @@ import java.util.function.Function;
  * Consistent hashing bucket index implementation, with auto-adjust bucket number.
  * NOTE: bucket resizing is triggered by clustering.
  */
+@Slf4j
 public class HoodieConsistentBucketIndex extends HoodieBucketIndex {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieConsistentBucketIndex.class);
 
   public HoodieConsistentBucketIndex(HoodieWriteConfig config) {
     super(config);
@@ -94,7 +92,7 @@ public class HoodieConsistentBucketIndex extends HoodieBucketIndex {
         return Option.of(new HoodieRecordLocation(null, FSUtils.createNewFileId(node.getFileIdPrefix(), 0)));
       }
 
-      LOG.error("Consistent hashing node has no file group, partition: {}, meta: {}, record_key: {}",
+      log.error("Consistent hashing node has no file group, partition: {}, meta: {}, record_key: {}",
           partitionPath, identifier.getMetadata().getFilename(), recordKey);
       throw new HoodieIndexException("Failed to getBucket as hashing node has no file group");
     }

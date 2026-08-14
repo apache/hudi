@@ -17,10 +17,11 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, PartitionBucketIndexHashingConfig}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator
 
 import org.apache.spark.sql.SparkSession
@@ -68,7 +69,7 @@ class PartitionBucketIndexSupport(spark: SparkSession,
       Option.apply(prunedPartitionsAndFileSlices.flatMap(v => {
         val partitionPathOption = v._1
         val fileSlices = v._2
-        val numBuckets = calc.get.computeNumBuckets(partitionPathOption.getOrElse(new PartitionPath("", Array())).path)
+        val numBuckets = calc.get.computeNumBuckets(partitionPathOption.getOrElse(new PartitionPath("", Array())).getPath)
         val bucketIdsBitMapByFilter = filterQueriesWithBucketHashField(queryFilters, numBuckets)
         if (bucketIdsBitMapByFilter.isDefined && bucketIdsBitMapByFilter.get.cardinality() > 0) {
           val allFilesName = getPrunedPartitionsAndFileNames(fileIndex, Seq((partitionPathOption, fileSlices)))._2

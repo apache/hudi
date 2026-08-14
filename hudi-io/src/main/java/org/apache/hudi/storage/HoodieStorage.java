@@ -389,6 +389,8 @@ public abstract class HoodieStorage implements Closeable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public final boolean needCreateTempFile() {
     return StorageSchemes.HDFS.getScheme().equals(getScheme())
+        // viewfs itself is just an abstraction layer on top of other file systems based on hadoop like HDFS, therefore, enabling the creation of temporary files is the safest
+        || StorageSchemes.VIEWFS.getScheme().equals(getScheme())
         // Local file will be visible immediately after LocalFileSystem#create(..), even before the output
         // stream is closed, so temporary file is also needed for atomic file creating with content written.
         || StorageSchemes.FILE.getScheme().equals(getScheme());

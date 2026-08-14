@@ -40,10 +40,17 @@ import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 public class ParquetDFSSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> PARQUET_DFS_MERGE_SCHEMA = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge_schema.enable")
-      .defaultValue(false)
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge_schema.enable")
+      .key(STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge.schema.enable")
+      .defaultValue(true)
+      .withAlternatives(
+          // Back-compat aliases for the previous underscore-style keys (since 0.15.0).
+          STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge_schema.enable",
+          DELTA_STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge_schema.enable")
       .markAdvanced()
       .sinceVersion("0.15.0")
-      .withDocumentation("Merge schema across parquet files within a single write");
+      .withDocumentation("Whether to merge schema across parquet files within a single read. "
+          + "Defaults to true: heterogeneous-schema source files (e.g. during bootstrap or "
+          + "evolving producers) get a unioned schema instead of silently dropping columns "
+          + "that exist only in some files. Set to false to restore the previous reader "
+          + "behavior (single file's schema wins).");
 }

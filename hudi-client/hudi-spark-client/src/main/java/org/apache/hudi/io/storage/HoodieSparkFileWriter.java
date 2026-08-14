@@ -20,29 +20,28 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.catalyst.InternalRow;
 
 import java.io.IOException;
 import java.util.Properties;
 
-public interface HoodieSparkFileWriter extends HoodieFileWriter {
+public interface HoodieSparkFileWriter extends HoodieFileWriter<InternalRow> {
   boolean canWrite();
 
   void close() throws IOException;
 
   void writeRowWithMetadata(HoodieKey recordKey, InternalRow row) throws IOException;
 
-  void writeRow(String recordKey, InternalRow row) throws IOException;
-
   @Override
-  default void write(String recordKey, HoodieRecord record, Schema schema, Properties props) throws IOException {
+  default void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
     writeRow(recordKey, (InternalRow) record.getData());
   }
 
   @Override
-  default void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException {
+  default void writeWithMetadata(HoodieKey key, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
     writeRowWithMetadata(key, (InternalRow) record.getData());
   }
 }

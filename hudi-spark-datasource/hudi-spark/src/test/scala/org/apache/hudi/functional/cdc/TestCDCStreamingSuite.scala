@@ -25,7 +25,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.apache.spark.sql.QueryTest.checkAnswer
 import org.apache.spark.sql.catalyst.expressions.{Add, If, Literal}
-import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.functions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
@@ -88,7 +87,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase with SparkAdapterSupport {
 
     val userToCountryMetaClient = createMetaClient(spark, userToCountryTblPath)
 
-    val inputData = new MemoryStream[(Int, String, String)](100, spark.sqlContext)
+    val inputData = sparkAdapter.createMemoryStream[(Int, String, String)](100, spark)
     val df = inputData.toDS().toDF("userid", "country", "ts")
     // stream1: from upstream data source to user_to_country_tbl
     val stream1 = df.writeStream
@@ -165,8 +164,8 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase with SparkAdapterSupport {
     val detailOutput1 = spark.read.format("hudi").load(userToCountryTblPath)
     assert(detailOutput1.where("country = 'US'").count() == 5)
     val ucTs1 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.requestedTime
-    val ucDdcData1 = cdcDataFrame(userToCountryTblPath, (ucTs1.toLong - 1).toString, null)
-    ucDdcData1.show(false)
+    val ucDdcData1 = cdcDataFrame(userToCountryTblPath, instantBefore(ucTs1), null)
+    ucDdcData1.collect()
     assertCDCOpCnt(ucDdcData1, 1, 2, 0)
 
     // check the final data of country_to_population_tbl for batch1
@@ -188,8 +187,8 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase with SparkAdapterSupport {
 
     // check the change data about user_to_country_tbl for batch2
     val ts2 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.requestedTime
-    val cdcData2 = cdcDataFrame(userToCountryTblPath, (ts2.toLong - 1).toString, null)
-    cdcData2.show(false)
+    val cdcData2 = cdcDataFrame(userToCountryTblPath, instantBefore(ts2), null)
+    cdcData2.collect()
     assertCDCOpCnt(cdcData2, 2, 1, 0)
 
     // check the final data of country_to_population_tbl for batch2

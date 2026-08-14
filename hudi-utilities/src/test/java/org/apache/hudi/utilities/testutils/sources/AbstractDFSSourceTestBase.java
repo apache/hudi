@@ -138,7 +138,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
     // Test Avro to Row format
     Dataset<Row> fetch1Rows = AvroConversionUtils
         .createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
-            schemaProvider.getSourceSchema().toString(), sparkSession);
+            schemaProvider.getSourceHoodieSchema().toString(), sparkSession);
     assertEquals(100, fetch1Rows.count());
     // city_to_state can't be in except because it is a map
     assertEquals(0, fetch1AsRows.getBatch().get().drop("city_to_state")

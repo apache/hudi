@@ -26,8 +26,10 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, ParquetTableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.io.storage.HoodieIOFactory
+import org.apache.hudi.core.io.storage.HoodieIOFactory
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
@@ -309,7 +311,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
   }
 
   private def getListType(hadoopConf: Configuration, path: StoragePath): String = {
-    val reader = HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, new HadoopStorageConfiguration(hadoopConf))).getReaderFactory(HoodieRecordType.AVRO).getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, path)
+    val reader = HoodieIOFactory.getIOFactory(HoodieStorageUtils.getStorage(path, HadoopFSUtils.getStorageConf(hadoopConf))).getReaderFactory(HoodieRecordType.AVRO).getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, path)
     val schema = ParquetTableSchemaResolver.convertAvroSchemaToParquet(reader.getSchema, hadoopConf)
 
     val list = schema.getFields.asScala.find(_.getName == TestParquetReaderCompatibility.listFieldName).get

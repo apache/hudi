@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities.schema.postprocessor;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.List;
@@ -43,8 +43,8 @@ public class ChainedSchemaPostProcessor extends SchemaPostProcessor {
   }
 
   @Override
-  public Schema processSchema(Schema schema) {
-    Schema targetSchema = schema;
+  public HoodieSchema processSchema(HoodieSchema schema) {
+    HoodieSchema targetSchema = schema;
     for (SchemaPostProcessor processor : processors) {
       targetSchema = processor.processSchema(targetSchema);
     }

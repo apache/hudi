@@ -20,6 +20,8 @@ package org.apache.hudi.cli;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -54,6 +56,7 @@ public class Table implements Iterable<List<String>> {
   // Headers ready for rendering
   private TableHeader renderHeaders;
   // Rows ready for rendering
+  @Getter
   private List<List<String>> renderRows;
 
   public Table(
@@ -192,9 +195,5 @@ public class Table implements Iterable<List<String>> {
       return renderHeaders.getFieldNames();
     }
     return rowHeader.getFieldNames();
-  }
-
-  public List<List<String>> getRenderRows() {
-    return renderRows;
   }
 }

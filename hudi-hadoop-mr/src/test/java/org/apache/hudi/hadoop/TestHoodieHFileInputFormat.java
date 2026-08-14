@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -33,7 +34,6 @@ import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -417,7 +417,7 @@ public class TestHoodieHFileInputFormat {
   // TODO enable this after enabling predicate push down
   public void testPredicatePushDown() throws IOException {
     // initial commit
-    Schema schema = getSchemaFromResource(TestHoodieHFileInputFormat.class, "/sample1.avsc");
+    HoodieSchema schema = getSchemaFromResource(TestHoodieHFileInputFormat.class, "/sample1.avsc");
     String commit1 = "20160628071126";
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 10, commit1);
     InputFormatTestUtil.commit(basePath, commit1);

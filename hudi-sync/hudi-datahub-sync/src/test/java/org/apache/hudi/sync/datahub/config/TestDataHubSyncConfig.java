@@ -19,10 +19,11 @@
 
 package org.apache.hudi.sync.datahub.config;
 
+import org.apache.hudi.sync.datahub.HoodieDataHubSyncException;
+
 import com.linkedin.common.FabricType;
 import com.linkedin.common.urn.DatasetUrn;
 import datahub.client.rest.RestEmitter;
-import org.apache.hudi.sync.datahub.HoodieDataHubSyncException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -40,8 +41,8 @@ import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DA
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TABLE_NAME;
-import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TLS_KEYSTORE_PATH;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TLS_KEYSTORE_PASSWORD;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TLS_KEYSTORE_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;

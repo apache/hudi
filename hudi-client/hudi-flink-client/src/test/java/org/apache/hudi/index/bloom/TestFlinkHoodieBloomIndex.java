@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -40,7 +41,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 import org.apache.hudi.testutils.HoodieFlinkWriteableTestTable;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,10 +48,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -71,7 +73,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 //TODO merge code with Spark Bloom index tests.
 public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
-  private static final Schema SCHEMA = getSchemaFromResource(TestFlinkHoodieBloomIndex.class, "/exampleSchema.avsc", true);
+  private static final HoodieSchema SCHEMA = getSchemaFromResource(TestFlinkHoodieBloomIndex.class, "/exampleSchema.avsc", true);
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}";
 
   public static Stream<Arguments> configParams() {
@@ -216,11 +218,10 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     assertFalse(filter.mightContain(record4.getRecordKey()));
 
     // Compare with file
-    List<String> uuids = asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
+    Set<String> uuids = Set.of(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    List<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
-        new StoragePath(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, metaClient.getStorage());
+    List<Pair<String, Long>> results = new ArrayList<>(HoodieIndexUtils.filterKeysFromFile(
+        new StoragePath(Paths.get(basePath, partition, filename).toString()), uuids, metaClient.getStorage()));
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
         || results.get(1).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));

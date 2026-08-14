@@ -19,10 +19,11 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
-import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
+import org.apache.hudi.client.timeline.TimelineArchiverV2;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -37,7 +38,6 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -49,9 +49,8 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -65,9 +64,8 @@ import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 
+@Slf4j
 public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMetadataBase.class);
 
   protected static HoodieTestTable testTable;
   protected String metadataTableBasePath;
@@ -346,6 +344,7 @@ public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(useFileListingMetadata)
             .enableMetrics(enableMetrics)
+            .enableDetailedMetadataMetrics(enableMetrics)
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)

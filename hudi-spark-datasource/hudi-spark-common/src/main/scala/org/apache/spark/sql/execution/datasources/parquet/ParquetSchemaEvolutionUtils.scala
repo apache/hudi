@@ -20,21 +20,23 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.schema.internal.InternalSchema
+import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger
+import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils
 import org.apache.hudi.common.table.timeline.TimelineLayout
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.InternalSchemaCache
 import org.apache.hudi.common.util.collection.Pair
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProjection}
+import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
 import org.apache.spark.sql.execution.datasources.parquet.ParquetSchemaEvolutionUtils.pruneInternalSchema
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructType}
@@ -62,7 +64,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
     val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
     val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
     InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
-      new HoodieHadoopStorage(tablePath, sharedConf), if (validCommits == null) "" else validCommits, layout)
+      HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(sharedConf)), if (validCommits == null) "" else validCommits, layout)
   } else {
     null
   }
@@ -160,7 +162,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   }
 
   def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
-    HoodieParquetFileFormatHelper.generateUnsafeProjection(fullSchema, timeZoneId, typeChangeInfos, requiredSchema, partitionSchema, schemaUtils)
+    SparkSchemaTransformUtils.generateUnsafeProjection(fullSchema, timeZoneId, typeChangeInfos, requiredSchema, partitionSchema, schemaUtils)
   }
 
   def buildVectorizedReader(convertTz: ZoneId,

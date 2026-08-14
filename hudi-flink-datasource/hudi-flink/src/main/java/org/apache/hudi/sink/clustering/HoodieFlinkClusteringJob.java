@@ -21,48 +21,50 @@ package org.apache.hudi.sink.clustering;
 import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.RetryHelper;
+import org.apache.hudi.common.util.TableServiceUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.HoodieFlinkCompactor;
 import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.client.deployment.application.ApplicationExecutionException;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static org.apache.hudi.sink.utils.FlinkTransformationUtils.setManagedMemoryWeight;
+
 /**
  * Flink hudi clustering program that can be executed manually.
  */
+@Slf4j
 public class HoodieFlinkClusteringJob {
-
-  protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkClusteringJob.class);
 
   private static final String NO_EXECUTE_KEYWORD = "no execute";
 
@@ -79,9 +81,44 @@ public class HoodieFlinkClusteringJob {
     FlinkClusteringConfig cfg = getFlinkClusteringConfig(args);
     Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
 
-    AsyncClusteringService service = new AsyncClusteringService(cfg, conf);
+    // Validate configuration
+    if (cfg.retryLastFailedJob && cfg.maxProcessingTimeMs <= 0) {
+      log.warn("--retry-last-failed-job is enabled but --job-max-processing-time-ms is not set or <= 0. "
+          + "The retry-last-failed feature will have no effect. Set --job-max-processing-time-ms to a positive value.");
+    }
 
-    new HoodieFlinkClusteringJob(service).start(cfg.serviceMode);
+    if (cfg.serviceMode) {
+      // Service mode: existing behavior without retry wrapper
+      // Service mode loop provides implicit retry semantics
+      AsyncClusteringService service = new AsyncClusteringService(cfg, conf);
+      new HoodieFlinkClusteringJob(service).start(true);
+    } else {
+      // Single-run mode: wrap with retry logic
+      new RetryHelper<Void, RuntimeException>(0, cfg.retry, 0, "java.lang.RuntimeException", "Flink clustering")
+          .start(() -> {
+            AsyncClusteringService service;
+            try {
+              service = new AsyncClusteringService(cfg, conf);
+            } catch (Exception e) {
+              throw new RuntimeException("Failed to create AsyncClusteringService", e);
+            }
+            try {
+              new HoodieFlinkClusteringJob(service).start(false);
+            } catch (ApplicationExecutionException aee) {
+              if (aee.getMessage() != null && aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
+                log.info("Clustering is not performed - no work to do");
+                // Not a failure, no need to retry
+              } else {
+                throw new RuntimeException(aee);
+              }
+            } catch (Exception e) {
+              throw new RuntimeException(e);
+            } finally {
+              service.shutDown();
+            }
+            return null;
+          });
+    }
   }
 
   /**
@@ -95,24 +132,24 @@ public class HoodieFlinkClusteringJob {
       } catch (Exception e) {
         throw new HoodieException(e.getMessage(), e);
       } finally {
-        LOG.info("Shut down hoodie flink clustering");
+        log.info("Shut down hoodie flink clustering");
       }
     } else {
-      LOG.info("Hoodie Flink Clustering running only single round");
+      log.info("Hoodie Flink Clustering running only single round");
       try {
         clusteringScheduleService.cluster();
       } catch (ApplicationExecutionException aee) {
-        if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
-          LOG.info("Clustering is not performed");
+        if (aee.getMessage() != null && aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
+          log.info("Clustering is not performed");
         } else {
-          LOG.error("Got error trying to perform clustering. Shutting down", aee);
+          log.error("Got error trying to perform clustering. Shutting down", aee);
           throw aee;
         }
       } catch (Exception e) {
-        LOG.error("Got error running delta sync once. Shutting down", e);
+        log.error("Got error running delta sync once. Shutting down", e);
         throw e;
       } finally {
-        LOG.info("Shut down hoodie flink clustering");
+        log.info("Shut down hoodie flink clustering");
       }
     }
   }
@@ -210,13 +247,13 @@ public class HoodieFlinkClusteringJob {
               cluster();
               Thread.sleep(cfg.minClusteringIntervalSeconds * 1000);
             } catch (ApplicationExecutionException aee) {
-              if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
-                LOG.info("Clustering is not performed.");
+              if (aee.getMessage() != null && aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
+                log.info("Clustering is not performed.");
               } else {
                 throw new HoodieException(aee.getMessage(), aee);
               }
             } catch (Exception e) {
-              LOG.error("Shutting down clustering service due to exception", e);
+              log.error("Shutting down clustering service due to exception", e);
               error = true;
               throw new HoodieException(e.getMessage(), e);
             }
@@ -246,11 +283,11 @@ public class HoodieFlinkClusteringJob {
         // create a clustering plan on the timeline
         ClusteringUtil.validateClusteringScheduling(conf);
 
-        LOG.info("Creating a clustering plan");
+        log.info("Creating a clustering plan");
         Option<String> clusteringInstantTime = writeClient.scheduleClustering(Option.empty());
         if (!clusteringInstantTime.isPresent()) {
           // do nothing.
-          LOG.info("No clustering plan for this job");
+          log.info("No clustering plan for this job");
           return;
         }
         table.getMetaClient().reloadActiveTimeline();
@@ -258,9 +295,27 @@ public class HoodieFlinkClusteringJob {
 
       // fetch the instant based on the configured execution sequence
       List<HoodieInstant> instants = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient());
+
+      // Check for stale inflight instant once if retry is enabled
+      Option<HoodieInstant> staleInflightInstant = Option.empty();
+      if (cfg.retryLastFailedJob && cfg.maxProcessingTimeMs > 0) {
+        staleInflightInstant = TableServiceUtils.findStaleInflightInstant(
+            table.getMetaClient(), HoodieTimeline.CLUSTERING_ACTION, cfg.maxProcessingTimeMs);
+        if (staleInflightInstant.isPresent()) {
+          log.info("Found stale inflight clustering instant [{}] exceeding max processing time {}ms. Will rollback and retry.",
+              staleInflightInstant.get(), cfg.maxProcessingTimeMs);
+        }
+      }
+
+      // If retry-last-failed is enabled, there might be only an inflight clustering instant (no REQUESTED pending instant).
+      // In that case, fall back to scanning the inflight timeline and rolling it back.
+      if (instants.isEmpty() && staleInflightInstant.isPresent()) {
+        instants = java.util.Collections.singletonList(staleInflightInstant.get());
+      }
+
       if (instants.isEmpty()) {
         // do nothing.
-        LOG.info("No clustering plan scheduled, turns on the clustering plan schedule with --schedule option");
+        log.info("No clustering plan scheduled, turns on the clustering plan schedule with --schedule option");
         return;
       }
 
@@ -270,6 +325,9 @@ public class HoodieFlinkClusteringJob {
             .filter(i -> i.requestedTime().equals(cfg.clusteringInstantTime))
             .findFirst()
             .orElseThrow(() -> new HoodieException("Clustering instant [" + cfg.clusteringInstantTime + "] not found"));
+      } else if (staleInflightInstant.isPresent()) {
+        // Prioritize stale inflight clustering instant that may have failed
+        clusteringInstant = staleInflightInstant.get();
       } else {
         // check for inflight clustering plans and roll them back if required
         clusteringInstant =
@@ -279,7 +337,7 @@ public class HoodieFlinkClusteringJob {
       Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(clusteringInstant.requestedTime(),
           table.getActiveTimeline(), table.getInstantGenerator());
       if (inflightInstantOpt.isPresent()) {
-        LOG.info("Rollback inflight clustering instant: [" + clusteringInstant + "]");
+        log.info("Rollback inflight clustering instant: [{}]", clusteringInstant);
         table.rollbackInflightClustering(inflightInstantOpt.get(),
             commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
             writeClient.getTransactionManager());
@@ -293,7 +351,7 @@ public class HoodieFlinkClusteringJob {
 
       if (!clusteringPlanOption.isPresent()) {
         // do nothing.
-        LOG.info("No clustering plan scheduled, turns on the clustering plan schedule with --schedule option");
+        log.info("No clustering plan scheduled, turns on the clustering plan schedule with --schedule option");
         return;
       }
 
@@ -302,7 +360,7 @@ public class HoodieFlinkClusteringJob {
       if (clusteringPlan == null || (clusteringPlan.getInputGroups() == null)
           || (clusteringPlan.getInputGroups().isEmpty())) {
         // no clustering plan, do nothing and return.
-        LOG.info("No clustering plan for instant " + clusteringInstant.requestedTime());
+        log.info("No clustering plan for instant {}", clusteringInstant.requestedTime());
         return;
       }
 
@@ -319,8 +377,8 @@ public class HoodieFlinkClusteringJob {
       // Mark instant as clustering inflight
       ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
 
-      final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
-      final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+      final HoodieSchema tableSchema = StreamerUtil.getTableSchema(table.getMetaClient(), false);
+      final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
       StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -339,7 +397,7 @@ public class HoodieFlinkClusteringJob {
           .setParallelism(clusteringParallelism);
 
       if (OptionsResolver.sortClusteringEnabled(conf)) {
-        ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+        setManagedMemoryWeight(dataStream.getTransformation(),
             conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
 
@@ -358,7 +416,7 @@ public class HoodieFlinkClusteringJob {
      * Shutdown async services like compaction/clustering as DeltaSync is shutdown.
      */
     public void shutdownAsyncService(boolean error) {
-      LOG.info("Gracefully shutting down clustering job. Error ?" + error);
+      log.info("Gracefully shutting down clustering job. Error: {}", error);
       executor.shutdown();
       writeClient.close();
     }

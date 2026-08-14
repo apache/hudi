@@ -1,0 +1,94 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Default values for the hudi-agent-gateway chart.
+#
+# The gateway points at an existing Trino with the Hudi connector (see the
+# sibling hudi-trino chart) and at the LLM provider of your choice. For the
+# self-contained laptop environment see hudi-lakehouse/local-dev/.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  # Built by hudi-lakehouse/scripts/build-images.sh from hudi-agent-gateway/.
+  repository: hudi-lakehouse-agent-gateway
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+gateway:
+  # anthropic | openai | ollama | openai-compatible
+  provider: ollama
+  model: qwen3:8b
+  # Appended to the built-in system prompt.
+  systemPromptExtra: ""
+  # Inline API keys are for development only -- they land in a chart-managed
+  # Secret. For real deployments create a Secret yourself and set
+  # existingSecret. The Secret is mounted with envFrom, and its keys must be
+  # the providers' STANDARD env-var names (ANTHROPIC_API_KEY, OPENAI_API_KEY;
+  # future providers -- TOGETHER_API_KEY, FIREWORKS_API_KEY, BASETEN_API_KEY,
+  # HF_TOKEN, ... -- work with no chart changes). Compatible with External
+  # Secrets Operator / Vault CSI: point existingSecret at the materialized
+  # Secret.
+  anthropicApiKey: ""
+  openaiApiKey: ""
+  existingSecret: ""
+  ollama:
+    # e.g. http://host.minikube.internal:11434 for Ollama on the laptop, or
+    # an in-cluster Ollama/vLLM service.
+    baseUrl: ""
+  openaiCompatible:
+    # Endpoint for provider=openai-compatible (vLLM, Together, Fireworks, ...).
+    baseUrl: ""
+  llmTimeoutSeconds: 120
+
+trino:
+  host: hudi-trino.hudi-lakehouse.svc
+  port: 8080
+  catalog: hudi
+  schema: default
+  user: hudi-agent-gateway
+
+guardrails:
+  rowCap: 200
+  queryTimeoutSeconds: 120
+  resultMaxBytes: 50000
+
+sessions:
+  ttlSeconds: 3600
+  maxSessions: 1000
+  maxMessagesPerSession: 40
+
+mcpEnabled: true
+logLevel: INFO
+
+service:
+  type: ClusterIP
+  port: 8000
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 1Gi
+
+# Extra environment variables for the gateway container.
+extraEnv: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

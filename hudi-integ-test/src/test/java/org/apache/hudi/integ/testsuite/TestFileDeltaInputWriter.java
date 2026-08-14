@@ -18,9 +18,26 @@
 
 package org.apache.hudi.integ.testsuite;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.integ.testsuite.generator.GenericRecordFullPayloadGenerator;
+import org.apache.hudi.integ.testsuite.reader.SparkBasedReader;
+import org.apache.hudi.integ.testsuite.writer.AvroFileDeltaInputWriter;
+import org.apache.hudi.integ.testsuite.writer.DeltaInputWriter;
+import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
+import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -28,26 +45,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.integ.testsuite.reader.SparkBasedReader;
-import org.apache.hudi.integ.testsuite.writer.AvroFileDeltaInputWriter;
-import org.apache.hudi.integ.testsuite.writer.DeltaInputWriter;
-import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
-import org.apache.hudi.integ.testsuite.generator.GenericRecordFullPayloadGenerator;
-import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
-import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
-import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit test for {@link DeltaInputWriter}.
@@ -83,10 +84,9 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
   public void testAvroFileSinkWriter() throws IOException {
     // 1. Create a Avro File Sink Writer
     DeltaInputWriter<GenericRecord> fileSinkWriter =
-        new AvroFileDeltaInputWriter(jsc.hadoopConfiguration(), basePath + "/input", schemaProvider.getSourceSchema()
-            .toString(), 1024 * 1024L);
+        new AvroFileDeltaInputWriter(jsc.hadoopConfiguration(), basePath + "/input", schemaProvider.getSourceHoodieSchema().toString(), 1024 * 1024L);
     GenericRecordFullPayloadGenerator payloadGenerator =
-        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceSchema());
+        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceHoodieSchema().toAvroSchema());
     // 2. Generate 100 avro payloads and write them to an avro file
     IntStream.range(0, 100).forEach(a -> {
       try {
@@ -99,7 +99,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
     DeltaWriteStats deltaWriteStats = fileSinkWriter.getDeltaWriteStats();
     FileSystem fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration());
     FileStatus[] fileStatuses = fs.listStatus(new Path(deltaWriteStats.getFilePath()));
-    // Atleast 1 file was written
+    // At least 1 file was written
     assertEquals(1, fileStatuses.length);
     // File length should be greater than 0
     assertTrue(fileStatuses[0].getLen() > 0);
@@ -108,7 +108,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
     List<String> paths = Arrays.asList(fs.globStatus(new Path(basePath + "/*/*.avro")))
         .stream().map(f -> f.getPath().toString()).collect(Collectors.toList());
     JavaRDD<GenericRecord> writtenRecords =
-        SparkBasedReader.readAvro(sparkSession, schemaProvider.getSourceSchema().toString(), paths, Option.empty(),
+        SparkBasedReader.readAvro(sparkSession, schemaProvider.getSourceHoodieSchema().toString(), paths, Option.empty(),
             Option.empty());
     // Number of records written should be 100
     assertEquals(writtenRecords.count(), 100);
@@ -121,10 +121,10 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
     // 1. Create a Avro File Sink Writer
     DeltaInputWriter<GenericRecord> fileSinkWriter =
         new AvroFileDeltaInputWriter(jsc.hadoopConfiguration(), basePath,
-            schemaProvider.getSourceSchema().toString(),
+            schemaProvider.getSourceHoodieSchema().toString(),
             1024 * 1024L);
     GenericRecordFullPayloadGenerator payloadGenerator =
-        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceSchema());
+        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceHoodieSchema().toAvroSchema());
     // 2. Generate 100 avro payloads and write them to an avro file
     IntStream.range(0, 100).forEach(a -> {
       try {

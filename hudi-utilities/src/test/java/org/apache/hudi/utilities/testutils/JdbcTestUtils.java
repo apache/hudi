@@ -23,9 +23,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -39,9 +38,8 @@ import java.util.Objects;
 /**
  * Helper class used in testing {@link org.apache.hudi.utilities.sources.JdbcSource}.
  */
+@Slf4j
 public class JdbcTestUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(JdbcTestUtils.class);
 
   public static final String JDBC_URL = "jdbc:h2:mem:test_mem";
   public static final String JDBC_DRIVER = "org.h2.Driver";
@@ -99,7 +97,7 @@ public class JdbcTestUtils {
             insertStatement.setDouble(9, Double.parseDouble(((GenericRecord) record.get("fare")).get("amount").toString()));
             insertStatement.addBatch();
           } catch (SQLException e) {
-            LOG.warn(e.getMessage());
+            log.warn(e.getMessage());
           }
         });
     insertStatement.executeBatch();
@@ -137,7 +135,7 @@ public class JdbcTestUtils {
             updateStatement.setString(10, r.get("_row_key").toString());
             updateStatement.addBatch();
           } catch (SQLException e) {
-            LOG.warn(e.getMessage());
+            log.warn(e.getMessage());
           }
         });
     updateStatement.executeBatch();
@@ -149,7 +147,7 @@ public class JdbcTestUtils {
     try (Statement statement = connection.createStatement()) {
       statement.executeUpdate(query);
     } catch (SQLException e) {
-      LOG.error(message);
+      log.error(message);
     }
   }
 
@@ -159,7 +157,7 @@ public class JdbcTestUtils {
         statement.close();
       }
     } catch (SQLException e) {
-      LOG.error("Error while closing statement. " + e.getMessage());
+      log.error("Error while closing statement. {}", e.getMessage());
     }
   }
 
@@ -169,7 +167,7 @@ public class JdbcTestUtils {
         connection.close();
       }
     } catch (SQLException e) {
-      LOG.error("Error while closing connection. " + e.getMessage());
+      log.error("Error while closing connection. {}", e.getMessage());
     }
   }
 
@@ -179,7 +177,7 @@ public class JdbcTestUtils {
       rs.next();
       return rs.getInt(1);
     } catch (SQLException e) {
-      LOG.warn("Error while counting records. " + e.getMessage());
+      log.warn("Error while counting records. {}", e.getMessage());
       return 0;
     }
   }

@@ -18,12 +18,13 @@
 
 package org.apache.hudi.sink.bulk;
 
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieValidationException;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
 
-import java.util.List;
+import javax.annotation.Nullable;
 
 /**
  * Factory class for all kinds of {@link RowDataKeyGen}.
@@ -31,22 +32,32 @@ import java.util.List;
 public class RowDataKeyGens {
 
   /**
-   * Creates a {@link RowDataKeyGen} with given configuration.
+   * Creates {@link RowDataKeyGen} of corresponding type depending on table configuration.
    */
-  public static RowDataKeyGen instance(Configuration conf, RowType rowType, int taskId, String instantTime) {
-    String recordKeys = conf.get(FlinkOptions.RECORD_KEY_FIELD);
-    if (hasRecordKey(recordKeys, rowType.getFieldNames())) {
+  public static RowDataKeyGen instance(Configuration conf, RowType rowType, @Nullable Integer taskId, @Nullable String instantTime) {
+    String[] recordKeys = OptionsResolver.getRecordKeys(conf);
+    if (hasRecordKey(recordKeys)) {
       return RowDataKeyGen.instance(conf, rowType);
     } else {
+      if (null == taskId || null == instantTime) {
+        throw new HoodieValidationException(
+            String.format("'taskId' and 'instantTime' cannot be null to use AutoRowDataKeyGen. 'taskId' = %s, 'instantTime' = %s", taskId, instantTime));
+      }
       return AutoRowDataKeyGen.instance(conf, rowType, taskId, instantTime);
     }
   }
 
   /**
+   * Creates {@link RowDataKeyGen} of a type, which doesn't expect parameters besides table configuration and row type.
+   */
+  public static RowDataKeyGen instance(Configuration conf, RowType rowType) {
+    return instance(conf, rowType, null, null);
+  }
+
+  /**
    * Checks whether user provides any record key.
    */
-  private static boolean hasRecordKey(String recordKeys, List<String> fieldNames) {
-    return recordKeys.split(",").length != 1
-        || fieldNames.contains(recordKeys);
+  private static boolean hasRecordKey(String[] recordKeys) {
+    return recordKeys.length > 0;
   }
 }

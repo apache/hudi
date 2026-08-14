@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -35,7 +36,6 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -63,7 +63,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
   private HoodieTable hoodieTable;
   private HoodieWriteConfig config;
   private WriteStatus writeStatus;
-  private Schema schema;
+  private HoodieSchema schema;
   private HoodieTableMetaClient metaClient;
   private HoodieEngineContext engineContext;
   private HoodieReaderContext readerContext;
@@ -73,7 +73,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
     hoodieTable = mock(HoodieTable.class);
     config = mock(HoodieWriteConfig.class);
     writeStatus = new WriteStatus(true, 0.0d);
-    schema = mock(Schema.class);
+    schema = mock(HoodieSchema.class);
     metaClient = mock(HoodieTableMetaClient.class);
     engineContext = mock(HoodieEngineContext.class);
     readerContext = mock(HoodieReaderContext.class);
@@ -100,7 +100,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
         partitionPath + "/.file-001_20231201120000.log.1",
         partitionPath + "/.file-001_20231201120000.log.2");
     String instantTime = "20231201120000";
-    
+
     HoodieIndexDefinition indexDef = HoodieIndexDefinition.newBuilder()
         .withIndexName(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "_fare_index")
         .withIndexType("SECONDARY_INDEX")
@@ -109,9 +109,6 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
     
     try (MockedStatic<SecondaryIndexRecordGenerationUtils> mockedUtils = 
             mockStatic(SecondaryIndexRecordGenerationUtils.class)) {
-      
-      // Mock empty previous file slice
-      Map<String, String> emptyMap = Collections.emptyMap();
       
       // Mock current file slice with new records
       Map<String, String> currentMap = new HashMap<>();
@@ -136,7 +133,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
           .get(indexDef.getIndexName()).forEach(stats -> {
             assertTrue(currentMap.containsKey(stats.getRecordKey()));
             assertEquals(currentMap.get(stats.getRecordKey()), stats.getSecondaryKeyValue());
-            assertEquals(false, stats.isDeleted());
+            assertFalse(stats.isDeleted());
           });
     }
   }
@@ -151,7 +148,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
   public void testTrackSecondaryIndexStats_WithExistingFileSlice() {
     String partitionPath = "2023/01/01";
     String fileId = "file-002";
-    List<String> newLogFiles = Arrays.asList(
+    List<String> newLogFiles = Collections.singletonList(
         partitionPath + "/.file-002_20231201130000.log.1");
     String instantTime = "20231201130000";
     
@@ -201,7 +198,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
       
       // Verify each operation
       long deleteCount = stats.stream()
-          .filter(s -> s.isDeleted())
+          .filter(SecondaryIndexStats::isDeleted)
           .count();
       assertEquals(2, deleteCount); // key2 old value + key3
       
@@ -308,7 +305,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
   public void testTrackSecondaryIndexStats_IOExceptionHandling() {
     String partitionPath = "2023/01/01";
     String fileId = "file-004";
-    List<String> newLogFiles = Arrays.asList(
+    List<String> newLogFiles = Collections.singletonList(
         partitionPath + "/.file-004_20231201150000.log.1");
     String instantTime = "20231201150000";
     
@@ -347,7 +344,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
   public void testTrackSecondaryIndexStats_EmptyIndexDefinitions() {
     String partitionPath = "2023/01/01";
     String fileId = "file-005";
-    List<String> newLogFiles = Arrays.asList(
+    List<String> newLogFiles = Collections.singletonList(
         partitionPath + "/.file-005_20231201160000.log.1");
     String instantTime = "20231201160000";
     
@@ -369,7 +366,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
   public void testTrackSecondaryIndexStats_NullSecondaryKeyValues() {
     String partitionPath = "2023/01/01";
     String fileId = "file-006";
-    List<String> newLogFiles = Arrays.asList(
+    List<String> newLogFiles = Collections.singletonList(
         partitionPath + "/.file-006_20231201170000.log.1");
     String instantTime = "20231201170000";
     
@@ -404,8 +401,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
       // Verify null value is handled
       boolean hasNullValue = writeStatus.getIndexStats().getSecondaryIndexStats()
           .get(indexDef.getIndexName()).stream()
-          .anyMatch(stats -> ((org.apache.hudi.client.SecondaryIndexStats) stats)
-              .getSecondaryKeyValue() == null);
+          .anyMatch(stats -> stats.getSecondaryKeyValue() == null);
       assertTrue(hasNullValue);
     }
   }
@@ -419,7 +415,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
   public void testTrackSecondaryIndexStats_SameSecondaryKeyNoUpdate() {
     String partitionPath = "2023/01/01";
     String fileId = "file-007";
-    List<String> newLogFiles = Arrays.asList(
+    List<String> newLogFiles = Collections.singletonList(
         partitionPath + "/.file-007_20231201180000.log.1");
     String instantTime = "20231201180000";
     

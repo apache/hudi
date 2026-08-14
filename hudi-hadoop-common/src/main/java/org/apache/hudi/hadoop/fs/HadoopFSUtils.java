@@ -24,17 +24,17 @@ import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BufferedFSInputStream;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -45,28 +45,22 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
 
 /**
  * Utility functions related to accessing the file storage on Hadoop.
  */
+@Slf4j
 public class HadoopFSUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(HadoopFSUtils.class);
+
   private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
 
@@ -74,7 +68,7 @@ public class HadoopFSUtils {
     // look for all properties, prefixed to be picked up
     for (Map.Entry<String, String> prop : System.getenv().entrySet()) {
       if (prop.getKey().startsWith(HOODIE_ENV_PROPS_PREFIX)) {
-        LOG.info("Picking up value for hoodie env var : {}", prop.getKey());
+        log.info("Picking up value for hoodie env var : {}", prop.getKey());
         conf.set(prop.getKey().replace(HOODIE_ENV_PROPS_PREFIX, "").replaceAll("_DOT_", "."), prop.getValue());
       }
     }
@@ -141,10 +135,10 @@ public class HadoopFSUtils {
     File localFile = new File(path);
     if (!providedPath.isAbsolute() && localFile.exists()) {
       Path resolvedPath = new Path("file://" + localFile.getAbsolutePath());
-      LOG.info("Resolving file {} to be a local file.", path);
+      log.info("Resolving file {} to be a local file.", path);
       return resolvedPath;
     }
-    LOG.info("Resolving file {} to be a remote file.", path);
+    log.info("Resolving file {} to be a remote file.", path);
     return providedPath;
   }
 
@@ -284,7 +278,7 @@ public class HadoopFSUtils {
    * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
    */
   public static boolean isGCSFileSystem(FileSystem fs) {
-    return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
+    return StorageSchemes.GCS.getScheme().equals(getScheme(fs));
   }
 
   /**
@@ -292,7 +286,42 @@ public class HadoopFSUtils {
    * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
    */
   public static boolean isCHDFileSystem(FileSystem fs) {
-    return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
+    return StorageSchemes.CHDFS.getScheme().equals(getScheme(fs));
+  }
+
+  /**
+   * Resolves the scheme of {@code fs} without depending on {@link FileSystem#getScheme()}.
+   *
+   * <p>{@code getScheme()} is optional in Hadoop: {@link FileSystem}'s own implementation throws
+   * {@link UnsupportedOperationException}, and proxy implementations such as Presto's
+   * {@code PrestoS3FileSystem} do not override it, so calling it unguarded turns an unrelated read into
+   * "Not implemented by the PrestoS3FileSystem FileSystem implementation" (HUDI-4602).
+   * {@link FileSystem#getUri()} is abstract, so every implementation supplies one to fall back on.
+   *
+   * <p>The two are not interchangeable, which is why {@code getScheme()} is tried first:
+   * {@code InLineFileSystem} returns {@code "inlinefs"} from {@code getScheme()} while its
+   * {@code getUri()} is {@code URI.create("inlinefs")}, which has no colon and so carries no scheme at all.
+   * A URI with no scheme is therefore a resolution failure rather than a value to pass on - returning null
+   * would surface much later as {@code does not support scheme null} or {@code Unsupported scheme :null},
+   * with the original {@code UnsupportedOperationException} discarded.
+   *
+   * @param fs instance of {@link FileSystem} in use.
+   * @return the scheme of {@code fs}, never null.
+   * @throws HoodieException if {@code getScheme()} is unimplemented and the URI carries no scheme.
+   */
+  public static String getScheme(FileSystem fs) {
+    try {
+      return fs.getScheme();
+    } catch (UnsupportedOperationException e) {
+      String scheme = fs.getUri().getScheme();
+      if (scheme == null) {
+        // HoodieException rather than HoodieIOException: the latter only accepts an IOException cause, and
+        // discarding the UnsupportedOperationException is the thing being fixed here.
+        throw new HoodieException("Cannot resolve the scheme of " + fs.getClass().getName()
+            + ": getScheme() is unimplemented and its URI " + fs.getUri() + " carries no scheme", e);
+      }
+      return scheme;
+    }
   }
 
   private static StorageConfiguration<Configuration> getStorageConf(Configuration conf, boolean copy) {
@@ -301,7 +330,7 @@ public class HadoopFSUtils {
 
   public static Configuration registerFileSystem(StoragePath file, Configuration conf) {
     Configuration returnConf = new Configuration(conf);
-    String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
+    String scheme = getScheme(HadoopFSUtils.getFs(file.toString(), conf));
     returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
         HoodieWrapperFileSystem.class.getName());
     return returnConf;
@@ -381,10 +410,6 @@ public class HadoopFSUtils {
     }
   }
 
-  public static long getFileSize(FileSystem fs, Path path) throws IOException {
-    return fs.getFileStatus(path).getLen();
-  }
-
   /**
    * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
@@ -397,37 +422,18 @@ public class HadoopFSUtils {
    * the file name.
    */
   public static String getFileIdFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
-      throw new InvalidHoodiePathException(path.toString(), "LogFile");
-    }
-    return matcher.group(1);
+    return FSUtils.getFileIdFromLogPath(new StoragePath(path.toUri()));
   }
 
   /**
    * Get the second part of the file name in the log file. That will be the delta commit time.
    */
   public static String getDeltaCommitTimeFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
-      throw new InvalidHoodiePathException(path.toString(), "LogFile");
-    }
-    return matcher.group(2);
-  }
-
-  /**
-   * Check if the file is a base file of a log file. Then get the fileId appropriately.
-   */
-  public static String getFileIdFromFilePath(Path filePath) {
-    if (isLogFile(filePath)) {
-      return getFileIdFromLogPath(filePath);
-    }
-    return FSUtils.getFileId(filePath.getName());
+    return FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(path.toUri()));
   }
 
   public static boolean isBaseFile(Path path) {
-    String extension = FSUtils.getFileExtension(path.getName());
-    return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension);
+    return FSUtils.isBaseFile(new StoragePath(path.toUri()));
   }
 
   public static boolean isLogFile(Path logPath) {
@@ -442,40 +448,17 @@ public class HadoopFSUtils {
   }
 
   /**
-   * Get the names of all the base and log files in the given partition path.
-   */
-  public static FileStatus[] getAllDataFilesInPartition(FileSystem fs, Path partitionPath) throws IOException {
-    final Set<String> validFileExtensions = Arrays.stream(HoodieFileFormat.values())
-        .map(HoodieFileFormat::getFileExtension).collect(Collectors.toCollection(HashSet::new));
-    final String logFileExtension = HoodieFileFormat.HOODIE_LOG.getFileExtension();
-
-    try {
-      return Arrays.stream(fs.listStatus(partitionPath, path -> {
-        String extension = FSUtils.getFileExtension(path.getName());
-        return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
-      })).filter(FileStatus::isFile).toArray(FileStatus[]::new);
-    } catch (IOException e) {
-      // return empty FileStatus if partition does not exist already
-      if (!fs.exists(partitionPath)) {
-        return new FileStatus[0];
-      } else {
-        throw e;
-      }
-    }
-  }
-
-  /**
    * When a file was opened and the task died without closing the stream, another task executor cannot open because the
    * existing lease will be active. We will try to recover the lease, from HDFS. If a data node went down, it takes
    * about 10 minutes for the lease to be recovered. But if the client dies, this should be instant.
    */
   public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
       throws IOException, InterruptedException {
-    LOG.info("Recover lease on dfs file {}", p);
+    log.info("Recover lease on dfs file {}", p);
     // initiate the recovery
     boolean recovered = false;
     for (int nbAttempt = 0; nbAttempt < MAX_ATTEMPTS_RECOVER_LEASE; nbAttempt++) {
-      LOG.info("Attempt {} to recover lease on dfs file {}", nbAttempt, p);
+      log.info("Attempt {} to recover lease on dfs file {}", nbAttempt, p);
       recovered = dfs.recoverLease(p);
       if (recovered) {
         break;

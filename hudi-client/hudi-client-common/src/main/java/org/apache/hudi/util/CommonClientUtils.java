@@ -21,15 +21,12 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
@@ -38,17 +35,15 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class CommonClientUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CommonClientUtils.class);
 
   public static void validateTableVersion(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
@@ -65,6 +60,16 @@ public class CommonClientUtils {
 
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT) && writeConfig.isNonBlockingConcurrencyControl()) {
       throw new HoodieNotSupportedException("Non-blocking concurrency control is not supported for table versions < 8.");
+    }
+
+    // The LSM-tree storage layout depends on the native (v2) log format, which is only written for
+    // writer versions >= TEN (see #shouldWriteNativeLogFormat). Reject an LSM-tree table whose writer
+    // version is below TEN, otherwise writes would silently fall back to the inline log format.
+    if (tableConfig.isLSMTreeStorageLayout()
+        && writeConfig.getWriteVersion().lesserThan(HoodieTableVersion.TEN)) {
+      throw new HoodieNotSupportedException(String.format(
+          "LSM-tree storage layout requires writer version >= %s (found writer version %s).",
+          HoodieTableVersion.TEN, writeConfig.getWriteVersion()));
     }
   }
 
@@ -84,7 +89,7 @@ public class CommonClientUtils {
     if (tableVersion.greaterThan(HoodieTableVersion.SIX)
         && writeVersion.versionCode() < tableVersion.versionCode()
         && writeVersion.greaterThanOrEquals(HoodieTableVersion.SIX)) {
-      LOG.info("Table version is greater than 6, and writer version is lower than table version and must be >= 6.");
+      log.info("Table version is greater than 6, and writer version is lower than table version and must be >= 6.");
       return true;
     }
     return false;
@@ -110,6 +115,7 @@ public class CommonClientUtils {
     }
     HoodieFileFormat baseFileFormat = getBaseFileFormat(writeConfig, tableConfig);
     switch (getBaseFileFormat(writeConfig, tableConfig)) {
+      case LANCE:
       case PARQUET:
       case ORC:
         return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
@@ -121,17 +127,18 @@ public class CommonClientUtils {
     }
   }
 
-  public static String generateWriteToken(TaskContextSupplier taskContextSupplier) {
-    try {
-      return FSUtils.makeWriteToken(
-          taskContextSupplier.getPartitionIdSupplier().get(),
-          taskContextSupplier.getStageIdSupplier().get(),
-          taskContextSupplier.getAttemptIdSupplier().get()
-      );
-    } catch (Throwable t) {
-      LOG.warn("Error generating write token, using default.", t);
-      return HoodieLogFormat.DEFAULT_WRITE_TOKEN;
-    }
+  /**
+   * Whether log blocks should be written in the native (v2) log format (standalone native
+   * files written via {@code HoodieNativeLogFormatWriter}) instead of the legacy inline
+   * log format. The native format is the default for write version &gt;= {@link HoodieTableVersion#TEN}.
+   *
+   * <p>This decision is keyed on the effective write version (i.e. {@code HoodieWriteConfig#getWriteVersion()}),
+   * so that the on-disk format follows what the writer is targeting during upgrade/downgrade windows.
+   *
+   * @param writeConfig the writer configuration.
+   */
+  public static boolean shouldWriteNativeLogs(HoodieWriteConfig writeConfig) {
+    return writeConfig.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.TEN);
   }
 
   public static <O> HoodieWriteMetadata stitchCompactionHoodieWriteStats(HoodieWriteMetadata<O> writeMetadata, List<HoodieWriteStat> writeStats) {

@@ -29,11 +29,10 @@ import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.ThriftHoodieMetaserver;
 import org.apache.hudi.metaserver.util.TServerSocketWrapper;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.transport.TServerTransport;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Proxy;
 
@@ -43,9 +42,8 @@ import java.lang.reflect.Proxy;
  * @since 0.13.0
  * @Experimental
  */
+@Slf4j
 public class HoodieMetaserver {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetaserver.class);
 
   private static TServer server;
   private static Thread serverThread;
@@ -80,11 +78,11 @@ public class HoodieMetaserver {
       ThriftHoodieMetaserver.Processor processor = new ThriftHoodieMetaserver.Processor(proxy);
       TServerTransport serverTransport = new TServerSocketWrapper(9090);
       server = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport).processor(processor));
-      LOG.info("Starting the server");
+      log.info("Starting the server");
       serverThread = new Thread(() -> server.serve());
       serverThread.start();
     } catch (Exception e) {
-      LOG.error("Failed to start Metaserver.", e);
+      log.error("Failed to start Metaserver.", e);
       System.exit(1);
     }
   }
@@ -116,7 +114,7 @@ public class HoodieMetaserver {
 
   public static void stopServer() {
     if (server != null) {
-      LOG.info("Stop the server...");
+      log.info("Stop the server...");
       server.stop();
       serverThread.interrupt();
       server = null;

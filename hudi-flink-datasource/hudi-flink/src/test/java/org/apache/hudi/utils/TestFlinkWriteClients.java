@@ -25,6 +25,8 @@ import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -36,8 +38,10 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.DirectWriteMarkers;
@@ -101,6 +105,53 @@ public class TestFlinkWriteClients {
       metaClient.reloadTableConfig();
       assertThat(metaClient.getTableConfig().getMetadataPartitions().toString(), is("[files]"));
     }
+  }
+
+  @Test
+  void testDefaultGlobalRecordIndexMinFileGroupCountForFlink() {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertEquals(8, writeConfig.getGlobalRecordLevelIndexMinFileGroupCount());
+  }
+
+  @Test
+  void testUserConfiguredGlobalRecordIndexMinFileGroupCountIsNotOverridden() {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "12");
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertEquals(12, writeConfig.getGlobalRecordLevelIndexMinFileGroupCount());
+  }
+
+  @Test
+  void testUserConfiguredMigrationCommitArchivalBatchSizeIsPropagated() {
+    // A raw hoodie.* property set on the Flink configuration must be propagated to the write config
+    // (and therefore reach the upgrade handler that reads it during the v7 -> v8 LSM timeline migration).
+    conf.setString(HoodieArchivalConfig.MIGRATION_COMMITS_ARCHIVAL_BATCH_SIZE.key(), "123");
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertEquals(123, writeConfig.getMigrationCommitArchivalBatchSize());
+    // The regular archival batch size must stay independent at its own default.
+    assertEquals(Integer.parseInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.defaultValue()),
+        writeConfig.getCommitArchivalBatchSize());
+  }
+
+  @Test
+  void testHoodieClientConfigPrecedence() {
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true, false);
+    assertTrue(writeConfig.isEmbeddedTimelineServerEnabled());
+
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "true");
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertFalse(writeConfig.isEmbeddedTimelineServerEnabled());
+
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED.key(), "false");
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertFalse(writeConfig.isEmbeddedTimelineServerReuseEnabled());
+
+    conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
+    conf.setString(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false");
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertFalse(writeConfig.allowOperationMetadataField());
   }
 
   @ParameterizedTest
@@ -194,8 +245,59 @@ public class TestFlinkWriteClients {
   }
 
   @Test
+  void testGetMetadataConfigWithoutAdditionalProperties() {
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 5);
+    // raw metadata table properties that are not exposed through FlinkOptions
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key(), "true");
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_TYPE.key(), BloomFilterTypeCode.SIMPLE.name());
+
+    HoodieMetadataConfig metadataConfig = FlinkWriteClients.getMetadataConfig(conf, false);
+
+    assertTrue(metadataConfig.isEnabled());
+    assertEquals(5, metadataConfig.getInt(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS));
+    // raw properties are not applied when includeAllProperties is false
+    assertFalse(metadataConfig.enableBloomFilter());
+  }
+
+  @Test
+  void testGetMetadataConfigWithAdditionalProperties() {
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 5);
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key(), "true");
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_TYPE.key(), BloomFilterTypeCode.SIMPLE.name());
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_NUM_ENTRIES.key(), "12345");
+
+    HoodieMetadataConfig metadataConfig = FlinkWriteClients.getMetadataConfig(conf);
+
+    assertTrue(metadataConfig.isEnabled());
+    assertEquals(5, metadataConfig.getInt(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS));
+    // raw properties are applied when includeAllProperties is true (the default)
+    assertTrue(metadataConfig.enableBloomFilter());
+    assertEquals(BloomFilterTypeCode.SIMPLE.name(), metadataConfig.getBloomFilterType());
+    assertEquals(12345, metadataConfig.getBloomFilterNumEntries());
+  }
+
+  @Test
+  void testHoodieClientConfigMetadataConfigConsistentWithGetMetadataConfig() throws Exception {
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key(), "true");
+    conf.setString(HoodieMetadataConfig.BLOOM_FILTER_TYPE.key(), BloomFilterTypeCode.SIMPLE.name());
+    StreamerUtil.initTableIfNotExists(conf);
+
+    HoodieMetadataConfig directMetadataConfig = FlinkWriteClients.getMetadataConfig(conf);
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf);
+
+    assertEquals(directMetadataConfig.isEnabled(), writeConfig.isMetadataTableEnabled());
+    assertEquals(directMetadataConfig.enableBloomFilter(), writeConfig.getMetadataConfig().enableBloomFilter());
+    assertEquals(directMetadataConfig.getBloomFilterType(), writeConfig.getMetadataConfig().getBloomFilterType());
+  }
+
+  @Test
   void testWriteMergeHandleForPreV9Table() throws Exception {
     conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
     StreamerUtil.initTableIfNotExists(conf);
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     assertThat(writeConfig.getMergeHandleClassName(), is(FileGroupReaderBasedMergeHandle.class.getName()));

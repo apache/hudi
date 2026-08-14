@@ -23,12 +23,12 @@ import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+@Slf4j
 public class SaferSchemaDagScheduler extends DagScheduler {
-  private static Logger LOG = LoggerFactory.getLogger(SaferSchemaDagScheduler.class);
+
   int processedVersion;
 
   public SaferSchemaDagScheduler(WorkflowDag workflowDag, WriterContext writerContext, JavaSparkContext jsc) {
@@ -43,9 +43,8 @@ public class SaferSchemaDagScheduler extends DagScheduler {
   @Override
   protected void executeNode(DagNode node, int curRound) throws HoodieException {
     if (node.getConfig().getSchemaVersion() < processedVersion) {
-      LOG.info(String.format("----------------- Processed SaferSchema version %d is available.  "
-              + "Skipping redundant Insert Operation. (Processed = %d) -----------------",
-          node.getConfig().getSchemaVersion(), processedVersion));
+      log.info("----------------- Processed SaferSchema version {} is available.  "
+          + "Skipping redundant Insert Operation. (Processed = {}) -----------------", node.getConfig().getSchemaVersion(), processedVersion);
       return;
     }
     super.executeNode(node, curRound);

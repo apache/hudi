@@ -40,8 +40,7 @@ import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Locale;
@@ -58,9 +57,8 @@ import static org.apache.hudi.keygen.KeyGenUtils.inferKeyGeneratorType;
  * This factory will try {@link HoodieWriteConfig#KEYGENERATOR_CLASS_NAME} firstly, this ensures the class prop
  * will not be overwritten by {@link KeyGeneratorType}
  */
+@Slf4j
 public class HoodieSparkKeyGeneratorFactory {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkKeyGeneratorFactory.class);
 
   private static final Map<String, String> COMMON_TO_SPARK_KEYGENERATOR = new HashMap<>();
   static {
@@ -183,7 +181,7 @@ public class HoodieSparkKeyGeneratorFactory {
       KeyGeneratorType keyGeneratorTypeEnum;
       if (StringUtils.isNullOrEmpty(keyGeneratorType)) {
         keyGeneratorTypeEnum = inferKeyGeneratorTypeFromWriteConfig(props);
-        LOG.info("The value of {} is empty; inferred to be {}",
+        log.info("The value of {} is empty; inferred to be {}",
             KEYGENERATOR_TYPE.key(), keyGeneratorTypeEnum);
       } else {
         try {

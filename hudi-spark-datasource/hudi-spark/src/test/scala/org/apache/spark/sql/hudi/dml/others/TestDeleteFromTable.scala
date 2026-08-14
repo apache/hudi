@@ -100,4 +100,77 @@ class TestDeleteFromTable extends HoodieSparkSqlTestBase {
       })
     }
   }
+
+  test("Test DELETE on VECTOR column preserves custom-type metadata") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id bigint,
+           |  embedding VECTOR(3)
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id'
+           | )
+         """.stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, array(cast(0.1 as float), cast(0.2 as float), cast(0.3 as float))),
+           |  (2, array(cast(0.4 as float), cast(0.5 as float), cast(0.6 as float)))
+           """.stripMargin)
+
+      spark.sql(s"delete from $tableName where id = 1")
+
+      checkAnswer(s"select id from $tableName")(Seq(2L))
+    }
+  }
+
+  test("Test DELETE on BLOB column preserves custom-type metadata") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id bigint,
+           |  payload BLOB
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id'
+           | )
+         """.stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, named_struct(
+           |        'type', 'OUT_OF_LINE',
+           |        'data', cast(null as binary),
+           |        'reference', named_struct(
+           |          'external_path', 'blobs/a',
+           |          'offset', 0L,
+           |          'length', 3L,
+           |          'managed', false))),
+           |  (2, named_struct(
+           |        'type', 'OUT_OF_LINE',
+           |        'data', cast(null as binary),
+           |        'reference', named_struct(
+           |          'external_path', 'blobs/b',
+           |          'offset', 0L,
+           |          'length', 5L,
+           |          'managed', false)))
+           """.stripMargin)
+
+      spark.sql(s"delete from $tableName where id = 1")
+
+      checkAnswer(s"select id, payload.reference.external_path from $tableName")(
+        Seq(2L, "blobs/b"))
+    }
+  }
 }

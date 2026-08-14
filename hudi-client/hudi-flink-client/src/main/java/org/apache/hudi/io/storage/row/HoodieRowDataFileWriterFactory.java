@@ -20,20 +20,24 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.storage.HoodieFileWriter;
-import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.core.io.HoodieParquetConfigInjector;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
-import org.apache.avro.Schema;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -65,11 +69,10 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newParquetFileWriter(
       OutputStream outputStream,
       HoodieConfig config,
-      Schema schema) throws IOException {
-    final RowType rowType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(schema).getRowType().getLogicalType();
+      HoodieSchema schema) throws IOException {
     HoodieRowDataParquetWriteSupport writeSupport =
         new HoodieRowDataParquetWriteSupport(
-            storage.getConf().unwrapAs(Configuration.class), rowType, null);
+            storage.getConf().unwrapAs(Configuration.class), schema, null);
     return new HoodieRowDataParquetOutputStreamWriter(
         new FSDataOutputStream(outputStream, null), writeSupport, getParquetConfig(config, writeSupport));
   }
@@ -90,41 +93,50 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       String instantTime,
       StoragePath storagePath,
       HoodieConfig config,
-      Schema schema,
+      HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    final RowType rowType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(schema).getRowType().getLogicalType();
-    return newParquetFileWriter(instantTime, storagePath, config, rowType, taskContextSupplier);
-  }
-
-  /**
-   * Create a parquet RowData writer on a given storage path.
-   *
-   * @param instantTime         instant time to write
-   * @param storagePath         file storage path
-   * @param config              hoodie configuration
-   * @param rowType             rowType of record
-   * @param taskContextSupplier task context supplier
-   *
-   * @return a RowData parquet writer
-   */
-  public HoodieFileWriter newParquetFileWriter(
-      String instantTime,
-      StoragePath storagePath,
-      HoodieConfig config,
-      RowType rowType,
-      TaskContextSupplier taskContextSupplier) throws IOException {
-    Configuration conf = storage.getConf().unwrapAs(Configuration.class);
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
 
-    BloomFilter filter = createBloomFilter(config);
-    HoodieRowDataParquetWriteSupport writeSupport = (HoodieRowDataParquetWriteSupport) ReflectionUtils.loadClass(
-        config.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS),
-        new Class<?>[] {Configuration.class, RowType.class, BloomFilter.class},
-        conf, rowType, filter);
+    Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(storagePath, storage.getConf(), config);
+    StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
+    HoodieConfig hoodieConfig = injectedConfigs.getRight();
 
-    return new HoodieRowDataParquetWriter(storagePath, getParquetConfig(config, writeSupport),
+    Configuration conf = (Configuration) storageConfiguration.unwrapAs(Configuration.class);
+    BloomFilter filter = createBloomFilter(hoodieConfig);
+    HoodieRowDataParquetWriteSupport writeSupport = (HoodieRowDataParquetWriteSupport) ReflectionUtils.loadClass(
+        hoodieConfig.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS),
+        new Class<?>[] {Configuration.class, HoodieSchema.class, BloomFilter.class},
+        conf, schema, filter);
+
+    return new HoodieRowDataParquetWriter(storagePath, getParquetConfig(hoodieConfig, writeSupport),
         instantTime, taskContextSupplier, populateMetaFields, withOperation);
+  }
+
+  @Override
+  public HoodieFileWriter newLanceFileWriter(
+      String instantTime,
+      StoragePath path,
+      HoodieConfig config,
+      HoodieSchema schema,
+      TaskContextSupplier taskContextSupplier) {
+    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
+    Option<org.apache.hudi.common.bloom.BloomFilter> bloomFilter = enableBloomFilter(populateMetaFields, config)
+        ? Option.of(createBloomFilter(config)) : Option.empty();
+    RowType rowType = HoodieSchemaConverter.convertToRowType(schema);
+    return new HoodieRowDataLanceWriter(
+        path,
+        rowType,
+        instantTime,
+        taskContextSupplier,
+        bloomFilter,
+        config.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE),
+        config.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES),
+        config.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_FLUSH_BYTE_WATERMARK),
+        config.getBooleanOrDefault(HoodieStorageConfig.WRITE_UTC_TIMEZONE),
+        populateMetaFields,
+        withOperation);
   }
 
   private static HoodieParquetConfig<HoodieRowDataParquetWriteSupport> getParquetConfig(

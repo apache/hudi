@@ -120,7 +120,7 @@ public class TestSparkBuildClusteringGroupsForPartition {
   private FileSlice generateFileSliceWithLen(String partitionPath, String fileId, String baseInstant, long fileLen) {
     FileSlice fs = new FileSlice(new HoodieFileGroupId(partitionPath, fileId), baseInstant);
     HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId, BASE_FILE_EXTENSION));
-    hoodieBaseFile.setFileLen(fileLen);
+    hoodieBaseFile.setFileSize(fileLen);
     fs.setBaseFile(hoodieBaseFile);
     return fs;
   }

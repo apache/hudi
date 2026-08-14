@@ -23,7 +23,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.FSUtils;
@@ -37,6 +36,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -51,6 +51,7 @@ import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePath;
@@ -59,7 +60,6 @@ import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
@@ -116,12 +116,12 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
       + "  ]\n"
       + "}";
 
-  private Schema schema;
+  private HoodieSchema schema;
   private HoodieTableMetaClient metaClient;
 
   @BeforeEach
   public void setUp() throws Exception {
-    schema = new Schema.Parser().parse(jsonSchema);
+    schema = HoodieSchema.parse(jsonSchema);
   }
 
   @Test
@@ -156,7 +156,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         metaClient.getCommitActionType());
 
     // There is no base file in partition dir because there is no compaction yet.
-    assertFalse(fileExists(), "No base data files should have been created");
+    assertFalse(baseDataFileExists(), "No base data files should have been created");
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
@@ -661,8 +661,9 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     assertNotNull(partitionDirs);
     assertThat(partitionDirs.length, is(partitions));
     for (File partitionDir : partitionDirs) {
-      File[] dataFiles = partitionDir.listFiles(filter);
+      File[] dataFiles = partitionDir.listFiles(file -> FSUtils.isBaseFile(file.getName()));
       assertNotNull(dataFiles);
+      assertTrue(dataFiles.length > 0);
       File latestDataFile = Arrays.stream(dataFiles)
           .max(Comparator.comparing(f -> FSUtils.getCommitTime(f.getName())))
           .orElse(dataFiles[0]);
@@ -699,7 +700,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     }
   }
 
-  private boolean fileExists() {
+  private boolean baseDataFileExists() {
     List<File> dirsToCheck = new ArrayList<>();
     dirsToCheck.add(tempDir.toFile());
     while (!dirsToCheck.isEmpty()) {
@@ -708,7 +709,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         if (!file.getName().startsWith(".")) {
           if (file.isDirectory()) {
             dirsToCheck.add(file);
-          } else {
+          } else if (FSUtils.isBaseFile(file.getName())) {
             return true;
           }
         }
@@ -718,7 +719,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
   }
 
   private GenericRecord str2GenericRecord(String str) {
-    GenericRecord record = new GenericData.Record(schema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     String[] fieldValues = str.split(",");
     ValidationUtils.checkArgument(fieldValues.length == 5, "Valid record must have 5 fields");
     record.put("id", StringUtils.isNullOrEmpty(fieldValues[0]) ? null : fieldValues[0]);

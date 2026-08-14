@@ -22,19 +22,18 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -57,9 +56,8 @@ import static org.mockito.Mockito.when;
 /**
  * Tests {@link MarkerBasedEarlyConflictDetectionRunnable}.
  */
+@Slf4j
 public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonTestHarness {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestMarkerBasedEarlyConflictDetectionRunnable.class);
 
   @BeforeEach
   public void setUp() throws Exception {

@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE;
+import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BOOLEAN;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.DOUBLE;
@@ -306,7 +306,7 @@ public class TestParquetBinaryCopyChecker {
     String testFile = makeTestFile(schema, "simple");
     ParquetFileInfo info = ParquetBinaryCopyChecker.collectFileInfo(conf, testFile);
     Assertions.assertNotNull(info);
-    Assertions.assertTrue(info.canBinaryCopy());
+    Assertions.assertTrue(info.isBinaryCopyEnabled());
     String schemaString = schema.toString();
     assertFileInfo(
         info,
@@ -381,7 +381,7 @@ public class TestParquetBinaryCopyChecker {
 
   private void assertFileInfo(ParquetFileInfo info, boolean support, String codeType, String schema) {
     Assertions.assertNotNull(info);
-    Assertions.assertEquals(support, info.canBinaryCopy());
+    Assertions.assertEquals(support, info.isBinaryCopyEnabled());
     if (support) {
       Assertions.assertEquals(codeType, info.getBloomFilterTypeCode());
       Assertions.assertEquals(schema, info.getSchema().toString());

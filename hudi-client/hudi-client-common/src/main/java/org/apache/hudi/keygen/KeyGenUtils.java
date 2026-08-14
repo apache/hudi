@@ -18,7 +18,7 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -39,11 +39,9 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
@@ -72,7 +70,7 @@ public class KeyGenUtils {
    */
   public static KeyGeneratorType inferKeyGeneratorType(
       Option<String> recordsKeyFields, String partitionFields) {
-    int numRecordKeyFields = recordsKeyFields.map(fields -> fields.split(",").length).orElse(0);
+    int numRecordKeyFields = recordsKeyFields.map(keyStr -> getRecordKeyFields(keyStr).size()).orElse(0);
     KeyGeneratorType partitionKeyGeneratorType = inferKeyGeneratorTypeFromPartitionFields(partitionFields);
     if (numRecordKeyFields <= 1) {
       return partitionKeyGeneratorType;
@@ -93,10 +91,10 @@ public class KeyGenUtils {
   // When auto record key gen is enabled, our inference will be based on partition path only.
   static KeyGeneratorType inferKeyGeneratorTypeFromPartitionFields(String partitionFields) {
     if (!StringUtils.isNullOrEmpty(partitionFields)) {
-      String[] partitonFields = partitionFields.split(",");
-      if (partitonFields[0].contains(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)) {
+      String[] partitionFieldsArray = partitionFields.split(",");
+      if (partitionFieldsArray[0].contains(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)) {
         return KeyGeneratorType.CUSTOM;
-      } else if (partitonFields.length == 1) {
+      } else if (partitionFieldsArray.length == 1) {
         return KeyGeneratorType.SIMPLE;
       } else {
         return KeyGeneratorType.COMPLEX;
@@ -233,8 +231,12 @@ public class KeyGenUtils {
     return constructRecordKey(recordKeyFields.toArray(new String[]{}), valueFunction);
   }
 
-  public static String getRecordPartitionPath(GenericRecord record, List<String> partitionPathFields,
-                                              boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+  public static String getRecordPartitionPath(GenericRecord record,
+                                              List<String> partitionPathFields,
+                                              boolean hiveStylePartitioning,
+                                              boolean encodePartitionPath,
+                                              boolean slashSeparatedDatePartitioning,
+                                              boolean consistentLogicalTimestampEnabled) {
     if (partitionPathFields.isEmpty()) {
       return "";
     }
@@ -253,7 +255,10 @@ public class KeyGenUtils {
           fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
         }
         if (hiveStylePartitioning) {
-          partitionPath.append(partitionPathField).append("=");
+          fieldVal = partitionPathField + "=" + fieldVal;
+        }
+        if (partitionPathFields.size() == 1 && slashSeparatedDatePartitioning) {
+          fieldVal = fieldVal.replace('-', '/');
         }
         partitionPath.append(fieldVal);
       }
@@ -273,7 +278,9 @@ public class KeyGenUtils {
   }
 
   public static String getPartitionPath(GenericRecord record, String partitionPathField,
-                                        boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+                                        boolean hiveStylePartitioning, boolean encodePartitionPath,
+                                        boolean slashSeparatedDatePartitioning,
+                                        boolean consistentLogicalTimestampEnabled) {
     String partitionPath = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
     if (partitionPath == null || partitionPath.isEmpty()) {
       partitionPath = HUDI_DEFAULT_PARTITION_PATH;
@@ -283,6 +290,9 @@ public class KeyGenUtils {
     }
     if (hiveStylePartitioning) {
       partitionPath = partitionPathField + "=" + partitionPath;
+    }
+    if (slashSeparatedDatePartitioning) {
+      partitionPath = partitionPath.replace('-', '/');
     }
     return partitionPath;
   }
@@ -319,13 +329,21 @@ public class KeyGenUtils {
   }
 
   public static List<String> getRecordKeyFields(TypedProperties props) {
-    return Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
-        .map(recordKeyConfigValue ->
-            Arrays.stream(recordKeyConfigValue.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toList())
-        ).orElse(Collections.emptyList());
+    return getRecordKeyFields(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null));
+  }
+
+  public static List<String> getRecordKeyFields(String recordKeys) {
+    return getKeyFields(recordKeys);
+  }
+
+  public static List<String> getIndexKeyFields(String indexKeys) {
+    return getKeyFields(indexKeys);
+  }
+
+  private static List<String> getKeyFields(String keys) {
+    return Option.ofNullable(keys)
+        .map(value -> StringUtils.split(value, ","))
+        .orElse(Collections.emptyList());
   }
 
   /**

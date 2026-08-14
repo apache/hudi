@@ -25,31 +25,33 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 /**
  * Helper class for native row writer for bulk_insert with bucket index.
  */
+@Slf4j
 public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInternalWriterHelper {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BucketBulkInsertDataInternalWriterHelper.class);
 
   private Pair<UTF8String, Integer> lastFileId; // for efficient code path
   // p -> (fileId -> handle)
   private final Map<Pair<UTF8String, Integer>, HoodieRowCreateHandle> handles;
-  protected final String indexKeyFields;
+  // parsed once; the per-row write path uses the List overloads so the comma-separated config
+  // string is not re-split per row
+  protected final List<String> indexKeyFieldList;
   protected final int bucketNum;
   private final boolean isNonBlockingConcurrencyControl;
   private final NumBucketsFunction numBucketsFunction;
@@ -64,7 +66,8 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
                                                   String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
                                                   boolean populateMetaFields, boolean arePartitionRecordsSorted, boolean shouldPreserveHoodieMetadata) {
     super(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted, shouldPreserveHoodieMetadata);
-    this.indexKeyFields = writeConfig.getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
+    this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(
+        writeConfig.getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())));
     this.bucketNum = writeConfig.getInt(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
     this.handles = new HashMap<>();
     this.isNonBlockingConcurrencyControl = writeConfig.isNonBlockingConcurrencyControl();
@@ -75,7 +78,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     try {
       UTF8String partitionPath = extractPartitionPath(row);
       UTF8String recordKey = extractRecordKey(row);
-      int bucketId = BucketIdentifier.getBucketId(String.valueOf(recordKey), indexKeyFields, numBucketsFunction.getNumBuckets(partitionPath.toString()));
+      int bucketId = BucketIdentifier.getBucketId(String.valueOf(recordKey), indexKeyFieldList, numBucketsFunction.getNumBuckets(partitionPath.toString()));
       if (lastFileId == null || !Objects.equals(lastFileId.getKey(), partitionPath) || !Objects.equals(lastFileId.getValue(), bucketId)) {
         // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
         //       a mutable underlying buffer
@@ -85,7 +88,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
       }
       handle.write(row);
     } catch (Throwable t) {
-      LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", t);
+      log.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", t);
       throw new IOException(t);
     }
   }
@@ -112,7 +115,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
         close();
       }
       String partitionPath = String.valueOf(fileId.getLeft());
-      LOG.info("Creating new file for partition path {}", partitionPath);
+      log.info("Creating new file for partition path {}", partitionPath);
       HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextBucketFileId(bucketId),
           instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
       handles.put(fileId, rowCreateHandle);
@@ -123,7 +126,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
   @Override
   public void close() throws IOException {
     for (HoodieRowCreateHandle handle : handles.values()) {
-      LOG.info("Closing bulk insert file {}", handle.getFileName());
+      log.info("Closing bulk insert file {}", handle.getFileName());
       writeStatusList.add(handle.close());
     }
     handles.clear();

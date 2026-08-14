@@ -58,12 +58,13 @@ public class ReusableFileGroupRecordBufferLoader<T> extends LogScanningRecordBuf
                                                                                          ReaderParameters readerParameters,
                                                                                          HoodieReadStats readStats,
                                                                                          Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);
+    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDeletes(), fileGroupUpdateCallback, props);
     Option<PartialUpdateMode> partialUpdateModeOpt = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
     if (cachedResults == null) {
       // Create an initial buffer to process the log files
       KeyBasedFileGroupRecordBuffer<T> initialBuffer = new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
+          readerContextWithoutFilters, hoodieTableMetaClient, readerContextWithoutFilters.getMergeMode(),
+          partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
       List<String> validInstants = scanLogFiles(readerContextWithoutFilters, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, initialBuffer);
       cachedResults = Pair.of(initialBuffer, validInstants);
     }

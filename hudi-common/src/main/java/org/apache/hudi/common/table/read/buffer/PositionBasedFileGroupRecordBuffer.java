@@ -19,11 +19,11 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -38,19 +38,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 
-import org.apache.avro.Schema;
-import org.roaringbitmap.longlong.Roaring64NavigableMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -61,8 +57,8 @@ import java.util.function.Function;
  * Here the position means that record position in the base file. The records from the base file is accessed from an iterator object. These records are merged when the
  * {@link #hasNext} method is called.
  */
+@Slf4j
 public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(PositionBasedFileGroupRecordBuffer.class);
 
   private static final String ROW_INDEX_COLUMN_NAME = "row_index";
   public static final String ROW_INDEX_TEMPORARY_COLUMN_NAME = "_tmp_metadata_" + ROW_INDEX_COLUMN_NAME;
@@ -96,7 +92,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock, baseFileInstantTime);
     if (recordPositions == null) {
-      LOG.debug("Falling back to key based merge for data block");
+      log.debug("Falling back to key based merge for data block");
       fallbackToKeyBasedBuffer();
       super.processDataBlock(dataBlock, keySpecOpt);
       return;
@@ -126,9 +122,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           partialUpdateModeOpt);
     }
 
-    Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
+    Pair<Function<T, T>, HoodieSchema> projectedTransformer = getProjectedTransformer(dataBlock);
 
-    Schema schema = AvroSchemaCache.intern(schemaTransformerWithEvolvedSchema.getRight());
+    HoodieSchema schema = HoodieSchemaCache.intern(projectedTransformer.getRight());
 
     // TODO: Return an iterator that can generate sequence number with the record.
     //       Then we can hide this logic into data block.
@@ -144,10 +140,17 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         }
 
         long recordPosition = recordPositions.get(recordIndex++);
-        T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
-        boolean isDelete = readerContext.getRecordContext().isDeleteRecord(evolvedNextRecord, deleteContext);
-        BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(evolvedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
+        T projectedNextRecord = projectedTransformer.getLeft().apply(nextRecord);
+        boolean isDelete = readerContext.getRecordContext().isDeleteRecord(projectedNextRecord, deleteContext);
+        BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(projectedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, recordPosition);
+      }
+      if (recordIndex != recordPositions.size()) {
+        throw new HoodieException(String.format(
+            "Data block yields %d records but its header has %d record positions. Position based "
+                + "merging pairs records with positions by index, so records must not be dropped from "
+                + "log file reads (e.g. by filter pushdown into the scan).",
+            recordIndex, recordPositions.size()));
       }
     }
   }
@@ -165,7 +168,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         records.remove(position);
       } else {
         //if it's a delete record and the key is null, then we need to still use positions
-        //this happens when we read the positions using logBlock.getRecordPositions()
+        //this happens when we read the positions using logBlock.getRecordPositionList()
         //instead of reading the delete records themselves
         needToDoHybridStrategy = true;
       }
@@ -181,16 +184,24 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     List<Long> recordPositions = extractRecordPositions(deleteBlock, baseFileInstantTime);
     if (recordPositions == null) {
-      LOG.debug("Falling back to key based merging for delete block");
+      log.debug("Falling back to key based merging for delete block");
       fallbackToKeyBasedBuffer();
       super.processDeleteBlock(deleteBlock);
       return;
     }
 
+    List<BufferedRecord<T>> deleteRecords = deleteBlock.getRecordsToDelete(readerContext);
+    if (deleteRecords.size() != recordPositions.size()) {
+      throw new HoodieException(String.format(
+          "Delete block yields %d records but its header has %d record positions. Position based "
+              + "merging pairs records with positions by index, so records must not be dropped from "
+              + "log file reads (e.g. by filter pushdown into the scan).",
+          deleteRecords.size(), recordPositions.size()));
+    }
+
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
         int commitTimeBasedRecordIndex = 0;
-        DeleteRecord[] deleteRecords = deleteBlock.getRecordsToDelete();
         for (Long recordPosition : recordPositions) {
           // IMPORTANT:
           // use #put for log files with regular order(see HoodieLogFile.LOG_FILE_COMPARATOR);
@@ -201,20 +212,16 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           // because under hybrid strategy in #doHasNextFallbackBaseRecord, if the record keys are not set up,
           // this delete-vector could be kept in the records cache(see the check in #fallbackToKeyBasedBuffer),
           // and these keys would be deleted no matter whether there are following-up inserts/updates.
-          DeleteRecord deleteRecord = deleteRecords[commitTimeBasedRecordIndex++];
-          BufferedRecord<T> record = BufferedRecords.fromDeleteRecord(deleteRecord, readerContext.getRecordContext());
-          records.put(recordPosition, record);
+          records.put(recordPosition, deleteRecords.get(commitTimeBasedRecordIndex++));
         }
         return;
       case EVENT_TIME_ORDERING:
       case CUSTOM:
       default:
         int recordIndex = 0;
-        Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
-        while (it.hasNext()) {
-          DeleteRecord record = it.next();
+        for (BufferedRecord<T> record : deleteRecords) {
           long recordPosition = recordPositions.get(recordIndex++);
-          processNextDeletedRecord(record, recordPosition);
+          processNextDataRecord(record, recordPosition);
         }
     }
   }
@@ -259,7 +266,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
    * 1. A set of pre-specified keys exists.
    * 2. The key of the record is not contained in the set.
    */
-  protected boolean shouldSkip(T record, boolean isFullKey, Set<String> keys, Schema writerSchema) {
+  protected boolean shouldSkip(T record, boolean isFullKey, Set<String> keys, HoodieSchema writerSchema) {
     // No keys are specified. Cannot skip at all.
     if (keys.isEmpty()) {
       return false;
@@ -287,29 +294,17 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
    */
   protected static List<Long> extractRecordPositions(HoodieLogBlock logBlock,
                                                      String baseFileInstantTime) throws IOException {
-    List<Long> blockPositions = new ArrayList<>();
-
     String blockBaseFileInstantTime = logBlock.getBaseFileInstantTimeOfPositions();
     if (StringUtils.isNullOrEmpty(blockBaseFileInstantTime) || !baseFileInstantTime.equals(blockBaseFileInstantTime)) {
-      LOG.debug("The record positions cannot be used because the base file instant time "
+      log.debug("The record positions cannot be used because the base file instant time "
               + "is either missing or different from the base file to merge. "
               + "Instant time in the header: {}, base file instant time of the file group: {}.",
           blockBaseFileInstantTime, baseFileInstantTime);
       return null;
     }
-    Roaring64NavigableMap positions = logBlock.getRecordPositions();
-    if (positions == null || positions.isEmpty()) {
-      LOG.info("No record position info is found when attempting to do position based merge.");
-      return null;
-    }
-
-    Iterator<Long> iterator = positions.iterator();
-    while (iterator.hasNext()) {
-      blockPositions.add(iterator.next());
-    }
-
+    List<Long> blockPositions = logBlock.getRecordPositionList();
     if (blockPositions.isEmpty()) {
-      LOG.info("No positions are extracted.");
+      log.info("No record position info is found when attempting to do position based merge.");
       return null;
     }
 

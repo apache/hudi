@@ -24,7 +24,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import java.util.List;
 
 /**
- * Simpler Wrapper to assist with auto commiting with action executor layer.
+ * Simpler Wrapper to assist with auto committing with action executor layer.
  * Only PartitionTTL and DeletePartition action executors are leveraging this at the moment.
  */
 public class FlinkAutoCommitActionExecutor {

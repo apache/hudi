@@ -18,12 +18,14 @@
 
 package org.apache.hudi.utils;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 /**
  * Test sql statements.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class TestSQL {
-  private TestSQL() {
-  }
 
   public static final String INSERT_T1 = "insert into t1 values\n"
       + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"
@@ -71,6 +73,11 @@ public class TestSQL {
       + "(1, row(cast(null as int), 'abc1')),\n"
       + "(2, row(2, cast(null as varchar))),\n"
       + "(3, row(cast(null as int), cast(null as varchar)))";
+
+  public static final String DEEPLY_NESTED_REPEATED_TYPE_INSERT_T1 = "insert into t1 values\n"
+      + "(1, row(array[row(11, map['a', 1, 'b', 2]), row(12, map['c', 3])])),\n"
+      + "(2, row(array[row(21, map['d', 4])])),\n"
+      + "(3, row(array[row(31, map['e', 5]), row(32, map['f', 6, 'g', 7])]))";
 
   public static final String INSERT_DATE_PARTITION_T1 = "insert into t1 values\n"
       + "('id1','Danny',23,DATE '1970-01-01'),\n"

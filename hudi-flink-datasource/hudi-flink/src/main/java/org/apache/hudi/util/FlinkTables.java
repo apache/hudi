@@ -24,6 +24,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.table.HoodieFlinkTable;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.configuration.Configuration;
 
@@ -32,9 +34,8 @@ import static org.apache.hudi.configuration.HadoopConfigurations.getHadoopConf;
 /**
  * Utilities for {@link org.apache.hudi.table.HoodieFlinkTable}.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class FlinkTables {
-  private FlinkTables() {
-  }
 
   private static HoodieFlinkTable<?> createTableInternal(HoodieWriteConfig writeConfig, HoodieEngineContext context) {
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(writeConfig, context);

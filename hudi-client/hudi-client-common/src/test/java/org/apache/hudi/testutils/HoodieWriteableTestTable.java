@@ -19,18 +19,21 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
@@ -38,23 +41,20 @@ import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.io.hadoop.HoodieAvroOrcWriter;
-import org.apache.hudi.io.hadoop.HoodieAvroParquetWriter;
-import org.apache.hudi.io.storage.HoodieOrcConfig;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.core.io.storage.HoodieOrcConfig;
+import org.apache.hudi.io.storage.hadoop.HoodieAvroOrcWriter;
+import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -65,27 +65,27 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileName;
 
+@Slf4j
 public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteableTestTable.class);
 
-  protected final Schema schema;
+  protected final HoodieSchema schema;
   protected final Option<BloomFilter> filter;
   protected final boolean populateMetaFields;
 
   protected HoodieWriteableTestTable(String basePath, HoodieStorage storage,
                                      HoodieTableMetaClient metaClient,
-                                     Schema schema, BloomFilter filter) {
+                                     HoodieSchema schema, BloomFilter filter) {
     this(basePath, storage, metaClient, schema, filter, null);
   }
 
   protected HoodieWriteableTestTable(String basePath, HoodieStorage storage,
-                                     HoodieTableMetaClient metaClient, Schema schema,
+                                     HoodieTableMetaClient metaClient, HoodieSchema schema,
                                      BloomFilter filter, HoodieTableMetadataWriter metadataWriter) {
     this(basePath, storage, metaClient, schema, filter, metadataWriter, Option.empty());
   }
 
   public HoodieWriteableTestTable(String basePath, HoodieStorage storage,
-                                     HoodieTableMetaClient metaClient, Schema schema,
+                                     HoodieTableMetaClient metaClient, HoodieSchema schema,
                                      BloomFilter filter, HoodieTableMetadataWriter metadataWriter,
                                      Option<HoodieEngineContext> context) {
     super(basePath, storage, metaClient, metadataWriter, context);
@@ -111,13 +111,13 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
 
     StoragePath baseFilePath = new StoragePath(Paths.get(basePath, partition, fileName).toString());
     if (storage.exists(baseFilePath)) {
-      LOG.warn("Deleting the existing base file " + baseFilePath);
+      log.warn("Deleting the existing base file {}", baseFilePath);
       storage.deleteFile(baseFilePath);
     }
 
     if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.PARQUET)) {
       HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-          new AvroSchemaConverter().convert(schema), schema, filter, new Properties());
+          new AvroSchemaConverter().convert(schema.toAvroSchema()), schema, filter, new Properties());
       HoodieParquetConfig<HoodieAvroWriteSupport> config = new HoodieParquetConfig<>(writeSupport, CompressionCodecName.GZIP,
           ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
           storage.getConf(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()), true);
@@ -169,10 +169,13 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
   }
 
   private Pair<String, HoodieLogFile> appendRecordsToLogFile(String partitionPath, String fileId, List<HoodieRecord> records) throws Exception {
-    try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new StoragePath(basePath, partitionPath))
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
-        .withInstantTime(currentInstantTime).withStorage(storage).build()) {
+    try (HoodieLogFormat.Writer logWriter = HoodieLogFormatWriter.builder()
+        .withParentPath(new StoragePath(basePath, partitionPath))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogFileId(fileId)
+        .withInstantTime(currentInstantTime)
+        .withStorage(storage)
+        .build()) {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, currentInstantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());

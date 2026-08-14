@@ -22,22 +22,26 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.AvroOrcUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TestAvroOrcUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
@@ -49,6 +53,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema.Builder;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -75,8 +80,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -97,7 +100,6 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordToS
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
@@ -107,8 +109,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
  * Abstract test that provides a dfs & spark contexts.
  *
  */
+@Slf4j
 public class UtilitiesTestBase {
-  private static final Logger LOG = LoggerFactory.getLogger(UtilitiesTestBase.class);
   @TempDir
   protected static java.nio.file.Path sharedTempDir;
   protected static FileSystem fs;
@@ -156,7 +158,9 @@ public class UtilitiesTestBase {
       fs = FileSystem.getLocal(hadoopConf);
       basePath = sharedTempDir.toUri().toString();
     }
-    storage = new HoodieHadoopStorage(fs);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(new Path(basePath)),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
 
     hadoopConf.set("hive.exec.scratchdir", basePath + "/.tmp/hive");
     if (needsHive) {
@@ -165,7 +169,8 @@ public class UtilitiesTestBase {
       clearHiveDb(basePath + "/dummy" + System.currentTimeMillis());
     }
 
-    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4,1]", sparkConf());
+    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie",
+        "local[4,1]", false, sparkConf());
     context = new HoodieSparkEngineContext(jsc);
     sqlContext = SQLContext.getOrCreate(jsc.sc());
     sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
@@ -250,7 +255,7 @@ public class UtilitiesTestBase {
     }
 
     if (!failedReleases.isEmpty()) {
-      LOG.error("Exception happened during releasing: " + String.join(",", failedReleases));
+      log.error("Exception happened during releasing: {}", String.join(",", failedReleases));
     }
   }
 
@@ -294,7 +299,6 @@ public class UtilitiesTestBase {
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "testdb1");
     props.setProperty(META_SYNC_TABLE_NAME.key(), tableName);
     props.setProperty(META_SYNC_BASE_PATH.key(), basePath);
-    props.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     return new HiveSyncConfig(props);
   }
@@ -530,8 +534,9 @@ public class UtilitiesTestBase {
         final TypeDescription type = orcSchema.getChildren().get(c);
 
         Object fieldValue = record.get(thisField);
-        Schema.Field avroField = record.getSchema().getField(thisField);
-        AvroOrcUtils.addToVector(type, colVector, avroField.schema(), fieldValue, batch.size);
+        HoodieSchemaField field = HoodieSchema.fromAvroSchema(record.getSchema()).getField(thisField)
+            .orElseThrow(() -> new HoodieSchemaException("Could not find field: " + thisField));
+        AvroOrcUtils.addToVector(type, colVector, field.schema(), fieldValue, batch.size);
       }
     }
   }

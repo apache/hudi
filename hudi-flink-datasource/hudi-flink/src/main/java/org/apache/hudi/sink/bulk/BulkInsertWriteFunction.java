@@ -22,20 +22,22 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -50,12 +52,11 @@ import java.util.List;
  * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
+@Slf4j
 public class BulkInsertWriteFunction<I>
     extends AbstractWriteFunction<I> {
 
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(BulkInsertWriteFunction.class);
 
   /**
    * Helper class for bulk insert mode.
@@ -65,6 +66,7 @@ public class BulkInsertWriteFunction<I>
   /**
    * Config options.
    */
+  @Getter
   private final Configuration config;
 
   /**
@@ -85,12 +87,14 @@ public class BulkInsertWriteFunction<I>
   /**
    * Correspondent to request the instant time.
    */
+  @Setter
   private transient Correspondent correspondent;
 
   /**
    * Gateway to send operator events to the operator coordinator.
    */
-  private transient OperatorEventGateway eventGateway;
+  @Setter
+  private transient OperatorEventGateway operatorEventGateway;
 
   /**
    * Constructs a StreamingSinkFunction.
@@ -121,6 +125,11 @@ public class BulkInsertWriteFunction<I>
     }
   }
 
+  @Override
+  public void setMemorySegmentPoolFactory(MemorySegmentPoolFactory memorySegmentPoolFactory) {
+    // do nothing
+  }
+
   /**
    * End input action for batch source.
    */
@@ -135,25 +144,12 @@ public class BulkInsertWriteFunction<I>
         .lastBatch(true)
         .endInput(true)
         .build();
-    this.eventGateway.sendEventToCoordinator(event);
+    this.operatorEventGateway.sendEventToCoordinator(event);
   }
 
   @Override
   public void handleOperatorEvent(OperatorEvent event) {
     // no operation
-  }
-
-  // -------------------------------------------------------------------------
-  //  Getter/Setter
-  // -------------------------------------------------------------------------
-
-  @Override
-  public void setCorrespondent(Correspondent correspondent) {
-    this.correspondent = correspondent;
-  }
-
-  public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
-    this.eventGateway = operatorEventGateway;
   }
 
   // -------------------------------------------------------------------------
@@ -163,7 +159,7 @@ public class BulkInsertWriteFunction<I>
   private void initWriterHelperIfNeeded() {
     if (writerHelper == null) {
       String instant = instantToWrite();
-      this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
+      this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(false), this.writeClient.getConfig(),
           instant, this.taskID, RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()), RuntimeContextUtils.getAttemptNumber(getRuntimeContext()),
           this.rowType);
     }

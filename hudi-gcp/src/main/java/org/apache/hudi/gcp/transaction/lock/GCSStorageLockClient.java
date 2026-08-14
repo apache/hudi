@@ -18,27 +18,28 @@
 
 package org.apache.hudi.gcp.transaction.lock;
 
+import org.apache.hudi.client.transaction.lock.LockGetResult;
+import org.apache.hudi.client.transaction.lock.LockUpsertResult;
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
-import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
-import org.apache.hudi.client.transaction.lock.models.StorageLockData;
-import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
+import org.apache.hudi.client.transaction.lock.StorageLockData;
+import org.apache.hudi.client.transaction.lock.StorageLockFile;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
+import com.google.api.gax.retrying.RetrySettings;
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageException;
 import com.google.cloud.storage.StorageOptions;
-import org.jetbrains.annotations.NotNull;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.IOException;
@@ -53,9 +54,10 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * A GCS-based implementation of a distributed lock provider using conditional writes
  * with generationMatch, plus local concurrency safety, heartbeat/renew, and pruning old locks.
  */
+@Slf4j
 @ThreadSafe
 public class GCSStorageLockClient implements StorageLockClient {
-  private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(GCSStorageLockClient.class);
+
   private static final long PRECONDITION_FAILURE_ERROR_CODE = 412;
   private static final long NOT_FOUND_ERROR_CODE = 404;
   private static final long RATE_LIMIT_ERROR_CODE = 429;
@@ -77,7 +79,7 @@ public class GCSStorageLockClient implements StorageLockClient {
       String ownerId,
       String lockFileUri,
       Properties props) {
-    this(ownerId, lockFileUri, props, createDefaultGcsClient(), DEFAULT_LOGGER);
+    this(ownerId, lockFileUri, props, createDefaultGcsClient(), log);
   }
 
   @VisibleForTesting
@@ -97,9 +99,16 @@ public class GCSStorageLockClient implements StorageLockClient {
 
   private static Functions.Function1<Properties, Storage> createDefaultGcsClient() {
     return (props) -> {
-      // Provide the option to customize the timeouts later on.
-      // For now, defaults suffice
-      return StorageOptions.newBuilder().build().getService();
+      // Configure with no retries - only one attempt per operation
+      RetrySettings retrySettings =
+          StorageOptions.getDefaultRetrySettings()
+              .toBuilder()
+              .setMaxAttempts(1)
+              .build();
+      return StorageOptions.newBuilder()
+          .setRetrySettings(retrySettings)
+          .build()
+          .getService();
     };
   }
 
@@ -141,6 +150,7 @@ public class GCSStorageLockClient implements StorageLockClient {
         return Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty());
       } else if (e.getCode() == RATE_LIMIT_ERROR_CODE) {
         logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFilePath);
+        return Pair.of(LockUpsertResult.THROTTLED, Option.empty());
       } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
         logger.warn("OwnerId: {}, GCS returned internal server error code for lock file: {}",
             ownerId, lockFilePath, e);
@@ -203,7 +213,7 @@ public class GCSStorageLockClient implements StorageLockClient {
     }
   }
 
-  private @NotNull Pair<LockGetResult, Option<StorageLockFile>> getLockFileFromBlob(Blob blob) {
+  private @Nonnull Pair<LockGetResult, Option<StorageLockFile>> getLockFileFromBlob(Blob blob) {
     try (InputStream inputStream = Channels.newInputStream(blob.reader())) {
       return Pair.of(LockGetResult.SUCCESS,
           Option.of(StorageLockFile.createFromStream(inputStream, String.valueOf(blob.getGeneration()))));

@@ -39,9 +39,9 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
 

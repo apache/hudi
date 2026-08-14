@@ -19,6 +19,9 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
@@ -30,7 +33,7 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.transform.FlatteningTransformer;
 
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Type;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -79,10 +82,10 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
             UtilHelpers.createSchemaProvider(DummySchemaProvider.class.getName(), properties, jsc),
             properties, jsc, null);
 
-    Schema schema = provider.getSourceSchema();
-    assertEquals(schema.getType(), Type.RECORD);
-    assertEquals(schema.getName(), "test");
-    assertNotNull(schema.getField("testString"));
+    HoodieSchema schema = provider.getSourceHoodieSchema();
+    assertEquals(HoodieSchemaType.RECORD, schema.getType());
+    assertEquals("test", schema.getName());
+    assertNotNull(schema.getField("testString").orElse(null));
   }
 
   @Test
@@ -95,18 +98,18 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
             UtilHelpers.createSchemaProvider(SparkAvroSchemaProvider.class.getName(), properties, jsc),
             properties, jsc, transformerClassNames);
 
-    Schema schema = provider.getSourceSchema();
-    assertEquals(Type.RECORD, schema.getType());
+    HoodieSchema schema = provider.getSourceHoodieSchema();
+    assertEquals(HoodieSchemaType.RECORD, schema.getType());
     assertEquals("test", schema.getFullName());
-    assertNotNull(schema.getField("day"));
+    assertNotNull(schema.getField("day").orElse(null));
   }
 
   @Test
   public void testDeleteSupport() {
     DeleteSupportSchemaPostProcessor processor = new DeleteSupportSchemaPostProcessor(properties, null);
-    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
-    Schema targetSchema = processor.processSchema(schema);
-    assertNotNull(targetSchema.getField("_hoodie_is_deleted"));
+    HoodieSchema schema = HoodieSchema.parse(ORIGINAL_SCHEMA);
+    HoodieSchema targetSchema = processor.processSchema(schema);
+    assertNotNull(targetSchema.getField("_hoodie_is_deleted").orElse(null));
   }
 
   @Test
@@ -116,24 +119,24 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
         "org.apache.hudi.utilities.schema.postprocessor.DeleteSupportSchemaPostProcessor,org.apache.hudi.utilities.DummySchemaPostProcessor");
 
     SchemaPostProcessor processor = UtilHelpers.createSchemaPostProcessor(properties.getString(SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR.key()), properties, jsc);
-    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
-    Schema targetSchema = processor.processSchema(schema);
+    HoodieSchema schema = HoodieSchema.parse(ORIGINAL_SCHEMA);
+    HoodieSchema targetSchema = processor.processSchema(schema);
 
-    assertNull(targetSchema.getField("_row_key"));
-    assertNull(targetSchema.getField("_hoodie_is_deleted"));
-    assertNotNull(targetSchema.getField("testString"));
+    assertNull(targetSchema.getField("_row_key").orElse(null));
+    assertNull(targetSchema.getField("_hoodie_is_deleted").orElse(null));
+    assertNotNull(targetSchema.getField("testString").orElse(null));
 
     // DummySchemaPostProcessor first, DeleteSupportSchemaPostProcessor second
     properties.put(SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR.key(),
         "org.apache.hudi.utilities.DummySchemaPostProcessor,org.apache.hudi.utilities.schema.postprocessor.DeleteSupportSchemaPostProcessor");
 
     processor = UtilHelpers.createSchemaPostProcessor(properties.getString(SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR.key()), properties, jsc);
-    schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
+    schema = HoodieSchema.parse(ORIGINAL_SCHEMA);
     targetSchema = processor.processSchema(schema);
 
-    assertNull(targetSchema.getField("_row_key"));
-    assertNotNull(targetSchema.getField("_hoodie_is_deleted"));
-    assertNotNull(targetSchema.getField("testString"));
+    assertNull(targetSchema.getField("_row_key").orElse(null));
+    assertNotNull(targetSchema.getField("_hoodie_is_deleted").orElse(null));
+    assertNotNull(targetSchema.getField("testString").orElse(null));
   }
 
   @Test
@@ -141,11 +144,51 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     // remove column ums_id_ from source schema
     properties.put(SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key(), "rider");
     DropColumnSchemaPostProcessor processor = new DropColumnSchemaPostProcessor(properties, null);
-    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
-    Schema targetSchema = processor.processSchema(schema);
+    HoodieSchema schema = HoodieSchema.parse(ORIGINAL_SCHEMA);
+    HoodieSchema targetSchema = processor.processSchema(schema);
 
-    assertNull(targetSchema.getField("rider"));
-    assertNotNull(targetSchema.getField("_row_key"));
+    assertNull(targetSchema.getField("rider").orElse(null));
+    assertNotNull(targetSchema.getField("_row_key").orElse(null));
+  }
+
+  @Test
+  public void testDeleteSupportSkipsSchemaAlreadyCarryingTheDeleteMarker() {
+    DeleteSupportSchemaPostProcessor processor = new DeleteSupportSchemaPostProcessor(properties, null);
+    // deprecated avro overload
+    Schema avroSchema = processor.processSchema(HoodieSchema.parse(ORIGINAL_SCHEMA).toAvroSchema());
+    HoodieSchema withDeleteMarker = HoodieSchema.fromAvroSchema(avroSchema);
+    assertNotNull(withDeleteMarker.getField("_hoodie_is_deleted").orElse(null));
+
+    // reprocessing yields the same schema instead of adding the column twice
+    HoodieSchema reprocessed = processor.processSchema(withDeleteMarker);
+    assertEquals(withDeleteMarker, reprocessed);
+    assertEquals(1, reprocessed.getFields().stream()
+        .filter(field -> "_hoodie_is_deleted".equals(field.name())).count());
+  }
+
+  @Test
+  public void testProcessSchemaBridgesToDeprecatedOverload() {
+    SchemaPostProcessor processor = new RenamingSchemaPostProcessor(properties, null);
+    HoodieSchema targetSchema = processor.processSchema(HoodieSchema.parse(ORIGINAL_SCHEMA));
+
+    assertEquals("renamedRec", targetSchema.getName());
+    assertEquals(HoodieSchema.parse(ORIGINAL_SCHEMA).getFields().size(), targetSchema.getFields().size());
+  }
+
+  @Test
+  public void testProcessSchemaThrowsWhenNeitherOverloadIsImplemented() {
+    SchemaPostProcessor processor = new UnimplementedSchemaPostProcessor(properties, null);
+    HoodieSchema schema = HoodieSchema.parse(ORIGINAL_SCHEMA);
+
+    Assertions.assertThrows(UnsupportedOperationException.class, () -> processor.processSchema(schema));
+  }
+
+  @Test
+  public void testDeprecatedConfigConstants() {
+    assertEquals("hoodie.streamer.schemaprovider.schema_post_processor",
+        SchemaPostProcessor.Config.SCHEMA_POST_PROCESSOR_PROP);
+    assertEquals("hoodie.streamer.schemaprovider.schema_post_processor.delete.columns",
+        DropColumnSchemaPostProcessor.Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP);
   }
 
   @Test
@@ -153,9 +196,21 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     // remove all columns from source schema
     properties.put(SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key(), "timestamp,_row_key,rider,driver,fare");
     DropColumnSchemaPostProcessor processor = new DropColumnSchemaPostProcessor(properties, null);
-    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
+    HoodieSchema schema = HoodieSchema.parse(ORIGINAL_SCHEMA);
 
     Assertions.assertThrows(HoodieSchemaPostProcessException.class, () -> processor.processSchema(schema));
+  }
+
+  @Test
+  public void testDeleteColumnWithEmptyParam() {
+    // configured but empty: nothing is deleted and the source schema is returned unchanged
+    properties.put(SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key(), "");
+    DropColumnSchemaPostProcessor processor = new DropColumnSchemaPostProcessor(properties, null);
+    HoodieSchema schema = HoodieSchema.parse(ORIGINAL_SCHEMA);
+    HoodieSchema targetSchema = processor.processSchema(schema);
+
+    assertEquals(schema.getFields().size(), targetSchema.getFields().size());
+    assertNotNull(targetSchema.getField("rider").orElse(null));
   }
 
   @ParameterizedTest
@@ -166,21 +221,58 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     properties.put(SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC_PROP.key(), "primitive column test");
 
     AddPrimitiveColumnSchemaPostProcessor processor = new AddPrimitiveColumnSchemaPostProcessor(properties, null);
-    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
-    Schema targetSchema = processor.processSchema(schema);
+    HoodieSchema schema = HoodieSchema.parse(ORIGINAL_SCHEMA);
+    HoodieSchema targetSchema = processor.processSchema(schema);
 
-    Schema.Field newColumn = targetSchema.getField("primitive_column");
+    HoodieSchemaField newColumn = targetSchema.getField("primitive_column").get();
 
     assertNotNull(newColumn);
-    assertEquals("primitive column test", newColumn.doc());
+    assertEquals("primitive column test", newColumn.doc().get());
     // nullable by default, so new column is union type
-    assertNotEquals(type, newColumn.schema().getType().getName());
+    assertNotEquals(type, newColumn.schema().getType().name());
 
     // test not nullable
     properties.put(SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NULLABLE_PROP.key(), false);
     targetSchema = processor.processSchema(schema);
-    newColumn = targetSchema.getField("primitive_column");
-    assertEquals(type, newColumn.schema().getType().getName());
+    newColumn = targetSchema.getField("primitive_column").get();
+    assertEquals(type, newColumn.schema().getType().name().toLowerCase());
+  }
 
+  @Test
+  public void testAddPrimitiveTypeColumnWithDeprecatedOverload() {
+    properties.put(SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP.key(), "primitive_column");
+    properties.put(SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE_PROP.key(), "string");
+
+    AddPrimitiveColumnSchemaPostProcessor processor = new AddPrimitiveColumnSchemaPostProcessor(properties, null);
+    Schema targetSchema = processor.processSchema(HoodieSchema.parse(ORIGINAL_SCHEMA).toAvroSchema());
+
+    assertNotNull(targetSchema.getField("primitive_column"));
+    assertNotNull(targetSchema.getField("_row_key"));
+  }
+
+  /**
+   * Implements only the deprecated avro overload, so that calls to
+   * {@link SchemaPostProcessor#processSchema(HoodieSchema)} go through the base class bridge.
+   */
+  private static class RenamingSchemaPostProcessor extends SchemaPostProcessor {
+
+    RenamingSchemaPostProcessor(TypedProperties props, JavaSparkContext jssc) {
+      super(props, jssc);
+    }
+
+    @Override
+    public Schema processSchema(Schema schema) {
+      return new Schema.Parser().parse(schema.toString().replace("tripUberRec", "renamedRec"));
+    }
+  }
+
+  /**
+   * Implements neither overload, so the base class rejects the call.
+   */
+  private static class UnimplementedSchemaPostProcessor extends SchemaPostProcessor {
+
+    UnimplementedSchemaPostProcessor(TypedProperties props, JavaSparkContext jssc) {
+      super(props, jssc);
+    }
   }
 }

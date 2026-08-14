@@ -20,25 +20,26 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Type;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
+import lombok.Getter;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.util.Preconditions;
 
@@ -63,6 +64,7 @@ public class InternalSchemaManager implements Serializable {
   public static final InternalSchemaManager DISABLED = new InternalSchemaManager(null, InternalSchema.getEmptyInternalSchema(), null, null,
       TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION), null);
 
+  @Getter
   private final InternalSchema querySchema;
   private final String validCommits;
   private final String tablePath;
@@ -99,10 +101,6 @@ public class InternalSchemaManager implements Serializable {
     this.tableConfig = tableConfig;
   }
 
-  public InternalSchema getQuerySchema() {
-    return querySchema;
-  }
-
   /**
    * Attempts to merge the file and query schema to produce a mergeSchema, prioritising the use of fileSchema types.
    * An emptySchema is returned if:
@@ -121,7 +119,7 @@ public class InternalSchemaManager implements Serializable {
     long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(fileName));
     InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(
         commitInstantTime, tablePath,
-        new HoodieHadoopStorage(tablePath, storageConf),
+        HoodieStorageUtils.getStorage(tablePath, storageConf),
         validCommits, layout, tableConfig);
     if (querySchema.equals(fileSchema)) {
       return InternalSchema.getEmptyInternalSchema();
@@ -159,8 +157,8 @@ public class InternalSchemaManager implements Serializable {
     }
     List<Integer> selectedFieldList = IntStream.of(selectedFields).boxed().collect(Collectors.toList());
     // mergeSchema is built with useColumnTypeFromFileSchema = true
-    List<DataType> mergeSchemaAsDataTypes = AvroSchemaConverter.convertToDataType(
-        AvroInternalSchemaConverter.convert(mergeSchema, "tableName")).getChildren();
+    List<DataType> mergeSchemaAsDataTypes = HoodieSchemaConverter.convertToDataType(
+        InternalSchemaConverter.convert(mergeSchema, "tableName")).getChildren();
     DataType[] fileFieldTypes = new DataType[queryFieldTypes.length];
     for (int i = 0; i < queryFieldTypes.length; i++) {
       // position of ChangedType in querySchema

@@ -18,7 +18,8 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
+
 import org.apache.avro.SchemaNormalization;
 
 import java.io.Serializable;
@@ -32,13 +33,13 @@ public class SchemaSet implements Serializable {
 
   private final Set<Long> processedSchema = new HashSet<>();
 
-  public boolean isSchemaPresent(Schema schema) {
-    long schemaKey = SchemaNormalization.parsingFingerprint64(schema);
+  public boolean isSchemaPresent(HoodieSchema schema) {
+    long schemaKey = SchemaNormalization.parsingFingerprint64(schema.toAvroSchema());
     return processedSchema.contains(schemaKey);
   }
 
-  public void addSchema(Schema schema) {
-    long schemaKey = SchemaNormalization.parsingFingerprint64(schema);
+  public void addSchema(HoodieSchema schema) {
+    long schemaKey = SchemaNormalization.parsingFingerprint64(schema.toAvroSchema());
     processedSchema.add(schemaKey);
   }
 }

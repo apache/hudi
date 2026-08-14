@@ -20,13 +20,12 @@ package org.apache.hudi.aws.transaction.lock;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import org.apache.hudi.common.util.StringUtils;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
 import javax.annotation.concurrent.NotThreadSafe;

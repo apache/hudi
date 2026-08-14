@@ -18,7 +18,12 @@
 
 package org.apache.hudi.io.storage.row.parquet;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.util.HoodieSchemaConverter;
+import org.apache.hudi.util.VectorConversionUtils;
 
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalDataUtils;
@@ -35,14 +40,12 @@ import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.util.Preconditions;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.io.api.RecordConsumer;
-import org.apache.parquet.schema.GroupType;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.sql.Timestamp;
 import java.util.Arrays;
 
-import static org.apache.flink.formats.parquet.utils.ParquetSchemaConverter.computeMinBytesForDecimalPrecision;
 import static org.apache.flink.formats.parquet.vector.reader.TimestampColumnReader.JULIAN_EPOCH_OFFSET_DAYS;
 import static org.apache.flink.formats.parquet.vector.reader.TimestampColumnReader.MILLIS_IN_DAY;
 import static org.apache.flink.formats.parquet.vector.reader.TimestampColumnReader.NANOS_PER_MILLISECOND;
@@ -64,16 +67,17 @@ public class ParquetRowDataWriter {
 
   public ParquetRowDataWriter(
       RecordConsumer recordConsumer,
-      RowType rowType,
-      GroupType schema,
-      boolean utcTimestamp) {
+      boolean utcTimestamp,
+      HoodieSchema schema) {
     this.recordConsumer = recordConsumer;
     this.utcTimestamp = utcTimestamp;
 
+    RowType rowType = HoodieSchemaConverter.convertToRowType(schema);
     this.filedWriters = new FieldWriter[rowType.getFieldCount()];
     this.fieldNames = rowType.getFieldNames().toArray(new String[0]);
     for (int i = 0; i < rowType.getFieldCount(); i++) {
-      this.filedWriters[i] = createWriter(rowType.getTypeAt(i));
+      HoodieSchema fieldSchema = HoodieSchemaUtils.getFieldSchema(schema, fieldNames[i]);
+      this.filedWriters[i] = createWriter(rowType.getTypeAt(i), fieldSchema);
     }
   }
 
@@ -97,7 +101,9 @@ public class ParquetRowDataWriter {
     recordConsumer.endMessage();
   }
 
-  private FieldWriter createWriter(LogicalType t) {
+  private FieldWriter createWriter(LogicalType t, HoodieSchema oriFieldSchema) {
+    // strip the nullable wrapper so the element/key/value/record sub-schemas can be resolved directly
+    HoodieSchema fieldSchema = oriFieldSchema.getNonNullType();
     switch (t.getTypeRoot()) {
       case CHAR:
       case VARCHAR:
@@ -109,7 +115,7 @@ public class ParquetRowDataWriter {
         return new BinaryWriter();
       case DECIMAL:
         DecimalType decimalType = (DecimalType) t;
-        return createDecimalWriter(decimalType.getPrecision(), decimalType.getScale());
+        return createDecimalWriter(decimalType.getPrecision(), decimalType.getScale(), fieldSchema);
       case TINYINT:
         return new ByteWriter();
       case SMALLINT:
@@ -141,21 +147,27 @@ public class ParquetRowDataWriter {
           return new Timestamp96Writer(tsLtzPrecision);
         }
       case ARRAY:
+        if (fieldSchema.getType() == HoodieSchemaType.VECTOR) {
+          return new VectorWriter((HoodieSchema.Vector) fieldSchema);
+        }
         ArrayType arrayType = (ArrayType) t;
         LogicalType elementType = arrayType.getElementType();
-        FieldWriter elementWriter = createWriter(elementType);
+        FieldWriter elementWriter = createWriter(elementType, fieldSchema.getElementType());
         return new ArrayWriter(elementWriter);
       case MAP:
         MapType mapType = (MapType) t;
         LogicalType keyType = mapType.getKeyType();
         LogicalType valueType = mapType.getValueType();
-        FieldWriter keyWriter = createWriter(keyType);
-        FieldWriter valueWriter = createWriter(valueType);
+        FieldWriter keyWriter = createWriter(keyType, fieldSchema.getKeyType());
+        FieldWriter valueWriter = createWriter(valueType, fieldSchema.getValueType());
         return new MapWriter(keyWriter, valueWriter);
       case ROW:
         RowType rowType = (RowType) t;
+        ValidationUtils.checkArgument(fieldSchema.getType() == HoodieSchemaType.RECORD || fieldSchema.getType() == HoodieSchemaType.BLOB,
+            "Hoodie schema should be RECORD or BLOB type.");
         FieldWriter[] fieldWriters = rowType.getFields().stream()
-            .map(RowType.RowField::getType).map(this::createWriter).toArray(FieldWriter[]::new);
+            .map(field -> createWriter(field.getType(), HoodieSchemaUtils.getFieldSchema(fieldSchema, field.getName())))
+            .toArray(FieldWriter[]::new);
         String[] fieldNames = rowType.getFields().stream()
             .map(RowType.RowField::getName).toArray(String[]::new);
         return new RowWriter(fieldNames, fieldWriters);
@@ -271,6 +283,29 @@ public class ParquetRowDataWriter {
     @Override
     public void write(ArrayData array, int ordinal) {
       recordConsumer.addBinary(Binary.fromReusedByteArray(array.getBinary(ordinal)));
+    }
+  }
+
+  private class VectorWriter implements FieldWriter {
+    private final HoodieSchema.Vector vectorSchema;
+
+    private VectorWriter(HoodieSchema.Vector vectorSchema) {
+      this.vectorSchema = vectorSchema;
+    }
+
+    @Override
+    public void write(RowData row, int ordinal) {
+      writeVector(row.getArray(ordinal));
+    }
+
+    @Override
+    public void write(ArrayData array, int ordinal) {
+      writeVector(array.getArray(ordinal));
+    }
+
+    private void writeVector(ArrayData vectorArray) {
+      recordConsumer.addBinary(
+          Binary.fromReusedByteArray(VectorConversionUtils.encodeVectorArrayData(vectorArray, vectorSchema)));
     }
   }
 
@@ -390,24 +425,21 @@ public class ParquetRowDataWriter {
     return Binary.fromConstantByteBuffer(buf);
   }
 
-  private FieldWriter createDecimalWriter(int precision, int scale) {
+  private FieldWriter createDecimalWriter(int precision, int scale, HoodieSchema fieldSchema) {
     Preconditions.checkArgument(
         precision <= DecimalType.MAX_PRECISION,
         "Decimal precision %s exceeds max precision %s",
         precision,
         DecimalType.MAX_PRECISION);
+    int numBytes = ParquetSchemaConverter.resolveDecimalByteLength(fieldSchema, precision);
 
     /*
      * This is optimizer for UnscaledBytesWriter.
      */
     class LongUnscaledBytesWriter implements FieldWriter {
-      private final int numBytes;
-      private final int initShift;
       private final byte[] decimalBuffer;
 
       private LongUnscaledBytesWriter() {
-        this.numBytes = computeMinBytesForDecimalPrecision(precision);
-        this.initShift = 8 * (numBytes - 1);
         this.decimalBuffer = new byte[numBytes];
       }
 
@@ -424,12 +456,15 @@ public class ParquetRowDataWriter {
       }
 
       private void doWrite(long unscaled) {
-        int i = 0;
-        int shift = initShift;
-        while (i < numBytes) {
-          decimalBuffer[i] = (byte) (unscaled >> shift);
-          i += 1;
-          shift -= 8;
+        // Parquet encodes FIXED_LEN_BYTE_ARRAY decimals as big-endian two's complement. A compact
+        // Flink decimal provides at most eight value bytes, so pad wider Avro fixed types with the
+        // sign byte to preserve the value.
+        int firstValueByte = Math.max(0, numBytes - Long.BYTES);
+        Arrays.fill(decimalBuffer, 0, firstValueByte, unscaled < 0 ? (byte) -1 : (byte) 0);
+        // Copy from the least-significant byte backwards to produce the big-endian representation.
+        for (int i = numBytes - 1; i >= firstValueByte; i--) {
+          decimalBuffer[i] = (byte) unscaled;
+          unscaled >>= Byte.SIZE;
         }
 
         recordConsumer.addBinary(Binary.fromReusedByteArray(decimalBuffer, 0, numBytes));
@@ -437,11 +472,9 @@ public class ParquetRowDataWriter {
     }
 
     class UnscaledBytesWriter implements FieldWriter {
-      private final int numBytes;
       private final byte[] decimalBuffer;
 
       private UnscaledBytesWriter() {
-        this.numBytes = computeMinBytesForDecimalPrecision(precision);
         this.decimalBuffer = new byte[numBytes];
       }
 
@@ -619,4 +652,3 @@ public class ParquetRowDataWriter {
     }
   }
 }
-

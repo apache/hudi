@@ -26,27 +26,25 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.RestoreInstantComparatorFactory;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Comparator;
 
+@Slf4j
 public class SavepointHelpers {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SavepointHelpers.class);
 
   public static void deleteSavepoint(HoodieTable table, String savepointTime) {
     HoodieInstant savePoint = table.getMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
     boolean isSavepointPresent = table.getCompletedSavepointTimeline().containsInstant(savePoint);
     if (!isSavepointPresent) {
-      LOG.warn("No savepoint present {}", savepointTime);
+      log.warn("No savepoint present {}", savepointTime);
       return;
     }
 
     table.getActiveTimeline().revertToInflight(savePoint);
     table.getActiveTimeline().deleteInflight(table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION,
         savepointTime));
-    LOG.info("Savepoint {} deleted", savepointTime);
+    log.info("Savepoint {} deleted", savepointTime);
   }
 
   public static void validateSavepointRestore(HoodieTable table, String savepointTime) {

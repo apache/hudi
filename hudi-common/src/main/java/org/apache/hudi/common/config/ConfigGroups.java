@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.config;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * In Hudi, we have multiple superclasses, aka Config Classes of {@link HoodieConfig} that maintain
  * several configs. This class group one or more of these superclasses into higher
@@ -29,6 +33,7 @@ public class ConfigGroups {
    * Config group names. Please add the description of each group in
    * {@link ConfigGroups#getDescription}.
    */
+  @AllArgsConstructor(access = AccessLevel.PACKAGE)
   public enum Names {
     TABLE_CONFIG("Hudi Table Config"),
     ENVIRONMENT_CONFIG("Environment Config"),
@@ -44,12 +49,9 @@ public class ConfigGroups {
     HUDI_STREAMER("Hudi Streamer Configs");
 
     public final String name;
-
-    Names(String name) {
-      this.name = name;
-    }
   }
 
+  @AllArgsConstructor(access = AccessLevel.PACKAGE)
   public enum SubGroupNames {
     INDEX(
         "Index Configs",
@@ -75,21 +77,17 @@ public class ConfigGroups {
     DELTA_STREAMER_SOURCE(
         "Hudi Streamer Source Configs",
         "Configurations controlling the behavior of reading source data."),
+    DELTA_STREAMER_TRANSFORMER(
+        "Hudi Streamer Transformer Configs",
+        "Configurations controlling the behavior of transformers applied to source data "
+            + "before writing."),
     NONE(
         "None",
         "No subgroup. This description should be hidden.");
 
     public final String name;
+    @Getter
     private final String description;
-
-    SubGroupNames(String name, String description) {
-      this.name = name;
-      this.description = description;
-    }
-
-    public String getDescription() {
-      return description;
-    }
   }
 
   public static String getDescription(Names names) {
@@ -135,6 +133,10 @@ public class ConfigGroups {
             + "lower level aspects like file sizing, compression, parallelism, compaction, "
             + "write schema, cleaning etc. Although Hudi provides sane defaults, from time-time "
             + "these configs may need to be tweaked to optimize for specific workloads.";
+        break;
+      case READER:
+        description = "These set of configs control the behavior of reading Hudi tables, "
+            + "such as file group reading.";
         break;
       case META_SYNC:
         description = "Configurations used by the Hudi to sync metadata to external metastores and catalogs.";

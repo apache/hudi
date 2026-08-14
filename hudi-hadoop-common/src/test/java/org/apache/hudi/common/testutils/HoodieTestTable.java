@@ -61,24 +61,26 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -144,12 +146,11 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 /**
  * Test Hoodie Table for testing only.
  */
+@Slf4j
 public class HoodieTestTable implements AutoCloseable {
 
   public static final String PHONY_TABLE_SCHEMA =
       "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTestTable.class);
   private static final Random RANDOM = new Random();
 
   protected static HoodieTestTableState testTableState;
@@ -160,6 +161,7 @@ public class HoodieTestTable implements AutoCloseable {
   protected final FileSystem fs;
   protected HoodieTableMetaClient metaClient;
   protected String currentInstantTime;
+  @Getter
   private boolean isNonPartitioned = false;
   protected Option<HoodieEngineContext> context;
   protected final InstantGenerator instantGenerator = new DefaultInstantGenerator();
@@ -189,10 +191,6 @@ public class HoodieTestTable implements AutoCloseable {
 
   public void setNonPartitioned() {
     this.isNonPartitioned = true;
-  }
-
-  public boolean isNonPartitioned() {
-    return this.isNonPartitioned;
   }
 
   public static String makeNewCommitTime(int sequence, String instantFormat) {
@@ -453,14 +451,12 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addClean(String instantTime) throws IOException {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(EMPTY_STRING, EMPTY_STRING, EMPTY_STRING),
         EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
-    HoodieCleanStat cleanStats = new HoodieCleanStat(
-        HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-        HoodieTestUtils.DEFAULT_PARTITION_PATHS[RANDOM.nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
-        Collections.emptyList(),
-        Collections.emptyList(),
-        Collections.emptyList(),
-        instantTime,
-        "");
+    HoodieCleanStat cleanStats = HoodieCleanStat.builder()
+        .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+        .withPartitionPath(HoodieTestUtils.DEFAULT_PARTITION_PATHS[RANDOM.nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)])
+        .withEarliestCommitToRetain(instantTime)
+        .withLastCompletedCommitTimestamp("")
+        .build();
     HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats), Collections.EMPTY_MAP);
     return HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata);
   }
@@ -470,8 +466,14 @@ public class HoodieTestTable implements AutoCloseable {
         EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
     List<HoodieCleanStat> cleanStats = new ArrayList<>();
     for (Map.Entry<String, List<String>> entry : testTableState.getPartitionToFileIdMapForCleaner(commitTime).entrySet()) {
-      cleanStats.add(new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-          entry.getKey(), entry.getValue(), entry.getValue(), Collections.emptyList(), commitTime, ""));
+      cleanStats.add(HoodieCleanStat.builder()
+          .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+          .withPartitionPath(entry.getKey())
+          .withDeletePathPatterns(entry.getValue())
+          .withSuccessDeleteFiles(entry.getValue())
+          .withEarliestCommitToRetain(commitTime)
+          .withLastCompletedCommitTimestamp("")
+          .build());
     }
     return Pair.of(cleanerPlan, convertCleanMetadata(commitTime, Option.of(0L), cleanStats, Collections.EMPTY_MAP));
   }
@@ -725,6 +727,16 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
+  public HoodieTestTable withPartitionMetaFilesWithDepth(String... partitionPaths) throws IOException {
+    for (String partitionPath : partitionPaths) {
+      StoragePath partitionPathObj = FSUtils.getAbsolutePartitionPath(new StoragePath(basePath), partitionPath);
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage,
+          currentInstantTime, new StoragePath(basePath), partitionPathObj, Option.empty());
+      partitionMetadata.trySave();
+    }
+    return this;
+  }
+
   public HoodieTestTable withMarkerFile(String partitionPath, String fileId, IOType ioType) throws IOException {
     createMarkerFile(metaClient, partitionPath, currentInstantTime, fileId, ioType);
     return this;
@@ -743,7 +755,7 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable withLogMarkerFile(String partitionPath, String fileId, IOType ioType) throws IOException {
-    String logFileName = FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, currentInstantTime, HoodieLogFile.LOGFILE_BASE_VERSION, HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
+    String logFileName = FSUtils.makeInlineLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, currentInstantTime, HoodieLogFile.LOGFILE_BASE_VERSION, HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
     String markerFileName = FileCreateUtils.markerFileName(logFileName, ioType);
     FileCreateUtils.createMarkerFile(metaClient, partitionPath, currentInstantTime, markerFileName);
     return this;
@@ -964,6 +976,8 @@ public class HoodieTestTable implements AutoCloseable {
 
   public List<StoragePathInfo> listAllBaseFiles(String fileExtension) throws IOException {
     return listRecursive(storage, new StoragePath(basePath)).stream()
+        .filter(fileInfo -> FSUtils.isBaseFile(fileInfo.getPath().getName()))
+        // filter out MDT base files.
         .filter(fileInfo -> fileInfo.getPath().getName().endsWith(fileExtension))
         .collect(Collectors.toList());
   }
@@ -1500,7 +1514,9 @@ public class HoodieTestTable implements AutoCloseable {
     }
   }
 
+  @NoArgsConstructor(access = AccessLevel.PACKAGE)
   static class HoodieTestTableState {
+
     /**
      * Map<commitTime, Map<partitionPath, List<filesToDelete>>>
      * Used in building CLEAN metadata.
@@ -1516,9 +1532,6 @@ public class HoodieTestTable implements AutoCloseable {
      * Used to build commit metadata for log files for several write operations.
      */
     Map<String, Map<String, List<Pair<String, Integer[]>>>> commitsToPartitionToLogFileInfoStats = new HashMap<>();
-
-    HoodieTestTableState() {
-    }
 
     static HoodieTestTableState of() {
       return new HoodieTestTableState();

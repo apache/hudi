@@ -20,24 +20,21 @@ package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Delay Node to add delays between each group of test runs.
  */
+@AllArgsConstructor
+@Slf4j
 public class DelayNode extends DagNode<Boolean> {
 
-  private static Logger log = LoggerFactory.getLogger(ValidateDatasetNode.class);
   private int delayMins;
-
-  public DelayNode(int delayMins) {
-    this.delayMins = delayMins;
-  }
 
   @Override
   public void execute(ExecutionContext context, int curItrCount) throws Exception {
-    log.warn("Waiting for " + delayMins + " mins before going for next test run");
-    Thread.sleep(delayMins * 60 * 1000);
+    log.warn("Waiting for {} mins before going for next test run", delayMins);
+    Thread.sleep(delayMins * 60 * 1000L);
   }
 }

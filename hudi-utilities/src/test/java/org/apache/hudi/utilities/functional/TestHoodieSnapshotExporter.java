@@ -28,13 +28,13 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -112,7 +112,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
     List<StoragePathInfo> pathInfoList = storage.listFiles(new StoragePath(sourcePath));
     for (StoragePathInfo pathInfo : pathInfoList) {
-      LOG.info(">>> Prepared test file: " + pathInfo.getPath());
+      LOG.info(">>> Prepared test file: {}", pathInfo.getPath());
     }
   }
 

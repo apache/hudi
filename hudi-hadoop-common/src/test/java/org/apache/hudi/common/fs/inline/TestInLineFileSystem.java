@@ -20,9 +20,9 @@ package org.apache.hudi.common.fs.inline;
 
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.fs.inline.HadoopInLineFSUtils;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -160,8 +160,13 @@ public class TestInLineFileSystem {
     assertThrows(IOException.class, () -> {
       fsDataInputStream.read(0, new byte[1100], 0, 1101);
     }, "Should have thrown IOException");
-    assertThrows(IOException.class, () -> {
+    // offset + length exceeds buffer size — Hadoop throws IndexOutOfBoundsException
+    assertThrows(IndexOutOfBoundsException.class, () -> {
       fsDataInputStream.read(0, new byte[10], 991, 10);
+    }, "Should have thrown IndexOutOfBoundsException");
+    // position + length exceeds inline content — throws IOException
+    assertThrows(IOException.class, () -> {
+      fsDataInputStream.read(995, new byte[100], 0, 10);
     }, "Should have thrown IOException");
 
     // test readFully(long position, byte[] buffer, int offset, int length)
@@ -175,8 +180,13 @@ public class TestInLineFileSystem {
     assertThrows(IOException.class, () -> {
       fsDataInputStream.readFully(0, new byte[1100], 0, 1101);
     }, "Should have thrown IOException");
-    assertThrows(IOException.class, () -> {
+    // offset + length exceeds buffer size — Hadoop throws IndexOutOfBoundsException
+    assertThrows(IndexOutOfBoundsException.class, () -> {
       fsDataInputStream.readFully(0, new byte[100], 910, 100);
+    }, "Should have thrown IndexOutOfBoundsException");
+    // position + length exceeds inline content — throws IOException
+    assertThrows(IOException.class, () -> {
+      fsDataInputStream.readFully(995, new byte[100], 0, 10);
     }, "Should have thrown IOException");
 
     // test readFully(long position, byte[] buffer)
@@ -350,12 +360,12 @@ public class TestInLineFileSystem {
       if (inputPath.toString().contains(":")) {
         scheme = inputPath.toString().split(":")[0];
       }
-      final StoragePath actualInLineFSPath = HadoopInLineFSUtils.getInlineFilePath(
+      final StoragePath actualInLineFSPath = InLineFSUtils.getInlineFilePath(
           new StoragePath(inputPath.toUri()), scheme, 10, 10);
       assertEquals(expectedInLineFSPath, actualInLineFSPath);
 
       final StoragePath actualOuterFilePath =
-          HadoopInLineFSUtils.getOuterFilePathFromInlinePath(actualInLineFSPath);
+          InLineFSUtils.getOuterFilePathFromInlinePath(actualInLineFSPath);
       assertEquals(expectedTransformedInputPath, actualOuterFilePath);
     }
   }

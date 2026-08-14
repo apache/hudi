@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -43,7 +42,7 @@ case class AlterHoodieTableRenameCommand(
         .fromProperties(hoodieCatalogTable.tableConfig.getProps)
         .setTableName(newName.table)
         .initTable(
-          HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf()),
+          hoodieCatalogTable.storage.getConf,
           hoodieCatalogTable.tableLocation)
 
       // Call AlterTableRenameCommand#run to rename table in meta.

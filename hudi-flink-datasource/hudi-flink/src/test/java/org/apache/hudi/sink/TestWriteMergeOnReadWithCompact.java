@@ -22,6 +22,8 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -42,7 +44,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.utils.TestData.insertRow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
@@ -54,6 +58,34 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   protected void setUp(Configuration conf) {
     // trigger the compaction for every finished checkpoint
     conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+  }
+
+  @Test
+  public void testUpsertWithTableServiceDisabled() throws Exception {
+    // reset the config option
+    conf.set(FlinkOptions.TABLE_SERVICES_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT)
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .handleEvents(1)
+        .checkpointComplete(1)
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .handleEvents(1)
+        .checkpointComplete(2)
+        .end();
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
+    long completedCompaction = writeClient.getHoodieTable().getActiveTimeline().getInstants().stream()
+        .filter(s -> s.getAction().equals(COMPACTION_ACTION))
+        .filter(HoodieInstant::isCompleted).count();
+    long pendingCompaction = writeClient.getHoodieTable().getActiveTimeline().filterPendingCompactionTimeline().getInstants().stream().count();
+    assertEquals(0, completedCompaction);
+    assertEquals(0, pendingCompaction);
   }
 
   @Test
@@ -74,11 +106,6 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   @Test
   public void testInsertAsyncClustering() {
     // insert async clustering is only valid for cow table.
-  }
-
-  @Override
-  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
-    return EXPECTED1;
   }
 
   protected Map<String, String> getMiniBatchExpected() {
@@ -245,6 +272,8 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // disable schedule compaction in writers
     conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
     conf.set(FlinkOptions.PRE_COMBINE, true);
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
 
     // start pipeline1 and insert record: [id1,Danny,null,1,par1], suspend the tx commit
     List<RowData> dataset1 = Collections.singletonList(

@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
-import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -77,9 +77,10 @@ public class BaseFileRecordParsingUtils {
         recordStatuses);
     List<HoodieRecord> hoodieRecords = new ArrayList<>();
     if (recordStatusListMap.containsKey(RecordStatus.INSERT)) {
+      long instantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(instantTime);
       hoodieRecords.addAll(recordStatusListMap.get(RecordStatus.INSERT).stream()
           .map(recordKey -> (HoodieRecord) HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
-              instantTime, writesFileIdEncoding)).collect(toList()));
+              instantTimeMillis, writesFileIdEncoding)).collect(toList()));
     }
 
     if (recordStatusListMap.containsKey(RecordStatus.DELETE)) {

@@ -103,11 +103,11 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
         .makeBaseFileName(commitTime1, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
-        .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken)));
+        .makeInlineLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken)));
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
         .makeBaseFileName(commitTime2, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
-        .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
+        .makeInlineLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
     // Write commit files
     Files.createFile(Paths.get(nonpartitionedTablePath, ".hoodie", commitTime1 + ".commit"));
@@ -146,11 +146,11 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
         .makeBaseFileName(commitTime1, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
-        .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken)));
+        .makeInlineLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
         .makeBaseFileName(commitTime2, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
-        .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
+        .makeInlineLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
     // Write commit files
     Files.createFile(Paths.get(partitionedTablePath, ".hoodie", commitTime1 + ".commit"));

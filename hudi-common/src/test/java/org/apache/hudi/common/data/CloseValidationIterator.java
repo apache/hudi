@@ -21,6 +21,8 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
+import lombok.Getter;
+
 import java.util.Iterator;
 
 /**
@@ -28,15 +30,13 @@ import java.util.Iterator;
  * @param <T> type of record within the iterator
  */
 class CloseValidationIterator<T> implements ClosableIterator<T> {
+
   private final Iterator<T> inner;
+  @Getter
   private boolean isClosed = false;
 
   public CloseValidationIterator(Iterator<T> inner) {
     this.inner = inner;
-  }
-
-  public boolean isClosed() {
-    return isClosed;
   }
 
   @Override

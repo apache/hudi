@@ -18,11 +18,13 @@
 
 package org.apache.hudi.integ.testsuite.writer;
 
-import java.io.IOException;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionUtils;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.SparkSession;
+
+import java.io.IOException;
 
 /**
  * Spark based avro delta input writer. We don't use this yet since we cannot control result file size.

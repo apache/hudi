@@ -18,15 +18,16 @@
 
 package org.apache.hudi.aws.sync;
 
+import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.aws.testutils.GlueTestUtil;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
-import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +40,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
 import software.amazon.awssdk.services.glue.GlueServiceClientConfiguration;
 import software.amazon.awssdk.services.glue.model.BatchCreatePartitionRequest;
@@ -74,7 +76,6 @@ import software.amazon.awssdk.services.glue.model.UpdateTableResponse;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
-import software.amazon.awssdk.regions.Region;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -137,7 +138,7 @@ class TestAWSGlueSyncClient {
     String tableName = "testTable";
     String databaseName = "testdb";
     String inputFormatClass = "inputFormat";
-    MessageType storageSchema = GlueTestUtil.getSimpleSchema();
+    HoodieSchema storageSchema = GlueTestUtil.getSimpleSchema();
     String outputFormatClass = "outputFormat";
     String serdeClass = "serde";
     HashMap<String, String> serdeProperties = new HashMap<>();
@@ -182,7 +183,7 @@ class TestAWSGlueSyncClient {
   @Test
   void testCreateOrReplaceTable_TableDoesNotExist() {
     String tableName = "testTable";
-    MessageType storageSchema = GlueTestUtil.getSimpleSchema();
+    HoodieSchema storageSchema = GlueTestUtil.getSimpleSchema();
     String inputFormatClass = "inputFormat";
     String outputFormatClass = "outputFormat";
     String serdeClass = "serde";
@@ -646,6 +647,62 @@ class TestAWSGlueSyncClient {
     assertTrue(ex.getCause().getCause().getMessage().contains("Fail to drop partitions"));
   }
 
+  @Test
+  void testDropPartitions_IgnoresEntityNotFound() {
+    String tableName = "tbl";
+    List<String> toDrop = List.of("2025/05/19");
+
+    // Glue reports EntityNotFoundException for a partition that no longer exists; it should be ignored.
+    ErrorDetail detail = ErrorDetail.builder().errorCode(EntityNotFoundException.class.getSimpleName()).build();
+    PartitionError pe = PartitionError.builder().partitionValues(Arrays.asList("2025", "05", "19")).errorDetail(detail).build();
+    BatchDeletePartitionResponse resp = BatchDeletePartitionResponse.builder()
+        .errors(Collections.singletonList(pe))
+        .build();
+    when(mockAwsGlue.batchDeletePartition(any(BatchDeletePartitionRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(resp));
+
+    // should swallow the EntityNotFound error and not throw
+    awsGlueSyncClient.dropPartitions(tableName, toDrop);
+
+    verify(mockAwsGlue).batchDeletePartition(any(BatchDeletePartitionRequest.class));
+  }
+
+  @Test
+  void testDropPartitions_MixedErrorsStillThrow() {
+    String tableName = "tbl";
+    List<String> toDrop = Arrays.asList("2025/05/19", "2025/05/18");
+
+    // One ignorable EntityNotFound error and one real error -> should still throw for the real one.
+    PartitionError ignorable = PartitionError.builder()
+        .partitionValues(Arrays.asList("2025", "05", "19"))
+        .errorDetail(ErrorDetail.builder().errorCode(EntityNotFoundException.class.getSimpleName()).build())
+        .build();
+    PartitionError real = PartitionError.builder()
+        .partitionValues(Arrays.asList("2025", "05", "18"))
+        .errorDetail(ErrorDetail.builder().errorCode("InternalServiceException").build())
+        .build();
+    BatchDeletePartitionResponse resp = BatchDeletePartitionResponse.builder()
+        .errors(Arrays.asList(ignorable, real))
+        .build();
+    when(mockAwsGlue.batchDeletePartition(any(BatchDeletePartitionRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(resp));
+
+    HoodieGlueSyncException ex = assertThrows(
+        HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.dropPartitions(tableName, toDrop)
+    );
+    // Walk the full cause chain: the error list is nested a few wrappers deep.
+    StringBuilder chain = new StringBuilder();
+    for (Throwable t = ex; t != null; t = t.getCause()) {
+      chain.append(t.getMessage()).append('\n');
+    }
+    String messages = chain.toString();
+    assertTrue(messages.contains("Fail to drop partitions"));
+    // Only the real error should be surfaced, not the ignored EntityNotFound one.
+    assertTrue(messages.contains("InternalServiceException"));
+    assertFalse(messages.contains(EntityNotFoundException.class.getSimpleName()));
+  }
+
   @Disabled("Integration test – requires real AWS environment")
   @Test
   void testIntegrationTableExists_RealGlueEnvironment() {
@@ -752,7 +809,7 @@ class TestAWSGlueSyncClient {
 
     // Test table creation with tagging
     String tableName = "test_table";
-    MessageType storageSchema = GlueTestUtil.getSimpleSchema();
+    HoodieSchema storageSchema = GlueTestUtil.getSimpleSchema();
     clientWithTags.createTable(tableName, storageSchema, "inputFormat", "outputFormat", 
         "serdeClass", new HashMap<>(), new HashMap<>());
 
@@ -772,6 +829,56 @@ class TestAWSGlueSyncClient {
     assertTrue(dbTagRequest.resourceArn().contains(dbName));
     assertEquals("SomeCenter", dbTagRequest.tagsToAdd().get("CostCenter"));
     assertEquals("Production", dbTagRequest.tagsToAdd().get("Environment"));
+  }
+
+  @Test
+  void testUpdateHoodieWriterVersion() throws ExecutionException, InterruptedException {
+    String tableName = "test";
+    List<Column> columns = Arrays.asList(
+        GlueTestUtil.getColumn("name", "string", "person's name"),
+        GlueTestUtil.getColumn("age", "int", "person's age"));
+    List<Column> partitionKeys = Collections.singletonList(
+        GlueTestUtil.getColumn("city", "string", "person's city"));
+    CompletableFuture<GetTableResponse> tableResponseFuture =
+        getTableWithDefaultProps(tableName, columns, partitionKeys);
+
+    CompletableFuture<UpdateTableResponse> mockUpdateTableResponse = Mockito.mock(CompletableFuture.class);
+    Mockito.when(mockUpdateTableResponse.get()).thenReturn(UpdateTableResponse.builder().build());
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponseFuture);
+    Mockito.when(mockAwsGlue.updateTable(any(UpdateTableRequest.class))).thenReturn(mockUpdateTableResponse);
+
+    awsGlueSyncClient.updateHoodieWriterVersion(tableName);
+
+    // Capture the request to verify the writer-version parameter was set correctly
+    ArgumentCaptor<UpdateTableRequest> captor = ArgumentCaptor.forClass(UpdateTableRequest.class);
+    verify(mockAwsGlue, times(1)).updateTable(captor.capture());
+    UpdateTableRequest sent = captor.getValue();
+    assertEquals(
+        HoodieVersion.get(),
+        sent.tableInput().parameters().get(HoodieVersion.HOODIE_WRITER_VERSION),
+        "Writer version parameter should be set on the table");
+  }
+
+  @Test
+  void testUpdateHoodieWriterVersionThrowsGlueException() throws ExecutionException, InterruptedException {
+    String tableName = "test";
+    List<Column> columns = Collections.singletonList(
+        GlueTestUtil.getColumn("name", "string", "person's name"));
+    List<Column> partitionKeys = Collections.singletonList(
+        GlueTestUtil.getColumn("city", "string", "person's city"));
+    CompletableFuture<GetTableResponse> tableResponseFuture =
+        getTableWithDefaultProps(tableName, columns, partitionKeys);
+
+    CompletableFuture<UpdateTableResponse> mockUpdateTableResponse = Mockito.mock(CompletableFuture.class);
+    Mockito.when(mockUpdateTableResponse.get()).thenThrow(new InterruptedException());
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponseFuture);
+    Mockito.when(mockAwsGlue.updateTable(any(UpdateTableRequest.class))).thenReturn(mockUpdateTableResponse);
+
+    HoodieGlueSyncException ex = assertThrows(
+        HoodieGlueSyncException.class,
+        () -> awsGlueSyncClient.updateHoodieWriterVersion(tableName));
+    assertTrue(ex.getMessage().contains(tableName), "exception message should mention the table");
+    assertTrue(ex.getMessage().contains(HoodieVersion.get()), "exception message should mention the writer version");
   }
 
   private CompletableFuture<GetTableResponse> getTableWithDefaultProps(String tableName, List<Column> columns, List<Column> partitionColumns) {

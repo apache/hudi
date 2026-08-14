@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.BaseAvroPayload;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -32,8 +33,13 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.SerializableIndexedRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
@@ -45,7 +51,6 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -64,24 +69,41 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class BaseTestFileGroupRecordBuffer {
 
-  protected static final Schema SCHEMA = Schema.createRecord("test_record", null, "namespace", false,
+  protected static final HoodieSchema SCHEMA = HoodieSchema.createRecord("test_record", "namespace", null,
       Arrays.asList(
-          new Schema.Field("record_key", Schema.create(Schema.Type.STRING)),
-          new Schema.Field("counter", Schema.create(Schema.Type.INT)),
-          new Schema.Field("ts", Schema.create(Schema.Type.LONG))));
+          HoodieSchemaField.of("record_key", HoodieSchema.create(HoodieSchemaType.STRING)),
+          HoodieSchemaField.of("counter", HoodieSchema.create(HoodieSchemaType.INT)),
+          HoodieSchemaField.of("ts", HoodieSchema.create(HoodieSchemaType.LONG))));
 
   protected static GenericRecord createTestRecord(String recordKey, int counter, long ts) {
-    GenericRecord record = new GenericData.Record(SCHEMA);
+    GenericRecord record = new GenericData.Record(SCHEMA.toAvroSchema());
     record.put("record_key", recordKey);
     record.put("counter", counter);
     record.put("ts", ts);
     return record;
+  }
+
+  protected static void mockDeleteRecords(HoodieDeleteBlock deleteBlock, DeleteRecord... deleteRecords) {
+    when(deleteBlock.getRecordsToDelete()).thenReturn(deleteRecords);
+    when(deleteBlock.getRecordsToDelete(any())).thenAnswer(invocation -> {
+      HoodieReaderContext readerContext = invocation.getArgument(0);
+      return Arrays.stream(deleteRecords)
+          .map(deleteRecord -> BufferedRecords.fromDeleteRecord(deleteRecord, readerContext.getRecordContext()))
+          .collect(Collectors.toList());
+    });
+  }
+
+  protected static HoodieTableMetaClient createMockMetaClient(HoodieTableConfig tableConfig) {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    return metaClient;
   }
 
   protected static List<HoodieRecord> convertToHoodieRecordsList(List<IndexedRecord> indexedRecords) {
@@ -115,7 +137,9 @@ public class BaseTestFileGroupRecordBuffer {
     });
     FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
     when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
+    when(fileGroupReaderSchemaHandler.getSchemaForUpdates()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(fileGroupReaderSchemaHandler.getSchemaEvolutionTransformer(any(), any())).thenReturn(Option.empty());
     when(fileGroupReaderSchemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, SCHEMA));
     readerContext.setSchemaHandler(fileGroupReaderSchemaHandler);
     return buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, recordMerger, recordMergeMode, orderingFieldNames, props,
@@ -132,8 +156,7 @@ public class BaseTestFileGroupRecordBuffer {
                                                                                                  Option<Iterator<HoodieRecord>> fileGroupRecordBufferItrOpt) {
 
     readerContext.setRecordMerger(Option.ofNullable(recordMerger));
-    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
-    when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
+    HoodieTableMetaClient mockMetaClient = createMockMetaClient(tableConfig);
     UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty(), props);
 
     if (fileGroupRecordBufferItrOpt.isEmpty()) {
@@ -145,7 +168,7 @@ public class BaseTestFileGroupRecordBuffer {
       when(inputSplit.hasNoRecordsToMerge()).thenReturn(false);
       when(inputSplit.getRecordIterator()).thenReturn(fileGroupRecordBufferItrOpt.get());
       ReaderParameters readerParameters = mock(ReaderParameters.class);
-      when(readerParameters.sortOutputs()).thenReturn(false);
+      when(readerParameters.isSortOutputs()).thenReturn(false);
       return (KeyBasedFileGroupRecordBuffer<IndexedRecord>) recordBufferLoader.getRecordBuffer(readerContext, mockMetaClient.getStorage(), inputSplit,
           orderingFieldNames, mockMetaClient, props, readerParameters, readStats, Option.empty()).getKey();
     }

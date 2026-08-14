@@ -20,13 +20,13 @@ package org.apache.hudi.utilities.ingestion;
 
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.NoArgsConstructor;
+
 /**
  * The root exception class for any failure with {@link HoodieIngestionService}.
  */
+@NoArgsConstructor
 public class HoodieIngestionException extends HoodieException {
-
-  public HoodieIngestionException() {
-  }
 
   public HoodieIngestionException(String message) {
     super(message);

@@ -24,9 +24,9 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.exception.{HoodieException, HoodieKeyGeneratorException}
-import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.functional.CommonOptionUtils._
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -64,14 +64,6 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initHoodieStorage()
-  }
-
-  @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
   }
 
   @ParameterizedTest
@@ -200,7 +192,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
         .save(basePath)
     }
 
-    assertTrue(getRootCause(e).getMessage.contains(configKey + " is not supported with auto generation of record keys"))
+    assertTrue(HoodieTestUtils.getRootCause(e).getMessage.contains(configKey + " is not supported with auto generation of record keys"))
   }
 
   @Test
@@ -245,7 +237,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     }
 
     val expectedMsg = s"RecordKey:\t_row_key\tnull"
-    assertTrue(getRootCause(e).getMessage.contains(expectedMsg))
+    assertTrue(HoodieTestUtils.getRootCause(e).getMessage.contains(expectedMsg))
   }
 
   @Test

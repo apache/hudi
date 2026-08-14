@@ -52,6 +52,7 @@ public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return KeyGenUtils.getPartitionPath(record, getPartitionPathFields().get(0), hiveStylePartitioning, encodePartitionPath, isConsistentLogicalTimestampEnabled());
+    return KeyGenUtils.getPartitionPath(record, getPartitionPathFields().get(0), hiveStylePartitioning,
+        encodePartitionPath, slashSeparatedDatePartitioning,  isConsistentLogicalTimestampEnabled());
   }
 }

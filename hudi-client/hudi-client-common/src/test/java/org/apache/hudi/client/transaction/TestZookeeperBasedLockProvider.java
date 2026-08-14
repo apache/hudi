@@ -18,9 +18,9 @@
 
 package org.apache.hudi.client.transaction;
 
+import org.apache.hudi.client.transaction.lock.BaseZookeeperBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
-import org.apache.hudi.client.transaction.lock.BaseZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.RetryOneTime;
@@ -39,10 +40,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -58,9 +58,8 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PRO
 import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
 
+@Slf4j
 public class TestZookeeperBasedLockProvider {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestZookeeperBasedLockProvider.class);
 
   private static TestingServer server;
   private static CuratorFramework client;
@@ -79,7 +78,7 @@ public class TestZookeeperBasedLockProvider {
         CuratorFrameworkFactory.Builder builder = CuratorFrameworkFactory.builder();
         client = builder.connectString(server.getConnectString()).retryPolicy(new RetryOneTime(1000)).build();
       } catch (Exception e) {
-        LOG.error("Getting bind exception - retrying to allocate server");
+        log.error("Getting bind exception - retrying to allocate server");
         server = null;
       }
     }
@@ -195,5 +194,25 @@ public class TestZookeeperBasedLockProvider {
   public void testUnlockWithoutLock() {
     ZookeeperBasedLockProvider zookeeperBasedLockProvider = new ZookeeperBasedLockProvider(zkConfWithZkBasePathAndLockKeyLock, null);
     zookeeperBasedLockProvider.unlock();
+  }
+
+  @Test
+  public void testFailFastWhenZkUnreachable() {
+    Properties properties = new Properties();
+    // Nothing listens on 127.0.0.1:1, so the connect-wait must time out instead of hanging.
+    properties.setProperty(ZK_CONNECT_URL_PROP_KEY, "127.0.0.1:1");
+    properties.setProperty(ZK_BASE_PATH_PROP_KEY, basePath);
+    properties.setProperty(ZK_LOCK_KEY_PROP_KEY, key);
+    properties.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "100");
+    properties.setProperty(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY, "300");
+    properties.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "1");
+    properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP_KEY, "1000");
+    properties.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, "1000");
+    LockConfiguration unreachable = new LockConfiguration(properties);
+    // Construction must fail fast (seconds, bounded by the connection timeout) with a
+    // HoodieLockException instead of being amplified into a multi-minute retry hang.
+    Assertions.assertTimeoutPreemptively(Duration.ofSeconds(15), () ->
+        Assertions.assertThrows(HoodieLockException.class,
+            () -> new ZookeeperBasedLockProvider(unreachable, null)));
   }
 }

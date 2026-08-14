@@ -27,6 +27,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.TimelineServiceClient;
+import org.apache.hudi.common.table.timeline.TimelineServiceClientBase;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
@@ -39,15 +41,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieRemoteException;
-import org.apache.hudi.timeline.TimelineServiceClient;
-import org.apache.hudi.timeline.TimelineServiceClientBase;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -57,11 +56,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.timeline.TimelineServiceClient.RequestMethod;
+import static org.apache.hudi.common.table.timeline.TimelineServiceClient.RequestMethod;
 
 /**
  * A proxy for table file-system view which translates local View API calls to REST calls to remote timeline service.
  */
+@Slf4j
 public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, Serializable {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
@@ -127,8 +127,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
 
   public static final String MULTI_VALUE_SEPARATOR = ",";
-
-  private static final Logger LOG = LoggerFactory.getLogger(RemoteHoodieTableFileSystemView.class);
   private static final TypeReference<List<FileSliceDTO>> FILE_SLICE_DTOS_REFERENCE = new TypeReference<List<FileSliceDTO>>() {};
   private static final TypeReference<List<FileGroupDTO>> FILE_GROUP_DTOS_REFERENCE = new TypeReference<List<FileGroupDTO>>() {};
   private static final TypeReference<Boolean> BOOLEAN_TYPE_REFERENCE = new TypeReference<Boolean>() {};

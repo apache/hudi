@@ -19,6 +19,7 @@ package org.apache.spark.sql.catalyst.plans.logical
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LeafNode
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 object HoodieTableChangesOptionsParser {
@@ -43,11 +44,13 @@ object HoodieTableChangesOptionsParser {
 
     val startInstantTimeOpt = startInstantTime match {
       case "earliest" => Map("hoodie.datasource.read.begin.instanttime" -> "000")
-      case _ => Map("hoodie.datasource.read.begin.instanttime" -> startInstantTime)
+      case _ => Map("hoodie.datasource.read.begin.instanttime" ->
+        HoodieSqlCommonUtils.formatIncrementalInstant(startInstantTime))
     }
 
     val endInstantTimeOpt = endInstantTime match {
-      case Some(x) => Map("hoodie.datasource.read.end.instanttime" -> x)
+      case Some(x) => Map("hoodie.datasource.read.end.instanttime" ->
+        HoodieSqlCommonUtils.formatIncrementalInstant(x))
       case None => Map.empty[String, String]
     }
 

@@ -24,12 +24,11 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.thrift.TException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,14 +37,23 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DECODE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 
+@Slf4j
 public class HivePartitionUtil {
-  private static final Logger LOG = LoggerFactory.getLogger(HivePartitionUtil.class);
 
   /**
    * Build String, example as year=2021/month=06/day=25
    */
   public static String getPartitionClauseForDrop(String partition, PartitionValueExtractor partitionValueExtractor, HiveSyncConfig config) {
-    List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
+    return getPartitionClauseForDrop(partitionValueExtractor.extractPartitionValuesInPath(partition), config);
+  }
+
+  /**
+   * Variant taking values already extracted by the caller, for paths that must not invoke
+   * a {@link PartitionValueExtractor} themselves — see
+   * {@code HiveQueryDDLExecutor#dropPartitionsToTable}, which extracts on the calling
+   * thread so a user-supplied extractor is never shared across pool workers.
+   */
+  public static String getPartitionClauseForDrop(List<String> partitionValues, HiveSyncConfig config) {
     ValidationUtils.checkArgument(config.getSplitStrings(META_SYNC_PARTITION_FIELDS).size() == partitionValues.size(),
         "Partition key parts " + config.getSplitStrings(META_SYNC_PARTITION_FIELDS) + " does not match with partition values " + partitionValues
             + ". Check partition strategy. ");
@@ -65,14 +73,23 @@ public class HivePartitionUtil {
 
   public static Boolean partitionExists(IMetaStoreClient client, String tableName, String partitionPath,
                                         PartitionValueExtractor partitionValueExtractor, HiveSyncConfig config) {
+    return partitionExists(client, tableName, partitionPath,
+        partitionValueExtractor.extractPartitionValuesInPath(partitionPath), config);
+  }
+
+  /**
+   * Variant taking values already extracted by the caller. {@code partitionPath} is
+   * retained only for error reporting.
+   */
+  public static Boolean partitionExists(IMetaStoreClient client, String tableName, String partitionPath,
+                                        List<String> partitionValues, HiveSyncConfig config) {
     Partition newPartition;
     try {
-      List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partitionPath);
       newPartition = client.getPartition(config.getStringOrDefault(META_SYNC_DATABASE_NAME), tableName, partitionValues);
     } catch (NoSuchObjectException ignored) {
       newPartition = null;
     } catch (TException e) {
-      LOG.error("Failed to get partition " + partitionPath, e);
+      log.error("Failed to get partition {}", partitionPath, e);
       throw new HoodieHiveSyncException("Failed to get partition " + partitionPath, e);
     }
     return newPartition != null;

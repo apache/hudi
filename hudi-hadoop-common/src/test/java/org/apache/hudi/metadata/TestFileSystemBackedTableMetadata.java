@@ -18,9 +18,13 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -30,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -178,6 +183,52 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     }
   }
 
+  /**
+   * Test that non-conformant files (stray files that are not valid HUDI data or log files)
+   * are filtered out when listing partition files.
+   */
+  @Test
+  public void testStrayFilesAreFilteredOut() throws Exception {
+    String partition = "2024/01/01";
+    hoodieTestTable = hoodieTestTable.addCommit("100")
+        .withPartitionMetaFiles(partition)
+        .withBaseFilesInPartition(partition, IntStream.range(0, 5).toArray());
+
+    // Create stray files that should be filtered out
+    StoragePath partitionPath = new StoragePath(basePath + "/" + partition);
+    String[] strayFileNames = {
+        ".tmp_copy_file",           // hidden temp file
+        "_temporary_data",          // underscore-prefixed temp file
+        "random_file.txt",          // non-hudi file
+        "corrupted_name",           // file with no valid extension
+        ".crc"                      // checksum file
+    };
+    for (String strayFile : strayFileNames) {
+      StoragePath strayPath = new StoragePath(partitionPath, strayFile);
+      try (OutputStream out = metaClient.getStorage().create(strayPath)) {
+        out.write("test".getBytes());
+      }
+    }
+
+    HoodieLocalEngineContext localEngineContext =
+        new HoodieLocalEngineContext(metaClient.getStorageConf());
+    FileSystemBackedTableMetadata fileSystemBackedTableMetadata =
+        new FileSystemBackedTableMetadata(localEngineContext, metaClient.getTableConfig(),
+            metaClient.getStorage(), basePath);
+
+    // getAllFilesInPartition should only return the 5 valid base files
+    List<StoragePathInfo> files = fileSystemBackedTableMetadata.getAllFilesInPartition(partitionPath);
+    Assertions.assertEquals(5, files.size(), "Stray files should be filtered out by getAllFilesInPartition");
+
+    // listPartitions should also only return the 5 valid base files
+    List<Pair<String, StoragePath>> partitionPathList = Collections.singletonList(
+        Pair.of(partition, partitionPath));
+    Map<Pair<String, StoragePath>, List<StoragePathInfo>> partitionFilesMap =
+        fileSystemBackedTableMetadata.listPartitions(partitionPathList);
+    Assertions.assertEquals(5, partitionFilesMap.get(partitionPathList.get(0)).size(),
+        "Stray files should be filtered out by listPartitions");
+  }
+
   @Test
   public void testMultiLevelEmptyPartitionTable() throws Exception {
     String instant = "100";
@@ -206,6 +257,39 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
     for (String p : fullPartitionPaths) {
       Assertions.assertEquals(0, partitionToFilesMap.get(p).size());
     }
+  }
+
+  @Test
+  public void testMetadataIndexOperationsAreUnsupported() {
+    HoodieLocalEngineContext localEngineContext =
+        new HoodieLocalEngineContext(metaClient.getStorageConf());
+    FileSystemBackedTableMetadata metadata = new FileSystemBackedTableMetadata(
+        localEngineContext, metaClient.getTableConfig(), metaClient.getStorage(), basePath);
+
+    Assertions.assertThrows(UnsupportedOperationException.class, metadata::getSyncedInstantTime);
+    Assertions.assertThrows(UnsupportedOperationException.class, metadata::getLatestCompactionTime);
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getBloomFilter("", "file.parquet", MetadataPartitionType.BLOOM_FILTERS.getPartitionPath()));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getBloomFilters(Collections.emptyList(), MetadataPartitionType.BLOOM_FILTERS.getPartitionPath()));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getColumnStats(Collections.emptyList(), "column"));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getColumnStats(Collections.emptyList(), Collections.singletonList("column")));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getRecordsByKeyPrefixes(
+            HoodieListData.eager(Collections.emptyList()), MetadataPartitionType.FILES.getPartitionPath(), false));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(Collections.emptyList())));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(Collections.emptyList()), Option.empty()));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.readSecondaryIndexLocationsWithKeys(
+            HoodieListData.eager(Collections.emptyList()), MetadataPartitionType.SECONDARY_INDEX.getPartitionPath()));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getNumFileGroupsForPartition(MetadataPartitionType.FILES));
+    Assertions.assertThrows(HoodieMetadataException.class,
+        () -> metadata.getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType.RECORD_INDEX));
   }
 
 }

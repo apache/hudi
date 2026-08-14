@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestTable;

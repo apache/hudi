@@ -25,8 +25,8 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 /**
  * Utility that could hold exclusively only either of (hence the name):
  * <ul>
- *     <li>Non-null value of type {@link L}</li>
- *     <li>Non-null value of type {@link R}</li>
+ *     <li>Non-null value of type L</li>
+ *     <li>Non-null value of type R</li>
  * </ul>
  *
  * @param <L> type of the "left" potential element

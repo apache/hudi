@@ -24,12 +24,13 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.util.OrderingValueEngineTypeConverter;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -63,15 +64,15 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     super(new DefaultJavaTypeConverter());
   }
 
-  public static Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
+  public static Object getFieldValueFromInternalRow(InternalRow row, HoodieSchema recordSchema, String fieldName) {
     return getFieldValueFromInternalRowInternal(row, recordSchema, fieldName, false);
   }
 
-  public static Object getFieldValueFromInternalRowAsJava(InternalRow row, Schema recordSchema, String fieldName) {
+  public static Object getFieldValueFromInternalRowAsJava(InternalRow row, HoodieSchema recordSchema, String fieldName) {
     return getFieldValueFromInternalRowInternal(row, recordSchema, fieldName, true);
   }
 
-  private static Object getFieldValueFromInternalRowInternal(InternalRow row, Schema recordSchema, String fieldName, boolean convertToJavaType) {
+  private static Object getFieldValueFromInternalRowInternal(InternalRow row, HoodieSchema recordSchema, String fieldName, boolean convertToJavaType) {
     StructType structType = getCachedSchema(recordSchema);
     scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
         HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
@@ -104,7 +105,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
-  public Object getValue(InternalRow row, Schema schema, String fieldName) {
+  public Object getValue(InternalRow row, HoodieSchema schema, String fieldName) {
     return getFieldValueFromInternalRow(row, schema, fieldName);
   }
 
@@ -124,24 +125,29 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
-    Schema schema = getSchemaFromBufferRecord(bufferedRecord);
+    HoodieSchema schema = getSchemaFromBufferRecord(bufferedRecord);
     InternalRow row = bufferedRecord.getRecord();
     return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema),
         false, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
   }
 
   @Override
-  public InternalRow constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+  public InternalRow constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
     return new GenericInternalRow(fieldValues);
   }
 
   @Override
-  public InternalRow mergeWithEngineRecord(Schema schema,
+  public HoodieRecord.HoodieRecordType getEngineRecordType() {
+    return HoodieRecord.HoodieRecordType.SPARK;
+  }
+
+  @Override
+  public InternalRow mergeWithEngineRecord(HoodieSchema schema,
                                            Map<Integer, Object> updateValues,
                                            BufferedRecord<InternalRow> baseRecord) {
-    List<Schema.Field> fields = schema.getFields();
+    List<HoodieSchemaField> fields = schema.getFields();
     Object[] values = new Object[fields.size()];
-    for (Schema.Field field : fields) {
+    for (HoodieSchemaField field : fields) {
       int pos = field.pos();
       if (updateValues.containsKey(pos)) {
         values[pos] = updateValues.get(pos);
@@ -155,11 +161,12 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   @Override
   public Comparable convertValueToEngineType(Comparable value) {
     if (value instanceof String) {
-      // Spark reads String field values as UTF8String.
-      // To foster value comparison, if the value is of String type, e.g., from
-      // the delete record, we convert it to UTF8String type.
-      // [SPARK-46832] UTF8String doesn't support compareTo anymore
-      return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory().wrapUTF8String(UTF8String.fromString((String) value));
+      // Spark represents String field values as UTF8String in InternalRow.
+      // NOTE: the returned raw UTF8String is meant for storage in an engine record; it does
+      // not support compareTo since [SPARK-46832]. Callers that need comparison must go
+      // through convertOrderingValueToEngineType/ensureComparability, which wrap the value
+      // into HoodieUTF8String.
+      return UTF8String.fromString((String) value);
     }
     return value;
   }
@@ -176,20 +183,9 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     // the delete record, we convert it to UTF8String type.
     // [SPARK-46832] UTF8String doesn't support compareTo anymore
     if (value instanceof UTF8String) {
-      return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory().wrapUTF8String((UTF8String) value);
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory().wrapUTF8String(((UTF8String) value).copy());
     }
     return (Comparable) value;
-  }
-
-  @Override
-  public Comparable convertPartitionValueToEngineType(Comparable value) {
-    if (value instanceof String) {
-      // Spark reads String field values as UTF8String.
-      // To foster value comparison, if the value is of String type, e.g., from
-      // the delete record, we convert it to UTF8String type.
-      return UTF8String.fromString((String) value);
-    }
-    return value;
   }
 
   @Override
@@ -205,12 +201,12 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
-  public InternalRow seal(InternalRow internalRow) {
+  public InternalRow seal(HoodieSchema schema, InternalRow internalRow) {
     return internalRow.copy();
   }
 
   @Override
-  public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
+  public InternalRow toBinaryRow(HoodieSchema schema, InternalRow internalRow) {
     if (internalRow instanceof UnsafeRow) {
       return internalRow;
     }
@@ -219,13 +215,13 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
-  public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+  public UnaryOperator<InternalRow> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
         HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns, Collections.emptyMap());
     return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 
-  void initOrderingValueConverter(Schema dataSchema, List<String> orderingFieldNames) {
+  void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
     this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames);
   }
 }

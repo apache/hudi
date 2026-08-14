@@ -23,8 +23,12 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,12 +41,9 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * A helper class used to diff timeline.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class TimelineDiffHelper {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TimelineDiffHelper.class);
-
-  private TimelineDiffHelper() {
-  }
 
   public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTableMetaClient metaClient,
                                                                     HoodieTimeline oldTimeline,
@@ -72,7 +73,7 @@ public class TimelineDiffHelper {
       if (!lostPendingCompactions.isEmpty()) {
         // If a compaction is unscheduled, fall back to complete refresh of fs view since some log files could have been
         // moved. Its unsafe to incrementally sync in that case.
-        LOG.warn("Some pending compactions are no longer in new timeline (unscheduled ?). They are: {}", lostPendingCompactions);
+        log.warn("Some pending compactions are no longer in new timeline (unscheduled ?). They are: {}", lostPendingCompactions);
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
       List<HoodieInstant> finishedCompactionInstants = compactionInstants.stream()
@@ -91,7 +92,7 @@ public class TimelineDiffHelper {
       return new TimelineDiffResult(newInstants, finishedCompactionInstants, finishedOrRemovedLogCompactionInstants, true);
     } else {
       // One or more timelines is empty
-      LOG.warn("One or more timelines is empty");
+      log.warn("One or more timelines is empty");
       return TimelineDiffResult.UNSAFE_SYNC_RESULT;
     }
   }
@@ -125,39 +126,18 @@ public class TimelineDiffHelper {
   /**
    * A diff result of timeline.
    */
+  @AllArgsConstructor
+  @Getter
   public static class TimelineDiffResult {
 
     private final List<HoodieInstant> newlySeenInstants;
     private final List<HoodieInstant> finishedCompactionInstants;
     private final List<HoodieInstant> finishedOrRemovedLogCompactionInstants;
+    @Accessors(fluent = true)
     private final boolean canSyncIncrementally;
 
     public static final TimelineDiffResult UNSAFE_SYNC_RESULT =
         new TimelineDiffResult(null, null, null, false);
-
-    public TimelineDiffResult(List<HoodieInstant> newlySeenInstants, List<HoodieInstant> finishedCompactionInstants,
-                              List<HoodieInstant> finishedOrRemovedLogCompactionInstants, boolean canSyncIncrementally) {
-      this.newlySeenInstants = newlySeenInstants;
-      this.finishedCompactionInstants = finishedCompactionInstants;
-      this.finishedOrRemovedLogCompactionInstants = finishedOrRemovedLogCompactionInstants;
-      this.canSyncIncrementally = canSyncIncrementally;
-    }
-
-    public List<HoodieInstant> getNewlySeenInstants() {
-      return newlySeenInstants;
-    }
-
-    public List<HoodieInstant> getFinishedCompactionInstants() {
-      return finishedCompactionInstants;
-    }
-
-    public List<HoodieInstant> getFinishedOrRemovedLogCompactionInstants() {
-      return finishedOrRemovedLogCompactionInstants;
-    }
-
-    public boolean canSyncIncrementally() {
-      return canSyncIncrementally;
-    }
 
     @Override
     public String toString() {

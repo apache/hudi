@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
@@ -26,6 +26,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -46,6 +47,7 @@ public abstract class BaseAvroPayload implements Serializable, KryoSerializable 
   /**
    * For purposes of preCombining.
    */
+  @Getter
   protected Comparable orderingVal;
 
   protected boolean isDeletedRecord;
@@ -67,10 +69,6 @@ public abstract class BaseAvroPayload implements Serializable, KryoSerializable 
     if (orderingVal == null) {
       throw new HoodieException("Ordering value is null for record: " + record);
     }
-  }
-
-  public Comparable getOrderingVal() {
-    return orderingVal;
   }
 
   /**

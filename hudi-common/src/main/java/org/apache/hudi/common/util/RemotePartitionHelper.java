@@ -22,18 +22,17 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.http.Consts;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.http.client.utils.URIBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.HashMap;
 
+@Slf4j
 public class RemotePartitionHelper implements Serializable {
-  private static final Logger LOG = LoggerFactory.getLogger(RemotePartitionHelper.class);
 
   public static final String URL = "/v1/hoodie/partitioner/getpartitionindex";
   public static final String NUM_BUCKETS_PARAM = "numbuckets";
@@ -71,7 +70,7 @@ public class RemotePartitionHelper implements Serializable {
     builder.addParameter(PARTITION_NUM_PARAM, String.valueOf(partitionNum));
 
     String url = builder.toString();
-    LOG.debug("Sending request : (" + url + ").");
+    log.debug("Sending request : ({}).", url);
     Response response = (Response)(retryHelper != null ? retryHelper.start(() -> Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute())
         : Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute());
     String content = response.returnContent().asString(Consts.UTF_8);

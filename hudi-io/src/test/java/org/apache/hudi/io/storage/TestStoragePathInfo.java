@@ -22,9 +22,8 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -38,8 +37,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 /**
  * Tests {@link StoragePathInfo}
  */
+@Slf4j
 public class TestStoragePathInfo {
-  private static final Logger LOG = LoggerFactory.getLogger(TestStoragePathInfo.class);
+
   private static final long LENGTH = 100;
   private static final short BLOCK_REPLICATION = 1;
   private static final long BLOCK_SIZE = 1000000L;

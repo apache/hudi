@@ -19,11 +19,15 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.utilities.config.FilebasedSchemaProviderConfig;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
+import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
 import org.apache.hudi.utilities.schema.converter.JsonToAvroSchemaConverter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import org.apache.avro.SchemaParseException;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -37,6 +41,7 @@ import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generate
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateRenamedSchemaWithDefaultReplacement;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for {@link FilebasedSchemaProvider}.
@@ -59,7 +64,7 @@ class TestFilebasedSchemaProvider extends UtilitiesTestBase {
   void properlyFormattedNestedSchemaTest() throws IOException {
     this.schemaProvider = new FilebasedSchemaProvider(
         Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_valid.avsc"), jsc);
-    assertEquals(this.schemaProvider.getSourceSchema(), generateProperFormattedSchema());
+    assertEquals(this.schemaProvider.getSourceHoodieSchema(), generateProperFormattedSchema());
   }
 
   @Test
@@ -67,12 +72,12 @@ class TestFilebasedSchemaProvider extends UtilitiesTestBase {
     TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_invalid.avsc");
     props.put(SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
     this.schemaProvider = new FilebasedSchemaProvider(props, jsc);
-    assertEquals(this.schemaProvider.getSourceSchema(), generateRenamedSchemaWithDefaultReplacement());
+    assertEquals(this.schemaProvider.getSourceHoodieSchema(), generateRenamedSchemaWithDefaultReplacement());
   }
 
   @Test
   void renameBadlyFormattedSchemaWithPropertyDisabledTest() {
-    assertThrows(SchemaParseException.class, () -> {
+    assertThrows(HoodieAvroSchemaException.class, () -> {
       new FilebasedSchemaProvider(
           Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_invalid.avsc"), jsc);
     });
@@ -84,7 +89,7 @@ class TestFilebasedSchemaProvider extends UtilitiesTestBase {
     props.put(SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
     props.put(SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "_");
     this.schemaProvider = new FilebasedSchemaProvider(props, jsc);
-    assertEquals(this.schemaProvider.getSourceSchema(), generateRenamedSchemaWithConfiguredReplacement());
+    assertEquals(this.schemaProvider.getSourceHoodieSchema(), generateRenamedSchemaWithConfiguredReplacement());
   }
 
   @Test
@@ -95,6 +100,86 @@ class TestFilebasedSchemaProvider extends UtilitiesTestBase {
     FilebasedSchemaProvider filebasedSchemaProvider = new FilebasedSchemaProvider(
         Helpers.setupSchemaOnDFS("streamer-config", "source_uber_encoded_decimal.avsc"), jsc);
 
-    assertEquals(filebasedSchemaProvider.getSourceSchema(), jsonFilebasedSchemaProvider.getSourceSchema());
+    assertEquals(filebasedSchemaProvider.getSourceHoodieSchema(), jsonFilebasedSchemaProvider.getSourceHoodieSchema());
+  }
+
+  @Test
+  void testJsonSchemaWithUnknownConverterClass() throws IOException {
+    TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "source_uber_encoded_decimal.json");
+    props.setProperty(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key(), "org.apache.hudi.utilities.NoSuchSchemaConverter");
+    Throwable t = assertThrows(HoodieSchemaProviderException.class, () -> new FilebasedSchemaProvider(props, jsc));
+    assertTrue(t.getMessage().contains("Error loading json schema converter"), t.getMessage());
+  }
+
+  @Test
+  void testJsonSchemaWithFailingConverter() throws IOException {
+    TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "source_uber_encoded_decimal.json");
+    props.setProperty(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key(), FailingSchemaConverter.class.getName());
+    Throwable t = assertThrows(HoodieSchemaProviderException.class, () -> new FilebasedSchemaProvider(props, jsc));
+    assertTrue(t.getMessage().contains("Error converting json schema"), t.getMessage());
+  }
+
+  @Test
+  void testMissingSchemaFile() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE.key(), basePath + "/no_such_schema.avsc");
+    Throwable t = assertThrows(HoodieSchemaProviderException.class, () -> new FilebasedSchemaProvider(props, jsc));
+    assertTrue(t.getMessage().contains("Error reading schema from file"), t.getMessage());
+  }
+
+  @Test
+  void testRefreshPicksUpRewrittenSourceAndTargetSchemaFiles() throws IOException {
+    TypedProperties targetProps = Helpers.setupSchemaOnDFS("streamer-config", "source_uber_encoded_decimal.avsc");
+    TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_valid.avsc");
+    props.setProperty(FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE.key(),
+        targetProps.getString(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE.key()));
+    this.schemaProvider = new FilebasedSchemaProvider(props, jsc);
+    assertEquals(this.schemaProvider.getSourceHoodieSchema(), generateProperFormattedSchema());
+
+    // rewrite the configured source schema file in place with an unrelated schema: refresh() has to
+    // re-read the file rather than serve the schema cached at construction time
+    HoodieSchema rewrittenSchema = new FilebasedSchemaProvider(
+        Helpers.setupSchemaOnDFS("streamer-config", "source_uber.avsc"), jsc).getSourceHoodieSchema();
+    Helpers.copyToDFS("streamer-config/source_uber.avsc", storage,
+        props.getString(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE.key()));
+
+    this.schemaProvider.refresh();
+
+    assertEquals(rewrittenSchema, this.schemaProvider.getSourceHoodieSchema());
+    assertEquals(this.schemaProvider.getTargetHoodieSchema(),
+        new FilebasedSchemaProvider(targetProps, jsc).getSourceHoodieSchema());
+  }
+
+  @Test
+  void testRefreshWithoutTargetSchemaFileConfigured() throws IOException {
+    TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_valid.avsc");
+    FilebasedSchemaProvider provider = new FilebasedSchemaProvider(props, jsc);
+    // without a target schema file the constructor leaves the target schema unset, so the target
+    // falls back to the source schema
+    assertEquals(generateProperFormattedSchema(), provider.getTargetHoodieSchema());
+
+    // refresh() populates the target schema from the target file, which defaults to the source
+    // file, so a rewrite of that file now surfaces through the populated branch of getTargetSchema()
+    HoodieSchema rewrittenSchema = new FilebasedSchemaProvider(
+        Helpers.setupSchemaOnDFS("streamer-config", "source_uber.avsc"), jsc).getSourceHoodieSchema();
+    Helpers.copyToDFS("streamer-config/source_uber.avsc", storage,
+        props.getString(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE.key()));
+    provider.refresh();
+
+    assertEquals(rewrittenSchema, provider.getTargetHoodieSchema());
+  }
+
+  /**
+   * Json schema converter whose conversion always fails, to exercise the conversion failure path.
+   */
+  public static class FailingSchemaConverter implements SchemaRegistryProvider.SchemaConverter {
+
+    public FailingSchemaConverter(TypedProperties props) {
+    }
+
+    @Override
+    public String convert(ParsedSchema schema) throws IOException {
+      throw new IOException("simulated json schema conversion failure");
+    }
   }
 }

@@ -25,13 +25,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.fixInstantTimeCompatibility;
@@ -40,15 +40,14 @@ import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.i
 /**
  * KeepByTimeStrategy will return expired partitions by their lastCommitTime.
  */
+@Slf4j
 public class KeepByTimeStrategy extends PartitionTTLStrategy {
-
-  private static final Logger LOG = LoggerFactory.getLogger(KeepByTimeStrategy.class);
 
   protected final long ttlInMilis;
 
   public KeepByTimeStrategy(HoodieTable hoodieTable, String instantTime) {
     super(hoodieTable, instantTime);
-    this.ttlInMilis = writeConfig.getPartitionTTLStrategyDaysRetain() * 1000 * 3600 * 24;
+    this.ttlInMilis = TimeUnit.DAYS.toMillis(writeConfig.getPartitionTTLStrategyDaysRetain());
   }
 
   @Override
@@ -60,7 +59,7 @@ public class KeepByTimeStrategy extends PartitionTTLStrategy {
     }
     List<String> expiredPartitions = getExpiredPartitionsForTimeStrategy(getPartitionPathsForTTL());
     int limit = writeConfig.getPartitionTTLMaxPartitionsToDelete();
-    LOG.info("Total expired partitions count {}, limit {}", expiredPartitions.size(), limit);
+    log.info("Total expired partitions count {}, limit {}", expiredPartitions.size(), limit);
     return expiredPartitions.stream()
         .limit(limit) // Avoid a single replace commit too large
         .collect(Collectors.toList());
@@ -69,7 +68,7 @@ public class KeepByTimeStrategy extends PartitionTTLStrategy {
   protected List<String> getExpiredPartitionsForTimeStrategy(List<String> partitionsForTTLManagement) {
     HoodieTimer timer = HoodieTimer.start();
     Map<String, Option<String>> lastCommitTimeForPartitions = getLastCommitTimeForPartitions(partitionsForTTLManagement);
-    LOG.info("Collect last commit time for partitions cost {} ms", timer.endTimer());
+    log.info("Collect last commit time for partitions cost {} ms", timer.endTimer());
     return lastCommitTimeForPartitions.entrySet()
         .stream()
         .filter(entry -> entry.getValue().isPresent())
@@ -82,7 +81,11 @@ public class KeepByTimeStrategy extends PartitionTTLStrategy {
    * @param partitionPaths Partitions to collect stats.
    */
   private Map<String, Option<String>> getLastCommitTimeForPartitions(List<String> partitionPaths) {
-    int statsParallelism = Math.min(partitionPaths.size(), 200);
+    if (partitionPaths.isEmpty()) {
+      log.info("Candidate partition paths list is empty, skip TTL stats collection");
+      return Collections.emptyMap();
+    }
+    int statsParallelism = Math.min(partitionPaths.size(), writeConfig.getPartitionTTLStatsMaxParallelism());
     return hoodieTable.getContext().map(partitionPaths, partitionPath -> {
       Option<String> partitionLastModifiedTime = hoodieTable.getHoodieView()
           .getLatestFileSlicesBeforeOrOn(partitionPath, instantTime, true)

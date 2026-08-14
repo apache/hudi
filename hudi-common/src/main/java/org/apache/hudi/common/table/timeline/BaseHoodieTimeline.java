@@ -27,6 +27,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.Getter;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
@@ -60,6 +62,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
 
   private static final String HASHING_ALGORITHM = "SHA-256";
 
+  @Getter
   protected transient HoodieInstantReader instantReader;
   private List<HoodieInstant> instants;
   // for efficient #contains queries.
@@ -70,6 +73,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   private transient volatile Option<HoodieInstant> firstNonSavepointCommit;
   // for efficient #isBeforeTimelineStartsByCompletionTime
   private transient volatile Option<HoodieInstant> firstNonSavepointCommitByCompletionTime;
+  @Getter
   private String timelineHash;
 
   protected TimelineFactory factory;
@@ -112,6 +116,22 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
     this.instants = mergeInstants(newInstants, this.instants);
     this.timelineHash = computeTimelineHash(this.instants);
     clearState();
+  }
+
+  /**
+   * Helper method to append loaded instants to the timeline, filtering out duplicates.
+   * This is used by both time-range and limit-based loading to avoid code duplication.
+   *
+   * @param loadedInstants The list of instants that were loaded to readCommit field of timeline
+   */
+  protected void appendLoadedInstants(List<HoodieInstant> loadedInstants) {
+    List<HoodieInstant> existingInstants = getInstants();
+    List<HoodieInstant> newInstants = loadedInstants.stream()
+        .filter(instant -> !existingInstants.contains(instant))
+        .collect(Collectors.toList());
+    if (!newInstants.isEmpty()) {
+      appendInstants(newInstants);
+    }
   }
 
   protected List<HoodieInstant> getInstantsFromFileSystem(HoodieTableMetaClient metaClient, Set<String> includedExtensions, boolean applyLayoutFilters) {
@@ -277,6 +297,17 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline findInstantsModifiedBeforeOrEqualsByCompletionTime(String instantTime) {
+    return factory.createDefaultTimeline(instants.stream()
+            // completed instants with completionTime <= instantTime or matching requestedTime,
+            // or pending instants with requestedTime <= instantTime
+            .filter(s -> (s.getCompletionTime() != null
+                    && (compareTimestamps(s.getCompletionTime(), LESSER_THAN_OR_EQUALS, instantTime) || s.requestedTime().equals(instantTime)))
+                || (s.getCompletionTime() == null && compareTimestamps(s.requestedTime(), LESSER_THAN_OR_EQUALS, instantTime))),
+        getInstantReader());
+  }
+
+  @Override
   public HoodieTimeline findInstantsAfter(String instantTime, int numCommits) {
     return factory.createDefaultTimeline(getInstantsAsStream()
             .filter(s -> compareTimestamps(s.requestedTime(), GREATER_THAN, instantTime)).limit(numCommits),
@@ -347,7 +378,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION,
         CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION,
-        INDEXING_ACTION, LOG_COMPACTION_ACTION));
+        INDEXING_ACTION, LOG_COMPACTION_ACTION, RESTORE_ACTION));
   }
 
   @Override
@@ -466,11 +497,6 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   @Override
   public boolean containsOrBeforeTimelineStarts(String instant) {
     return containsInstant(instant) || isBeforeTimelineStarts(instant);
-  }
-
-  @Override
-  public String getTimelineHash() {
-    return timelineHash;
   }
 
   @Override
@@ -636,10 +662,6 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
       throw new HoodieException(nse);
     }
     return StringUtils.toHexString(md.digest());
-  }
-
-  public HoodieInstantReader getInstantReader() {
-    return instantReader;
   }
 
   /**

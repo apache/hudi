@@ -49,6 +49,14 @@ public class TestPartitionValueExtractor {
     assertThrows(
         IllegalArgumentException.class,
         () -> hiveStylePartition.extractPartitionValuesInPath("2021/04/02"));
+    // Only the first '=' is the separator, so a value containing '=' is preserved.
+    assertEquals(
+        Collections.singletonList("a=b=c"),
+        hiveStylePartition.extractPartitionValuesInPath("k=a=b=c"));
+    // base64-encoded value with '=' padding must not be truncated
+    assertEquals(
+        Collections.singletonList("YWJjZA=="),
+        hiveStylePartition.extractPartitionValuesInPath("col=YWJjZA=="));
   }
 
   @Test

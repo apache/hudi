@@ -21,6 +21,7 @@ package org.apache.hudi.functional.cdc
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
@@ -32,7 +33,7 @@ import org.apache.hudi.exception.HoodieException
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.{Row, SaveMode}
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, IntegerType, LongType, MapType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -81,7 +82,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     metaClient = createMetaClient(spark, basePath)
 
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val dataSchema = schemaResolver.getTableAvroSchema(false)
+    val dataSchema = schemaResolver.getTableSchema(false)
     val cdcSchema = schemaBySupplementalLoggingMode(loggingMode, dataSchema)
 
     totalInsertedCnt += 100
@@ -89,7 +90,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // all the data is new-coming, it will write out cdc log files.
     assertFalse(hasCDCLogFile(instant1))
     val commitTime1 = instant1.requestedTime
-    val cdcDataOnly1 = cdcDataFrame((commitTime1.toLong - 1).toString)
+    val cdcDataOnly1 = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(cdcDataOnly1, 100, 0, 0)
 
     // Upsert Operation
@@ -117,7 +118,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // at the last commit, 100 records are inserted.
     val insertedCnt2 = currentSnapshotData.count() - 100
     val updatedCnt2 = 50 - insertedCnt2
-    val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
+    val cdcDataOnly2 = cdcDataFrame(instantBefore(commitTime2))
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
     totalUpdatedCnt += updatedCnt2
     totalInsertedCnt += insertedCnt2
@@ -144,7 +145,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalDeletedCnt += 20
 
     // all the change data  in the range [commitTime1, commitTime3]
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // check both starting and ending are provided
@@ -165,15 +166,15 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // it will NOT write out cdc log files
     assertFalse(hasCDCLogFile(instant4))
     val commitTime4 = instant4.requestedTime
-    val cdcDataOnly4 = cdcDataFrame((commitTime4.toLong - 1).toString)
+    val cdcDataOnly4 = cdcDataFrame(instantBefore(commitTime4))
     val insertedCnt4 = 50
     val deletedCnt4 = currentSnapshotData.count()
     assertCDCOpCnt(cdcDataOnly4, insertedCnt4, 0, deletedCnt4)
     totalInsertedCnt += insertedCnt4
     totalDeletedCnt += deletedCnt4
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
-    val cdcDataOrdered = cdcDataFrame((commitTime1.toLong - 1).toString).orderBy("ts_ms")
+    val cdcDataOrdered = cdcDataFrame(instantBefore(commitTime1)).orderBy("ts_ms")
     assertCDCOpCnt(cdcDataOrdered, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
     assertEquals(allVisibleCDCData.collect().length, cdcDataOrdered.collect().length)
 
@@ -204,7 +205,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .save(basePath)
     val instant7 = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant().get()
     // part of data are updated, it will write out cdc log files.
-    val cdcDataOnly7 = cdcDataFrame((instant7.requestedTime.toLong - 1).toString)
+    val cdcDataOnly7 = cdcDataFrame(instantBefore(instant7.requestedTime))
     val currentData = spark.read.format("hudi").load(basePath)
     val insertedCnt7 = currentData.count() - 60
     val updatedCnt7 = 30 - insertedCnt7
@@ -215,7 +216,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalInsertedCnt = 60 + insertedCnt7
     totalUpdatedCnt = updatedCnt7
     totalDeletedCnt = 0
-    allVisibleCDCData = cdcDataFrame((commitTime4.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime4))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Bulk_Insert Operation With Clean Operation
@@ -232,15 +233,15 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // it will NOT write out cdc log files
     assertFalse(hasCDCLogFile(instant8))
     val commitTime8 = instant8.requestedTime
-    val cdcDataOnly8 = cdcDataFrame((commitTime8.toLong - 1).toString)
+    val cdcDataOnly8 = cdcDataFrame(instantBefore(commitTime8))
     assertCDCOpCnt(cdcDataOnly8, 20, 0, 0)
     totalInsertedCnt += 20
-    allVisibleCDCData = cdcDataFrame((commitTime4.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime4))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // test start commit time in archived timeline. cdc query should fail
     assertThrows(classOf[HoodieException], () => {
-      cdcDataFrame((commitTime1.toLong - 1).toString)
+      cdcDataFrame(instantBefore(commitTime1))
     })
   }
 
@@ -278,7 +279,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     metaClient = createMetaClient(spark, basePath)
 
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val dataSchema = schemaResolver.getTableAvroSchema(false)
+    val dataSchema = schemaResolver.getTableSchema(false)
     val cdcSchema = schemaBySupplementalLoggingMode(loggingMode, dataSchema)
 
     totalInsertedCnt += 100
@@ -286,7 +287,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // all the data is new-coming, it will write out cdc log files.
     assertFalse(hasCDCLogFile(instant1))
     val commitTime1 = instant1.requestedTime
-    val cdcDataOnly1 = cdcDataFrame((commitTime1.toLong - 1).toString)
+    val cdcDataOnly1 = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(cdcDataOnly1, 100, 0, 0)
 
     // 2. Upsert Operation
@@ -313,7 +314,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // at the last commit, 100 records are inserted.
     val insertedCnt2 = currentSnapshotData.count() - 100
     val updatedCnt2 = 50 - insertedCnt2
-    val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
+    val cdcDataOnly2 = cdcDataFrame(instantBefore(commitTime2))
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
     totalUpdatedCnt += updatedCnt2
     totalInsertedCnt += insertedCnt2
@@ -340,7 +341,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     totalDeletedCnt += 20
     // all the change data  in the range [commitTime1, commitTime3]
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // 4. Bulk_Insert Operation
@@ -358,14 +359,14 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertFalse(hasCDCLogFile(instant4))
     val commitTime4 = instant4.requestedTime
     val cntForInstant4 = spark.read.format("hudi").load(basePath).count()
-    val cdcDataOnly4 = cdcDataFrame((commitTime4.toLong - 1).toString)
+    val cdcDataOnly4 = cdcDataFrame(instantBefore(commitTime4))
     val insertedCnt4 = 100
     assertCDCOpCnt(cdcDataOnly4, insertedCnt4, 0, 0)
 
     totalInsertedCnt += insertedCnt4
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
-    val cdcDataOrdered = cdcDataFrame((commitTime1.toLong - 1).toString).orderBy("ts_ms")
+    val cdcDataOrdered = cdcDataFrame(instantBefore(commitTime1)).orderBy("ts_ms")
     assertCDCOpCnt(cdcDataOrdered, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
     assertEquals(allVisibleCDCData.collect().length, cdcDataOrdered.collect().length)
 
@@ -393,7 +394,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     totalInsertedCnt += insertedCnt5
     totalUpdatedCnt += updatedCnt5
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // check both starting and ending are provided
@@ -416,11 +417,11 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertFalse(hasCDCLogFile(instant6))
     val commitTime6 = instant6.requestedTime
     val cntForInstant6 = spark.read.format("hudi").load(basePath).count()
-    val cdcDataOnly6 = cdcDataFrame((commitTime6.toLong - 1).toString)
+    val cdcDataOnly6 = cdcDataFrame(instantBefore(commitTime6))
     assertCDCOpCnt(cdcDataOnly6, 70, 0, cntForInstant5)
     totalInsertedCnt += 70
     totalDeletedCnt += cntForInstant5
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // 7,8. insert 10 records
@@ -466,7 +467,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val updatedCnt9 = 30 - insertedCnt9
     assertCDCOpCnt(cdcDataOnly9, insertedCnt9, updatedCnt9, 0)
 
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt + 30, totalDeletedCnt)
   }
 
@@ -514,7 +515,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // all the data is new-coming, it will write out cdc log files.
     assertFalse(hasCDCLogFile(instant1))
     val commitTime1 = instant1.requestedTime
-    val cdcDataOnly1 = cdcDataFrame((commitTime1.toLong - 1).toString)
+    val cdcDataOnly1 = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(cdcDataOnly1, 100, 0, 0)
 
     // Insert Overwrite Partition Operation
@@ -533,12 +534,12 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val commitTime2 = instant2.requestedTime
     val insertedCnt2 = 30
     val deletedCnt2 = partitionToCnt(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
-    val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
+    val cdcDataOnly2 = cdcDataFrame(instantBefore(commitTime2))
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, 0, deletedCnt2)
 
     totalInsertedCnt += insertedCnt2
     totalDeletedCnt += deletedCnt2
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Drop Partition
@@ -556,13 +557,13 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val cntForInstant3 = spark.read.format("hudi").load(basePath).count()
     // here we use `commitTime2` to query the change data in commit 3.
     // because `commitTime3` is the ts of the clustering operation, not the delete operation.
-    val cdcDataOnly3 = cdcDataFrame((commitTime3.toLong - 1).toString)
+    val cdcDataOnly3 = cdcDataFrame(instantBefore(commitTime3))
     val deletedCnt3 = partitionToCnt(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
     assertCDCOpCnt(cdcDataOnly3, 0, 0, deletedCnt3)
 
     totalDeletedCnt += deletedCnt3
     // all the change data  in the range [commitTime1, commitTime3]
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Upsert Operation
@@ -575,18 +576,18 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val instant4 = metaClient.reloadActiveTimeline.lastInstant().get()
     val commitTime4 = instant4.requestedTime
     val cntForInstant4 = spark.read.format("hudi").load(basePath).count()
-    val cdcDataOnly4 = cdcDataFrame((commitTime4.toLong - 1).toString)
+    val cdcDataOnly4 = cdcDataFrame(instantBefore(commitTime4))
     val insertedCnt4 = cntForInstant4 - cntForInstant3
     val updatedCnt4 = 50 - insertedCnt4
     assertCDCOpCnt(cdcDataOnly4, insertedCnt4, updatedCnt4, 0)
 
     totalInsertedCnt += insertedCnt4
     totalUpdatedCnt += updatedCnt4
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame(instantBefore(commitTime1))
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // check both starting and ending are provided
-    val cdcDataFrom2To3 = cdcDataFrame((commitTime2.toLong - 1).toString, commitTime3)
+    val cdcDataFrom2To3 = cdcDataFrame(instantBefore(commitTime2), commitTime3)
     assertCDCOpCnt(cdcDataFrom2To3, insertedCnt2, 0, deletedCnt2 + deletedCnt3)
   }
 
@@ -618,7 +619,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     metaClient = createMetaClient(spark, basePath)
 
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val dataSchema = schemaResolver.getTableAvroSchema(false)
+    val dataSchema = schemaResolver.getTableSchema(false)
     val cdcSchema = schemaBySupplementalLoggingMode(loggingMode, dataSchema)
 
     // Upsert Operation
@@ -645,7 +646,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // at the last commit, 100 records are inserted.
     val insertedCnt2 = currentSnapshotData.count() - 100
     val updatedCnt2 = 50 - insertedCnt2
-    val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
+    val cdcDataOnly2 = cdcDataFrame(instantBefore(commitTime2))
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
   }
 
@@ -825,7 +826,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.read.end.instanttime", startTimeStamp)
         .option("hoodie.datasource.query.incremental.format", "cdc")
         .load(basePath)
-      result1.show(false)
+      result1.collect()
       assertCDCOpCnt(result1, 1, 0, 0)
       assertEquals(result1.count(), 1)
 
@@ -835,7 +836,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.read.end.instanttime", latestTimeStamp)
         .option("hoodie.datasource.query.incremental.format", "cdc")
         .load(basePath)
-      result2.show(false)
+      result2.collect()
       assertCDCOpCnt(result2, 2, 1, 0)
       assertEquals(result2.count(), 3)
 
@@ -845,8 +846,178 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.read.end.instanttime", latestTimeStamp)
         .option("hoodie.datasource.query.incremental.format", "cdc")
         .load(basePath)
-      result3.show(false)
+      result3.collect()
       assertCDCOpCnt(result3, 3, 1, 0)
       assertEquals(result3.count(), 4)
     }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "COPY_ON_WRITE,data_before_after", "MERGE_ON_READ,data_before_after",
+    "COPY_ON_WRITE,data_before", "MERGE_ON_READ,data_before",
+    "COPY_ON_WRITE,op_key_only", "MERGE_ON_READ,op_key_only"))
+  def testCDCWithComplexDataTypes(tableType: String, loggingMode: String): Unit = {
+    // Create a schema with complex data types
+    val complexSchema = StructType(Seq(
+      StructField("_row_key", StringType, nullable = false),
+      StructField("timestamp", LongType, nullable = false),
+      StructField("simple_field", StringType, nullable = true),
+      StructField("array_field", ArrayType(IntegerType), nullable = true),
+      StructField("map_field", MapType(StringType, StringType), nullable = true),
+      StructField("struct_field", StructType(Seq(
+        StructField("name", StringType, nullable = true),
+        StructField("age", IntegerType, nullable = true)
+      )), nullable = true)
+    ))
+    val options = commonOpts ++ Map(
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode,
+      DataSourceWriteOptions.TABLE_TYPE.key() -> tableType,
+      "hoodie.table.name" -> "test_complex_data_types"
+    )
+
+    // Create initial data with complex types
+    val initialData = spark.createDataFrame(spark.sparkContext.parallelize(Seq(
+      Row("key1", 1001L, "value1", Array(1, 2, 3), Map("key1" -> "val1", "key2" -> "val2"), Row("John", 30)),
+      Row("key2", 1002L, "value2", Array(4, 5, 6), Map("key3" -> "val3", "key4" -> "val4"), Row("Jane", 25))
+    )), complexSchema)
+
+    // Write initial data
+    initialData.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = createMetaClient(spark, basePath)
+
+    // Get the first commit time
+    val instant1 = metaClient.reloadActiveTimeline.lastInstant().get()
+    val commitTime1 = instant1.requestedTime
+
+    // Verify initial CDC data
+    val cdcData1 = cdcDataFrame(instantBefore(commitTime1))
+    assertEquals(2, cdcData1.count())
+    assertCDCOpCnt(cdcData1, 2, 0, 0)
+
+    // Check that complex data types are properly serialized in CDC data
+    val cdcRows = cdcData1.collect()
+    cdcRows.foreach { row =>
+      val afterJson = row.getAs[String]("after").replace(" ", "")
+      assertTrue(afterJson != null)
+      if (afterJson.contains(""""_row_key":"key1"""")) {
+        assertTrue(afterJson.contains(""""array_field":[1,2,3]"""), s"Expected array field in: $afterJson")
+        assertTrue(afterJson.contains(""""map_field":{"key1":"val1","key2":"val2"}"""), s"Expected map field in: $afterJson")
+        assertTrue(afterJson.contains(""""struct_field":{"name":"John","age":30}"""), s"Expected struct field in: $afterJson")
+      } else if (afterJson.contains(""""_row_key":"key2"""")) {
+        assertTrue(afterJson.contains(""""array_field":[4,5,6]"""), s"Expected array field in: $afterJson")
+        assertTrue(afterJson.contains(""""map_field":{"key3":"val3","key4":"val4"}"""), s"Expected map field in: $afterJson")
+        assertTrue(afterJson.contains(""""struct_field":{"name":"Jane","age":25}"""), s"Expected struct field in: $afterJson")
+      }
+    }
+
+    // Upsert with updated complex data
+    val updatedData = spark.createDataFrame(spark.sparkContext.parallelize(Seq(
+      Row("key1", 1005L, "updated_value1", Array(7, 8, 9), Map("key5" -> "val5", "key6" -> "val6"), Row("Jack", 35)),
+      Row("key3", 1001L, "value3", Array(10, 11), Map("key7" -> "val7"), Row("Bob", 40))
+    )), complexSchema)
+
+    // Write updated data
+    updatedData.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val instant2 = metaClient.reloadActiveTimeline.lastInstant().get()
+    val commitTime2 = instant2.requestedTime
+
+    // Check CDC data for upsert operation
+    val cdcData2 = cdcDataFrame(commitTime1)
+    val updatedCnt = cdcData2.collect().count(r => r.getAs[String]("op") == "u")
+    val insertedCnt = cdcData2.collect().count(r => r.getAs[String]("op") == "i")
+
+    assertTrue(updatedCnt >= 1, s"Expected at least 1 update operation, got $updatedCnt")
+    assertTrue(insertedCnt >= 1, s"Expected at least 1 insert operation, got $insertedCnt")
+
+    // Verify that CDC data contains properly formatted complex data types
+    val allCDCData = cdcDataFrame(instantBefore(commitTime2))
+    val allRows = allCDCData.collect()
+
+    // Look for the updated record in CDC
+    val updatedRecordFound = allRows.exists { row =>
+      val afterJson = row.getAs[String]("after").replace(" ", "")
+      afterJson != null && afterJson.contains(""""simple_field":"updated_value1"""") &&
+        afterJson.contains(""""array_field":[7,8,9]""") &&
+        afterJson.contains(""""map_field":{"key5":"val5","key6":"val6"}""") &&
+        afterJson.contains(""""struct_field":{"name":"Jack","age":35}""")
+    }
+    assertTrue(updatedRecordFound, "Should have found the updated record with complex data types in CDC")
+
+    // Look for the new record in CDC
+    val newRecordFound = allRows.exists { row =>
+      val afterJson = row.getAs[String]("after").replace(" ", "")
+      afterJson != null && afterJson.contains(""""simple_field":"value3""") &&
+        afterJson.contains(""""array_field":[10,11]""") &&
+        afterJson.contains(""""map_field":{"key7":"val7"}""") &&
+        afterJson.contains(""""struct_field":{"name":"Bob","age":40}""")
+    }
+    assertTrue(newRecordFound, "Should have found the new record with complex data types in CDC")
+  }
+
+  /**
+   * Regression test for HUDI-14363: the CDC incremental query must produce before/after images
+   * that contain only business columns, never the _hoodie_* meta columns. Before the fix, images
+   * inferred directly from base/log data files (e.g. the BASE_FILE_INSERT case, which is hit by an
+   * insert-only commit that writes no CDC log file) leaked the meta columns, while images served
+   * from the supplemental CDC log did not - producing an inconsistent, alternating-per-commit
+   * schema. This reproduces the reporter's scenario (MOR + inline compaction every delta commit +
+   * upsert inserts) and asserts no image carries meta fields for any supplemental logging mode.
+   */
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def testCDCImagesExcludeHoodieMetaFields(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
+    val options = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key() -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode.name(),
+      "hoodie.compact.inline" -> "true",
+      "hoodie.compact.inline.max.delta.commits" -> "1"
+    )
+
+    // 1. Insert - this commit writes no CDC log file, so its change data is inferred from the base
+    // file via the BASE_FILE_INSERT case (the path that previously leaked _hoodie_* meta columns).
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    spark.read.json(spark.sparkContext.parallelize(records1, 2))
+      .write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = createMetaClient(spark, basePath)
+    val instant1 = metaClient.reloadActiveTimeline.lastInstant().get()
+    assertFalse(hasCDCLogFile(instant1))
+    val commitTime1 = instant1.requestedTime
+
+    // 2. Upsert (updates + new inserts) - exercises the supplemental CDC log (AS_IS) path too.
+    val updates = recordsToStrings(dataGen.generateUniqueUpdates("001", 30)).asScala.toList
+    val inserts = recordsToStrings(dataGen.generateInserts("001", 20)).asScala.toList
+    spark.read.json(spark.sparkContext.parallelize(updates ++ inserts, 2))
+      .write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Read all change data and assert no before/after image contains a Hudi meta column. Note we
+    // check the actual meta-column names rather than the "_hoodie_" prefix: _hoodie_is_deleted is a
+    // business/payload field (the soft-delete marker carried in the record schema), not a meta
+    // column, so it is expected to remain in the image.
+    val allCDCData = cdcDataFrame(instantBefore(commitTime1)).collect()
+    assertTrue(allCDCData.nonEmpty, "Expected some CDC rows")
+    allCDCData.foreach { row =>
+      Seq("before", "after").foreach { col =>
+        val json = row.getAs[String](col)
+        if (json != null) {
+          HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.asScala.foreach { metaCol =>
+            assertFalse(json.contains(metaCol),
+              s"$col image should not contain meta column $metaCol, but was: $json")
+          }
+        }
+      }
+    }
+  }
 }

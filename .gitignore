@@ -3,7 +3,17 @@
 target/
 metastore_db/
 .metals/
+# Track the repo-root .mvn/extensions.xml: that directory must exist for
+# maven.multiModuleProjectDirectory to resolve to the repo root when a build runs from inside a
+# submodule (HUDI-6111).
+# Keep the un-anchored `.mvn/` entry. A pattern containing a slash is anchored to this file's
+# directory, so narrowing it to `.mvn/*` would stop matching nested .mvn directories -- and
+# apache-rat reads .gitignore, so that un-hides hudi-trino/.mvn/modernizer/*.xml, which are tracked
+# without ASF headers, and validate-source fails.
 .mvn/
+!/.mvn/
+/.mvn/*
+!/.mvn/extensions.xml
 *.bloop/
 *.vscode/
 *.metals/
@@ -91,4 +101,14 @@ package-lock.json
 # Spark Binaries used for testing
 hudi-spark-datasource/hudi-spark/src/test/resources/upgrade-downgrade-fixtures/spark-versions/
 
+#######################################
+# AI Tools
+#######################################
 CLAUDE.md
+.claude
+.codex
+
+#######################################
+# Python virtual environments
+#######################################
+.venv/

@@ -27,13 +27,13 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.curator.retry.BoundedExponentialBackoffRetry;
 import org.apache.zookeeper.KeeperException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -53,11 +53,11 @@ import static org.apache.hudi.config.HoodieLockConfig.ZK_SESSION_TIMEOUT_MS;
  * using zookeeper. Users need to have a Zookeeper cluster deployed to be able to use this lock.
  */
 @NotThreadSafe
+@Slf4j
 public abstract class BaseZookeeperBasedLockProvider implements LockProvider<InterProcessMutex>, Serializable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BaseZookeeperBasedLockProvider.class);
-
   private final transient CuratorFramework curatorFrameworkClient;
+  @Getter
   private volatile InterProcessMutex lock = null;
   protected final LockConfiguration lockConfiguration;
   protected final String zkBasePath;
@@ -68,6 +68,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
     this.lockConfiguration = lockConfiguration;
     zkBasePath = getZkBasePath(lockConfiguration);
     lockKey = getLockKey(lockConfiguration);
+    int connectionTimeoutMs = ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), ZK_CONNECTION_TIMEOUT_MS);
     this.curatorFrameworkClient = CuratorFrameworkFactory.builder()
         .connectString(ConfigUtils.getStringWithAltKeys(lockConfiguration.getConfig(), ZK_CONNECT_URL))
         .retryPolicy(new BoundedExponentialBackoffRetry(
@@ -75,10 +76,32 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
             ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS),
             ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), LOCK_ACQUIRE_NUM_RETRIES)))
         .sessionTimeoutMs(ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), ZK_SESSION_TIMEOUT_MS))
-        .connectionTimeoutMs(ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), ZK_CONNECTION_TIMEOUT_MS))
+        .connectionTimeoutMs(connectionTimeoutMs)
         .build();
     this.curatorFrameworkClient.start();
-    createPathIfNotExists();
+    // Once started, the Curator client owns background threads. If anything below throws, the
+    // constructor never returns the instance, so the caller can never invoke close() - clean up here.
+    try {
+      if (!this.curatorFrameworkClient.blockUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)) {
+        throw new HoodieLockException("Failed to connect to ZooKeeper within " + connectionTimeoutMs + " ms");
+      }
+      createPathIfNotExists();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      closeQuietly();
+      throw new HoodieLockException("Interrupted while waiting to connect to ZooKeeper", e);
+    } catch (RuntimeException e) {
+      closeQuietly();
+      throw e;
+    }
+  }
+
+  private void closeQuietly() {
+    try {
+      this.curatorFrameworkClient.close();
+    } catch (Exception ex) {
+      log.warn("Failed to close ZooKeeper client after failed initialization", ex);
+    }
   }
 
   protected abstract String getZkBasePath(LockConfiguration lockConfiguration);
@@ -96,7 +119,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
   private void createPathIfNotExists() {
     try {
       String lockPath = getLockPath();
-      LOG.info("Creating zookeeper path {} if not exists", lockPath);
+      log.info("Creating zookeeper path {} if not exists", lockPath);
       String[] parts = lockPath.split("/");
       StringBuilder currentPath = new StringBuilder();
       for (String part : parts) {
@@ -106,7 +129,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
         }
       }
     } catch (Exception e) {
-      LOG.error("Failed to create ZooKeeper path", e);
+      log.error("Failed to create ZooKeeper path", e);
       throw new HoodieLockException("Failed to initialize ZooKeeper path", e);
     }
   }
@@ -118,7 +141,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
         // to avoid failure due to synchronous calls.
       } catch (KeeperException e) {
         if (e.code() == KeeperException.Code.NODEEXISTS) {
-          LOG.debug("Node already exist for path = {}", path);
+          log.debug("Node already exist for path = {}", path);
         } else {
           throw new HoodieLockException("Failed to create zookeeper node", e);
         }
@@ -128,10 +151,10 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
 
   @Override
   public boolean tryLock(long time, TimeUnit unit) {
-    LOG.info(generateLogStatement(LockState.ACQUIRING, generateLogSuffixString()));
+    log.info(generateLogStatement(LockState.ACQUIRING, generateLogSuffixString()));
     try {
       acquireLock(time, unit);
-      LOG.info(generateLogStatement(LockState.ACQUIRED, generateLogSuffixString()));
+      log.info(generateLogStatement(LockState.ACQUIRED, generateLogSuffixString()));
     } catch (HoodieLockException e) {
       throw e;
     } catch (Exception e) {
@@ -143,13 +166,13 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
   @Override
   public void unlock() {
     try {
-      LOG.info(generateLogStatement(LockState.RELEASING, generateLogSuffixString()));
+      log.info(generateLogStatement(LockState.RELEASING, generateLogSuffixString()));
       if (lock == null || !lock.isAcquiredInThisProcess()) {
         return;
       }
       lock.release();
       lock = null;
-      LOG.info(generateLogStatement(LockState.RELEASED, generateLogSuffixString()));
+      log.info(generateLogStatement(LockState.RELEASED, generateLogSuffixString()));
     } catch (Exception e) {
       throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()), e);
     }
@@ -164,19 +187,14 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
       }
       this.curatorFrameworkClient.close();
     } catch (Exception e) {
-      LOG.error(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
+      log.error(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
     }
-  }
-
-  @Override
-  public InterProcessMutex getLock() {
-    return this.lock;
   }
 
   private void acquireLock(long time, TimeUnit unit) throws Exception {
     ValidationUtils.checkArgument(this.lock == null, generateLogStatement(LockState.ALREADY_ACQUIRED, generateLogSuffixString()));
-    InterProcessMutex newLock = new InterProcessMutex(
-        this.curatorFrameworkClient, getLockPath());
+    InterProcessMutex newLock = new HoodieInterProcessMutex(
+        this.curatorFrameworkClient, getLockPath(), this.lockConfiguration);
     boolean acquired = newLock.acquire(time, unit);
     if (!acquired) {
       throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE, generateLogSuffixString()));

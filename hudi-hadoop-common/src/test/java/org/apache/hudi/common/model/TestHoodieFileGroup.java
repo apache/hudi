@@ -19,9 +19,9 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
-import org.apache.hudi.common.table.timeline.versioning.v2.CompletionTimeQueryViewV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.v2.CompletionTimeQueryViewV2;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -62,7 +62,7 @@ public class TestHoodieFileGroup {
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data",
         activeTimeline.getCommitsTimeline().filterCompletedInstants());
     for (int i = 0; i < 3; i++) {
-      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i);
+      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i + ".parquet");
       fileGroup.addBaseFile(baseFile);
     }
     assertEquals(2, fileGroup.getAllFileSlices().count());
@@ -84,7 +84,7 @@ public class TestHoodieFileGroup {
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data",
         activeTimeline.getCommitsTimeline().filterCompletedInstants());
     for (int i = 0; i < 3; i++) {
-      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i);
+      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i + ".parquet");
       fileGroup.addBaseFile(baseFile);
       fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(preTableVersion8 ? "001" : "00" + i, "data", i))));
     }
@@ -105,7 +105,7 @@ public class TestHoodieFileGroup {
     ).collect(Collectors.toList()));
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
     for (int i = 0; i < 7; i++) {
-      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_0" + i);
+      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_0" + i + ".parquet");
       fileGroup.addBaseFile(baseFile);
     }
     List<FileSlice> allFileSlices = fileGroup.getAllFileSlices().collect(Collectors.toList());

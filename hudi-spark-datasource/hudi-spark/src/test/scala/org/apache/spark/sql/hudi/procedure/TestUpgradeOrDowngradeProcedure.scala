@@ -136,7 +136,9 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       }
       // verify hoodie.table.checksum is deleted from hoodie.properties
       metaClient = HoodieTableMetaClient.reload(metaClient)
-      assertResult(false) {metaClient.getTableConfig.contains(HoodieTableConfig.TABLE_CHECKSUM)}
+      assertResult(false) {
+        metaClient.getTableConfig.contains(HoodieTableConfig.TABLE_CHECKSUM)
+      }
       // upgrade table to SIX
       checkAnswer(s"""call upgrade_table(table => '$tableName', to_version => 'SIX')""")(Seq(true))
       metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -170,38 +172,40 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
            |  preCombineField = 'ts'
            | )
        """.stripMargin)
+      withSQLConf(
+        "hoodie.merge.small.file.group.candidates.limit" -> "0",
+        "hoodie.compact.inline" -> "true",
+        "hoodie.compact.inline.max.delta.commits" -> "4",
+        "hoodie.clean.commits.retained" -> "2",
+        "hoodie.keep.min.commits" -> "3",
+        "hoodie.keep.max.commits" -> "4",
+        "hoodie.metadata.record.index.enable" -> "true"
+      ) {
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a2' where id = 1")
+        spark.sql(s"update $tableName set name = 'a3' where id = 1")
 
-      spark.sql("set hoodie.merge.small.file.group.candidates.limit=0")
-      spark.sql("set hoodie.compact.inline=true")
-      spark.sql("set hoodie.compact.inline.max.delta.commits=4")
-      spark.sql("set hoodie.clean.commits.retained = 2")
-      spark.sql("set hoodie.keep.min.commits = 3")
-      spark.sql("set hoodie.keep.min.commits = 4")
-      spark.sql("set hoodie.metadata.record.index.enable = true")
-
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"update $tableName set name = 'a2' where id = 1")
-      spark.sql(s"update $tableName set name = 'a3' where id = 1")
-
-      var metaClient = createMetaClient(spark, tablePath)
-      val numCompactionInstants = metaClient.getActiveTimeline.filterCompletedOrMajorOrMinorCompactionInstants.countInstants
-      // Disabling record index should not affect downgrade
-      spark.sql("set hoodie.metadata.record.index.enable = false")
-      // downgrade table to version six
-      checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'SIX')""")(Seq(true))
-      metaClient = createMetaClient(spark, tablePath)
-      assertResult(numCompactionInstants + 1)(metaClient.getActiveTimeline.filterCompletedOrMajorOrMinorCompactionInstants.countInstants)
-      assertResult(HoodieTableVersion.SIX.versionCode) {
-        metaClient.getTableConfig.getTableVersion.versionCode()
+        var metaClient = createMetaClient(spark, tablePath)
+        val numCompactionInstants = metaClient.getActiveTimeline.filterCompletedOrMajorOrMinorCompactionInstants.countInstants
+        // Disabling record index should not affect downgrade
+        withSQLConf("hoodie.metadata.record.index.enable" -> "false") {
+          // downgrade table to version six
+          checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'SIX')""")(Seq(true))
+          metaClient = createMetaClient(spark, tablePath)
+          assertResult(numCompactionInstants + 1)(metaClient.getActiveTimeline.filterCompletedOrMajorOrMinorCompactionInstants.countInstants)
+          assertResult(HoodieTableVersion.SIX.versionCode) {
+            metaClient.getTableConfig.getTableVersion.versionCode()
+          }
+          // Verify whether the naming format of instant files is consistent with 0.x
+          metaClient.reloadActiveTimeline().getInstants.iterator().asScala.forall(f => NAME_FORMAT_0_X.matcher(INSTANT_FILE_NAME_GENERATOR.getFileName(f)).find())
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a3", 10.0, 1000)
+          )
+          // Ensure files and record index partition are available after downgrade
+          assertTrue(metaClient.getTableConfig.isMetadataTableAvailable)
+          assertTrue(metaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX))
+        }
       }
-      // Verify whether the naming format of instant files is consistent with 0.x
-      metaClient.reloadActiveTimeline().getInstants.iterator().asScala.forall(f => NAME_FORMAT_0_X.matcher(INSTANT_FILE_NAME_GENERATOR.getFileName(f)).find())
-      checkAnswer(s"select id, name, price, ts from $tableName")(
-        Seq(1, "a3", 10.0, 1000)
-      )
-      // Ensure files and record index partition are available after downgrade
-      assertTrue(metaClient.getTableConfig.isMetadataTableAvailable)
-      assertTrue(metaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX))
     }
   }
 

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -34,22 +33,24 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -109,11 +110,14 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     Files.createDirectories(Paths.get(partitionPath));
     storage = HoodieStorageUtils.getStorage(tablePath, storageConf());
 
-    try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new StoragePath(partitionPath))
+    try (HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+        .withParentPath(new StoragePath(partitionPath))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-log-fileid1").withInstantTime("100").withStorage(storage)
-        .withSizeThreshold(1).build()) {
+        .withLogFileId("test-log-fileid1")
+        .withInstantTime("100")
+        .withStorage(storage)
+        .withSizeThreshold(1L)
+        .build()) {
 
       // write data to file
       List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(0, 100).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
@@ -199,20 +203,18 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     HoodieTestCommitMetadataGenerator.createCommitFile(tablePath, INSTANT_TIME, HoodieCLI.conf);
 
     // write to path '2015/03/16'.
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     partitionPath = tablePath + StoragePath.SEPARATOR + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
     Files.createDirectories(Paths.get(partitionPath));
 
-    HoodieLogFormat.Writer writer = null;
-    try {
-      // set little threshold to split file.
-      writer =
-          HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionPath))
-              .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-              .withFileId("test-log-fileid1").withInstantTime(INSTANT_TIME).withStorage(
-                  storage)
-              .withSizeThreshold(500).build();
-
+    try (HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+        .withParentPath(new StoragePath(partitionPath))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogFileId("test-log-fileid1")
+        .withInstantTime(INSTANT_TIME)
+        .withStorage(storage)
+        .withSizeThreshold(500L) // set little threshold to split file.
+        .build()) {
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<HoodieRecord> records1 = testUtil.generateHoodieTestRecords(0, 100).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
@@ -220,10 +222,6 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
       HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       writer.appendBlock(dataBlock);
-    } finally {
-      if (writer != null) {
-        writer.close();
-      }
     }
 
     Object result = shell.evaluate(() -> "show logfile records --logFilePathPattern "
@@ -249,7 +247,6 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
         .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath())
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
-        .withOptimizedLogBlocksScan(Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()))
         .build();
 
     Iterator<HoodieRecord> records = scanner.iterator();
@@ -257,7 +254,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     int maxSize = 10;
     List<IndexedRecord> indexRecords = new ArrayList<>();
     while (records.hasNext() && num < maxSize) {
-      Option<IndexedRecord> hoodieRecord = ((HoodieAvroRecord)records.next()).getData().getInsertValue(schema);
+      Option<IndexedRecord> hoodieRecord = ((HoodieAvroRecord)records.next()).getData().getInsertValue(schema.toAvroSchema());
       indexRecords.add(hoodieRecord.get());
       num++;
     }

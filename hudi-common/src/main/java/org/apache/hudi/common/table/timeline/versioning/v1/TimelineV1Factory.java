@@ -60,6 +60,11 @@ public class TimelineV1Factory extends TimelineFactory {
   }
 
   @Override
+  public HoodieArchivedTimeline createArchivedTimeline(HoodieTableMetaClient metaClient, boolean shouldLoadInstants) {
+    return new ArchivedTimelineV1(metaClient, shouldLoadInstants);
+  }
+
+  @Override
   public ArchivedTimelineLoader createArchivedTimelineLoader() {
     return new ArchivedTimelineLoaderV1();
   }

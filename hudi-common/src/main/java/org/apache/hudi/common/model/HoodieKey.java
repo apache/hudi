@@ -18,8 +18,11 @@
 
 package org.apache.hudi.common.model;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.io.Serializable;
-import java.util.Objects;
 
 /**
  * HoodieKey consists of
@@ -36,57 +39,11 @@ import java.util.Objects;
  *
  *       Check out HUDI-5760 for more details
  */
+@AllArgsConstructor
+@NoArgsConstructor
+@Data
 public class HoodieKey implements Serializable {
 
   private String recordKey;
   private String partitionPath;
-
-  // Required for serializer
-  public HoodieKey() {
-  }
-
-  public HoodieKey(String recordKey, String partitionPath) {
-    this.recordKey = recordKey;
-    this.partitionPath = partitionPath;
-  }
-
-  public void setRecordKey(String recordKey) {
-    this.recordKey = recordKey;
-  }
-
-  public String getRecordKey() {
-    return recordKey;
-  }
-
-  public void setPartitionPath(String partitionPath) {
-    this.partitionPath = partitionPath;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    HoodieKey otherKey = (HoodieKey) o;
-    return Objects.equals(recordKey, otherKey.recordKey) && Objects.equals(partitionPath, otherKey.partitionPath);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(recordKey, partitionPath);
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieKey {" + " recordKey=" + recordKey
-        + " partitionPath=" + partitionPath
-        + '}';
-  }
 }

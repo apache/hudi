@@ -20,10 +20,10 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -58,8 +58,8 @@ public class TestHoodieTableSchemaEvolution {
   @Test
   public void testNoSecondaryIndexes() {
     // When there are no secondary indexes, any schema evolution should be allowed
-    Schema tableSchema = new Schema.Parser().parse(TABLE_SCHEMA);
-    Schema writerSchema = new Schema.Parser().parse(TABLE_SCHEMA.replace("\"age\", \"type\": \"int\"", "\"age\", \"type\": \"long\""));
+    HoodieSchema tableSchema = HoodieSchema.parse(TABLE_SCHEMA);
+    HoodieSchema writerSchema = HoodieSchema.parse(TABLE_SCHEMA.replace("\"age\", \"type\": \"int\"", "\"age\", \"type\": \"long\""));
     
     HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata(new HashMap<>());
     
@@ -70,8 +70,8 @@ public class TestHoodieTableSchemaEvolution {
   @Test
   public void testNoSchemaChange() {
     // When schema doesn't change, validation should pass even with secondary indexes
-    Schema tableSchema = new Schema.Parser().parse(TABLE_SCHEMA);
-    Schema writerSchema = new Schema.Parser().parse(TABLE_SCHEMA);
+    HoodieSchema tableSchema = HoodieSchema.parse(TABLE_SCHEMA);
+    HoodieSchema writerSchema = HoodieSchema.parse(TABLE_SCHEMA);
     
     HoodieIndexDefinition indexDef = createSecondaryIndexDefinition("secondary_index_age", "age");
     HoodieIndexMetadata indexMetadata = createIndexMetadata(indexDef);
@@ -83,8 +83,8 @@ public class TestHoodieTableSchemaEvolution {
   @Test
   public void testNonIndexedColumnEvolution() {
     // Evolution of non-indexed columns should be allowed
-    Schema tableSchema = new Schema.Parser().parse(TABLE_SCHEMA);
-    Schema writerSchema = new Schema.Parser().parse(TABLE_SCHEMA.replace("\"name\", \"type\": \"string\"", "\"name\", \"type\": [\"null\", \"string\"]"));
+    HoodieSchema tableSchema = HoodieSchema.parse(TABLE_SCHEMA);
+    HoodieSchema writerSchema = HoodieSchema.parse(TABLE_SCHEMA.replace("\"name\", \"type\": \"string\"", "\"name\", \"type\": [\"null\", \"string\"]"));
     
     HoodieIndexDefinition indexDef = createSecondaryIndexDefinition("secondary_index_age", "age");
     HoodieIndexMetadata indexMetadata = createIndexMetadata(indexDef);
@@ -101,8 +101,8 @@ public class TestHoodieTableSchemaEvolution {
     String evolvedSchema = TABLE_SCHEMA.replace("\"" + fieldName + "\", \"type\": \"" + originalType + "\"", 
                                                  "\"" + fieldName + "\", \"type\": \"" + evolvedType + "\"");
     
-    Schema tableSchema = new Schema.Parser().parse(originalSchema);
-    Schema writerSchema = new Schema.Parser().parse(evolvedSchema);
+    HoodieSchema tableSchema = HoodieSchema.parse(originalSchema);
+    HoodieSchema writerSchema = HoodieSchema.parse(evolvedSchema);
     
     HoodieIndexDefinition indexDef = createSecondaryIndexDefinition("secondary_index_" + fieldName, fieldName);
     HoodieIndexMetadata indexMetadata = createIndexMetadata(indexDef);
@@ -126,8 +126,8 @@ public class TestHoodieTableSchemaEvolution {
   @Test
   public void testMultipleIndexesOnSameColumn() {
     // When a column has multiple indexes, error should mention at least one
-    Schema tableSchema = new Schema.Parser().parse(TABLE_SCHEMA);
-    Schema writerSchema = new Schema.Parser().parse(TABLE_SCHEMA.replace("\"age\", \"type\": \"int\"", "\"age\", \"type\": \"long\""));
+    HoodieSchema tableSchema = HoodieSchema.parse(TABLE_SCHEMA);
+    HoodieSchema writerSchema = HoodieSchema.parse(TABLE_SCHEMA.replace("\"age\", \"type\": \"int\"", "\"age\", \"type\": \"long\""));
     
     HoodieIndexDefinition indexDef1 = createSecondaryIndexDefinition("secondary_index_age_1", "age");
     HoodieIndexDefinition indexDef2 = createSecondaryIndexDefinition("secondary_index_age_2", "age");
@@ -148,8 +148,8 @@ public class TestHoodieTableSchemaEvolution {
   @Test
   public void testCompoundIndex() {
     // Test index on multiple columns - if any column evolves, should fail
-    Schema tableSchema = new Schema.Parser().parse(TABLE_SCHEMA);
-    Schema writerSchema = new Schema.Parser().parse(TABLE_SCHEMA.replace("\"age\", \"type\": \"int\"", "\"age\", \"type\": \"long\""));
+    HoodieSchema tableSchema = HoodieSchema.parse(TABLE_SCHEMA);
+    HoodieSchema writerSchema = HoodieSchema.parse(TABLE_SCHEMA.replace("\"age\", \"type\": \"int\"", "\"age\", \"type\": \"long\""));
     
     HoodieIndexDefinition indexDef = createSecondaryIndexDefinition("secondary_index_compound", "name", "age");
     HoodieIndexMetadata indexMetadata = createIndexMetadata(indexDef);
@@ -180,8 +180,8 @@ public class TestHoodieTableSchemaEvolution {
         + "  {\"name\": \"new_name\", \"type\": \"string\"}"  // Field renamed using alias
         + "]}";
     
-    Schema tableSchema = new Schema.Parser().parse(tableSchemaStr);
-    Schema writerSchema = new Schema.Parser().parse(writerSchemaStr);
+    HoodieSchema tableSchema = HoodieSchema.parse(tableSchemaStr);
+    HoodieSchema writerSchema = HoodieSchema.parse(writerSchemaStr);
     
     HoodieIndexDefinition indexDef = createSecondaryIndexDefinition("secondary_index_name", "old_name");
     HoodieIndexMetadata indexMetadata = createIndexMetadata(indexDef);
@@ -197,8 +197,8 @@ public class TestHoodieTableSchemaEvolution {
     String evolvedSchema = TABLE_SCHEMA.replace("\"name\", \"type\": \"string\"", 
                                                  "\"name\", \"type\": [\"null\", \"string\"], \"default\": null");
     
-    Schema tableSchema = new Schema.Parser().parse(TABLE_SCHEMA);
-    Schema writerSchema = new Schema.Parser().parse(evolvedSchema);
+    HoodieSchema tableSchema = HoodieSchema.parse(TABLE_SCHEMA);
+    HoodieSchema writerSchema = HoodieSchema.parse(evolvedSchema);
     
     HoodieIndexDefinition indexDef = createSecondaryIndexDefinition("secondary_index_name", "name");
     HoodieIndexMetadata indexMetadata = createIndexMetadata(indexDef);
@@ -211,8 +211,8 @@ public class TestHoodieTableSchemaEvolution {
   @Test
   public void testMissingIndexedColumnInTableSchema() {
     // Edge case: index references a column that doesn't exist in table schema
-    Schema tableSchema = new Schema.Parser().parse(TABLE_SCHEMA);
-    Schema writerSchema = new Schema.Parser().parse(TABLE_SCHEMA);
+    HoodieSchema tableSchema = HoodieSchema.parse(TABLE_SCHEMA);
+    HoodieSchema writerSchema = HoodieSchema.parse(TABLE_SCHEMA);
     
     HoodieIndexDefinition indexDef = createSecondaryIndexDefinition("secondary_index_nonexistent", "nonexistent_column");
     HoodieIndexMetadata indexMetadata = createIndexMetadata(indexDef);
@@ -225,8 +225,8 @@ public class TestHoodieTableSchemaEvolution {
   @Test
   public void testNonSecondaryIndexDefinitions() {
     // Test that non-secondary index definitions are ignored
-    Schema tableSchema = new Schema.Parser().parse(TABLE_SCHEMA);
-    Schema writerSchema = new Schema.Parser().parse(TABLE_SCHEMA.replace("\"age\", \"type\": \"int\"", "\"age\", \"type\": \"long\""));
+    HoodieSchema tableSchema = HoodieSchema.parse(TABLE_SCHEMA);
+    HoodieSchema writerSchema = HoodieSchema.parse(TABLE_SCHEMA.replace("\"age\", \"type\": \"int\"", "\"age\", \"type\": \"long\""));
     
     // Create an expression index (not secondary index)
     HoodieIndexDefinition expressionIndexDef = HoodieIndexDefinition.newBuilder()
@@ -261,14 +261,14 @@ public class TestHoodieTableSchemaEvolution {
         + "  {\"name\": \"fixed_field\", \"type\": {\"type\": \"fixed\", \"name\": \"FixedField\", \"size\": 16}}"
         + "]}";
     
-    Schema tableSchema = new Schema.Parser().parse(fixed8Schema);
-    Schema writerSchema = new Schema.Parser().parse(fixed16Schema);
+    HoodieSchema tableSchema = HoodieSchema.parse(fixed8Schema);
+    HoodieSchema writerSchema = HoodieSchema.parse(fixed16Schema);
     
     HoodieIndexDefinition indexDef = createSecondaryIndexDefinition("secondary_index_fixed", "fixed_field");
     HoodieIndexMetadata indexMetadata = createIndexMetadata(indexDef);
     
-    final Schema tableSchemaFixed1 = tableSchema;
-    final Schema writerSchemaFixed1 = writerSchema;
+    final HoodieSchema tableSchemaFixed1 = tableSchema;
+    final HoodieSchema writerSchemaFixed1 = writerSchema;
     final HoodieIndexMetadata indexMetadataFixed = indexMetadata;
     SchemaCompatibilityException exception = assertThrows(SchemaCompatibilityException.class, () -> 
         HoodieTable.validateSecondaryIndexSchemaEvolution(tableSchemaFixed1, writerSchemaFixed1, indexMetadataFixed));
@@ -277,11 +277,11 @@ public class TestHoodieTableSchemaEvolution {
     assertTrue(exception.getMessage().contains("secondary index"));
     
     // Fixed size decrease
-    tableSchema = new Schema.Parser().parse(fixed16Schema);
-    writerSchema = new Schema.Parser().parse(fixed8Schema);
+    tableSchema = HoodieSchema.parse(fixed16Schema);
+    writerSchema = HoodieSchema.parse(fixed8Schema);
     
-    final Schema tableSchemaFixed2 = tableSchema;
-    final Schema writerSchemaFixed2 = writerSchema;
+    final HoodieSchema tableSchemaFixed2 = tableSchema;
+    final HoodieSchema writerSchemaFixed2 = writerSchema;
     exception = assertThrows(SchemaCompatibilityException.class, () -> 
         HoodieTable.validateSecondaryIndexSchemaEvolution(tableSchemaFixed2, writerSchemaFixed2, indexMetadataFixed));
     

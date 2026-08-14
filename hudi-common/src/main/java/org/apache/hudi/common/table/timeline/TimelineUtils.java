@@ -40,8 +40,7 @@ import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
@@ -49,6 +48,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.text.ParseException;
 import java.util.AbstractMap;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -56,6 +56,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -80,6 +81,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  * 1) HiveSync - this can be used to query partitions that changed since previous sync.
  * 2) Incremental reads - InputFormats can use this API to query
  */
+@Slf4j
 public class TimelineUtils {
   public static final Set<String> NOT_PARSABLE_TIMESTAMPS = new HashSet<String>(3) {
     {
@@ -88,7 +90,6 @@ public class TimelineUtils {
       add(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
     }
   };
-  private static final Logger LOG = LoggerFactory.getLogger(TimelineUtils.class);
 
   /**
    * Returns partitions that have new data strictly after commitTime.
@@ -136,7 +137,7 @@ public class TimelineUtils {
             });
           } catch (HoodieIOException e) {
             if (e.getCause() instanceof FileNotFoundException) {
-              LOG.warn("Instant {} not found in storage and has been archived", instant, e);
+              log.warn("Instant {} not found in storage and has been archived", instant, e);
             } else {
               throw e;
             }
@@ -263,7 +264,13 @@ public class TimelineUtils {
 
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
     try {
-      LOG.info("reading checkpoint info for:" + instant + " key: " + extraMetadataKey);
+      log.info("reading checkpoint info for:{} key: {}", instant, extraMetadataKey);
+      byte[] contents = metaClient.getCommitsTimeline().getInstantDetails(instant).get();
+      if (instant.isCompleted()) {
+        if (contents == null || contents.length == 0) {
+          throw new HoodieIOException("Completed commit has no contents for instant " + instant.requestedTime());
+        }
+      }
       HoodieCommitMetadata commitMetadata =
           metaClient.getCommitsTimeline().readCommitMetadata(instant);
 
@@ -469,7 +476,7 @@ public class TimelineUtils {
             "Found hollow commit: '%s'. Adjust config `%s` accordingly if to avoid throwing this exception.",
             hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key()));
       case BLOCK:
-        LOG.warn("Found hollow commit '{}'. Config `{}` was set to `{}`: no data will be returned beyond '{}' until it's completed.",
+        log.warn("Found hollow commit '{}'. Config `{}` was set to `{}`: no data will be returned beyond '{}' until it's completed.",
             hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode, hollowCommitTimestamp);
         return completedCommitTimeline.findInstantsBefore(hollowCommitTimestamp);
       default:
@@ -511,7 +518,7 @@ public class TimelineUtils {
       if (NOT_PARSABLE_TIMESTAMPS.contains(timestamp)) {
         parsedDate = Option.of(new Date(Integer.parseInt(timestamp)));
       } else {
-        LOG.warn("Failed to parse timestamp {}: {}", timestamp, e.getMessage());
+        log.warn("Failed to parse timestamp {}: {}", timestamp, e.getMessage());
         parsedDate = Option.empty();
       }
     }
@@ -640,5 +647,45 @@ public class TimelineUtils {
       writerOption = timeline.getInstantWriter(metadata);
     }
     return writerOption;
+  }
+
+  /**
+   * Returns the latest reverse-ordered instant whose commit metadata contains at least one of the provided
+   * checkpoint metadata keys.
+   *
+   * @param timeline timeline to scan; expected to contain completed instants
+   * @param checkpointKeys checkpoint metadata keys to look for in commit metadata
+   * @return an {@link Option} containing a {@link Pair} of the matching instant's
+   *         {@link HoodieInstant#toString()} value and its
+   *         {@link HoodieCommitMetadata}; {@link Option#empty()} if no matching instant is found
+   * @throws IOException if reading commit metadata fails
+   */
+  public static Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(
+      HoodieTimeline timeline, String... checkpointKeys) throws IOException {
+    return findLatestInCommitMetadata(timeline, (instant, commitMetadata) -> {
+      boolean hasCheckpointMetadata = Arrays.stream(checkpointKeys)
+          .anyMatch(key -> !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(key)));
+      return hasCheckpointMetadata ? Option.of(Pair.of(instant.toString(), commitMetadata)) : Option.empty();
+    });
+  }
+
+  /**
+   * Scans the timeline's instants in reverse order, reading each instant's commit metadata,
+   * and returns the first non-empty result of the extractor.
+   *
+   * @param timeline  timeline whose instants are scanned (callers filter as needed)
+   * @param extractor extracts a result from an instant and its commit metadata; return
+   *                  {@link Option#empty()} to continue scanning
+   * @return first non-empty extraction in reverse instant order; empty if none matches
+   */
+  public static <T> Option<T> findLatestInCommitMetadata(
+      HoodieTimeline timeline, BiFunction<HoodieInstant, HoodieCommitMetadata, Option<T>> extractor) {
+    return timeline.getReverseOrderedInstants().map(instant -> {
+      try {
+        return extractor.apply(instant, timeline.readCommitMetadata(instant));
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+      }
+    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
   }
 }

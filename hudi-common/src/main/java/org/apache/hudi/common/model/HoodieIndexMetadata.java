@@ -25,8 +25,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -41,9 +41,9 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_PA
  * Represents the metadata for all functional and secondary indexes in Hudi.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Getter
+@Slf4j
 public class HoodieIndexMetadata implements Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexMetadata.class);
 
   // Map to hold the index definitions keyed by their names.
   private Map<String, HoodieIndexDefinition> indexDefinitions;
@@ -55,10 +55,6 @@ public class HoodieIndexMetadata implements Serializable {
   public HoodieIndexMetadata(Map<String, HoodieIndexDefinition> indexDefinitions) {
     this.indexDefinitions = indexDefinitions;
     validateIndexMetadata(this);
-  }
-
-  public Map<String, HoodieIndexDefinition> getIndexDefinitions() {
-    return indexDefinitions;
   }
 
   public void setIndexDefinitions(Map<String, HoodieIndexDefinition> indexDefinitions) {
@@ -100,7 +96,7 @@ public class HoodieIndexMetadata implements Serializable {
    */
   public String toJson() throws JsonProcessingException {
     if (indexDefinitions.containsKey(null)) {
-      LOG.info("null index name for the index definition " + indexDefinitions.get(null));
+      log.info("null index name for the index definition {}", indexDefinitions.get(null));
       indexDefinitions.remove(null);
     }
     return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);

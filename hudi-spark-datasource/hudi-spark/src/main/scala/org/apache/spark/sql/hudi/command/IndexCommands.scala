@@ -22,11 +22,11 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.common.model.HoodieIndexDefinition
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
+import org.apache.hudi.core.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION
 import org.apache.hudi.exception.HoodieIndexException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieSparkIndexClient
 import org.apache.hudi.index.expression.ExpressionIndexSparkFunctions
-import org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION
 import org.apache.hudi.metadata.{HoodieTableMetadataUtil, MetadataPartitionType}
 
 import org.apache.spark.internal.Logging
@@ -152,7 +152,7 @@ case class DropIndexCommand(table: CatalogTable,
 
 /**
  * Command to show available indexes in hudi. The corresponding logical plan is available at
- * org.apache.spark.sql.catalyst.plans.logical.ShowIndexes
+ * org.apache.spark.sql.catalyst.plans.logical.HoodieShowIndexes
  */
 case class ShowIndexesCommand(table: CatalogTable,
                               override val output: Seq[Attribute]) extends IndexBaseCommand {

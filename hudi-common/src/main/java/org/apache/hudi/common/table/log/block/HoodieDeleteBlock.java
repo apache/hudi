@@ -18,20 +18,24 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.avro.model.HoodieDeleteRecordList;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.util.Lazy;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
@@ -41,8 +45,6 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -56,14 +58,15 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
+import static org.apache.hudi.common.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.common.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far.
  */
+@Slf4j
 public class HoodieDeleteBlock extends HoodieLogBlock {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieDeleteBlock.class);
+
   /**
    * These static builders are added to avoid performance issue in Avro 1.10.
    * You can find more details in HoodieAvroUtils, HUDI-3834, and AVRO-3048.
@@ -129,6 +132,15 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     } catch (IOException io) {
       throw new HoodieIOException("Unable to generate keys to delete from block content", io);
     }
+  }
+
+  /**
+   * Returns delete records in the same representation used by the file-group record buffer.
+   */
+  public <T> List<BufferedRecord<T>> getRecordsToDelete(HoodieReaderContext<T> readerContext) {
+    return Arrays.stream(getRecordsToDelete())
+        .map(deleteRecord -> BufferedRecords.fromDeleteRecord(deleteRecord, readerContext.getRecordContext()))
+        .collect(Collectors.toList());
   }
 
   private byte[] serializeV2() throws IOException {

@@ -28,14 +28,16 @@ import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataReco
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.{collection, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.core.index.expression.HoodieExpressionIndex
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.index.expression.HoodieExpressionIndex
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
-import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
-import org.apache.hudi.stats.ValueMetadata.getValueMetadata
+import org.apache.hudi.metadata.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
+import org.apache.hudi.metadata.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
@@ -522,7 +524,7 @@ class ExpressionIndexSupport(spark: SparkSession,
         indexDefinition.getSourceFields.asScala.toSeq, prunedPartitions, indexPartition, shouldReadInMemory)
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       val catalystRows: HoodieData[InternalRow] = colStatsRecords.map[InternalRow](JFunction.toJavaSerializableFunction(r => {
-        val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
+        val converter = HoodieSchemaConversionUtils.createGenericRecordToInternalRowConverter(HoodieSchema.fromAvroSchema(HoodieMetadataColumnStats.SCHEMA$), columnStatsRecordStructType)
         converter(r).orNull
       }))
 
@@ -594,7 +596,7 @@ class ExpressionIndexSupport(spark: SparkSession,
             }.toSet
 
             // Update the map with the new partition and its file names
-            partitionToFileMap.updated(partitionPath.path, partitionToFileMap.getOrElse(partitionPath.path, Set.empty) ++ fileNames)
+            partitionToFileMap.updated(partitionPath.getPath, partitionToFileMap.getOrElse(partitionPath.getPath, Set.empty) ++ fileNames)
           case None =>
             partitionToFileMap // Skip if no partition path
         }
@@ -645,5 +647,5 @@ object ExpressionIndexSupport {
     HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME
   )
 
-  private val columnStatsRecordStructType: StructType = AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataColumnStats.SCHEMA$)
+  private val columnStatsRecordStructType: StructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieSchema.fromAvroSchema(HoodieMetadataColumnStats.SCHEMA$))
 }

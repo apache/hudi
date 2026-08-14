@@ -17,9 +17,9 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSchemaConversionUtils, ScalaAssertionSupport, SparkAdapterSupport}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
+import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.util.Option
@@ -75,14 +75,6 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     initHoodieStorage()
   }
 
-  @AfterEach override def tearDown(): Unit = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
-  }
-
   // TODO add test-case for upcasting
 
   @ParameterizedTest
@@ -125,7 +117,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       tableMetaClient.reloadActiveTimeline()
 
       val resolver = new TableSchemaResolver(tableMetaClient)
-      val latestTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(resolver.getTableAvroSchema(false))
+      val latestTableSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(resolver.getTableSchema(false))
 
       val df =
         spark.read.format("org.apache.hudi")

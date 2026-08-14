@@ -46,7 +46,7 @@ public class AvroDFSSource extends AvroSource {
   public AvroDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) throws IOException {
     super(props, sparkContext, sparkSession, schemaProvider);
-    sparkContext.hadoopConfiguration().set("avro.schema.input.key", schemaProvider.getSourceSchema().toString());
+    sparkContext.hadoopConfiguration().set("avro.schema.input.key", schemaProvider.getSourceHoodieSchema().toString());
     this.pathSelector = DFSPathSelector
         .createSourceSelector(props, sparkContext.hadoopConfiguration());
   }

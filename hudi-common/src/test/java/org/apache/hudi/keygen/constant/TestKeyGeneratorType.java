@@ -32,8 +32,8 @@ import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_CLASS
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestKeyGeneratorType {
   @Test

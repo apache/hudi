@@ -24,10 +24,12 @@ import org.apache.hudi.common.model.BaseAvroPayload;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.SerializableIndexedRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -38,6 +40,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.Stream;
 
@@ -55,11 +58,11 @@ class TestUpdateProcessor {
   private final HoodieReaderContext<IndexedRecord> readerContext = mock(HoodieReaderContext.class, RETURNS_DEEP_STUBS);
   private final RecordContext<IndexedRecord> recordContext = mock(RecordContext.class);
   private static final String KEY = "key";
-  private static final Schema SCHEMA = SchemaBuilder.record("TestRecord")
-      .fields()
-      .name("key").type().stringType().noDefault()
-      .name("value").type().stringType().noDefault()
-      .endRecord();
+  private static final HoodieSchema SCHEMA = HoodieSchema.createRecord("TestRecord", null, null,
+      Arrays.asList(
+          HoodieSchemaField.of("key", HoodieSchema.create(HoodieSchemaType.STRING)),
+          HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.STRING))
+      ));
 
   private static Stream<Arguments> handleEmitDeletes() {
     BufferedRecord<IndexedRecord> previous = getRecord("value1", null);
@@ -126,7 +129,8 @@ class TestUpdateProcessor {
   @Test
   void testHandleInsert() {
     when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(recordContext.seal(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
+    when(recordContext.getSchemaFromBufferRecord(any())).thenReturn(SCHEMA);
+    when(recordContext.seal(any(), any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(1));
     BufferedRecord<IndexedRecord> previous = null;
     BufferedRecord<IndexedRecord> merged = getRecord("value2", null);
     BufferedRecord<IndexedRecord> expected = getRecord("value2", HoodieOperation.INSERT);
@@ -143,7 +147,8 @@ class TestUpdateProcessor {
   @ValueSource(booleans = {true, false})
   void testHandleInsertWithPayload(boolean shouldIgnore) {
     when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(recordContext.seal(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
+    when(recordContext.getSchemaFromBufferRecord(any())).thenReturn(SCHEMA);
+    when(recordContext.seal(any(), any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(1));
     BufferedRecord<IndexedRecord> previous = null;
     BufferedRecord<IndexedRecord> merged = getRecord("value2", null);
     BufferedRecord<IndexedRecord> expected = getRecord("value2", HoodieOperation.INSERT);
@@ -181,7 +186,8 @@ class TestUpdateProcessor {
   @ValueSource(booleans = {true, false})
   void testHandleNoUpdate(boolean usePayload) {
     when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(recordContext.seal(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
+    when(recordContext.getSchemaFromBufferRecord(any())).thenReturn(SCHEMA);
+    when(recordContext.seal(any(), any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(1));
     BufferedRecord<IndexedRecord> previous = getRecord("value2", null);
     BufferedRecord<IndexedRecord> merged = previous;
     HoodieReadStats readStats = new HoodieReadStats();
@@ -203,7 +209,8 @@ class TestUpdateProcessor {
   @ValueSource(booleans = {true, false})
   void testHandleUpdate(boolean usePayload) {
     when(readerContext.getRecordContext()).thenReturn(recordContext);
-    when(recordContext.seal(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
+    when(recordContext.getSchemaFromBufferRecord(any())).thenReturn(SCHEMA);
+    when(recordContext.seal(any(), any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(1));
     BufferedRecord<IndexedRecord> previous = getRecord("value1", null);
     BufferedRecord<IndexedRecord> merged = getRecord("value2", null);
     BufferedRecord<IndexedRecord> expected = getRecord("value2", HoodieOperation.UPDATE_AFTER);
@@ -229,7 +236,7 @@ class TestUpdateProcessor {
   }
 
   private static BufferedRecord<IndexedRecord> getRecord(String value, HoodieOperation operation) {
-    GenericRecord record = new GenericData.Record(SCHEMA);
+    GenericRecord record = new GenericData.Record(SCHEMA.toAvroSchema());
     record.put("key", KEY);
     record.put("value", value);
     return new BufferedRecord<>(KEY, 1, SerializableIndexedRecord.createInstance(record), 0, operation);

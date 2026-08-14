@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.HoodieStorageUtils
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row

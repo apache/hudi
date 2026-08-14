@@ -28,17 +28,16 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -57,10 +56,10 @@ import static org.apache.hudi.common.table.log.HoodieLogFormat.DEFAULT_WRITE_TOK
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 
+@Slf4j
 public class HoodieTestCommitGenerator {
   public static final String BASE_FILE_WRITE_TOKEN = "1-0-1";
   public static final String LOG_FILE_WRITE_TOKEN = DEFAULT_WRITE_TOKEN;
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTestCommitGenerator.class);
 
   public static void initCommitInfoForRepairTests(
       Map<String, List<Pair<String, String>>> baseFileInfo,
@@ -117,7 +116,7 @@ public class HoodieTestCommitGenerator {
   }
 
   public static String getLogFilename(String instantTime, String fileId) {
-    return FSUtils.makeLogFileName(
+    return FSUtils.makeInlineLogFileName(
         fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), instantTime, 1, LOG_FILE_WRITE_TOKEN);
   }
 
@@ -136,7 +135,7 @@ public class HoodieTestCommitGenerator {
             try {
               createDataFile(basePath, new HadoopStorageConfiguration(true), partitionPath, filename);
             } catch (IOException e) {
-              LOG.error(String.format("Failed to create data file: %s/%s/%s",
+              log.error(String.format("Failed to create data file: %s/%s/%s",
                   basePath, partitionPath, filename));
             }
           });

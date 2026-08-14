@@ -21,6 +21,10 @@ package org.apache.hudi.io.compress;
 
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -31,6 +35,8 @@ import java.util.stream.Collectors;
  * Available compression codecs.
  * There should not be any assumption on the ordering or ordinal of the defined enums.
  */
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter
 public enum CompressionCodec {
   NONE("none", 2),
   BZIP2("bz2", 5),
@@ -50,19 +56,6 @@ public enum CompressionCodec {
   // The ID of each codec cannot change or else that breaks all existing HFiles out there
   // even the ones that are not compressed! (They use the NONE algorithm)
   private final int id;
-
-  CompressionCodec(final String name, int id) {
-    this.name = name;
-    this.id = id;
-  }
-
-  public String getName() {
-    return name;
-  }
-
-  public int getId() {
-    return id;
-  }
 
   public static CompressionCodec findCodecByName(String name) {
     CompressionCodec codec =

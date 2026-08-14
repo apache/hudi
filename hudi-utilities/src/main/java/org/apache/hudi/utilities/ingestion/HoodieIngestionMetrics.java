@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.ingestion;
 
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 
 import com.codahale.metrics.Timer;
 
@@ -48,6 +48,10 @@ public abstract class HoodieIngestionMetrics {
 
   public abstract void updateStreamerMetrics(long durationNanos);
 
+  public abstract void emitStreamerJobSuccessMetrics();
+
+  public abstract void emitStreamerJobFailedMetrics();
+
   public abstract void updateStreamerMetaSyncMetrics(String syncClassShortName, long syncTimeNanos);
 
   public abstract void updateStreamerSyncMetrics(long syncEpochTimeMs);
@@ -63,6 +67,8 @@ public abstract class HoodieIngestionMetrics {
   public abstract void updateStreamerSourceParallelism(int sourceParallelism);
 
   public abstract void updateStreamerSourceBytesToBeIngestedInSyncRound(long sourceBytesToBeIngested);
+
+  public abstract void updateHoodieIncrSourceMetrics(long numCommitsInProgress, long numUnprocessedCommits);
 
   public abstract void shutdown();
 }

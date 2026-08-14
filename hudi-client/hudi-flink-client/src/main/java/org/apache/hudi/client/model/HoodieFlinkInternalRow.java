@@ -20,6 +20,7 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.model.HoodieOperation;
 
+import lombok.Getter;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
@@ -55,7 +56,12 @@ public class HoodieFlinkInternalRow implements Serializable {
   // there is no rowData for index record
   private final BooleanValue isIndexRecord;
 
+  @Getter
   private final RowData rowData;
+
+  public HoodieFlinkInternalRow(String recordKey, String partitionPath, RowData rowData) {
+    this(recordKey, partitionPath, "", "", "", false, rowData);
+  }
 
   public HoodieFlinkInternalRow(String recordKey, String partitionPath, String operationType, RowData rowData) {
     this(recordKey, partitionPath, "", "", operationType, false, rowData);
@@ -116,10 +122,6 @@ public class HoodieFlinkInternalRow implements Serializable {
 
   public boolean isIndexRecord() {
     return isIndexRecord.getValue();
-  }
-
-  public RowData getRowData() {
-    return rowData;
   }
 
   public HoodieFlinkInternalRow copy(RowDataSerializer rowDataSerializer) {

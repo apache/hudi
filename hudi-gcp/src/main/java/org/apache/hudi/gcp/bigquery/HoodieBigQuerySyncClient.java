@@ -47,8 +47,7 @@ import com.google.cloud.bigquery.Table;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.ViewDefinition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -57,16 +56,14 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BILLING_PROJECT_ID;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID;
-import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BILLING_PROJECT_ID;
-
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER;
 
+@Slf4j
 public class HoodieBigQuerySyncClient extends HoodieSyncClient {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieBigQuerySyncClient.class);
 
   protected final BigQuerySyncConfig config;
   private final String projectId;
@@ -134,11 +131,11 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       queryJob = queryJob.waitFor();
 
       if (queryJob == null) {
-        LOG.error("Job for table creation no longer exists");
+        log.error("Job for table creation no longer exists");
       } else if (queryJob.getStatus().getError() != null) {
-        LOG.error("Job for table creation failed: {}", queryJob.getStatus().getError().toString());
+        log.error("Job for table creation failed: {}", queryJob.getStatus().getError().toString());
       } else {
-        LOG.info("External table created using manifest file.");
+        log.info("External table created using manifest file.");
       }
     } catch (InterruptedException | BigQueryException e) {
       throw new HoodieBigQuerySyncException("Failed to create external table using manifest file. ", e);
@@ -164,7 +161,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
               .setMaxBadRecords(0)
               .build();
       bigquery.create(TableInfo.of(tableId, customTable));
-      LOG.info("Manifest External table created.");
+      log.info("Manifest External table created.");
     } catch (BigQueryException e) {
       throw new HoodieBigQuerySyncException("Manifest External table was not created ", e);
     }
@@ -193,7 +190,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     boolean samePartitionFilter = partitionFields.isEmpty()
         || (requirePartitionFilter == (definition.getHivePartitioningOptions().getRequirePartitionFilter() != null && definition.getHivePartitioningOptions().getRequirePartitionFilter()));
     if (sameSchema && samePartitionFilter) {
-      LOG.info("No table update is needed.");
+      log.info("No table update is needed.");
       return; // No need to update schema.
     }
     if (!StringUtils.isNullOrEmpty(bigLakeConnectionId)) {
@@ -244,7 +241,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       }
 
       bigquery.create(TableInfo.of(tableId, customTable));
-      LOG.info("External table created using hivepartitioningoptions");
+      log.info("External table created using hivepartitioningoptions");
     } catch (BigQueryException e) {
       throw new HoodieBigQuerySyncException("External table was not created ", e);
     }
@@ -268,7 +265,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
           ViewDefinition.newBuilder(query).setUseLegacySql(false).build();
 
       bigquery.create(TableInfo.of(tableId, viewDefinition));
-      LOG.info("View created successfully");
+      log.info("View created successfully");
     } catch (BigQueryException e) {
       throw new HoodieBigQuerySyncException("View was not created ", e);
     }
@@ -328,7 +325,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       boolean isTableBasePathUpdated = sourceUris.stream()
           .noneMatch(sourceUri -> sourceUri.startsWith(basePathWithTrailingSlash));
       if (isTableBasePathUpdated) {
-        LOG.warn("Table base path from source uri updated from: {}, to new base path: {}", sourceUris, basePathWithTrailingSlash);
+        log.warn("Table base path from source uri updated from: {}, to new base path: {}", sourceUris, basePathWithTrailingSlash);
       }
       return isTableBasePathUpdated;
     }
@@ -336,7 +333,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     basePathInTableDefinition = StringUtils.stripEnd(basePathInTableDefinition, "/");
     boolean isTableBasePathUpdated = !basePathInTableDefinition.equals(basePath);
     if (isTableBasePathUpdated) {
-      LOG.warn("Table base path from table definition updated from: {}, to new base path: {}", basePathInTableDefinition, basePath);
+      log.warn("Table base path from table definition updated from: {}, to new base path: {}", basePathInTableDefinition, basePath);
     }
     return isTableBasePathUpdated;
   }

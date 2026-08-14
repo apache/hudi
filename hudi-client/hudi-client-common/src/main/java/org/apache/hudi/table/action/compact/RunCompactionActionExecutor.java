@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -33,22 +34,19 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
+@Slf4j
 @SuppressWarnings("checkstyle:LineLength")
 public class RunCompactionActionExecutor<T> extends
     BaseActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieWriteMetadata<HoodieData<WriteStatus>>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RunCompactionActionExecutor.class);
 
   private final HoodieCompactor compactor;
   private final WriteOperationType operationType;
@@ -71,7 +69,7 @@ public class RunCompactionActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
-    LOG.info("Compaction requested. Instant time: {}.", instantTime);
+    log.info("Compaction requested. Instant time: {}.", instantTime);
     metrics.emitCompactionRequested();
 
     HoodieTimeline pendingMajorOrMinorCompactionTimeline = WriteOperationType.COMPACT.equals(operationType)

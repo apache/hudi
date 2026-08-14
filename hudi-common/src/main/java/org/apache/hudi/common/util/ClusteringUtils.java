@@ -44,16 +44,15 @@ import org.apache.hudi.common.table.timeline.TableFormatCompletionAction;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -71,9 +70,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * Helper class to generate clustering plan from metadata.
  */
+@Slf4j
 public class ClusteringUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ClusteringUtils.class);
 
   public static final String TOTAL_IO_READ_MB = "TOTAL_IO_READ_MB";
   public static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILES_SIZE";
@@ -124,9 +122,9 @@ public class ClusteringUtils {
    * Transitions the provided clustering instant fron inflight to complete based on the clustering
    * action type. After HUDI-7905, the new clustering commits are written with clustering action.
    */
-  public static <T> void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
-                                                                         HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline,
-                                                                         TableFormatCompletionAction tableFormatCompletionAction) {
+  public static void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
+                                                                     HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline,
+                                                                     TableFormatCompletionAction tableFormatCompletionAction) {
     if (clusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
       activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, metadata, tableFormatCompletionAction);
     } else {
@@ -248,7 +246,7 @@ public class ClusteringUtils {
    * @return option of the replace metadata if present, else empty
    */
   public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
-    return getClusteringPlan(metaClient.getActiveTimeline(), pendingReplaceInstant, metaClient.getInstantGenerator());
+    return getClusteringPlan(metaClient.getActiveTimeline(), pendingReplaceInstant, metaClient.getInstantGenerator(), Option.of(metaClient));
   }
 
   /**
@@ -268,17 +266,40 @@ public class ClusteringUtils {
    * Get Clustering plan from timeline.
    * @param timeline
    * @param pendingReplaceInstant
-   * @return
+   * @return {@link Option} of {@link Pair} of {@link HoodieInstant} and {@link HoodieClusteringPlan}
    */
   public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTimeline timeline, HoodieInstant pendingReplaceInstant, InstantGenerator factory) {
+    return getClusteringPlan(timeline, pendingReplaceInstant, factory, Option.empty());
+  }
+
+  /**
+   * Get Clustering plan from timeline with optional metaClient for error recovery.
+   * When metaClient is provided, if reading the clustering plan fails due to the instant being
+   * rolled back by a concurrent writer, the timeline is reloaded and an empty option is returned
+   * instead of throwing an exception.
+   */
+  public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(
+      HoodieTimeline timeline, HoodieInstant pendingReplaceInstant, InstantGenerator factory, Option<HoodieTableMetaClient> metaClientOpt) {
     try {
       Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = getRequestedReplaceMetadata(timeline, pendingReplaceInstant, factory);
       if (requestedReplaceMetadata.isPresent() && WriteOperationType.CLUSTER.name().equals(requestedReplaceMetadata.get().getOperationType())) {
         return Option.of(Pair.of(pendingReplaceInstant, requestedReplaceMetadata.get().getClusteringPlan()));
       }
       return Option.empty();
-    } catch (IOException e) {
-      throw new HoodieIOException("Error reading clustering plan " + pendingReplaceInstant.requestedTime(), e);
+    } catch (IOException | HoodieIOException e) {
+      if (metaClientOpt.isPresent() && !metaClientOpt.get().reloadActiveTimeline().containsInstant(pendingReplaceInstant)) {
+        log.warn("Error reading requested replace metadata {} due to it no longer being in the timeline. "
+            + "This could be due to the instant being rolled back by a concurrent writer",
+            pendingReplaceInstant, e);
+        return Option.empty();
+      }
+      final IOException ioException;
+      if (e instanceof HoodieIOException) {
+        ioException = ((HoodieIOException) e).getIOException();
+      } else {
+        ioException = (IOException) e;
+      }
+      throw new HoodieIOException("Error reading clustering plan " + pendingReplaceInstant.requestedTime(), ioException);
     }
   }
 
@@ -303,7 +324,7 @@ public class ClusteringUtils {
       }
       throw new HoodieException("Error getting all file groups in pending clustering", e);
     }
-    LOG.info("Found " + resultMap.size() + " files in pending clustering operations");
+    log.info("Found {} files in pending clustering operations", resultMap.size());
     return resultMap;
   }
 

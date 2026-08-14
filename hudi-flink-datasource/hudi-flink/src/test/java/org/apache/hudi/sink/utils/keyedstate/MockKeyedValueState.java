@@ -18,8 +18,10 @@
 
 package org.apache.hudi.sink.utils.keyedstate;
 
-import org.apache.flink.api.common.state.ValueState;
 import org.apache.hudi.sink.utils.MockValueState;
+
+import org.apache.flink.api.common.state.ValueState;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;

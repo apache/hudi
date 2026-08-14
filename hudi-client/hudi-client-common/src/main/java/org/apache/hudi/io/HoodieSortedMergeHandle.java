@@ -22,13 +22,13 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.Schema;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -48,7 +48,7 @@ import java.util.Queue;
 @NotThreadSafe
 public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
 
-  private final Queue<String> newRecordKeysSorted = new PriorityQueue<>();
+  private final Queue<String> newRecordKeysSorted = new PriorityQueue<>(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
 
   public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                  Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
@@ -73,13 +73,13 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<
    */
   @Override
   public void write(HoodieRecord oldRecord) {
-    Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
-    Schema newSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    HoodieSchema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
+    HoodieSchema newSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
 
     // To maintain overall sorted order across updates and inserts, write any new inserts whose keys are less than
     // the oldRecord's key.
-    while (!newRecordKeysSorted.isEmpty() && newRecordKeysSorted.peek().compareTo(key) <= 0) {
+    while (!newRecordKeysSorted.isEmpty() && StringUtils.compareUtf8Bytes(newRecordKeysSorted.peek(), key) <= 0) {
       String keyToPreWrite = newRecordKeysSorted.remove();
       if (keyToPreWrite.equals(key)) {
         // will be handled as an update later

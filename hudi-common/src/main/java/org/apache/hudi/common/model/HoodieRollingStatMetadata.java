@@ -20,8 +20,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.JsonUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -31,12 +31,14 @@ import java.util.Map;
 /**
  * This class holds statistics about files belonging to a table.
  */
+@Slf4j
+@Getter
 public class HoodieRollingStatMetadata implements Serializable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRollingStatMetadata.class);
+  public static final String ROLLING_STAT_METADATA_KEY = "ROLLING_STAT";
+
   protected Map<String, Map<String, HoodieRollingStat>> partitionToRollingStats;
   private String actionType = "DUMMY_ACTION";
-  public static final String ROLLING_STAT_METADATA_KEY = "ROLLING_STAT";
 
   public void addRollingStat(String partitionPath, HoodieRollingStat stat) {
     if (!partitionToRollingStats.containsKey(partitionPath)) {
@@ -76,7 +78,7 @@ public class HoodieRollingStatMetadata implements Serializable {
 
   public String toJsonString() throws IOException {
     if (partitionToRollingStats.containsKey(null)) {
-      LOG.info("partition path is null for " + partitionToRollingStats.get(null));
+      log.info("partition path is null for {}", partitionToRollingStats.get(null));
       partitionToRollingStats.remove(null);
     }
     return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
@@ -90,13 +92,5 @@ public class HoodieRollingStatMetadata implements Serializable {
       }
     }
     return this;
-  }
-
-  public Map<String, Map<String, HoodieRollingStat>> getPartitionToRollingStats() {
-    return partitionToRollingStats;
-  }
-
-  public String getActionType() {
-    return actionType;
   }
 }

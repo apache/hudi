@@ -27,10 +27,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetaSyncException;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Properties;
@@ -46,8 +45,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 /**
  * Helper class for syncing Hudi commit data with external metastores.
  */
+@Slf4j
 public class SyncUtilHelpers {
-  private static final Logger LOG = LoggerFactory.getLogger(SyncUtilHelpers.class);
 
   // Locks for each table (base path) to avoid concurrent modification of the same underneath meta storage.
   // Meta store such as Hive may encounter {@code ConcurrentModificationException} for #alter_table.
@@ -126,7 +125,7 @@ public class SyncUtilHelpers {
     if (properties.containsKey(META_SYNC_TABLE_NAME.key())) {
       String tableName = properties.getString(META_SYNC_TABLE_NAME.key());
       if (!tableName.equals(tableName.toLowerCase())) {
-        LOG.warn(
+        log.warn(
             "Table name \"{}\" contains capital letters. Your metastore may automatically convert this to lower case and can cause table not found errors during subsequent syncs.", tableName);
       }
     }
