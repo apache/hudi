@@ -155,7 +155,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           String commitTime;
           try {
             commitTime = table.getMetaClient().createNewInstantTime(false);
-            table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false);
+            table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false, Option.empty());
           } finally {
             transactionManager.endStateChange(Option.empty());
           }
