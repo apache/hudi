@@ -37,7 +37,7 @@ import org.apache.hudi.util.CloseableInternalRowIterator
 import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{BoundReference, Expression, GetStructField, JoinedRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.internal.SQLConf
@@ -159,7 +159,34 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       structType
     }
 
-    val (readSchema, readFilters) = getSchemaAndFiltersForRead(parquetReadStructType, hasRowIndexField)
+    // Internal reads have no catalyst plan, so nothing rewrites VariantType fields the way
+    // PushVariantIntoScan does for user queries. Requesting native VariantType against a
+    // SHREDDED parquet base file clips the file group to {metadata, value} and reads
+    // value=null; write-side callers (compaction, clustering, merge) would then persist the
+    // nulls, silently losing the variant data (#19556). Query paths that build this context
+    // without sparkRequiredSchema hit the same null reads and take the same rewrite: CDC
+    // (CDCFileGroupIterator) under default configs, plus the legacy RDD paths (streaming
+    // source, MergeOnRead relations) only when hoodie.file.group.reader.enabled=false;
+    // batch incremental always scans through the file format with a catalyst schema.
+    // Request the full-variant projection shape
+    // instead and restore native VariantType after the scan. User-facing reads pass
+    // sparkRequiredSchema and are overlaid above. Only top-level variant fields are
+    // rewritten: no production write path shreds a nested variant today (a nested shredded
+    // write schema needs the test-only force config until shredding-schema inference
+    // lands), so the nested leg is deferred until such files can exist. Spark < 4.1 cannot
+    // reconstruct shredded values on read (SPARK-54410) and the adapter returns None;
+    // Spark 4.0 does write shredded files, so its pre-existing read-side gap stays as is.
+    val isParquetBaseFile = !isInlineLog && !FSUtils.isLogFile(filePath) &&
+      HoodieFileFormat.fromFileExtension(filePath.getFileExtension) == HoodieFileFormat.PARQUET
+    val (readStructTypeForScan, variantOrdinals) =
+      if (sparkRequiredSchema.isEmpty && isParquetBaseFile) {
+        SparkFileFormatInternalRowReaderContext.fullVariantReadSchemaWithOrdinals(parquetReadStructType)
+          .getOrElse((parquetReadStructType, Set.empty[Int]))
+      } else {
+        (parquetReadStructType, Set.empty[Int])
+      }
+
+    val (readSchema, readFilters) = getSchemaAndFiltersForRead(readStructTypeForScan, hasRowIndexField)
     if (FSUtils.isLogFile(filePath)) {
       // NOTE: now only primary key based filtering is supported for log files
       // Position-based merging pairs log records with the RECORD_POSITIONS bitmap by index (see
@@ -205,11 +232,21 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]], tableSchemaOpt))
 
-      // Post-process: convert binary VECTOR columns back to typed arrays
-      if (vectorColumnInfo.nonEmpty) {
-        SparkFileFormatInternalRowReaderContext.wrapWithVectorConversion(rawIterator, vectorColumnInfo, readSchema)
+      // Post-process: restore native VariantType from the full-variant projection shape
+      // (child 0 of each rewritten field), then convert binary VECTOR columns back to arrays.
+      val (variantRestoredIterator, variantRestoredSchema) = if (variantOrdinals.nonEmpty) {
+        val restoredSchema = StructType(readSchema.fields.zipWithIndex.map { case (f, i) =>
+          if (variantOrdinals.contains(i)) f.copy(dataType = structType.fields(i).dataType) else f
+        })
+        (SparkFileFormatInternalRowReaderContext.wrapWithVariantRestore(rawIterator, readSchema, variantOrdinals),
+          restoredSchema)
       } else {
-        rawIterator
+        (rawIterator, readSchema)
+      }
+      if (vectorColumnInfo.nonEmpty) {
+        SparkFileFormatInternalRowReaderContext.wrapWithVectorConversion(variantRestoredIterator, vectorColumnInfo, variantRestoredSchema)
+      } else {
+        variantRestoredIterator
       }
     }
   }
@@ -433,6 +470,56 @@ object SparkFileFormatInternalRowReaderContext {
   def replaceVectorColumnsWithBinary(structType: StructType, vectorColumns: Map[Int, HoodieSchema.Vector]): StructType = {
     val javaMap = vectorColumns.map { case (k, v) => (Integer.valueOf(k), v.asInstanceOf[AnyRef]) }.asJava
     VectorConversionUtils.replaceVectorColumnsWithBinary(structType, javaMap)
+  }
+
+  /**
+   * Rewrites top-level VariantType fields of `structType` into the full-variant projection
+   * shape (see SparkAdapter.buildFullVariantReadSchema) and returns it with the ordinals of
+   * the rewritten fields, or None when nothing rewrites (no variant fields, or no shredded
+   * read support on this Spark version). Shared by this context and direct base-file reads
+   * that bypass it (CDCFileGroupIterator's BASE_FILE_INSERT case).
+   */
+  private[hudi] def fullVariantReadSchemaWithOrdinals(structType: StructType): Option[(StructType, Set[Int])] = {
+    SparkAdapterSupport.sparkAdapter.buildFullVariantReadSchema(structType).map { rewritten =>
+      val ordinals = rewritten.fields.indices
+        .filter(i => rewritten.fields(i).dataType != structType.fields(i).dataType)
+        .toSet
+      (rewritten, ordinals)
+    }
+  }
+
+  /**
+   * Projection restoring native VariantType columns from the full-variant projection shape:
+   * each rewritten column is a struct with a single child "0" holding the reconstructed
+   * variant, so restoring is a projection of that child. NOTE: UnsafeProjection reuses its
+   * output buffer; callers that buffer rows must copy them.
+   */
+  private[hudi] def variantRestoreProjection(readSchema: StructType, variantOrdinals: Set[Int]): UnsafeProjection = {
+    val exprs: Seq[Expression] = readSchema.fields.zipWithIndex.map { case (field, i) =>
+      val ref = BoundReference(i, field.dataType, field.nullable)
+      if (variantOrdinals.contains(i)) {
+        GetStructField(ref, 0, Some("0"))
+      } else {
+        ref: Expression
+      }
+    }.toSeq
+    UnsafeProjection.create(exprs)
+  }
+
+  /**
+   * Restores native VariantType columns from the full-variant projection shape requested for
+   * internal reads of parquet base files (see SparkAdapter.buildFullVariantReadSchema).
+   */
+  private[hudi] def wrapWithVariantRestore(
+      iterator: ClosableIterator[InternalRow],
+      readSchema: StructType,
+      variantOrdinals: Set[Int]): ClosableIterator[InternalRow] = {
+    val projection = variantRestoreProjection(readSchema, variantOrdinals)
+    new ClosableIterator[InternalRow] {
+      override def hasNext: Boolean = iterator.hasNext
+      override def next(): InternalRow = projection(iterator.next())
+      override def close(): Unit = iterator.close()
+    }
   }
 
   /**

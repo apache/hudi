@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.hudi.common.table.read.CustomPayloadForTesting
 import org.apache.hudi.config.HoodieWriteConfig
 
 import org.apache.spark.sql.DataFrame
@@ -25,6 +26,11 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ArrayType, IntegerType, MapType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.assertEquals
 
+/**
+ * Verifies nested schema pruning on Hudi tables. The pruning itself is performed by Spark's
+ * built-in SchemaPruning rule: the file-group-reader based file format extends ParquetFileFormat,
+ * so Hudi does not ship a nested schema pruning rule of its own.
+ */
 class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
 
   // NOTE: We disable WCE once for the whole suite so the executed plans stay a plain Project over the
@@ -58,26 +64,34 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test nested schema pruning with DefaultHoodieRecordPayload") {
+  test("Test nested schema pruning with a projection-incompatible custom payload") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-      // NOTE: On the file-group-reader based read path the payload class does not affect nested
-      //       schema pruning, so the read schema is pruned the same way as with the default payload
+      // NOTE: A payload class outside the well-known set puts the table in CUSTOM merge mode, whose
+      //       merger is not projection compatible, so the file group reader merges on the full
+      //       table schema internally (FileGroupReaderSchemaHandler#generateRequiredSchema) and
+      //       projects the merged rows back down to the pruned read schema afterwards
       createTableWithNestedStructSchema("mor", tableName, tablePath,
-        Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> "org.apache.hudi.common.model.DefaultHoodieRecordPayload"))
+        Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> classOf[CustomPayloadForTesting].getName),
+        populateMetaFields = true)
+
+      // The update writes a log file, so the pruned reads below actually merge through that gate
+      spark.sql(s"UPDATE $tableName SET ts = 123457 WHERE id = 1")
 
       val selectDF = spark.sql(s"SELECT id, item.name FROM $tableName")
 
+      // Spark still prunes the scan schema; the full-schema requirement is internal to the reader
       val expectedSchema = StructType(Seq(
         StructField("id", IntegerType, nullable = true),
         StructField("item", StructType(Seq(StructField("name", StringType, nullable = false))), nullable = true)
       ))
-
       assertPrunedReadSchema(selectDF, tableName, expectedSchema)
 
       checkAnswer(s"SELECT id, item.name FROM $tableName")(Seq(1, "a1"))
+      // A second query pruned to different leaves still observes the correctly merged values
+      checkAnswer(s"SELECT id, item.price, ts FROM $tableName")(Seq(1, 10, 123457))
     }
   }
 

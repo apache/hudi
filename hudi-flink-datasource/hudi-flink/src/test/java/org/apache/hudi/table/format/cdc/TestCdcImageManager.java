@@ -34,6 +34,8 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.MockedStatic;
 
 import java.io.ByteArrayOutputStream;
@@ -50,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
@@ -152,6 +155,111 @@ class TestCdcImageManager {
       imageManager.close();
       verify(second, times(1)).close();
     }
+  }
+
+  private enum LoadFailure {
+    ITERATOR_CREATION,
+    ITERATION
+  }
+
+  @ParameterizedTest
+  @EnumSource(LoadFailure.class)
+  void testLoadClosesImageCacheWhenLoadFails(LoadFailure mode) {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getBasePath()).thenReturn("/table");
+    ExternalSpillableMap<String, byte[]> imageCache = mockImageCache();
+    ClosableIterator<RowData> iterator = mockIterator();
+    RuntimeException failure = new RuntimeException("load failed");
+    when(iterator.hasNext()).thenThrow(failure);
+    CdcImageManager imageManager = new CdcImageManager(
+        rowType("value"), writeConfig,
+        split -> {
+          if (mode == LoadFailure.ITERATOR_CREATION) {
+            throw failure;
+          }
+          return iterator;
+        });
+
+    try (MockedStatic<FormatUtils> mockedFormatUtils = mockStatic(FormatUtils.class)) {
+      mockedFormatUtils.when(() -> FormatUtils.spillableMap(
+          writeConfig, 1024L, CdcImageManager.class.getSimpleName()))
+          .thenReturn(imageCache);
+
+      assertSame(failure, assertThrows(
+          RuntimeException.class,
+          () -> imageManager.getOrLoadImages(1024L, fileSlice("001"))));
+      if (mode == LoadFailure.ITERATION) {
+        verify(iterator).close();
+      }
+      verify(imageCache, times(1)).close();
+      imageManager.close();
+      verify(imageCache, times(1)).close();
+    }
+  }
+
+  @Test
+  void testLoadSuppressesImageCacheCloseError() {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getBasePath()).thenReturn("/table");
+    ExternalSpillableMap<String, byte[]> imageCache = mockImageCache();
+    RuntimeException closeFailure = new RuntimeException("close failed");
+    doThrow(closeFailure).when(imageCache).close();
+    RuntimeException failure = new RuntimeException("load failed");
+    CdcImageManager imageManager = new CdcImageManager(
+        rowType("value"), writeConfig,
+        split -> {
+          throw failure;
+        });
+
+    try (MockedStatic<FormatUtils> mockedFormatUtils = mockStatic(FormatUtils.class)) {
+      mockedFormatUtils.when(() -> FormatUtils.spillableMap(
+          writeConfig, 1024L, CdcImageManager.class.getSimpleName()))
+          .thenReturn(imageCache);
+
+      assertSame(failure, assertThrows(
+          RuntimeException.class,
+          () -> imageManager.getOrLoadImages(1024L, fileSlice("001"))));
+      assertEquals(1, failure.getSuppressed().length, "close failure must be suppressed, not lost");
+      assertSame(closeFailure, failure.getSuppressed()[0]);
+    }
+  }
+
+  @Test
+  void testCloseContinuesAfterFailureAndClearsCache() throws IOException {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getBasePath()).thenReturn("/table");
+    ExternalSpillableMap<String, byte[]> first = mockImageCache();
+    ExternalSpillableMap<String, byte[]> second = mockImageCache();
+    RuntimeException firstFailure = new RuntimeException("first close failed");
+    RuntimeException secondFailure = new RuntimeException("second close failed");
+    doThrow(firstFailure).when(first).close();
+    doThrow(secondFailure).when(second).close();
+    CdcImageManager imageManager = new CdcImageManager(
+        rowType("value"), writeConfig,
+        split -> ClosableIterator.wrap(List.<RowData>of().iterator()));
+
+    try (MockedStatic<FormatUtils> mockedFormatUtils = mockStatic(FormatUtils.class)) {
+      mockedFormatUtils.when(() -> FormatUtils.spillableMap(
+          writeConfig, 1024L, CdcImageManager.class.getSimpleName()))
+          .thenReturn(first, second);
+      imageManager.getOrLoadImages(1024L, fileSlice("001"));
+      imageManager.getOrLoadImages(1024L, fileSlice("002"));
+
+      assertSame(firstFailure, assertThrows(RuntimeException.class, imageManager::close));
+      assertEquals(1, firstFailure.getSuppressed().length);
+      assertSame(secondFailure, firstFailure.getSuppressed()[0]);
+      verify(first, times(1)).close();
+      verify(second, times(1)).close();
+
+      imageManager.close();
+      verify(first, times(1)).close();
+      verify(second, times(1)).close();
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static ClosableIterator<RowData> mockIterator() {
+    return mock(ClosableIterator.class);
   }
 
   @SuppressWarnings("unchecked")

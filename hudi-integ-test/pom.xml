@@ -540,6 +540,8 @@
         its own docker-compose demo in the same job, which collides on host ports
         (e.g. zookeeper 2181). Exclude the integ2 package here so only the
         dedicated `integration-tests-hive-sync` stage runs them (via -Dit.test=).
+        That stage is currently parked in .github/workflows/bot.yml to cut CI
+        usage, so nothing runs the integ2 suite until it is restored.
       -->
       <build>
         <plugins>

@@ -228,6 +228,29 @@ class TestHoodieLsmFileGroupReader {
   }
 
   @Test
+  void testBaseFileOnlyPathPreservesDuplicateRecordKeys() throws IOException {
+    HoodieReaderContext<IndexedRecord> readerContext = spy(context());
+    StoragePathInfo baseFilePathInfo = pathInfo("/tmp/file1_1-0-1_001.parquet");
+    doReturn(ClosableIterator.wrap(Arrays.asList(
+        recordWithCommitTime("001", "a", "first", 1),
+        recordWithCommitTime("001", "a", "second", 2)).iterator()))
+        .when(readerContext).getFileRecordIterator(
+            eq(baseFilePathInfo), anyLong(), anyLong(), any(HoodieSchema.class),
+            any(HoodieSchema.class), any(HoodieStorage.class));
+
+    try (HoodieLsmFileGroupReader<IndexedRecord> reader = reader(
+        readerContext, Option.of(new HoodieBaseFile(baseFilePathInfo)), Collections.emptyList(), 0L);
+         ClosableIterator<IndexedRecord> iterator = reader.getClosableIterator()) {
+      List<IndexedRecord> records = drain(iterator);
+      assertEquals(2, records.size());
+      assertEquals("a", records.get(0).get(1).toString());
+      assertEquals("first", records.get(0).get(2).toString());
+      assertEquals("a", records.get(1).get(1).toString());
+      assertEquals("second", records.get(1).get(2).toString());
+    }
+  }
+
+  @Test
   void testMetadataTableBaseFileIsNotFilteredByInstantRange() throws IOException {
     when(metaClient.getBasePath()).thenReturn(
         new StoragePath("/tmp/data-table/" + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH));

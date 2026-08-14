@@ -43,6 +43,7 @@ public final class TestcontainersConfig {
     public static final String SPARK_MASTER = "sparkmaster";
     // Testcontainers appends the replica index, so the adhoc services resolve as "<name>-1".
     public static final String ADHOC_1 = "adhoc-1-1";
+    public static final String TRINO_COORDINATOR = "trinocoordinator";
 
     private Containers() {
     }
@@ -66,6 +67,8 @@ public final class TestcontainersConfig {
   /** Network endpoints the harness exposes to tests. */
   public static final class Network {
     public static final int SPARK_MASTER_WEB_UI_PORT = 8080;
+    /** Container-internal Trino HTTP port. Tests exec the CLI inside the coordinator. */
+    public static final int TRINO_PORT = 8080;
 
     private Network() {
     }
@@ -76,6 +79,13 @@ public final class TestcontainersConfig {
     public static final Duration CONTAINER_STARTUP = Duration.ofMinutes(5);
     public static final int HDFS_MAX_RETRIES = 12;
     public static final Duration HDFS_RETRY_INTERVAL = Duration.ofSeconds(10);
+    /**
+     * Trino's slow startup path is plugin discovery + metastore handshake. The CLI's
+     * first query against an unready coordinator returns a misleading error, so callers
+     * should retry up to this many times.
+     */
+    public static final int TRINO_READY_MAX_RETRIES = 18;
+    public static final Duration TRINO_READY_RETRY_INTERVAL = Duration.ofSeconds(10);
 
     private Timeouts() {
     }
@@ -87,6 +97,17 @@ public final class TestcontainersConfig {
     public static final String DEFAULT_COMPOSE_PREFIX = "docker-compose_hadoop340_hive2310_spark402";
     /** Substring present in compose prefixes that run Spark 4.x (e.g. "...spark402"). */
     public static final String SPARK_4_PREFIX_TOKEN = "spark4";
+
+    /**
+     * Comma-separated Docker Compose profiles to activate (passed through to the
+     * compose stack as {@code COMPOSE_PROFILES}). The Trino services live behind the
+     * {@link #TRINO_PROFILE} profile, so they only start when it is present.
+     */
+    public static final String COMPOSE_PROFILES_PROP = "compose.profiles";
+    /** Host path to the built Trino Hudi plugin, mounted into the coordinator container. */
+    public static final String TRINO_PLUGIN_DIR_PROP = "trino.plugin.dir";
+    /** Compose profile name that gates the Trino coordinator/worker services. */
+    public static final String TRINO_PROFILE = "trino";
 
     /**
      * Flip to {@code true} (e.g. {@code -Dhudi.integ.hive.verbose=true}) to route

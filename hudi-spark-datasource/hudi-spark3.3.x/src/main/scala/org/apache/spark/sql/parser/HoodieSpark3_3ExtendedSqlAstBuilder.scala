@@ -21,26 +21,24 @@ import org.apache.hudi.spark.sql.parser.{HoodieSqlBaseBaseVisitor, HoodieSqlBase
 import org.apache.hudi.spark.sql.parser.HoodieSqlBaseParser._
 
 import org.antlr.v4.runtime.{ParserRuleContext, Token}
-import org.antlr.v4.runtime.tree.{ParseTree, RuleNode, TerminalNode}
+import org.antlr.v4.runtime.tree.{ParseTree, RuleNode}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
-import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis._
-import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogStorageFormat}
+import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.expressions.aggregate.{First, Last}
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
-import org.apache.spark.sql.catalyst.parser.ParserUtils.{checkDuplicateClauses, checkDuplicateKeys, entry, escapedIdentifier, operationNotAllowed, source, string, stringWithoutUnescape, validate, withOrigin, EnhancedLogicalPlan}
+import org.apache.spark.sql.catalyst.parser.ParserUtils.{checkDuplicateClauses, checkDuplicateKeys, operationNotAllowed, source, string, stringWithoutUnescape, validate, withOrigin}
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.util.{truncatedString, CharVarcharUtils, DateTimeUtils, IntervalUtils}
+import org.apache.spark.sql.catalyst.util.{DateTimeUtils, IntervalUtils}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.BucketSpecHelper
 import org.apache.spark.sql.connector.catalog.TableCatalog
 import org.apache.spark.sql.connector.expressions.{ApplyTransform, BucketTransform, DaysTransform, Expression => V2Expression, FieldReference, HoursTransform, IdentityTransform, LiteralValue, MonthsTransform, Transform, YearsTransform}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.types.BlobType
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 import org.apache.spark.util.Utils.isTesting
 
@@ -58,6 +56,17 @@ import scala.collection.JavaConverters._
  */
 class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterface)
   extends HoodieSqlBaseBaseVisitor[AnyRef] with Logging {
+
+  /**
+   * Returns a [[ParseException]] carrying `message` as plain human-readable text, positioned at
+   * `ctx`. Spark 3.3's (String, ParserRuleContext) constructor takes the human message directly,
+   * unlike Spark 3.4+ where that constructor treats the string as an error class (#19450).
+   * The Spark 4.x builders render the same messages behind an "Operation not allowed: " prefix,
+   * so cross-profile test assertions must stay substring-based.
+   */
+  private def parseException(message: String, ctx: ParserRuleContext): ParseException = {
+    new ParseException(message, ctx)
+  }
 
   protected def typedVisit[T](ctx: ParseTree): T = {
     ctx.accept(this).asInstanceOf[T]
@@ -132,7 +141,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
 
     def toLiteral[T](f: UTF8String => Option[T], t: DataType): Literal = {
       f(UTF8String.fromString(value)).map(Literal(_, t)).getOrElse {
-        throw new ParseException(s"Cannot parse the $valueType value: $value", ctx)
+        throw parseException(s"Cannot parse the $valueType value: $value", ctx)
       }
     }
 
@@ -181,7 +190,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
             IntervalUtils.stringToInterval(UTF8String.fromString(value))
           } catch {
             case e: IllegalArgumentException =>
-              val ex = new ParseException(s"Cannot parse the INTERVAL value: $value", ctx)
+              val ex = parseException(s"Cannot parse the INTERVAL value: $value", ctx)
               ex.setStackTrace(e.getStackTrace)
               throw ex
           }
@@ -198,24 +207,28 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
           val padding = if (value.length % 2 != 0) "0" else ""
           Literal(DatatypeConverter.parseHexBinary(padding + value))
         case other =>
-          throw new ParseException(s"Literals of type '$other' are currently not supported.", ctx)
+          throw parseException(s"Literals of type '$other' are currently not supported.", ctx)
       }
     } catch {
       case e: IllegalArgumentException =>
         val message = Option(e.getMessage).getOrElse(s"Exception parsing $valueType")
-        throw new ParseException(message, ctx)
+        throw parseException(message, ctx)
     }
   }
 
   /**
-   * Create a NULL literal expression.
+   * Create a NULL literal expression. Reachable under ANSI keyword mode, where NULL (like
+   * FALSE) is a reserved word, so f(null, id) in transform-argument position parses as a
+   * null literal instead of a column reference.
    */
   override def visitNullLiteral(ctx: NullLiteralContext): Literal = withOrigin(ctx) {
     Literal(null)
   }
 
   /**
-   * Create a Boolean literal expression.
+   * Create a Boolean literal expression. Reachable under ANSI keyword mode, where FALSE is a
+   * reserved word (only TRUE is ansiNonReserved), so a bare false in transform-argument
+   * position parses as a boolean literal instead of a column reference.
    */
   override def visitBooleanLiteral(ctx: BooleanLiteralContext): Literal = withOrigin(ctx) {
     if (ctx.getText.toBoolean) {
@@ -272,13 +285,13 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     try {
       val rawBigDecimal = BigDecimal(rawStrippedQualifier)
       if (rawBigDecimal < minValue || rawBigDecimal > maxValue) {
-        throw new ParseException(s"Numeric literal $rawStrippedQualifier does not " +
+        throw parseException(s"Numeric literal $rawStrippedQualifier does not " +
           s"fit in range [$minValue, $maxValue] for type $typeName", ctx)
       }
       Literal(converter(rawStrippedQualifier))
     } catch {
       case e: NumberFormatException =>
-        throw new ParseException(e.getMessage, ctx)
+        throw parseException(e.getMessage, ctx)
     }
   }
 
@@ -336,7 +349,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       Literal(BigDecimal(raw).underlying())
     } catch {
       case e: AnalysisException =>
-        throw new ParseException(e.message, ctx)
+        throw parseException(e.message, ctx)
     }
   }
 
@@ -387,7 +400,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     if (yearMonthFields.nonEmpty) {
       if (dayTimeFields.nonEmpty) {
         val literalStr = source(ctx)
-        throw new ParseException(s"Cannot mix year-month and day-time fields: $literalStr", ctx)
+        throw parseException(s"Cannot mix year-month and day-time fields: $literalStr", ctx)
       }
       Literal(
         calendarInterval.months,
@@ -444,18 +457,20 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     if (ctx.errorCapturingMultiUnitsInterval != null) {
       val innerCtx = ctx.errorCapturingMultiUnitsInterval
       if (innerCtx.unitToUnitInterval != null) {
-        throw new ParseException("Can only have a single from-to unit in the interval literal syntax", innerCtx.unitToUnitInterval)
+        throw parseException("Can only have a single from-to unit in the interval literal syntax", innerCtx.unitToUnitInterval)
       }
       visitMultiUnitsInterval(innerCtx.multiUnitsInterval)
     } else if (ctx.errorCapturingUnitToUnitInterval != null) {
       val innerCtx = ctx.errorCapturingUnitToUnitInterval
       if (innerCtx.error1 != null || innerCtx.error2 != null) {
         val errorCtx = if (innerCtx.error1 != null) innerCtx.error1 else innerCtx.error2
-        throw new ParseException("Can only have a single from-to unit in the interval literal syntax", errorCtx)
+        throw parseException("Can only have a single from-to unit in the interval literal syntax", errorCtx)
       }
       visitUnitToUnitInterval(innerCtx.body)
     } else {
-      throw new ParseException("at least one time unit should be given for interval literal", ctx)
+      // Unreachable through Hudi's pruned grammar: a bare INTERVAL keyword binds to
+      // transformArgument's qualifiedName alternative first. Kept for parity with Spark.
+      throw parseException("at least one time unit should be given for interval literal", ctx)
     }
   }
 
@@ -477,7 +492,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
             // units and become valid ones, e.g. '1 day 2 hour'.
             // Ideally, we only ensure the value parts don't contain any units here.
             if (value.exists(Character.isLetter)) {
-              throw new ParseException("Can only use numbers in the interval value part for" +
+              throw parseException("Can only use numbers in the interval value part for" +
                 s" multiple unit value pairs interval form, but got invalid value: $value", ctx)
             }
             if (values(i).MINUS() == null) {
@@ -496,7 +511,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         IntervalUtils.stringToInterval(UTF8String.concat(kvs: _*))
       } catch {
         case i: IllegalArgumentException =>
-          val e = new ParseException(i.getMessage, ctx)
+          val e = parseException(i.getMessage, ctx)
           e.setStackTrace(i.getStackTrace)
           throw e
       }
@@ -518,7 +533,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
           }
         }
       }.getOrElse {
-        throw new ParseException("The value of from-to unit must be a string", ctx.intervalValue)
+        throw parseException("The value of from-to unit must be a string", ctx.intervalValue)
       }
       try {
         val from = ctx.from.getText.toLowerCase(Locale.ROOT)
@@ -531,12 +546,12 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
             IntervalUtils.fromDayTimeString(value,
               DayTimeIntervalType.stringToField(from), DayTimeIntervalType.stringToField(to))
           case _ =>
-            throw new ParseException(s"Intervals FROM $from TO $to are not supported.", ctx)
+            throw parseException(s"Intervals FROM $from TO $to are not supported.", ctx)
         }
       } catch {
         // Handle Exceptions thrown by CalendarInterval
         case e: IllegalArgumentException =>
-          val pe = new ParseException(e.getMessage, ctx)
+          val pe = parseException(e.getMessage, ctx)
           pe.setStackTrace(e.getStackTrace)
           throw pe
       }
@@ -577,7 +592,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
           HoodieSchema.parseTypeDescriptor(ctx.getText).asInstanceOf[HoodieSchema.Vector]
         } catch {
           case e: IllegalArgumentException =>
-            throw new ParseException(s"Invalid VECTOR type: ${e.getMessage}", ctx)
+            throw parseException(s"Invalid VECTOR type: ${e.getMessage}", ctx)
         }
         val sparkElemType = vectorSchema.getVectorElementType match {
           case HoodieSchema.Vector.VectorElementType.FLOAT => FloatType
@@ -594,7 +609,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       case ("interval", Nil) => CalendarIntervalType
       case (dt, params) =>
         val dtStr = if (params.nonEmpty) s"$dt(${params.mkString(",")})" else dt
-        throw new ParseException(s"DataType $dtStr is not supported.", ctx)
+        throw parseException(s"DataType $dtStr is not supported.", ctx)
     }
   }
 
@@ -605,7 +620,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       val endStr = ctx.to.getText.toLowerCase(Locale.ROOT)
       val end = YearMonthIntervalType.stringToField(endStr)
       if (end <= start) {
-        throw new ParseException(s"Intervals FROM $startStr TO $endStr are not supported.", ctx)
+        throw parseException(s"Intervals FROM $startStr TO $endStr are not supported.", ctx)
       }
       YearMonthIntervalType(start, end)
     } else {
@@ -620,7 +635,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       val endStr = ctx.to.getText.toLowerCase(Locale.ROOT)
       val end = DayTimeIntervalType.stringToField(endStr)
       if (end <= start) {
-        throw new ParseException(s"Intervals FROM $startStr TO $endStr are not supported.", ctx)
+        throw parseException(s"Intervals FROM $startStr TO $endStr are not supported.", ctx)
       }
       DayTimeIntervalType(start, end)
     } else {
@@ -640,13 +655,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       case HoodieSqlBaseParser.STRUCT =>
         StructType(Option(ctx.complexColTypeList).toSeq.flatMap(visitComplexColTypeList))
     }
-  }
-
-  /**
-   * Create top level table schema.
-   */
-  protected def createSchema(ctx: ColTypeListContext): StructType = {
-    StructType(Option(ctx).toSeq.flatMap(visitColTypeList))
   }
 
   /**
@@ -689,13 +697,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       val vectorSchema = HoodieSchema.parseTypeDescriptor(typeText).asInstanceOf[HoodieSchema.Vector]
       builder.putString(HoodieSchema.TYPE_METADATA_FIELD, vectorSchema.toTypeDescriptor)
     }
-  }
-
-  /**
-   * Create a [[StructType]] from a sequence of [[StructField]]s.
-   */
-  protected def createStructType(ctx: ComplexColTypeListContext): StructType = {
-    StructType(Option(ctx).toSeq.flatMap(visitComplexColTypeList))
   }
 
   /**
@@ -776,7 +777,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
 
   /**
    * Convert a table property list into a key-value map.
-   * This should be called through [[visitPropertyKeyValues]] or [[visitPropertyKeys]].
+   * This should be called through [[visitPropertyKeyValues]].
    */
   override def visitTablePropertyList(
                                        ctx: TablePropertyListContext): Map[String, String] = withOrigin(ctx) {
@@ -801,19 +802,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         s"Values must be specified for key(s): ${badKeys.mkString("[", ",", "]")}", ctx)
     }
     props
-  }
-
-  /**
-   * Parse a list of keys from a [[TablePropertyListContext]], assuming no values are specified.
-   */
-  def visitPropertyKeys(ctx: TablePropertyListContext): Seq[String] = {
-    val props = visitTablePropertyList(ctx)
-    val badKeys = props.filter { case (_, v) => v != null }.keys
-    if (badKeys.nonEmpty) {
-      operationNotAllowed(
-        s"Values should not be specified for key(s): ${badKeys.mkString("[", ",", "]")}", ctx)
-    }
-    props.keys.toSeq
   }
 
   /**
@@ -915,7 +903,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         case ref: FieldReference =>
           ref
         case nonRef =>
-          throw new ParseException(s"Expected a column reference for transform $name: $nonRef.describe", ctx)
+          throw parseException(s"Expected a column reference for transform $name: ${nonRef.describe}", ctx)
       }
     }
 
@@ -924,11 +912,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
                                  arguments: Seq[V2Expression]): FieldReference = {
       lazy val name: String = ctx.identifier.getText
       if (arguments.size > 1) {
-        throw new ParseException(s"Too many arguments for transform $name", ctx)
-      } else if (arguments.isEmpty) {
-        throw
-
-          new ParseException(s"Not enough arguments for transform $name", ctx)
+        throw parseException(s"Too many arguments for transform $name", ctx)
       } else {
         getFieldReference(ctx, arguments.head)
       }
@@ -951,7 +935,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
               case LiteralValue(longValue, LongType) =>
                 longValue.asInstanceOf[Long].toInt
               case lit =>
-                throw new ParseException(s"Invalid number of buckets: ${lit.describe}", applyCtx)
+                throw parseException(s"Invalid number of buckets: ${lit.describe}", applyCtx)
             }
 
             val fields = arguments.tail.map(arg => getFieldReference(applyCtx, arg))
@@ -989,7 +973,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         .map(typedVisit[Literal])
         .map(lit => LiteralValue(lit.value, lit.dataType))
       reference.orElse(literal)
-        .getOrElse(throw new ParseException("Invalid transform argument", ctx))
+        .getOrElse(throw parseException("Invalid transform argument", ctx))
     }
   }
 
@@ -999,13 +983,13 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     val legacyOn = conf.getConf(SQLConf.LEGACY_PROPERTY_NON_RESERVED)
     properties.filter {
       case (PROP_PROVIDER, _) if !legacyOn =>
-        throw new ParseException(s"$PROP_PROVIDER is a reserved table property, please use the USING clause to specify it.", ctx)
+        throw parseException(s"$PROP_PROVIDER is a reserved table property, please use the USING clause to specify it.", ctx)
       case (PROP_PROVIDER, _) => false
       case (PROP_LOCATION, _) if !legacyOn =>
-        throw new ParseException(s"$PROP_LOCATION is a reserved table property, please use the LOCATION clause to specify it.", ctx)
+        throw parseException(s"$PROP_LOCATION is a reserved table property, please use the LOCATION clause to specify it.", ctx)
       case (PROP_LOCATION, _) => false
       case (PROP_OWNER, _) if !legacyOn =>
-        throw new ParseException(s"$PROP_OWNER is a reserved table property, it will be set to the current user.", ctx)
+        throw parseException(s"$PROP_OWNER is a reserved table property, it will be set to the current user.", ctx)
       case (PROP_OWNER, _) => false
       case _ => true
     }
@@ -1018,7 +1002,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     var path = location
     val filtered = cleanTableProperties(ctx, options).filter {
       case (k, v) if k.equalsIgnoreCase("path") && path.nonEmpty =>
-        throw new ParseException(s"Duplicated table paths found: '${path.get}' and '$v'. LOCATION" +
+        throw parseException(s"Duplicated table paths found: '${path.get}' and '$v'. LOCATION" +
           s" and the case insensitive key 'path' in OPTIONS are all used to indicate the custom" +
           s" table path, you can only specify one of them.", ctx)
       case (k, v) if k.equalsIgnoreCase("path") =>
@@ -1044,8 +1028,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         SerdeInfo(storedAs = Some(c.identifier.getText))
       case (null, storageHandler) =>
         operationNotAllowed("STORED BY", ctx)
-      case _ =>
-        throw new ParseException("Expected either STORED AS or STORED BY, not both", ctx)
     }
   }
 
@@ -1144,7 +1126,8 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
               s"ROW FORMAT DELIMITED is only compatible with 'textfile', not '$fmt'", parentCtx)
           }
         case _ =>
-          // should never happen
+          // Reachable: ROW FORMAT ... STORED BY 'handler' leaves createFileFormatCtx.fileFormat
+          // null, so none of the typed arms above match.
           def str(ctx: ParserRuleContext): String = {
             (0 until ctx.getChildCount).map { i => ctx.getChild(i).getText }.mkString(" ")
           }
@@ -1230,14 +1213,13 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
   }
 
   /**
-   * Create a table, returning a [[CreateTable]] or [[CreateTableAsSelect]] logical plan.
+   * Create a table, returning a [[CreateTable]] logical plan.
    *
    * Expected format:
    * {{{
    *   CREATE [TEMPORARY] TABLE [IF NOT EXISTS] [db_name.]table_name
    *   [USING table_provider]
-   *   create_table_clauses
-   *   [[AS] select_statement];
+   *   create_table_clauses;
    *
    *   create_table_clauses (order insensitive):
    *     [PARTITIONED BY (partition_fields)]
@@ -1360,7 +1342,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
 
   /**
    * Convert a property list into a key-value map.
-   * This should be called through [[visitPropertyKeyValues]] or [[visitPropertyKeys]].
+   * This should be called through [[visitPropertyKeyValues]].
    */
   override def visitPropertyList(ctx: PropertyListContext): Map[String, String] = withOrigin(ctx) {
     val properties = ctx.property.asScala.map { property =>
@@ -1384,19 +1366,6 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         s"Values must be specified for key(s): ${badKeys.mkString("[", ",", "]")}", ctx)
     }
     props
-  }
-
-  /**
-   * Parse a list of keys from a [[PropertyListContext]], assuming no values are specified.
-   */
-  def visitPropertyKeys(ctx: PropertyListContext): Seq[String] = {
-    val props = visitPropertyList(ctx)
-    val badKeys = props.filter { case (_, v) => v != null }.keys
-    if (badKeys.nonEmpty) {
-      operationNotAllowed(
-        s"Values should not be specified for key(s): ${badKeys.mkString("[", ",", "]")}", ctx)
-    }
-    props.keys.toSeq
   }
 
   /**

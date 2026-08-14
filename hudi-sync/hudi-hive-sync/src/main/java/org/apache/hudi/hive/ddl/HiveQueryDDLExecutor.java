@@ -18,11 +18,13 @@
 
 package org.apache.hudi.hive.ddl;
 
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HiveDriverPool;
+import org.apache.hudi.hive.util.HiveMetaStoreClientPool;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -59,16 +61,22 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   // (createTable, schema evolution, single-statement runSQL callers) always uses the
   // session `hiveDriver` above. See HiveDriverPool javadoc.
   private final Option<HiveDriverPool> driverPool;
+  // When present, dropPartitionsToTable fans batches across this Thrift client pool.
+  // Owned by HoodieHiveSyncClient; close() is delegated through there. See
+  // HiveMetaStoreClientPool javadoc for the usage contract (partition-row ops only).
+  private final Option<HiveMetaStoreClientPool> metaStoreClientPool;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
-    this(config, metaStoreClient, Option.empty());
+    this(config, metaStoreClient, Option.empty(), Option.empty());
   }
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient,
-                              Option<HiveDriverPool> driverPool) {
+                              Option<HiveDriverPool> driverPool,
+                              Option<HiveMetaStoreClientPool> metaStoreClientPool) {
     super(config);
     this.metaStoreClient = metaStoreClient;
     this.driverPool = driverPool;
+    this.metaStoreClientPool = metaStoreClientPool;
     try {
       this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());
@@ -209,18 +217,84 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
     log.info("Drop partitions {} on {}", partitionsToDrop.size(), tableName);
     try {
-      for (String dropPartition : partitionsToDrop) {
-        if (HivePartitionUtil.partitionExists(metaStoreClient, tableName, dropPartition, partitionValueExtractor,
-            config)) {
-          String partitionClause =
-              HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
-          metaStoreClient.dropPartition(databaseName, tableName, partitionClause, false);
-        }
-        log.info("Drop partition {} on {}", dropPartition, tableName);
+      // Resolved here, on the calling thread, rather than inside the workers: this is the
+      // only sync path that would otherwise call a user-supplied PartitionValueExtractor
+      // from several threads at once. Extractors are pluggable and not required to be
+      // thread-safe, and a garbled clause would drop the wrong partition. It also halves
+      // the extractor calls, since partitionExists and the drop clause share the values.
+      List<PartitionToDrop> resolved = new ArrayList<>(partitionsToDrop.size());
+      for (String partition : partitionsToDrop) {
+        List<String> values = partitionValueExtractor.extractPartitionValuesInPath(partition);
+        resolved.add(new PartitionToDrop(partition, values,
+            HivePartitionUtil.getPartitionClauseForDrop(values, config)));
       }
+
+      int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+      List<List<PartitionToDrop>> batches = CollectionUtils.batches(resolved, batchSyncPartitionNum);
+      runDropBatches(tableName, batches);
     } catch (Exception e) {
       log.error("{} drop partition failed", tableId(databaseName, tableName), e);
       throw new HoodieHiveSyncException(tableId(databaseName, tableName) + " drop partition failed", e);
+    }
+  }
+
+  /**
+   * Drops partitions one batch at a time. When {@link #metaStoreClientPool} is present,
+   * batches fan out across the pool's worker threads (each borrowing an independent
+   * IMetaStoreClient); otherwise batches are dispatched sequentially against the
+   * session client. Hive has no batch-drop primitive that matches dropPartition's
+   * semantics, so each worker still iterates its chunk one partition at a time — the
+   * win is fanning chunks across independent Thrift clients.
+   *
+   * <p>First-error semantics come from {@link ParallelDispatch}, shared with
+   * {@code HiveDriverPool}: the first failure is rethrown, batches that have not started
+   * are stopped via the task-side abort flag, and later failures are logged at WARN.
+   */
+  private void runDropBatches(String tableName, List<List<PartitionToDrop>> batches) throws Exception {
+    if (!metaStoreClientPool.isPresent()) {
+      for (List<PartitionToDrop> batch : batches) {
+        applyDropBatch(metaStoreClient, tableName, batch);
+      }
+      return;
+    }
+    HiveMetaStoreClientPool pool = metaStoreClientPool.get();
+    pool.awaitAll(
+        pool.dispatchAll(batches, (client, batch) -> applyDropBatch(client, tableName, batch)),
+        "drop partition");
+  }
+
+  private void applyDropBatch(IMetaStoreClient client, String tableName, List<PartitionToDrop> batch) throws Exception {
+    int dropped = 0;
+    for (PartitionToDrop dropPartition : batch) {
+      if (HivePartitionUtil.partitionExists(client, tableName, dropPartition.path,
+          dropPartition.values, config)) {
+        client.dropPartition(databaseName, tableName, dropPartition.clause, false);
+        dropped++;
+      }
+      // Per-partition detail stays at debug: a batch can hold thousands of partitions
+      // and N workers log concurrently, so INFO carries the per-batch summary instead.
+      log.debug("Dropped partition {} on {}", dropPartition.path, tableName);
+    }
+    log.info("Dropped {} of {} partitions in batch on {}", dropped, batch.size(), tableName);
+  }
+
+  /**
+   * A partition to drop with its extractor-derived values already resolved, so worker
+   * threads never touch the shared {@link PartitionValueExtractor}. Immutable: the
+   * {@code values} list is copied and wrapped unmodifiable at construction.
+   */
+  private static final class PartitionToDrop {
+    private final String path;
+    private final List<String> values;
+    private final String clause;
+
+    private PartitionToDrop(String path, List<String> values, String clause) {
+      this.path = path;
+      // Copied, not just wrapped: PartitionValueExtractor may hand back a buffer it reuses
+      // across calls, and unmodifiableList would leave every entry aliasing the last
+      // extraction. partitionExists would then check the wrong partition and skip drops.
+      this.values = Collections.unmodifiableList(new ArrayList<>(values));
+      this.clause = clause;
     }
   }
 

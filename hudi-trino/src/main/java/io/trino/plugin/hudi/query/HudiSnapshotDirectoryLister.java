@@ -21,12 +21,13 @@ import io.trino.plugin.hudi.query.index.HudiIndexSupport;
 import io.trino.plugin.hudi.query.index.IndexSupportFactory;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.SchemaTableName;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import java.util.List;
 import java.util.Optional;
@@ -54,9 +55,22 @@ public class HudiSnapshotDirectoryLister
         this.lazyFileSystemView = Lazy.lazily(() -> {
             HoodieTimer timer = HoodieTimer.start();
             HoodieTableMetaClient metaClient = tableHandle.getMetaClient();
-            HoodieTableFileSystemView fileSystemView = getFileSystemView(lazyTableMetadata.get(), metaClient);
-            if (enableMetadataTable) {
-                fileSystemView.loadAllPartitions();
+            HoodieTableFileSystemView fileSystemView;
+            try {
+                fileSystemView = getFileSystemView(lazyTableMetadata.get(), metaClient);
+                if (enableMetadataTable) {
+                    fileSystemView.loadAllPartitions();
+                }
+            }
+            catch (Exception e) {
+                // A failure here is a metadata-table read failure (the metastore/table itself is
+                // fine), so fall back to direct file listing instead of failing the query. The
+                // failed view is deliberately not closed: closing it would also close the shared
+                // HoodieTableMetadata behind lazyTableMetadata, which the split loader and the
+                // index supports still read through.
+                log.error(e, "Failed to load the file system view of table %s via the metadata table, falling back to direct file listing",
+                        schemaTableName);
+                fileSystemView = createDirectListingFileSystemView(metaClient);
             }
             log.info("Created file system view of table %s in %s ms", schemaTableName, timer.endTimer());
             return fileSystemView;
@@ -65,6 +79,19 @@ public class HudiSnapshotDirectoryLister
         Lazy<HoodieTableMetaClient> lazyMetaClient = Lazy.lazily(tableHandle::getMetaClient);
         this.indexSupportOpt = enableMetadataTable ?
                 IndexSupportFactory.createIndexSupport(tableHandle, lazyMetaClient, lazyTableMetadata, tableHandle.getRegularPredicates(), session) : Optional.empty();
+    }
+
+    /**
+     * Builds a file system view that lists files directly from storage, bypassing the metadata table.
+     * Used as the fallback when the metadata-table-backed view cannot be loaded (e.g. an MDT read
+     * failure); it lists lazily per partition, so no {@code loadAllPartitions()} here.
+     */
+    private static HoodieTableFileSystemView createDirectListingFileSystemView(HoodieTableMetaClient metaClient)
+    {
+        return HoodieTableFileSystemView.fileListingBasedFileSystemView(
+                new HoodieLocalEngineContext(metaClient.getStorage().getConf()),
+                metaClient,
+                metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
     }
 
     @Override

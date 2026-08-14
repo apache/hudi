@@ -23,10 +23,12 @@ on:
       - 'hudi-client/hudi-java-client/**'
       - 'hudi-sync/hudi-sync-common/**'
       - 'hudi-sync/hudi-hive-sync/**'
-  # No `paths:` filter here on purpose. test-hudi-trino-plugin is a required status check
-  # in .asf.yaml, and a path-filtered workflow is never instantiated on PRs that miss the
-  # filter, leaving the required context permanently pending. Run on every PR instead and
-  # skip the expensive steps via the detect-trino-changes job below.
+  # No `paths:` filter here on purpose. A path-filtered workflow is never instantiated on
+  # PRs that miss the filter, so any run of this workflow that a reviewer or a required
+  # status check expects to see would sit permanently pending. Run on every PR instead and
+  # skip the expensive steps via the detect-trino-changes job below. (test-hudi-trino-plugin
+  # is no longer a required check: the .asf.yaml contexts list was reset when the CI matrix
+  # was trimmed. Restoring the filter here is an option if runner time gets tight again.)
   pull_request:
     branches:
       - master

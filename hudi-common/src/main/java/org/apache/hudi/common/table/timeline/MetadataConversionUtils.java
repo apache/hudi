@@ -171,7 +171,7 @@ public class MetadataConversionUtils {
     Option<byte[]> planBytes = planBuffer != null ? Option.of(planBuffer.array()) : Option.empty();
 
     String instantTime = lsmTimelineRecord.get(ArchivedTimelineV2.INSTANT_TIME_ARCHIVED_META_FIELD).toString();
-    String completionTime = lsmTimelineRecord.get(ArchivedTimelineV2.COMPLETION_TIME_ARCHIVED_META_FIELD).toString();
+    String completionTime = ArchivedTimelineV2.completionTimeOrInstantTime(lsmTimelineRecord, instantTime);
 
     HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
     archivedMetaWrapper.setCommitTime(instantTime);

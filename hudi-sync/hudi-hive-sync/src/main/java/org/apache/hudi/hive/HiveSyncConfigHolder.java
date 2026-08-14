@@ -132,18 +132,24 @@ public class HiveSyncConfigHolder {
           + "Hive Driver workers, with ADD and TOUCH additionally split into batches of "
           + "`hoodie.datasource.hive_sync.batch_num` partitions per statement (ADD was already batched "
           + "before this flag existed; only its dispatch becomes parallel here). SET_LOCATION remains one "
-          + "statement per partition, as Hive SQL has no multi-partition form. DROP remains serial. "
-          + "Table-level statements (create/alter table, last commit time, writer version) continue to run "
-          + "on the single session Driver. Default off; the default HiveQL path is unchanged unless "
+          + "statement per partition, as Hive SQL has no multi-partition form. DROP is also parallelized, "
+          + "but over a pool of metastore (Thrift) clients rather than Hive Driver workers, since it is "
+          + "issued as dropPartition calls rather than SQL; drops are split into batches of "
+          + "`hoodie.datasource.hive_sync.batch_num` partitions and fanned across those clients. DROP falls "
+          + "back to sequential execution on the single session client when "
+          + "`hoodie.datasource.hive_sync.use_spark_catalog` is true, as the Spark catalog client cannot be "
+          + "pooled. Table-level statements (create/alter table, last commit time, writer version) continue "
+          + "to run on the single session Driver. Default off; the default HiveQL path is unchanged unless "
           + "explicitly opted in.");
   public static final ConfigProperty<Integer> HIVE_SYNC_BATCHING_THREADS = ConfigProperty
       .key("hoodie.datasource.hive_sync.batching.threads")
       .defaultValue(4)
       .markAdvanced()
       .sinceVersion("1.3.0")
-      .withDocumentation("Pool size (number of Hive Driver workers) and worker-thread count for parallel "
-          + "HiveQL partition dispatch when `hoodie.datasource.hive_sync.batching.enabled` is true. "
-          + "Ignored otherwise.");
+      .withDocumentation("Number of worker threads used for parallel HiveQL partition dispatch when "
+          + "`hoodie.datasource.hive_sync.batching.enabled` is true. The same value sizes both pools: the "
+          + "Hive Driver workers used for ADD/TOUCH/SET_LOCATION and the metastore (Thrift) clients used "
+          + "for DROP. Ignored otherwise.");
   public static final ConfigProperty<String> HIVE_SYNC_MODE = ConfigProperty
       .key("hoodie.datasource.hive_sync.mode")
       .noDefaultValue()

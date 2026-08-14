@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 
 import lombok.Getter;
@@ -303,8 +304,9 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
   }
 
   private void readCompletionTime(String instantTime, GenericRecord record) {
-    final String completionTime = record.get(COMPLETION_TIME_ARCHIVED_META_FIELD).toString();
-    setCompletionTime(instantTime, completionTime);
+    // The field is nullable in HoodieLSMTimelineInstant and is absent for instants archived before it
+    // existed, so leave the fallback to setCompletionTime rather than dereferencing here.
+    setCompletionTime(instantTime, StringUtils.objToString(record.get(COMPLETION_TIME_ARCHIVED_META_FIELD)));
   }
 
   private void setCompletionTime(String beginInstantTime, String completionTime) {

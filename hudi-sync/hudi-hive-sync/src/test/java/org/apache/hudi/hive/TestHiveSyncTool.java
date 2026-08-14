@@ -404,6 +404,46 @@ public class TestHiveSyncTool {
   }
 
   /**
+   * Exercises the DROP path in HiveQL mode with batching on. DROP routes through
+   * IMetaStoreClient.dropPartition (Thrift, not Hive Driver), so when batching is
+   * enabled it fans out across HiveMetaStoreClientPool. Verifies the partition set
+   * shrinks as expected when batches drop in parallel.
+   */
+  @Test
+  public void testHiveQLDropPartitionsWithBatching() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HIVEQL.name());
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_ENABLED.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_BATCHING_THREADS.key(), "3");
+    // Small batch_num so we get multiple drop batches dispatched in parallel.
+    hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "2");
+
+    int partitionCount = 8;
+    HiveTestUtil.createCOWTable("100", partitionCount, true);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(partitionCount, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "All partitions should be added before drop test");
+
+    // Drop half the partitions through the parallel pool path.
+    List<String> existing = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).stream()
+        .map(p -> getRelativePartitionPath(new Path(basePath), new Path(p.getStorageLocation())))
+        .collect(Collectors.toList());
+    List<String> toDrop = existing.subList(0, partitionCount / 2);
+    hiveClient.dropPartitions(HiveTestUtil.TABLE_NAME, toDrop);
+
+    List<Partition> remaining = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(partitionCount - toDrop.size(), remaining.size(),
+        "Parallel DROP should remove exactly the requested partitions");
+    Set<String> remainingPaths = remaining.stream()
+        .map(p -> getRelativePartitionPath(new Path(basePath), new Path(p.getStorageLocation())))
+        .collect(Collectors.toSet());
+    for (String dropped : toDrop) {
+      assertFalse(remainingPaths.contains(dropped),
+          "Dropped partition " + dropped + " must not appear in remaining set");
+    }
+  }
+
+  /**
    * Exercises the SET_LOCATION path in HiveQL mode with batching on. SET_LOCATION
    * emits one ALTER PARTITION ... SET LOCATION statement per partition (Hive SQL
    * has no multi-partition SET LOCATION), so this is the fan-out path most likely
@@ -2536,12 +2576,16 @@ public class TestHiveSyncTool {
 
     HiveTestUtil.addMORPartitions(0, true, true, true, ZonedDateTime.now().plusDays(2), commitTime2, commitTime3);
 
+    // No sync condition is met, but the sync marker trails the midpoint of the active commits
+    // timeline ([100, 101, 102, 103] with midpoint 102), so it advances to the last commit.
+    reInitHiveSyncClient();
     reSyncHiveTable();
-    assertEquals(commitTime1, hiveClient.getLastCommitTimeSynced(tableName).get());
+    assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(tableName).get());
 
     // Let the last commit time synced to be before the start of the active timeline,
-    // to trigger the fallback of listing all partitions. There is no partition change
-    // and the last commit time synced should still be the same.
+    // to trigger the fallback of listing all partitions. There is no partition change,
+    // and the sync marker again trails the timeline midpoint, so it advances to the
+    // last commit instead of aging out further.
     HiveTestUtil.addMORPartitions(0, true, true, true, ZonedDateTime.now().plusDays(2), commitTime4, commitTime5);
     HiveTestUtil.removeCommitFromActiveTimeline(commitTime0, COMMIT_ACTION);
     HiveTestUtil.removeCommitFromActiveTimeline(commitTime1, DELTA_COMMIT_ACTION);
@@ -2549,7 +2593,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.removeCommitFromActiveTimeline(commitTime3, DELTA_COMMIT_ACTION);
     reInitHiveSyncClient();
     reSyncHiveTable();
-    assertEquals(commitTime1, hiveClient.getLastCommitTimeSynced(tableName).get());
+    assertEquals(commitTime5, hiveClient.getLastCommitTimeSynced(tableName).get());
   }
 
   @ParameterizedTest

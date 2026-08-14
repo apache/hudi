@@ -19,7 +19,9 @@
 
 package org.apache.spark.sql.hudi.dml.schema
 
-import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.HoodieSchemaException
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -250,7 +252,581 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       metaClient.reloadActiveTimeline()
       assert(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0,
         "Expected at least one .clean instant on the timeline after compaction")
+
+      // Round 2: the compaction above compacted a log-only slice, so it never read a
+      // parquet base file. Pin that the compacted base file is shredded, then drive a
+      // second compaction that reads it through the internal reader
+      // (SparkFileFormatInternalRowReaderContext) and must carry rows 3 and 4, which
+      // exist only in that base file, forward (#19556).
+      val compactedFiles = listDataParquetFiles(tablePath)
+      assert(compactedFiles.nonEmpty, "Should have a compacted base parquet file")
+      compactedFiles.foreach { filePath =>
+        val parquetSchema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(parquetSchema, "v")
+        assert(variantGroup.containsField("typed_value"),
+          s"Compacted base file should carry typed_value. Schema:\n$variantGroup")
+      }
+
+      // The v2-merged deltacommit above was the first after the compaction; four more
+      // reach max.delta.commits = 5 and trip the second compaction inline.
+      spark.sql(s"""update $tableName set v = parse_json('{"key":"v1-r2"}'), ts = 1003 where id = 1""")
+      spark.sql(s"""update $tableName set v = parse_json('{"key":"v2-r2"}'), ts = 1004 where id = 2""")
+      spark.sql(s"""update $tableName set v = parse_json('{"key":"v1-r3"}'), ts = 1005 where id = 1""")
+      spark.sql(s"""update $tableName set v = parse_json('{"key":"v2-r3"}'), ts = 1006 where id = 2""")
+
+      metaClient.reloadActiveTimeline()
+      assertResult(2)(metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants.countInstants)
+
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"v1-r3\"}", 1005),
+        Seq(2, "{\"key\":\"v2-r3\"}", 1006),
+        Seq(3, "{\"key\":\"value3\"}", 1000),
+        Seq(4, "{\"key\":\"value4\"}", 1000)
+      )
+
+      // Incremental round trip over the shredded table: batch incremental reads the
+      // shredded base file through the file-group-reader file format with a catalyst
+      // schema, a stack nothing else in this suite pins for variant columns. The
+      // no-catalyst-schema legs are covered by the CDC round trip below and, for
+      // streaming with hoodie.file.group.reader.enabled=false, by
+      // TestStreamingSource#"test mor stream source reads shredded variant with legacy
+      // file group reader disabled".
+      val incRows = spark.read.format("hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        .option(DataSourceReadOptions.START_COMMIT.key, "000")
+        .load(tablePath)
+        .selectExpr("id", "cast(v as string) as v", "ts")
+        .orderBy("id")
+        .collect()
+      assertResult(4)(incRows.length)
+      assertResult("{\"key\":\"v1-r3\"}")(incRows(0).getString(1))
+      assertResult("{\"key\":\"v2-r3\"}")(incRows(1).getString(1))
+      assertResult("{\"key\":\"value3\"}")(incRows(2).getString(1))
+      assertResult("{\"key\":\"value4\"}")(incRows(3).getString(1))
     })
+  }
+
+  test("Test COW clustering preserves VARIANT values") {
+    // Same Spark 4.1 gate as the compaction test above: clustering reads the shredded
+    // base files back through the native reader, which rejects the 3-field shredded
+    // layout before SPARK-54410 (Spark 4.1+).
+    assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
+
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      // Clustering rewrites ALL rows of the clustered file groups through the internal
+      // write-side reader context (SparkReaderContextFactory ->
+      // SparkFileFormatInternalRowReaderContext), the stack whose blob handling silently
+      // lost bytes in #19232. Nothing pinned its VARIANT behavior: this is the first
+      // clustering coverage for the type. Shredding is forced so the rewrite reads and
+      // rewrites the shredded layout, the default in production.
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v variant,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.write.shredding.enabled = 'true',
+           |  hoodie.parquet.variant.force.shredding.schema.for.test = 'key string',
+           |  hoodie.index.type = 'INMEMORY',
+           |  hoodie.parquet.small.file.limit = '0',
+           |  hoodie.clustering.inline = 'true',
+           |  hoodie.clustering.inline.max.commits = '2'
+           | )
+       """.stripMargin)
+
+      // small.file.limit = 0 keeps the second insert in its own file group. Otherwise the
+      // second commit bin-packs into the first file group and rewrites it through the CoW
+      // small-file MERGE (a different internal read stack), conflating that path's variant
+      // handling with the clustering rewrite this test isolates.
+      spark.sql(s"insert into $tableName values " +
+        "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
+        "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
+
+      // The pre-clustering base file must actually carry the shredded layout; without this
+      // check the test silently degrades into the unshredded twin below if the forced
+      // shredding schema ever stops taking effect.
+      val preClusteringFiles = listDataParquetFiles(tablePath)
+      assert(preClusteringFiles.nonEmpty, "Should have at least one data parquet file before clustering")
+      preClusteringFiles.foreach { filePath =>
+        val parquetSchema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(parquetSchema, "v")
+        assert(variantGroup.containsField("typed_value"),
+          s"Pre-clustering base file should carry typed_value. Schema:\n$variantGroup")
+      }
+
+      // Second commit trips inline clustering (max.commits = 2), which rewrites the rows
+      // of the first commit too.
+      spark.sql(s"insert into $tableName values " +
+        "(3, parse_json('{\"key\":\"value3\"}'), 1000), " +
+        "(4, parse_json('{\"key\":\"value4\"}'), 1000)")
+
+      // getLastClusteringInstant filters by action only, so a REQUESTED/INFLIGHT instant
+      // satisfies isPresent; isCompleted confirms the rewrite finished.
+      val metaClient = createMetaClient(spark, tablePath)
+      val lastClustering = metaClient.getActiveTimeline.getLastClusteringInstant
+      assert(lastClustering.isPresent && lastClustering.get.isCompleted,
+        "A COMPLETED clustering (replacecommit) instant must exist after inline clustering; " +
+          "without a completed rewrite the round-trip below proves nothing")
+
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"value1\"}", 1000),
+        Seq(2, "{\"key\":\"value2\"}", 1000),
+        Seq(3, "{\"key\":\"value3\"}", 1000),
+        Seq(4, "{\"key\":\"value4\"}", 1000)
+      )
+
+      // VARIANT must still surface as the native type after the clustering rewrite.
+      val variantField = spark.table(tableName).schema.find(_.name == "v").get
+      assertResult("variant")(variantField.dataType.typeName)
+    })
+  }
+
+  test("Test COW clustering preserves unshredded VARIANT values") {
+    // Companion to the shredded clustering test above, with shredding disabled. If this
+    // passes while the shredded one fails, the loss is specific to reading the shredded
+    // layout inside the clustering rewrite, not to variant clustering in general.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Variant clustering read-back requires Spark 4.1 or higher")
+
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v variant,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.write.shredding.enabled = 'false',
+           |  hoodie.index.type = 'INMEMORY',
+           |  hoodie.parquet.small.file.limit = '0',
+           |  hoodie.clustering.inline = 'true',
+           |  hoodie.clustering.inline.max.commits = '2'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values " +
+        "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
+        "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
+
+      // Pin the layout: these files must NOT carry typed_value, or this twin silently
+      // becomes a copy of the shredded test above and the unshredded leg of the rewrite
+      // goes uncovered.
+      val preClusteringFiles = listDataParquetFiles(tablePath)
+      assert(preClusteringFiles.nonEmpty, "Should have at least one data parquet file before clustering")
+      preClusteringFiles.foreach { filePath =>
+        val parquetSchema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(parquetSchema, "v")
+        assert(!variantGroup.containsField("typed_value"),
+          s"Unshredded base file must not carry typed_value. Schema:\n$variantGroup")
+      }
+
+      spark.sql(s"insert into $tableName values " +
+        "(3, parse_json('{\"key\":\"value3\"}'), 1000), " +
+        "(4, parse_json('{\"key\":\"value4\"}'), 1000)")
+
+      val metaClient = createMetaClient(spark, tablePath)
+      val lastClustering = metaClient.getActiveTimeline.getLastClusteringInstant
+      assert(lastClustering.isPresent && lastClustering.get.isCompleted,
+        "A COMPLETED clustering (replacecommit) instant must exist after inline clustering")
+
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"value1\"}", 1000),
+        Seq(2, "{\"key\":\"value2\"}", 1000),
+        Seq(3, "{\"key\":\"value3\"}", 1000),
+        Seq(4, "{\"key\":\"value4\"}", 1000)
+      )
+    })
+  }
+
+  test("Test CDC captures VARIANT values from shredded and unshredded base files") {
+    // #19578: CDC is the only default-config query path that builds the internal reader
+    // context without a catalyst schema, and its BASE_FILE_INSERT case additionally reads
+    // the new base file directly, bypassing the context, so it needs its own full-variant
+    // rewrite. That rewrite is picked from the spark adapter and the requested schema alone,
+    // never from the file, so the unshredded leg runs through it too; both layouts are swept
+    // below so neither side of that branch goes uncovered.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
+
+    // OP_KEY_ONLY reconstructs both images by reading the file slices; DATA_BEFORE_AFTER
+    // (the default) reads the update images from the cdc log instead. The insert leg takes
+    // BASE_FILE_INSERT in both modes.
+    Seq(true, false).foreach { shredded =>
+      Seq("OP_KEY_ONLY", "DATA_BEFORE_AFTER").foreach { loggingMode =>
+        // SPARK is pinned instead of sweeping both record types: a cdc-enabled table always
+        // writes through FileGroupReaderBasedMergeHandle, and the merger's record type picks
+        // that handle's reader context. AVRO would route the update's base-file read through
+        // HoodieAvroParquetReader, whose shredded read is the separate defect tracked as
+        // #19567/#19582; SPARK routes it through SparkFileFormatInternalRowReaderContext,
+        // fixed in #19558. The CDC read path under test is independent of that choice.
+        withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
+          val leg = s"$loggingMode, shredded=$shredded"
+          val tableName = generateTableName
+          val tablePath = tmp.getCanonicalPath
+          // The forced shredding schema belongs to the shredded leg only; the unshredded leg
+          // must reach the writer with shredding off and no forced schema.
+          val forceShreddingProp =
+            if (shredded) "hoodie.parquet.variant.force.shredding.schema.for.test = 'key string'," else ""
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  v variant,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  type = 'cow',
+               |  preCombineField = 'ts',
+               |  'hoodie.table.cdc.enabled' = 'true',
+               |  'hoodie.table.cdc.supplemental.logging.mode' = '$loggingMode',
+               |  hoodie.parquet.variant.write.shredding.enabled = '$shredded',
+               |  $forceShreddingProp
+               |  hoodie.index.type = 'INMEMORY'
+               | )
+           """.stripMargin)
+
+          spark.sql(s"""insert into $tableName values (1, parse_json('{"key":"value1"}'), 1000)""")
+
+          // Pin the layout the CDC reads: without this, one leg silently degrades into a
+          // second copy of the other and its half of the rewrite branch goes uncovered.
+          val baseFiles = listDataParquetFiles(tablePath)
+          assert(baseFiles.nonEmpty, s"[$leg] should have a base parquet file after the insert")
+          baseFiles.foreach { filePath =>
+            val parquetSchema = readParquetSchema(filePath)
+            val variantGroup = getFieldAsGroup(parquetSchema, "v")
+            if (shredded) {
+              assert(variantGroup.containsField("typed_value"),
+                s"[$leg] base file should carry typed_value. Schema:\n$variantGroup")
+            } else {
+              assert(!variantGroup.containsField("typed_value"),
+                s"[$leg] base file must not carry typed_value. Schema:\n$variantGroup")
+            }
+          }
+
+          spark.sql(s"""update $tableName set v = parse_json('{"key":"value2"}'), ts = 1001 where id = 1""")
+
+          val cdc = spark.read.format("hudi")
+            .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+            .option(DataSourceReadOptions.INCREMENTAL_FORMAT.key, DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
+            .option(DataSourceReadOptions.START_COMMIT.key, "000")
+            .load(tablePath)
+
+          // Insert leg: the after-image comes from BASE_FILE_INSERT's direct read of the
+          // base file; a null here means that read dropped the variant payload.
+          val insertRows = cdc.where("op = 'i'")
+            .selectExpr("get_json_object(after, '$.v.key') as after_key").collect()
+          assert(insertRows.length == 1, s"[$leg] expected exactly one insert cdc row")
+          assert(insertRows(0).getString(0) == "value1",
+            s"[$leg] insert after-image lost the variant payload: ${insertRows(0)}")
+
+          // Update leg: images come from slice reads (OP_KEY_ONLY) or the cdc log
+          // (DATA_BEFORE_AFTER); both must carry the variant payloads.
+          val updateRows = cdc.where("op = 'u'")
+            .selectExpr(
+              "get_json_object(before, '$.v.key') as before_key",
+              "get_json_object(after, '$.v.key') as after_key")
+            .collect()
+          assert(updateRows.length == 1, s"[$leg] expected exactly one update cdc row")
+          assert(updateRows(0).getString(0) == "value1",
+            s"[$leg] update before-image lost the variant payload: ${updateRows(0)}")
+          assert(updateRows(0).getString(1) == "value2",
+            s"[$leg] update after-image lost the variant payload: ${updateRows(0)}")
+        })
+      }
+    }
+  }
+
+  test("Test COW small-file merge preserves shredded VARIANT values") {
+    // The #19567 repro: the second insert bin-packs into the existing small file group, and the
+    // small-file merge (HoodieConcatHandle -> HoodieMergeHelper) rewrites the old base file
+    // through the AVRO read path (HoodieAvroParquetReader + HoodieVariantReconstruction), not the
+    // Spark reader context the clustering tests above exercise. Before the fix, the footer-derived
+    // reader schema lost the variant logical type, so the merge's strict-projection check failed
+    // and degenerated the requested schema to the footer schema itself; reconstruction had no
+    // variant column to anchor on, and the writer-schema rewrite silently dropped typed_value,
+    // nulling rows 1-2 after the second commit. Pinned to the AVRO record type: that is the leg
+    // this fix covers, and the record type picks the reader the merge uses. Unlike the clustering
+    // tests, small.file.limit stays at its default on purpose: the bin-pack is the trigger.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
+
+    withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v variant,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.write.shredding.enabled = 'true',
+           |  hoodie.parquet.variant.force.shredding.schema.for.test = 'key string',
+           |  hoodie.index.type = 'INMEMORY'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values " +
+        "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
+        "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
+
+      // Pin the trigger: the first base file must be shredded, or this degenerates into a
+      // plain unshredded merge.
+      val firstFiles = listDataParquetFiles(tablePath)
+      assert(firstFiles.nonEmpty, "Should have at least one data parquet file after the first insert")
+      firstFiles.foreach { filePath =>
+        val parquetSchema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(parquetSchema, "v")
+        assert(variantGroup.containsField("typed_value"),
+          s"First base file should carry typed_value. Schema:\n$variantGroup")
+      }
+
+      spark.sql(s"insert into $tableName values " +
+        "(3, parse_json('{\"key\":\"value3\"}'), 1000), " +
+        "(4, parse_json('{\"key\":\"value4\"}'), 1000)")
+
+      // Pin that the second commit went through the small-file merge: both parquet versions
+      // belong to one file group, no second group was created.
+      val fileGroupIds = listDataParquetFiles(tablePath)
+        .map(f => FSUtils.getFileId(new HadoopPath(f).getName)).distinct
+      assert(fileGroupIds.size == 1,
+        s"Second insert should bin-pack into the first file group via the small-file merge, got: $fileGroupIds")
+
+      // Rows 1 and 2 survive only if the merge carried them out of the shredded base file;
+      // nulls here mean the AVRO read path dropped typed_value (#19567).
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"value1\"}", 1000),
+        Seq(2, "{\"key\":\"value2\"}", 1000),
+        Seq(3, "{\"key\":\"value3\"}", 1000),
+        Seq(4, "{\"key\":\"value4\"}", 1000)
+      )
+    })
+  }
+
+  test("Test COW small-file merge preserves shredded VARIANT values when the schema evolves") {
+    // The evolving-schema leg of the same merge. Adding a column makes the writer schema stop
+    // being a strict projection of the base file's, so runMerge takes the other branch of
+    // recordSchema = isPureProjection ? writerSchema : readerSchema. That branch used to hand the
+    // reader the raw footer schema, where the variant column is a plain record, so reconstruction
+    // could not anchor and rewriteRecordWithNewSchema copied {metadata, value} by name and dropped
+    // typed_value - the same silent corruption as the un-evolved case, reached without any
+    // schema-on-read config. Aligning the reader schema up front covers both branches.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
+
+    withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v variant,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.write.shredding.enabled = 'true',
+           |  hoodie.parquet.variant.force.shredding.schema.for.test = 'key string',
+           |  hoodie.index.type = 'INMEMORY'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values " +
+        "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
+        "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
+
+      val firstFiles = listDataParquetFiles(tablePath)
+      assert(firstFiles.nonEmpty, "Should have at least one data parquet file after the first insert")
+      firstFiles.foreach { filePath =>
+        val parquetSchema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(parquetSchema, "v")
+        assert(variantGroup.containsField("typed_value"),
+          s"First base file should carry typed_value. Schema:\n$variantGroup")
+      }
+
+      // The added column is what breaks the strict projection: the writer schema now carries a
+      // field the base file does not have.
+      spark.sql(s"alter table $tableName add columns (note string)")
+
+      spark.sql(s"insert into $tableName values " +
+        "(3, parse_json('{\"key\":\"value3\"}'), 1000, 'n3'), " +
+        "(4, parse_json('{\"key\":\"value4\"}'), 1000, 'n4')")
+
+      val fileGroupIds = listDataParquetFiles(tablePath)
+        .map(f => FSUtils.getFileId(new HadoopPath(f).getName)).distinct
+      assert(fileGroupIds.size == 1,
+        s"Second insert should bin-pack into the first file group via the small-file merge, got: $fileGroupIds")
+
+      // Rows 1-2 keep their variants and pick up a null for the new column; rows 3-4 carry it.
+      checkAnswer(s"select id, cast(v as string), ts, note from $tableName order by id")(
+        Seq(1, "{\"key\":\"value1\"}", 1000, null),
+        Seq(2, "{\"key\":\"value2\"}", 1000, null),
+        Seq(3, "{\"key\":\"value3\"}", 1000, "n3"),
+        Seq(4, "{\"key\":\"value4\"}", 1000, "n4")
+      )
+    })
+  }
+
+  test("Test COW small-file merge preserves unshredded VARIANT values") {
+    // Companion to the shredded small-file merge test above, with shredding disabled, split the
+    // same way as the clustering pair. The shredded twin only proves the merge stopped losing
+    // typed_value; this one guards the other direction, because alignShreddedVariants now runs on
+    // every HoodieMergeHelper.runMerge. An ordinary variant table writes the plain {metadata,
+    // value} layout, nothing should match the shredded shape, the alignment must be a no-op, and
+    // the bin-pack must keep round-tripping exactly as it did before the fix. If this goes red
+    // while the shredded twin stays green, the alignment is reaching columns it should not.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Variant small-file merge read-back requires Spark 4.1 or higher")
+
+    withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v variant,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.write.shredding.enabled = 'false',
+           |  hoodie.index.type = 'INMEMORY'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values " +
+        "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
+        "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
+
+      // Pin the layout: these files must NOT carry typed_value, or this twin silently becomes a
+      // copy of the shredded test above and the unshredded leg of the merge goes uncovered.
+      val firstFiles = listDataParquetFiles(tablePath)
+      assert(firstFiles.nonEmpty, "Should have at least one data parquet file after the first insert")
+      firstFiles.foreach { filePath =>
+        val parquetSchema = readParquetSchema(filePath)
+        val variantGroup = getFieldAsGroup(parquetSchema, "v")
+        assert(!variantGroup.containsField("typed_value"),
+          s"Unshredded base file must not carry typed_value. Schema:\n$variantGroup")
+      }
+
+      spark.sql(s"insert into $tableName values " +
+        "(3, parse_json('{\"key\":\"value3\"}'), 1000), " +
+        "(4, parse_json('{\"key\":\"value4\"}'), 1000)")
+
+      // Same bin-pack pin as the shredded twin: one file group, so this really went through the
+      // small-file merge and not a fresh insert.
+      val fileGroupIds = listDataParquetFiles(tablePath)
+        .map(f => FSUtils.getFileId(new HadoopPath(f).getName)).distinct
+      assert(fileGroupIds.size == 1,
+        s"Second insert should bin-pack into the first file group via the small-file merge, got: $fileGroupIds")
+
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"value1\"}", 1000),
+        Seq(2, "{\"key\":\"value2\"}", 1000),
+        Seq(3, "{\"key\":\"value3\"}", 1000),
+        Seq(4, "{\"key\":\"value4\"}", 1000)
+      )
+    })
+  }
+
+  test("Test bulk_insert row-writer round-trips VARIANT") {
+    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+
+    // bulk_insert takes the row-writer path (HoodieRowParquetWriteSupport), which has its
+    // own variant writers (unshredded and shredded); no end-to-end test covered it for
+    // either layout, only writer-level units (TestHoodieRowParquetWriteSupportVariant).
+
+    // Unshredded bulk_insert: full round trip on any Spark 4.x.
+    withTempDir { tmp =>
+      val df = spark.sql(
+        """
+          |SELECT 1L AS id, parse_json('{"key":"value1"}') AS v, 1000L AS ts
+          |UNION ALL
+          |SELECT 2L AS id, parse_json('{"key":"value2"}') AS v, 1000L AS ts
+          |""".stripMargin)
+      df.write.format("hudi")
+        .option("hoodie.table.name", "variant_bulk_insert_unshredded")
+        .option("hoodie.datasource.write.recordkey.field", "id")
+        .option("hoodie.datasource.write.precombine.field", "ts")
+        .option("hoodie.datasource.write.operation", "bulk_insert")
+        .option("hoodie.datasource.write.row.writer.enable", "true")
+        .option("hoodie.parquet.variant.write.shredding.enabled", "false")
+        .mode(SaveMode.Overwrite)
+        .save(tmp.getCanonicalPath)
+
+      val readDf = spark.read.format("hudi").load(tmp.getCanonicalPath)
+      assert(readDf.schema("v").dataType.typeName == "variant",
+        s"v should round-trip as native VariantType, got ${readDf.schema("v").dataType}")
+      val rows = readDf.selectExpr("id", "cast(v as string) as v").orderBy("id").collect()
+      assert(rows.length == 2)
+      assert(rows(0).getString(1) == "{\"key\":\"value1\"}")
+      assert(rows(1).getString(1) == "{\"key\":\"value2\"}")
+    }
+
+    // Shredded bulk_insert exercises the row-writer shredding path end to end; reading
+    // the shredded file back needs Spark 4.1+ (SPARK-54410).
+    if (HoodieSparkUtils.gteqSpark4_1) {
+      withTempDir { tmp =>
+        val df = spark.sql(
+          """
+            |SELECT 1L AS id, parse_json('{"key":"value1"}') AS v, 1000L AS ts
+            |UNION ALL
+            |SELECT 2L AS id, parse_json('{"key":"value2"}') AS v, 1000L AS ts
+            |""".stripMargin)
+        df.write.format("hudi")
+          .option("hoodie.table.name", "variant_bulk_insert_shredded")
+          .option("hoodie.datasource.write.recordkey.field", "id")
+          .option("hoodie.datasource.write.precombine.field", "ts")
+          .option("hoodie.datasource.write.operation", "bulk_insert")
+          .option("hoodie.datasource.write.row.writer.enable", "true")
+          .option("hoodie.parquet.variant.write.shredding.enabled", "true")
+          .option("hoodie.parquet.variant.force.shredding.schema.for.test", "key string")
+          .mode(SaveMode.Overwrite)
+          .save(tmp.getCanonicalPath)
+
+        // The written parquet must actually carry the shredded layout; otherwise the
+        // read-back below silently validates the unshredded path a second time.
+        val parquetFiles = listDataParquetFiles(tmp.getCanonicalPath)
+        assert(parquetFiles.nonEmpty, "Should have at least one data parquet file")
+        parquetFiles.foreach { filePath =>
+          val schema = readParquetSchema(filePath)
+          val variantGroup = getFieldAsGroup(schema, "v")
+          assert(variantGroup.containsField("typed_value"),
+            s"bulk_insert with shredding forced should write typed_value. Schema:\n$variantGroup")
+        }
+
+        val readDf = spark.read.format("hudi").load(tmp.getCanonicalPath)
+        val rows = readDf.selectExpr("id", "cast(v as string) as v").orderBy("id").collect()
+        assert(rows.length == 2)
+        assert(rows(0).getString(1) == "{\"key\":\"value1\"}")
+        assert(rows(1).getString(1) == "{\"key\":\"value2\"}")
+      }
+    }
   }
 
   test("Test toHiveCompatibleSchema converts VariantType to physical struct") {

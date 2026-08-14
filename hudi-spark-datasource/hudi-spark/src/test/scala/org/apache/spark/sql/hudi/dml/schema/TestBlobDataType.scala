@@ -382,10 +382,10 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // Endpoints where the end field does not follow the start are rejected by both interval
     // data-type visitors. The grammar only allows YEAR/MONTH -> MONTH and DAY/HOUR/MINUTE/SECOND
     // -> HOUR/MINUTE/SECOND, so these stay grammatical yet still hit the builder's end <= start guard.
-    checkExceptionContain(
+    interceptParse(
       "CREATE TABLE blob_bad_ym (id BIGINT, bad INTERVAL MONTH TO MONTH, data BLOB) USING hudi")(
       "are not supported")
-    checkExceptionContain(
+    interceptParse(
       "CREATE TABLE blob_bad_dt (id BIGINT, bad INTERVAL SECOND TO HOUR, data BLOB) USING hudi")(
       "are not supported")
   }
@@ -454,11 +454,10 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     // to #19449: the extended parser enables ANSI reserved-keyword enforcement whenever
     // spark.sql.ansi.enabled is set (the Spark 4.x default) instead of following Spark's
     // spark.sql.ansi.enforceReservedKeywords, which makes a bare TIMESTAMP token unparseable
-    // there (a bug, not a Spark 4 constraint). A bare true/false in this position parses as a
-    // column reference in BOTH keyword modes (TRUE/FALSE are ansiNonReserved, so qualifiedName
-    // wins), leaving visitBooleanLiteral unreachable (#19451); null is a column reference only
-    // under the default non-ANSI keyword mode and a null literal under ANSI, so visitNullLiteral
-    // is mode-dependent and both are left unasserted here.
+    // there (a bug, not a Spark 4 constraint). Boolean and null literals are keyword-mode
+    // dependent: only TRUE is ansiNonReserved, so a bare true always parses as a column
+    // reference, while false and null are column references under the default non-ANSI keyword
+    // mode but typed literals under ANSI mode (both cases are asserted below).
     val plan = parseCreateTable(
       s"""
          |CREATE TABLE blob_lit_tbl (
@@ -485,26 +484,79 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
       firstLiteralArg(transformByName(plan, "mu_ivl_t")).dataType)
     assertResult(YearMonthIntervalType(YearMonthIntervalType.YEAR, YearMonthIntervalType.MONTH))(
       firstLiteralArg(transformByName(plan, "uu_ivl_t")).dataType)
+
+    // Under ANSI keyword mode a bare false and a bare null must survive visitBooleanLiteral
+    // and visitNullLiteral as typed literals, while a bare true stays a column reference
+    // (TRUE is ansiNonReserved; FALSE and NULL are not).
+    withSQLConf("spark.sql.ansi.enabled" -> "true") {
+      val ansiPlan = parseCreateTable(
+        "CREATE TABLE blob_bool_tbl (id BIGINT, data BLOB) USING hudi " +
+          "PARTITIONED BY (bool_t(false, id), true_t(true, id), null_t(null, id))")
+      assertResult(BooleanType)(firstLiteralArg(transformByName(ansiPlan, "bool_t")).dataType)
+      assertResult(false)(firstLiteralArg(transformByName(ansiPlan, "bool_t")).value)
+      assertResult(NullType)(firstLiteralArg(transformByName(ansiPlan, "null_t")).dataType)
+      assertResult(null)(firstLiteralArg(transformByName(ansiPlan, "null_t")).value)
+      assertResult(Seq(Seq("true"), Seq("id")))(
+        transformFieldRefs(transformByName(ansiPlan, "true_t")))
+    }
   }
 
   test("Test parse CREATE TABLE with BLOB column and invalid partition transforms") {
-    // Non-numeric number of buckets. The builders' raw `new ParseException(message, ctx)` sites
-    // surface on Spark 3.4+ as SparkException [INTERNAL_ERROR] wrapping the message text
-    // (#19450), so this case asserts the message via a plain intercept.
-    // TODO(#19450): tighten to intercept[ParseException] once the builders throw it cleanly.
-    val e = intercept[Exception] {
-      spark.sql("CREATE TABLE blob_e1 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket('x', id))")
-    }
-    assert(e.getMessage.contains("Invalid number of buckets"))
-    // A non-column-reference where a column is required.
-    checkExceptionContain(
-      "CREATE TABLE blob_e2 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")(
-      "Expected a column reference")
+    // Each case pins a distinct visitor arm of the extended AST builders; all must surface as a
+    // clean ParseException on every Spark profile (#19450). Assertions stay substring-based
+    // because the Spark 4.x builders add an "Operation not allowed: " prefix.
+    // Non-numeric number of buckets.
+    interceptParse("CREATE TABLE blob_e1 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket('x', id))")(
+      "Invalid number of buckets")
+    // A non-column-reference where a column is required. The buggy interpolation rendered the
+    // literal text "5.describe" (a superstring of the expected message), so pin its absence too.
+    val e2 = interceptParse("CREATE TABLE blob_e2 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(4, 5))")(
+      "Expected a column reference for transform bucket: 5")
+    assert(!e2.getMessage.contains(".describe"))
     // A single-field transform given more than one argument.
-    checkExceptionContain(
-      "CREATE TABLE blob_e3 (id BIGINT, ts DATE, data BLOB) USING hudi " +
-        "PARTITIONED BY (years(id, ts))")(
+    interceptParse("CREATE TABLE blob_e3 (id BIGINT, ts DATE, data BLOB) USING hudi PARTITIONED BY (years(id, ts))")(
       "Too many arguments")
+    // Typed literal that fails to parse (visitTypeConstructor arm).
+    interceptParse("CREATE TABLE blob_e4 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(DATE 'nope', id))")(
+      "Cannot parse the DATE value: nope")
+    // Invalid INTERVAL literal: the builders copy the triggering exception's stack trace onto the
+    // ParseException (the construct-then-setStackTrace arm), so the thrower must be visible.
+    val e5 = interceptParse("CREATE TABLE blob_e5 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 'x', id))")(
+      "Cannot parse the INTERVAL value: x")
+    assert(e5.getStackTrace.exists(_.getClassName.contains("IntervalUtils")))
+    // Out-of-range fractional literal; pre-fix the message's interior dots broke Spark 3.4+
+    // error-class lookup and surfaced as a bare AssertionError.
+    interceptParse("CREATE TABLE blob_e6 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (bucket(1e40F, id))")(
+      "does not fit in range")
+    // Mixed year-month and day-time interval fields.
+    interceptParse("CREATE TABLE blob_e7 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1 year 2 hours', id))")(
+      "Cannot mix year-month and day-time fields")
+  }
+
+  test("Test parse CREATE TABLE with BLOB column and invalid literal transform arguments") {
+    // Remaining error arms of the literal and interval visitors, one SQL per throw site; all must
+    // surface as a clean ParseException on every Spark profile (#19450).
+    // A typed literal whose type keyword has no visitor arm.
+    interceptParse("CREATE TABLE blob_e8 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(FOO 'bar', id))")(
+      "Literals of type 'FOO' are currently not supported")
+    // A hex literal with a non-hex character (the IllegalArgumentException fallback arm).
+    interceptParse("CREATE TABLE blob_e9 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(X'zz', id))")(
+      "hexBinary")
+    // Multi-unit interval combined with a from-to unit.
+    interceptParse("CREATE TABLE blob_e10 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 1 DAY 2 HOUR TO MINUTE, id))")(
+      "Can only have a single from-to unit in the interval literal syntax")
+    // From-to unit combined with a trailing multi-unit interval (the error-recovery arm).
+    interceptParse("CREATE TABLE blob_e11 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1' DAY TO HOUR '2' MINUTE, id))")(
+      "Can only have a single from-to unit in the interval literal syntax")
+    // A non-numeric value in a unit-value pair.
+    interceptParse("CREATE TABLE blob_e12 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 'x' DAY, id))")(
+      "Can only use numbers in the interval value part")
+    // A from-to interval whose value is not a string literal.
+    interceptParse("CREATE TABLE blob_e13 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL 1 DAY TO HOUR, id))")(
+      "The value of from-to unit must be a string")
+    // A from-to unit pair outside the supported YEAR TO MONTH / DAY TO SECOND family.
+    interceptParse("CREATE TABLE blob_e14 (id BIGINT, data BLOB) USING hudi PARTITIONED BY (myfunc(INTERVAL '1' MONTH TO HOUR, id))")(
+      "Intervals FROM month TO hour are not supported")
   }
 
   test("Test parse CREATE TABLE with BLOB column and file-format / row-format clauses") {
@@ -539,6 +591,14 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
       "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
     assertResult(Some("TEXTFILE"))(ff6.tableSpec.serde.get.storedAs)
     assertResult(",")(ff6.tableSpec.serde.get.serdeProperties("field.delim"))
+    // Any ROW FORMAT combined with STORED AS INPUTFORMAT/OUTPUTFORMAT is accepted (the
+    // table-file-format arm of validateRowFormatFileFormat).
+    val ff7 = parseCreateTable("CREATE TABLE blob_ff7 (id BIGINT, data BLOB) " +
+      "ROW FORMAT SERDE 'com.example.Serde' " +
+      "STORED AS INPUTFORMAT 'com.example.InFmt' OUTPUTFORMAT 'com.example.OutFmt'")
+    assertResult(Some("com.example.Serde"))(ff7.tableSpec.serde.get.serde)
+    assertResult(Some(FormatClasses("com.example.InFmt", "com.example.OutFmt")))(
+      ff7.tableSpec.serde.get.formatClasses)
 
     // ROW FORMAT DELIMITED with a non-text file format is rejected.
     checkExceptionContain(
@@ -556,6 +616,13 @@ class TestBlobDataType extends HoodieSparkSqlTestBase with ExtendedParserTestHel
     checkExceptionContain(
       "CREATE TABLE blob_ferr3 (id BIGINT, data BLOB) STORED BY 'com.example.Handler'")(
       "Operation not allowed: STORED BY")
+    // ROW FORMAT combined with STORED BY leaves no file format for the row format to pair with;
+    // validateRowFormatFileFormat's catch-all arm rejects the combination before the STORED BY
+    // error can fire.
+    checkExceptionContain(
+      "CREATE TABLE blob_ferr5 (id BIGINT, data BLOB) " +
+        "ROW FORMAT SERDE 'com.example.Serde' STORED BY 'com.example.Handler'")(
+      "Unexpected combination of")
     // A USING provider combined with a serde clause is not allowed.
     checkExceptionContain(
       "CREATE TABLE blob_ferr4 (id BIGINT, data BLOB) USING hudi STORED AS PARQUET")(

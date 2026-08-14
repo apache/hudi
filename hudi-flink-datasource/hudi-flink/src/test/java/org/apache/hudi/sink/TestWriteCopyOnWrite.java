@@ -745,7 +745,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   protected void validateNonBlockingConcurrencyControlConditions() {
     assertThrows(
-        IllegalArgumentException.class,
+        HoodieException.class,
         () -> preparePipeline(conf),
         "Non-blocking concurrency control requires the MOR table with simple bucket index");
   }
