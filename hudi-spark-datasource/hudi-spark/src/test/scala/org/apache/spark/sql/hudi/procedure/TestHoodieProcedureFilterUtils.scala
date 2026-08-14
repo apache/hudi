@@ -34,8 +34,8 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   private def schemaOf(fields: (String, DataType)*): StructType =
     StructType(fields.map { case (n, dt) => StructField(n, dt, nullable = true) })
 
-  private def keep(rows: Seq[Row], expr: String, s: StructType): Seq[Row] =
-    HoodieProcedureFilterUtils.evaluateFilter(rows, expr, s, spark)
+  private def keep(rows: Seq[Row], expr: String, schema: StructType): Seq[Row] =
+    HoodieProcedureFilterUtils.evaluateFilter(rows, expr, schema, spark)
 
   // A rich scalar schema reused across the function tests.
   private val scalarSchema = schemaOf(
@@ -160,41 +160,41 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
   }
 
   test("evaluateFilter handles null values and IS [NOT] NULL") {
-    val s = schemaOf("id" -> IntegerType, "name" -> StringType)
+    val schema = schemaOf("id" -> IntegerType, "name" -> StringType)
     val rows = Seq(Row(1, "a1"), Row(2, null))
-    assertResult(Seq(rows(1)))(keep(rows, "isnull(name)", s))
-    assertResult(Seq(rows.head))(keep(rows, "isnotnull(name)", s))
-    assertResult(Seq(rows(1)))(keep(rows, "name IS NULL", s))
-    assertResult(Seq(rows.head))(keep(rows, "name IS NOT NULL", s))
+    assertResult(Seq(rows(1)))(keep(rows, "isnull(name)", schema))
+    assertResult(Seq(rows.head))(keep(rows, "isnotnull(name)", schema))
+    assertResult(Seq(rows(1)))(keep(rows, "name IS NULL", schema))
+    assertResult(Seq(rows.head))(keep(rows, "name IS NOT NULL", schema))
     // A null-valued bare expression resolves to a false decision.
-    assertResult(Seq.empty)(keep(Seq(rows(1)), "name", s))
+    assertResult(Seq.empty)(keep(Seq(rows(1)), "name", schema))
   }
 
   test("evaluateFilter converts map columns and resolves map functions") {
     import scala.collection.JavaConverters._
-    val s = schemaOf("id" -> IntegerType,
+    val schema = schemaOf("id" -> IntegerType,
       "mScala" -> MapType(StringType, IntegerType),
       "mJava" -> MapType(StringType, IntegerType))
     val javaMap = Map("a" -> 1, "b" -> 2).asJava
     val rows = Seq(Row(1, Map("a" -> 1, "b" -> 2), javaMap))
-    assertResult(rows)(keep(rows, "size(mScala) = 2", s))
-    assertResult(rows)(keep(rows, "size(mJava) = 2", s))
-    assertResult(rows)(keep(rows, "array_contains(map_keys(mScala), 'a')", s))
-    assertResult(rows)(keep(rows, "array_contains(map_values(mScala), 1)", s))
-    assertResult(Seq.empty)(keep(rows, "size(mScala) = 5", s))
+    assertResult(rows)(keep(rows, "size(mScala) = 2", schema))
+    assertResult(rows)(keep(rows, "size(mJava) = 2", schema))
+    assertResult(rows)(keep(rows, "array_contains(map_keys(mScala), 'a')", schema))
+    assertResult(rows)(keep(rows, "array_contains(map_values(mScala), 1)", schema))
+    assertResult(Seq.empty)(keep(rows, "size(mScala) = 5", schema))
   }
 
   test("evaluateFilter converts struct columns and resolves IS [NOT] NULL on them") {
-    val s = schemaOf("id" -> IntegerType,
+    val schema = schemaOf("id" -> IntegerType,
       "st" -> StructType(Seq(StructField("x", IntegerType), StructField("y", StringType))))
     val rows = Seq(Row(1, Row(10, "p")), Row(2, null))
-    assertResult(Seq(rows.head))(keep(rows, "isnotnull(st)", s))
-    assertResult(Seq(rows(1)))(keep(rows, "isnull(st)", s))
+    assertResult(Seq(rows.head))(keep(rows, "isnotnull(st)", schema))
+    assertResult(Seq(rows(1)))(keep(rows, "isnull(st)", schema))
   }
 
   test("evaluateFilter converts array / decimal / binary / uuid / java-time columns without error") {
     import scala.collection.JavaConverters._
-    val s = schemaOf(
+    val schema = schemaOf(
       "id" -> IntegerType,
       "arrScala" -> ArrayType(IntegerType),
       "arrList" -> ArrayType(IntegerType),
@@ -221,16 +221,16 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     val rows = Seq(row)
     // Filtering on the scalar column converts every field of the row, exercising each
     // complex-type conversion branch; the row is retained.
-    assertResult(rows)(keep(rows, "id = 1", s))
+    assertResult(rows)(keep(rows, "id = 1", schema))
     // Decimal / binary / uuid / java-time values survive conversion and are non-null.
-    assertResult(rows)(keep(rows, "isnotnull(dec) AND isnotnull(decScala)", s))
-    assertResult(rows)(keep(rows, "isnotnull(bin) AND isnotnull(uuidCol)", s))
-    assertResult(rows)(keep(rows, "isnotnull(inst) AND isnotnull(ld) AND isnotnull(ldt)", s))
+    assertResult(rows)(keep(rows, "isnotnull(dec) AND isnotnull(decScala)", schema))
+    assertResult(rows)(keep(rows, "isnotnull(bin) AND isnotnull(uuidCol)", schema))
+    assertResult(rows)(keep(rows, "isnotnull(inst) AND isnotnull(ld) AND isnotnull(ldt)", schema))
     // Known limitation: array values are converted to a plain Array instead of Catalyst ArrayData,
     // so every array predicate (even isnotnull) fails to evaluate and drops the row instead of
     // matching. Pinned here so a fix flips these assertions; see #19633.
-    assertResult(Seq.empty)(keep(rows, "size(arrScala) >= 0", s))
-    assertResult(Seq.empty)(keep(rows, "isnotnull(arrScala)", s))
+    assertResult(Seq.empty)(keep(rows, "size(arrScala) >= 0", schema))
+    assertResult(Seq.empty)(keep(rows, "isnotnull(arrScala)", schema))
   }
 
   test("evaluateFilter throws IllegalArgumentException on unparseable expression") {

@@ -567,16 +567,17 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
              |   preCombineField = 'ts'
              | )
              |""".stripMargin)
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
 
+        // No insert needed: both validations run before any table data is read.
         // A non-positive limit is rejected.
         checkExceptionContain(s"call show_clean_plans(table => '$tableName', limit => 0)")(
           "Limit must be positive")
 
-        // A filter that references an unknown column is rejected before the plans are read.
+        // A filter that references an unknown column is rejected before the plans are read; the
+        // column-reference message discriminates this branch from a filter parse failure.
         checkExceptionContain(
           s"""call show_clean_plans(table => '$tableName', filter => "nonexistent_col > 1")""")(
-          "Invalid filter expression")
+          "Invalid column references: nonexistent_col")
       }
     }
   }

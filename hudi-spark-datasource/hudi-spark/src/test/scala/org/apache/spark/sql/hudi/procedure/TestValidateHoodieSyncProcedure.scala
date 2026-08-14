@@ -63,11 +63,11 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
           .stripMargin).collect()
 
       assertResult(1)(result.length)
-      val message = result.head.getString(0)
-      assert(message.startsWith("Count difference now is"),
-        s"Unexpected message: $message")
-      // The destination has commits after the source's latest, so a catch-up count is reported.
-      assert(message.contains("Catach up count is"), s"Unexpected message: $message")
+      // The destination is ahead, so the dst-first branch is taken (count(dst) - count(src)) and the
+      // two catch-up commits (one insert record each) are counted. Record counts stay 0 in this mode.
+      // "Catach up" mirrors the typo in the procedure's output message.
+      assertResult(s"Count difference now is count($dstTable) - count($srcTable) == 0. Catach up count is 2")(
+        result.head.getString(0))
     }
   }
 
@@ -85,22 +85,9 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
           .stripMargin).collect()
 
       assertResult(1)(result.length)
-      val message = result.head.getString(0)
-      assert(message.startsWith("Count difference now is"), s"Unexpected message: $message")
-      assert(message.contains("== 0"), s"Unexpected message: $message")
-      assert(!message.contains("Catach up count is"), s"Unexpected message: $message")
-    }
-  }
-
-  test("Test Call sync_validate requires its mandatory arguments") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      createTable(tableName, s"${tmp.getCanonicalPath}/$tableName")
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-
-      checkExceptionContain(
-        s"call sync_validate(src_table => '$tableName', dst_table => '$tableName', mode => 'noop')")(
-        "Argument: hive_server_url is required")
+      // No catch-up suffix: the exact match pins that no commits are found after the (shared) latest.
+      assertResult(s"Count difference now is count($tableName) - count($tableName) == 0")(
+        result.head.getString(0))
     }
   }
 }

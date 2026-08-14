@@ -20,28 +20,32 @@
 package org.apache.spark.sql.hudi.procedure
 
 class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
+
+  private def createMorTable(tableName: String, tablePath: String): Unit = {
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long,
+         |  partition long
+         |) using hudi
+         | partitioned by (partition)
+         | location '$tablePath'
+         | tblproperties (
+         |  type = 'mor',
+         |  primaryKey = 'id',
+         |  orderingFields = 'ts'
+         | )
+       """.stripMargin)
+  }
+
   test("Test Call show_logfile_metadata Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long,
-           |  partition int
-           |) using hudi
-           | partitioned by (partition)
-           | location '$tablePath'
-           | tblproperties (
-           |  type = 'mor',
-           |  primaryKey = 'id',
-           |  orderingFields = 'ts'
-           | )
-       """.stripMargin)
+      createMorTable(tableName, tablePath)
       // insert data to table
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1500")
@@ -64,24 +68,7 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long,
-           |  partition long
-           |) using hudi
-           | partitioned by (partition)
-           | location '$tablePath'
-           | tblproperties (
-           |  type = 'mor',
-           |  primaryKey = 'id',
-           |  orderingFields = 'ts'
-           | )
-       """.stripMargin)
+      createMorTable(tableName, tablePath)
       // insert data to table
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1500")
@@ -110,23 +97,7 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
       withTempDir { tmp =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long,
-             |  partition long
-             |) using hudi
-             | partitioned by (partition)
-             | location '$tablePath'
-             | tblproperties (
-             |  type = 'mor',
-             |  primaryKey = 'id',
-             |  orderingFields = 'ts'
-             | )
-       """.stripMargin)
+        createMorTable(tableName, tablePath)
         spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
         spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1000")
         // Each update touches a distinct key on purpose: a key updated in more than one log block

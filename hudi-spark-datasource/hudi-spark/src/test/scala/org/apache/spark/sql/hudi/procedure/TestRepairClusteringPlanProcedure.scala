@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.ClusteringUtils
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -36,35 +36,7 @@ class TestRepairClusteringPlanProcedure extends HoodieSparkProcedureTestBase {
       withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
         val tableName = generateTableName
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long,
-             |  dt string
-             |) using hudi
-             | tblproperties (
-             |  primaryKey = 'id',
-             |  type = 'cow',
-             |  orderingFields = 'ts',
-             |  hoodie.metadata.enable = 'false'
-             | )
-             | partitioned by (dt)
-             | location '$basePath'
-             |""".stripMargin)
-
-        insertRows(tableName, "2026-01-27", 1)
-        insertRows(tableName, "2026-01-27", 4)
-        insertRows(tableName, "2026-01-27", 7)
-
-        runClustering(tableName, "schedule")
-        var metadata = getLatestRequestedClusteringPlan(basePath)
-        val instant1 = metadata.getLeft
-        val plannedFiles = getPlanDataFiles(metadata.getRight)
-        assertTrue(plannedFiles.size > 1, s"Expected more than one planned file, but got $plannedFiles")
+        val (instant1, plannedFiles) = createTableWithPendingClusteringPlan(tableName, basePath)
 
         val fileToRemove = plannedFiles.head
         val dryRunRows = spark.sql(
@@ -78,8 +50,7 @@ class TestRepairClusteringPlanProcedure extends HoodieSparkProcedureTestBase {
             s"op => 'delete', invalid_parquet_files => '$fileToRemove', dry_run => false)").collect()
         assertRepairResult(deleteRows, instant1.requestedTime, fileToRemove, "REMOVED_FROM_PLAN", deleted = false, "USER_REQUESTED")
 
-        metadata = getLatestRequestedClusteringPlan(basePath)
-        assertFalse(getPlanDataFiles(metadata.getRight).contains(fileToRemove))
+        assertFalse(getPlanDataFiles(getLatestRequestedClusteringPlan(basePath).getRight).contains(fileToRemove))
 
         var metaClient = createMetaClient(spark, basePath)
         assertTrue(metaClient.getStorage.exists(new StoragePath(fileToRemove)))
@@ -99,9 +70,9 @@ class TestRepairClusteringPlanProcedure extends HoodieSparkProcedureTestBase {
         insertRows(tableName, "2026-01-28", 16)
 
         runClustering(tableName, "schedule")
-        metadata = getLatestRequestedClusteringPlan(basePath)
-        val instant2 = metadata.getLeft
-        val corruptFile = getPlanDataFiles(metadata.getRight).head
+        val metadata2 = getLatestRequestedClusteringPlan(basePath)
+        val instant2 = metadata2.getLeft
+        val corruptFile = getPlanDataFiles(metadata2.getRight).head
         metaClient = createMetaClient(spark, basePath)
         replaceWithEmptyFile(metaClient.getStorage, new StoragePath(corruptFile))
 
@@ -110,8 +81,7 @@ class TestRepairClusteringPlanProcedure extends HoodieSparkProcedureTestBase {
             s"op => 'validate_delete', need_delete => true, dry_run => false)").collect()
         assertRepairResult(validateRows, instant2.requestedTime, corruptFile, "REMOVED_FROM_PLAN", deleted = true, "NOT_PARQUET_FILE")
 
-        metadata = getLatestRequestedClusteringPlan(basePath)
-        assertFalse(getPlanDataFiles(metadata.getRight).contains(corruptFile))
+        assertFalse(getPlanDataFiles(getLatestRequestedClusteringPlan(basePath).getRight).contains(corruptFile))
         metaClient = createMetaClient(spark, basePath)
         assertFalse(metaClient.getStorage.exists(new StoragePath(corruptFile)))
       }
@@ -127,37 +97,13 @@ class TestRepairClusteringPlanProcedure extends HoodieSparkProcedureTestBase {
       withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
         val tableName = generateTableName
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long,
-             |  dt string
-             |) using hudi
-             | tblproperties (
-             |  primaryKey = 'id',
-             |  type = 'cow',
-             |  orderingFields = 'ts',
-             |  hoodie.metadata.enable = 'false'
-             | )
-             | partitioned by (dt)
-             | location '$basePath'
-             |""".stripMargin)
-
-        insertRows(tableName, "2026-01-27", 1)
-        insertRows(tableName, "2026-01-27", 4)
-        insertRows(tableName, "2026-01-27", 7)
-
-        runClustering(tableName, "schedule")
-        val metadata = getLatestRequestedClusteringPlan(basePath)
-        val instant = metadata.getLeft
-        val plannedFiles = getPlanDataFiles(metadata.getRight)
-        assertTrue(plannedFiles.size > 1, s"Expected more than one planned file, but got $plannedFiles")
+        val (instant, plannedFiles) = createTableWithPendingClusteringPlan(tableName, basePath)
 
         // validate_delete over a healthy plan finds no corrupt files, so no candidates are returned.
+        // Anchor the negative result: every planned file exists and is readable on storage.
+        val metaClient = createMetaClient(spark, basePath)
+        plannedFiles.foreach(file => assertTrue(metaClient.getStorage.exists(new StoragePath(file)),
+          s"Expected planned file $file to exist"))
         val healthyRows = spark.sql(
           s"call repair_clustering_plan(table => '$tableName', instant => '${instant.requestedTime}', " +
             s"op => 'validate_delete')").collect()
@@ -168,6 +114,22 @@ class TestRepairClusteringPlanProcedure extends HoodieSparkProcedureTestBase {
           s"call repair_clustering_plan(table => '$tableName', instant => '${instant.requestedTime}', op => 'bogus')")(
           "Unsupported operation")
 
+        // A candidate that is not part of the plan is reported as NOT_FOUND_IN_PLAN and, because
+        // deletion only applies to the (candidates intersect plan) set, the file is never deleted
+        // even with need_delete => true.
+        insertRows(tableName, "2026-01-28", 10)
+        val foreign = spark.sql(
+          s"select distinct _hoodie_partition_path, _hoodie_file_name from $tableName where dt = '2026-01-28'")
+          .collect().head
+        val notInPlanFile = s"$basePath/${foreign.getString(0)}/${foreign.getString(1)}"
+        val notInPlanRows = spark.sql(
+          s"call repair_clustering_plan(table => '$tableName', instant => '${instant.requestedTime}', " +
+            s"op => 'delete', invalid_parquet_files => '$notInPlanFile', need_delete => true, dry_run => false)").collect()
+        assertRepairResult(notInPlanRows, instant.requestedTime, notInPlanFile, "NOT_FOUND_IN_PLAN", deleted = false, "USER_REQUESTED")
+        assertTrue(metaClient.getStorage.exists(new StoragePath(notInPlanFile)),
+          s"Expected $notInPlanFile to survive a repair request it is not planned in")
+        assertEquals(plannedFiles.toSet, getPlanDataFiles(getLatestRequestedClusteringPlan(basePath).getRight).toSet)
+
         // Removing every input group without allow_empty_plan is rejected.
         val allFilesArg = plannedFiles.distinct.mkString(",")
         checkExceptionContain(
@@ -175,15 +137,51 @@ class TestRepairClusteringPlanProcedure extends HoodieSparkProcedureTestBase {
             s"op => 'delete', invalid_parquet_files => '$allFilesArg')")(
           "would remove all input groups")
 
-        // With allow_empty_plan the (dry-run) removal of every planned file is reported.
+        // With allow_empty_plan the destructive run removes every planned file and rewrites the
+        // requested instant with an empty plan that still parses.
         val emptyPlanRows = spark.sql(
           s"call repair_clustering_plan(table => '$tableName', instant => '${instant.requestedTime}', " +
-            s"op => 'delete', invalid_parquet_files => '$allFilesArg', allow_empty_plan => true)").collect()
+            s"op => 'delete', invalid_parquet_files => '$allFilesArg', allow_empty_plan => true, dry_run => false)").collect()
         assertEquals(plannedFiles.distinct.size, emptyPlanRows.length)
-        assertTrue(emptyPlanRows.forall(_.getString(2) == "WOULD_REMOVE_FROM_PLAN"),
-          s"Expected all rows to be WOULD_REMOVE_FROM_PLAN, but got ${emptyPlanRows.mkString("[", ", ", "]")}")
+        assertTrue(emptyPlanRows.forall(_.getString(2) == "REMOVED_FROM_PLAN"),
+          s"Expected all rows to be REMOVED_FROM_PLAN, but got ${emptyPlanRows.mkString("[", ", ", "]")}")
+        val emptiedPlan = getLatestRequestedClusteringPlan(basePath)
+        assertEquals(instant.requestedTime, emptiedPlan.getLeft.requestedTime)
+        assertTrue(getPlanDataFiles(emptiedPlan.getRight).isEmpty,
+          s"Expected the rewritten plan to have no data files, but got ${getPlanDataFiles(emptiedPlan.getRight)}")
       }
     }
+  }
+
+  private def createTableWithPendingClusteringPlan(tableName: String, basePath: String): (HoodieInstant, Seq[String]) = {
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long,
+         |  dt string
+         |) using hudi
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  type = 'cow',
+         |  orderingFields = 'ts',
+         |  hoodie.metadata.enable = 'false'
+         | )
+         | partitioned by (dt)
+         | location '$basePath'
+         |""".stripMargin)
+
+    insertRows(tableName, "2026-01-27", 1)
+    insertRows(tableName, "2026-01-27", 4)
+    insertRows(tableName, "2026-01-27", 7)
+
+    runClustering(tableName, "schedule")
+    val metadata = getLatestRequestedClusteringPlan(basePath)
+    val plannedFiles = getPlanDataFiles(metadata.getRight)
+    assertTrue(plannedFiles.size > 1, s"Expected more than one planned file, but got $plannedFiles")
+    (metadata.getLeft, plannedFiles)
   }
 
   private def runClustering(tableName: String,
