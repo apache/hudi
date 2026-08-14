@@ -371,6 +371,19 @@ instant. Large term statistics, dictionaries, and postings are never placed in
 the Avro record. Active-source masks are computed for the pinned snapshot rather
 than persisted as a single current value.
 
+The coverage planner does not scan the complete `text_index_<name>` partition
+for every query. It first applies normal partition pruning and enumerates the
+eligible data file slices, then issues batched point lookups for their
+`coverage/<encoded-partition>/<file-id>` keys. It loads only the `SEGMENT`
+descriptors referenced by those records and may cache immutable descriptors for
+the lifetime of the pinned MDT snapshot. Coverage storage is `O(F_table)` in the
+number of table file groups, while lookup and comparison work is `O(F_query)` in
+the number of file groups selected by the query. An unpartitioned full-table
+query still has `F_query = F_table`, consistent with its data-scan planning
+scope. The dynamic MDT partition uses normal MDT file-group sharding,
+compaction, and key lookup rather than a driver-side enumeration of all control
+records.
+
 Payloads use this default path:
 
 ```text
@@ -417,6 +430,24 @@ rebuilt. A segment created from a later state is not used for an older snapshot.
 This avoids attempting to delete or mutate old postings after compaction,
 clustering, rollback, or MOR updates.
 
+Freshness is measured in changed source slices, not merely elapsed commits. Let
+`F` be the eligible source slices and `R` the slices whose fingerprint is not
+covered at the query snapshot. The coverage ratio is `C = 1 - R/F`. Once a MOR
+file group receives its first new log block it contributes one raw slice until
+catch-up; additional blocks increase scan bytes but not the raw-slice count. A
+complete predicate query therefore has the qualitative cost
+`index_scan(C * F) + raw_scan(R)`. Complete ranked search additionally analyzes
+the raw tail to obtain exact global document frequencies. As `C` approaches
+zero, performance intentionally approaches a normal Hudi scan while correctness
+is unchanged.
+
+There is no universal freshness SLA because `R`, log size, analyzer cost, and
+query selectivity depend on the workload. Deployments schedule incremental
+catch-up by time or changed-slice thresholds and observe source instant lag,
+coverage ratio, raw bytes, and raw-tail analysis time. The performance plan must
+publish the latency envelope across those dimensions before the feature is
+enabled by default.
+
 ### Text-index payload format
 
 All files begin with an eight-byte `HUDIFTS1` magic value followed by little-
@@ -444,6 +475,13 @@ documents and use bit packing or variable-byte encoding, selected per block.
 Each block records maximum term frequency and minimum document length; these
 values provide a conservative BM25 upper bound for block-max WAND. Positions
 are stored only when enabled by the immutable index definition.
+
+A phrase clause requires compatible position data. For an index created with
+`with_position=false`, the complete Spark SQL and Hudi RS paths treat its source
+slices as uncovered for that query and evaluate the phrase through
+`RawTextSearchSplit`. They never silently downgrade a phrase to an `AND` of its
+terms. In version 1, `allow_incomplete_index=True` rejects a phrase query against
+a positionless index rather than returning an approximate result.
 
 No implementation-specific collection serialization is persisted directly.
 Every field is defined by the Hudi format specification, so upgrading a Java or
@@ -477,6 +515,15 @@ and completeness rules. Hudi RS must reject unsupported required feature bits;
 the Spark implementation must do the same. Neither implementation may infer
 compatibility from a library version alone.
 
+These are cross-engine conformance contracts: a conforming engine must search a
+segment built by another conforming engine without rebuilding it, produce the
+same match set for the same snapshot and query AST, and implement the same BM25
+formula and operation order. Format-versioned golden fixtures define the
+accepted floating-point tolerance and binary record-key tie break. Bit-identical
+floating-point scores are not required. Java and Rust need not share one runtime
+query library; a versioned, language-neutral query AST plus shared analyzer,
+format, match-set, and scoring fixtures prevent semantic drift.
+
 The JVM side uses `HoodieStorage` for range reads, credentials, retries, and
 metrics. A future optimization may consume Hudi RS artifacts through a separately
 reviewed integration, but this RFC does not establish a JNI ABI or native
@@ -508,6 +555,23 @@ indexer compares current fingerprints with coverage records and builds segments
 for new or changed slices. Unchanged slices retain their existing segment and
 source-mask membership.
 
+Each build and descriptor records its pinned source instant `S`. A data commit
+that completes after enumeration does not make publication for `S` incorrect:
+a reader at a later snapshot compares the later source fingerprint and sends
+changed slices to the raw tail. Immediately before MDT publication, the indexer
+must verify that `S` is still a completed, retained instant and that the index
+definition and analyzer fingerprint have not changed. It aborts publication if
+`S` was rolled back or is no longer a valid build base.
+
+The MDT commit uses Hudi's existing indexing transaction, OCC, and lock-provider
+configuration. Since concurrent indexers can update the same `HEAD` and
+`COVERAGE` keys, a conflict must retry against the latest MDT snapshot and merge
+candidate segments in source-instant order. `HEAD` advancement is monotonic: an
+older build may remain a time-travel candidate but cannot replace a newer head
+or discard newer coverage. This rule covers concurrent data writers and
+concurrent text-index table services without introducing a separate lock
+protocol.
+
 The publication order prevents a partially written segment from becoming
 visible:
 
@@ -523,7 +587,13 @@ sequenceDiagram
     I->>D: Enumerate and fingerprint source slices
     I->>S: Write immutable payloads to UUID paths
     S-->>I: Return checksums and descriptors
-    I->>M: Commit HEAD, SEGMENT, and COVERAGE records
+    I->>D: Revalidate S and the index definition
+    D-->>I: S is retained and the definition is unchanged
+    I->>M: OCC commit HEAD, SEGMENT, and COVERAGE records
+    alt MDT key conflict
+        M-->>I: Reject stale write
+        I->>M: Reload, merge by source instant, and retry
+    end
     M-->>I: MDT commit completes atomically
     Q->>M: Pin MDT snapshot compatible with S
     M-->>Q: Return visible descriptors
@@ -669,9 +739,10 @@ until the API can represent their potentially short result sets explicitly.
 
 Spark `EXPLAIN` and query metrics expose the selected index, analyzer
 fingerprint, data/MDT instants, covered and raw source counts, segment count,
-payload bytes read, posting blocks skipped, and raw-scan time. Hudi RS ranked
-results additionally expose `is_complete`, indexed/raw source counts, and
-scoring time through query metadata.
+coverage ratio, index source-instant lag, raw bytes, payload bytes read, posting
+blocks skipped, and raw-scan time. Hudi RS ranked results additionally expose
+`is_complete`, indexed/raw source counts, raw-tail statistics time, and scoring
+time through query metadata.
 
 Checksum failure, unsupported format, missing payload, or source-fingerprint
 mismatch marks the affected source uncovered. Spark SQL and complete Hudi RS
@@ -760,6 +831,9 @@ side-by-side rebuilds followed by descriptor switchover and cleanup.
 - Analyzer/schema incompatibility and unsupported payload-version behavior.
 - Cross-client compatibility between Spark-built segments and Hudi RS reads.
 - Orphan, partial upload, retry, duplicate build, and tombstone cleanup cases.
+- A data commit between source enumeration and MDT publication, concurrent
+  indexers targeting overlapping file groups, stale-head rejection, and OCC
+  retry/merge behavior.
 - Record keys containing arbitrary UTF-8 and binary-safe encoded metadata keys.
 
 ### Distributed correctness tests
@@ -784,6 +858,12 @@ tolerance and deterministic tie ordering.
 - Cold/warm top-k latency, range-read count, bytes read, cache hit rate, and WAND
   block skips at multiple selectivities.
 - Consolidation write amplification and query degradation with segment count.
+- Coverage-planning latency for partition-pruned and full-table queries at up
+  to millions of file groups, verifying batched point lookup rather than a full
+  MDT control-record scan.
+- Complete-query latency across catch-up delay, changed-slice ratio, MOR raw-log
+  bytes, analyzer cost, and selectivity. Report coverage ratio, raw-scan time,
+  and exact raw-tail document-frequency analysis separately.
 - Compare flat Hudi search and, as non-binding external baselines, Lance FTS and
   Elasticsearch on the same corpus and analyzer semantics.
 
