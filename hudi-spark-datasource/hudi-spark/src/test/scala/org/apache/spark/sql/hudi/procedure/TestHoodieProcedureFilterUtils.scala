@@ -81,6 +81,12 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(Seq(scalarRows(1)))(keep(scalarRows, "ts >= 2000", scalarSchema))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "ts < 2000", scalarSchema))
     assertResult(Seq(scalarRows.head))(keep(scalarRows, "ts <= 1000", scalarSchema))
+    // Known limitation: the coercion narrows the Long column to Int instead of widening the Int
+    // literal, so a Long value beyond Int range never matches (wrong results under non-ANSI Spark,
+    // swallowed overflow error under ANSI). Pinned here so a fix flips this assertion; see #19632.
+    val bigRow = Seq(Row(3, "c3", 30.0d, 3000000000L, true, -9,
+      Date.valueOf("2024-03-16"), Timestamp.valueOf("2024-03-16 12:30:00")))
+    assertResult(Seq.empty)(keep(bigRow, "ts > 2000", scalarSchema))
   }
 
   test("evaluateFilter handles AND / OR / NOT / IN / BETWEEN") {
@@ -220,10 +226,11 @@ class TestHoodieProcedureFilterUtils extends HoodieSparkProcedureTestBase {
     assertResult(rows)(keep(rows, "isnotnull(dec) AND isnotnull(decScala)", s))
     assertResult(rows)(keep(rows, "isnotnull(bin) AND isnotnull(uuidCol)", s))
     assertResult(rows)(keep(rows, "isnotnull(inst) AND isnotnull(ld) AND isnotnull(ldt)", s))
-    // Array columns are converted during row conversion; evaluating an array function is handled
-    // gracefully (no exception propagates to the caller).
-    val arrResult = keep(rows, "size(arrScala) >= 0", s)
-    assert(arrResult.length <= rows.length)
+    // Known limitation: array values are converted to a plain Array instead of Catalyst ArrayData,
+    // so every array predicate (even isnotnull) fails to evaluate and drops the row instead of
+    // matching. Pinned here so a fix flips these assertions; see #19633.
+    assertResult(Seq.empty)(keep(rows, "size(arrScala) >= 0", s))
+    assertResult(Seq.empty)(keep(rows, "isnotnull(arrScala)", s))
   }
 
   test("evaluateFilter throws IllegalArgumentException on unparseable expression") {

@@ -102,9 +102,10 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
   }
 
   test("Test Call show_logfile_records Procedure with merge and filter") {
-    // Keep automatic cleaning off so the pre-compaction log files survive for the merged scan, and
-    // lower the compaction trigger so the explicit run_compaction below actually schedules and
-    // executes (producing the commit instant that the merged scan needs to find the latest instant).
+    // Keep automatic cleaning off so the pre-compaction log files survive for the merged scan. The
+    // lowered compaction trigger + explicit run_compaction below are a workaround: the merged scan
+    // resolves the latest instant via getCommitAndReplaceTimeline.lastInstant.get, which throws on
+    // a deltacommit-only (never compacted) MOR table; see #19634.
     withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.compact.inline.max.delta.commits" -> "1") {
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -128,6 +129,9 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
        """.stripMargin)
         spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
         spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1000")
+        // Each update touches a distinct key on purpose: a key updated in more than one log block
+        // makes the merged scan cast the merged record to HoodieRecordPayload and fail with a
+        // ClassCastException, so the merge-is-a-no-op shape is the only one that works; see #19634.
         spark.sql(s"update $tableName set name = 'b1' where id = 1")
         spark.sql(s"update $tableName set name = 'b2' where id = 2")
 
