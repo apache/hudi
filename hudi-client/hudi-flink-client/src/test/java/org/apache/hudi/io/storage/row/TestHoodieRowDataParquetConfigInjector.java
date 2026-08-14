@@ -19,8 +19,11 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -56,16 +59,21 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedConstruction;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieRecordType.FLINK;
+import static org.apache.hudi.common.model.LogExtensions.DATA_LOG_EXTENSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mockConstruction;
 
 /**
  * Tests for {@link HoodieParquetConfigInjector} functionality in {@link HoodieRowDataFileWriterFactory}.
@@ -229,6 +237,42 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
 
     // Verify the parquet file was created
     assertTrue(storage.exists(parquetPath));
+  }
+
+  @Test
+  public void testNativeLogMaxFileSize() throws Exception {
+    final String instantTime = "105";
+    HoodieStorage storage = HoodieTestUtils.getStorage(tmpDir.toString());
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, "120");
+    config.setValue(HoodieStorageConfig.LOGFILE_MAX_SIZE, "1024");
+
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(getTestRowType());
+    StoragePath baseFilePath = new StoragePath(basePath + "/partition/path/base.parquet");
+    StoragePath nativeLogPath = new StoragePath(basePath + "/partition/path/"
+        + FSUtils.makeNativeLogFileName("file-1", "0-0-0", instantTime, 1,
+        DATA_LOG_EXTENSION, HoodieFileFormat.PARQUET));
+    HoodieRowDataFileWriterFactory factory = new HoodieRowDataFileWriterFactory(storage);
+    List<HoodieParquetConfig<?>> writerConfigs = new ArrayList<>();
+
+    try (MockedConstruction<HoodieRowDataParquetWriter> ignored = mockConstruction(
+        HoodieRowDataParquetWriter.class,
+        (writer, context) -> writerConfigs.add((HoodieParquetConfig<?>) context.arguments().get(1)))) {
+      // LOGFILE_MAX_SIZE does not apply to native Parquet logs, so they retain the Parquet target.
+      factory.newParquetFileWriter(
+          instantTime, nativeLogPath, config, schema, new LocalTaskContextSupplier());
+
+      // The dedicated override changes native-log sizing without affecting base Parquet files.
+      config.setValue(HoodieStorageConfig.NATIVE_LOG_MAX_FILE_SIZE, "256");
+      factory.newParquetFileWriter(
+          instantTime, baseFilePath, config, schema, new LocalTaskContextSupplier());
+      factory.newParquetFileWriter(
+          instantTime, nativeLogPath, config, schema, new LocalTaskContextSupplier());
+
+      assertEquals(120L, writerConfigs.get(0).getMaxFileSize());
+      assertEquals(120L, writerConfigs.get(1).getMaxFileSize());
+      assertEquals(256L, writerConfigs.get(2).getMaxFileSize());
+    }
   }
 
   @Test

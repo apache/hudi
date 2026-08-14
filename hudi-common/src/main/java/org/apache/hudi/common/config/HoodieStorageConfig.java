@@ -42,6 +42,14 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Target size in bytes for parquet files produced by Hudi write phases. "
           + "For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.");
 
+  public static final ConfigProperty<String> NATIVE_LOG_MAX_FILE_SIZE = ConfigProperty
+      .key("hoodie.native.log.max.file.size")
+      // Keep this unset so the runtime fallback honors the max file size of the corresponding file format.
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Target size in bytes for native log files. When not set, the max file size configured "
+          + "for the corresponding file format is used, for example hoodie.parquet.max.file.size for Parquet.");
+
   public static final ConfigProperty<String> PARQUET_BLOCK_SIZE = ConfigProperty
       .key("hoodie.parquet.block.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
@@ -556,6 +564,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetMaxFileSize(long maxFileSize) {
       storageConfig.setValue(PARQUET_MAX_FILE_SIZE, String.valueOf(maxFileSize));
+      return this;
+    }
+
+    public Builder nativeLogMaxFileSize(long maxFileSize) {
+      storageConfig.setValue(NATIVE_LOG_MAX_FILE_SIZE, String.valueOf(maxFileSize));
       return this;
     }
 

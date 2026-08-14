@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -108,8 +109,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
         hoodieConfig.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS),
         new Class<?>[] {Configuration.class, HoodieSchema.class, BloomFilter.class},
         conf, schema, filter);
-
-    return new HoodieRowDataParquetWriter(storagePath, getParquetConfig(hoodieConfig, writeSupport),
+    return new HoodieRowDataParquetWriter(storagePath, getParquetConfig(hoodieConfig, writeSupport, storagePath),
         instantTime, taskContextSupplier, populateMetaFields, withOperation);
   }
 
@@ -141,12 +141,31 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
 
   private static HoodieParquetConfig<HoodieRowDataParquetWriteSupport> getParquetConfig(
       HoodieConfig config, HoodieRowDataParquetWriteSupport writeSupport) {
+    return getParquetConfig(config, writeSupport,
+        config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE));
+  }
+
+  private static HoodieParquetConfig<HoodieRowDataParquetWriteSupport> getParquetConfig(
+      HoodieConfig config, HoodieRowDataParquetWriteSupport writeSupport, StoragePath storagePath) {
+    // Native logs handled by this factory are write-once Parquet files whose rollover is decided by
+    // the Parquet writer's canWrite(), not by LOGFILE_MAX_SIZE used for Hudi log containers. Preserve
+    // the Parquet target as the fallback unless a dedicated native-log target is explicitly configured.
+    boolean useNativeLogMaxFileSize = FSUtils.isNativeLogFile(storagePath.getName())
+        && config.contains(HoodieStorageConfig.NATIVE_LOG_MAX_FILE_SIZE);
+    long maxFileSize = useNativeLogMaxFileSize
+        ? config.getLong(HoodieStorageConfig.NATIVE_LOG_MAX_FILE_SIZE)
+        : config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE);
+    return getParquetConfig(config, writeSupport, maxFileSize);
+  }
+
+  private static HoodieParquetConfig<HoodieRowDataParquetWriteSupport> getParquetConfig(
+      HoodieConfig config, HoodieRowDataParquetWriteSupport writeSupport, long maxFileSize) {
     return new HoodieParquetConfig<>(
         writeSupport,
         getCompressionCodecName(config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
         config.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
         config.getIntOrDefault(HoodieStorageConfig.PARQUET_PAGE_SIZE),
-        config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
+        maxFileSize,
         new HadoopStorageConfiguration(writeSupport.getHadoopConf()),
         config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
