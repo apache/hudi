@@ -68,7 +68,6 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
     return this.deserialize(topic, false, bytes, sourceSchema);
   }
 
-  @Override
   public Object deserialize(String topic, Headers headers, byte[] bytes) {
     return super.deserialize(topic, false, bytes, sourceSchema);
   }

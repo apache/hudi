@@ -28,6 +28,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.schema.internal.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.TableFormatCompletionAction;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -36,6 +37,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -65,7 +67,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   public CleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
-    this.txnManager = new TransactionManager(config, table.getStorage());
+    this.txnManager = table.getTxnManager().orElseThrow(() -> new HoodieValidationException("The txn manager is not set up yet"));
   }
 
   /**
@@ -238,11 +240,10 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       table.getMetaClient().reloadActiveTimeline();
       BaseHoodieClient.mergeRollingMetadata(table, config, metadata);
       writeTableMetadata(metadata, inflightInstant.requestedTime());
-      table.getActiveTimeline().transitionCleanInflightToComplete(
-          false,
-          inflightInstant,
-          Option.of(metadata),
-          completedInstant -> table.getMetaClient().getTableFormat().clean(metadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
+      TableFormatCompletionAction formatCompletionAction = completedInstant -> table.getMetaClient().getTableFormat()
+          .clean(metadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
+      table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant, Option.of(metadata),
+          txnManager.generateInstantTime(), formatCompletionAction);
       log.info("Marked clean started on {} as complete", inflightInstant.requestedTime());
       return metadata;
     } finally {

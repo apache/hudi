@@ -100,7 +100,7 @@ class TestLegacyUpgradeDowngradeHandlers {
   @Test
   void testZeroToOneCreatesBaseAndLogMarkers() {
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001");
-    HoodieTable table = mock(HoodieTable.class);
+    HoodieTable table = mockTable();
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
     when(table.getActiveTimeline()).thenReturn(activeTimeline);
@@ -140,7 +140,7 @@ class TestLegacyUpgradeDowngradeHandlers {
 
   @Test
   void testZeroToOneIgnoresMissingInstantAndWrapsFailures() {
-    HoodieTable table = mock(HoodieTable.class);
+    HoodieTable table = mockTable();
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     HoodieTimeline timeline = mock(HoodieTimeline.class);
     when(table.getActiveTimeline()).thenReturn(activeTimeline);
@@ -220,7 +220,7 @@ class TestLegacyUpgradeDowngradeHandlers {
 
   @Test
   void testFourToFiveValidatesDefaultPartitionLayouts() throws Exception {
-    HoodieTable table = mock(HoodieTable.class);
+    HoodieTable table = mockTable();
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     HoodieStorage storage = mock(HoodieStorage.class);
@@ -250,7 +250,7 @@ class TestLegacyUpgradeDowngradeHandlers {
 
   @Test
   void testFourToFiveHandlesNonPartitionedTableAndStorageFailure() throws Exception {
-    HoodieTable table = mock(HoodieTable.class);
+    HoodieTable table = mockTable();
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     HoodieStorage storage = mock(HoodieStorage.class);
@@ -275,7 +275,7 @@ class TestLegacyUpgradeDowngradeHandlers {
 
   @Test
   void testFiveToSixDeletesRequestedCompactionFromAuxiliaryFolder() throws Exception {
-    HoodieTable table = mock(HoodieTable.class);
+    HoodieTable table = mockTable();
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     HoodieTimeline compactionTimeline = mock(HoodieTimeline.class);
@@ -308,7 +308,7 @@ class TestLegacyUpgradeDowngradeHandlers {
 
   @Test
   void testFiveToSixWrapsAuxiliaryFolderDeleteFailure() throws Exception {
-    HoodieTable table = mock(HoodieTable.class);
+    HoodieTable table = mockTable();
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     HoodieTimeline compactionTimeline = mock(HoodieTimeline.class);
@@ -338,7 +338,7 @@ class TestLegacyUpgradeDowngradeHandlers {
 
   @SuppressWarnings("unchecked")
   private HoodieTable mockTableWithPendingInstants(String... instantTimes) {
-    HoodieTable table = mock(HoodieTable.class);
+    HoodieTable table = mockTable();
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     HoodieTimeline pendingTimeline = mock(HoodieTimeline.class);
@@ -349,6 +349,12 @@ class TestLegacyUpgradeDowngradeHandlers {
     when(metaClient.getCommitsTimeline()).thenReturn(activeTimeline);
     when(activeTimeline.filterPendingExcludingCompactionAndLogCompaction()).thenReturn(pendingTimeline);
     when(pendingTimeline.getReverseOrderedInstants()).thenAnswer(ignored -> instants.stream());
+    return table;
+  }
+
+  private HoodieTable mockTable() {
+    HoodieTable table = mock(HoodieTable.class);
+    when(table.getTxnManager()).thenReturn(Option.empty());
     return table;
   }
 }

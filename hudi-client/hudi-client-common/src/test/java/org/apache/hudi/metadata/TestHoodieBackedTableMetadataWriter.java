@@ -500,13 +500,15 @@ class TestHoodieBackedTableMetadataWriter {
     writer.metrics = Option.empty();
 
     BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
-    when(writeClient.createNewInstantTime(false)).thenReturn("100", "200", "300", "400");
+    when(writeClient.scheduleCompaction(Option.empty())).thenReturn(
+        Option.of("100"), Option.of("200"), Option.of("300"), Option.of("400"));
     when(writeClient.scheduleCompactionAtInstant("200", Option.empty())).thenReturn(true);
     when(writeClient.scheduleCompactionAtInstant("300", Option.empty()))
         .thenThrow(new HoodieException("compaction failed"));
     when(writeClient.scheduleCompactionAtInstant("400", Option.empty())).thenReturn(false);
     when(writeClient.scheduleLogCompaction(Option.empty()))
         .thenReturn(Option.of("201"))
+        .thenReturn(Option.empty())
         .thenThrow(new HoodieException("log compaction failed"));
 
     writer.compactIfNecessary(writeClient, Option.empty());

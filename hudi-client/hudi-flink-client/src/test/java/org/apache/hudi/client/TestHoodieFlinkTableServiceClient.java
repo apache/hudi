@@ -21,6 +21,8 @@ package org.apache.hudi.client;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.transaction.lock.LockManager;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -217,7 +219,7 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
       client.close();
     }
 
-    verify(compactHelpers).completeInflightCompaction(table, "20260723120000000", metadata);
+    verify(compactHelpers).completeInflightCompaction(table, "20260723120000000", metadata, "20260723120000000");
     verify(writeMarkers).quietDeleteMarkerDir(any(), any(Integer.class));
   }
 
@@ -267,8 +269,15 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
                                                     HoodieWriteConfig clientConfig,
                                                     Option<EmbeddedTimelineService> timelineService,
                                                     HoodieTable mockedTable) {
-      super(context, clientConfig, timelineService);
+      super(context, clientConfig, timelineService, createTransactionManager());
       this.mockedTable = mockedTable;
+    }
+
+    private static TransactionManager createTransactionManager() {
+      TransactionManager transactionManager = mock(TransactionManager.class);
+      when(transactionManager.getLockManager()).thenReturn(mock(LockManager.class));
+      when(transactionManager.generateInstantTime()).thenReturn("20260723120000000");
+      return transactionManager;
     }
 
     @Override

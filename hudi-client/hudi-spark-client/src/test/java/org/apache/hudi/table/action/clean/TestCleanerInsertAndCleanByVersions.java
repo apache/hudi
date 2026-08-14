@@ -153,7 +153,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
 
       Map<HoodieFileGroupId, FileSlice> compactionFileIdToLatestFileSlice = new HashMap<>();
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable table = HoodieSparkTable.createForReads(cfg, context(), metaClient);
       for (String partitionPath : dataGen.getPartitionPaths()) {
         TableFileSystemView fsView = table.getFileSystemView();
         Option<Boolean> added = Option.fromJavaOptional(fsView.getAllFileGroups(partitionPath).findFirst().map(fg -> {
@@ -189,7 +189,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
         assertNoWriteErrors(statusList);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
-        table = HoodieSparkTable.create(cfg, context(), metaClient);
+        table = HoodieSparkTable.createForReads(cfg, context(), metaClient);
         HoodieTimeline timeline = table.getMetaClient().getCommitsTimeline();
 
         TableFileSystemView fsView = table.getFileSystemView();

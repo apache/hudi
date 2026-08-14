@@ -34,9 +34,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimeGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerators;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
@@ -90,7 +87,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   @Getter
   protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
-  protected final TimeGenerator timeGenerator;
 
   /**
    * Lazily-initialized commit callback (HoodieWriteCommitCallback). Lifted from
@@ -114,11 +110,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
                              Option<EmbeddedTimelineService> timelineServer) {
-    this(context, clientConfig, timelineServer, buildTransactionManager(context, clientConfig), buildTimeGenerator(context, clientConfig));
-  }
-
-  private static TimeGenerator buildTimeGenerator(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    return TimeGenerators.getTimeGenerator(clientConfig.getTimeGeneratorConfig(), context.getStorageConf());
+    this(context, clientConfig, timelineServer, buildTransactionManager(context, clientConfig));
   }
 
   private static TransactionManager buildTransactionManager(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
@@ -127,7 +119,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   @VisibleForTesting
   BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
-                   Option<EmbeddedTimelineService> timelineServer, TransactionManager transactionManager, TimeGenerator timeGenerator) {
+                   Option<EmbeddedTimelineService> timelineServer, TransactionManager transactionManager) {
     this.storageConf = context.getStorageConf();
     this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), storageConf);
     this.context = context;
@@ -141,7 +133,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config, storage);
     this.txnManager = transactionManager;
-    this.timeGenerator = timeGenerator;
     startEmbeddedServerView();
     runClientInitCallbacks();
   }
@@ -214,18 +205,16 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         .setBasePath(config.getBasePath())
         .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad)
         .setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-        .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
         .setMetaserverConfig(config.getProps()).build();
   }
 
-  /**
-   * Returns next instant time in the correct format.
-   *
-   * @param shouldLock Whether to lock the context to get the instant time.
-   */
-  public String createNewInstantTime(boolean shouldLock) {
-    return TimelineUtils.generateInstantTime(shouldLock, timeGenerator);
+  public Option<EmbeddedTimelineService> getTimelineServer() {
+    return timelineServer;
+  }
+
+  public HoodieHeartbeatClient getHeartbeatClient() {
+    return heartbeatClient;
   }
 
   /**
@@ -309,17 +298,17 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    */
   protected abstract void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
 
-  protected void executeUsingTxnManager(Option<HoodieInstant> ownerInstant, Runnable r) {
-    this.txnManager.beginStateChange(ownerInstant, Option.empty());
-    try {
-      r.run();
-    } finally {
-      this.txnManager.endStateChange(ownerInstant);
-    }
-  }
-
   public TransactionManager getTransactionManager() {
     return txnManager;
+  }
+
+  /**
+   * Compatibility helper for callers that only need a generated instant.
+   * Instant generation is still delegated to the transaction manager.
+   */
+  @Deprecated
+  public String createNewInstantTime(boolean shouldLock) {
+    return txnManager.executeStateChangeWithInstant(instantTime -> instantTime);
   }
 
   protected boolean isStreamingWriteToMetadataEnabled(HoodieTable table) {

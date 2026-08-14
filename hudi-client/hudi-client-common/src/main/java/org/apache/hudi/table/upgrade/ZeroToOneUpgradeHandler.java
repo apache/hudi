@@ -19,6 +19,7 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -48,9 +49,10 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.EQUALS;
 public class ZeroToOneUpgradeHandler implements UpgradeHandler {
 
   @Override
-  public UpgradeDowngrade.TableConfigChangeSet upgrade(
-      HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
-      SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
+                                                       HoodieEngineContext context,
+                                                       String instantTime,
+                                                       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     // fetch pending commit info
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction();
@@ -64,6 +66,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
       // for every pending commit, delete old markers and re-create markers in new format
       recreateMarkers(commit, table, context, config.getMarkersDeleteParallelism());
     }
+    table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
     return new UpgradeDowngrade.TableConfigChangeSet();
   }
 

@@ -140,7 +140,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   public void testCompactionOnCopyOnWriteFail() throws Exception {
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE);
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(getConfig());) {
-      HoodieTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      HoodieTable table = HoodieSparkTable.create(getConfig(), context, metaClient, Option.of(writeClient.getTransactionManager()));
       String compactionInstantTime = WriteClientTestUtils.createNewInstantTime();
       assertThrows(HoodieNotSupportedException.class, () -> {
         table.scheduleCompaction(context, compactionInstantTime, Option.empty());
@@ -157,9 +157,8 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   public void testCompactionEmpty() {
     HoodieWriteConfig config = getConfig();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
-
+      HoodieTable table = HoodieSparkTable.create(getConfig(), context, metaClient, Option.of(writeClient.getTransactionManager()));
       String newCommitTime = writeClient.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
@@ -430,7 +429,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   }
 
   private void updateRecords(HoodieWriteConfig config, String newCommitTime, List<HoodieRecord> records) throws IOException {
-    HoodieTable table = HoodieSparkTable.create(config, context);
+    HoodieTable table = HoodieSparkTable.createForReads(config, context);
     List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
     JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
     HoodieIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
@@ -448,7 +447,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
    * @param expected The expected number of log files
    */
   private void assertLogFilesNumEqualsTo(HoodieWriteConfig config, int expected) {
-    HoodieTable table = HoodieSparkTable.create(config, context);
+    HoodieTable table = HoodieSparkTable.createForReads(config, context);
     for (String partitionPath : dataGen.getPartitionPaths()) {
       List<FileSlice> groupedLogFiles =
           table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());

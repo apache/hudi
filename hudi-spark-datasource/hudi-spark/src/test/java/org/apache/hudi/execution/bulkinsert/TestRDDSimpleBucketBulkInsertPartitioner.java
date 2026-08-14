@@ -91,7 +91,7 @@ public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientT
     List<HoodieRecord> records = dataGenerator.generateInserts("0", 1000);
     HoodieJavaRDD<HoodieRecord> javaRDD = HoodieJavaRDD.of(records, context, 1);
 
-    final HoodieSparkTable table = HoodieSparkTable.create(config, context);
+    final HoodieSparkTable table = HoodieSparkTable.createForReads(config, context);
     // we call BulkInsertInternalPartitionerFactory.get() directly, which behaves like we disabled Spark native row writer
     BulkInsertPartitioner partitioner = BulkInsertInternalPartitionerFactory.get(table, config);
     JavaRDD<HoodieRecord> repartitionRecords =

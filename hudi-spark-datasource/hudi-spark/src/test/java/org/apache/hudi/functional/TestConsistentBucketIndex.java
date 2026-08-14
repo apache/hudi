@@ -143,7 +143,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
 
     // The records should be tagged anyway, even though it is the first time doing tagging
     List<HoodieRecord> taggedRecord = tagLocation(index, writeRecords, hoodieTable).collect();

@@ -25,9 +25,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 
@@ -47,17 +47,12 @@ public class CopyOnWriteRestoreActionExecutor<T, I, K, O>
         && !ClusteringUtils.isClusteringOrReplaceCommitAction(instantToRollback.getAction())) {
       throw new HoodieRollbackException("Unsupported action in rollback instant:" + instantToRollback);
     }
-    String newInstantTime;
-    try (TransactionManager transactionManager = new TransactionManager(config, table.getStorage())) {
+    TransactionManager transactionManager = table.getTxnManager().orElseThrow(() -> new HoodieValidationException("The txn manager is not set up yet"));
+    String newInstantTime = transactionManager.executeStateChangeWithInstant(instantTime -> {
       table.getMetaClient().reloadActiveTimeline();
-      transactionManager.beginStateChange(Option.empty(), Option.empty());
-      try {
-        newInstantTime = table.getMetaClient().createNewInstantTime(false);
-        table.scheduleRollback(context, newInstantTime, instantToRollback, false, false, true);
-      } finally {
-        transactionManager.endStateChange(Option.empty());
-      }
-    }
+      table.scheduleRollback(context, instantTime, instantToRollback, false, false, true);
+      return instantTime;
+    });
     table.getMetaClient().reloadActiveTimeline();
     CopyOnWriteRollbackActionExecutor rollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(
         context,

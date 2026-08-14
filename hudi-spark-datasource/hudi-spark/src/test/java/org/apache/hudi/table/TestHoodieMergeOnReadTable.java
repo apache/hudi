@@ -177,7 +177,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertNoWriteErrors(rawStatuses);
       client.commit(newCommitTime, jsc().parallelize(rawStatuses, 1), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
 
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -264,7 +264,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertNoWriteErrors(rawStatuses);
       client.commit(newCommitTime, jsc().parallelize(rawStatuses, 1), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
 
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -308,7 +308,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     assertTrue(deltaCommit.isPresent());
     assertEquals(newCommitTime, deltaCommit.get().requestedTime(), "Latest Delta commit should be 002");
 
-    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
     HoodieTable finalHoodieTable = hoodieTable;
     baseFileMapping.entrySet().forEach(entry -> {
           FileSlice fileSlice = finalHoodieTable.getSliceView().getLatestFileSlices(entry.getKey()).collect(Collectors.toList()).get(0);
@@ -389,7 +389,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         assertEquals(indexType != IndexType.INMEMORY ? allPartitions.size() : 0, testTable.listAllBaseFiles().size());
 
         // Verify that all data file has one log file
-        HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
+        HoodieTable table = HoodieSparkTable.createForReads(config, context(), metaClient);
         for (String partitionPath : dataGen.getPartitionPaths()) {
           List<FileSlice> groupedLogFiles =
               table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
@@ -423,7 +423,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
         // Verify that recently written compacted data file has no log file
         metaClient = HoodieTableMetaClient.reload(metaClient);
-        table = HoodieSparkTable.create(config, context(), metaClient);
+        table = HoodieSparkTable.createForReads(config, context(), metaClient);
         HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
 
         assertTrue(compareTimestamps(timeline.lastInstant().get().requestedTime(), GREATER_THAN, lastCommit.finalDeleteTime),
@@ -507,8 +507,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
             .keySet();
         assertEquals(allPartitions.size(), testTable.listAllBaseFiles().size());
 
-        // Verify that all data files have an update log file and a delete log file
-        HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
+        // Verify that all data file has one log file
+        HoodieTable table = HoodieSparkTable.createForReads(config, context(), metaClient);
         for (String partitionPath : dataGen.getPartitionPaths()) {
           List<FileSlice> groupedLogFiles =
               table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
@@ -527,7 +527,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
         // Verify that recently written compacted data file has no log file
         metaClient = HoodieTableMetaClient.reload(metaClient);
-        table = HoodieSparkTable.create(config, context(), metaClient);
+        table = HoodieSparkTable.createForReads(config, context(), metaClient);
         HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
 
         assertTrue(compareTimestamps(timeline.lastInstant().get().requestedTime(), GREATER_THAN, lastCommit.finalDeleteTime),
@@ -642,18 +642,17 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     setUp(cfg.getProps());
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
-      HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable table = HoodieSparkTable.createForReads(cfg, context(), metaClient);
 
       // Create a commit without metadata stats in metadata to test backwards compatibility
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       String commitActionType = table.getMetaClient().getCommitActionType();
-      List<String> instants = new ArrayList<>();
       String instant0 = WriteClientTestUtils.createNewInstantTime();
       HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, commitActionType, instant0);
       activeTimeline.createNewInstant(instant);
       activeTimeline.transitionRequestedToInflight(instant, Option.empty());
       instant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, commitActionType, instant0);
-      activeTimeline.saveAsComplete(instant, Option.empty());
+      activeTimeline.saveAsComplete(instant, Option.empty(), WriteClientTestUtils.createNewInstantTime());
 
       String instant1 = client.startCommit();
 
@@ -664,7 +663,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertTrue(client.commit(instant1, jsc().parallelize(rawStatuses, 1), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap()), "Commit should succeed");
 
       // Read from commit file
-      table = HoodieSparkTable.create(cfg, context());
+      table = HoodieSparkTable.createForReads(cfg, context());
       HoodieInstant instantOne = table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get();
       HoodieCommitMetadata metadata =
           table.getActiveTimeline().readCommitMetadata(instantOne);
@@ -700,7 +699,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       client.rollback(instant2);
 
       // Read from commit file
-      table = HoodieSparkTable.create(cfg, context());
+      table = HoodieSparkTable.createForReads(cfg, context());
       HoodieInstant instant3 = table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get();
       metadata = table.getActiveTimeline().readCommitMetadata(instant3);
       inserts = 0;
@@ -740,7 +739,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertTrue(client.commit(instantTime, jsc().parallelize(rawStatuses, 1), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap()));
 
       // Read from commit file
-      HoodieTable table = HoodieSparkTable.create(cfg, context());
+      HoodieTable table = HoodieSparkTable.createForReads(cfg, context());
       HoodieInstant instantOne = table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get();
       HoodieCommitMetadata metadata =
           table.getActiveTimeline().readCommitMetadata(instantOne);
@@ -764,7 +763,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertTrue(client.commit(instantTime, jsc().parallelize(rawStatuses, 1), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap()),"Commit should succeed");
 
       // Read from commit file
-      table = HoodieSparkTable.create(cfg, context());
+      table = HoodieSparkTable.createForReads(cfg, context());
       HoodieInstant instantTwo = table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get();
       metadata = table.getActiveTimeline().readCommitMetadata(instantTwo);
       inserts = 0;
@@ -789,7 +788,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(instantTime));
 
       // Read from commit file
-      table = HoodieSparkTable.create(cfg, context());
+      table = HoodieSparkTable.createForReads(cfg, context());
       HoodieInstant instantThree = table.getActiveTimeline().getCommitsTimeline().lastInstant().get();
       HoodieCommitMetadata metadata1 =
           table.getActiveTimeline().readCommitMetadata(instantThree);
@@ -812,7 +811,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertTrue(client.commit(instantTime, jsc().parallelize(rawStatuses, 1), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap()), "Commit should succeed");
 
       // Read from commit file
-      table = HoodieSparkTable.create(cfg, context());
+      table = HoodieSparkTable.createForReads(cfg, context());
       HoodieInstant instant = table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get();
       metadata = table.getActiveTimeline().readCommitMetadata(instant);
       inserts = 0;
@@ -854,7 +853,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertNoWriteErrors(rawStatuses);
       client.commit(newCommitTime, jsc().parallelize(rawStatuses, 1), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
 
-      HoodieSparkMergeOnReadTable hoodieTable = (HoodieSparkMergeOnReadTable) HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieSparkMergeOnReadTable hoodieTable = (HoodieSparkMergeOnReadTable) HoodieSparkTable.createForReads(cfg, context(), metaClient);
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());

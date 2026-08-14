@@ -21,7 +21,9 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieJavaWriteClient;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieJavaTable;
@@ -45,7 +47,8 @@ public class JavaUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   @Override
   public HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
-    return HoodieJavaTable.create(config, context);
+    TransactionManager txnManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
+    return HoodieJavaTable.create(config, context, txnManager);
   }
 
   @Override

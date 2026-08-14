@@ -145,7 +145,7 @@ public class TestBloomIndexTagWithColStats extends TestHoodieMetadataBase {
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record));
 
     HoodieWriteConfig config = makeConfig();
-    HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkTable hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
 
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(bloomIndex, recordRDD, hoodieTable);
@@ -159,7 +159,7 @@ public class TestBloomIndexTagWithColStats extends TestHoodieMetadataBase {
     String fileId = status.first().getFileId();
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    taggedRecordRDD = tagLocation(bloomIndex, recordRDD, HoodieSparkTable.create(config, context, metaClient));
+    taggedRecordRDD = tagLocation(bloomIndex, recordRDD, HoodieSparkTable.createForReads(config, context, metaClient));
 
     assertEquals(taggedRecordRDD.first().getCurrentLocation().getFileId(), fileId);
   }

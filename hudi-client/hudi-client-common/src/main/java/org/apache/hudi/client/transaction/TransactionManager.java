@@ -20,8 +20,12 @@ package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.client.transaction.lock.LockManager;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.HoodieStorage;
 
 import lombok.Getter;
@@ -29,10 +33,26 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.util.function.Function;
 
 /**
- * This class allows clients to start and end transactions. Anything done between a start and end transaction is
- * guaranteed to be atomic.
+ * Coordinates state changes that must be serialized by the configured lock provider.
+ *
+ * <p>A {@code TransactionManager} is deliberately non-reentrant when locking is required. After a thread enters a
+ * state change through {@link #beginStateChange(Option, Option)} or {@link #executeStateChangeWithInstant(Option,
+ * Option, Function)}, that same thread must not enter another state change through this manager until the first one
+ * finishes. Re-entry fails immediately with a {@link HoodieLockException}; callers already inside a state change can
+ * use {@link #generateInstantTime()} when they only need another instant.</p>
+ *
+ * <p>Calls from other threads still contend through the configured lock provider. A state change started with
+ * {@code beginStateChange} must be ended by the same thread and with the same action instant (including an empty
+ * instant). Every successful {@code beginStateChange} call must have exactly one matching {@code endStateChange}
+ * call. The callback-based API manages its own release in a {@code finally} block and must not be mixed with manual
+ * begin or end calls. Violations of the thread and instant ownership rules fail without changing the active
+ * transaction.</p>
+ *
+ * <p>When locking is not required, the begin and end methods are no-ops and the ownership checks described above do
+ * not apply.</p>
  */
 public class TransactionManager implements Serializable, AutoCloseable {
 
@@ -41,54 +61,205 @@ public class TransactionManager implements Serializable, AutoCloseable {
   protected final LockManager lockManager;
   @Getter
   protected final boolean isLockRequired;
+  private final transient TimeGenerator timeGenerator;
+  private transient volatile Thread lockHolder;
   protected Option<HoodieInstant> changeActionInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedActionInstant = Option.empty();
 
   public TransactionManager(HoodieWriteConfig config, HoodieStorage storage) {
-    this(new LockManager(config, storage), config.isLockRequired());
+    this(config, new LockManager(config, storage));
   }
 
-  protected TransactionManager(LockManager lockManager, boolean isLockRequired) {
+  protected TransactionManager(HoodieWriteConfig writeConfig, LockManager lockManager) {
+    this(lockManager, writeConfig.isLockRequired(), TimeGenerators.getTimeGenerator(writeConfig.getTimeGeneratorConfig()));
+  }
+
+  public TransactionManager(LockManager lockManager, boolean isLockRequired, TimeGenerator timeGenerator) {
     this.lockManager = lockManager;
     this.isLockRequired = isLockRequired;
+    this.timeGenerator = timeGenerator;
+    this.lockHolder = null;
   }
 
+  /**
+   * Generates an instant while the current thread owns this manager's lock.
+   *
+   * <p>This method is intended for code that is already executing inside a state change and must not attempt to
+   * enter another one solely to generate an instant.</p>
+   *
+   * @throws HoodieLockException if locking is required and the current thread does not own the lock
+   */
+  public String generateInstantTime() {
+    if (isLockRequired && !isLockHeldByCurrentThread()) {
+      throw new HoodieLockException("Cannot create instant without acquiring a lock first.");
+    }
+    return HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0L);
+  }
+
+  /**
+   * Generates an instant time and executes an action that requires that instant time within a lock.
+   * This method is non-reentrant when locking is required.
+   *
+   * @param instantTimeConsumingAction a function that takes the generated instant time and performs some action
+   * @return the result of the action
+   * @param <T> type of the result
+   * @throws HoodieLockException if the current thread is already executing a state change through this manager
+   */
+  public <T> T executeStateChangeWithInstant(Function<String, T> instantTimeConsumingAction) {
+    return executeStateChangeWithInstant(Option.empty(), Option.empty(), instantTimeConsumingAction);
+  }
+
+  /**
+   * Uses the provided instant if present or else generates an instant time and executes an action that requires that instant time within a lock.
+   * This method is non-reentrant when locking is required.
+   *
+   * @param providedInstantTime an optional instant time provided by the caller. If not provided, a new instant time will be generated.
+   * @param instantTimeConsumingAction a function that takes the generated instant time and performs some action
+   * @return the result of the action
+   * @param <T> type of the result
+   * @throws HoodieLockException if the current thread is already executing a state change through this manager
+   */
+  public <T> T executeStateChangeWithInstant(Option<String> providedInstantTime, Function<String, T> instantTimeConsumingAction) {
+    return executeStateChangeWithInstant(providedInstantTime, Option.empty(), instantTimeConsumingAction);
+  }
+
+  /**
+   * Uses the provided instant if present or else generates an instant time and executes an action that requires that instant time within a lock.
+   * This method is non-reentrant when locking is required. Calls from other threads contend through the configured
+   * lock provider.
+   *
+   * @param providedInstantTime an optional instant time provided by the caller. If not provided, a new instant time will be generated.
+   * @param lastCompletedActionInstant optional input representing the last completed instant, used for logging purposes.
+   * @param instantTimeConsumingAction a function that takes the generated instant time and performs some action
+   * @return the result of the action
+   * @param <T> type of the result
+   * @throws HoodieLockException if the current thread is already executing a state change through this manager
+   */
+  public <T> T executeStateChangeWithInstant(Option<String> providedInstantTime, Option<HoodieInstant> lastCompletedActionInstant, Function<String, T> instantTimeConsumingAction) {
+    if (isLockRequired()) {
+      acquireLock();
+    }
+    String requestedInstant = null;
+    try {
+      requestedInstant = providedInstantTime.orElseGet(() -> HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0L));
+      if (lastCompletedActionInstant.isEmpty()) {
+        LOG.info("State change starting for {}", changeActionInstant);
+      } else {
+        LOG.info("State change starting for {} with latest completed action instant {}", changeActionInstant, lastCompletedActionInstant.get());
+      }
+      return instantTimeConsumingAction.apply(requestedInstant);
+    } finally {
+      if (isLockRequired()) {
+        releaseLock();
+        if (requestedInstant != null) {
+          LOG.info("State change ended for {}", requestedInstant);
+        }
+      }
+    }
+  }
+
+  public void beginStateChange() {
+    beginStateChange(Option.empty(), Option.empty());
+  }
+
+  /**
+   * Starts a non-reentrant state change.
+   *
+   * <p>When locking is required, the caller must later invoke {@link #endStateChange(Option)} from the same thread and
+   * pass an action instant equal to {@code changeActionInstant}. Calls from other threads contend through the
+   * configured lock provider. Each successful call must have exactly one matching {@code endStateChange} call.</p>
+   *
+   * @throws HoodieLockException if the current thread is already executing a state change through this manager
+   */
   public void beginStateChange(Option<HoodieInstant> changeActionInstant,
                                Option<HoodieInstant> lastCompletedActionInstant) {
     if (isLockRequired) {
       LOG.info("State change starting for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
-      lockManager.lock();
-      reset(this.changeActionInstant, changeActionInstant, lastCompletedActionInstant);
+      acquireLock();
+      reset(changeActionInstant, lastCompletedActionInstant);
       LOG.info("State change started for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
     }
   }
 
+  public void endStateChange() {
+    endStateChange(Option.empty());
+  }
+
+  /**
+   * Ends a state change started by {@link #beginStateChange(Option, Option)}.
+   *
+   * @throws HoodieLockException if the current thread does not own the lock or {@code changeActionInstant} does not
+   *                              match the instant supplied to {@code beginStateChange}
+   */
   public void endStateChange(Option<HoodieInstant> changeActionInstant) {
     if (isLockRequired) {
       LOG.info("State change ending for action instant {}", changeActionInstant);
-      if (reset(changeActionInstant, Option.empty(), Option.empty())) {
-        lockManager.unlock();
-        LOG.info("State change ended for action instant {}", changeActionInstant);
+      if (!isLockHeldByCurrentThread()) {
+        throw new HoodieLockException("Cannot end a state change from a thread that does not own the lock");
       }
+      if (!this.changeActionInstant.equals(changeActionInstant)) {
+        throw new HoodieLockException(String.format(
+            "Cannot end state change for action instant %s because the active action instant is %s",
+            changeActionInstant, this.changeActionInstant));
+      }
+      releaseLock();
+      LOG.info("State change ended for action instant {}", changeActionInstant);
     }
   }
 
-  protected synchronized boolean reset(Option<HoodieInstant> callerInstant,
-                                       Option<HoodieInstant> changeActionInstant,
-                                       Option<HoodieInstant> lastCompletedActionInstant) {
-    if (!this.changeActionInstant.isPresent() || this.changeActionInstant.get().equals(callerInstant.get())) {
-      this.changeActionInstant = changeActionInstant;
-      this.lastCompletedActionInstant = lastCompletedActionInstant;
-      return true;
+  /**
+   * Acquires the configured lock, failing immediately if the current thread already owns it.
+   */
+  private void acquireLock() {
+    if (isLockHeldByCurrentThread()) {
+      throw new HoodieLockException("TransactionManager is non-reentrant: the current thread already owns the lock");
     }
-    return false;
+    lockManager.lock();
+    // The previous owner may still be clearing its local state after releasing the underlying lock. Publish the new
+    // state before returning so that its cleanup cannot erase this ownership.
+    reset(Option.empty(), Option.empty());
+    this.lockHolder = Thread.currentThread();
+    LOG.info("{}: Lock acquired for action instant {}", this, changeActionInstant);
+  }
+
+  private void releaseLock() {
+    if (!isLockHeldByCurrentThread()) {
+      throw new HoodieLockException("Cannot release a lock that is not owned by the current thread");
+    }
+    Thread releasingThread = Thread.currentThread();
+    lockManager.unlock();
+    clearLocalStateAfterUnlock(releasingThread);
+    LOG.info("{}: Lock released for action instant {}", this, changeActionInstant);
+  }
+
+  private synchronized void clearLocalStateAfterUnlock(Thread releasingThread) {
+    // Another thread may acquire the underlying lock and publish itself before the releasing thread reaches this
+    // method. Only clear state if it still belongs to the releasing thread.
+    if (lockHolder == releasingThread) {
+      lockHolder = null;
+      reset(Option.empty(), Option.empty());
+    }
+  }
+
+  boolean isLockHeldByCurrentThread() {
+    return Thread.currentThread() == lockHolder;
+  }
+
+  boolean isLockHeld() {
+    return lockHolder != null;
+  }
+
+  private void reset(Option<HoodieInstant> changeActionInstant,
+                     Option<HoodieInstant> lastCompletedActionInstant) {
+    this.changeActionInstant = changeActionInstant;
+    this.lastCompletedActionInstant = lastCompletedActionInstant;
   }
 
   @Override
   public void close() {
-    if (isLockRequired) {
+    if (lockManager != null) {
       lockManager.close();
       LOG.debug("Transaction manager closed");
     }

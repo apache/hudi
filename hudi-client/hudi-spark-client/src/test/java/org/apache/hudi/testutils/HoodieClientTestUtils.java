@@ -19,6 +19,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.SparkRDDReadClient;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -44,7 +46,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.HoodieSparkKryoRegistrar;
@@ -55,6 +56,8 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -72,8 +75,9 @@ import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.readHFi
 /**
  * Utility methods to aid testing inside the HoodieClient module.
  */
-@Slf4j
 public class HoodieClientTestUtils {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestUtils.class);
 
   /**
    * Returns a Spark config for this test.
@@ -129,7 +133,7 @@ public class HoodieClientTestUtils {
       Configuration testHadoopConfig = new Configuration(false);
       hadoopConfigurationField.set(sparkContext, testHadoopConfig);
     } catch (NoSuchFieldException | IllegalAccessException e) {
-      log.warn(e.getMessage());
+      LOG.warn(e.getMessage());
     }
   }
 
@@ -152,7 +156,7 @@ public class HoodieClientTestUtils {
     try {
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
-      log.info("Path :{}", paths.values());
+      LOG.info("Path :{}", paths.values());
       Dataset<Row> unFilteredRows = null;
       if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.PARQUET)) {
         unFilteredRows = sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]));
@@ -285,7 +289,7 @@ public class HoodieClientTestUtils {
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();
-      log.info("Timeline service server port: {}", timelineServicePort);
+      LOG.info("Timeline service server port: {}", timelineServicePort);
       return timelineService;
     } catch (Exception ex) {
       throw new RuntimeException(ex);
@@ -333,6 +337,46 @@ public class HoodieClientTestUtils {
       return ReflectionUtils.getClass(className) != null;
     } catch (Exception e) {
       return false;
+    }
+  }
+
+  /**
+   * Creates a TransactionManager for testing purposes.
+   *
+   * @param config HoodieWriteConfig to use
+   * @param context HoodieEngineContext to use
+   * @return TransactionManager instance
+   */
+  public static TransactionManager createTransactionManager(HoodieWriteConfig config, HoodieEngineContext context) {
+    return new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
+  }
+
+  /**
+   * Creates a TransactionManager for testing purposes.
+   *
+   * @param config HoodieWriteConfig to use
+   * @param basePath Base path for the table
+   * @param storageConfiguration Storage configuration to use
+   * @return TransactionManager instance
+   */
+  public static TransactionManager createTransactionManager(HoodieWriteConfig config, String basePath, 
+                                                           org.apache.hudi.storage.StorageConfiguration<?> storageConfiguration) {
+    return new TransactionManager(config, HoodieStorageUtils.getStorage(basePath, storageConfiguration));
+  }
+
+  /**
+   * Safely closes a TransactionManager if it's not null.
+   *
+   * @param txnManager TransactionManager to close
+   */
+  public static void closeTransactionManager(TransactionManager txnManager) {
+    if (txnManager != null) {
+      try {
+        txnManager.close();
+      } catch (Exception e) {
+        // Log and ignore cleanup errors in tests
+        System.err.println("Error closing TransactionManager in test: " + e.getMessage());
+      }
     }
   }
 }

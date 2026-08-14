@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -181,6 +182,7 @@ class TestUpgradeDowngradeOrchestration {
         .build();
 
     TestContext(HoodieTableVersion version) throws Exception {
+      when(table.getTxnManager()).thenReturn(Option.empty());
       when(metaClient.getTableConfig()).thenReturn(tableConfig);
       when(tableConfig.getTableVersion()).thenReturn(version);
       when(tableConfig.isMetadataTableAvailable()).thenReturn(false);
