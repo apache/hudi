@@ -511,6 +511,8 @@ public class BufferedRecordMergerFactory {
 
   private static <T> boolean shouldKeepNewerRecord(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
     if (newRecord.isCommitTimeOrderingDelete() || oldRecord.isCommitTimeOrderingDelete()) {
+      // handle records coming from DELETE statements
+      // The orderingVal is constant 0 (int) and not guaranteed to match the type of the old or new record's ordering value.
       return true;
     }
     Comparable newOV = newRecord.getOrderingValue();
