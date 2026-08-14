@@ -33,6 +33,9 @@
   <suppress checks="IllegalTokenText" files="PartitionPathEncodeUtils.java"/>
   <!-- SQL is longer than 200 characters -->
   <suppress checks="LineLength" files="sql-transformer.properties"/>
+  <!-- Charset-correctness of the decode side only matters for bytes that came from storage, so the
+       rule is scoped to main sources; test fixtures build their own bytes in-process. -->
+  <suppress id="DefaultCharsetDecode" files="src[\\/]test[\\/].*"/>
   <!-- Ignore hudi-trino as this module has its own checkstyle rules -->
   <suppress checks=".*" files="hudi-trino[\\/].*"/>
   <suppress checks=".*" files="target[\\/].*"/>

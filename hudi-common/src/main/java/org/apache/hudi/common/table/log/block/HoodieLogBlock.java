@@ -469,11 +469,9 @@ public abstract class HoodieLogBlock {
         int metadataEntrySize = dis.readInt();
         byte[] metadataEntry = new byte[metadataEntrySize];
         dis.readFully(metadataEntry, 0, metadataEntrySize);
-        // Decode as UTF-8 to match the write side: getLogMetadataBytes() serializes these values
-        // with StringUtils.getUTF8Bytes(). Using new String(byte[]) here applies the platform
-        // default charset instead, so on any JVM whose default charset is not UTF-8 a non-ASCII
-        // header value (e.g. a writer schema containing non-ASCII field names) is corrupted on
-        // read, and downstream Avro parsing fails with "Illegal initial character".
+        // Must match getLogMetadataBytes(), which writes these values as UTF-8. Decoding with the
+        // platform default charset corrupts non-ASCII values: loudly for a schema name, which Avro
+        // then rejects, and silently for a doc, a default or a prop.
         metadata.put(typeMapper.apply(metadataEntryIndex), fromUTF8Bytes(metadataEntry));
         metadataCount--;
       }
