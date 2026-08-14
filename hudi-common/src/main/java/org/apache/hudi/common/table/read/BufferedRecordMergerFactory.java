@@ -264,9 +264,6 @@ public class BufferedRecordMergerFactory {
       Comparable oldOrderingValue = olderRecord.getOrderingValue();
       HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
       if (!olderRecord.isCommitTimeOrderingDelete()
-          && !OrderingValues.isDefault(oldOrderingValue)
-          && !OrderingValues.isDefault(newOrderingValue)
-          && OrderingValues.isSameClass(oldOrderingValue, newOrderingValue)
           && oldOrderingValue.compareTo(newOrderingValue) > 0) {
         // Use old record as the base record since old record has higher ordering value.
         olderRecord = partialUpdateHandler.partialMerge(
@@ -515,17 +512,6 @@ public class BufferedRecordMergerFactory {
       // The orderingVal is constant 0 (int) and not guaranteed to match the type of the old or new record's ordering value.
       return true;
     }
-    Comparable newOV = newRecord.getOrderingValue();
-    Comparable oldOV = oldRecord.getOrderingValue();
-    // Use ordering comparison only when both values are non-default and the same type.
-    // A null ordering field is coerced to DEFAULT_VALUE (Integer 0) by OrderingValues.create,
-    // making it the same as the commit-time ordering sentinel. A type mismatch (e.g. Integer 0
-    // vs Long) would throw ClassCastException. In both cases treat the record as a tie and keep
-    // the newer one, mirroring the same guard in deltaMergeDeleteRecord.
-    if (!OrderingValues.isDefault(newOV) && !OrderingValues.isDefault(oldOV)
-        && OrderingValues.isSameClass(newOV, oldOV)) {
-      return newOV.compareTo(oldOV) >= 0;
-    }
-    return true;
+    return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
   }
 }

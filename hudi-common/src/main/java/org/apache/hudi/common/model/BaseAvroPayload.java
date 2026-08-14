@@ -20,7 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.exception.HoodieException;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
@@ -63,10 +63,12 @@ public abstract class BaseAvroPayload implements Serializable, KryoSerializable 
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
     this.record = record;
     this.recordBytes = null; // only initialized when needed
-    // A null ordering value (e.g. a nullable ordering column) is treated as the default
-    // (natural order), consistent with OrderingValues.create, rather than being rejected.
-    this.orderingVal = orderingVal == null ? OrderingValues.getDefault() : orderingVal;
+    this.orderingVal = orderingVal;
     this.isDeletedRecord = record == null || isDeleteRecord(record);
+
+    if (orderingVal == null) {
+      throw new HoodieException("Ordering value is null for record: " + record);
+    }
   }
 
   /**

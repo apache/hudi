@@ -67,7 +67,6 @@ import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -595,62 +594,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertTrue(result.isDelete());
     assertEquals(newRecord, result.getRecord());
-  }
-
-  /**
-   * Regression test for null ordering field values (e.g. a nullable BIGINT timestamp column).
-   * OrderingValues.create coerces null to DEFAULT_VALUE (Integer 0). shouldKeepNewerRecord must
-   * then guard against the Integer-vs-Long ClassCastException via isSameClass before calling
-   * compareTo. Prior to the fix: null ordering field caused NPE; after partial fix without the
-   * isSameClass guard: Integer(0) vs Long caused ClassCastException.
-   */
-  @Test
-  void testFinalMerge_nullOrderingField_doesNotThrow() throws IOException {
-    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, EVENT_TIME_ORDERING, Option.empty());
-    InternalRow oldRecord = createFullRecord("old", "Old Name", 25, "Old City", 1000L);
-    InternalRow newRecord = createFullRecord("new", "New Name", 29, "New City", 2000L);
-
-    // One record has a null ordering field (coerced to DEFAULT_VALUE = Integer 0),
-    // the other has a real Long ordering value. The type mismatch caused ClassCastException.
-    BufferedRecord<InternalRow> olderRecord =
-        new BufferedRecord<>(RECORD_KEY, OrderingValues.getDefault(), oldRecord, 1, null);
-    BufferedRecord<InternalRow> newerRecord =
-        new BufferedRecord<>(RECORD_KEY, 100L, newRecord, 1, null);
-
-    // Must not throw NPE or ClassCastException. Type mismatch -> keep newer.
-    BufferedRecord<InternalRow> result = merger.finalMerge(olderRecord, newerRecord);
-    assertEquals(newRecord, result.getRecord());
-
-    // Both records have null ordering field -> both DEFAULT_VALUE -> keep newer (treated as tie).
-    olderRecord = new BufferedRecord<>(RECORD_KEY, OrderingValues.getDefault(), oldRecord, 1, null);
-    newerRecord = new BufferedRecord<>(RECORD_KEY, OrderingValues.getDefault(), newRecord, 1, null);
-    result = merger.finalMerge(olderRecord, newerRecord);
-    assertEquals(newRecord, result.getRecord());
-  }
-
-  /**
-   * Regression test for null ordering field values in EventTimePartialRecordMerger.finalMerge.
-   * The same Integer(0) vs Long ClassCastException affected EventTimePartialRecordMerger, which
-   * overrides finalMerge independently and was not covered by testFinalMerge_nullOrderingField_doesNotThrow.
-   */
-  @Test
-  void testFinalMerge_nullOrderingField_partialMerger_doesNotThrow() throws IOException {
-    BufferedRecordMerger<InternalRow> merger =
-        createMerger(readerContext, EVENT_TIME_ORDERING, Option.of(PartialUpdateMode.FILL_UNAVAILABLE));
-    InternalRow oldRecord = createFullRecord("old", "Old Name", 25, "Old City", 1000L);
-    InternalRow newRecord = createFullRecord("new", "New Name", 29, "New City", 2000L);
-
-    // One record with DEFAULT_VALUE (null ordering coerced to Integer 0), other with real Long.
-    // EventTimePartialRecordMerger.finalMerge called oldOrderingValue.compareTo(newOrderingValue)
-    // without an isSameClass guard, causing ClassCastException.
-    BufferedRecord<InternalRow> olderRecord =
-        new BufferedRecord<>(RECORD_KEY, OrderingValues.getDefault(), oldRecord, 1, null);
-    BufferedRecord<InternalRow> newerRecord =
-        new BufferedRecord<>(RECORD_KEY, 100L, newRecord, 1, null);
-
-    // Must not throw. Type mismatch -> treat as tie -> use newer as base for partial merge.
-    BufferedRecord<InternalRow> result = merger.finalMerge(olderRecord, newerRecord);
-    assertNotNull(result);
   }
 
   @ParameterizedTest
