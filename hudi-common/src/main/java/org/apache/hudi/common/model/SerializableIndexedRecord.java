@@ -20,6 +20,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
@@ -189,6 +190,6 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
 
   @Override
   public String toString() {
-    return record == null ? "SERIALIZED: " + new String(recordBytes) : record.toString();
+    return record == null ? "SERIALIZED: " + StringUtils.fromUTF8Bytes(recordBytes) : record.toString();
   }
 }

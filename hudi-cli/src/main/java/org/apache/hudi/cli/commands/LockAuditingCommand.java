@@ -20,6 +20,7 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
@@ -278,7 +279,7 @@ public class LockAuditingCommand {
       // Read and parse the configuration
       String configContent;
       try (InputStream inputStream = HoodieCLI.storage.open(configPath)) {
-        configContent = new String(FileIOUtils.readAsByteArray(inputStream));
+        configContent = StringUtils.fromUTF8Bytes(FileIOUtils.readAsByteArray(inputStream));
       } catch (FileNotFoundException e) {
         return String.format("Lock Audit Status: DISABLED\n"
             + "Table: %s\n"

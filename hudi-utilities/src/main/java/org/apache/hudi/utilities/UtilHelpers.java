@@ -322,7 +322,7 @@ public class UtilHelpers {
     try (FSDataInputStream inputStream = fs.open(p)) {
       inputStream.readFully(0, buf.array(), 0, buf.array().length);
     }
-    return new String(buf.array());
+    return StringUtils.fromUTF8Bytes(buf.array());
   }
 
   public static SparkConf buildSparkConf(String appName, String defaultMaster) {

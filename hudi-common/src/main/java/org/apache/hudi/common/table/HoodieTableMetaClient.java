@@ -103,6 +103,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigs
 import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForV9TableCreation;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -355,7 +356,7 @@ public class HoodieTableMetaClient implements Serializable {
     try {
       Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
       if (bytesOpt.isPresent()) {
-        return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
+        return Option.of(HoodieIndexMetadata.fromJson(fromUTF8Bytes(bytesOpt.get())));
       } else {
         return Option.of(new HoodieIndexMetadata());
       }
