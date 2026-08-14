@@ -19,9 +19,21 @@
 
 Hudi connector for Trino (RFC-105). Published as `org.apache.hudi:hudi-trino` -- a regular non-shaded JAR. The Trino-side `trino-hudi` plugin module depends on this artifact and Trino's URLClassLoader isolates the plugin's transitive deps from the rest of the server, so no shading is required.
 
+## Bootstrap Trino (do this first)
+
+On master no `io.trino` artifact resolves from Maven Central: master tracks `trinodb/trino` master at the commit pinned by `trino.sha` in the root pom, and Trino publishes no SNAPSHOT artifacts. One time per pin advance, clone `trinodb/trino` (or reuse a checkout) and build it under JDK 25:
+
+```
+scripts/trino/bootstrap_trino.sh /path/to/trino
+```
+
+Takes roughly 10-30 minutes and installs everything the connector needs, including the four test-jars and the `trino-root` pom.
+
+On release branches `trino.version` is a released number, so compile deps resolve from Central and bootstrap is only needed for running tests.
+
 ## Build
 
-Excluded from default builds. Activate the `hudi-trino` Maven profile:
+Excluded from default builds. Activate the `hudi-trino` Maven profile (after bootstrap):
 
 ```
 # tests need Trino test-jars not on Maven Central (see Running tests); skip them in the default build
@@ -32,18 +44,15 @@ Requires JDK 25 (enforced via `maven-enforcer-plugin`).
 
 ## Running tests
 
-Tests depend on Trino test-jars (`trino-spi`, `trino-filesystem`, `trino-hive`, `trino-main` at the `tests` classifier). Trino does not publish three of those to Maven Central, so the test deps live behind the `hudi-trino-tests` profile, off by default.
+Tests depend on Trino test-jars (`trino-spi`, `trino-filesystem`, `trino-hive`, `trino-main` at the `tests` classifier). Trino publishes none of those, so the test deps live behind the `hudi-trino-tests` profile, off by default.
 
-To run the tests:
-
-1. Build the matching Trino version locally so its `*-tests.jar` artifacts land in your `~/.m2` (see `trino.version` in the root pom for the version to build).
-2. Activate both profiles:
+After bootstrap, activate both profiles:
 
 ```
 mvn -Phudi-trino,hudi-trino-tests -pl hudi-trino test
 ```
 
-CI follows the same two steps: `.github/workflows/hudi_trino_ci.yml` installs the test-jars from a source checkout of the pinned Trino tag, then runs with both profiles enabled.
+CI follows the same two steps: `.github/workflows/hudi_trino_ci.yml` runs `bootstrap_trino.sh` against the pinned commit (cached per `trino.sha`), then runs with both profiles enabled.
 
 ## End-to-end tests (docker)
 
@@ -55,7 +64,11 @@ project mirroring the upstream `trinodb/trino` `plugin/trino-hudi` shim planned 
 RFC-105 (not yet released upstream). CI runs the same flow via
 `.github/workflows/hudi_trino_e2e.yml`.
 
-Local flow:
+The plugin is built at the pinned `trino.version` while the server image is the released
+`trino.e2e.version`; CI auto-skips the suite during SPI drift windows (SPI or filesystem changes
+between the two).
+
+Local flow (after bootstrap):
 
 ```
 # 1. JDK 17: full reactor incl. the integ-test bundles the containers mount
@@ -72,8 +85,11 @@ mvn -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
 HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
 mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
 
-# 4. Build the Trino image (locally tagged; never published)
-docker/trino/build_image.sh --plugin-dir docker/trino/shim/target/trino-hudi-481
+# 4. Build the Trino image (locally tagged; never published). The base server defaults to
+#    trino.e2e.version; pass --trino-version to override it.
+TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+unzip -o -q "docker/trino/shim/target/trino-hudi-$TRINO_VERSION.zip" -d docker/trino/shim/target  # trino-maven-plugin 24 emits only the zip
+docker/trino/build_image.sh --plugin-dir "docker/trino/shim/target/trino-hudi-$TRINO_VERSION"
 
 # 5. JDK 17: run the suite (only the spark402 compose pair has the trino service)
 mvn verify -pl hudi-integ-test -Dscala-2.13 -Dscala.binary.version=2.13 -Dspark4.0 \
@@ -83,7 +99,7 @@ mvn verify -pl hudi-integ-test -Dscala-2.13 -Dscala.binary.version=2.13 -Dspark4
 ```
 
 Fast iteration loop: after changing connector code, redo steps 2-3, then add
-`-Dtrino.plugin.dir=$PWD/docker/trino/shim/target/trino-hudi-481` to step 5. The
+`-Dtrino.plugin.dir=$PWD/docker/trino/shim/target/trino-hudi-$TRINO_VERSION` to step 5. The
 container's overlay entrypoint swaps the freshly built plugin dir in at start, so the
 image rebuild (step 4) is skipped.
 

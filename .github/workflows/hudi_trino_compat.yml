@@ -5,10 +5,12 @@ on:
     - cron: '17 4 * * *'
   workflow_dispatch:
 
-# The failure handler files/updates a drift report issue.
+# The failure handler files/updates a drift report issue; on success the job pushes the
+# pin-advance branch and opens its PR.
 permissions:
-  contents: read
+  contents: write
   issues: write
+  pull-requests: write
 
 env:
   MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip
@@ -28,6 +30,13 @@ jobs:
           repository: trinodb/trino
           ref: master
           path: trino
+      - name: Read trinodb/trino HEAD
+        id: trino-head
+        run: |
+          set -euo pipefail
+          HEAD_SHA=$(git -C trino rev-parse HEAD)
+          echo "trinodb/trino master is at $HEAD_SHA"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
       # Hudi targets Java 11 and uses Lombok 1.18.36, which does not run on JDK 25.
       # Install the upstream Hudi modules under JDK 17 first, then compile the connector
       # under JDK 25.
@@ -59,11 +68,12 @@ jobs:
           echo "trino_version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Detected Trino version: $VERSION"
       - name: Install Trino modules from master (JDK 25)
-        working-directory: trino
-        # hudi-trino compiles against these plus their transitive modules (spi, cache, metastore,
-        # hive-formats, memory-context). They must come from the master checkout -- resolving from
-        # Maven Central would defeat the point of the drift check.
-        run: mvn $MVN_ARGS install -pl :trino-hive,:trino-filesystem-manager,:trino-parquet,:trino-plugin-toolkit -am -DskipTests -Dair.check.skip-all=true
+        # Same module set the pinned build uses, so a green compile here is a promotable pin. The
+        # script purges ~/.m2/repository/io/trino itself and only warns when master's version has
+        # rolled past the pinned trino.version.
+        env:
+          HEAD_SHA: ${{ steps.trino-head.outputs.head_sha }}
+        run: hudi/scripts/trino/bootstrap_trino.sh trino --skip-checkout --ref "$HEAD_SHA"
       - name: Compile hudi-trino against current Trino SPI (JDK 25)
         id: compile
         working-directory: hudi
@@ -71,6 +81,48 @@ jobs:
           mvn $MVN_ARGS -Phudi-trino \
             -Dtrino.version=${{ steps.trino-version.outputs.trino_version }} \
             -pl hudi-trino compile
+      - name: Save Trino artifacts under the candidate pin
+        # Pre-seeds the gating CI cache, which keys on the sha, so the pin advance below does not
+        # make every PR rebuild Trino from source.
+        if: steps.compile.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.m2/repository/io/trino
+          key: trino-m2-v1-${{ steps.trino-head.outputs.head_sha }}
+      - name: Propose pin advance
+        # Pin PRs are human-merged by policy. Org settings may forbid GITHUB_TOKEN from creating
+        # PRs; the branch still lands and the PR is then opened by hand.
+        working-directory: hudi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.trino-head.outputs.head_sha }}
+          TRINO_VERSION: ${{ steps.trino-version.outputs.trino_version }}
+          BASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          PINNED_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B bot/trino-pin
+          sed -i "s|<trino.sha>.*</trino.sha>|<trino.sha>${HEAD_SHA}</trino.sha>|" pom.xml
+          if [ "$TRINO_VERSION" != "$PINNED_VERSION" ]; then
+            # Version rollover: the shim's parent tracks trino.version.
+            sed -i "s|<trino.version>.*</trino.version>|<trino.version>${TRINO_VERSION}</trino.version>|" pom.xml
+            sed -i "/<parent>/,/<\/parent>/ s|<version>.*</version>|<version>${TRINO_VERSION}</version>|" docker/trino/shim/pom.xml
+          fi
+          if git diff --quiet; then
+            echo "Pin is already at ${HEAD_SHA}; nothing to propose."
+            exit 0
+          fi
+          TITLE="build(trino): advance trino master pin to ${HEAD_SHA:0:12}"
+          git commit -am "$TITLE"
+          git push --force origin bot/trino-pin
+          if [ -n "$(gh pr list --head bot/trino-pin --state open --json number --jq '.[].number')" ]; then
+            echo "Open pin PR picked up the force-push."
+            exit 0
+          fi
+          gh pr create --base "$BASE_BRANCH" --head bot/trino-pin --title "$TITLE" \
+            --body "hudi-trino compiles against trinodb/trino ${TRINO_VERSION} at ${HEAD_SHA}."
       - name: Open issue on failure
         # Only a connector compile failure is SPI drift. A bare failure() would also file
         # the issue for a failed checkout or a broken trinodb/trino master build, with an
