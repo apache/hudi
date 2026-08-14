@@ -56,6 +56,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -468,7 +469,10 @@ public abstract class HoodieLogBlock {
         int metadataEntrySize = dis.readInt();
         byte[] metadataEntry = new byte[metadataEntrySize];
         dis.readFully(metadataEntry, 0, metadataEntrySize);
-        metadata.put(typeMapper.apply(metadataEntryIndex), new String(metadataEntry));
+        // Must match getLogMetadataBytes(), which writes these values as UTF-8. Decoding with the
+        // platform default charset corrupts non-ASCII values: loudly for a schema name, which Avro
+        // then rejects, and silently for a doc, a default or a prop.
+        metadata.put(typeMapper.apply(metadataEntryIndex), fromUTF8Bytes(metadataEntry));
         metadataCount--;
       }
       return metadata;
