@@ -101,7 +101,21 @@ public class HoodieAWSConfig extends HoodieConfig {
       .noDefaultValue()
       .markAdvanced()
       .sinceVersion("0.15.0")
-      .withDocumentation("Aws glue endpoint");
+      .withDocumentation("Aws glue region");
+
+  public static final ConfigProperty<String> AWS_STS_ENDPOINT = ConfigProperty
+      .key("hoodie.aws.sts.endpoint")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("AWS STS endpoint");
+
+  public static final ConfigProperty<String> AWS_STS_REGION = ConfigProperty
+      .key("hoodie.aws.sts.region")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("AWS STS region");
 
   private HoodieAWSConfig() {
     super();
