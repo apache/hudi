@@ -32,6 +32,7 @@
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <parquet.version>1.15.1</parquet.version>
     <skipTests>true</skipTests>
   </properties>
   <dependencyManagement>
