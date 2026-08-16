@@ -22,9 +22,9 @@ These don't launch a real JVM; they exercise the guards and the result object.
 passes its existence check without shelling out to Hudi.
 """
 
-import hudi_cli.executor as executor_mod
-from hudi_cli.executor import ExecutionResult, HudiCliExecutor, LazyHudiCliExecutor
-from hudi_cli.parser import ParsedOutput
+import hudi_cli_mcp.executor as executor_mod
+from hudi_cli_mcp.executor import ExecutionResult, HudiCliExecutor, LazyHudiCliExecutor
+from hudi_cli_mcp.parser import ParsedOutput
 
 
 def _executor() -> HudiCliExecutor:
@@ -74,7 +74,7 @@ class TestIsSuccess:
 class TestOutputCap:
     def test_rows_capped(self, monkeypatch):
         monkeypatch.setattr(executor_mod, "DEFAULT_MAX_ROWS", 2)
-        from hudi_cli.parser import ParsedTable
+        from hudi_cli_mcp.parser import ParsedTable
 
         big = ParsedTable(headers=["c"], rows=[{"c": str(i)} for i in range(10)])
         result = ExecutionResult(

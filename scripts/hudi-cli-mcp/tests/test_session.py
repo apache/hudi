@@ -19,7 +19,7 @@
 
 import pytest
 
-from hudi_cli.session import NotConnectedError, SessionManager
+from hudi_cli_mcp.session import NotConnectedError, SessionManager
 
 
 class TestSessionManager:

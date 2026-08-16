@@ -27,7 +27,7 @@ real border so that regression cannot come back unnoticed.
 import os
 from pathlib import Path
 
-from hudi_cli.parser import parse_cli_output
+from hudi_cli_mcp.parser import parse_cli_output
 
 SAMPLE_DIR = Path(os.path.dirname(__file__)) / "sample_outputs"
 
@@ -84,3 +84,24 @@ class TestErrorCapture:
         raw = "Compaction can only be run for table type MERGE_ON_READ\n"
         result = parse_cli_output(raw)
         assert len(result.errors) == 1
+
+    def test_benign_serviceability_agent_warning_not_flagged(self):
+        # jol prints this on every compaction-planning run; it contains "Exception"
+        # and "Unable to attach" but the command still succeeds -- must NOT be an error.
+        raw = (
+            "# WARNING: Unable to attach Serviceability Agent. Unable to attach even "
+            "with module exceptions: [org.apache.hudi.org.openjdk.jol.vm.sa."
+            "SASupportException: Sense failed.]\n"
+        )
+        result = parse_cli_output(raw)
+        assert result.errors == []
+
+    def test_benign_warning_does_not_mask_real_failure(self):
+        # A benign SA warning alongside a genuine failure: only the real one is flagged.
+        raw = (
+            "# WARNING: Unable to attach Serviceability Agent. "
+            "[org.apache.hudi.org.openjdk.jol.vm.sa.SASupportException: Sense failed.]\n"
+            "Failed to run compaction for trips_demo\n"
+        )
+        result = parse_cli_output(raw)
+        assert result.errors == ["Failed to run compaction for trips_demo"]

@@ -21,9 +21,9 @@ from __future__ import annotations
 
 import json
 
-from hudi_cli.executor import HudiCliExecutor
-from hudi_cli.safety import SafetyManager, TokenExpiredError, TokenNotFoundError
-from hudi_cli.session import SessionManager
+from hudi_cli_mcp.executor import HudiCliExecutor
+from hudi_cli_mcp.safety import SafetyManager, TokenExpiredError, TokenNotFoundError
+from hudi_cli_mcp.session import SessionManager
 
 
 def confirm_operation(

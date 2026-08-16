@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import json
 
-from hudi_cli.executor import HudiCliExecutor
-from hudi_cli.session import SessionManager
+from hudi_cli_mcp.executor import HudiCliExecutor
+from hudi_cli_mcp.session import SessionManager
 
 
 def _execute_workflow(

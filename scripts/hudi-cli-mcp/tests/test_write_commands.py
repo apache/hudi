@@ -19,7 +19,7 @@
 
 import pytest
 
-from hudi_cli.commands import (
+from hudi_cli_mcp.commands import (
     CommandNotAllowedError,
     RiskLevel,
     get_risk_level,

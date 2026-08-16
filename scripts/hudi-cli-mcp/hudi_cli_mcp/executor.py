@@ -26,7 +26,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 
-from hudi_cli.parser import ParsedOutput, parse_cli_output
+from hudi_cli_mcp.parser import ParsedOutput, parse_cli_output
 
 # Caps on the structured output returned to the model. The CLI can emit very large
 # tables (e.g. `show fsview all`, `commit showfiles` on a big table); returning all

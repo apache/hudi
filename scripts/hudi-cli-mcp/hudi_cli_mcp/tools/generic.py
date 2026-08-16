@@ -21,9 +21,9 @@ from __future__ import annotations
 
 import json
 
-from hudi_cli.commands import CommandNotAllowedError, validate_command, validate_commands
-from hudi_cli.executor import HudiCliExecutor
-from hudi_cli.session import NotConnectedError, SessionManager
+from hudi_cli_mcp.commands import CommandNotAllowedError, validate_command, validate_commands
+from hudi_cli_mcp.executor import HudiCliExecutor
+from hudi_cli_mcp.session import NotConnectedError, SessionManager
 
 
 def execute_hudi_command(

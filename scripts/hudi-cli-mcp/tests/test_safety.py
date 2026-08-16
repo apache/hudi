@@ -17,15 +17,13 @@
 
 """Tests for the safety manager and confirmation token system."""
 
-import time
 from unittest.mock import patch
 
 import pytest
 
-from hudi_cli.commands import RiskLevel
-from hudi_cli.safety import (
+from hudi_cli_mcp.commands import RiskLevel
+from hudi_cli_mcp.safety import (
     SafetyManager,
-    TokenExpiredError,
     TokenNotFoundError,
 )
 
@@ -117,7 +115,7 @@ class TestSafetyManagerConfirm:
             description="Run clean",
         )
         # Expire the token by moving time forward
-        with patch("hudi_cli.safety.time.time", return_value=op.created_at + 400):
+        with patch("hudi_cli_mcp.safety.time.time", return_value=op.created_at + 400):
             with pytest.raises(TokenNotFoundError):
                 # Expired tokens are cleaned up before lookup
                 safety.confirm(op.token)
@@ -186,7 +184,7 @@ class TestSafetyManagerListPending:
             table_path="/tmp/table",
             description="Run clean",
         )
-        with patch("hudi_cli.safety.time.time", return_value=op.created_at + 400):
+        with patch("hudi_cli_mcp.safety.time.time", return_value=op.created_at + 400):
             pending = safety.list_pending()
             assert len(pending) == 0
 
@@ -229,7 +227,7 @@ class TestMultipleOperations:
         tokens = set()
         for i in range(20):
             op = safety.prepare_operation(
-                command=f"cleans run",
+                command="cleans run",
                 risk_level=RiskLevel.HIGH,
                 table_path="/tmp/table",
                 description=f"Op {i}",

@@ -23,7 +23,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 
-from hudi_cli.commands import RiskLevel
+from hudi_cli_mcp.commands import RiskLevel
 
 # Confirmation tokens expire after 5 minutes.
 TOKEN_TTL_SECONDS = 300

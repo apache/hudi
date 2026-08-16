@@ -20,7 +20,7 @@
 import os
 from pathlib import Path
 
-from hudi_cli.parser import parse_cli_output
+from hudi_cli_mcp.parser import parse_cli_output
 
 SAMPLE_DIR = Path(os.path.dirname(__file__)) / "sample_outputs"
 

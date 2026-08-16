@@ -21,55 +21,115 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
-from hudi_cli.executor import LazyHudiCliExecutor
-from hudi_cli.safety import SafetyManager
-from hudi_cli.session import SessionManager
-from tools.confirmation import (
+from hudi_cli_mcp.executor import LazyHudiCliExecutor
+from hudi_cli_mcp.safety import SafetyManager
+from hudi_cli_mcp.session import SessionManager
+from hudi_cli_mcp.tools.confirmation import (
     cancel_operation as _cancel_operation,
+)
+from hudi_cli_mcp.tools.confirmation import (
     confirm_operation as _confirm_operation,
+)
+from hudi_cli_mcp.tools.confirmation import (
     list_pending_operations as _list_pending_operations,
 )
-from tools.connection import (
+from hudi_cli_mcp.tools.connection import (
     connect_to_table as _connect_to_table,
+)
+from hudi_cli_mcp.tools.connection import (
     disconnect as _disconnect,
+)
+from hudi_cli_mcp.tools.connection import (
     show_connection as _show_connection,
 )
-from tools.generic import (
+from hudi_cli_mcp.tools.generic import (
     execute_hudi_command as _execute_hudi_command,
+)
+from hudi_cli_mcp.tools.generic import (
     execute_hudi_commands as _execute_hudi_commands,
 )
-from tools.workflows import (
+from hudi_cli_mcp.tools.workflows import (
     commit_details as _commit_details,
+)
+from hudi_cli_mcp.tools.workflows import (
     storage_analysis as _storage_analysis,
+)
+from hudi_cli_mcp.tools.workflows import (
     table_health_check as _table_health_check,
+)
+from hudi_cli_mcp.tools.workflows import (
     table_overview as _table_overview,
+)
+from hudi_cli_mcp.tools.workflows import (
     timeline_summary as _timeline_summary,
 )
-from tools.write_ops import (
+from hudi_cli_mcp.tools.write_ops import (
     create_savepoint as _create_savepoint,
+)
+from hudi_cli_mcp.tools.write_ops import (
     delete_markers as _delete_markers,
+)
+from hudi_cli_mcp.tools.write_ops import (
     delete_savepoint as _delete_savepoint,
+)
+from hudi_cli_mcp.tools.write_ops import (
     delete_table_configs as _delete_table_configs,
+)
+from hudi_cli_mcp.tools.write_ops import (
     manage_metadata as _manage_metadata,
+)
+from hudi_cli_mcp.tools.write_ops import (
     recover_table_configs as _recover_table_configs,
+)
+from hudi_cli_mcp.tools.write_ops import (
     repair_table as _repair_table,
+)
+from hudi_cli_mcp.tools.write_ops import (
     rollback_commit as _rollback_commit,
+)
+from hudi_cli_mcp.tools.write_ops import (
     rollback_to_savepoint as _rollback_to_savepoint,
+)
+from hudi_cli_mcp.tools.write_ops import (
     run_clean as _run_clean,
+)
+from hudi_cli_mcp.tools.write_ops import (
     run_clustering as _run_clustering,
+)
+from hudi_cli_mcp.tools.write_ops import (
     run_compaction as _run_compaction,
+)
+from hudi_cli_mcp.tools.write_ops import (
     schedule_clustering as _schedule_clustering,
+)
+from hudi_cli_mcp.tools.write_ops import (
     schedule_compaction as _schedule_compaction,
+)
+from hudi_cli_mcp.tools.write_ops import (
     toggle_lock_audit as _toggle_lock_audit,
+)
+from hudi_cli_mcp.tools.write_ops import (
     trigger_archival as _trigger_archival,
+)
+from hudi_cli_mcp.tools.write_ops import (
     unschedule_compaction as _unschedule_compaction,
+)
+from hudi_cli_mcp.tools.write_ops import (
     update_table_configs as _update_table_configs,
+)
+from hudi_cli_mcp.tools.write_ops import (
     upgrade_or_downgrade_table as _upgrade_or_downgrade_table,
 )
-from tools.write_workflows import (
+from hudi_cli_mcp.tools.write_workflows import (
     clustering_workflow as _clustering_workflow,
+)
+from hudi_cli_mcp.tools.write_workflows import (
     compaction_workflow as _compaction_workflow,
+)
+from hudi_cli_mcp.tools.write_workflows import (
     safe_rollback_workflow as _safe_rollback_workflow,
+)
+from hudi_cli_mcp.tools.write_workflows import (
     table_repair_workflow as _table_repair_workflow,
 )
 
@@ -439,7 +499,8 @@ def run_compaction(instant_time: str | None = None) -> str:
     Shows pending compaction plans before requesting confirmation.
 
     Args:
-        instant_time: Specific compaction instant to execute. If omitted, runs the next pending plan.
+        instant_time: Specific compaction instant to execute. If omitted, runs the
+            next pending plan.
     """
     return _run_compaction(executor, session, safety, instant_time)
 
@@ -451,7 +512,8 @@ def run_clustering(instant_time: str | None = None) -> str:
     Requires confirmation.
 
     Args:
-        instant_time: Specific clustering instant to execute. If omitted, runs the next pending plan.
+        instant_time: Specific clustering instant to execute. If omitted, runs the
+            next pending plan.
     """
     return _run_clustering(executor, session, safety, instant_time)
 
@@ -516,7 +578,8 @@ def compaction_workflow(instant_time: str | None = None) -> str:
     the execution for confirmation.
 
     Args:
-        instant_time: Specific compaction instant to execute. If omitted, runs the next pending plan.
+        instant_time: Specific compaction instant to execute. If omitted, runs the
+            next pending plan.
     """
     return _compaction_workflow(executor, session, safety, instant_time)
 
@@ -529,7 +592,8 @@ def clustering_workflow(instant_time: str | None = None) -> str:
     prepares clustering execution for confirmation.
 
     Args:
-        instant_time: Specific clustering instant to execute. If omitted, runs the next pending plan.
+        instant_time: Specific clustering instant to execute. If omitted, runs the
+            next pending plan.
     """
     return _clustering_workflow(executor, session, safety, instant_time)
 

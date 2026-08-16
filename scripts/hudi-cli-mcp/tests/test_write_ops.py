@@ -20,14 +20,11 @@
 import json
 from unittest.mock import MagicMock
 
-import pytest
-
-from hudi_cli.commands import RiskLevel
-from hudi_cli.executor import ExecutionResult
-from hudi_cli.parser import ParsedOutput
-from hudi_cli.safety import SafetyManager
-from hudi_cli.session import SessionManager
-from tools.write_ops import (
+from hudi_cli_mcp.executor import ExecutionResult
+from hudi_cli_mcp.parser import ParsedOutput
+from hudi_cli_mcp.safety import SafetyManager
+from hudi_cli_mcp.session import SessionManager
+from hudi_cli_mcp.tools.write_ops import (
     create_savepoint,
     delete_markers,
     delete_savepoint,
@@ -38,10 +35,10 @@ from tools.write_ops import (
     rollback_commit,
     rollback_to_savepoint,
     run_clean,
-    run_compaction,
     run_clustering,
-    schedule_compaction,
+    run_compaction,
     schedule_clustering,
+    schedule_compaction,
     toggle_lock_audit,
     trigger_archival,
     unschedule_compaction,

@@ -41,10 +41,9 @@ The following environment variables must be set before starting the server:
 cd scripts/hudi-cli-mcp
 python -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install .            # runtime only (the sole dependency is fastmcp>=2.0.0)
+pip install -e ".[dev]"  # contributors: adds pytest + ruff
 ```
-
-The only dependency is `fastmcp>=2.0.0`.
 
 ## Running the Server
 
@@ -297,23 +296,25 @@ Ensure the appropriate Hadoop/cloud credentials are available in the environment
 ## Architecture
 
 ```
-server.py                  # FastMCP server — registers all tools
-hudi_cli/
+server.py                  # FastMCP server — registers all tools (the MCP surface)
+pyproject.toml             # Packaging, dependencies, pytest and ruff configuration
+hudi_cli_mcp/
   commands.py              # Command validation, risk classification, allowlists
   executor.py              # Subprocess execution of hudi-cli
   parser.py                # ASCII FlipTable output parsing to structured JSON
   safety.py                # Token-based confirmation protocol (SafetyManager)
   session.py               # Table connection state (SessionManager)
-tools/
-  connection.py            # connect_to_table, disconnect, show_connection
-  generic.py               # execute_hudi_command, execute_hudi_commands
-  workflows.py             # Read-only composite workflows
-  confirmation.py          # confirm_operation, cancel_operation
-  write_ops.py             # All individual write operation tools
-  write_workflows.py       # Guided multi-step write workflows
+  tools/
+    connection.py          # connect_to_table, disconnect, show_connection
+    generic.py             # execute_hudi_command, execute_hudi_commands
+    workflows.py           # Read-only composite workflows
+    confirmation.py        # confirm_operation, cancel_operation
+    write_ops.py           # All individual write operation tools
+    write_workflows.py     # Guided multi-step write workflows
 tests/
   test_commands.py          # Command validation tests
-  test_parser.py            # Output parser tests
+  test_parser.py            # Output parser tests (incl. real hudi-cli fixtures)
+  test_executor.py          # Executor guards and result semantics
   test_safety.py            # Safety manager tests
   test_session.py           # Session manager tests
   test_write_commands.py    # Write command classification tests
@@ -321,12 +322,14 @@ tests/
   sample_outputs/           # Sample Hudi CLI output fixtures
 ```
 
-## Running Tests
+## Running Tests and Lint
 
 ```bash
 cd scripts/hudi-cli-mcp
 source venv/bin/activate
-python -m pytest tests/ -v
+pip install -e ".[dev]"
+python -m pytest            # test paths/imports configured via pyproject.toml
+ruff check .                # lint (configuration in pyproject.toml)
 ```
 
 Tests use mocked executors and do not require a running Spark or Hudi installation.
@@ -335,8 +338,10 @@ Tests use mocked executors and do not require a running Spark or Hudi installati
 
 When adding new tools:
 
-1. **Read-only commands** — add the command prefix to `READONLY_COMMAND_PREFIXES` in `commands.py`, then use `execute_hudi_command` or create a new workflow in `tools/workflows.py`.
-2. **Write operations** — add the command prefix and risk level to `WRITE_COMMAND_PREFIXES` in `commands.py`, then add a tool function in `tools/write_ops.py` with the appropriate risk tier.
+1. **Read-only commands** — add the command prefix to `READONLY_COMMAND_PREFIXES` in `hudi_cli_mcp/commands.py`, then use `execute_hudi_command` or create a new workflow in `hudi_cli_mcp/tools/workflows.py`.
+2. **Write operations** — add the command prefix and risk level to `WRITE_COMMAND_PREFIXES` in `hudi_cli_mcp/commands.py`, then add a tool function in `hudi_cli_mcp/tools/write_ops.py` with the appropriate risk tier.
+
+Before sending a PR, run `python -m pytest` and `ruff check .` — both must pass.
 3. **Composite workflows** — combine multiple commands into a single tool in `tools/workflows.py` (read-only) or `tools/write_workflows.py` (write).
 4. **Tests** — add corresponding tests in the `tests/` directory.
 

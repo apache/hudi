@@ -22,7 +22,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-
 # Patterns to filter out CLI noise
 NOISE_PATTERNS = [
     re.compile(r"^SLF4J:", re.IGNORECASE),
@@ -60,9 +59,25 @@ ERROR_MARKERS = [
     re.compile(r"can only be run", re.IGNORECASE),  # e.g. compaction on a COW table
 ]
 
+# Benign JVM warnings that superficially match an error marker but are NOT command
+# failures. The HotSpot Serviceability Agent attach warning
+# ("Unable to attach Serviceability Agent ... SASupportException: Sense failed")
+# is printed by the jol object-sizing library on every compaction-planning run;
+# it contains "Exception" and "Unable to attach" but the command still succeeds.
+# Checked before the error markers so these lines are never flagged as failures.
+_BENIGN_MARKERS = [
+    re.compile(r"Serviceability Agent"),
+    re.compile(r"SASupportException"),
+    re.compile(r"Unable to attach"),
+    re.compile(r"Dynamic Attach failed"),
+    re.compile(r"allowAttachSelf"),
+]
+
 
 def _is_error_line(line: str) -> bool:
     """Check if a line signals a real command failure (not routine log noise)."""
+    if any(p.search(line) for p in _BENIGN_MARKERS):
+        return False
     return any(p.search(line) for p in ERROR_MARKERS)
 
 
