@@ -21,7 +21,12 @@ from __future__ import annotations
 
 import json
 
-from hudi_cli_mcp.commands import CommandNotAllowedError, validate_command, validate_commands
+from hudi_cli_mcp.commands import (
+    CommandNotAllowedError,
+    quirk_hint,
+    validate_command,
+    validate_commands,
+)
 from hudi_cli_mcp.executor import HudiCliExecutor
 from hudi_cli_mcp.session import NotConnectedError, SessionManager
 
@@ -55,6 +60,9 @@ def execute_hudi_command(
     output = result.to_dict()
     output["success"] = result.is_success()
     output["command"] = command
+    hint = quirk_hint(command)
+    if hint:
+        output["hint"] = hint
     return json.dumps(output, indent=2)
 
 
@@ -92,4 +100,7 @@ def execute_hudi_commands(
     output = result.to_dict()
     output["success"] = result.is_success()
     output["commands"] = commands
+    hints = [h for h in (quirk_hint(c) for c in commands) if h]
+    if hints:
+        output["hint"] = " ".join(dict.fromkeys(hints))
     return json.dumps(output, indent=2)

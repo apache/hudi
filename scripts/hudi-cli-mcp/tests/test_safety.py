@@ -23,6 +23,8 @@ import pytest
 
 from hudi_cli_mcp.commands import RiskLevel
 from hudi_cli_mcp.safety import (
+    MAX_PENDING_OPERATIONS,
+    PendingOperationLimitError,
     SafetyManager,
     TokenNotFoundError,
 )
@@ -222,15 +224,55 @@ class TestMultipleOperations:
         cancelled = safety.cancel(op2.token)
         assert cancelled.table_path == "/tmp/table2"
 
-    def test_unique_tokens(self):
+    def test_unique_tokens_for_distinct_operations(self):
+        # Distinct (command, table_path) pairs each get their own token.
+        # (Identical pairs are deliberately deduped -- see TestPendingDedupeAndCap.)
         safety = SafetyManager()
         tokens = set()
-        for i in range(20):
+        for i in range(MAX_PENDING_OPERATIONS):
             op = safety.prepare_operation(
-                command="cleans run",
+                command=f"cleans run --retain {i}",
                 risk_level=RiskLevel.HIGH,
                 table_path="/tmp/table",
                 description=f"Op {i}",
             )
             tokens.add(op.token)
-        assert len(tokens) == 20
+        assert len(tokens) == MAX_PENDING_OPERATIONS
+
+
+class TestPendingDedupeAndCap:
+    def _prep(self, safety, command, path="/tmp/table"):
+        return safety.prepare_operation(
+            command=command,
+            risk_level=RiskLevel.HIGH,
+            table_path=path,
+            description="d",
+        )
+
+    def test_identical_pending_operation_returns_same_token(self):
+        safety = SafetyManager()
+        a = self._prep(safety, "compaction run")
+        b = self._prep(safety, "compaction run")
+        # A retry loop must not mint a second token for the same destructive op.
+        assert a.token == b.token
+        assert len(safety.list_pending()) == 1
+
+    def test_different_command_or_table_gets_new_token(self):
+        safety = SafetyManager()
+        a = self._prep(safety, "compaction run")
+        b = self._prep(safety, "cleans run")
+        c = self._prep(safety, "compaction run", path="/tmp/other")
+        assert len({a.token, b.token, c.token}) == 3
+
+    def test_pending_cap_enforced(self):
+        safety = SafetyManager()
+        for i in range(MAX_PENDING_OPERATIONS):
+            self._prep(safety, f"cleans run --x {i}")
+        with pytest.raises(PendingOperationLimitError):
+            self._prep(safety, "compaction run")
+
+    def test_cancel_frees_a_slot(self):
+        safety = SafetyManager()
+        ops = [self._prep(safety, f"cleans run --x {i}") for i in range(MAX_PENDING_OPERATIONS)]
+        safety.cancel(ops[0].token)
+        self._prep(safety, "compaction run")  # should not raise

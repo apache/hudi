@@ -19,6 +19,8 @@
 
 from __future__ import annotations
 
+from hudi_cli_mcp.commands import quote_arg
+
 
 class NotConnectedError(Exception):
     """Raised when a command requires a table connection but none exists."""
@@ -61,4 +63,4 @@ class SessionManager:
     def build_command_list(self, commands: list[str]) -> list[str]:
         """Prepend connect command to a list of commands."""
         path = self.require_connection()
-        return [f"connect --path {path}"] + commands
+        return [f"connect --path {quote_arg(path)}"] + commands

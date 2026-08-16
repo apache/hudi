@@ -39,6 +39,12 @@ DEFAULT_MAX_MESSAGES = int(os.environ.get("HUDI_MCP_MAX_MESSAGES", "100"))
 # lower. Tunable via env.
 DEFAULT_TIMEOUT = int(os.environ.get("HUDI_MCP_TIMEOUT", "120"))
 
+# Timeout for executing WRITE operations (compaction/clustering runs, rollbacks,
+# repairs). These launch real Spark jobs and routinely take many minutes, so they
+# get a much larger budget than the read path -- a 120s kill mid-compaction would
+# leave the caller unsure whether the operation partially applied.
+WRITE_TIMEOUT = int(os.environ.get("HUDI_MCP_WRITE_TIMEOUT", "1800"))
+
 
 @dataclass
 class ExecutionResult:

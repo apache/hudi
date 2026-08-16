@@ -21,7 +21,8 @@ from __future__ import annotations
 
 import json
 
-from hudi_cli_mcp.executor import HudiCliExecutor
+from hudi_cli_mcp.commands import quirk_hint, quote_arg
+from hudi_cli_mcp.executor import WRITE_TIMEOUT, HudiCliExecutor
 from hudi_cli_mcp.safety import SafetyManager, TokenExpiredError, TokenNotFoundError
 from hudi_cli_mcp.session import SessionManager
 
@@ -38,15 +39,20 @@ def confirm_operation(
     except (TokenNotFoundError, TokenExpiredError) as e:
         return json.dumps({"success": False, "error": str(e)}, indent=2)
 
-    # Execute the confirmed command
-    commands = [f"connect --path {op.table_path}", op.command]
-    result = executor.execute(commands)
+    # Execute the confirmed command. Write operations launch real Spark jobs
+    # (compaction, clustering, rollback) that routinely take many minutes, so
+    # they get the write-path timeout, not the 120s read default.
+    commands = [f"connect --path {quote_arg(op.table_path)}", op.command]
+    result = executor.execute(commands, timeout=WRITE_TIMEOUT)
 
     output = result.to_dict()
     output["success"] = result.is_success()
     output["confirmed_command"] = op.command
     output["risk_level"] = op.risk_level.value
     output["table_path"] = op.table_path
+    hint = quirk_hint(op.command)
+    if hint:
+        output["hint"] = hint
     return json.dumps(output, indent=2)
 
 

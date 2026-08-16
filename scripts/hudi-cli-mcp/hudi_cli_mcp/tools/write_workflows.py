@@ -21,9 +21,9 @@ from __future__ import annotations
 
 import json
 
-from hudi_cli_mcp.commands import RiskLevel, build_command
+from hudi_cli_mcp.commands import RiskLevel, build_command, quote_arg
 from hudi_cli_mcp.executor import HudiCliExecutor
-from hudi_cli_mcp.safety import SafetyManager
+from hudi_cli_mcp.safety import PendingOperationLimitError, SafetyManager
 from hudi_cli_mcp.session import NotConnectedError, SessionManager
 
 
@@ -34,7 +34,7 @@ def _gather_context(
     table_path: str,
 ) -> dict:
     """Run read-only commands to gather context before a write operation."""
-    full_commands = [f"connect --path {table_path}"] + commands
+    full_commands = [f"connect --path {quote_arg(table_path)}"] + commands
     result = executor.execute(full_commands)
     return result.to_dict()
 
@@ -68,13 +68,16 @@ def compaction_workflow(
         command = "compaction run"
         description = "Execute the next pending compaction plan."
 
-    op = safety.prepare_operation(
-        command=command,
-        risk_level=RiskLevel.HIGH,
-        table_path=table_path,
-        description=description + " This will rewrite data files.",
-        dry_run_result=json.dumps(context, indent=2),
-    )
+    try:
+        op = safety.prepare_operation(
+            command=command,
+            risk_level=RiskLevel.HIGH,
+            table_path=table_path,
+            description=description + " This will rewrite data files.",
+            dry_run_result=json.dumps(context, indent=2),
+        )
+    except PendingOperationLimitError as e:
+        return json.dumps({"success": False, "error": str(e)}, indent=2)
 
     return json.dumps(
         {
@@ -116,13 +119,16 @@ def clustering_workflow(
         command = "clustering run"
         description = "Execute the next pending clustering plan."
 
-    op = safety.prepare_operation(
-        command=command,
-        risk_level=RiskLevel.HIGH,
-        table_path=table_path,
-        description=description + " This will reorganize data files.",
-        dry_run_result=json.dumps(context, indent=2),
-    )
+    try:
+        op = safety.prepare_operation(
+            command=command,
+            risk_level=RiskLevel.HIGH,
+            table_path=table_path,
+            description=description + " This will reorganize data files.",
+            dry_run_result=json.dumps(context, indent=2),
+        )
+    except PendingOperationLimitError as e:
+        return json.dumps({"success": False, "error": str(e)}, indent=2)
 
     return json.dumps(
         {
@@ -167,16 +173,19 @@ def safe_rollback_workflow(
     )
 
     command = build_command("commit rollback", commit=commit_instant)
-    op = safety.prepare_operation(
-        command=command,
-        risk_level=RiskLevel.HIGH,
-        table_path=table_path,
-        description=(
-            f"ROLLBACK commit {commit_instant}. All data written by this commit "
-            f"will be permanently removed. This CANNOT be undone."
-        ),
-        dry_run_result=json.dumps(context, indent=2),
-    )
+    try:
+        op = safety.prepare_operation(
+            command=command,
+            risk_level=RiskLevel.HIGH,
+            table_path=table_path,
+            description=(
+                f"ROLLBACK commit {commit_instant}. All data written by this commit "
+                f"will be permanently removed. This CANNOT be undone."
+            ),
+            dry_run_result=json.dumps(context, indent=2),
+        )
+    except PendingOperationLimitError as e:
+        return json.dumps({"success": False, "error": str(e)}, indent=2)
 
     return json.dumps(
         {
@@ -229,16 +238,19 @@ def table_repair_workflow(
 
     # Step 2: prepare real repair
     real_cmd = build_command(base_cmd, dryrun="false")
-    op = safety.prepare_operation(
-        command=real_cmd,
-        risk_level=RiskLevel.MEDIUM,
-        table_path=table_path,
-        description=(
-            f"Execute {repair_type} repair (for real this time — not a dry run). "
-            f"Review the dry-run results below before confirming."
-        ),
-        dry_run_result=json.dumps(dry_context, indent=2),
-    )
+    try:
+        op = safety.prepare_operation(
+            command=real_cmd,
+            risk_level=RiskLevel.MEDIUM,
+            table_path=table_path,
+            description=(
+                f"Execute {repair_type} repair (for real this time — not a dry run). "
+                f"Review the dry-run results below before confirming."
+            ),
+            dry_run_result=json.dumps(dry_context, indent=2),
+        )
+    except PendingOperationLimitError as e:
+        return json.dumps({"success": False, "error": str(e)}, indent=2)
 
     return json.dumps(
         {

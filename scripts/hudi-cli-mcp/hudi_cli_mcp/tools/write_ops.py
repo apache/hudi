@@ -28,8 +28,8 @@ from hudi_cli_mcp.commands import (
     get_risk_level,
     validate_write_command,
 )
-from hudi_cli_mcp.executor import HudiCliExecutor
-from hudi_cli_mcp.safety import SafetyManager
+from hudi_cli_mcp.executor import WRITE_TIMEOUT, HudiCliExecutor
+from hudi_cli_mcp.safety import PendingOperationLimitError, SafetyManager
 from hudi_cli_mcp.session import NotConnectedError, SessionManager
 
 
@@ -68,7 +68,7 @@ def _execute_write_operation(
     # LOW risk — execute immediately
     if risk_level == RiskLevel.LOW:
         commands = session.build_command_list([command])
-        result = executor.execute(commands)
+        result = executor.execute(commands, timeout=WRITE_TIMEOUT)
         output = result.to_dict()
         output["success"] = result.is_success()
         output["command"] = command
@@ -82,13 +82,16 @@ def _execute_write_operation(
         dry_result = executor.execute(dry_commands)
         dry_run_result = json.dumps(dry_result.to_dict(), indent=2)
 
-    op = safety.prepare_operation(
-        command=command,
-        risk_level=risk_level,
-        table_path=table_path,
-        description=description,
-        dry_run_result=dry_run_result,
-    )
+    try:
+        op = safety.prepare_operation(
+            command=command,
+            risk_level=risk_level,
+            table_path=table_path,
+            description=description,
+            dry_run_result=dry_run_result,
+        )
+    except PendingOperationLimitError as e:
+        return json.dumps({"success": False, "error": str(e)}, indent=2)
 
     return json.dumps(
         {

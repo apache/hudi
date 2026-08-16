@@ -28,6 +28,10 @@ from hudi_cli_mcp.commands import RiskLevel
 # Confirmation tokens expire after 5 minutes.
 TOKEN_TTL_SECONDS = 300
 
+# Upper bound on operations awaiting confirmation. An LLM caller stuck in a
+# retry loop should not be able to stack an unbounded queue of pending writes.
+MAX_PENDING_OPERATIONS = 10
+
 
 class TokenExpiredError(Exception):
     """Raised when a confirmation token has expired."""
@@ -37,6 +41,12 @@ class TokenExpiredError(Exception):
 
 class TokenNotFoundError(Exception):
     """Raised when a confirmation token does not exist."""
+
+    pass
+
+
+class PendingOperationLimitError(Exception):
+    """Raised when too many operations are already awaiting confirmation."""
 
     pass
 
@@ -94,8 +104,24 @@ class SafetyManager:
         description: str,
         dry_run_result: str | None = None,
     ) -> PendingOperation:
-        """Create a pending operation and return it with a confirmation token."""
+        """Create a pending operation and return it with a confirmation token.
+
+        Idempotent for identical requests: if the same (command, table_path) is
+        already pending, the existing operation is returned instead of minting a
+        second token -- an LLM retry loop must not be able to queue the same
+        destructive operation twice (each confirm would execute it once).
+        """
         self._cleanup_expired()
+        for existing in self._pending.values():
+            if existing.command == command and existing.table_path == table_path:
+                return existing
+        if len(self._pending) >= MAX_PENDING_OPERATIONS:
+            raise PendingOperationLimitError(
+                f"{len(self._pending)} operations are already awaiting confirmation "
+                "(limit " + str(MAX_PENDING_OPERATIONS) + "). Confirm or cancel "
+                "pending operations (see list_pending_operations) before preparing "
+                "new ones."
+            )
         op = PendingOperation(
             command=command,
             risk_level=risk_level,

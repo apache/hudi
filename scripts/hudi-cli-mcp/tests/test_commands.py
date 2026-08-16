@@ -23,6 +23,8 @@ from hudi_cli_mcp.commands import (
     CommandNotAllowedError,
     build_command,
     is_readonly_command,
+    quirk_hint,
+    quote_arg,
     validate_command,
     validate_commands,
 )
@@ -130,3 +132,41 @@ class TestBuildCommand:
         # An unquoted path with a space would be split into two CLI arguments.
         result = build_command("table update-configs", **{"props-file": "/my dir/t.props"})
         assert result == 'table update-configs --props-file "/my dir/t.props"'
+
+
+class TestWordBoundaryMatching:
+    def test_prefix_requires_word_boundary(self):
+        # "desc" is allowed; an unrelated command sharing the prefix is not.
+        assert is_readonly_command("desc")
+        assert is_readonly_command("desc --verbose")
+        assert not is_readonly_command("described-elsewhere")
+        assert not is_readonly_command("descX")
+
+    def test_readonly_prefix_does_not_leak_into_longer_command(self):
+        # "commits show" must not accept an invented longer command word.
+        assert is_readonly_command("commits show --limit 5")
+        assert not is_readonly_command("commits showevil --limit 5")
+
+
+class TestQuirkHints:
+    def test_stats_filesizes_has_hint(self):
+        hint = quirk_hint("stats filesizes")
+        assert hint and "show fsview all" in hint
+
+    def test_metadata_list_partitions_has_hint(self):
+        assert quirk_hint("metadata list-partitions --sparkMaster local") is not None
+
+    def test_compaction_schedule_hint_not_applied_to_schedule_and_execute(self):
+        assert quirk_hint("compaction schedule") is not None
+        assert quirk_hint("compaction scheduleAndExecute") is None
+
+    def test_normal_command_has_no_hint(self):
+        assert quirk_hint("commits show --limit 10") is None
+
+
+class TestQuoteArg:
+    def test_plain_value_unchanged(self):
+        assert quote_arg("/tmp/table") == "/tmp/table"
+
+    def test_value_with_space_quoted(self):
+        assert quote_arg("/data/my table") == '"/data/my table"'

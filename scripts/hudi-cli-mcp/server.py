@@ -197,9 +197,11 @@ def execute_hudi_command(command: str) -> str:
         - cleans show --limit N: Show clean operations
         - stats wa: Write amplification stats
         - stats filesizes --partitionPath <path>: File size distribution
+          (known CLI quirk: may report all zeros -- prefer `show fsview all` for sizes)
         - show fsview all / show fsview latest: File system view
         - timeline show active --limit N: Active timeline instants
         - metadata list-partitions: List all partitions
+          (known CLI quirk: may fail internally -- partitions also appear in `show fsview all`)
         - metadata list-files --partition <path>: List files in a partition
         - savepoints show: Show savepoints
         - show rollbacks: Show rollback history

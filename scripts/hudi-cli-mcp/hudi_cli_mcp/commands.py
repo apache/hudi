@@ -157,22 +157,32 @@ class CommandNotAllowedError(Exception):
     pass
 
 
+def _matches_prefix(cmd: str, prefix: str) -> bool:
+    """True if ``cmd`` is exactly ``prefix`` or ``prefix`` followed by arguments.
+
+    A word boundary is required after the prefix so that e.g. the read-only
+    prefix ``desc`` does not accept an unrelated command like ``describe-x``,
+    and ``compaction schedule`` does not accept ``compaction scheduleAndExecute``
+    (which has its own, higher risk tier). Both sides are already lowercased.
+    """
+    return cmd == prefix or cmd.startswith(prefix + " ")
+
+
 def is_readonly_command(command: str) -> bool:
     """Check if a command is in the read-only allowlist."""
     cmd = command.strip().lower()
-    return any(cmd.startswith(prefix.lower()) for prefix in READONLY_COMMAND_PREFIXES)
+    return any(_matches_prefix(cmd, prefix.lower()) for prefix in READONLY_COMMAND_PREFIXES)
 
 
 def is_write_command(command: str) -> bool:
     """Check if a command is in the write command list."""
     cmd = command.strip().lower()
-    return any(cmd.startswith(prefix.lower()) for prefix in WRITE_COMMAND_PREFIXES)
+    return any(_matches_prefix(cmd, prefix.lower()) for prefix in WRITE_COMMAND_PREFIXES)
 
 
 # Match the longest prefix first, so a command that extends a shorter prefix is
-# classified by its most specific entry. Otherwise "compaction scheduleAndExecute"
-# (HIGH) would match "compaction schedule" (MEDIUM) first and skip the HIGH-risk
-# preview + confirmation. Recomputed once at import time.
+# classified by its most specific entry (belt-and-braces alongside the word-boundary
+# check in _matches_prefix). Recomputed once at import time.
 _WRITE_PREFIXES_BY_LENGTH = sorted(
     WRITE_COMMAND_PREFIXES.items(), key=lambda kv: len(kv[0]), reverse=True
 )
@@ -182,7 +192,7 @@ def get_risk_level(command: str) -> RiskLevel | None:
     """Return the risk level for a write command, or None if not a write command."""
     cmd = command.strip().lower()
     for prefix, level in _WRITE_PREFIXES_BY_LENGTH:
-        if cmd.startswith(prefix.lower()):
+        if _matches_prefix(cmd, prefix.lower()):
             return level
     return None
 
@@ -280,17 +290,51 @@ def build_command(base: str, **kwargs) -> str:
             continue
         else:
             parts.append(f"--{key}")
-            parts.append(_quote(str(value)))
+            parts.append(quote_arg(str(value)))
     return " ".join(parts)
 
 
-def _quote(value: str) -> str:
+def quote_arg(value: str) -> str:
     """Quote a value that contains whitespace so it stays a single CLI argument.
 
     Spring Shell splits script-mode arguments on whitespace, so an unquoted path
-    like ``/data/my table`` would be parsed as two arguments.
+    like ``/data/my table`` would be parsed as two arguments. Used by
+    ``build_command`` and by every ``connect --path`` interpolation.
     """
     if value and any(c.isspace() for c in value):
         escaped = value.replace('"', '\\"')
         return f'"{escaped}"'
     return value
+
+
+# Known hudi-cli output quirks, keyed by command prefix. These are surfaced as a
+# ``hint`` alongside the affected command's result so an LLM caller is not misled
+# by output that is technically returned but known to be wrong or misleading on
+# current CLI builds. Keeping this knowledge server-side means every MCP client
+# benefits without prompt engineering.
+KNOWN_CLI_QUIRKS: dict[str, str] = {
+    "stats filesizes": (
+        "Known hudi-cli quirk: `stats filesizes` reports all zeros on some CLI "
+        "builds even when data files exist. Read base-file sizes from "
+        "`show fsview all` (Data-File Size column) instead."
+    ),
+    "metadata list-partitions": (
+        "Known hudi-cli quirk: `metadata list-partitions` can fail with an internal "
+        "exception on some CLI builds. Partitions are visible in `show fsview all` "
+        "(Partition column)."
+    ),
+    "compaction schedule": (
+        "Known hudi-cli quirk: a successful `compaction schedule` may still print "
+        "'Failed to run compaction'. Verify the plan with `compactions show all` -- "
+        "a new instant in REQUESTED state means scheduling succeeded."
+    ),
+}
+
+
+def quirk_hint(command: str) -> str | None:
+    """Return a known-quirk hint for ``command``, or None."""
+    cmd = command.strip().lower()
+    for prefix, hint in KNOWN_CLI_QUIRKS.items():
+        if _matches_prefix(cmd, prefix):
+            return hint
+    return None

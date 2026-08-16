@@ -29,7 +29,8 @@ The following environment variables must be set before starting the server:
 | `CLI_BUNDLE_JAR` | yes | Path to `hudi-cli-bundle` JAR | `/path/to/hudi-cli-bundle_2.12-1.0.0.jar` |
 | `SPARK_BUNDLE_JAR` | yes | Path to `hudi-spark-bundle` JAR | `/path/to/hudi-spark3.5-bundle_2.12-1.0.0.jar` |
 | `HUDI_CLI_BIN` | yes | Path to the `hudi-cli-with-bundle.sh` launcher | `/path/to/hudi/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh` |
-| `HUDI_MCP_TIMEOUT` | no | Per-command timeout in seconds (default `120`). Raise for long compaction/clustering runs. | `1800` |
+| `HUDI_MCP_TIMEOUT` | no | Read-command timeout in seconds (default `120`). | `300` |
+| `HUDI_MCP_WRITE_TIMEOUT` | no | Write-operation timeout in seconds (default `1800`). Applies to confirmed/immediate write ops (compaction, clustering, rollback, ...), which run real Spark jobs. | `3600` |
 | `HUDI_MCP_MAX_ROWS` | no | Max rows returned per table (default `200`). | `500` |
 
 > `HUDI_CLI_BIN` has no default — a default under world-writable `/tmp` would let a

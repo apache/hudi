@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 
+from hudi_cli_mcp.commands import quote_arg
 from hudi_cli_mcp.executor import HudiCliExecutor
 from hudi_cli_mcp.session import SessionManager
 
@@ -35,7 +36,7 @@ def connect_to_table(
     Runs connect + desc to validate the table and return metadata.
     """
     commands = [
-        f"connect --path {path}",
+        f"connect --path {quote_arg(path)}",
         "desc",
     ]
     result = executor.execute(commands)

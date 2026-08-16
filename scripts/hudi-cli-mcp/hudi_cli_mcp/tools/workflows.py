@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 
+from hudi_cli_mcp.commands import quote_arg
 from hudi_cli_mcp.executor import HudiCliExecutor
 from hudi_cli_mcp.session import SessionManager
 
@@ -37,7 +38,7 @@ def _execute_workflow(
     Connects to the table, runs the commands, and returns structured output.
     Also updates the session to remember the connected path.
     """
-    full_commands = [f"connect --path {path}"] + commands
+    full_commands = [f"connect --path {quote_arg(path)}"] + commands
     result = executor.execute(full_commands)
 
     # A composite workflow runs several read commands in one JVM. A single

@@ -20,6 +20,7 @@
 import json
 from unittest.mock import MagicMock
 
+from hudi_cli_mcp.commands import RiskLevel
 from hudi_cli_mcp.executor import ExecutionResult
 from hudi_cli_mcp.parser import ParsedOutput
 from hudi_cli_mcp.safety import SafetyManager
@@ -333,3 +334,50 @@ class TestNotConnected:
         result = json.loads(rollback_commit("20240101120000", executor, session, safety))
         assert result["success"] is False
         assert "Not connected" in result["error"]
+
+
+class TestWriteTimeoutAndQuoting:
+    def test_confirm_uses_write_timeout(self):
+        from hudi_cli_mcp.executor import WRITE_TIMEOUT
+        from hudi_cli_mcp.safety import SafetyManager
+        from hudi_cli_mcp.tools.confirmation import confirm_operation
+
+        executor = _mock_executor()
+        session = _connected_session()
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="compaction run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/tmp/table",
+            description="d",
+        )
+        confirm_operation(op.token, executor, session, safety)
+        _, kwargs = executor.execute.call_args
+        assert kwargs.get("timeout") == WRITE_TIMEOUT
+
+    def test_low_risk_immediate_uses_write_timeout(self):
+        from hudi_cli_mcp.executor import WRITE_TIMEOUT
+
+        executor = _mock_executor()
+        session = _connected_session()
+        safety = SafetyManager()
+        create_savepoint("20240101", executor, session, safety)
+        _, kwargs = executor.execute.call_args
+        assert kwargs.get("timeout") == WRITE_TIMEOUT
+
+    def test_confirm_quotes_table_path_with_space(self):
+        from hudi_cli_mcp.safety import SafetyManager
+        from hudi_cli_mcp.tools.confirmation import confirm_operation
+
+        executor = _mock_executor()
+        session = _connected_session()
+        safety = SafetyManager()
+        op = safety.prepare_operation(
+            command="cleans run",
+            risk_level=RiskLevel.HIGH,
+            table_path="/data/my table",
+            description="d",
+        )
+        confirm_operation(op.token, executor, session, safety)
+        (commands,), _ = executor.execute.call_args
+        assert commands[0] == 'connect --path "/data/my table"'
