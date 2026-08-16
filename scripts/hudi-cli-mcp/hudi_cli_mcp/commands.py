@@ -328,6 +328,23 @@ KNOWN_CLI_QUIRKS: dict[str, str] = {
         "'Failed to run compaction'. Verify the plan with `compactions show all` -- "
         "a new instant in REQUESTED state means scheduling succeeded."
     ),
+    "metadata list-files": (
+        "Known hudi-cli quirk: `metadata list-files` can hang until the timeout on "
+        "some CLI builds. Files are visible in `show fsview all` instead."
+    ),
+    "metadata validate-files": (
+        "Known hudi-cli quirk: `metadata validate-files` can hang until the timeout "
+        "on some CLI builds."
+    ),
+    "show archived commit": (
+        "Known hudi-cli quirk: `show archived commit` fails with an internal error "
+        "on some CLI builds. Use `commits showarchived` to list archived commits."
+    ),
+    "export instants": (
+        "Known hudi-cli quirk: `export instants` fails on some CLI builds even with "
+        "a valid local folder. Read instants from `timeline show active` or "
+        "`commits showarchived` instead."
+    ),
 }
 
 

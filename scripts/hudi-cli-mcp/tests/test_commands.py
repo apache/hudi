@@ -163,6 +163,21 @@ class TestQuirkHints:
     def test_normal_command_has_no_hint(self):
         assert quirk_hint("commits show --limit 10") is None
 
+    def test_metadata_hang_commands_have_hints(self):
+        # Both hang until the timeout on the 1.3.0 CLI build (found by exercising
+        # every allowlisted command against a live table).
+        assert "hang" in quirk_hint("metadata list-files --partition city=x")
+        assert "hang" in quirk_hint("metadata validate-files")
+
+    def test_show_archived_commit_steers_to_working_alternative(self):
+        hint = quirk_hint("show archived commit --limit 5")
+        assert hint and "commits showarchived" in hint
+        # The working alternative itself must NOT carry a hint.
+        assert quirk_hint("commits showarchived --limit 5") is None
+
+    def test_export_instants_has_hint(self):
+        assert quirk_hint("export instants --localFolder /tmp/x") is not None
+
 
 class TestQuoteArg:
     def test_plain_value_unchanged(self):
