@@ -529,9 +529,9 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       String cause = expireResult == ExpireLockResult.THROTTLED
           ? CAUSE_THROTTLE_RETRIES_EXHAUSTED
           : CAUSE_EXPIRE_WRITE_FAILED;
-      logger.error("Owner {}: Cannot release lock {} - expire write ended as {} after {} throttle "
-              + "retries; lock left un-expired and will dangle until its lease elapses.",
-          ownerId, lockFilePath, expireResult, THROTTLE_MAX_RETRIES);
+      logger.error("Owner {}: Cannot release lock {} - expire write ended as {} (cause={}) after {} "
+              + "throttle retries; lock left un-expired and will dangle until its lease elapses.",
+          ownerId, lockFilePath, expireResult, cause, THROTTLE_MAX_RETRIES);
       hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
       throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE, cause));
     }
