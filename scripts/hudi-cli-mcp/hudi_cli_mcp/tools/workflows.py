@@ -63,6 +63,22 @@ def _execute_workflow(
             "Some sub-commands did not apply to this table (see 'errors'); "
             "the rest of the workflow completed."
         )
+    if workflow_name == "timeline_summary":
+        # Computed live from this call's parsed rows -- never make the model
+        # count table rows itself (observed miscounts on smaller models).
+        counts: dict[str, int] = {}
+        total = 0
+        for table in result.parsed.tables:
+            if "Action" in table.headers and "State" in table.headers:
+                for row in table.rows:
+                    action = (row.get("Action") or "").strip()
+                    state = (row.get("State") or "").strip()
+                    if not action or action == "Action" or state == "State":
+                        continue
+                    counts[f"{action}/{state}"] = counts.get(f"{action}/{state}", 0) + 1
+                    total += 1
+        output["instant_counts"] = counts
+        output["total_active_instants"] = total
     output["workflow"] = workflow_name
     output["table_path"] = path
     return json.dumps(output, indent=2)

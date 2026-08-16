@@ -48,6 +48,15 @@ from hudi_cli_mcp.tools.generic import (
 from hudi_cli_mcp.tools.generic import (
     execute_hudi_commands as _execute_hudi_commands,
 )
+from hudi_cli_mcp.tools.table_info import (
+    get_commit_summary as _get_commit_summary,
+)
+from hudi_cli_mcp.tools.table_info import (
+    get_file_size_stats as _get_file_size_stats,
+)
+from hudi_cli_mcp.tools.table_info import (
+    get_table_info as _get_table_info,
+)
 from hudi_cli_mcp.tools.workflows import (
     commit_details as _commit_details,
 )
@@ -180,6 +189,52 @@ def show_connection() -> str:
 
 
 @mcp.tool()
+def get_table_info(path: str = "") -> str:
+    """Get the table's core facts as typed fields (no parsing needed).
+
+    Use this for ANY question about: table type (COPY_ON_WRITE vs MERGE_ON_READ),
+    table version, partition columns/fields, record key, ordering/precombine
+    field, or metadata indexes. Prefer this over running `desc` -- the values are
+    extracted server-side from the live table on every call.
+
+    Args:
+        path: Table base path; empty uses the currently connected table.
+    """
+    return _get_table_info(executor, session, path)
+
+
+@mcp.tool()
+def get_commit_summary(path: str = "", limit: int = 10) -> str:
+    """Commit count and recent commits, computed server-side from the live timeline.
+
+    Use this for ANY question about: how many commits the table has, the most
+    recent commits, or records/bytes written per commit. `commit_count` is counted
+    server-side on every call -- do not count table rows yourself.
+
+    Args:
+        path: Table base path; empty uses the currently connected table.
+        limit: How many recent commits to include (default 10).
+    """
+    return _get_commit_summary(executor, session, path, limit)
+
+
+@mcp.tool()
+def get_file_size_stats(path: str = "") -> str:
+    """File-size statistics (min/avg/max/total bytes), computed server-side.
+
+    Use this for ANY question about file sizes: base/parquet file sizes, average
+    file size, storage footprint, or log-file counts. Stats are computed from the
+    latest file slices in the live file-system view on every call. Prefer this
+    over `stats filesizes` (known to report zeros) and over reading `show fsview
+    all` rows yourself.
+
+    Args:
+        path: Table base path; empty uses the currently connected table.
+    """
+    return _get_file_size_stats(executor, session, path)
+
+
+@mcp.tool()
 def execute_hudi_command(command: str) -> str:
     """Execute any single read-only Hudi CLI command and return structured results.
 
@@ -188,6 +243,10 @@ def execute_hudi_command(command: str) -> str:
 
     Args:
         command: The Hudi CLI command to execute (e.g., "commits show --limit 10 --desc true")
+
+    Prefer the typed tools for common questions: get_table_info (type/version/
+    partitions/indexes), get_commit_summary (commit counts, recent commits),
+    get_file_size_stats (file sizes). Use this raw-command tool for everything else.
 
     Common commands:
         - commits show --limit N --desc true: Show recent commits
