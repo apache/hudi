@@ -347,16 +347,19 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   private HoodieData<HoodieRecord<HoodieMetadataPayload>> lookupIndexRecords(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
                                                                              Option<String> dataTablePartition) {
+    List<FileSlice> targetFileSlices = fileSlices;
     if (dataTablePartition.isPresent()) {
-      // assume is partitioned rli if a data table partition name is provided
-      // filter to only the files in the partition
-      List<FileSlice> fileSlicesForDataPartition = fileSlices.stream()
-          .filter(fileSlice -> HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(fileSlice.getFileId()).equals(dataTablePartition.get()))
+      // Partitioned RLI file groups are scoped by data-table partition, but a partition may still
+      // span multiple shards. Narrow the slices here, then let the normal hash/repartition path
+      // below route every key to its own shard; choosing a shard from the first key corrupts
+      // batched lookups whenever the batch crosses file groups.
+      targetFileSlices = fileSlices.stream()
+          .filter(fileSlice -> HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(fileSlice.getFileId())
+              .equals(dataTablePartition.get()))
           .collect(Collectors.toList());
-      // all keys will be from the same shard index so just calculate the first key and reduce partitionFileSlices to 1
-      TreeSet<String> distinctSortedKeys = getDistinctSortedKeysForSingleSlice(keys);
-      int fileGroupIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(distinctSortedKeys.stream().findFirst().get(), fileSlicesForDataPartition.size());
-      return readSliceAndFilterByKeysIntoList(partitionName, distinctSortedKeys, fileSlicesForDataPartition.get(fileGroupIndex), true);
+      if (targetFileSlices.isEmpty() || keys.isEmpty()) {
+        return HoodieListData.lazy(Collections.emptyList());
+      }
     } else if (partitionName.equals(RECORD_INDEX.getPartitionPath()) && !fileSlices.isEmpty() && HoodieTableMetadataUtil.verifyRLIFile(fileSlices.get(0).getFileId(), true)) {
       if (keys.isEmpty()) {
         return HoodieListData.lazy(Collections.emptyList());
@@ -364,9 +367,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       throw new IllegalArgumentException("File pruning with partitioned rli has not yet been implemented");
     }
     boolean isSecondaryIndex = MetadataPartitionType.fromPartitionPath(partitionName).equals(MetadataPartitionType.SECONDARY_INDEX);
-    final int numFileSlices = fileSlices.size();
+    final List<FileSlice> selectedFileSlices = targetFileSlices;
+    final int numFileSlices = selectedFileSlices.size();
     if (numFileSlices == 1) {
-      return readSliceAndFilterByKeysIntoList(partitionName, getDistinctSortedKeysForSingleSlice(keys), fileSlices.get(0), !isSecondaryIndex);
+      return readSliceAndFilterByKeysIntoList(partitionName, getDistinctSortedKeysForSingleSlice(keys), selectedFileSlices.get(0), !isSecondaryIndex);
     }
 
     // For SI v2, there are 2 cases require different implementation:
@@ -396,7 +400,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           // The shuffle above repartitions/sorts by String (UTF-16) order, but the HFile reader below
           // does a forward-only seek in UTF-8 byte order. Re-sort so the two agree.
           keysList.sort(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
-          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
+          FileSlice fileSlice = selectedFileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
           return lookupRecordsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
@@ -943,6 +947,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
     return getFilegroupsForPartition(partition).size();
+  }
+
+  @Override
+  public boolean isRecordIndexPartitioned() {
+    List<FileSlice> fileSlices = getFilegroupsForPartition(RECORD_INDEX);
+    return !fileSlices.isEmpty()
+        && HoodieTableMetadataUtil.verifyRLIFile(fileSlices.get(0).getFileId(), true);
   }
 
   @Override

@@ -164,7 +164,7 @@ class TestVectorIndexMetadataPayload {
         1.1f, "sha256:routing", 1, 8,
         "COSINE", true, true, "embedding", 524288, 2048,
         1, 1, 1, "sha256:rotation", 1.9, 1.0e-3, 1.0, 1.0e-3, 4, "sha256:centroids",
-        4096, 1024, "20260806120000000", 123L, "vector_index_demo");
+        4096, 1024, "20260806120000000", "20260806120000000", 123L, "vector_index_demo");
 
     HoodieVectorIndexManifest manifest =
         (HoodieVectorIndexManifest) record.getData().getVectorIndexMetadata().get();
@@ -183,6 +183,7 @@ class TestVectorIndexMetadataPayload {
     assertEquals(4, manifest.getCentroidChunkCount());
     assertEquals("sha256:centroids", manifest.getCentroidChecksum());
     assertEquals("BUILDING", manifest.getState().toString());
+    assertEquals("20260806120000000", manifest.getBootstrapBaseline());
     assertEquals("20260806120000000", manifest.getLastContiguousSourceInstant());
     assertNull(HoodieVectorIndexManifest.getClassSchema().getField("centroidEpoch"));
   }

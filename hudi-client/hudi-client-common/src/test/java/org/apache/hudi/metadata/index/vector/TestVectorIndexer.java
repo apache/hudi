@@ -72,6 +72,7 @@ import static org.mockito.Mockito.when;
 class TestVectorIndexer {
 
   private static final String INDEX_PARTITION = "vector_index_embedding";
+  private static final String BASELINE = "000";
   private static final String INSTANT = "002";
   private static final int GENERATION = 3;
 
@@ -212,6 +213,7 @@ class TestVectorIndexer {
           .orElse(null);
       assertEquals(markerPresent, advancedManifest != null);
       if (advancedManifest != null) {
+        assertEquals(BASELINE, advancedManifest.getBootstrapBaseline());
         assertEquals("003", advancedManifest.getLastContiguousSourceInstant());
       }
       assertTrue(records.stream().anyMatch(record -> VectorIndexMetadataKey
@@ -231,6 +233,6 @@ class TestVectorIndexer {
         ByteBuffer.allocate(0), ByteBuffer.allocate(0), 1.1f, "routing-digest",
         1, 1, "L2", false, false, "embedding",
         65536, 100, 1, 1, 1, "rotation-digest", 0.0, 0.0, 0.0, 0.0,
-        1, "checksum", 2, 1, lastCoveredInstant, 0L, INDEX_PARTITION);
+        1, "checksum", 2, 1, BASELINE, lastCoveredInstant, 0L, INDEX_PARTITION);
   }
 }

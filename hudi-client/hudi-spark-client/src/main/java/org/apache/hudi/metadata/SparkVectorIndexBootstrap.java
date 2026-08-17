@@ -288,12 +288,14 @@ public final class SparkVectorIndexBootstrap {
               0,
               0,
               sourceInstant,
+              sourceInstant,
               lastUpdatedTs,
               indexName));
           driverRecords.add(HoodieMetadataPayload.createVectorIndexActiveManifestRecord(
               generation, indexName));
-          driverRecords.add(HoodieMetadataPayload.createVectorIndexSourceInstantMarkerRecord(
-              generation, sourceInstant, lastUpdatedTs, indexName));
+
+          // Pre-bootstrap source instants are represented by the immutable manifest baseline.
+          // Per-instant markers begin with the first source commit after that baseline.
 
           // Cluster manifests
           for (Map.Entry<Integer, Long> entry : clusterVectorCounts.entrySet()) {

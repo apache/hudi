@@ -58,7 +58,7 @@ class TestVectorIndexMetadataLoader {
         1, 8,
         "L2", false, true, "embedding", 524288, 128,
         1, 1, 1, RaBitQEncoder.rotationDigest(2, 17L), 1.9, 1.0e-3, 1.0, 1.0e-3, 2, "checksum",
-        4096, 1024, "002", 123L, partition);
+        4096, 1024, "002", "002", 123L, partition);
     ByteBuffer ids = ByteBuffer.allocate(2 * Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN)
         .putInt(0).putInt(1);
     ids.flip();

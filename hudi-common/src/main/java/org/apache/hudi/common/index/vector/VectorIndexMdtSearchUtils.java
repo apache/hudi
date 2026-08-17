@@ -21,6 +21,7 @@ package org.apache.hudi.common.index.vector;
 
 import org.apache.hudi.avro.model.HoodieVectorIndexPostingBlock;
 import org.apache.hudi.avro.model.HoodieVectorIndexPostingDelta;
+import org.apache.hudi.avro.model.HoodieVectorIndexTombstone;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
@@ -53,8 +54,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Shared helper for MDT-native vector posting lookup and approximate candidate reduction.
@@ -149,6 +152,12 @@ public final class VectorIndexMdtSearchUtils {
 
           Object info = infoOpt.get();
           int[] keyComponents = parsePostingKey(record.getRecordKey());
+          if (isPostingTombstoneInfo(info)) {
+            String deletedRecordKey = VectorIndexMetadataKey.postingRecordKey(record.getRecordKey());
+            return deletedRecordKey == null
+                ? Collections.<PostingMatch>emptyIterator()
+                : Collections.singletonList(PostingMatch.tombstone(deletedRecordKey, keyComponents)).iterator();
+          }
           if (isPostingBlockInfo(info)) {
             PostingBlockView view = new PostingBlockView(asPostingBlock(info));
             List<PostingMatch> blockMatches = new ArrayList<>(view.numVectors());
@@ -664,7 +673,7 @@ public final class VectorIndexMdtSearchUtils {
     List<int[]> blockKeyComponents = new ArrayList<>();
     List<ScoredPostingMatch> deltaMatches = new ArrayList<>();
     Map<String, ScoredPostingMatch> deltaByRecordKey = new HashMap<>();
-    Set<String> suppressedRecordKeys = new HashSet<>();
+    Set<String> suppressedPostingKeys = new HashSet<>();
     Map<Integer, MetricQueryState.ClusterQuery> clusterQueryCache = new HashMap<>();
     Map<Integer, RaBitQByteLutScorer> lutScorerCache = new HashMap<>();
     int blocksRead = 0;
@@ -690,9 +699,11 @@ public final class VectorIndexMdtSearchUtils {
       }
       if (record.getData().isDeleted()) {
         String deletedRecordKey = VectorIndexMetadataKey.postingRecordKey(record.getRecordKey());
-        if (deletedRecordKey != null && suppressedRecordKeys.add(deletedRecordKey)) {
-          deltaByRecordKey.remove(deletedRecordKey);
-          heap.growTo(heapSize + deltaByRecordKey.size() + suppressedRecordKeys.size());
+        int[] keyComponents = parsePostingKey(record.getRecordKey());
+        String postingKey = postingIdentity(keyComponents, deletedRecordKey);
+        if (deletedRecordKey != null && suppressedPostingKeys.add(postingKey)) {
+          removeSuppressedDelta(deltaByRecordKey, deletedRecordKey, keyComponents);
+          heap.growTo(heapSize + deltaByRecordKey.size() + suppressedPostingKeys.size());
         }
         continue;
       }
@@ -702,6 +713,16 @@ public final class VectorIndexMdtSearchUtils {
       }
 
       Object info = infoOpt.get();
+      if (isPostingTombstoneInfo(info)) {
+        String deletedRecordKey = VectorIndexMetadataKey.postingRecordKey(record.getRecordKey());
+        int[] keyComponents = parsePostingKey(record.getRecordKey());
+        String postingKey = postingIdentity(keyComponents, deletedRecordKey);
+        if (deletedRecordKey != null && suppressedPostingKeys.add(postingKey)) {
+          removeSuppressedDelta(deltaByRecordKey, deletedRecordKey, keyComponents);
+          heap.growTo(heapSize + deltaByRecordKey.size() + suppressedPostingKeys.size());
+        }
+        continue;
+      }
       int[] keyComponents = parsePostingKey(record.getRecordKey());
       if (isPostingBlockInfo(info)) {
         PostingBlockView view = new PostingBlockView(asPostingBlock(info));
@@ -768,13 +789,13 @@ public final class VectorIndexMdtSearchUtils {
             clusterQueryCache,
             dimension,
             rabitqBits);
-        if (suppressedRecordKeys.contains(scoredDelta.getRecordKey())) {
+        if (suppressedPostingKeys.contains(postingIdentity(keyComponents, scoredDelta.getRecordKey()))) {
           continue;
         }
         boolean newOverlayKey = !deltaByRecordKey.containsKey(scoredDelta.getRecordKey());
         deltaByRecordKey.merge(scoredDelta.getRecordKey(), scoredDelta, VectorIndexMdtSearchUtils::chooseOverlayCandidate);
         if (newOverlayKey) {
-          heap.growTo(heapSize + deltaByRecordKey.size() + suppressedRecordKeys.size());
+          heap.growTo(heapSize + deltaByRecordKey.size() + suppressedPostingKeys.size());
         }
         if (heap.wouldAdmit(scoredDelta.getApproxDistance())) {
           int deltaOrdinal = deltaMatches.size();
@@ -787,10 +808,17 @@ public final class VectorIndexMdtSearchUtils {
     }
 
     List<ScoredPostingMatch> scored = new ArrayList<>(heap.size());
+    Set<String> emittedDeltaRecordKeys = new HashSet<>();
     for (LongFloatHeap.Entry entry : heap.entriesBestFirst()) {
       long key = entry.key;
       if (isDeltaKey(key)) {
-        scored.add(deltaMatches.get(unpackDeltaOrdinal(key)));
+        ScoredPostingMatch delta = deltaMatches.get(unpackDeltaOrdinal(key));
+        int[] keyComponents = {delta.getClusterId(), delta.getShardId()};
+        if (!suppressedPostingKeys.contains(postingIdentity(keyComponents, delta.getRecordKey()))
+            && delta == deltaByRecordKey.get(delta.getRecordKey())) {
+          scored.add(delta);
+          emittedDeltaRecordKeys.add(delta.getRecordKey());
+        }
         continue;
       }
       int blockOrdinal = unpackBlockOrdinal(key);
@@ -798,12 +826,14 @@ public final class VectorIndexMdtSearchUtils {
       PostingBlockView view = blocks.get(blockOrdinal);
       int[] keyComponents = blockKeyComponents.get(blockOrdinal);
       String recordKey = view.recordKey(vectorIndex);
-      if (suppressedRecordKeys.contains(recordKey)) {
+      if (suppressedPostingKeys.contains(postingIdentity(keyComponents, recordKey))) {
         continue;
       }
       ScoredPostingMatch overlayDelta = deltaByRecordKey.get(recordKey);
       if (overlayDelta != null) {
-        scored.add(overlayDelta);
+        if (emittedDeltaRecordKeys.add(recordKey)) {
+          scored.add(overlayDelta);
+        }
         continue;
       }
       PostingBlockView.RowLocator rowLocator = view.rowLocator(vectorIndex);
@@ -1091,36 +1121,67 @@ public final class VectorIndexMdtSearchUtils {
    */
   public static HoodieData<ScoredPostingMatch> arbitrateFinalists(HoodieTableMetadata metadataTable,
                                                                   HoodieData<ScoredPostingMatch> finalists) {
+    return arbitrateFinalists(metadataTable, finalists, false);
+  }
+
+  public static HoodieData<ScoredPostingMatch> arbitrateFinalists(
+      HoodieTableMetadata metadataTable,
+      HoodieData<ScoredPostingMatch> finalists,
+      boolean partitionedRecordIndex) {
+    if (!partitionedRecordIndex) {
+      return arbitrateFinalistsForPartition(metadataTable, finalists, Option.empty());
+    }
+    List<String> partitions = finalists.map(ScoredPostingMatch::getPartitionPath)
+        .distinct()
+        .collectAsList();
+    HoodieData<ScoredPostingMatch> arbitrated = null;
+    for (String partition : partitions) {
+      HoodieData<ScoredPostingMatch> partitionFinalists = finalists
+          .filter(candidate -> Objects.equals(partition, candidate.getPartitionPath()));
+      HoodieData<ScoredPostingMatch> partitionResult = arbitrateFinalistsForPartition(
+          metadataTable, partitionFinalists, Option.ofNullable(partition));
+      arbitrated = arbitrated == null ? partitionResult : arbitrated.union(partitionResult);
+    }
+    return arbitrated == null ? HoodieListData.eager(Collections.emptyList()) : arbitrated;
+  }
+
+  private static HoodieData<ScoredPostingMatch> arbitrateFinalistsForPartition(
+      HoodieTableMetadata metadataTable,
+      HoodieData<ScoredPostingMatch> finalists,
+      Option<String> dataTablePartition) {
     HoodiePairData<String, ScoredPostingMatch> byRecordKey =
         finalists.mapToPair(candidate -> Pair.of(candidate.getRecordKey(), candidate));
     HoodiePairData<String, HoodieRecordGlobalLocation> locations =
-        metadataTable.readRecordIndexLocationsWithKeys(byRecordKey.keys().distinct());
+        metadataTable.readRecordIndexLocationsWithKeys(
+            byRecordKey.keys().distinct(), dataTablePartition);
 
     return byRecordKey.leftOuterJoin(locations)
         .values()
-        .map(joined -> {
-          ScoredPostingMatch candidate = joined.getLeft();
-          HoodieRecordGlobalLocation current = joined.getRight().orElse(null);
-          VectorIndexArbiter.Decision decision = VectorIndexArbiter.classify(
-              candidate.getPartitionPath(),
-              candidate.getFileGroupId(),
-              candidate.getBaseInstantTime(),
-              current);
-          HoodieRecordGlobalLocation resolved;
-          switch (decision) {
-            case SERVE:
-              resolved = candidate.getLocation() != null ? candidate.getLocation() : current;
-              break;
-            case STALE:
-              resolved = current;
-              break;
-            case DELETED:
-            default:
-              resolved = null;
-              break;
-          }
-          return candidate.withArbiterVerdict(decision, resolved);
-        });
+        .map(joined -> arbitrateCandidate(joined.getLeft(), joined.getRight().orElse(null)));
+  }
+
+  private static ScoredPostingMatch arbitrateCandidate(
+      ScoredPostingMatch candidate,
+      HoodieRecordGlobalLocation current) {
+    VectorIndexArbiter.Decision decision = VectorIndexArbiter.classify(
+        candidate.getPartitionPath(),
+        candidate.getFileGroupId(),
+        candidate.getBaseInstantTime(),
+        current);
+    HoodieRecordGlobalLocation resolved;
+    switch (decision) {
+      case SERVE:
+        resolved = candidate.getLocation() != null ? candidate.getLocation() : current;
+        break;
+      case STALE:
+        resolved = current;
+        break;
+      case DELETED:
+      default:
+        resolved = null;
+        break;
+    }
+    return candidate.withArbiterVerdict(decision, resolved);
   }
 
   /**
@@ -1213,8 +1274,38 @@ public final class VectorIndexMdtSearchUtils {
   public static ArbitrationResult arbitrateMaterializedFinalists(
       HoodieTableMetadata metadataTable,
       List<ScoredPostingMatch> finalists) {
+    return arbitrateMaterializedFinalists(metadataTable, finalists, false);
+  }
+
+  public static ArbitrationResult arbitrateMaterializedFinalists(
+      HoodieTableMetadata metadataTable,
+      List<ScoredPostingMatch> finalists,
+      boolean partitionedRecordIndex) {
     if (finalists.isEmpty()) {
       return new ArbitrationResult(Collections.emptyList(), Collections.emptyList(), 0L);
+    }
+    if (partitionedRecordIndex) {
+      List<ScoredPostingMatch> serve = new ArrayList<>();
+      List<ScoredPostingMatch> stale = new ArrayList<>();
+      long deleted = 0L;
+      Map<String, List<ScoredPostingMatch>> byPartition = finalists.stream()
+          .collect(Collectors.groupingBy(ScoredPostingMatch::getPartitionPath));
+      for (Map.Entry<String, List<ScoredPostingMatch>> entry : byPartition.entrySet()) {
+        List<ScoredPostingMatch> partitionFinalists = entry.getValue();
+        Set<String> partitionKeys = partitionFinalists.stream()
+            .map(ScoredPostingMatch::getRecordKey)
+            .collect(Collectors.toSet());
+        Map<String, HoodieRecordGlobalLocation> partitionLocations = new HashMap<>();
+        metadataTable.readRecordIndexLocationsWithKeys(
+                HoodieListData.eager(new ArrayList<>(partitionKeys)), Option.of(entry.getKey()))
+            .collectAsList()
+            .forEach(pair -> partitionLocations.put(pair.getKey(), pair.getValue()));
+        ArbitrationResult result = arbitrateMaterializedFinalists(partitionFinalists, partitionLocations);
+        serve.addAll(result.serve());
+        stale.addAll(result.stale());
+        deleted += result.deletedCount();
+      }
+      return new ArbitrationResult(serve, stale, deleted);
     }
     Set<String> distinctKeys = new HashSet<>();
     for (ScoredPostingMatch candidate : finalists) {
@@ -1317,6 +1408,22 @@ public final class VectorIndexMdtSearchUtils {
     return record.getData().getVectorIndexMetadata();
   }
 
+  private static String postingIdentity(int[] keyComponents, String recordKey) {
+    return keyComponents[0] + "\u0000" + keyComponents[1] + "\u0000" + recordKey;
+  }
+
+  private static void removeSuppressedDelta(
+      Map<String, ScoredPostingMatch> deltaByRecordKey,
+      String recordKey,
+      int[] keyComponents) {
+    ScoredPostingMatch delta = deltaByRecordKey.get(recordKey);
+    if (delta != null
+        && delta.getClusterId() == keyComponents[0]
+        && delta.getShardId() == keyComponents[1]) {
+      deltaByRecordKey.remove(recordKey);
+    }
+  }
+
   private static boolean isPostingBlockInfo(Object info) {
     return info instanceof HoodieVectorIndexPostingBlock || hasAvroName(info, "HoodieVectorIndexPostingBlock");
   }
@@ -1325,11 +1432,15 @@ public final class VectorIndexMdtSearchUtils {
     return info instanceof HoodieVectorIndexPostingDelta || hasAvroName(info, "HoodieVectorIndexPostingDelta");
   }
 
+  private static boolean isPostingTombstoneInfo(Object info) {
+    return info instanceof HoodieVectorIndexTombstone || hasAvroName(info, "HoodieVectorIndexTombstone");
+  }
+
   private static boolean hasAvroName(Object info, String name) {
     return info instanceof GenericRecord && name.equals(((GenericRecord) info).getSchema().getName());
   }
 
-  private static HoodieVectorIndexPostingBlock asPostingBlock(Object info) {
+  public static HoodieVectorIndexPostingBlock asPostingBlock(Object info) {
     if (info instanceof HoodieVectorIndexPostingBlock) {
       return (HoodieVectorIndexPostingBlock) info;
     }

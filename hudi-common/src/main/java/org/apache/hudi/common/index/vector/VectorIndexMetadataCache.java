@@ -477,7 +477,7 @@ public final class VectorIndexMetadataCache implements Serializable {
     return info instanceof GenericRecord && name.equals(((GenericRecord) info).getSchema().getName());
   }
 
-  private static HoodieVectorIndexManifest asManifest(Object info) {
+  public static HoodieVectorIndexManifest asManifest(Object info) {
     if (info instanceof HoodieVectorIndexManifest) {
       return (HoodieVectorIndexManifest) info;
     }
@@ -517,8 +517,32 @@ public final class VectorIndexMetadataCache implements Serializable {
         nullableStringField(record, "centroidChecksum"),
         intField(record, "splitLimit"),
         intField(record, "mergeFloor"),
+        nullableStringField(record, "bootstrapBaseline"),
         nullableStringField(record, "lastContiguousSourceInstant"),
         longField(record, "createdTs"));
+  }
+
+  public static HoodieVectorIndexCentroids asCentroids(Object info) {
+    if (info instanceof HoodieVectorIndexCentroids) {
+      return (HoodieVectorIndexCentroids) info;
+    }
+    GenericRecord record = (GenericRecord) info;
+    return new HoodieVectorIndexCentroids(
+        byteBufferField(record, "clusterIds"),
+        byteBufferField(record, "centroidBytes"),
+        byteBufferField(record, "clusterRadii"));
+  }
+
+  public static HoodieVectorIndexQuantizer asQuantizer(Object info) {
+    if (info instanceof HoodieVectorIndexQuantizer) {
+      return (HoodieVectorIndexQuantizer) info;
+    }
+    GenericRecord record = (GenericRecord) info;
+    Object rotationBytes = record.get("rotationBytes");
+    return new HoodieVectorIndexQuantizer(
+        stringField(record, "quantizerType"),
+        longField(record, "randomSeed"),
+        rotationBytes == null ? null : (ByteBuffer) rotationBytes);
   }
 
   private static String getManifestState(Object info) {

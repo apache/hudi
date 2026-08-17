@@ -33,6 +33,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.index.vector.VectorDistanceMetric;
+import org.apache.hudi.common.index.vector.VectorIndexMetadataCache;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -306,10 +307,10 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
     tableMetadata.getRecordsByKeyPrefixes(HoodieListData.eager(keys), indexPartition, true)
         .collectAsList().forEach(record -> ((HoodieMetadataPayload) record.getData())
             .getVectorIndexMetadata().ifPresent(value -> metadata.put(record.getRecordKey(), value)));
-    HoodieVectorIndexManifest manifest = requireArtifact(
-        metadata, VectorIndexMetadataKey.manifest(generation), HoodieVectorIndexManifest.class);
-    HoodieVectorIndexQuantizer quantizer = requireArtifact(
-        metadata, VectorIndexMetadataKey.quantizer(generation, 0), HoodieVectorIndexQuantizer.class);
+    HoodieVectorIndexManifest manifest = VectorIndexMetadataCache.asManifest(
+        requireArtifact(metadata, VectorIndexMetadataKey.manifest(generation)));
+    HoodieVectorIndexQuantizer quantizer = VectorIndexMetadataCache.asQuantizer(
+        requireArtifact(metadata, VectorIndexMetadataKey.quantizer(generation, 0)));
 
     List<VectorMetadataRawKey> centroidKeys = new ArrayList<>(manifest.getCentroidChunkCount());
     for (int chunk = 0; chunk < manifest.getCentroidChunkCount(); chunk++) {
@@ -322,10 +323,9 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
                 value -> centroidMetadata.put(record.getRecordKey(), value)));
     List<HoodieVectorIndexCentroids> centroidChunks = new ArrayList<>(manifest.getCentroidChunkCount());
     for (int chunk = 0; chunk < manifest.getCentroidChunkCount(); chunk++) {
-      centroidChunks.add(requireArtifact(
+      centroidChunks.add(VectorIndexMetadataCache.asCentroids(requireArtifact(
           centroidMetadata,
-          VectorIndexMetadataKey.centroids(generation, chunk),
-          HoodieVectorIndexCentroids.class));
+          VectorIndexMetadataKey.centroids(generation, chunk))));
     }
 
     if (manifest.getShardCount() <= 0) {
@@ -358,13 +358,12 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
         manifest.getResidualEncoding());
   }
 
-  private static <T> T requireArtifact(
-      Map<String, Object> metadata, String key, Class<T> artifactClass) {
+  private static Object requireArtifact(Map<String, Object> metadata, String key) {
     Object value = metadata.get(key);
-    if (!artifactClass.isInstance(value)) {
+    if (value == null) {
       throw new HoodieMetadataException("ACTIVE vector generation artifact is missing: " + key);
     }
-    return artifactClass.cast(value);
+    return value;
   }
 
   private static float[][] decodeCentroids(

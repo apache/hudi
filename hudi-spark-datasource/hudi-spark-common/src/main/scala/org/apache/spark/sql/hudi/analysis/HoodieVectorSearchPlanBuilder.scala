@@ -449,6 +449,9 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
       tuningOptions: Map[String, String],
       metric: DistanceMetric.Value)
 
+  private def isPartitionedRecordIndex(ctx: VectorSearchPlanContext): Boolean =
+    ctx.metadataTable.isRecordIndexPartitioned
+
   private val STRUCTURAL_OPTION_KEYS: Set[String] = Set(
     VectorIndexOptions.METRIC,
     VectorIndexOptions.QUANTIZER,
@@ -699,7 +702,8 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     val arbiterEnabled = VectorIndexOptions.isFinalistArbiterEnabled(mergedOptions.asJava)
     val candidateRdd: RDD[VectorIndexMdtSearchUtils.ScoredPostingMatch] =
       if (arbiterEnabled) {
-        val arbitrated = VectorIndexMdtSearchUtils.arbitrateFinalists(ctx.metadataTable, topCandidates)
+        val arbitrated = VectorIndexMdtSearchUtils.arbitrateFinalists(
+          ctx.metadataTable, topCandidates, isPartitionedRecordIndex(ctx))
         val staleAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_arbiter_stale")
         val deletedAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_arbiter_deleted")
         HoodieJavaRDD.getJavaRDD(arbitrated).rdd.mapPartitions { it =>
@@ -818,7 +822,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
       val serveCandidates: Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch] =
         if (arbiterEnabled) {
           val arb = VectorIndexMdtSearchUtils.arbitrateMaterializedFinalists(
-            ctx.metadataTable, topCandidateList.asJava)
+            ctx.metadataTable, topCandidateList.asJava, isPartitionedRecordIndex(ctx))
           val staleFailPolicy = VectorIndexOptions.isStaleLocatorPolicyFail(mergedOptions.asJava)
           LOG.info(
             s"[vector_search][exact][arbiter] arbiterExclusions{stale=${arb.staleCount}, deleted=${arb.deletedCount}} " +

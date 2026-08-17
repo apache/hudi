@@ -608,8 +608,10 @@
                          "doc": "Checksum of the canonical centroid payload used to reject incomplete or mismatched builds."},
                         {"name": "splitLimit", "type": "int"},
                         {"name": "mergeFloor", "type": "int"},
+                        {"name": "bootstrapBaseline", "type": ["null", "string"], "default": null,
+                         "doc": "Source snapshot instant represented by this generation at bootstrap. Marker contiguity begins strictly after this immutable baseline."},
                         {"name": "lastContiguousSourceInstant", "type": ["null", "string"], "default": null,
-                         "doc": "Latest source instant for which every required earlier source instant is covered by this generation."},
+                         "doc": "Latest source instant covered contiguously after bootstrapBaseline; equals bootstrapBaseline before the first post-bootstrap update."},
                         {"name": "createdTs", "type": "long"}
                     ]
                 },

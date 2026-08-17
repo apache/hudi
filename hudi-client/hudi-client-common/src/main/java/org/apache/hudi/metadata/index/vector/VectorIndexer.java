@@ -25,6 +25,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.index.vector.VectorIndexMetadataCache;
 import org.apache.hudi.common.index.vector.VectorIndexOptions;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -58,6 +59,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -257,9 +259,6 @@ public class VectorIndexer extends BaseIndexer {
         .collect(Collectors.toList());
     String baseInstant = previous.map(FileSlice::getBaseInstantTime)
         .orElseGet(() -> newLogFiles.get(0).getDeltaCommitTime());
-    ValidationUtils.checkArgument(newLogFiles.stream()
-            .allMatch(logFile -> baseInstant.equals(logFile.getDeltaCommitTime())),
-        "All log files in a vector-index update must belong to the same base file slice");
     FileSlice current = previous.map(FileSlice::new)
         .orElseGet(() -> new FileSlice(partition, baseInstant, fileId));
     newLogFiles.forEach(current::addLogFile);
@@ -272,11 +271,23 @@ public class VectorIndexer extends BaseIndexer {
         context, indexPartition, VectorIndexMetadataKey.manifest(generation))
         .orElseThrow(() -> new HoodieMetadataException(
             "Vector generation manifest is missing for " + indexPartition));
-    ValidationUtils.checkState(metadata instanceof HoodieVectorIndexManifest,
-        "Unexpected vector generation manifest payload for " + indexPartition);
-    HoodieVectorIndexManifest manifest = (HoodieVectorIndexManifest) metadata;
+    HoodieVectorIndexManifest manifest;
+    try {
+      manifest = VectorIndexMetadataCache.asManifest(metadata);
+    } catch (RuntimeException e) {
+      throw new HoodieMetadataException(
+          "Unexpected vector generation manifest payload for " + indexPartition, e);
+    }
+    String baseline = manifest.getBootstrapBaseline();
+    ValidationUtils.checkState(baseline != null && !baseline.isEmpty(),
+        "Vector generation manifest is missing its bootstrap baseline for " + indexPartition);
     String lastCovered = manifest.getLastContiguousSourceInstant();
-    if (lastCovered == null || lastCovered.equals(context.instantTime())) {
+    if (lastCovered == null || lastCovered.isEmpty()) {
+      lastCovered = baseline;
+    }
+    ValidationUtils.checkState(!compareTimestamps(lastCovered, LESSER_THAN, baseline),
+        "Vector generation frontier precedes its bootstrap baseline for " + indexPartition);
+    if (lastCovered.equals(context.instantTime())) {
       return Option.empty();
     }
 
@@ -285,12 +296,12 @@ public class VectorIndexer extends BaseIndexer {
         .findInstantsAfter(lastCovered)
         .getInstantsAsStream()
         .map(instant -> instant.requestedTime())
-        .filter(instant -> !compareTimestamps(context.instantTime(), LESSER_THAN, instant))
+        .filter(instant -> compareTimestamps(instant, LESSER_THAN, context.instantTime()))
         .collect(Collectors.toList());
-    if (requiredInstants.isEmpty()
-        || !requiredInstants.get(requiredInstants.size() - 1).equals(context.instantTime())) {
-      return Option.empty();
-    }
+    // Metadata updates are committed before the corresponding data-table instant completes.
+    // The current marker and frontier are part of that same MDT commit; normal MDT
+    // valid-instant filtering keeps them invisible until the source instant completes.
+    requiredInstants.add(context.instantTime());
 
     List<VectorMetadataRawKey> markerKeys = requiredInstants.stream()
         .filter(instant -> !instant.equals(context.instantTime()))
@@ -335,9 +346,18 @@ public class VectorIndexer extends BaseIndexer {
         context, indexPartition, VectorIndexMetadataKey.activeManifest())
         .orElseThrow(() -> new HoodieMetadataException(
             "Active vector generation pointer is missing for " + indexPartition));
-    ValidationUtils.checkState(metadata instanceof HoodieVectorIndexActiveManifest,
-        "Unexpected active vector generation payload for " + indexPartition);
-    Integer generation = ((HoodieVectorIndexActiveManifest) metadata).getActiveGeneration();
+    Integer generation;
+    if (metadata instanceof HoodieVectorIndexActiveManifest) {
+      generation = ((HoodieVectorIndexActiveManifest) metadata).getActiveGeneration();
+    } else if (metadata instanceof GenericRecord
+        && "HoodieVectorIndexActiveManifest".equals(
+            ((GenericRecord) metadata).getSchema().getName())) {
+      Object value = ((GenericRecord) metadata).get("activeGeneration");
+      generation = value == null ? null : ((Number) value).intValue();
+    } else {
+      throw new HoodieMetadataException(
+          "Unexpected active vector generation payload for " + indexPartition);
+    }
     ValidationUtils.checkState(generation != null,
         "Vector index has no ACTIVE generation for " + indexPartition);
     return generation;

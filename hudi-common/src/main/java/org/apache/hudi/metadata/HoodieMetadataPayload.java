@@ -439,6 +439,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       String centroidChecksum,
       int splitLimit,
       int mergeFloor,
+      String bootstrapBaseline,
       String lastContiguousSourceInstant,
       long createdTs,
       String metadataPartitionPath) {
@@ -477,6 +478,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         centroidChecksum,
         splitLimit,
         mergeFloor,
+        bootstrapBaseline,
         lastContiguousSourceInstant,
         createdTs);
     return createVectorIndexManifestRecord(manifest, generation, metadataPartitionPath);
