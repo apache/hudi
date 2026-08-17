@@ -24,8 +24,11 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
+import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -40,7 +43,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.Column;
@@ -124,45 +126,60 @@ public class CloudObjectsSelectorCommon {
    * @param storageUrlSchemePrefix    Eg: s3:// or gs://. The storage-provider-specific prefix to use within the URL.
    * @param storageConf               storage configuration.
    * @param checkIfExists             check if each file exists, before adding it to the returned list
-   * @param existsCheckParallelism    number of threads per task for parallel existence checks
+   * @param existsCheckParallelism    number of threads per task for the existence checks; values <= 1 check sequentially
    */
   public static MapPartitionsFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(
       String storageUrlSchemePrefix, StorageConfiguration<Configuration> storageConf,
       boolean checkIfExists, int existsCheckParallelism) {
     return rows -> {
-      List<Row> rowList = new ArrayList<>();
-      rows.forEachRemaining(rowList::add);
-
       if (!checkIfExists || existsCheckParallelism <= 1) {
-        return rowList.stream()
-            .map(row -> processRow(row, storageUrlSchemePrefix, storageConf, checkIfExists))
-            .filter(Option::isPresent)
-            .map(Option::get)
-            .iterator();
+        List<CloudObjectMetadata> cloudObjectMetadataPerPartition = new ArrayList<>();
+        rows.forEachRemaining(row ->
+            processRow(row, storageUrlSchemePrefix, storageConf, checkIfExists).ifPresent(cloudObjectMetadataPerPartition::add));
+        return cloudObjectMetadataPerPartition.iterator();
       }
 
-      ExecutorService executor = Executors.newFixedThreadPool(existsCheckParallelism);
+      List<Row> rowList = new ArrayList<>();
+      rows.forEachRemaining(rowList::add);
+      ExecutorService executor = Executors.newFixedThreadPool(existsCheckParallelism,
+          new CustomizedThreadFactory("cloud-exists-check", true));
       try {
         List<CompletableFuture<Option<CloudObjectMetadata>>> futures = rowList.stream()
             .map(row -> CompletableFuture.supplyAsync(
                 () -> processRow(row, storageUrlSchemePrefix, storageConf, true), executor))
             .collect(Collectors.toList());
+        List<Option<CloudObjectMetadata>> results;
         try {
-          CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+          // fails fast: the first failed check completes the returned future exceptionally and cancels the rest,
+          // and every future is complete before this returns, so the pool can be shut down right after
+          results = FutureUtils.allOf(futures).join();
         } catch (CompletionException e) {
-          throw new HoodieException("Failed during parallel cloud object existence check", e.getCause());
+          throw unwrapExistsCheckFailure(e);
         }
-        // All futures are complete — join() on already-completed futures returns immediately
-        return futures.stream()
-            .map(CompletableFuture::join)
+        return results.stream()
             .filter(Option::isPresent)
             .map(Option::get)
             .collect(Collectors.toList())
             .iterator();
       } finally {
+        // on the failure path this also interrupts the in-flight checks that FutureUtils.allOf only cancelled
         executor.shutdownNow();
       }
     };
+  }
+
+  /**
+   * {@link FutureUtils#allOf} wraps the first failure in one or more {@link CompletionException}s; surface the same
+   * exception the sequential path throws so callers see one failure shape regardless of the parallelism setting.
+   */
+  private static HoodieException unwrapExistsCheckFailure(CompletionException e) {
+    Throwable cause = e;
+    while (cause instanceof CompletionException && cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+    return cause instanceof HoodieException
+        ? (HoodieException) cause
+        : new HoodieException("Failed during parallel cloud object existence check", cause);
   }
 
   /**
@@ -302,14 +319,8 @@ public class CloudObjectsSelectorCommon {
   ) {
     StorageConfiguration<Configuration> storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
     int existsCheckParallelism = getIntWithAltKeys(props, EXISTS_CHECK_PARALLELISM);
-
-    SparkConf conf = jsc.getConf();
-    int executorInstances = conf.getInt("spark.executor.instances", 1);
-    if (conf.getBoolean("spark.dynamicAllocation.enabled", false)) {
-      executorInstances = Math.max(executorInstances, conf.getInt("spark.dynamicAllocation.maxExecutors", 1));
-    }
-    int executorCores = conf.getInt("spark.executor.cores", 1);
-    int totalCores = executorInstances * executorCores;
+    ValidationUtils.checkArgument(existsCheckParallelism >= 1,
+        EXISTS_CHECK_PARALLELISM.key() + " must be >= 1, got: " + existsCheckParallelism);
 
     String prefix;
     String bucketCol;
@@ -330,12 +341,16 @@ public class CloudObjectsSelectorCommon {
       throw new UnsupportedOperationException("Invalid cloud type " + type);
     }
 
-    log.info("Processing cloud objects with totalCores={}, existsCheckParallelism={}",
-        totalCores, existsCheckParallelism);
-    return cloudObjectMetadataDF
-        .select(bucketCol, keyCol, sizeCol)
-        .distinct()
-        .repartition(totalCores)
+    Dataset<Row> distinctObjects = cloudObjectMetadataDF.select(bucketCol, keyCol, sizeCol).distinct();
+    if (checkIfExists) {
+      // The upstream Window.orderBy() in IncrSourceHelper collapses the dataset to one partition and AQE keeps the
+      // distinct() output there, which would serialize every existence check on one task. Spread the checks over
+      // the cluster: repartition(n) is not coalesced by AQE, and defaultParallelism tracks the registered cores.
+      int numPartitions = jsc.defaultParallelism();
+      log.info("Checking cloud object existence over {} partitions with {} threads per task", numPartitions, existsCheckParallelism);
+      distinctObjects = distinctObjects.repartition(numPartitions);
+    }
+    return distinctObjects
         .mapPartitions(
             getCloudObjectMetadataPerPartition(prefix, storageConf, checkIfExists, existsCheckParallelism),
             Encoders.kryo(CloudObjectMetadata.class))

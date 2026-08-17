@@ -220,9 +220,11 @@ public class CloudSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> EXISTS_CHECK_PARALLELISM = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.parallelism")
-      .defaultValue(32)
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.parallelism")
+      .defaultValue(16)
       .markAdvanced()
-      .withDocumentation("Number of threads per Spark task for parallel cloud object existence checks. "
-          + "Each task uses a fixed thread pool of this size to issue HEAD requests concurrently.");
+      .sinceVersion("1.3.0")
+      .withDocumentation("Number of threads per Spark task used to check cloud object existence concurrently when "
+          + ENABLE_EXISTS_CHECK.key() + " is enabled. Must be >= 1; 1 checks sequentially. All tasks on an executor "
+          + "share one cached FileSystem client, so keep executor cores x this value within the client's connection "
+          + "pool (fs.s3a.connection.maximum, 96 by default on Hadoop 3.3) to avoid connection pool timeouts.");
 }
