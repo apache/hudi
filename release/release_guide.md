@@ -299,9 +299,9 @@ Source Release step) -- otherwise the voted tarball ships a `-SNAPSHOT` Trino pi
 
 1. Wait for the latest released Trino `NNN` to be available on Maven Central.
 2. In a `trinodb/trino` checkout, find the tagged commit: `TAG_SHA=$(git rev-list -n1 NNN)`.
-3. If the pin is behind the tag, advance master's pin to `TAG_SHA` first by running the
-   `Hudi Trino SPI Compatibility` workflow via `workflow_dispatch` and merging the pin PR a committer opens from the
-   pushed `bot/trino-pin` branch. If the pin is ahead of the tag, enumerate the adaptations that would be lost with
+3. If the pin is behind the tag, advance master's pin to `TAG_SHA` first by dispatching the
+   `Hudi Trino SPI Compatibility` workflow with `trino_ref=NNN` (it then verifies and pins exactly that tag rather
+   than master HEAD) and merging the pin PR a committer opens from the pushed `bot/trino-pin` branch. If the pin is ahead of the tag, enumerate the adaptations that would be lost with
    `git log NNN..<pin> -- core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs`
    and revert them forward on the release branch only, never on master.
 4. On the release branch set `trino.version=NNN`, `trino.sha=TAG_SHA` and `trino.e2e.version=NNN` in the root

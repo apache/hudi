@@ -96,16 +96,25 @@ jobs:
           # Per-path commit queries, NOT the compare API: compare caps its file list at 300
           # and a single Trino release cycle already exceeds that, so a capped compare would
           # flag every pin more than a release old as drifted. The commits API is uncapped;
-          # any commit reachable from the pin that touched an SPI-relevant path after the
+          # any commit reachable from the pin that touched a boundary-crossing path after the
           # released tag's commit date (excluding the tag commit itself) is drift. Existence
           # is enough, so the first page settles it -- truncation cannot yield a false pass.
+          # Only two surfaces cross the plugin/server boundary and are therefore gated:
+          # core/trino-spi (the server provides it to the plugin classloader) and the
+          # reflective HdfsFileSystemLoader contract (bundled trino-filesystem-manager loads
+          # the server image's version-matched hdfs jar set; see docker/trino/Dockerfile).
+          # lib/trino-filesystem ships inside the plugin dir, so it cannot skew the boot.
           TAG_SHA=$(gh api "repos/trinodb/trino/commits/${E2E_VERSION}" --jq .sha)
           TAG_DATE=$(gh api "repos/trinodb/trino/commits/${E2E_VERSION}" --jq .commit.committer.date)
           DRIFTED=false
-          for p in core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs; do
-            for c in $(gh api "repos/trinodb/trino/commits?sha=${TRINO_SHA}&path=${p}&since=${TAG_DATE}" --jq '.[].sha'); do
+          for p in core/trino-spi lib/trino-filesystem-manager lib/trino-hdfs; do
+            # Assign before iterating: a failing substitution in the for-list would not trip
+            # set -e, and gh api prints the error body to stdout, so a transient API error
+            # would otherwise iterate over error JSON and silently skip the suite.
+            SHAS=$(gh api "repos/trinodb/trino/commits?sha=${TRINO_SHA}&path=${p}&since=${TAG_DATE}" --jq '.[].sha')
+            for c in $SHAS; do
               if [ "$c" != "$TAG_SHA" ]; then
-                echo "SPI-relevant change under ${p}: ${c}"
+                echo "Boundary-crossing change under ${p}: ${c}"
                 DRIFTED=true
               fi
             done

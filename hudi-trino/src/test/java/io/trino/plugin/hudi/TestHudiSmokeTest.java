@@ -947,6 +947,7 @@ public class TestHudiSmokeTest
                 .from(getSession())
                 .withDynamicFilterTimeout("10s")
                 .build();
+        final String tableIdentifier = "hudi:tests." + table.getRoTableName();
 
         // The build side matches no rows, so the completed dynamic filter is NONE and the
         // probe-side split source must report itself finished instead of draining the queue
@@ -954,6 +955,21 @@ public class TestHudiSmokeTest
                 table + " t1 " +
                 "INNER JOIN " + table + " t2 ON t1.id = t2.id " +
                 "WHERE t2.price < 0";
+        MaterializedResult explainRes = getQueryRunner().execute(session, "EXPLAIN ANALYZE " + query);
+        Pattern scanFilterInputRowsPattern = getScanFilterInputRowsPattern(tableIdentifier);
+        Matcher matcher = scanFilterInputRowsPattern.matcher(explainRes.toString());
+        assertThat(matcher.find())
+                .withFailMessage("Could not find 'ScanFilter' for table '%s' with 'dynamicFilters' and 'Input: X rows' stats in EXPLAIN output.\nOutput was:\n%s",
+                        tableIdentifier, explainRes.toString())
+                .isTrue();
+
+        // Zero probe-side input rows pins split elimination at the source: without the NONE
+        // short-circuit the probe would scan all rows and the join would discard them, which
+        // returns the same empty result but reads Input: 4 rows here
+        assertThat(Long.parseLong(matcher.group(1)))
+                .describedAs("Probe side (%s) should read no rows when the dynamic filter is NONE", tableIdentifier)
+                .isEqualTo(0);
+
         assertThat(getQueryRunner().execute(session, query).getRowCount()).isEqualTo(0);
     }
 

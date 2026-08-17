@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '17 4 * * *'
   workflow_dispatch:
+    inputs:
+      trino_ref:
+        description: 'trinodb/trino ref to verify and pin (default: master HEAD); the release pin-back dispatches this with the released tag'
+        required: false
+        default: 'master'
 
 # Two jobs on purpose: the build job executes mvnw from a fresh trinodb/trino master
 # checkout, so it must never hold a push-capable token; the propose job holds
@@ -32,11 +37,12 @@ jobs:
         uses: actions/checkout@v5
         with:
           path: hudi
-      - name: Checkout trinodb/trino master
+      - name: Checkout trinodb/trino
         uses: actions/checkout@v5
         with:
           repository: trinodb/trino
-          ref: master
+          # Scheduled runs track master; a manual dispatch may pin any ref, e.g. a release tag
+          ref: ${{ inputs.trino_ref || 'master' }}
           path: trino
       - name: Read trinodb/trino HEAD
         id: trino-head

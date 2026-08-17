@@ -168,7 +168,11 @@ public class HudiSplitSource
     @Override
     public boolean isFinished()
     {
-        return finished.get() || (splitLoaderFuture.isDone() && queue.isFinished());
+        // The failure callback sets trinoException before finishing the queue, so once the queue
+        // reports finished the exception (if any) is visible here. Claiming finished while an
+        // exception is pending would let the engine stop polling and end the scan silently;
+        // reporting unfinished instead makes the next getNextBatch surface the failure.
+        return finished.get() || (splitLoaderFuture.isDone() && queue.isFinished() && trinoException.get() == null);
     }
 
     @Override

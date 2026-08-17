@@ -27,9 +27,13 @@
 
 set -e
 
-# Default values
+# Directory of this script, so the build context and pom lookups are stable regardless of cwd
+SCRIPT_DIR=$(cd $(dirname "$0") && pwd)
+
+# Default values. The server version defaults to the root pom's trino.e2e.version (the
+# nightly pin-advance job keeps that current; a literal default here would rot).
 PLUGIN_DIR=""
-TRINO_VERSION="483"
+TRINO_VERSION=$(sed -n 's|.*<trino.e2e.version>\(.*\)</trino.e2e.version>.*|\1|p' "$SCRIPT_DIR/../../pom.xml")
 IMAGE_TAG="latest"
 
 # Parse command-line arguments
@@ -43,8 +47,10 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# Directory of this script, so the build context path is stable regardless of cwd
-SCRIPT_DIR=$(cd $(dirname "$0") && pwd)
+if [ -z "$TRINO_VERSION" ]; then
+  echo "Error: could not read trino.e2e.version from the root pom and no --trino-version given." >&2
+  exit 1
+fi
 
 # Validate --plugin-dir: required, must exist and be non-empty
 if [ -z "$PLUGIN_DIR" ]; then
