@@ -200,9 +200,10 @@ changes are needed for the current amd64 plus arm64 image set in this repository
 ## Trino E2E image - `/trino`
 
 The Trino E2E stack does not use the `hoodie/hadoop` image tree. `docker/trino/` builds
-`apachehudi/hudi-trino_<trino-version>` directly on top of the official `trinodb/trino`
-image, baking in a locally-assembled native `trino-hudi` plugin directory and the E2E
-catalog config (`connector.name=hudi`, metastore at `thrift://hivemetastore:9083`).
+`apachehudi/hudi-trino-e2e` directly on top of the official `trinodb/trino` image at the
+root pom's `trino.e2e.version`, baking in a locally-assembled native `trino-hudi` plugin
+directory and the E2E catalog config (`connector.name=hudi`, metastore at
+`thrift://hivemetastore:9083`).
 
 This image is built locally on demand (also by the `hudi_trino_e2e.yml` CI workflow) and
 is NOT published to Docker Hub. The plugin directory comes from the in-repo shim project
@@ -214,7 +215,9 @@ at `docker/trino/shim/` (see `hudi-trino/README.md` for the full build-and-run f
 # cut_release_branch.sh cannot bump the literal default in its own pom.
 HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
 mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
-docker/trino/build_image.sh --plugin-dir docker/trino/shim/target/trino-hudi-481
+TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+unzip -o -q "docker/trino/shim/target/trino-hudi-$TRINO_VERSION.zip" -d docker/trino/shim/target  # trino-maven-plugin 24 emits only the zip
+docker/trino/build_image.sh --plugin-dir "docker/trino/shim/target/trino-hudi-$TRINO_VERSION"
 ```
 
 The `trinocoordinator` compose service exists only in the
