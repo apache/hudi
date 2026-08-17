@@ -40,10 +40,14 @@ public class VariantSchemaUtils {
   /**
    * Strips shredding from the variant fields in {@code schema}, replacing each shredded variant
    * with its unshredded form (dropping {@code typed_value}). Variants nested inside records, array
-   * elements and map values are stripped too, since the row writer shreds at any depth
-   * ({@code HoodieRowParquetWriteSupport.processNestedDataType}). Non-variant fields and
-   * already-unshredded variants pass through unchanged; returns {@code schema} as-is when nothing
-   * changes.
+   * elements and map values are stripped too; see {@link #swapShreddedVariantFields} for when such
+   * a schema can arise. Non-variant fields and already-unshredded variants pass through unchanged;
+   * returns {@code schema} as-is when nothing changes.
+   *
+   * <p>Every field of a rebuilt record is copied via {@code withSchema}, including the untouched
+   * ones: reusing an Avro {@code Field} still bound to the source record makes
+   * {@code Schema.setFields} throw "Field already used" (the defect #18938 fixed in the sibling
+   * HoodieVariantReconstruction).
    */
   public static HoodieSchema stripVariantShredding(HoodieSchema schema) {
     if (schema.getType() != HoodieSchemaType.RECORD) {
@@ -53,19 +57,24 @@ public class VariantSchemaUtils {
   }
 
   private static HoodieSchema stripRecordVariantShredding(HoodieSchema record) {
-    List<HoodieSchemaField> newFields = new ArrayList<>();
-    boolean changed = false;
-    for (HoodieSchemaField field : record.getFields()) {
+    List<HoodieSchemaField> fields = record.getFields();
+    // Built lazily: every schema without a shredded variant walks this method, and copying fields
+    // only to discard them costs an Avro Field plus a defaultVal() lookup per field per level.
+    List<HoodieSchemaField> newFields = null;
+    for (int i = 0; i < fields.size(); i++) {
+      HoodieSchemaField field = fields.get(i);
       HoodieSchema fieldSchema = field.schema();
       HoodieSchema replacement = stripVariantShreddingAt(fieldSchema);
-      if (replacement != fieldSchema) {
-        changed = true;
+      if (replacement != fieldSchema && newFields == null) {
+        newFields = copyFieldsBefore(fields, i);
       }
-      // withSchema makes a fresh Avro Field: reusing one already bound to this record would fail
-      // Schema.setFields with "Field already used" when building the replacement record below.
-      newFields.add(field.withSchema(replacement));
+      if (newFields != null) {
+        // withSchema makes a fresh Avro Field: reusing one already bound to this record would fail
+        // Schema.setFields with "Field already used" when building the replacement record below.
+        newFields.add(field.withSchema(replacement));
+      }
     }
-    if (!changed) {
+    if (newFields == null) {
       return record;
     }
     return HoodieSchema.createRecord(
@@ -166,30 +175,44 @@ public class VariantSchemaUtils {
 
   /**
    * Walks {@code base} against its matching {@code other} fields by name, replacing every shredded
-   * variant position with the other side's schema. Recurses through records, array elements and map
-   * values, since the row writer shreds variants at any depth
-   * ({@code HoodieRowParquetWriteSupport.processNestedDataType}). {@code baseIsFile} says which of
-   * the two is the file side, which is what {@link #isShreddedVariantTarget} needs to anchor
-   * detection. Returns {@code base} when nothing matches.
+   * variant position with the other side's schema. {@code baseIsFile} says which of the two is the
+   * file side, which is what {@link #isShreddedVariantTarget} needs to anchor detection. Returns
+   * {@code base} when nothing matches.
+   *
+   * <p>The walk recurses through records, array elements and map values because the row writer
+   * shreds at any depth its write schema asks it to
+   * ({@code HoodieRowParquetWriteSupport.processNestedDataType} recurses into structs, array
+   * elements and map values, and {@code generateShreddedSchema} re-reads the forced-shredding DDL
+   * on every entry, so {@code struct<v variant>} plus
+   * {@code hoodie.parquet.variant.force.shredding.schema.for.test} does shred at depth on the ROW
+   * path). The AVRO path is the narrower one: {@code HoodieAvroWriteSupport.applyForcedShreddingSchema}
+   * walks top-level fields only, so on that path a nested shredded column needs a hand-authored
+   * write schema that declares {@code typed_value} below the top level.
    */
   private static HoodieSchema swapShreddedVariantFields(HoodieSchema base, HoodieSchema other, boolean baseIsFile) {
-    List<HoodieSchemaField> newFields = new ArrayList<>();
-    boolean changed = false;
-    for (HoodieSchemaField baseField : base.getFields()) {
+    List<HoodieSchemaField> baseFields = base.getFields();
+    // Built lazily, as in stripRecordVariantShredding: alignShreddedVariants runs on every
+    // HoodieMergeHelper.runMerge, so the overwhelmingly common case is a schema that matches
+    // nothing and must not pay for a full field copy it will throw away.
+    List<HoodieSchemaField> newFields = null;
+    for (int i = 0; i < baseFields.size(); i++) {
+      HoodieSchemaField baseField = baseFields.get(i);
       HoodieSchema baseFieldSchema = baseField.schema();
       Option<HoodieSchemaField> otherField = other.getField(baseField.name());
       HoodieSchema replacement = otherField.isPresent()
           ? swapShreddedVariantsAt(baseFieldSchema, otherField.get().schema(), baseIsFile)
           : baseFieldSchema;
-      if (replacement != baseFieldSchema) {
-        changed = true;
+      if (replacement != baseFieldSchema && newFields == null) {
+        newFields = copyFieldsBefore(baseFields, i);
       }
-      // Copy untouched fields too (withSchema makes a fresh Avro Field): reusing a field already
-      // bound to the base record would fail Schema.setFields with "Field already used" when
-      // building the swapped record below.
-      newFields.add(baseField.withSchema(replacement));
+      if (newFields != null) {
+        // Copy untouched fields too (withSchema makes a fresh Avro Field): reusing a field already
+        // bound to the base record would fail Schema.setFields with "Field already used" when
+        // building the swapped record below.
+        newFields.add(baseField.withSchema(replacement));
+      }
     }
-    if (!changed) {
+    if (newFields == null) {
       return base;
     }
     return HoodieSchema.createRecord(
@@ -239,16 +262,51 @@ public class VariantSchemaUtils {
     return wasNullable ? HoodieSchema.createNullable(replacement) : replacement;
   }
 
-  /** The on-disk shredded variant shape: a record of exactly {metadata: bytes, value: [nullable] bytes, typed_value}. */
+  /**
+   * The on-disk shredded variant shape: a record of {metadata: bytes, typed_value} plus an optional
+   * {value: [nullable] bytes}, and nothing else.
+   *
+   * <p>{@code value} is deliberately optional. The shredding spec lets a writer omit it when every
+   * row is typed, and {@link HoodieSchema.Variant#determineIfShredded} - the answer used whenever
+   * the logical type survives - calls anything with a {@code typed_value} shredded regardless. Since
+   * the footer always strips the logical type, this shape check is the only detector that runs on
+   * real files, so demanding {@code value} here made a two-field group read at the unshredded schema
+   * and silently drop its payload: #19567 again by another shape. The requested-side variant anchor
+   * in {@link #isShreddedVariantTarget} is what keeps plain user structs out, so accepting the
+   * two-field form costs no false positives.
+   */
   private static boolean isShreddedVariantShape(HoodieSchema schema) {
-    if (schema.getType() != HoodieSchemaType.RECORD || schema.getFields().size() != 3) {
+    if (schema.getType() != HoodieSchemaType.RECORD) {
+      return false;
+    }
+    int fieldCount = schema.getFields().size();
+    if (fieldCount < 2 || fieldCount > 3) {
       return false;
     }
     if (!schema.getField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD).isPresent()) {
       return false;
     }
-    return isBytesField(schema, HoodieSchema.Variant.VARIANT_METADATA_FIELD)
-        && isBytesField(schema, HoodieSchema.Variant.VARIANT_VALUE_FIELD);
+    if (!isBytesField(schema, HoodieSchema.Variant.VARIANT_METADATA_FIELD)) {
+      return false;
+    }
+    boolean hasValue = schema.getField(HoodieSchema.Variant.VARIANT_VALUE_FIELD).isPresent();
+    // A third field that is not `value` is some other user struct, not a variant group.
+    return hasValue
+        ? isBytesField(schema, HoodieSchema.Variant.VARIANT_VALUE_FIELD)
+        : fieldCount == 2;
+  }
+
+  /**
+   * Fresh copies of {@code fields[0, end)}, for the point a rebuild first turns out to be needed.
+   * Copies rather than reuses because the originals are still bound to their source record.
+   */
+  private static List<HoodieSchemaField> copyFieldsBefore(List<HoodieSchemaField> fields, int end) {
+    List<HoodieSchemaField> copied = new ArrayList<>(fields.size());
+    for (int i = 0; i < end; i++) {
+      HoodieSchemaField field = fields.get(i);
+      copied.add(field.withSchema(field.schema()));
+    }
+    return copied;
   }
 
   private static boolean isBytesField(HoodieSchema schema, String fieldName) {

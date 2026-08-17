@@ -129,8 +129,10 @@ final class HoodieVariantReconstruction {
    * side is matched into it by field name. Detection is anchored by the requested side because the
    * file schema usually comes from converting the parquet footer MessageType, which loses the
    * variant logical type; see VariantSchemaUtils.isShreddedVariantTarget (#19567). Records, array
-   * elements and map values are all descended into, since the row writer shreds variants at any
-   * depth ({@code HoodieRowParquetWriteSupport.processNestedDataType}).
+   * elements and map values are all descended into, matching what the row writer can emit; see
+   * {@code VariantSchemaUtils.swapShreddedVariantFields} for what actually produces a nested
+   * shredded file today (the row path shreds at depth off the forced-shredding property; the AVRO
+   * path needs a hand-authored write schema).
    */
   private static Rebuilder buildRebuilder(HoodieSchema outputSchema, HoodieSchema fileSchema) {
     if (VariantSchemaUtils.isShreddedVariantTarget(fileSchema, outputSchema)) {
