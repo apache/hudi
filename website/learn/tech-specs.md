@@ -614,9 +614,11 @@ read as `V1` while indexes created afterwards on the same table use `V2`.
 
 *   A secondary index may be defined on **exactly one column**. Attempting more fails with
     `Only one column can be indexed for functional or secondary index.`
-*   The indexed column must be one of `string`, `int`, `long`, `float`, `double`, `date`, `time`, or a
-    **UTC-adjusted** `timestamp`. Local-timestamp columns and all other types are rejected. A nullable column is
-    supported when its non-null branch is one of these types.
+*   The indexed column must resolve to one of the schema types `string`, `int`, `long`, `float`, `double`, `date`,
+    `time`, or a **UTC-adjusted** `timestamp`. In Spark SQL terms that covers `string`, `tinyint`, `smallint`, `int`,
+    `bigint`, `float`, `double`, `date` and `timestamp`, since `tinyint` and `smallint` are represented as `int`.
+    Rejected are `decimal`, `boolean`, `binary`, the nested types `array`, `map` and `struct`, and local
+    (non-UTC-adjusted) timestamps. A nullable column is supported when its non-null branch is a supported type.
 *   The **type of an indexed column cannot be changed** while the index exists. Both a SQL
     `ALTER TABLE ... ALTER COLUMN ... TYPE ...` and a write that evolves the column through schema-on-read fail with
     `Column '<column>' has secondary index '<index>' and cannot evolve from schema '<old>' to '<new>'`. Drop the index,
