@@ -42,9 +42,12 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -66,6 +69,8 @@ import static org.mockito.Mockito.when;
  * constructor lookup against the {@link MergeContext} signature, and the fallback behavior for
  * custom merge handle implementations that do not expose that constructor.
  */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class TestHoodieMergeHandleFactoryInstantiation extends HoodieCommonTestHarness {
 
   private static final String DEFAULT_PARTITION_PATH = "partition";
@@ -87,7 +92,8 @@ class TestHoodieMergeHandleFactoryInstantiation extends HoodieCommonTestHarness 
 
   @BeforeEach
   void setUp() throws IOException {
-    MockitoAnnotations.openMocks(this);
+    // Lenient strictness: the fallback-disabled test never instantiates a handle, so the shared
+    // stubs below are legitimately unused there.
     initPath();
     initMetaClient();
     taskContextSupplier = new LocalTaskContextSupplier();

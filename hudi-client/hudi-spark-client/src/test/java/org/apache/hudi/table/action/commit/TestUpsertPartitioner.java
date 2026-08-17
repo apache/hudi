@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.MergeContext;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -436,5 +437,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     assertEquals(BucketType.INSERT, result.getBucketType());
     assertEquals(updateInfo.getPartitionPath(), result.getPartitionPath());
     assertNotEquals(updateInfo.getFileIdPrefix(), result.getFileIdPrefix());
+    assertEquals(MergeContext.UNKNOWN_NUM_UPDATES, result.getNumUpdates(),
+        "insert-overwrite rebuilds the bucket as INSERT and drops the profiled count");
   }
 }

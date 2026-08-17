@@ -261,6 +261,9 @@ public class TestMergeHandle extends BaseTestHandle {
     // HoodieConcatHandle splits the MergeContext: the parent gets an empty iterator (so records
     // are not merged by key) while the handle-local iterator concatenates the incoming records
     // after the existing ones. This test fails if either half of the context is dropped.
+    // The factory-selected concat path is covered end-to-end by testHoodieConcatHandleOnDupInserts
+    // (HoodieWriterClientTestHarness); this is the only direct-construction concat coverage and the
+    // only assertion on numUpdates carriage through the re-wrapped context.
     // delete and recreate
     metaClient.getStorage().deleteDirectory(metaClient.getBasePath());
     Properties properties = new Properties();
