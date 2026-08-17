@@ -41,13 +41,13 @@ class TestPartitionPathFormatter {
   private static final List<String> SINGLE_FIELD = Collections.singletonList("date_col");
   private static final List<String> TWO_FIELDS = Arrays.asList("date_col", "city");
 
-  private String combine(boolean unsafe,
+  private String combine(boolean useRowWriterPath,
                          boolean hiveStylePartitioning,
                          boolean encode,
                          boolean slashSeparatedDatePartitioning,
                          List<String> fields,
                          Object... parts) {
-    if (unsafe) {
+    if (useRowWriterPath) {
       return new UTF8StringPartitionPathFormatter(
           UTF8StringPartitionPathFormatter.UTF8StringBuilder::new, hiveStylePartitioning, encode,
           slashSeparatedDatePartitioning).combine(fields, parts).toString();
@@ -59,52 +59,57 @@ class TestPartitionPathFormatter {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testSlashSeparatedDatePartitioningSingleField(boolean unsafe) {
+  void testSlashSeparatedDatePartitioningSingleField(boolean useRowWriterPath) {
     assertEquals("2026/01/05",
-        combine(unsafe, false, false, true, SINGLE_FIELD, "2026-01-05"));
+        combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "2026-01-05"));
     // Input that is already slash-separated is left untouched
     assertEquals("2026/01/05",
-        combine(unsafe, false, false, true, SINGLE_FIELD, "2026/01/05"));
+        combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "2026/01/05"));
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testSlashSeparatedDatePartitioningOnlyAppliesToSingleFieldPartitioning(boolean unsafe) {
+  void testSlashSeparatedDatePartitioningOnlyAppliesToSingleFieldPartitioning(boolean useRowWriterPath) {
     // NOTE: This mirrors [[KeyGenUtils#getRecordPartitionPath]] driving the Avro write-path
     assertEquals("2026-01-05/san-francisco",
-        combine(unsafe, false, false, true, TWO_FIELDS, "2026-01-05", "san-francisco"));
+        combine(useRowWriterPath, false, false, true, TWO_FIELDS, "2026-01-05", "san-francisco"));
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testSlashSeparatedDatePartitioningHandlesNullAndEmptyValues(boolean unsafe) {
+  void testSlashSeparatedDatePartitioningHandlesNullAndEmptyValues(boolean useRowWriterPath) {
     assertEquals(DEFAULT_PARTITION_PATH,
-        combine(unsafe, false, false, true, SINGLE_FIELD, new Object[] {null}));
+        combine(useRowWriterPath, false, false, true, SINGLE_FIELD, new Object[] {null}));
     assertEquals(DEFAULT_PARTITION_PATH,
-        combine(unsafe, false, false, true, SINGLE_FIELD, ""));
+        combine(useRowWriterPath, false, false, true, SINGLE_FIELD, ""));
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testSlashSeparatedDatePartitioningEncodesValues(boolean unsafe) {
+  void testSlashSeparatedDatePartitioningEncodesValues(boolean useRowWriterPath) {
     // '?' has to be escaped, while the date separators are turned into directory separators
-    assertEquals("2026/01/05", combine(unsafe, false, true, true, SINGLE_FIELD, "2026-01-05"));
-    assertEquals("a%3Fb", combine(unsafe, false, true, true, SINGLE_FIELD, "a?b"));
+    assertEquals("2026/01/05", combine(useRowWriterPath, false, true, true, SINGLE_FIELD, "2026-01-05"));
+    assertEquals("a%3Fb", combine(useRowWriterPath, false, true, true, SINGLE_FIELD, "a?b"));
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testHiveStylePartitioningTakesPrecedence(boolean unsafe) {
+  void testHiveStylePartitioningTakesPrecedence(boolean useRowWriterPath) {
+    // NOTE: Hive-style partitioning and slash-separated date partitioning are mutually exclusive --
+    //       [[HoodieCatalogTable#extraTableConfig]] rejects a table configuring both -- so this
+    //       combination is unreachable and the formatter deliberately leaves the value alone.
+    //       This asserts the pre-existing behavior stays put, it is not a statement about what the
+    //       combination *should* produce
     assertEquals("date_col=2026-01-05",
-        combine(unsafe, true, false, true, SINGLE_FIELD, "2026-01-05"));
+        combine(useRowWriterPath, true, false, true, SINGLE_FIELD, "2026-01-05"));
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testPlainPartitioningIsUnaffected(boolean unsafe) {
+  void testPlainPartitioningIsUnaffected(boolean useRowWriterPath) {
     assertEquals("2026-01-05",
-        combine(unsafe, false, false, false, SINGLE_FIELD, "2026-01-05"));
+        combine(useRowWriterPath, false, false, false, SINGLE_FIELD, "2026-01-05"));
     assertEquals("2026-01-05/san-francisco",
-        combine(unsafe, false, false, false, TWO_FIELDS, "2026-01-05", "san-francisco"));
+        combine(useRowWriterPath, false, false, false, TWO_FIELDS, "2026-01-05", "san-francisco"));
   }
 }
