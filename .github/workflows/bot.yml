@@ -590,7 +590,11 @@ jobs:
           if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle -am
           else
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+            # Build only the bundles needed by the docker validation (mirrors the scala-2.13 branch).
+            # A full `-T 2` project build races the hudi-hadoop-hive-docker antrun copy against the
+            # bundle builds (it copies the utilities-bundle jar before it exists), so restrict the
+            # reactor to the bundles + flink bundle instead.
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-kafka-connect-bundle,packaging/hudi-metaserver-server-bundle -am
             # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
             sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
@@ -657,7 +661,11 @@ jobs:
           if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle -am
           else
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true
+            # Build only the bundles needed by the docker validation (mirrors the scala-2.13 branch).
+            # A full `-T 2` project build races the hudi-hadoop-hive-docker antrun copy against the
+            # bundle builds (it copies the utilities-bundle jar before it exists), so restrict the
+            # reactor to the bundles + flink bundle instead.
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-kafka-connect-bundle,packaging/hudi-metaserver-server-bundle -am
             # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
             sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
