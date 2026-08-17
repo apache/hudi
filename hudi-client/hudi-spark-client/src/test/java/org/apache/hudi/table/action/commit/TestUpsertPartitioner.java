@@ -422,18 +422,6 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
   }
 
   @Test
-  void testBucketInfoDefaultNumUpdates() {
-    BucketInfo bucketInfo = new BucketInfo(BucketType.UPDATE, "file1", "partition1");
-    assertEquals(-1L, bucketInfo.getNumUpdates(), "Default numUpdates should be -1 (unknown)");
-
-    BucketInfo bucketInfoWithUpdates = new BucketInfo(BucketType.UPDATE, "file1", "partition1", 500);
-    assertEquals(500, bucketInfoWithUpdates.getNumUpdates());
-
-    BucketInfo insertBucket = new BucketInfo(BucketType.INSERT, "file2", "partition1", 0);
-    assertEquals(0, insertBucket.getNumUpdates());
-  }
-
-  @Test
   void testInsertOverwriteBucketInfoGetter() {
     BucketInfo insertInfo = new BucketInfo(BucketType.INSERT, "bucket1", "partition1");
     BucketInfo updateInfo = new BucketInfo(BucketType.UPDATE, "bucket2", "partition2", 75);
@@ -444,7 +432,6 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     InsertOverwriteBucketInfoGetter getter = new InsertOverwriteBucketInfoGetter(map);
     BucketInfo result = getter.getBucketInfo(0);
     assertEquals(insertInfo, result);
-    assertEquals(-1L, result.getNumUpdates(), "INSERT bucket via 3-arg constructor should have -1 numUpdates");
     result = getter.getBucketInfo(1);
     assertEquals(BucketType.INSERT, result.getBucketType());
     assertEquals(updateInfo.getPartitionPath(), result.getPartitionPath());

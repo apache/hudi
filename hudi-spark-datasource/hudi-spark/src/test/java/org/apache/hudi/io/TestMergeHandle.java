@@ -89,6 +89,7 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -164,7 +165,7 @@ public class TestMergeHandle extends BaseTestHandle {
       mergeHandle = new HoodieWriteMergeHandle(config, instantTime, table, mergeContext, partitionPath, fileId, new LocalTaskContextSupplier(),
           new HoodieBaseFile(fileGroup.getAllBaseFiles().findFirst().get()), Option.empty());
     }
-    assertEquals(newRecords.size(), mergeHandle.getNumIncomingUpdates(),
+    assertEquals(newRecords.size(), mergeHandle.getNumUpdates(),
         "Merge handle should receive the correct number of incoming updates from the caller");
     mergeHandle.doMerge();
     WriteStatus writeStatus = (WriteStatus) mergeHandle.close().get(0);
@@ -253,6 +254,54 @@ public class TestMergeHandle extends BaseTestHandle {
     List<String> actualKeysInOrder = actualRecords.stream().map(r -> r.get("_row_key").toString()).collect(Collectors.toList());
     // bmpHighKey must come first when sorted by UTF-8 bytes.
     assertEquals(Arrays.asList(bmpHighKey, supplementaryKey), actualKeysInOrder);
+  }
+
+  @Test
+  public void testConcatHandleWritesIncomingRecordsAndCarriesNumUpdates() throws Exception {
+    // HoodieConcatHandle splits the MergeContext: the parent gets an empty iterator (so records
+    // are not merged by key) while the handle-local iterator concatenates the incoming records
+    // after the existing ones. This test fails if either half of the context is dropped.
+    // delete and recreate
+    metaClient.getStorage().deleteDirectory(metaClient.getBasePath());
+    Properties properties = new Properties();
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+    properties.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), ORDERING_FIELD);
+    initMetaClient(getTableType(), properties);
+
+    HoodieWriteConfig config = getHoodieWriteConfigBuilder().build();
+    HoodieSparkTable.create(config, new HoodieLocalEngineContext(storageConf), metaClient);
+
+    String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
+
+    List<HoodieRecord> baseRecords = dataGenerator.generateInserts("000", 3);
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+    String instantTime = client.startCommit();
+    JavaRDD<WriteStatus> statuses = client.upsert(jsc.parallelize(baseRecords, 1), instantTime);
+    client.commit(instantTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.create(config, context, metaClient);
+    HoodieFileGroup fileGroup = table.getFileSystemView().getAllFileGroups(partitionPath).collect(Collectors.toList()).get(0);
+    String fileId = fileGroup.getFileGroupId().getFileId();
+
+    List<HoodieRecord> newRecords = dataGenerator.generateInserts("001", 2);
+    HoodieConcatHandle concatHandle = new HoodieConcatHandle(
+        config, "001", table, MergeContext.create(newRecords.size(), (Iterator) newRecords.iterator()),
+        partitionPath, fileId, new LocalTaskContextSupplier(), Option.empty());
+    assertEquals(newRecords.size(), concatHandle.getNumUpdates(),
+        "The concat handle should carry numUpdates from the merge context");
+    concatHandle.doMerge();
+    WriteStatus writeStatus = (WriteStatus) concatHandle.close().get(0);
+
+    String fullPath = metaClient.getBasePath() + "/" + writeStatus.getStat().getPath();
+    List<GenericRecord> actualRecords = new ParquetUtils().readAvroRecords(metaClient.getStorage(), new StoragePath(fullPath));
+    List<String> actualKeys = actualRecords.stream().map(r -> r.get("_row_key").toString()).sorted().collect(Collectors.toList());
+    List<String> expectedKeys = Stream.concat(baseRecords.stream(), newRecords.stream())
+        .map(HoodieRecord::getRecordKey).sorted().collect(Collectors.toList());
+    assertEquals(expectedKeys, actualKeys,
+        "Concat must write the existing records plus every incoming record");
   }
 
   @Test
@@ -410,7 +459,7 @@ public class TestMergeHandle extends BaseTestHandle {
         config, instantTime, table,
         MergeContext.create(inputAndExpectedDataSet.getRecordsToMerge().size(), (Iterator) inputAndExpectedDataSet.getRecordsToMerge().iterator()),
         partitionPath, fileId, new LocalTaskContextSupplier(), Option.empty());
-    assertEquals(inputAndExpectedDataSet.getRecordsToMerge().size(), fileGroupReaderBasedMergeHandle.getNumIncomingUpdates(),
+    assertEquals(inputAndExpectedDataSet.getRecordsToMerge().size(), fileGroupReaderBasedMergeHandle.getNumUpdates(),
         "Merge handle should receive the correct numUpdates");
 
     fileGroupReaderBasedMergeHandle.doMerge();

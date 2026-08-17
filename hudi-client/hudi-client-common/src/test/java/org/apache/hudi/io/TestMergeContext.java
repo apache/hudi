@@ -21,6 +21,8 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -34,29 +36,16 @@ class TestMergeContext {
   void testCreateWithIteratorOnlyDefaultsToUnknown() {
     Iterator<HoodieRecord<Object>> itr = Collections.emptyIterator();
     MergeContext<Object> ctx = MergeContext.create(itr);
-    assertEquals(-1L, ctx.getNumIncomingUpdates());
-    assertSame(itr, ctx.getRecordItr());
+    assertEquals(MergeContext.UNKNOWN_NUM_UPDATES, ctx.getNumUpdates());
+    assertSame(itr, ctx.getRecordIterator());
   }
 
-  @Test
-  void testCreateWithExplicitNumIncomingUpdates() {
+  @ParameterizedTest
+  @ValueSource(longs = {MergeContext.UNKNOWN_NUM_UPDATES, 0L, 100L})
+  void testCreateWithExplicitNumUpdates(long numUpdates) {
     Iterator<HoodieRecord<Object>> itr = Collections.emptyIterator();
-    MergeContext<Object> ctx = MergeContext.create(100L, itr);
-    assertEquals(100L, ctx.getNumIncomingUpdates());
-    assertSame(itr, ctx.getRecordItr());
-  }
-
-  @Test
-  void testCreateWithZeroNumIncomingUpdates() {
-    Iterator<HoodieRecord<Object>> itr = Collections.emptyIterator();
-    MergeContext<Object> ctx = MergeContext.create(0L, itr);
-    assertEquals(0L, ctx.getNumIncomingUpdates());
-  }
-
-  @Test
-  void testCreateWithNegativeOnePreservesUnknownSemantic() {
-    Iterator<HoodieRecord<Object>> itr = Collections.emptyIterator();
-    MergeContext<Object> ctx = MergeContext.create(-1L, itr);
-    assertEquals(-1L, ctx.getNumIncomingUpdates());
+    MergeContext<Object> ctx = MergeContext.create(numUpdates, itr);
+    assertEquals(numUpdates, ctx.getNumUpdates());
+    assertSame(itr, ctx.getRecordIterator());
   }
 }
