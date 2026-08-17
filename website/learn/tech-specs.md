@@ -486,7 +486,11 @@ metadata-table partition name:
 
 *   `indexType` is one of `files`, `column_stats`, `partition_stats`, `bloom_filters`, `record_index`,
     `secondary_index` or `expr_index`.
-*   `indexFunction` is the transform applied to the source column, `identity` unless the index is an expression index.
+*   `indexFunction` carries the transform for an expression index, and defaults to `identity` when an expression index
+    is created without an explicit function. For every other index type the field is not meaningful, and the value it
+    ends up with depends on the code path that registered the definition: empty when the built-in initialisation path
+    registers it, `identity` for a secondary index created through SQL `CREATE INDEX`, and the partition name for the
+    column-stats registration path. Use `indexType` to identify an index, not this field.
 *   `sourceFields` are the data-table columns the index is derived from. Metadata columns are permitted.
 *   `indexOptions` carries index-type-specific options, such as the expression-index function arguments.
 *   `version` is the storage-layout version of the index, described below.
