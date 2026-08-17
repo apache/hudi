@@ -47,7 +47,7 @@ import java.util.NoSuchElementException;
 public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> implements HoodieMergeHandle<T, I, K, O> {
 
   // The number of incoming update and delete records based on tagging; see the
-  // MergeContext#numUpdates javadoc for the exact semantics (lower bound, not iterator size).
+  // MergeContext#getNumUpdates() javadoc for the exact semantics (lower bound, not iterator size).
   // MergeContext.UNKNOWN_NUM_UPDATES on code paths without workload profiling, e.g.,
   // compaction and metadata table writes.
   @Getter

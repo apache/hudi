@@ -190,6 +190,7 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
             } else {
               recordsPerBucket.add(totalUnassignedInserts - (insertBuckets - 1) * insertRecordsPerBucket);
             }
+            // INSERT buckets carry no tagged updates, so the count is a known zero rather than unknown
             BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), partitionPath, 0L);
             bucketInfoMap.put(totalBuckets, bucketInfo);
             if (profile.hasOutputWorkLoadStats()) {

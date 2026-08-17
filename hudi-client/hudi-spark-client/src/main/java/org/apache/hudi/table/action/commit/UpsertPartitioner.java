@@ -246,6 +246,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
             } else {
               recordsPerBucket.add(totalUnassignedInserts - (insertBuckets - 1) * insertRecordsPerBucket);
             }
+            // INSERT buckets carry no tagged updates, so the count is a known zero rather than unknown
             BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), partitionPath, 0L);
             bucketInfoMap.put(totalBuckets, bucketInfo);
             if (profile.hasOutputWorkLoadStats()) {
