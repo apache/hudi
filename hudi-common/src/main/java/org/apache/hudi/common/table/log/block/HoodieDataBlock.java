@@ -25,13 +25,12 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -40,7 +39,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -57,8 +55,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *   2. Total number of records in the block
  *   3. Actual serialized content of the records
  */
+@Slf4j
 public abstract class HoodieDataBlock extends HoodieLogBlock {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieDataBlock.class);
 
   // TODO rebase records/content to leverage Either to warrant
   //      that they are mutex (used by read/write flows respectively)
@@ -67,14 +65,12 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * Key field's name w/in the record's schema
    */
+  @Getter
   private final String keyFieldName;
 
   private final boolean enablePointLookups;
 
   protected HoodieSchema readerSchema;
-
-  //  Map of string schema to parsed schema.
-  private static final ConcurrentHashMap<String, HoodieSchema> SCHEMA_MAP = new ConcurrentHashMap<>();
 
   /**
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
@@ -130,10 +126,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     return serializeRecords(records.get(), storage);
-  }
-
-  public String getKeyFieldName() {
-    return keyFieldName;
   }
 
   public boolean containsPartialUpdates() {
@@ -263,7 +255,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   public final <T> ClosableIterator<T> getEngineRecordIterator(HoodieReaderContext<T> readerContext, List<String> keys, boolean fullKey) throws IOException {
     boolean fullScan = keys.isEmpty();
     if (!fullScan) {
-      return lookupEngineRecords(keys, fullKey);
+      return lookupEngineRecords(readerContext, keys, fullKey);
     } else {
       throw new IllegalStateException("Unexpected code reached. Expected to be called only with keySpec defined for non FILES partition in Metadata table");
     }
@@ -323,7 +315,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     );
   }
 
-  protected <T> ClosableIterator<T> lookupEngineRecords(List<String> keys, boolean fullKey) throws IOException {
+  protected <T> ClosableIterator<T> lookupEngineRecords(HoodieReaderContext<T> readerContext, List<String> keys, boolean fullKey) throws IOException {
     throw new UnsupportedOperationException(
         String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
     );
@@ -364,21 +356,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected Option<String> getRecordKey(HoodieRecord record) {
     return Option.ofNullable(record.getRecordKey(readerSchema, keyFieldName));
-  }
-
-  protected HoodieSchema getSchemaFromHeader() {
-    String schemaStr = getLogBlockHeader().get(HeaderMetadataType.SCHEMA);
-    SCHEMA_MAP.computeIfAbsent(schemaStr,
-        (schemaString) -> {
-          try {
-            return HoodieSchema.parse(schemaStr);
-          } catch (HoodieAvroSchemaException e) {
-            // Archived commits from earlier hudi versions fail the schema check
-            // So we retry in this one specific instance with validation disabled
-            return HoodieSchema.parse(schemaStr, false);
-          }
-        });
-    return SCHEMA_MAP.get(schemaStr);
   }
 
   /**
@@ -472,7 +449,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    *
    * @param <T> The type of engine-specific record representation.
    */
-  private static class FilteringEngineRecordIterator<T> implements ClosableIterator<T> {
+  protected static class FilteringEngineRecordIterator<T> implements ClosableIterator<T> {
     private final ClosableIterator<T> nested; // nested iterator
 
     private final Set<String> keys; // the filtering keys

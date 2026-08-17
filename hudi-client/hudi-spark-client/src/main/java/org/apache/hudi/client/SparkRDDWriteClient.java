@@ -42,13 +42,14 @@ import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
+import org.apache.hudi.metadata.StreamingMetadataWriteHandler;
+import org.apache.hudi.metrics.DistributedRegistryUtil;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
-import org.apache.hudi.util.DistributedRegistryUtil;
 
 import com.codahale.metrics.Timer;
 import lombok.AllArgsConstructor;

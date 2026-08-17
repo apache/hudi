@@ -18,11 +18,11 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -94,7 +94,8 @@ public class HoodieLogFileCommand {
               defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    HoodieStorage storage = HoodieCLI.getTableMetaClient().getStorage();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieStorage storage = metaClient.getStorage();
     List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(
         storage, new StoragePath(logFilePathPattern)).stream()
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
@@ -115,8 +116,8 @@ public class HoodieLogFileCommand {
       } else {
         fileName = path.getName();
       }
-      HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage, path);
-      try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), writerSchema)) {
+      HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(metaClient, path);
+      try (Reader reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(path), writerSchema)) {
 
         // read the avro blocks
         while (reader.hasNext()) {
@@ -221,7 +222,7 @@ public class HoodieLogFileCommand {
     // get schema from last log file
     for (int i = logFilePaths.size() - 1; i >= 0; i--) {
       HoodieSchema schema = TableSchemaResolver.readSchemaFromLogFile(
-          storage, new StoragePath(logFilePaths.get(i)));
+          client, new StoragePath(logFilePaths.get(i)));
       if (schema != null) {
         readerSchema = schema;
         break;
@@ -264,9 +265,9 @@ public class HoodieLogFileCommand {
     } else {
       for (String logFile : logFilePaths) {
         HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(
-            client.getStorage(), new StoragePath(logFile));
+            client, new StoragePath(logFile));
         try (HoodieLogFormat.Reader reader =
-                 HoodieLogFormat.newReader(storage, new HoodieLogFile(new StoragePath(logFile)), writerSchema)) {
+                 HoodieLogFormat.newReader(client, new HoodieLogFile(new StoragePath(logFile)), writerSchema)) {
           // read the avro blocks
           while (reader.hasNext()) {
             HoodieLogBlock n = reader.next();

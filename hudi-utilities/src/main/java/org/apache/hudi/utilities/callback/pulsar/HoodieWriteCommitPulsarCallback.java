@@ -18,8 +18,8 @@
 package org.apache.hudi.utilities.callback.pulsar;
 
 import org.apache.hudi.callback.HoodieWriteCommitCallback;
+import org.apache.hudi.callback.HoodieWriteCommitCallbackUtil;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
-import org.apache.hudi.callback.util.HoodieWriteCommitCallbackUtil;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;

@@ -40,10 +40,12 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
@@ -52,7 +54,7 @@ import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -121,9 +123,11 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       return inputRecords;
     }
 
-    UpdateStrategy<T, HoodieData<HoodieRecord<T>>> updateStrategy = (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils
-        .loadClass(config.getClusteringUpdatesStrategyClass(), new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
-            this.context, table, fileGroupsInPendingClustering);
+    // Get file groups that will be replaced by this operation (for INSERT_OVERWRITE, etc.)
+    Set<HoodieFileGroupId> fileGroupsToBeReplaced = getFileGroupsBeingReplaced(inputRecords);
+
+    UpdateStrategy<T, HoodieData<HoodieRecord<T>>> updateStrategy =
+        loadClusteringUpdateStrategy(fileGroupsInPendingClustering, fileGroupsToBeReplaced);
     // For SparkAllowUpdateStrategy with rollback pending clustering as false, need not handle
     // the file group intersection between current ingestion and pending clustering file groups.
     // This will be handled at the conflict resolution strategy.
@@ -161,6 +165,50 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       table.getMetaClient().reloadActiveTimeline();
     }
     return recordsAndPendingClusteringFileGroups.getLeft();
+  }
+
+  /**
+   * Get the file groups that will be replaced by the current operation.
+   * This is relevant for INSERT_OVERWRITE, INSERT_OVERWRITE_TABLE, and DELETE_PARTITION operations.
+   *
+   * @param inputRecords the input records for the operation
+   * @return set of file group IDs that will be replaced
+   */
+  protected Set<HoodieFileGroupId> getFileGroupsBeingReplaced(HoodieData<HoodieRecord<T>> inputRecords) {
+    // Default implementation returns empty set. Subclasses should override as needed.
+    return Collections.emptySet();
+  }
+
+  /**
+   * Loads {@code hoodie.clustering.updates.strategy} via reflection, preferring the new 4-arg
+   * constructor (with {@code fileGroupsToBeReplaced}) and falling back to the legacy 3-arg
+   * constructor for custom strategies that pre-date this PR.
+   */
+  @SuppressWarnings("unchecked")
+  private UpdateStrategy<T, HoodieData<HoodieRecord<T>>> loadClusteringUpdateStrategy(
+      Set<HoodieFileGroupId> fileGroupsInPendingClustering,
+      Set<HoodieFileGroupId> fileGroupsToBeReplaced) {
+    String strategyClass = config.getClusteringUpdatesStrategyClass();
+    try {
+      return (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils.loadClass(
+          strategyClass,
+          new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class, Set.class},
+          this.context, table, fileGroupsInPendingClustering, fileGroupsToBeReplaced);
+    } catch (HoodieException ex) {
+      if (!(ex.getCause() instanceof NoSuchMethodException)) {
+        throw ex;
+      }
+      // Legacy custom strategies only have the 3-arg constructor. INSERT_OVERWRITE overlap with
+      // pending clustering will not be detected for these classes (they never see
+      // fileGroupsToBeReplaced); recommend bumping to the 4-arg constructor.
+      log.warn("Clustering update strategy {} is missing the 4-arg constructor with "
+          + "fileGroupsToBeReplaced; falling back to the 3-arg constructor. INSERT_OVERWRITE "
+          + "overlap with pending clustering will not be detected for this strategy.", strategyClass);
+      return (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils.loadClass(
+          strategyClass,
+          new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
+          this.context, table, fileGroupsInPendingClustering);
+    }
   }
 
   @Override
@@ -279,10 +327,12 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     if (table.requireSortedRecords()) {
       // Partition and sort within each partition as a single step. This is faster than partitioning first and then
       // applying a sort.
+      // requireSortedRecords() is true only for HFile base files, which order keys by UTF-8 bytes,
+      // not String (UTF-16) order, so sort with the matching comparator.
       Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> comparator = (Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> & Serializable) (t1, t2) -> {
         HoodieKey key1 = t1._1;
         HoodieKey key2 = t2._1;
-        return key1.getRecordKey().compareTo(key2.getRecordKey());
+        return StringUtils.compareUtf8Bytes(key1.getRecordKey(), key2.getRecordKey());
       };
 
       partitionedRDD = mappedRDD.repartitionAndSortWithinPartitions(partitioner, comparator);
@@ -389,7 +439,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
     // these are updates
     HoodieMergeHandle mergeHandle = getUpdateHandle(partitionPath, fileId, recordItr);
-    return IOUtils.runMerge(mergeHandle, instantTime, fileId);
+    return MergeUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {

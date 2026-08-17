@@ -20,11 +20,14 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.callback.HoodieClientInitCallback;
+import org.apache.hudi.callback.HoodieCommitCallbackFactory;
+import org.apache.hudi.callback.HoodieWriteCommitCallback;
+import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
-import org.apache.hudi.client.utils.TransactionUtils;
+import org.apache.hudi.client.transaction.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -34,6 +37,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -46,7 +51,6 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
@@ -63,6 +67,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieWriteConfig.APPLICATION_ID;
@@ -86,6 +91,14 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
   protected final TimeGenerator timeGenerator;
+
+  /**
+   * Lazily-initialized commit callback (HoodieWriteCommitCallback). Lifted from
+   * {@link BaseHoodieWriteClient} so that {@link BaseHoodieTableServiceClient} can also
+   * fire callbacks for compaction and clustering completions. Transient is fine
+   * because the callback is only ever invoked from the driver after a commit.
+   */
+  protected transient HoodieWriteCommitCallback commitCallback;
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -457,5 +470,41 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     }
 
     return foundRollingMetadata;
+  }
+
+  protected Option<Map<String, String>> updateExtraMetadata(Option<Map<String, String>> extraMetadata) {
+    return CommitMetadataProperties.enrich(extraMetadata, config, context);
+  }
+
+  /**
+   * Fire {@link HoodieWriteCommitCallback} for a commit, if enabled. Shared by
+   * {@link BaseHoodieWriteClient#postCommit} (regular auto- and explicit-commit paths)
+   * and {@link BaseHoodieTableServiceClient} (compaction and clustering completions).
+   * Lazily constructs the callback instance from {@code hoodie.write.commit.callback.class}.
+   *
+   * <p>Best-effort: catches and logs any exception from the user-supplied callback so a
+   * misbehaving observer cannot fail the commit.
+   */
+  protected void fireCommitCallbackIfNecessary(String commitTime,
+                                               String commitActionType,
+                                               List<HoodieWriteStat> stats,
+                                               Supplier<BaseFileOnlyView> fsViewSupplier,
+                                               Option<Map<String, String>> extraMetadata) {
+    if (!config.writeCommitCallbackOn()) {
+      return;
+    }
+    try {
+      if (commitCallback == null) {
+        commitCallback = HoodieCommitCallbackFactory.create(config);
+      }
+      commitCallback.call(new HoodieWriteCommitCallbackMessage(
+          commitTime, config.getTableName(), config.getBasePath(),
+          stats, Option.of(commitActionType), extraMetadata,
+          fsViewSupplier,
+          Collections.emptyMap()));
+    } catch (Exception e) {
+      log.warn("HoodieWriteCommitCallback failed for commit {} ({}); ignoring",
+          commitTime, commitActionType, e);
+    }
   }
 }

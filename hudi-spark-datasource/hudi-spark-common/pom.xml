@@ -264,4 +264,48 @@
 
   </dependencies>
 
+  <profiles>
+    <!-- Vortex requires Java 17 (vortex-jni/vortex-spark ship Java 17 bytecode). Compile the Vortex
+         datasource reader under src/main/scala-vortex and pull the vortex-spark connector only on
+         JDK 17; Java 11 builds skip it. Only the Spark 4.x adapters (Java 17) wire it in; the Spark
+         3.x adapters return None. -->
+    <profile>
+      <id>vortex</id>
+      <activation>
+        <jdk>[17,)</jdk>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>dev.vortex</groupId>
+          <artifactId>${vortex.spark.artifact}</artifactId>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>add-vortex-source</id>
+                <phase>generate-sources</phase>
+                <goals>
+                  <goal>add-source</goal>
+                </goals>
+                <configuration>
+                  <!-- Vortex is only supported on Spark 3.5+/4.x; skip the source on Spark 3.3/3.4
+                       (vortex.skip.tests=true) where its Spark 3.5+ APIs are unavailable. -->
+                  <skipAddSource>${vortex.skip.tests}</skipAddSource>
+                  <sources>
+                    <source>src/main/scala-vortex</source>
+                  </sources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
 </project>

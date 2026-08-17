@@ -17,13 +17,14 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSchemaConversionUtils}
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieFileScanRDD, HoodieSchemaConversionUtils}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StorageConfiguration
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.{GroupType, MessageType, PrimitiveType, Type, Types}
 import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
@@ -34,7 +35,7 @@ import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate, SpecializedGetters}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate, Predicate, SpecializedGetters}
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -42,11 +43,12 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.classic.ColumnConversions
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.orc.{OrcColumnarBatchReader, SparkOrcReaderBase}
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFilters, SparkShreddingUtils}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.{BinaryType, DataType, StructType, VariantType}
+import org.apache.spark.sql.types.{BinaryType, DataType, StructField, StructType, VariantType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.types.variant.Variant
@@ -101,6 +103,23 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     Predicate.createInterpreted(e)
   }
 
+  override def createHoodieFileScanRDD(sparkSession: SparkSession,
+                                       readFunction: PartitionedFile => Iterator[InternalRow],
+                                       filePartitions: Seq[FilePartition],
+                                       readDataSchema: StructType,
+                                       metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
+    new HoodieFileScanRDD(sparkSession, readFunction, filePartitions, readDataSchema, metadataColumns)
+  }
+
+  override def createOrcFileReader(vectorized: Boolean,
+                                   sqlConf: SQLConf,
+                                   options: Map[String, String],
+                                   hadoopConf: Configuration,
+                                   dataSchema: StructType): SparkColumnarFileReader = {
+    SparkOrcReaderBase.build(vectorized, sqlConf, options, hadoopConf, dataSchema,
+      (capacity, memoryMode) => new OrcColumnarBatchReader(capacity, memoryMode))
+  }
+
   override def createRelation(sqlContext: SQLContext,
                               metaClient: HoodieTableMetaClient,
                               schema: HoodieSchema,
@@ -129,6 +148,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 
   override def getUTF8StringFactory: HoodieUTF8StringFactory = Spark4HoodieUTF8StringFactory
+
+  override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark4PartitionedFileUtils
 
   override def splitFiles(sparkSession: SparkSession,
                           partitionDirectory: PartitionDirectory,
@@ -180,18 +201,20 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def isDataTypeEqualForPhysicalSchema(requiredType: DataType, fileType: DataType): Option[Boolean] = {
     /**
      * Checks if a StructType is the physical representation of VariantType in Parquet.
-     * VariantType is stored in Parquet as a struct with two binary fields: "metadata" and "value".
+     * VariantType is stored in Parquet as a struct with binary fields: "metadata" and "value".
+     * Supports both unshredded (2 fields) and shredded (3 fields with "typed_value") layouts.
      */
+    // TODO(voon) parquet-1.16: replace this name/arity shape heuristic with a VariantLogicalTypeAnnotation check once all supported parquet versions are >= 1.16.
     def isVariantPhysicalSchema(structType: StructType): Boolean = {
-      if (structType.fields.length != 2) {
-        false
-      } else {
-        val fieldMap = structType.fields.map(f => (f.name, f.dataType)).toMap
-        fieldMap.contains(HoodieSchema.Variant.VARIANT_VALUE_FIELD) &&
-          fieldMap.contains(HoodieSchema.Variant.VARIANT_METADATA_FIELD) &&
-          fieldMap(HoodieSchema.Variant.VARIANT_VALUE_FIELD) == BinaryType &&
-          fieldMap(HoodieSchema.Variant.VARIANT_METADATA_FIELD) == BinaryType
-      }
+      val fieldMap = structType.fields.map(f => (f.name, f.dataType)).toMap
+      val hasRequiredFields = fieldMap.contains(HoodieSchema.Variant.VARIANT_VALUE_FIELD) &&
+        fieldMap.contains(HoodieSchema.Variant.VARIANT_METADATA_FIELD) &&
+        fieldMap(HoodieSchema.Variant.VARIANT_VALUE_FIELD) == BinaryType &&
+        fieldMap(HoodieSchema.Variant.VARIANT_METADATA_FIELD) == BinaryType
+      val isUnshredded = structType.fields.length == 2
+      val isShredded = structType.fields.length == 3 &&
+        fieldMap.contains(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)
+      hasRequiredFields && (isUnshredded || isShredded)
     }
 
     // Handle VariantType comparisons
@@ -261,6 +284,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     applyVariantLogicalType(builder).named(fieldName)
   }
 
+  // TODO(#18935) drop-spark4.0: when all remaining 4.x adapters are parquet 1.16+, apply variantType() in this base and delete the no-op default plus the Spark4_1Adapter override.
   protected def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = builder
 
   override def isVariantShreddingStruct(structType: StructType): Boolean = {
@@ -270,6 +294,29 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def generateVariantWriteShreddingSchema(dataType: DataType, isTopLevel: Boolean, isObjectField: Boolean): StructType = {
     SparkShreddingUtils.addWriteShreddingMetadata(
       SparkShreddingUtils.variantShreddingSchema(dataType, isTopLevel, isObjectField))
+  }
+
+  /**
+   * Shared implementation behind [[SparkAdapter#buildFullVariantReadSchema]] for the 4.x
+   * adapters whose parquet reader can reconstruct shredded variants (4.1+, SPARK-54410).
+   * Spark 4.0 keeps the default None: the write-side methods above have no version gate, so
+   * it does write shredded files, but its reader cannot rebuild them and the projection
+   * shape would not help.
+   */
+  protected final def rewriteTopLevelVariantsForFullRead(schema: StructType): Option[StructType] = {
+    var rewritten = false
+    val fields = schema.fields.map { f =>
+      if (isVariantType(f.dataType)) {
+        rewritten = true
+        // Mirrors RequestedVariantField.fullVariant in PushVariantIntoScan: whole-variant
+        // access is a single child "0" at path "$" with failOnError and UTC.
+        f.copy(dataType = StructType(Array(StructField("0", VariantType,
+          metadata = VariantMetadata("$", failOnError = true, timeZoneId = "UTC").toMetadata))))
+      } else {
+        f
+      }
+    }
+    if (rewritten) Some(StructType(fields)) else None
   }
 
   override def createShreddedVariantWriter(

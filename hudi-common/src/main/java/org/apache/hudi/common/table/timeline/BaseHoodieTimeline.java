@@ -27,6 +27,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.Getter;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
@@ -60,6 +62,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
 
   private static final String HASHING_ALGORITHM = "SHA-256";
 
+  @Getter
   protected transient HoodieInstantReader instantReader;
   private List<HoodieInstant> instants;
   // for efficient #contains queries.
@@ -70,6 +73,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   private transient volatile Option<HoodieInstant> firstNonSavepointCommit;
   // for efficient #isBeforeTimelineStartsByCompletionTime
   private transient volatile Option<HoodieInstant> firstNonSavepointCommitByCompletionTime;
+  @Getter
   private String timelineHash;
 
   protected TimelineFactory factory;
@@ -374,7 +378,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION,
         CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION,
-        INDEXING_ACTION, LOG_COMPACTION_ACTION));
+        INDEXING_ACTION, LOG_COMPACTION_ACTION, RESTORE_ACTION));
   }
 
   @Override
@@ -493,11 +497,6 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   @Override
   public boolean containsOrBeforeTimelineStarts(String instant) {
     return containsInstant(instant) || isBeforeTimelineStarts(instant);
-  }
-
-  @Override
-  public String getTimelineHash() {
-    return timelineHash;
   }
 
   @Override
@@ -663,10 +662,6 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
       throw new HoodieException(nse);
     }
     return StringUtils.toHexString(md.digest());
-  }
-
-  public HoodieInstantReader getInstantReader() {
-    return instantReader;
   }
 
   /**

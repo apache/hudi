@@ -19,17 +19,17 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.schema.HoodieProjectionMask;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaTestUtils;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.hadoop.HiveHoodieReaderContext;
 import org.apache.hudi.hadoop.HiveRecordContext;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;

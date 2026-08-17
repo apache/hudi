@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,30 +28,29 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
+import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSchemaNotFoundException;
 import org.apache.hudi.exception.InvalidTableException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.Lazy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -67,10 +67,9 @@ import java.util.stream.Stream;
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
  */
+@Slf4j
 @ThreadSafe
 public class TableSchemaResolver {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TableSchemaResolver.class);
 
   protected final HoodieTableMetaClient metaClient;
 
@@ -254,11 +253,11 @@ public class TableSchemaResolver {
               .map(writeStat -> new StoragePath(metaClient.getBasePath(), writeStat.getPath()));
           return Option.of(fetchSchemaFromFiles(filePaths));
         } else {
-          LOG.debug("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePath());
+          log.debug("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePath());
           return Option.empty();
         }
       default:
-        LOG.error("Unknown table type {}", metaClient.getTableType());
+        log.error("Unknown table type {}", metaClient.getTableType());
         throw new InvalidTableException(metaClient.getBasePath().toString());
     }
   }
@@ -279,7 +278,7 @@ public class TableSchemaResolver {
   }
 
   private HoodieSchema readSchemaFromLogFile(StoragePath path) throws IOException {
-    return readSchemaFromLogFile(metaClient.getRawStorage(), path);
+    return readSchemaFromLogFile(metaClient, path);
   }
 
   /**
@@ -287,11 +286,16 @@ public class TableSchemaResolver {
    *
    * @return
    */
-  public static HoodieSchema readSchemaFromLogFile(HoodieStorage storage, StoragePath path) throws IOException {
+  public static HoodieSchema readSchemaFromLogFile(HoodieTableMetaClient metaClient, StoragePath path) throws IOException {
+    Option<FileNameParser.LogFileName> nativeLogFileName = FileNameParser.parseNativeLogFile(path.getName());
+    if (nativeLogFileName.isPresent()) {
+      return NativeLogFooterMetadata.readSchemaFromNativeLogFile(metaClient.getStorage(), path, nativeLogFileName.get());
+    }
+
     // We only need to read the schema from the log block header,
     // so we read the block lazily to avoid reading block content
     // containing the records
-    try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), null, false)) {
+    try (Reader reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(path), null, false)) {
       HoodieDataBlock lastBlock = null;
       while (reader.hasNext()) {
         HoodieLogBlock block = reader.next();
@@ -373,7 +377,7 @@ public class TableSchemaResolver {
       HoodieSchema tableSchema = getTableSchemaFromDataFile();
       return tableSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD).isPresent();
     } catch (Exception e) {
-      LOG.info("Failed to read operation field from schema ({})", e.getMessage());
+      log.info("Failed to read operation field from schema ({})", e.getMessage());
       return false;
     }
   }

@@ -374,6 +374,14 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("Source avro schema string, the parsed schema is used for deserialization");
 
+  public static final ConfigOption<String> VECTOR_COLUMNS = ConfigOptions
+      .key("hoodie.vector.columns")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Comma-separated top-level VECTOR columns in the format columnName[:dimension]. "
+          + "The dimension defaults to 128 when omitted. The element type is inferred from the Flink "
+          + "ARRAY element type: FLOAT, DOUBLE, or TINYINT.");
+
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
   public static final String QUERY_TYPE_INCREMENTAL = "incremental";
@@ -1317,7 +1325,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("hive_sync.mode")
       .stringType()
       .defaultValue(HiveSyncMode.HMS.name())
-      .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'hms'");
+      .withDescription("Mode to choose for Hive ops. Valid values are hms, glue, jdbc and hiveql, default 'hms'");
 
   @AdvancedConfig
   public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions

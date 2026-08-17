@@ -170,6 +170,24 @@ public class RowDataKeyGen implements Serializable {
     }
   }
 
+  /**
+   * Returns a compact key that preserves the ordering of the encoded Hudi record key.
+   *
+   * <p>The first {@code <field>:} prefix used by complex keys and the legacy simple-key encoding
+   * is identical for all records and is omitted. Subsequent {@code ,<field>:} separators in a
+   * complex key are retained because field values may contain the same delimiter characters;
+   * removing them could make distinct record keys compare equal.
+   */
+  public String getRecordKeyForComparison(RowData rowData) {
+    if (this.simpleRecordKeyFunc != null) {
+      return getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData),
+          this.recordKeyFields[0], consistentLogicalTimestampEnabled);
+    } else {
+      Object[] keyValues = this.recordKeyProjection.projectAsValues(rowData);
+      return getRecordKeyForComparison(keyValues, this.recordKeyFields, consistentLogicalTimestampEnabled);
+    }
+  }
+
   public String getPartitionPath(RowData rowData) {
     if (this.simplePartitionPath) {
       return getPartitionPath(partitionPathFieldGetter.getFieldOrNull(rowData),
@@ -184,6 +202,11 @@ public class RowDataKeyGen implements Serializable {
 
   private static String getRecordKey(Object[] keyValues, String[] keyFields, boolean consistentLogicalTimestampEnabled) {
     return KeyGenerator.constructRecordKey(keyFields,
+        (key, index) -> StringUtils.objToString(getTimestampValue(consistentLogicalTimestampEnabled, keyValues[index])));
+  }
+
+  private static String getRecordKeyForComparison(Object[] keyValues, String[] keyFields, boolean consistentLogicalTimestampEnabled) {
+    return KeyGenerator.constructRecordKeyForComparison(keyFields,
         (key, index) -> StringUtils.objToString(getTimestampValue(consistentLogicalTimestampEnabled, keyValues[index])));
   }
 

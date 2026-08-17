@@ -84,13 +84,6 @@
       <artifactId>orc-core</artifactId>
     </dependency>
 
-    <!-- Hilbert Curve -->
-    <dependency>
-      <groupId>com.github.davidmoten</groupId>
-      <artifactId>hilbert-curve</artifactId>
-      <version>0.2.2</version>
-    </dependency>
-
     <!-- Lock -->
     <dependency>
       <groupId>org.apache.curator</groupId>

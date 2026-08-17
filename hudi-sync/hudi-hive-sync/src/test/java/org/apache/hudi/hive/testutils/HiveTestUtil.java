@@ -49,6 +49,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -61,7 +62,6 @@ import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.Getter;
@@ -395,6 +395,11 @@ public class HiveTestUtil {
 
   public static void createCOWTableWithSchema(String instantTime, String schemaFileName)
       throws IOException, URISyntaxException {
+    createCOWTableWithSchema(instantTime, SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, schemaFileName));
+  }
+
+  public static void createCOWTableWithSchema(String instantTime, HoodieSchema schema)
+      throws IOException, URISyntaxException {
     Path path = new Path(basePath);
     FileIOUtils.deleteDirectory(new File(basePath));
     HoodieTableMetaClient.newTableBuilder()
@@ -417,7 +422,6 @@ public class HiveTestUtil {
     String fileId = UUID.randomUUID().toString();
     Path filePath = new Path(partPath.toString() + "/"
         + FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
-    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, schemaFileName);
     generateParquetDataWithSchema(filePath, schema);
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setFileId(fileId);

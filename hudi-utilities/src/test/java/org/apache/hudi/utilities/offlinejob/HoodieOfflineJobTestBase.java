@@ -110,7 +110,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     static void assertNCompletedCommits(int expected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage, tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getWriteTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numCommits = timeline.countInstants();
       assertEquals(expected, numCommits, "Got=" + numCommits + ", exp =" + expected);
     }
@@ -118,7 +118,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     static void assertNCleanCommits(int expected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage, tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numCleanCommits = timeline.countInstants();
       assertEquals(expected, numCleanCommits, "Got=" + numCleanCommits + ", exp =" + expected);
     }
@@ -126,7 +126,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     static void assertNClusteringCommits(int expected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage, tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      LOG.info("Timeline Instants={}", meta.getActiveTimeline().getInstants());
       int numCommits = timeline.countInstants();
       assertEquals(expected, numCommits, "Got=" + numCommits + ", exp =" + expected);
     }

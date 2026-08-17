@@ -19,11 +19,11 @@
 package org.apache.hudi.azure.transaction.lock;
 
 import org.apache.hudi.azure.credentials.AzureCredentialFactory;
+import org.apache.hudi.client.transaction.lock.LockGetResult;
+import org.apache.hudi.client.transaction.lock.LockUpsertResult;
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
-import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
-import org.apache.hudi.client.transaction.lock.models.StorageLockData;
-import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
+import org.apache.hudi.client.transaction.lock.StorageLockData;
+import org.apache.hudi.client.transaction.lock.StorageLockFile;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;

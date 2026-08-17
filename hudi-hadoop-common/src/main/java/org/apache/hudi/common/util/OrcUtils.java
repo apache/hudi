@@ -34,7 +34,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.hadoop.OrcReaderIterator;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieIndexVersion;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -76,29 +76,12 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
 public class OrcUtils extends FileFormatUtils {
 
   /**
-   * Provides a closable iterator for reading the given ORC file.
-   *
-   * @param storage  {@link HoodieStorage} instance.
-   * @param filePath The ORC file path
-   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the ORC file
-   */
-  @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
-    return getHoodieKeyIterator(storage, filePath, Option.empty(), Option.empty());
-  }
-
-  /**
    * Fetch {@link HoodieKey}s from the given ORC file.
    *
    * @param storage  {@link HoodieStorage} instance.
    * @param filePath The ORC file path.
    * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
    */
-  @Override
-  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
-    return fetchRecordKeysWithPositions(storage, filePath, Option.empty(), Option.empty());
-  }
-
   @Override
   public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
     try {

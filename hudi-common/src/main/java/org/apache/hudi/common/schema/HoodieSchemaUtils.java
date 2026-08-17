@@ -18,23 +18,20 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.AvroSchemaUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.math.MathContext;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -71,6 +68,19 @@ public final class HoodieSchemaUtils {
   // Private constructor to prevent instantiation
   private HoodieSchemaUtils() {
     throw new UnsupportedOperationException("Utility class cannot be instantiated");
+  }
+
+  /**
+   * Returns the schema for the specified field.
+   *
+   * @param schema    record schema that contains the field
+   * @param fieldName field name to resolve
+   * @return schema of the resolved field
+   * @throws HoodieSchemaException if the field does not exist in the schema
+   */
+  public static HoodieSchema getFieldSchema(HoodieSchema schema, String fieldName) {
+    return schema.getNonNullType().getField(fieldName).map(HoodieSchemaField::schema)
+        .orElseThrow(() -> new HoodieSchemaException("Field " + fieldName + " doesn't exist in schema: " + schema));
   }
 
   /**
@@ -394,6 +404,7 @@ public final class HoodieSchemaUtils {
 
   /**
    * Converts a byte array to a BigDecimal with the specified precision and scale.
+   * Delegates to {@link HoodieAvroUtils#convertBytesToBigDecimal(byte[], int, int)}.
    *
    * @param value     the byte array to convert
    * @param precision the precision of the decimal
@@ -401,8 +412,7 @@ public final class HoodieSchemaUtils {
    * @return the resulting BigDecimal
    */
   public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
-    return new BigDecimal(new BigInteger(value),
-        scale, new MathContext(precision, RoundingMode.HALF_UP));
+    return HoodieAvroUtils.convertBytesToBigDecimal(value, precision, scale);
   }
 
   /**

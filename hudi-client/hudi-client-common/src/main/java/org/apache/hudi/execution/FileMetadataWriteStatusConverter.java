@@ -61,7 +61,7 @@ public class FileMetadataWriteStatusConverter<T extends HoodieRecordPayload, I, 
    */
   public WriteStatus convert(String parquetFile, String partitionPath,
                              Map<String, Object> executionConfigs) throws IOException {
-    LOG.info("Creating write status for parquet file " + parquetFile);
+    LOG.info("Creating write status for parquet file {}", parquetFile);
     WriteStatus writeStatus = (WriteStatus) ReflectionUtils.loadClass(this.writeConfig.getWriteStatusClassName(),
         this.hoodieTable.shouldTrackSuccessRecords(), this.writeConfig.getWriteStatusFailureFraction(), this.hoodieTable.isMetadataTable());
     StoragePath parquetFilePath = new StoragePath(parquetFile);

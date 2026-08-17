@@ -18,6 +18,8 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;

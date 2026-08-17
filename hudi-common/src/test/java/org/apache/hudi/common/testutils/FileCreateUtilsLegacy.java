@@ -229,7 +229,7 @@ public class FileCreateUtilsLegacy extends FileCreateUtilsBase {
   public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)
       throws IOException {
     if (IOType.APPEND == ioType) {
-      String logFileName = FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime, HoodieLogFile.LOGFILE_BASE_VERSION, WRITE_TOKEN);
+      String logFileName = FSUtils.makeInlineLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime, HoodieLogFile.LOGFILE_BASE_VERSION, WRITE_TOKEN);
       String markerFileName = markerFileName(logFileName, ioType);
       return createMarkerFile(basePath, partitionPath, instantTime, markerFileName);
     }

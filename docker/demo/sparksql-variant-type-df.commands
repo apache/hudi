@@ -1,0 +1,80 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import org.apache.spark.sql.{DataFrame, SaveMode}
+
+// E2E test: VARIANT type with Hive sync via DataFrame API path.
+// Tests that the HiveSyncTool correctly maps VARIANT to struct<value:binary,metadata:binary> in Hive.
+
+// Body is wrapped in { } so the spark-shell REPL keeps the chained .option(...)
+// calls attached to the def. Without braces, writer.format("hudi") on the first
+// body line parses as a complete expression, the REPL closes the def there, and
+// the remaining .option(...) lines get dot-applied to `sc` (SparkContext).
+def applyWriteOpts(writer: org.apache.spark.sql.DataFrameWriter[_]): org.apache.spark.sql.DataFrameWriter[_] = {
+  writer.format("hudi")
+    .option("hoodie.table.name", "variant_test_df")
+    .option("hoodie.datasource.write.recordkey.field", "id")
+    .option("hoodie.datasource.write.precombine.field", "name")
+    .option("hoodie.datasource.write.partitionpath.field", "dt")
+    .option("hoodie.datasource.hive_sync.enable", "true")
+    .option("hoodie.datasource.hive_sync.database", "default")
+    .option("hoodie.datasource.hive_sync.table", "variant_test_df")
+    .option("hoodie.datasource.hive_sync.jdbcurl", "jdbc:hive2://hiveserver:10000/")
+    .option("hoodie.datasource.hive_sync.mode", "jdbc")
+    .option("hoodie.datasource.hive_sync.partition_fields", "dt")
+    .option("hoodie.datasource.hive_sync.partition_extractor_class",
+      "org.apache.hudi.hive.MultiPartKeysValueExtractor")
+    .option("hoodie.datasource.hive_sync.username", "hive")
+    .option("hoodie.datasource.hive_sync.password", "hive")
+}
+
+// Seed two rows in dt='2024-01-01' via Overwrite.
+val seedDf: DataFrame = spark.sql("""
+  SELECT 1L AS id, 'row1' AS name, parse_json('{"key":"value1"}') AS variant_data, '2024-01-01' AS dt
+  UNION ALL
+  SELECT 2L AS id, 'row2' AS name, parse_json('{"key":"value2"}') AS variant_data, '2024-01-01' AS dt
+""")
+applyWriteOpts(seedDf.write).mode(SaveMode.Overwrite).save("/user/hive/warehouse/variant_test_df")
+spark.sql("select id, name, cast(variant_data as string), dt from variant_test_df order by id").show(10, false)
+println("VARIANT_DF_INSERT_SUCCESS")
+
+// Append-upsert: id=2 mutated, id=3 new in dt='2024-01-02'.
+val upsertDf: DataFrame = spark.sql("""
+  SELECT 2L AS id, 'row2-updated' AS name, parse_json('{"key":"value2-updated"}') AS variant_data, '2024-01-01' AS dt
+  UNION ALL
+  SELECT 3L AS id, 'row3' AS name, parse_json('{"key":"value3"}') AS variant_data, '2024-01-02' AS dt
+""")
+applyWriteOpts(upsertDf.write)
+  .option("hoodie.datasource.write.operation", "upsert")
+  .mode(SaveMode.Append)
+  .save("/user/hive/warehouse/variant_test_df")
+spark.sql("select id, name, cast(variant_data as string), dt from variant_test_df order by id").show(10, false)
+println("VARIANT_DF_UPSERT_SUCCESS")
+
+// Delete id=3 via operation=delete.
+val deleteDf: DataFrame = spark.sql("""
+  SELECT 3L AS id, 'row3' AS name, parse_json('{}') AS variant_data, '2024-01-02' AS dt
+""")
+applyWriteOpts(deleteDf.write)
+  .option("hoodie.datasource.write.operation", "delete")
+  .mode(SaveMode.Append)
+  .save("/user/hive/warehouse/variant_test_df")
+spark.sql("select id, name, cast(variant_data as string), dt from variant_test_df order by id").show(10, false)
+println("VARIANT_DF_DELETE_SUCCESS")
+
+println("VARIANT_DF_TEST_SUCCESS")

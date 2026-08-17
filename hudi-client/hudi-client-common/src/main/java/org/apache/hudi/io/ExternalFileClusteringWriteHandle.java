@@ -63,7 +63,7 @@ public class ExternalFileClusteringWriteHandle<T extends HoodieRecordPayload, I,
 
     // Create inProgress marker file
     createMarkerFile(partitionPath, path.getName());
-    LOG.info("New ExternalFileClusteringWriteHandle for partition :" + partitionPath + " with fileId " + fileId);
+    LOG.info("New ExternalFileClusteringWriteHandle for partition :{} with fileId {}", partitionPath, fileId);
   }
 
   /**

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;

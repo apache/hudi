@@ -18,11 +18,11 @@
 
 package org.apache.hudi.adapter;
 
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Type;
+import org.apache.hudi.common.schema.internal.action.InternalSchemaChangeApplier;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
@@ -49,9 +49,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.FIRST;
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION;
+import static org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
+import static org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType.FIRST;
+import static org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION;
 
 /**
  * Adapter utils.
@@ -125,7 +125,7 @@ public class Utils {
         String colName = column.getName();
         Type colType = convertFunc.apply(column.getDataType().getLogicalType());
         String comment = column.getComment().orElse(null);
-        Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
+        Pair<org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
             parseColumnPosition(add.getPosition());
         return changeApplier.applyAddChange(
             colName, colType, comment, colPositionPair.getRight(), colPositionPair.getLeft());
@@ -148,7 +148,7 @@ public class Utils {
     } else if (change instanceof TableChange.ModifyColumnPosition) {
       TableChange.ModifyColumnPosition modify = (TableChange.ModifyColumnPosition) change;
       String colName = modify.getOldColumn().getName();
-      Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
+      Pair<org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
           parseColumnPosition(modify.getNewPosition());
       return changeApplier.applyReOrderColPositionChange(
           colName, colPositionPair.getRight(), colPositionPair.getLeft());
@@ -164,8 +164,8 @@ public class Utils {
     }
   }
 
-  private static Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> parseColumnPosition(TableChange.ColumnPosition colPosition) {
-    org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType positionType;
+  private static Pair<org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType, String> parseColumnPosition(TableChange.ColumnPosition colPosition) {
+    org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType positionType;
     String position = "";
     if (colPosition instanceof TableChange.First) {
       positionType = FIRST;

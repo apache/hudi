@@ -59,6 +59,13 @@ public class HoodieReaderConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to use positions in the block header for data blocks containing updates and delete blocks for merging.");
 
+  public static final ConfigProperty<Integer> LSM_SORT_MERGE_SPILL_THRESHOLD = ConfigProperty
+      .key("hoodie.lsm.sort.merge.spill.threshold")
+      .defaultValue(16)
+      .markAdvanced()
+      .withDocumentation("Maximum number of sorted LSM input files to keep as direct readers during sort merge. "
+          + "When the fan-in is larger, remaining inputs are drained to sequential local spill files and read back during merge.");
+
   public static final String REALTIME_SKIP_MERGE = "skip_merge";
   public static final String REALTIME_PAYLOAD_COMBINE = "payload_combine";
   public static final ConfigProperty<String> MERGE_TYPE = ConfigProperty
@@ -112,8 +119,9 @@ public class HoodieReaderConfig extends HoodieConfig {
       .sinceVersion("1.2.0")
       .withValidValues(BLOB_INLINE_READ_MODE_CONTENT, BLOB_INLINE_READ_MODE_DESCRIPTOR)
       .withDocumentation("How Hudi interprets INLINE BLOB values on read. "
-          + "DESCRIPTOR (default) returns an OUT_OF_LINE-shaped reference pointing at the "
-          + "backing Lance file with the INLINE payload's position and size, so callers can "
-          + "skip the byte content read. "
-          + "CONTENT returns the raw inline bytes directly in the data field on every read.");
+          + "DESCRIPTOR (default) returns an OUT_OF_LINE-shaped reference (position and size) into "
+          + "the backing file, skipping the byte read. CONTENT returns the raw inline bytes in the "
+          + "data field. Materializing INLINE bytes via read_blob() requires CONTENT; under "
+          + "DESCRIPTOR it fails fast asking for CONTENT. Pass this as a read option, not a session "
+          + "config. OUT_OF_LINE blobs ignore this option.");
 }

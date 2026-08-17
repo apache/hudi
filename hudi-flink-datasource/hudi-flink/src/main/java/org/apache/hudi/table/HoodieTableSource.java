@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
 import org.apache.hudi.adapter.InputFormatSourceFunctionAdapter;
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -304,7 +305,7 @@ public class HoodieTableSource extends FileIndexReader implements
 
     HoodieScanContext context = createHoodieScanContext(rowType);
     final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.get(FlinkOptions.TABLE_TYPE));
-    final SplitReaderFunction<RowData> splitReaderFunction;
+    final SerializableSupplier<SplitReaderFunction<RowData>> splitReaderFunctionSupplier;
     final MergeOnReadTableState<HoodieSourceSplit> hoodieTableState = new MergeOnReadTableState<>(
             rowType,
             requiredRowType,
@@ -314,24 +315,16 @@ public class HoodieTableSource extends FileIndexReader implements
     boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ && context.isStreaming();
     if (conf.get(FlinkOptions.CDC_ENABLED)) {
       List<DataType> fieldTypes = rowDataType.getChildren();
-      splitReaderFunction = new HoodieCdcSplitReaderFunction(
-          conf,
-          hoodieTableState,
-          internalSchemaManager,
-          fieldTypes,
-          predicates,
-          emitDelete);
+      splitReaderFunctionSupplier = () -> new HoodieCdcSplitReaderFunction(
+          conf, hoodieTableState, internalSchemaManager, fieldTypes, predicates, emitDelete);
     } else {
-      splitReaderFunction = new HoodieSplitReaderFunction(
-          conf,
-          tableSchema,
-          requiredHoodieSchema,
-          internalSchemaManager,
-          conf.get(FlinkOptions.MERGE_TYPE),
-          predicates,
-          emitDelete);
+      splitReaderFunctionSupplier = () -> new HoodieSplitReaderFunction(
+          conf, tableSchema, requiredHoodieSchema, internalSchemaManager,
+          conf.get(FlinkOptions.MERGE_TYPE), predicates, emitDelete);
     }
-    return new HoodieSource<>(context, splitReaderFunction, new HoodieSourceSplitComparator(), metaClient, new HoodieRecordEmitter<>());
+    return new HoodieSource<>(
+        context, splitReaderFunctionSupplier, new HoodieSourceSplitComparator(), metaClient,
+        new HoodieRecordEmitter<>());
   }
 
   /**
@@ -471,7 +464,7 @@ public class HoodieTableSource extends FileIndexReader implements
     }
     StringJoiner joiner = new StringJoiner(" and ");
     partitionFilters.forEach(f -> joiner.add(f.asSummaryString()));
-    log.info("Partition pruner for hoodie source, condition is:\n" + joiner);
+    log.info("Partition pruner for hoodie source, condition is:\n{}", joiner);
     List<ExpressionEvaluators.Evaluator> evaluators = ExpressionEvaluators.fromExpression(partitionFilters);
     List<DataType> partitionTypes = this.partitionKeys.stream().map(name ->
             this.schema.getColumn(name).orElseThrow(() -> new HoodieValidationException("Field " + name + " does not exist")))
@@ -685,7 +678,10 @@ public class HoodieTableSource extends FileIndexReader implements
   }
 
   private HoodieSchema inferSchemaFromDdl() {
-    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(this.tableRowType);
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(
+        this.tableRowType,
+        HoodieSchemaUtils.getRecordQualifiedName(conf.get(FlinkOptions.TABLE_NAME)),
+        conf.get(FlinkOptions.VECTOR_COLUMNS));
     return HoodieSchemaUtils.addMetadataFields(schema, conf.get(FlinkOptions.CHANGELOG_ENABLED));
   }
 

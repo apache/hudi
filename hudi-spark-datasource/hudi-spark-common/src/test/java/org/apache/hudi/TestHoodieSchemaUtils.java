@@ -321,6 +321,25 @@ public class TestHoodieSchemaUtils {
     assertEquals(expected, deduceWriterSchema(end, start, true));
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testExistingColumnRelaxedToNullableEvolves(boolean setNullForMissingColumns) {
+    // Table has field2 as a required boolean; the incoming (source) schema relaxed it to nullable, same
+    // column set otherwise. The deduced writer schema must evolve field2 to nullable regardless of the
+    // set.null.for.missing.columns flag -- with the flag on this used to silently stay required, so records
+    // with null in field2 failed the write / were quarantined.
+    HoodieSchema table = createRecord("relaxRec",
+        createPrimitiveField("field1", HoodieSchemaType.INT),
+        createPrimitiveField("field2", HoodieSchemaType.BOOLEAN));
+    HoodieSchema incoming = createRecord("relaxRec",
+        createPrimitiveField("field1", HoodieSchemaType.INT),
+        createNullablePrimitiveField("field2", HoodieSchemaType.BOOLEAN));
+    HoodieSchema expected = createRecord("relaxRec",
+        createPrimitiveField("field1", HoodieSchemaType.INT),
+        createNullablePrimitiveField("field2", HoodieSchemaType.BOOLEAN));
+    assertEquals(expected, deduceWriterSchema(incoming, table, setNullForMissingColumns));
+  }
+
   private static HoodieSchema deduceWriterSchema(HoodieSchema incomingSchema, HoodieSchema latestTableSchema) {
     return deduceWriterSchema(incomingSchema, latestTableSchema, false);
   }

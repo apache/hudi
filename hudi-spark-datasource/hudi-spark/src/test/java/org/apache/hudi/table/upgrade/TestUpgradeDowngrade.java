@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -35,6 +37,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -113,6 +116,41 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     originalMetaClient = HoodieTableMetaClient.reload(originalMetaClient);
     assertEquals(numCompactionInstants + 1, originalMetaClient.getActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants().countInstants());
     assertTrue(originalMetaClient.getTableConfig().isMetadataTableAvailable());
+  }
+
+  @ParameterizedTest
+  @MethodSource("legacyFixtureUpgradePairs")
+  public void testLegacyUpgradeHandlersWithFixtureTables(
+      HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion);
+    Dataset<Row> originalData = readTableData(originalMetaClient, "before legacy fixture upgrade");
+    StoragePath metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(originalMetaClient.getBasePath());
+    if (originalMetaClient.getStorage().exists(metadataTablePath)) {
+      originalMetaClient.getStorage().deleteDirectory(metadataTablePath);
+    }
+
+    StoragePath auxiliaryCompactionFile = null;
+    if (fromVersion == HoodieTableVersion.FIVE) {
+      HoodieInstant requestedCompaction = originalMetaClient.getInstantGenerator().createNewInstant(
+          HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "20250802170400000");
+      originalMetaClient.getActiveTimeline().saveToCompactionRequested(
+          requestedCompaction, HoodieCompactionPlan.newBuilder().setVersion(1).build());
+      String instantFileName = originalMetaClient.getInstantFileNameGenerator().getFileName(requestedCompaction);
+      auxiliaryCompactionFile = new StoragePath(originalMetaClient.getMetaAuxiliaryPath(), instantFileName);
+      originalMetaClient.getStorage().create(auxiliaryCompactionFile, false).close();
+      assertTrue(originalMetaClient.getStorage().exists(auxiliaryCompactionFile));
+    }
+
+    HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
+    new LegacyFixtureUpgradeDowngrade(
+        originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null);
+
+    HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.reload(originalMetaClient);
+    assertEquals(toVersion, resultMetaClient.getTableConfig().getTableVersion());
+    if (auxiliaryCompactionFile != null) {
+      assertFalse(resultMetaClient.getStorage().exists(auxiliaryCompactionFile));
+    }
+    validateDataConsistency(originalData, resultMetaClient, "after legacy fixture upgrade");
   }
 
   @Disabled
@@ -236,13 +274,15 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   private static Stream<Arguments> writeTableVersionTestCases() {
     return Stream.of(
             // Case 1: No explicit hoodie.write.table.version (uses default)
-            Arguments.of(Option.empty(), HoodieTableVersion.current(), "Default version upgrade to current version NINE"),
+            Arguments.of(Option.empty(), HoodieTableVersion.current(), "Default version upgrade to current version TEN"),
             // Case 2: hoodie.write.table.version = 6 (same as current table version)
             Arguments.of(Option.of(HoodieTableVersion.SIX), HoodieTableVersion.SIX, "No upgrade when versions match"),
             // Case 3: hoodie.write.table.version = 8
             Arguments.of(Option.of(HoodieTableVersion.EIGHT), HoodieTableVersion.EIGHT, "Upgrade to table version EIGHT"),
             // Case 4: hoodie.write.table.version = 9
-            Arguments.of(Option.of(HoodieTableVersion.NINE), HoodieTableVersion.NINE, "Upgrade to table version NINE")
+            Arguments.of(Option.of(HoodieTableVersion.NINE), HoodieTableVersion.NINE, "Upgrade to table version NINE"),
+            // Case 5: hoodie.write.table.version = 10
+            Arguments.of(Option.of(HoodieTableVersion.TEN), HoodieTableVersion.TEN, "Upgrade to table version TEN")
     );
   }
 
@@ -470,6 +510,91 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     assertTrue(resultMetaClient.getTableConfig().getMetadataPartitions().contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
   }
 
+  @Test
+  public void testTenToNineDowngradeCompactsNativeLogsAndRemovesStorageLayout() throws Exception {
+    String tablePath = URI.create(basePath()).getPath();
+    String tableName = "ten_to_nine_native_logs";
+
+    Dataset<Row> inserts = sqlContext().range(0, 100).selectExpr(
+        "cast(id as string) as id",
+        "cast(id as int) as ts",
+        "concat('rider-', cast(id as string)) as rider",
+        "concat('driver-', cast(id as string)) as driver",
+        "cast(id as double) as fare",
+        "'2021/09/11' as partition");
+
+    inserts.write()
+        .format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+        .option(DataSourceWriteOptions.TABLE_TYPE().key(), HoodieTableType.MERGE_ON_READ.name())
+        .option(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())
+        .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "id")
+        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "ts")
+        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
+        .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(HoodieTableVersion.TEN.versionCode()))
+        .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false")
+        .option(HoodieMetadataConfig.ENABLE.key(), "false")
+        .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
+        .option(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue())
+        .mode(SaveMode.Overwrite)
+        .save(tablePath);
+
+    Dataset<Row> updates = sqlContext().range(0, 50).selectExpr(
+        "cast(id as string) as id",
+        "cast(id + 200 as int) as ts",
+        "concat('rider-updated-', cast(id as string)) as rider",
+        "concat('driver-updated-', cast(id as string)) as driver",
+        "cast(id + 1000 as double) as fare",
+        "'2021/09/11' as partition");
+
+    updates.write()
+        .format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+        .option(DataSourceWriteOptions.TABLE_TYPE().key(), HoodieTableType.MERGE_ON_READ.name())
+        .option(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL())
+        .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "id")
+        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "ts")
+        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
+        .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(HoodieTableVersion.TEN.versionCode()))
+        .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false")
+        .option(HoodieMetadataConfig.ENABLE.key(), "false")
+        .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
+        .mode(SaveMode.Append)
+        .save(tablePath);
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(tablePath)
+        .build();
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(HoodieTableVersion.TEN, metaClient.getTableConfig().getTableVersion());
+    validateLogFilesCount(metaClient, "before 10->9 downgrade", true);
+
+    HoodieWriteConfig downgradeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withWriteTableVersion(HoodieTableVersion.NINE.versionCode())
+        .withAutoUpgradeVersion(true)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+
+    new UpgradeDowngrade(metaClient, downgradeConfig, context(), SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.NINE, null);
+
+    HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(metaClient.getBasePath())
+        .build();
+    assertEquals(HoodieTableVersion.NINE, resultMetaClient.getTableConfig().getTableVersion());
+    assertFalse(resultMetaClient.getTableConfig().contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
+    validateLogFilesCount(resultMetaClient, "after 10->9 downgrade", false);
+    Dataset<Row> downgradedData = readTableData(resultMetaClient, "after 10->9 downgrade")
+        .select("id", "rider", "driver", "fare");
+    assertEquals(100, downgradedData.count());
+    assertEquals(100, downgradedData.select("id").distinct().count());
+  }
+
   /**
    * Load a fixture table from resources and copy it to a temporary location for testing.
    */
@@ -549,6 +674,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       case EIGHT:
         return Option.of(HoodieTableVersion.NINE);
       case NINE:
+        return Option.of(HoodieTableVersion.TEN);
       default:
         return Option.empty();
     }
@@ -599,6 +725,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return Stream.of(
         Arguments.of(HoodieTableVersion.FOUR),   // Hudi 0.11.1
         Arguments.of(HoodieTableVersion.FIVE)    // Hudi 0.12.2
+    );
+  }
+
+  private static Stream<Arguments> legacyFixtureUpgradePairs() {
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.FOUR, HoodieTableVersion.FIVE),
+        Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.SIX)
     );
   }
 
@@ -809,6 +942,9 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     }
     if (fromVersion == HoodieTableVersion.NINE && toVersion == HoodieTableVersion.EIGHT) {
       return true; // NineToEightDowngradeHandler
+    }
+    if (fromVersion == HoodieTableVersion.TEN && toVersion == HoodieTableVersion.NINE) {
+      return true; // TenToNineDowngradeHandler
     }
     
     return false; // All other transitions don't perform rollbacks
@@ -1091,5 +1227,18 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     // will perform real time query and do dataframe validation
     validateDataConsistency(expectedDataWithNewRecord, metaClientV6, "dataframe validation after v9->v6 downgrade for " + payloadType);
     log.info("Completed payload upgrade/downgrade test for: {}", payloadType);
+  }
+
+  private static class LegacyFixtureUpgradeDowngrade extends UpgradeDowngrade {
+    LegacyFixtureUpgradeDowngrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
+                                  org.apache.hudi.common.engine.HoodieEngineContext context,
+                                  SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+      super(metaClient, config, context, upgradeDowngradeHelper);
+    }
+
+    @Override
+    public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
+      return true;
+    }
   }
 }

@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -56,6 +57,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -76,6 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -472,6 +475,36 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
       assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING, triple.getLeft());
       assertEquals("org.apache.hudi.common.model.OverwriteWithLatestPayload", triple.getMiddle());
       assertEquals("any_id", triple.getRight());
+    }
+
+    @Test
+    void testReportSuccessMetricsDelegatesToMetrics() throws Exception {
+      StreamSync streamSync = mock(StreamSync.class);
+      HoodieIngestionMetrics mockMetrics = mock(HoodieIngestionMetrics.class);
+      Field metricsField = StreamSync.class.getDeclaredField("metrics");
+      metricsField.setAccessible(true);
+      metricsField.set(streamSync, mockMetrics);
+      doCallRealMethod().when(streamSync).reportSuccessMetrics();
+
+      streamSync.reportSuccessMetrics();
+
+      verify(mockMetrics, times(1)).emitStreamerJobSuccessMetrics();
+      verify(mockMetrics, never()).emitStreamerJobFailedMetrics();
+    }
+
+    @Test
+    void testReportFailureMetricsDelegatesToMetrics() throws Exception {
+      StreamSync streamSync = mock(StreamSync.class);
+      HoodieIngestionMetrics mockMetrics = mock(HoodieIngestionMetrics.class);
+      Field metricsField = StreamSync.class.getDeclaredField("metrics");
+      metricsField.setAccessible(true);
+      metricsField.set(streamSync, mockMetrics);
+      doCallRealMethod().when(streamSync).reportFailureMetrics();
+
+      streamSync.reportFailureMetrics();
+
+      verify(mockMetrics, times(1)).emitStreamerJobFailedMetrics();
+      verify(mockMetrics, never()).emitStreamerJobSuccessMetrics();
     }
   }
 }

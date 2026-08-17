@@ -25,9 +25,12 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.io.HoodieParquetConfigInjector;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.HoodieParquetConfigInjector;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
 import org.apache.hudi.storage.HoodieStorage;
@@ -136,6 +139,27 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
         .allocatorSize(allocatorSize)
         .flushByteWatermark(flushByteWatermark)
         .build();
+  }
+
+  @Override
+  protected HoodieFileWriter newVortexFileWriter(String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
+                                                 TaskContextSupplier taskContextSupplier) throws IOException {
+    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
+    boolean enableBloomFilter = enableBloomFilter(populateMetaFields, config);
+    Option<BloomFilter> bloomFilter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
+    long maxFileSize = config.getLongOrDefault(HoodieStorageConfig.VORTEX_MAX_FILE_SIZE);
+    long allocatorSize = config.getLongOrDefault(HoodieStorageConfig.VORTEX_WRITE_ALLOCATOR_SIZE_BYTES);
+    long flushByteWatermark = config.getLongOrDefault(HoodieStorageConfig.VORTEX_WRITE_FLUSH_BYTE_WATERMARK);
+
+    // Vortex sources are compiled only under JDK 17 (see the vortex profile in this module's pom),
+    // so build the writer reflectively to keep this factory compilable on the Java 11 build.
+    return (HoodieFileWriter) ReflectionUtils.invokeStaticMethod(
+        "org.apache.hudi.io.storage.HoodieSparkVortexWriter", "newWriter",
+        new Object[] {path, structType, instantTime, taskContextSupplier, storage, populateMetaFields,
+            bloomFilter, maxFileSize, allocatorSize, flushByteWatermark},
+        StoragePath.class, StructType.class, String.class, TaskContextSupplier.class, HoodieStorage.class,
+        boolean.class, Option.class, long.class, long.class, long.class);
   }
 
   private static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(StorageConfiguration<?> conf, HoodieSchema schema,

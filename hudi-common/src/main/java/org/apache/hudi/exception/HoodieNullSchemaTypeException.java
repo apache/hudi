@@ -19,7 +19,7 @@
 
 package org.apache.hudi.exception;
 
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 
 /**
  * Thrown if a schema is null or empty. Or if a field has type null

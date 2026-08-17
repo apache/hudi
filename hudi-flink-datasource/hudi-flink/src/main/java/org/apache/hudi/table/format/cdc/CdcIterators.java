@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -33,7 +34,11 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.table.log.HoodieCDCEngineRecordAccessor;
+import org.apache.hudi.common.table.log.HoodieCDCInlineLogRecordIterator;
+import org.apache.hudi.common.table.log.HoodieCDCLogRecord;
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator;
+import org.apache.hudi.common.table.log.HoodieCDCNativeLogRecordIterator;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
@@ -41,6 +46,7 @@ import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -48,15 +54,17 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.FlinkReaderContextFactory;
-import org.apache.hudi.table.format.FormatUtils;
+import org.apache.hudi.table.format.HoodieRowDataFileReader;
+import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.RowDataProjection;
 
@@ -71,9 +79,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 
 /**
@@ -92,6 +102,11 @@ public final class CdcIterators {
   /**
    * Iterates over an ordered sequence of {@link HoodieCDCFileSplit}s, delegating
    * per-split record reading to a user-supplied factory function.
+   *
+   * <p>Not thread-safe by design: in the Source V2 read path this iterator is created, drained into a
+   * materialized minibatch, and closed entirely on the single split-fetcher thread (see
+   * {@code AbstractSplitReaderFunction}); the legacy {@link CdcInputFormat} path likewise reads and
+   * closes it on one thread. No method is ever invoked concurrently, so no synchronization is needed.
    */
   public static class CdcFileSplitsIterator implements ClosableIterator<RowData> {
     private CdcImageManager imageManager;
@@ -110,19 +125,19 @@ public final class CdcIterators {
 
     @Override
     public boolean hasNext() {
-      if (recordIterator != null) {
-        if (recordIterator.hasNext()) {
-          return true;
-        } else {
+      while (true) {
+        if (recordIterator != null) {
+          if (recordIterator.hasNext()) {
+            return true;
+          }
           recordIterator.close();
           recordIterator = null;
         }
-      }
-      if (fileSplitIterator.hasNext()) {
+        if (!fileSplitIterator.hasNext()) {
+          return false;
+        }
         recordIterator = recordIteratorFunc.apply(fileSplitIterator.next());
-        return recordIterator.hasNext();
       }
-      return false;
     }
 
     @Override
@@ -132,11 +147,12 @@ public final class CdcIterators {
 
     @Override
     public void close() {
-      if (recordIterator != null) {
-        recordIterator.close();
-      }
-      if (imageManager != null) {
-        imageManager.close();
+      try (CdcImageManager ignored = imageManager) {
+        if (recordIterator != null) {
+          recordIterator.close();
+        }
+      } finally {
+        recordIterator = null;
         imageManager = null;
       }
     }
@@ -239,7 +255,7 @@ public final class CdcIterators {
     private final String[] orderingFields;
     private final TypedProperties props;
 
-    private ExternalSpillableMap<String, byte[]> beforeImages;
+    private Map<String, byte[]> beforeImages;
     private RowData currentImage;
     private RowData sideImage;
 
@@ -273,15 +289,15 @@ public final class CdcIterators {
           metaClient.getTableConfig().getPartialUpdateMode());
       this.logRecordIterator = logRecordIterator;
       this.deleteContext = new DeleteContext(props, tableSchema).withReaderSchema(tableSchema);
-      initImages(cdcFileSplit, writeConfig);
+      initImages(cdcFileSplit);
     }
 
-    private void initImages(HoodieCDCFileSplit fileSplit, HoodieWriteConfig writeConfig) throws IOException {
+    private void initImages(HoodieCDCFileSplit fileSplit) throws IOException {
       if (fileSplit.getBeforeFileSlice().isPresent() && !fileSplit.getBeforeFileSlice().get().isEmpty()) {
         this.beforeImages = imageManager.getOrLoadImages(
             maxCompactionMemoryInBytes, fileSplit.getBeforeFileSlice().get());
       } else {
-        this.beforeImages = FormatUtils.spillableMap(writeConfig, maxCompactionMemoryInBytes, getClass().getSimpleName());
+        this.beforeImages = Collections.emptyMap();
       }
     }
 
@@ -334,7 +350,6 @@ public final class CdcIterators {
     @Override
     public void close() {
       logRecordIterator.close();
-      imageManager.close();
     }
 
     @SuppressWarnings("unchecked")
@@ -364,21 +379,42 @@ public final class CdcIterators {
 
   /**
    * Base iterator for CDC log files stored with supplemental logging (AS_IS inference case).
-   * Reads a {@link HoodieCDCLogRecordIterator} and resolves before/after images using
-   * subclass-specific logic.
+   * Reads inline or native CDC log files through a normalized CDC record iterator and resolves
+   * before/after images using subclass-specific logic.
    */
   public abstract static class BaseImageIterator implements ClosableIterator<RowData> {
     private final HoodieSchema requiredSchema;
     private final int[] requiredPos;
     private final GenericRecordBuilder recordBuilder;
     private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
-    private HoodieCDCLogRecordIterator cdcItr;
+    private final RowDataProjection nativeCdcImageProjection;
+    private final int nativeCdcImageArity;
+    private static final HoodieCDCEngineRecordAccessor<RowData> ROW_DATA_CDC_RECORD_ACCESSOR =
+        new HoodieCDCEngineRecordAccessor<RowData>() {
+          @Override
+          public String getOperation(RowData record) {
+            return record.getString(0).toString();
+          }
 
-    private GenericRecord cdcRecord;
+          @Override
+          public String getRecordKey(RowData record) {
+            return record.getString(1).toString();
+          }
+
+          @Override
+          public RowData getImage(RowData record, int ordinal, int imageArity) {
+            return record.isNullAt(ordinal) ? null : record.getRow(ordinal, imageArity);
+          }
+        };
+
+    private HoodieCDCLogRecordIterator<?> cdcItr;
+
+    private HoodieCDCLogRecord<?> cdcRecord;
     private RowData sideImage;
     private RowData currentImage;
 
     protected BaseImageIterator(
+        org.apache.flink.configuration.Configuration conf,
         org.apache.hadoop.conf.Configuration hadoopConf,
         String tablePath,
         HoodieSchema tableSchema,
@@ -390,20 +426,98 @@ public final class CdcIterators {
       this.requiredPos = computeRequiredPos(tableSchema, requiredSchema);
       this.recordBuilder = new GenericRecordBuilder(requiredSchema.getAvroSchema());
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredSchema, requiredRowType, true);
+      this.nativeCdcImageProjection = RowDataProjection.instance(requiredRowType, requiredPos);
+      this.nativeCdcImageArity = HoodieSchemaUtils.removeMetadataFields(tableSchema).getFields().size();
+      this.cdcItr = createCdcRecordIterator(
+          conf, hadoopConf, tablePath, cdcSchema, fileSplit);
+    }
 
-      StoragePath hadoopTablePath = new StoragePath(tablePath);
-      HoodieStorage storage = HoodieStorageUtils.getStorage(
-          tablePath, HadoopFSUtils.getStorageConf(hadoopConf));
-      HoodieLogFile[] cdcLogFiles = fileSplit.getCdcFiles().stream()
-          .map(cdcFile -> {
-            try {
-              return new HoodieLogFile(storage.getPathInfo(new StoragePath(hadoopTablePath, cdcFile)));
-            } catch (IOException e) {
-              throw new HoodieIOException("Failed to get file status for CDC log: " + cdcFile, e);
-            }
-          })
-          .toArray(HoodieLogFile[]::new);
-      this.cdcItr = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcSchema);
+    private static HoodieCDCLogRecordIterator<?> createCdcRecordIterator(
+        org.apache.flink.configuration.Configuration conf,
+        org.apache.hadoop.conf.Configuration hadoopConf,
+        String tablePath,
+        HoodieSchema cdcSchema,
+        HoodieCDCFileSplit fileSplit) {
+      if (fileSplit.getCdcFiles() == null || fileSplit.getCdcFiles().isEmpty()) {
+        return HoodieCDCLogRecordIterator.empty();
+      }
+      if (isNativeCdcFileSplit(fileSplit)) {
+        return new HoodieCDCNativeLogRecordIterator<>(
+            fileSplit.getCdcFiles().iterator(),
+            cdcFile -> getNativeCdcFileIterator(conf, hadoopConf, tablePath, cdcFile, cdcSchema),
+            ROW_DATA_CDC_RECORD_ACCESSOR);
+      } else {
+        StoragePath hadoopTablePath = new StoragePath(tablePath);
+        HoodieStorage storage = HoodieStorageUtils.getStorage(
+            tablePath, HadoopFSUtils.getStorageConf(hadoopConf));
+        HoodieLogFile[] cdcLogFiles = fileSplit.getCdcFiles().stream()
+            .map(cdcFile -> {
+              try {
+                return new HoodieLogFile(storage.getPathInfo(new StoragePath(hadoopTablePath, cdcFile)));
+              } catch (IOException e) {
+                throw new HoodieIOException("Failed to get file status for CDC log: " + cdcFile, e);
+              }
+            })
+            .toArray(HoodieLogFile[]::new);
+        return new HoodieCDCInlineLogRecordIterator(storage, cdcLogFiles, cdcSchema);
+      }
+    }
+
+    private static ClosableIterator<RowData> getNativeCdcFileIterator(
+        org.apache.flink.configuration.Configuration conf,
+        org.apache.hadoop.conf.Configuration hadoopConf,
+        String tablePath,
+        String cdcFile,
+        HoodieSchema cdcSchema) {
+      HoodieRowDataFileReader reader = null;
+      try {
+        StoragePath cdcFilePath = new StoragePath(tablePath, cdcFile);
+        HoodieStorage storage = HoodieStorageUtils.getStorage(
+            tablePath, HadoopFSUtils.getStorageConf(hadoopConf));
+        HoodieFileFormat cdcFileFormat = HoodieFileFormat.fromFileExtension(cdcFilePath.getFileExtension());
+        reader = (HoodieRowDataFileReader) HoodieIOFactory.getIOFactory(storage)
+            .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
+            .getFileReader(
+                FlinkWriteClients.getHoodieClientConfig(conf), cdcFilePath, cdcFileFormat, Option.empty());
+        return closeReaderWithIterator(
+            reader,
+            reader.getRowDataIterator(cdcSchema, cdcSchema, InternalSchemaManager.DISABLED, Collections.emptyList()));
+      } catch (IOException e) {
+        if (reader != null) {
+          reader.close();
+        }
+        throw new HoodieIOException("Failed to create native CDC record iterator for file: " + cdcFile, e);
+      } catch (RuntimeException e) {
+        if (reader != null) {
+          reader.close();
+        }
+        throw e;
+      }
+    }
+
+    private static ClosableIterator<RowData> closeReaderWithIterator(
+        HoodieRowDataFileReader reader,
+        ClosableIterator<RowData> iterator) {
+      return new ClosableIterator<RowData>() {
+        @Override
+        public boolean hasNext() {
+          return iterator.hasNext();
+        }
+
+        @Override
+        public RowData next() {
+          return iterator.next();
+        }
+
+        @Override
+        public void close() {
+          try {
+            iterator.close();
+          } finally {
+            reader.close();
+          }
+        }
+      };
     }
 
     private static int[] computeRequiredPos(HoodieSchema tableSchema, HoodieSchema requiredSchema) {
@@ -417,6 +531,14 @@ public final class CdcIterators {
           .toArray();
     }
 
+    private static boolean isNativeCdcFileSplit(HoodieCDCFileSplit fileSplit) {
+      boolean nativeCdc = FSUtils.isNativeLogFile(fileSplit.getCdcFiles().get(0));
+      ValidationUtils.checkState(fileSplit.getCdcFiles().stream()
+              .allMatch(path -> FSUtils.isNativeLogFile(path) == nativeCdc),
+          "CDC file split cannot mix inline and native CDC log files");
+      return nativeCdc;
+    }
+
     @Override
     public boolean hasNext() {
       if (sideImage != null) {
@@ -424,17 +546,16 @@ public final class CdcIterators {
         sideImage = null;
         return true;
       } else if (cdcItr.hasNext()) {
-        cdcRecord = (GenericRecord) cdcItr.next();
-        String op = String.valueOf(cdcRecord.get(0));
-        resolveImage(op);
+        cdcRecord = cdcItr.next();
+        resolveImage(cdcRecord.getOperation());
         return true;
       }
       return false;
     }
 
-    protected abstract RowData getAfterImage(RowKind rowKind, GenericRecord cdcRecord);
+    protected abstract RowData getAfterImage(RowKind rowKind, HoodieCDCLogRecord<?> cdcRecord);
 
-    protected abstract RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord);
+    protected abstract RowData getBeforeImage(RowKind rowKind, HoodieCDCLogRecord<?> cdcRecord);
 
     @Override
     public RowData next() {
@@ -473,6 +594,18 @@ public final class CdcIterators {
       resolved.setRowKind(rowKind);
       return resolved;
     }
+
+    protected RowData resolveImage(RowKind rowKind, HoodieCDCLogRecord<?> cdcRecord, int ordinal) {
+      if (!cdcRecord.isNative()) {
+        return resolveAvro(rowKind, (GenericRecord) cdcRecord.getAvroImage(ordinal));
+      }
+      RowData image = (RowData) cdcRecord.getEngineImage(ordinal, nativeCdcImageArity);
+      if (image == null) {
+        return null;
+      }
+      image.setRowKind(rowKind);
+      return nativeCdcImageProjection.project(image);
+    }
   }
 
   /**
@@ -481,6 +614,7 @@ public final class CdcIterators {
    */
   public static class BeforeAfterImageIterator extends BaseImageIterator {
     public BeforeAfterImageIterator(
+        org.apache.flink.configuration.Configuration conf,
         org.apache.hadoop.conf.Configuration hadoopConf,
         String tablePath,
         HoodieSchema tableSchema,
@@ -488,17 +622,17 @@ public final class CdcIterators {
         RowType requiredRowType,
         HoodieSchema cdcSchema,
         HoodieCDCFileSplit fileSplit) {
-      super(hadoopConf, tablePath, tableSchema, requiredSchema, requiredRowType, cdcSchema, fileSplit);
+      super(conf, hadoopConf, tablePath, tableSchema, requiredSchema, requiredRowType, cdcSchema, fileSplit);
     }
 
     @Override
-    protected RowData getAfterImage(RowKind rowKind, GenericRecord cdcRecord) {
-      return resolveAvro(rowKind, (GenericRecord) cdcRecord.get(3));
+    protected RowData getAfterImage(RowKind rowKind, HoodieCDCLogRecord<?> cdcRecord) {
+      return resolveImage(rowKind, cdcRecord, 3);
     }
 
     @Override
-    protected RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord) {
-      return resolveAvro(rowKind, (GenericRecord) cdcRecord.get(2));
+    protected RowData getBeforeImage(RowKind rowKind, HoodieCDCLogRecord<?> cdcRecord) {
+      return resolveImage(rowKind, cdcRecord, 2);
     }
   }
 
@@ -514,6 +648,7 @@ public final class CdcIterators {
     protected final CdcImageManager imageManager;
 
     public BeforeImageIterator(
+        org.apache.flink.configuration.Configuration conf,
         org.apache.hadoop.conf.Configuration hadoopConf,
         String tablePath,
         HoodieSchema tableSchema,
@@ -524,11 +659,16 @@ public final class CdcIterators {
         HoodieSchema cdcSchema,
         HoodieCDCFileSplit fileSplit,
         CdcImageManager imageManager) throws IOException {
-      super(hadoopConf, tablePath, tableSchema, requiredSchema, requiredRowType, cdcSchema, fileSplit);
+      super(conf, hadoopConf, tablePath, tableSchema, requiredSchema, requiredRowType, cdcSchema, fileSplit);
       this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
       this.projection = RowDataProjection.instance(requiredRowType, requiredPositions);
       this.imageManager = imageManager;
-      initImages(fileSplit);
+      try {
+        initImages(fileSplit);
+      } catch (IOException | RuntimeException | Error e) {
+        closeSuppressing(this, e);
+        throw e;
+      }
     }
 
     protected void initImages(HoodieCDCFileSplit fileSplit) throws IOException {
@@ -539,16 +679,16 @@ public final class CdcIterators {
     }
 
     @Override
-    protected RowData getAfterImage(RowKind rowKind, GenericRecord cdcRecord) {
-      String recordKey = cdcRecord.get(1).toString();
+    protected RowData getAfterImage(RowKind rowKind, HoodieCDCLogRecord<?> cdcRecord) {
+      String recordKey = cdcRecord.getRecordKey();
       RowData row = imageManager.getImageRecord(recordKey, afterImages, rowKind);
       row.setRowKind(rowKind);
       return projection.project(row);
     }
 
     @Override
-    protected RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord) {
-      return resolveAvro(rowKind, (GenericRecord) cdcRecord.get(2));
+    protected RowData getBeforeImage(RowKind rowKind, HoodieCDCLogRecord<?> cdcRecord) {
+      return resolveImage(rowKind, cdcRecord, 2);
     }
   }
 
@@ -561,6 +701,7 @@ public final class CdcIterators {
     protected ExternalSpillableMap<String, byte[]> beforeImages;
 
     public RecordKeyImageIterator(
+        org.apache.flink.configuration.Configuration conf,
         org.apache.hadoop.conf.Configuration hadoopConf,
         String tablePath,
         HoodieSchema tableSchema,
@@ -571,7 +712,7 @@ public final class CdcIterators {
         HoodieSchema cdcSchema,
         HoodieCDCFileSplit fileSplit,
         CdcImageManager imageManager) throws IOException {
-      super(hadoopConf, tablePath, tableSchema, requiredSchema, requiredRowType,
+      super(conf, hadoopConf, tablePath, tableSchema, requiredSchema, requiredRowType,
           requiredPositions, maxCompactionMemoryInBytes, cdcSchema, fileSplit, imageManager);
     }
 
@@ -585,8 +726,8 @@ public final class CdcIterators {
     }
 
     @Override
-    protected RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord) {
-      String recordKey = cdcRecord.get(1).toString();
+    protected RowData getBeforeImage(RowKind rowKind, HoodieCDCLogRecord<?> cdcRecord) {
+      String recordKey = cdcRecord.getRecordKey();
       RowData row = imageManager.getImageRecord(recordKey, beforeImages, rowKind);
       row.setRowKind(rowKind);
       return projection.project(row);
@@ -659,9 +800,11 @@ public final class CdcIterators {
   }
 
   public static MergeOnReadInputSplit singleLogFile2Split(String tablePath, String filePath, long maxCompactionMemoryInBytes) {
+    StoragePath logPath = new StoragePath(filePath);
+    HoodieLogFile logFile = new HoodieLogFile(logPath);
     return new MergeOnReadInputSplit(0, null, Option.of(Collections.singletonList(filePath)),
-            FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(filePath)), tablePath, maxCompactionMemoryInBytes,
-            FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, FSUtils.getFileIdFromLogPath(new StoragePath(filePath)),
-            FSUtils.getRelativePartitionPath(new StoragePath(tablePath), new StoragePath(filePath).getParent()));
+            logFile.getDeltaCommitTime(), tablePath, maxCompactionMemoryInBytes,
+            FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, logFile.getFileId(),
+            FSUtils.getRelativePartitionPath(new StoragePath(tablePath), logPath.getParent()));
   }
 }

@@ -20,11 +20,9 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.client.CommitMetadataResolverFactory;
-import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.TransactionManager;
-import org.apache.hudi.client.utils.TransactionUtils;
+import org.apache.hudi.client.transaction.TransactionUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -34,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -53,7 +52,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -188,7 +187,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       initializeLastCompletedTnxAndPendingInstants();
     }
     autoCommit(result);
-    log.info("Completed commit for " + instantTime);
+    log.info("Completed commit for {}", instantTime);
   }
 
   protected void autoCommit(HoodieWriteMetadata<O> result) {
@@ -216,7 +215,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
   protected void commit(HoodieWriteMetadata<O> result, List<HoodieWriteStat> writeStats) {
     String actionType = getCommitActionType();
-    log.info("Committing " + instantTime + ", action Type " + actionType + ", operation Type " + operationType);
+    log.info("Committing {}, action Type {}, operation Type {}", instantTime, actionType, operationType);
     result.setCommitted(true);
     result.setWriteStats(writeStats);
     // Finalize write
@@ -234,10 +233,10 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       activeTimeline.saveAsComplete(false,
           table.getMetaClient().createNewInstant(State.INFLIGHT, actionType, instantTime), Option.of(metadata),
           completedInstant -> table.getMetaClient().getTableFormat().commit(metadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
-      log.info("Committed " + instantTime);
+      log.info("Committed {}", instantTime);
       result.setCommitMetadata(Option.of(metadata));
       // update cols to Index as applicable
-      HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, actionType,
+      HoodieMetadataWriteUtils.updateColsToIndex(table, config, metadata, actionType,
           (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
             updateColumnsToIndexForColumnStats(metaClient, columnsToIndex);
             return null;
@@ -308,7 +307,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
     writeMetadata.setWriteStatuses(statuses);
 
-    log.debug("Create place holder commit metadata for clustering with instant time " + instantTime);
+    log.debug("Create place holder commit metadata for clustering with instant time {}", instantTime);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(),
         extraMetadata, operationType, schema.get().toString(), getCommitActionType());
     writeMetadata.setCommitMetadata(Option.of(commitMetadata));

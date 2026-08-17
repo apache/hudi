@@ -19,23 +19,23 @@
 
 package org.apache.hudi.io.storage.hadoop;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.util.HFileUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.io.storage.HoodieAvroFileWriter;
+import org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.core.io.storage.HoodieHFileConfig;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.io.hfile.HFileContext;
 import org.apache.hudi.io.hfile.HFileWriter;
 import org.apache.hudi.io.hfile.HFileWriterImpl;
-import org.apache.hudi.io.storage.HoodieAvroFileWriter;
-import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
-import org.apache.hudi.io.storage.HoodieHFileConfig;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -129,11 +130,16 @@ public class HoodieAvroHFileWriter
   }
 
   @Override
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    footerMetadata.forEach((key, value) -> writer.appendFileInfo(key, getUTF8Bytes(value)));
+  }
+
+  @Override
   public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
     if (!this.hfileConfig.isAllowDuplicatesOnHfileWrites()) {
       // When allowDuplicatesOnHfileWrites is true, allow duplicates to be written to hFile.
       if (prevRecordKey.equals(recordKey)) {
-        LOG.info("Duplicate recordKey " + recordKey + " found while writing to HFile. Record payload " + record);
+        LOG.info("Duplicate recordKey {} found while writing to HFile. Record payload {}", recordKey, record);
         throw new HoodieDuplicateKeyException("Duplicate recordKey " + recordKey + " found while writing to HFile.");
       }
     }
@@ -169,23 +175,7 @@ public class HoodieAvroHFileWriter
   @Override
   public void close() throws IOException {
     if (hfileConfig.useBloomFilter()) {
-      final BloomFilter bloomFilter = hfileConfig.getBloomFilter();
-      if (minRecordKey == null) {
-        minRecordKey = "";
-      }
-      if (maxRecordKey == null) {
-        maxRecordKey = "";
-      }
-      writer.appendFileInfo(
-          HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD, getUTF8Bytes(minRecordKey));
-      writer.appendFileInfo(
-          HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD, getUTF8Bytes(maxRecordKey));
-      writer.appendFileInfo(
-          HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE,
-          getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().toString()));
-      writer.appendMetaInfo(
-          HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK,
-          getUTF8Bytes(bloomFilter.serializeToString()));
+      HFileUtils.appendBloomFilter(writer, minRecordKey, maxRecordKey, hfileConfig.getBloomFilter());
     }
     writer.close();
     writer = null;

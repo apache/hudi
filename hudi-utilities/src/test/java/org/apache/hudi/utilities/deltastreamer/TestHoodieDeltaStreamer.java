@@ -25,13 +25,14 @@ import org.apache.hudi.DefaultSparkRecordMerger;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -53,6 +54,10 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchema.TimePrecision;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.Type;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -76,9 +81,10 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -103,6 +109,7 @@ import org.apache.hudi.utilities.HoodieMetadataTableValidator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.SourceTestConfig;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -115,6 +122,7 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.SqlSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
+import org.apache.hudi.utilities.sources.helpers.TestMercifulJsonToRowConverterBase;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.streamer.StreamSync;
@@ -128,6 +136,8 @@ import org.apache.hudi.utilities.transform.Transformer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -197,6 +207,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -207,6 +218,11 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  */
 @Slf4j
 public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
+
+  // Per-field verdict for the corrupt logical-repair fixtures: relabel ts_millis to millis and
+  // attach the local-timestamp logical types that 0.x dropped. ts_micros is already micros.
+  private static final String LOGICAL_REPAIR_TS_OVERRIDES =
+      "ts_millis:timestamp-millis,local_ts_millis:local-timestamp-millis,local_ts_micros:local-timestamp-micros";
 
   private void addRecordMerger(HoodieRecordType type, List<String> hoodieConfig) {
     if (type == HoodieRecordType.SPARK) {
@@ -751,15 +767,112 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(0, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts < '1980-01-01'").count());
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testLongToTimestampPromotionGated(boolean setNullForMissingColumns) throws Exception {
+    // Promoting a plain long column to a timestamp logical type is override-gated: rejected without a
+    // per-field override for every target type, and applied with one. A bare long carries no precision
+    // signal, so the override is the explicit verdict that authorizes the promotion. One bare-long seed
+    // is reused: the rejection cases all throw (table stays bare long), and the accepted case runs last.
+    String tableBasePath = basePath + "/testLongToTs" + setNullForMissingColumns;
+    defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
+
+    // Sync 0: seed the table with `seconds_since_epoch` stored as a bare long.
+    HoodieDeltaStreamer.Config seed = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT,
+        Collections.singletonList(TestIdentityTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE,
+        false, true, false, null, HoodieTableType.COPY_ON_WRITE.name());
+    seed.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    seed.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    seed.configs.add("hoodie.datasource.write.row.writer.enable=false");
+    seed.configs.add(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key() + "=" + setNullForMissingColumns);
+    new HoodieDeltaStreamer(seed, jsc).sync();
+
+    Schema tableSchema = new TableSchemaResolver(HoodieTestUtils.createMetaClient(storage, tableBasePath))
+        .getTableSchema(false).toAvroSchema();
+    assertNull(tableSchema.getField("seconds_since_epoch").schema().getLogicalType(),
+        "seconds_since_epoch must be seeded as a bare long in the table");
+    Schema baseSchema = new Schema.Parser().parse(fs.open(new Path(basePath + "/source-timestamp-millis.avsc")));
+
+    // Every target type is rejected without a per-field override.
+    for (LogicalType targetType : new LogicalType[] {LogicalTypes.timestampMillis(), LogicalTypes.timestampMicros(),
+        LogicalTypes.localTimestampMillis(), LogicalTypes.localTimestampMicros()}) {
+      String schemaFile = writePromotedSchema(baseSchema, targetType, setNullForMissingColumns);
+      HoodieDeltaStreamer.Config reject = promoteConfig(tableBasePath, schemaFile, setNullForMissingColumns, null);
+      HoodieDeltaStreamer streamer = new HoodieDeltaStreamer(reject, jsc);
+      // sync() wraps the guard's SchemaCompatibilityException in a HoodieIngestionException, so walk
+      // the cause chain to assert on the underlying exception.
+      Throwable thrown = assertThrows(Exception.class, streamer::sync,
+          "long -> " + targetType.getName() + " must be rejected without an override");
+      Throwable cause = thrown;
+      while (cause != null && !(cause instanceof SchemaCompatibilityException)) {
+        cause = cause.getCause();
+      }
+      assertTrue(cause instanceof SchemaCompatibilityException,
+          "Expected a SchemaCompatibilityException in the cause chain, got: " + thrown);
+      Type toType = SchemaChangeUtils.parseTimestampLogicalTypeOverrides("field:" + targetType.getName()).get("field");
+      assertEquals(AvroSchemaEvolutionUtils.timestampPrecisionChangeError(
+          "seconds_since_epoch", Types.LongType.get(), toType).getMessage(), cause.getMessage());
+    }
+
+    // With an override the promotion is authorized (local promotions are covered end-to-end by
+    // testCOWLogicalRepair / testMORLogicalRepair); verify a UTC promotion succeeds and lands on the
+    // table schema.
+    String utcSchemaFile = writePromotedSchema(baseSchema, LogicalTypes.timestampMicros(), setNullForMissingColumns);
+    HoodieDeltaStreamer.Config accept = promoteConfig(tableBasePath, utcSchemaFile, setNullForMissingColumns,
+        "seconds_since_epoch:timestamp-micros");
+    new HoodieDeltaStreamer(accept, jsc).sync();
+    Schema evolved = new TableSchemaResolver(HoodieTestUtils.createMetaClient(storage, tableBasePath))
+        .getTableSchema(false).toAvroSchema();
+    assertEquals("timestamp-micros", evolved.getField("seconds_since_epoch").schema().getLogicalType().getName());
+  }
+
+  private String writePromotedSchema(Schema baseSchema, LogicalType targetType, boolean setNull) throws IOException {
+    Schema incoming = replaceFieldType(baseSchema, "seconds_since_epoch",
+        targetType.addToSchema(Schema.create(Schema.Type.LONG)));
+    String schemaFile = basePath + "/promote-" + targetType.getName() + "-nul" + setNull + ".avsc";
+    UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {incoming.toString()}, storage, schemaFile);
+    return schemaFile;
+  }
+
+  private HoodieDeltaStreamer.Config promoteConfig(String tableBasePath, String schemaFile,
+                                                   boolean setNullForMissingColumns, String override) {
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT,
+        Collections.singletonList(TestIdentityTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE,
+        false, true, false, null, HoodieTableType.COPY_ON_WRITE.name());
+    cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + schemaFile);
+    cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + schemaFile);
+    cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
+    cfg.configs.add(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key() + "=" + setNullForMissingColumns);
+    if (override != null) {
+      cfg.configs.add(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key() + "=" + override);
+    }
+    return cfg;
+  }
+
+  private static Schema replaceFieldType(Schema recordSchema, String fieldName, Schema newFieldType) {
+    List<Schema.Field> fields = new ArrayList<>();
+    for (Schema.Field field : recordSchema.getFields()) {
+      Schema fieldSchema = field.name().equals(fieldName) ? newFieldType : field.schema();
+      fields.add(new Schema.Field(field.name(), fieldSchema, field.doc(), field.defaultVal()));
+    }
+    return Schema.createRecord(recordSchema.getName(), recordSchema.getDoc(), recordSchema.getNamespace(), false, fields);
+  }
+
   @Test
   public void testLogicalTypes() throws Exception {
     try {
       String tableBasePath = basePath + "/testTimestampMillis";
       defaultSchemaProviderClassName = TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.class.getName();
 
-      TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA;
-      TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA;
-      AbstractBaseTestSource.schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA;
+      if (HoodieSparkUtils.isSpark3_3()) {
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS;
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS;
+        AbstractBaseTestSource.schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS;
+      } else {
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA;
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA;
+        AbstractBaseTestSource.schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA;
+      }
 
       // Insert data produced with Schema A, pass Schema A
       HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
@@ -840,11 +953,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     try {
       //use v6 schema because decimal parsing iso 8859-1 support not available currently
-      TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema =
-          HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_V6;
-      TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema =
-          HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_V6;
-      String schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA_V6;
+      String schemaStr;
+      if (HoodieSparkUtils.isSpark3_3()) {
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema =
+            HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6;
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema =
+            HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6;
+        schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6;
+      } else {
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema =
+            HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_V6;
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema =
+            HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_V6;
+        schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA_V6;
+      }
       defaultSchemaProviderClassName =
           TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.class.getName();
       String tableBasePath = basePath + "testTimestampMillis_" + orderingField + "_" + recordType + "_" + tableType.name();
@@ -923,37 +1045,46 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
   public void testBackwardsCompatibility(HoodieTableVersion version) throws Exception {
-    String dirName = "colstats-upgrade-test-v" + version.versionCode();
-    String dataPath = basePath + "/" + dirName;
-    java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
-    HoodieTestUtils.extractZipToDirectory("col-stats/" + dirName + ".zip", zipOutput, getClass());
-    String tableBasePath = zipOutput.resolve("trips_logical_types_json").toString();
+    TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
+      String dirName = "colstats-upgrade-test-v" + version.versionCode();
+      String dataPath = basePath + "/" + dirName;
+      java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
+      HoodieTestUtils.extractZipToDirectory("col-stats/" + dirName + ".zip", zipOutput, getClass());
+      String tableBasePath = zipOutput.resolve("trips_logical_types_json").toString();
 
-    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
-        HoodieTestUtils.createMetaClient(storage, tableBasePath));
-    HoodieSchema tableSchema = tableSchemaResolver.getTableSchema(false);
-    Map<String, String> hudiOpts = new HashMap<>();
-    hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
-    logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
+      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
+          HoodieTestUtils.createMetaClient(storage, tableBasePath));
+      HoodieSchema tableSchema = tableSchemaResolver.getTableSchema(false);
+      Map<String, String> hudiOpts = new HashMap<>();
+      hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
 
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.emptyList(),
-        "placeholder", false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
-    cfg.propsFilePath = zipOutput + "/hudi.properties";
-    cfg.schemaProviderClassName = "org.apache.hudi.utilities.schema.FilebasedSchemaProvider";
-    cfg.sourceOrderingFields = "timestamp";
-    cfg.sourceClassName = "org.apache.hudi.utilities.sources.JsonDFSSource";
-    cfg.targetTableName = "trips_logical_types_json";
-    cfg.configs.add("hoodie.streamer.source.dfs.root=" + zipOutput + "/data/data_6/");
-    cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), version.versionCode()));
-    cfg.configs.add(String.format(("%s=%s"), HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "100"));
-    String schemaPath = zipOutput + "/schema.avsc";
-    cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.source.schema.file", schemaPath));
-    cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.target.schema.file", schemaPath));
-    cfg.forceDisableCompaction = true;
-    cfg.sourceLimit = 100_000;
-    cfg.ignoreCheckpoint = "12345";
-    syncOnce(cfg);
-    logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
+      HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.emptyList(),
+          "placeholder", false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
+      cfg.propsFilePath = zipOutput + "/hudi.properties";
+      cfg.schemaProviderClassName = "org.apache.hudi.utilities.schema.FilebasedSchemaProvider";
+      cfg.sourceOrderingFields = "timestamp";
+      cfg.sourceClassName = "org.apache.hudi.utilities.sources.JsonDFSSource";
+      cfg.targetTableName = "trips_logical_types_json";
+      cfg.configs.add("hoodie.streamer.source.dfs.root=" + zipOutput + "/data/data_6/");
+      cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), version.versionCode()));
+      cfg.configs.add(String.format(("%s=%s"), HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "100"));
+      String schemaPath = zipOutput + "/schema.avsc";
+      cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.source.schema.file", schemaPath));
+      cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.target.schema.file", schemaPath));
+      // The v6/v8 col-stats fixture reuses the same trips_logical_types_json corrupt schema as
+      // the logical-repair tests — 0.x collapsed ts_millis to timestamp-micros and dropped the
+      // local-timestamp logical types entirely. Provide the same explicit verdict so the guard
+      // in HoodieSchemaUtils.deduceWriterSchema authorizes the repair rather than rejecting the
+      // unverified precision change.
+      cfg.configs.add(String.format(("%s=%s"),
+          HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(), LOGICAL_REPAIR_TS_OVERRIDES));
+      cfg.forceDisableCompaction = true;
+      cfg.sourceLimit = 100_000;
+      cfg.ignoreCheckpoint = "12345";
+      syncOnce(cfg);
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
+    });
   }
 
   private void logicalAssertions(HoodieSchema tableSchema, String tableBasePath, Map<String, String> hudiOpts, int tableVersion) {
@@ -971,7 +1102,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(HoodieSchemaType.TIMESTAMP, tsMicrosFieldSchema.getType());
     assertEquals(TimePrecision.MICROS, tsMicrosFieldSchema.getPrecision());
     assertTrue(tsMicrosFieldSchema.isUtcAdjusted());
-    if (tableVersion > 8) {
+    if (tableVersion > 8 && !HoodieSparkUtils.isSpark3_3()) {
       Option<HoodieSchemaField> localTsMillisFieldOpt = tableSchema.getField("local_ts_millis");
       assertTrue(localTsMillisFieldOpt.isPresent());
       HoodieSchema.Timestamp localTsMillisFieldSchema = (HoodieSchema.Timestamp) localTsMillisFieldOpt.get().schema();
@@ -1043,7 +1174,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertBoundaryCounts(df, "ts_micros > timestamp('2020-06-01 12:00:00.000001Z')", "ts_micros <= timestamp('2020-06-01 12:00:00.000001Z')", totalCount);
     assertBoundaryCounts(df, "ts_micros < timestamp('2020-06-01 11:59:59.999999Z')", "ts_micros >= timestamp('2020-06-01 11:59:59.999999Z')", totalCount);
 
-    if (tableVersion > 8) {
+    if (tableVersion > 8 && !HoodieSparkUtils.isSpark3_3()) {
       assertHalfSplit(df, "local_ts_millis > CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)", expectedHalf, tolerance, "local_ts_millis > threshold");
       assertHalfSplit(df, "local_ts_millis < CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)", expectedHalf, tolerance, "local_ts_millis < threshold");
       assertBoundaryCounts(df, "local_ts_millis > CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)", "local_ts_millis <= CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)", totalCount);
@@ -1090,213 +1221,286 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"SIX,AVRO,CLUSTER", "EIGHT,AVRO,CLUSTER", "CURRENT,AVRO,NONE", "CURRENT,AVRO,CLUSTER", "CURRENT,SPARK,NONE", "CURRENT,SPARK,CLUSTER"})
-  void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Exception {
-    String dirName = "trips_logical_types_json_cow_write";
-    String dataPath = basePath + "/" + dirName;
-    java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
-    HoodieTestUtils.extractZipToDirectory("logical-repair/" + dirName + ".zip", zipOutput, getClass());
-    String tableBasePath = zipOutput.toString();
+  @CsvSource(value = {
+      // Repair succeeds when a per-field verdict is set, on the default (non-reconcile) write path...
+      "SIX,AVRO,CLUSTER,false,true", "EIGHT,AVRO,CLUSTER,false,true",
+      "CURRENT,AVRO,NONE,false,true", "CURRENT,AVRO,CLUSTER,false,true",
+      "CURRENT,SPARK,NONE,false,true", "CURRENT,SPARK,CLUSTER,false,true",
+      // ...and on the reconcile path (setNullForMissingColumns=true).
+      "SIX,AVRO,CLUSTER,true,true", "EIGHT,AVRO,CLUSTER,true,true", "CURRENT,AVRO,CLUSTER,true,true",
+      // Guard: with no verdict, the mislabeled timestamp/local-timestamp columns must be rejected on
+      // the first sync, on both the reconcile path and the default path.
+      "SIX,AVRO,CLUSTER,true,false", "SIX,AVRO,CLUSTER,false,false"})
+  void testCOWLogicalRepair(String tableVersion, String recordType, String operation,
+                            boolean setNullForMissingColumns,
+                            boolean setTimestampOverride) throws Exception {
+    TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
+      String dirName = "trips_logical_types_json_cow_write";
+      String dataPath = basePath + "/" + dirName;
+      java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
+      HoodieTestUtils.extractZipToDirectory("logical-repair/" + dirName + ".zip", zipOutput, getClass());
+      String tableBasePath = zipOutput.toString();
 
-    TypedProperties properties = new TypedProperties();
-    String schemaPath = getClass().getClassLoader().getResource("logical-repair/schema.avsc").toURI().toString();
-    properties.setProperty("hoodie.streamer.schemaprovider.source.schema.file", schemaPath);
-    properties.setProperty("hoodie.streamer.schemaprovider.target.schema.file", schemaPath);
-    String inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/2").toURI().toString();
-    properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
+      TypedProperties properties = new TypedProperties();
+      String schemaPath = getClass().getClassLoader().getResource("logical-repair/schema.avsc").toURI().toString();
+      properties.setProperty("hoodie.streamer.schemaprovider.source.schema.file", schemaPath);
+      properties.setProperty("hoodie.streamer.schemaprovider.target.schema.file", schemaPath);
+      String inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/2").toURI().toString();
+      properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
 
-    String mergerClass = getMergerClassForRecordType(recordType);
-    String tableVersionString = getTableVersionCode(tableVersion);
+      String mergerClass = getMergerClassForRecordType(recordType);
+      String tableVersionString = getTableVersionCode(tableVersion);
 
-    properties.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), mergerClass);
-    properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    properties.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
-    properties.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
-    properties.setProperty("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
-    properties.setProperty("hoodie.cleaner.policy", "KEEP_LATEST_COMMITS");
-    properties.setProperty("hoodie.compact.inline", "false");
-    properties.setProperty("hoodie.metatata.enable", "true");
-    properties.setProperty("hoodie.parquet.small.file.limit", "-1");
-    properties.setProperty("hoodie.cleaner.commits.retained", "10");
-    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
-
-    Option<TypedProperties> propt = Option.of(properties);
-
-    syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt);
-
-    inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/3").toURI().toString();
-    propt.get().setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
-    if ("CLUSTER".equals(operation)) {
-      propt.get().setProperty("hoodie.clustering.inline", "true");
-      propt.get().setProperty("hoodie.clustering.inline.max.commits", "1");
-      propt.get().setProperty("hoodie.clustering.plan.strategy.single.group.clustering.enabled", "true");
-      propt.get().setProperty("hoodie.clustering.plan.strategy.sort.columns", "ts_millis,_row_key");
-    }
-    syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "789"), propt);
-
-    String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
-    try {
-      sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
-      Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
-
-      assertDataframe(df, 15, 15);
-
-      if ("CLUSTER".equals(operation)) {
-        // after we cluster, the raw parquet should be correct
-
-        // Validate raw parquet files
-        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-            .setConf(storage.getConf())
-            .setBasePath(tableBasePath)
-            .build();
-
-        HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
-        Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
-        assertTrue(latestInstant.isPresent(), "No completed commits found");
-
-        List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
-
-        assertEquals(4, baseFilePaths.size());
-
-        // Read raw parquet files
-        Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
-        assertDataframe(rawParquetDf, 15, 15);
+      properties.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), mergerClass);
+      properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+      properties.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
+      properties.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
+      properties.setProperty("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
+      properties.setProperty("hoodie.cleaner.policy", "KEEP_LATEST_COMMITS");
+      properties.setProperty("hoodie.compact.inline", "false");
+      properties.setProperty("hoodie.metatata.enable", "true");
+      properties.setProperty("hoodie.parquet.small.file.limit", "-1");
+      properties.setProperty("hoodie.cleaner.commits.retained", "10");
+      properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
+      properties.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
+          Boolean.toString(setNullForMissingColumns));
+      if (setTimestampOverride) {
+        // Per-field verdict authorizing the repair: relabel ts_millis to millis and attach the
+        // local-timestamp logical types 0.x dropped. ts_micros stays micros (no entry needed).
+        properties.setProperty(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(),
+            LOGICAL_REPAIR_TS_OVERRIDES);
       }
-    } finally {
-      sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
-    }
+
+      Option<TypedProperties> propt = Option.of(properties);
+
+      if (!setTimestampOverride) {
+        // No per-field verdict. The mislabeled timestamp/local-timestamp columns must be rejected on
+        // the first sync rather than silently flipped, on both the reconcile and default write paths.
+        // syncOnce wraps the guard's SchemaCompatibilityException in a HoodieIngestionException, so
+        // walk the cause chain to assert on the underlying exception.
+        Throwable thrown = assertThrows(Exception.class,
+            () -> syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt));
+        Throwable cause = thrown;
+        while (cause != null && !(cause instanceof SchemaCompatibilityException)) {
+          cause = cause.getCause();
+        }
+        assertTrue(cause instanceof SchemaCompatibilityException,
+            "Expected a SchemaCompatibilityException in the cause chain, got: " + thrown);
+        assertTrue(cause.getMessage().contains("column 'ts_millis'")
+                && cause.getMessage().contains("without an explicit"),
+            "Unexpected message: " + cause.getMessage());
+        return;
+      }
+
+      syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt);
+
+      inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/3").toURI().toString();
+      propt.get().setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
+      if ("CLUSTER".equals(operation)) {
+        propt.get().setProperty("hoodie.clustering.inline", "true");
+        propt.get().setProperty("hoodie.clustering.inline.max.commits", "1");
+        propt.get().setProperty("hoodie.clustering.plan.strategy.single.group.clustering.enabled", "true");
+        propt.get().setProperty("hoodie.clustering.plan.strategy.sort.columns", "ts_millis,_row_key");
+      }
+      syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "789"), propt);
+
+      String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
+      try {
+        sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
+        Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
+
+        assertDataframe(df, 15, 15);
+
+        if ("CLUSTER".equals(operation)) {
+          // after we cluster, the raw parquet should be correct
+
+          // Validate raw parquet files
+          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+              .setConf(storage.getConf())
+              .setBasePath(tableBasePath)
+              .build();
+
+          HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+          Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
+          assertTrue(latestInstant.isPresent(), "No completed commits found");
+
+          List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
+
+          assertEquals(4, baseFilePaths.size());
+
+          // Read raw parquet files
+          Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
+          assertDataframe(rawParquetDf, 15, 15);
+        }
+      } finally {
+        sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
+      }
+    });
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"SIX,AVRO,CLUSTER,AVRO", "EIGHT,AVRO,CLUSTER,AVRO",
-      "CURRENT,AVRO,NONE,AVRO", "CURRENT,AVRO,CLUSTER,AVRO", "CURRENT,AVRO,COMPACT,AVRO",
-      "CURRENT,AVRO,NONE,PARQUET", "CURRENT,AVRO,CLUSTER,PARQUET", "CURRENT,AVRO,COMPACT,PARQUET",
-      "CURRENT,SPARK,NONE,PARQUET", "CURRENT,SPARK,CLUSTER,PARQUET", "CURRENT,SPARK,COMPACT,PARQUET"})
-  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
-    String tableSuffix;
-    String logFormatValue;
-    if ("AVRO".equals(logBlockType)) {
-      logFormatValue = "avro";
-      tableSuffix = "avro_log";
-    } else {
-      logFormatValue = "parquet";
-      tableSuffix = "parquet_log";
-    }
-
-    String dirName = "trips_logical_types_json_mor_write_" + tableSuffix;
-    String dataPath = basePath + "/" + dirName;
-    java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
-    HoodieTestUtils.extractZipToDirectory("logical-repair/" + dirName + ".zip", zipOutput, getClass());
-    String tableBasePath = zipOutput.toString();
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(storage.getConf())
-        .setBasePath(tableBasePath)
-        .build();
-
-    // validate no compaction and clustering instants present in the timeline
-    HoodieTimeline completedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
-    assertFalse(completedTimeline.getInstants().stream().anyMatch(i -> i.getAction().equals(HoodieTimeline.COMPACTION_ACTION)));
-    assertFalse(completedTimeline.getInstants().stream().anyMatch(i -> i.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)));
-
-    TypedProperties properties = new TypedProperties();
-    String schemaPath = getClass().getClassLoader().getResource("logical-repair/schema.avsc").toURI().toString();
-    properties.setProperty("hoodie.streamer.schemaprovider.source.schema.file", schemaPath);
-    properties.setProperty("hoodie.streamer.schemaprovider.target.schema.file", schemaPath);
-    String inputDataPath = getClass().getClassLoader().getResource("logical-repair/mor_write_updates/5").toURI().toString();
-    properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
-    String mergerClass = getMergerClassForRecordType(recordType);
-    String tableVersionString = getTableVersionCode(tableVersion);
-
-    properties.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), mergerClass);
-    properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    properties.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
-    properties.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
-    properties.setProperty("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
-    properties.setProperty("hoodie.cleaner.policy", "KEEP_LATEST_COMMITS");
-    properties.setProperty("hoodie.metatata.enable", "true");
-    properties.setProperty("hoodie.parquet.small.file.limit", "-1");
-    properties.setProperty("hoodie.cleaner.commits.retained", "10");
-    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
-    properties.setProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logFormatValue);
-
-    boolean disableCompaction;
-    if ("COMPACT".equals(operation)) {
-      properties.setProperty("hoodie.compact.inline", "true");
-      properties.setProperty("hoodie.compact.inline.max.delta.commits", "1");
-      disableCompaction = false;
-      // validate that there are no completed compaction (commit) instants in timeline.
-    } else {
-      properties.setProperty("hoodie.compact.inline", "false");
-      disableCompaction = true;
-    }
-
-    if ("CLUSTER".equals(operation)) {
-      properties.setProperty("hoodie.clustering.inline", "true");
-      properties.setProperty("hoodie.clustering.inline.max.commits", "1");
-      properties.setProperty("hoodie.clustering.plan.strategy.single.group.clustering.enabled", "true");
-      properties.setProperty("hoodie.clustering.plan.strategy.sort.columns", "ts_millis,_row_key");
-    }
-
-    Option<TypedProperties> propt = Option.of(properties);
-
-    syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt);
-
-    String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
-    try {
-      if (!HoodieSparkUtils.gteqSpark3_5()) {
-        sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
+  @CsvSource(value = {"SIX,AVRO,CLUSTER,AVRO,false,true", "EIGHT,AVRO,CLUSTER,AVRO,false,true",
+      "CURRENT,AVRO,NONE,AVRO,false,true", "CURRENT,AVRO,CLUSTER,AVRO,false,true", "CURRENT,AVRO,COMPACT,AVRO,false,true",
+      "CURRENT,AVRO,NONE,PARQUET,false,true", "CURRENT,AVRO,CLUSTER,PARQUET,false,true", "CURRENT,AVRO,COMPACT,PARQUET,false,true",
+      "CURRENT,SPARK,NONE,PARQUET,false,true", "CURRENT,SPARK,CLUSTER,PARQUET,false,true", "CURRENT,SPARK,COMPACT,PARQUET,false,true",
+      // Variants that exercise the schema-reconcile path (setNullForMissingColumns=true) with a verdict.
+      "SIX,AVRO,CLUSTER,AVRO,true,true", "EIGHT,AVRO,CLUSTER,AVRO,true,true", "CURRENT,AVRO,CLUSTER,AVRO,true,true",
+      // Guard: with no verdict, the first sync must throw, on both the reconcile and default paths.
+      "SIX,AVRO,CLUSTER,AVRO,true,false", "SIX,AVRO,CLUSTER,AVRO,false,false"})
+  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType,
+                            boolean setNullForMissingColumns,
+                            boolean setTimestampOverride) throws Exception {
+    TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
+      String tableSuffix;
+      String logFormatValue;
+      if ("AVRO".equals(logBlockType)) {
+        logFormatValue = "avro";
+        tableSuffix = "avro_log";
+      } else {
+        logFormatValue = "parquet";
+        tableSuffix = "parquet_log";
       }
-      sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
-      Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
 
-      assertDataframe(df, 12, 14);
+      String dirName = "trips_logical_types_json_mor_write_" + tableSuffix;
+      String dataPath = basePath + "/" + dirName;
+      java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
+      HoodieTestUtils.extractZipToDirectory("logical-repair/" + dirName + ".zip", zipOutput, getClass());
+      String tableBasePath = zipOutput.toString();
 
-      metaClient = HoodieTableMetaClient.builder()
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
           .setConf(storage.getConf())
           .setBasePath(tableBasePath)
           .build();
 
+      // validate no compaction and clustering instants present in the timeline
+      HoodieTimeline completedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
+      assertFalse(completedTimeline.getInstants().stream().anyMatch(i -> i.getAction().equals(HoodieTimeline.COMPACTION_ACTION)));
+      assertFalse(completedTimeline.getInstants().stream().anyMatch(i -> i.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)));
+
+      TypedProperties properties = new TypedProperties();
+      String schemaPath = getClass().getClassLoader().getResource("logical-repair/schema.avsc").toURI().toString();
+      properties.setProperty("hoodie.streamer.schemaprovider.source.schema.file", schemaPath);
+      properties.setProperty("hoodie.streamer.schemaprovider.target.schema.file", schemaPath);
+      String inputDataPath = getClass().getClassLoader().getResource("logical-repair/mor_write_updates/5").toURI().toString();
+      properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
+      String mergerClass = getMergerClassForRecordType(recordType);
+      String tableVersionString = getTableVersionCode(tableVersion);
+
+      properties.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), mergerClass);
+      properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+      properties.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
+      properties.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
+      properties.setProperty("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
+      properties.setProperty("hoodie.cleaner.policy", "KEEP_LATEST_COMMITS");
+      properties.setProperty("hoodie.metatata.enable", "true");
+      properties.setProperty("hoodie.parquet.small.file.limit", "-1");
+      properties.setProperty("hoodie.cleaner.commits.retained", "10");
+      properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
+      properties.setProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logFormatValue);
+      properties.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
+          Boolean.toString(setNullForMissingColumns));
+      if (setTimestampOverride) {
+        properties.setProperty(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES.key(),
+            LOGICAL_REPAIR_TS_OVERRIDES);
+      }
+
+      boolean disableCompaction;
+      if ("COMPACT".equals(operation)) {
+        properties.setProperty("hoodie.compact.inline", "true");
+        properties.setProperty("hoodie.compact.inline.max.delta.commits", "1");
+        disableCompaction = false;
+        // validate that there are no completed compaction (commit) instants in timeline.
+      } else {
+        properties.setProperty("hoodie.compact.inline", "false");
+        disableCompaction = true;
+      }
+
       if ("CLUSTER".equals(operation)) {
-        // after we cluster, the raw parquet should be correct
-
-        // Validate raw parquet files
-        HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
-        Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
-        assertTrue(latestInstant.isPresent(), "No completed commits found");
-
-        List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
-
-        assertEquals(3, baseFilePaths.size());
-
-        // Read raw parquet files
-        Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
-        assertDataframe(rawParquetDf, 12, 14);
-      } else if ("COMPACT".equals(operation)) {
-        // after compaction some files should be ok
-
-        // Validate raw parquet files
-        HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
-        Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
-        assertTrue(latestInstant.isPresent(), "No completed commits found");
-
-        List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
-
-        assertEquals(7, baseFilePaths.size());
-
-        // Read raw parquet files
-        Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.stream()
-            // only read the compacted ones, the others are still incorrect
-            .filter(path -> path.contains(latestInstant.get().requestedTime()))
-            .toArray(String[]::new));
-        assertDataframe(rawParquetDf, 2, 3);
+        properties.setProperty("hoodie.clustering.inline", "true");
+        properties.setProperty("hoodie.clustering.inline.max.commits", "1");
+        properties.setProperty("hoodie.clustering.plan.strategy.single.group.clustering.enabled", "true");
+        properties.setProperty("hoodie.clustering.plan.strategy.sort.columns", "ts_millis,_row_key");
       }
-    } finally {
-      sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
-      if (!HoodieSparkUtils.gteqSpark3_5()) {
-        sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "true");
+
+      Option<TypedProperties> propt = Option.of(properties);
+
+      if (!setTimestampOverride) {
+        // No per-field verdict. The mislabeled timestamp/local-timestamp columns must be rejected on
+        // the first sync rather than silently flipped, on both the reconcile and default write paths.
+        // syncOnce wraps the guard's SchemaCompatibilityException in a HoodieIngestionException, so
+        // walk the cause chain to assert on the underlying exception.
+        Throwable thrown = assertThrows(Exception.class,
+            () -> syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt));
+        Throwable cause = thrown;
+        while (cause != null && !(cause instanceof SchemaCompatibilityException)) {
+          cause = cause.getCause();
+        }
+        assertTrue(cause instanceof SchemaCompatibilityException,
+            "Expected a SchemaCompatibilityException in the cause chain, got: " + thrown);
+        assertTrue(cause.getMessage().contains("column 'ts_millis'")
+                && cause.getMessage().contains("without an explicit"),
+            "Unexpected message: " + cause.getMessage());
+        return;
       }
-    }
+
+      syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt);
+
+      String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
+      try {
+        if (!HoodieSparkUtils.gteqSpark3_5()) {
+          sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
+        }
+        sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
+        Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
+
+        assertDataframe(df, 12, 14);
+
+        metaClient = HoodieTableMetaClient.builder()
+            .setConf(storage.getConf())
+            .setBasePath(tableBasePath)
+            .build();
+
+        if ("CLUSTER".equals(operation)) {
+          // after we cluster, the raw parquet should be correct
+
+          // Validate raw parquet files
+          HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+          Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
+          assertTrue(latestInstant.isPresent(), "No completed commits found");
+
+          List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
+
+          assertEquals(3, baseFilePaths.size());
+
+          // Read raw parquet files
+          Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
+          assertDataframe(rawParquetDf, 12, 14);
+        } else if ("COMPACT".equals(operation)) {
+          // after compaction some files should be ok
+
+          // Validate raw parquet files
+          HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+          Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
+          assertTrue(latestInstant.isPresent(), "No completed commits found");
+
+          List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
+
+          assertEquals(7, baseFilePaths.size());
+
+          // Read raw parquet files
+          Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.stream()
+              // only read the compacted ones, the others are still incorrect
+              .filter(path -> path.contains(latestInstant.get().requestedTime()))
+              .toArray(String[]::new));
+          assertDataframe(rawParquetDf, 2, 3);
+        }
+      } finally {
+        sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
+        if (!HoodieSparkUtils.gteqSpark3_5()) {
+          sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "true");
+        }
+      }
+    });
   }
 
   public static void assertDataframe(Dataset<Row> df, int above, int below) {
@@ -2586,11 +2790,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true,
         false, false, null, null);
-    Exception e = assertThrows(HoodieException.class, () -> {
+    Exception e = assertThrows(HoodieIngestionException.class, () -> {
       syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()));
     }, "Should error out when schema provider is not provided");
     log.debug("Expected error during reading data from source ", e);
-    assertTrue(e.getMessage().contains("Schema provider is required for this operation and for the source of interest. "
+    String errorMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
+    assertTrue(errorMsg.contains("Schema provider is required for this operation and for the source of interest. "
         + "Please set '--schemaprovider-class' in the top level HoodieStreamer config for the source of interest. "
         + "Based on the schema provider class chosen, additional configs might be required. "
         + "For eg, if you choose 'org.apache.hudi.utilities.schema.SchemaRegistryProvider', "
@@ -3510,16 +3715,18 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Target schema is determined based on the Dataframe after transformation
     // No CSV header and no schema provider at the same time are not recommended,
     // as the transformer behavior may be unexpected
-    Exception e = assertThrows(AnalysisException.class, () -> {
+    Exception e = assertThrows(HoodieIngestionException.class, () -> {
       testCsvDFSSource(false, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
     }, "Should error out when doing the transformation.");
     log.debug("Expected error during transformation", e);
+    Throwable cause = e.getCause();
+    assertTrue(cause instanceof AnalysisException, "Expected cause to be AnalysisException but was: " + cause.getClass());
     // First message for Spark 3.4 and above, second message for Spark 3.3, third message for Spark 3.2 and below
     assertTrue(
-        e.getMessage().contains("[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter "
+        cause.getMessage().contains("[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter "
             + "with name `begin_lat` cannot be resolved. Did you mean one of the following?")
-            || e.getMessage().contains("Column 'begin_lat' does not exist. Did you mean one of the following?")
-            || e.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
+            || cause.getMessage().contains("Column 'begin_lat' does not exist. Did you mean one of the following?")
+            || cause.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
   }
 
   @Test

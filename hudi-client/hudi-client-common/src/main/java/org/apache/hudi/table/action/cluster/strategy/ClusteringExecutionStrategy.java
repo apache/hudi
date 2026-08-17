@@ -32,6 +32,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
@@ -40,8 +42,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -107,7 +107,11 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
   protected TypedProperties getReaderProperties(long maxMemory) {
     HoodieWriteConfig config = getWriteConfig();
-    TypedProperties props = new TypedProperties();
+    // Seed from the full write config so that merge-related properties (e.g. the custom record
+    // merger impl classes, merge mode and strategy id) are propagated to the file group reader.
+    // Without this, reading source file groups with a CUSTOM merge mode fails to resolve the
+    // configured merger (HUDI-18980). This mirrors the compaction read path.
+    TypedProperties props = TypedProperties.copy(config.getProps());
     props.setProperty(SPILLABLE_MAP_BASE_PATH.key(), config.getSpillableMapBasePath());
     props.setProperty(SPILLABLE_DISK_MAP_TYPE.key(), config.getCommonConfig().getSpillableDiskMapType().toString());
     props.setProperty(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), Boolean.toString(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled()));

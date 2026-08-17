@@ -19,7 +19,7 @@
 
 package org.apache.hudi.io.storage.hadoop;
 
-import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -28,10 +28,10 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.io.storage.HoodieAvroFileWriter;
+import org.apache.hudi.core.io.storage.HoodieOrcConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.io.storage.HoodieAvroFileWriter;
-import org.apache.hudi.io.storage.HoodieOrcConfig;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.GenericRecord;
@@ -48,7 +48,9 @@ import org.apache.orc.Writer;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -68,6 +70,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private final Option<HoodieWrapperFileSystem> wrapperFs;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
+  private final Map<String, String> footerMetadata = new LinkedHashMap<>();
 
   private final HoodieOrcConfig orcConfig;
   private String minRecordKey;
@@ -152,6 +155,11 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   }
 
   @Override
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    this.footerMetadata.putAll(footerMetadata);
+  }
+
+  @Override
   public void close() throws IOException {
     if (batch.size != 0) {
       writer.addRowBatch(batch);
@@ -170,6 +178,9 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
       }
     }
     writer.addUserMetadata(HoodieOrcConfig.AVRO_SCHEMA_METADATA_KEY, ByteBuffer.wrap(getUTF8Bytes(schema.toString())));
+    for (Map.Entry<String, String> entry : footerMetadata.entrySet()) {
+      writer.addUserMetadata(entry.getKey(), ByteBuffer.wrap(getUTF8Bytes(entry.getValue())));
+    }
 
     writer.close();
   }

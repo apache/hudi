@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.StreamingMetadataWriteHandler;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.function.Function;

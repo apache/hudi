@@ -18,67 +18,23 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.CompatAlias;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.lock.LockProvider;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import javax.annotation.Nonnull;
-
-import java.io.Serializable;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-
 /**
- * NoopLockProvider as the name suggests, is a no op lock provider. Any caller asking for a lock will be able to get hold of the lock.
- * This is not meant to be used a production grade lock providers. This is meant to be used for Hudi's internal operations.
- * For eg: During upgrade, we have nested lock situations, and we leverage this {@code NoopLockProvider} for any operations we
- * might want to do within the upgradeHandler blocks to avoid re-entrant situations. Not all lock providers support re-entrance and during upgrade,
- * it is expected to have a single writer to the Hudi table of interest.
+ * Compatibility alias for {@link org.apache.hudi.core.transaction.lock.NoopLockProvider},
+ * kept only so existing {@code hoodie.write.lock.provider} configs referencing the old class
+ * name keep resolving, e.g. tables carrying the setting through an upgrade. Holds no logic;
+ * do not use in new code.
+ *
+ * @deprecated use {@link org.apache.hudi.core.transaction.lock.NoopLockProvider} instead.
  */
-public class NoopLockProvider implements LockProvider<ReentrantReadWriteLock>, Serializable {
+@Deprecated
+@CompatAlias(of = org.apache.hudi.core.transaction.lock.NoopLockProvider.class, since = "1.3.0")
+public class NoopLockProvider extends org.apache.hudi.core.transaction.lock.NoopLockProvider {
 
   public NoopLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
-    // no op.
-  }
-
-  @Override
-  public boolean tryLock(long time, @Nonnull TimeUnit unit) throws InterruptedException {
-    return true;
-  }
-
-  @Override
-  public void unlock() {
-    // no op.
-  }
-
-  @Override
-  public void lockInterruptibly() {
-    // no op.
-  }
-
-  @Override
-  public void lock() {
-    // no op.
-  }
-
-  @Override
-  public boolean tryLock() {
-    return true;
-  }
-
-  @Override
-  public ReentrantReadWriteLock getLock() {
-    return new ReentrantReadWriteLock();
-  }
-
-  @Override
-  public String getCurrentOwnerLockInfo() {
-    return StringUtils.EMPTY_STRING;
-  }
-
-  @Override
-  public void close() {
-    // no op.
+    super(lockConfiguration, conf);
   }
 }

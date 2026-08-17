@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -75,7 +76,6 @@ import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
@@ -98,7 +98,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
@@ -136,7 +135,13 @@ public class StreamerUtil {
 
   public static TypedProperties getProps(FlinkStreamerConfig cfg) {
     if (cfg.propsFilePath.isEmpty()) {
-      return new TypedProperties();
+      TypedProperties properties = new TypedProperties();
+      cfg.configs.forEach(x -> {
+        String[] kv = x.split("=");
+        ValidationUtils.checkArgument(kv.length == 2);
+        properties.setProperty(kv[0], kv[1]);
+      });
+      return properties;
     }
     return readConfig(
         HadoopConfigurations.getHadoopConf(cfg),
@@ -337,6 +342,7 @@ public class StreamerUtil {
           .setTableVersion(conf.get(FlinkOptions.WRITE_TABLE_VERSION))
           .setTableFormat(conf.get(FlinkOptions.WRITE_TABLE_FORMAT))
           .setBaseFileFormat(conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null))
+          .setTableStorageLayout(OptionsResolver.getTableStorageLayout(conf).configValue())
           .setRecordMergeMode(getMergeMode(conf))
           .setRecordMergeStrategyId(getMergeStrategyId(conf))
           .setPayloadClassName(getPayloadClass(conf))
@@ -733,12 +739,7 @@ public class StreamerUtil {
    * @return HoodieMetadataConfig constructed from flink configuration.
    */
   public static HoodieMetadataConfig metadataConfig(org.apache.flink.configuration.Configuration conf) {
-    Properties properties = new Properties();
-
-    // set up metadata.enabled=true in table DDL to enable metadata listing
-    properties.put(HoodieMetadataConfig.ENABLE.key(), conf.get(FlinkOptions.METADATA_ENABLED));
-
-    return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
+    return FlinkWriteClients.getMetadataConfig(conf);
   }
 
   /**

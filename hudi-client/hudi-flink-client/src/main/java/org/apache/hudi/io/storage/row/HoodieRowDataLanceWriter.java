@@ -26,6 +26,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.io.lance.HoodieBaseLanceWriter;
+import org.apache.hudi.io.storage.row.lance.HoodieFlinkLanceArrowUtils;
+import org.apache.hudi.io.storage.row.lance.LanceRowDataWriter;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -134,18 +136,17 @@ public class HoodieRowDataLanceWriter extends HoodieBaseLanceWriter<RowData, Str
 
   private class RowDataArrowWriter implements ArrowWriter<RowData> {
     private final VectorSchemaRoot root;
+    private final LanceRowDataWriter writer;
     private int rowId;
 
     private RowDataArrowWriter(VectorSchemaRoot root) {
       this.root = root;
+      this.writer = new LanceRowDataWriter(rowType, root.getFieldVectors(), utcTimestamp);
     }
 
     @Override
     public void write(RowData row) {
-      for (int i = 0; i < rowType.getFieldCount(); i++) {
-        HoodieFlinkLanceArrowUtils.writeValue(rowType.getTypeAt(i), root.getVector(i), rowId, row, i, utcTimestamp);
-      }
-      rowId++;
+      writer.write(row, rowId++);
     }
 
     @Override

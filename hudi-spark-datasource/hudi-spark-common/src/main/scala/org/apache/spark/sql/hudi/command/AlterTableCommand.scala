@@ -21,17 +21,17 @@ import org.apache.hudi.{DataSourceUtils, HoodieWriterUtils}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, WriteOperationType}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
+import org.apache.hudi.common.schema.internal.InternalSchema
+import org.apache.hudi.common.schema.internal.action.TableChange.ColumnChangeID
+import org.apache.hudi.common.schema.internal.action.TableChanges
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
+import org.apache.hudi.common.schema.internal.io.FileBasedInternalSchemaStorageManager
+import org.apache.hudi.common.schema.internal.utils.{SchemaChangeUtils, SerDeHelper}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
-import org.apache.hudi.internal.schema.action.TableChanges
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
-import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager
-import org.apache.hudi.internal.schema.utils.{SchemaChangeUtils, SerDeHelper}
 import org.apache.hudi.table.HoodieSparkTable
 
 import org.apache.hadoop.conf.Configuration

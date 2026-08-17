@@ -24,11 +24,6 @@ import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.spark.sql.catalyst.InternalRow
 
 class Spark42HoodiePartitionCDCFileGroupMapping(partitionValues: InternalRow,
-                                                fileSplits: List[HoodieCDCFileSplit])
+                                                protected val fileSplits: List[HoodieCDCFileSplit])
   extends Spark42HoodiePartitionValues(partitionValues)
-    with HoodiePartitionCDCFileGroupMapping {
-
-  override def getFileSplits(): List[HoodieCDCFileSplit] = {
-    fileSplits
-  }
-}
+  with Spark4HoodiePartitionCDCFileGroupMapping

@@ -18,13 +18,14 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.avro.AvroSchemaUtils;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import lombok.Getter;
 import org.apache.avro.JsonProperties;
@@ -51,7 +52,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.createNewSchemaField;
 
 /**
  * Wrapper class for Avro Schema that provides Hudi-specific schema functionality
@@ -282,39 +283,25 @@ public class HoodieSchema implements Serializable {
    * @return set of field names (preserves insertion order), or empty set if input is null / empty
    */
   public static Set<String> parseVectorColumnNames(String footerValue) {
-    if (footerValue == null || footerValue.isEmpty()) {
-      return Collections.emptySet();
-    }
     LinkedHashSet<String> names = new LinkedHashSet<>();
-    int depth = 0;
-    int start = 0;
-    for (int i = 0; i < footerValue.length(); i++) {
-      char c = footerValue.charAt(i);
-      if (c == '(') {
-        depth++;
-      } else if (c == ')') {
-        depth--;
-      } else if (c == ',' && depth == 0) {
-        addVectorColumnName(footerValue, start, i, names);
-        start = i + 1;
+    // Split on top-level commas only so the comma inside a VECTOR(dim, elemType) descriptor is
+    // not mistaken for a column separator.
+    for (String entry : StringUtils.splitTopLevelCommas(footerValue)) {
+      int colon = entry.indexOf(':');
+      if (colon > 0) {
+        names.add(entry.substring(0, colon).trim());
       }
     }
-    addVectorColumnName(footerValue, start, footerValue.length(), names);
     return names;
   }
 
-  private static void addVectorColumnName(String s, int start, int end, Set<String> names) {
-    int colon = s.indexOf(':', start);
-    if (colon > start && colon < end) {
-      names.add(s.substring(start, colon).trim());
-    }
-  }
-
-
   private Schema avroSchema;
   private HoodieSchemaType type;
-  private transient List<HoodieSchemaField> fields;
-  private transient Map<String, HoodieSchemaField> fieldMap;
+  // interned instances are shared across threads, so the lazily built caches use a benign racy
+  // single-check (see getFields()/getFieldMap()): lock-free volatile reads, and volatile gives
+  // safe publication of the immutable, deterministic result
+  private transient volatile List<HoodieSchemaField> fields;
+  private transient volatile Map<String, HoodieSchemaField> fieldMap;
 
   // Register the Variant logical type with Avro
   static {
@@ -1152,6 +1139,8 @@ public class HoodieSchema implements Serializable {
     if (!hasFields()) {
       throw new IllegalStateException("Cannot get fields from schema type: " + type);
     }
+    // Benign race: the result is an immutable, deterministic view of avroSchema's fields, so concurrent
+    // callers may each build it once but converge on equal lists; the volatile field makes publication safe.
     if (fields == null) {
       fields = Collections.unmodifiableList(avroSchema.getFields().stream().map(HoodieSchemaField::new).collect(Collectors.toList()));
     }
@@ -1195,9 +1184,10 @@ public class HoodieSchema implements Serializable {
   }
 
   private Map<String, HoodieSchemaField> getFieldMap() {
+    // Benign race, same rationale as getFields(): deterministic immutable result, volatile for safe publication.
     if (fieldMap == null) {
-      fieldMap = getFields().stream()
-          .collect(Collectors.toMap(HoodieSchemaField::name, field -> field));
+      fieldMap = Collections.unmodifiableMap(getFields().stream()
+          .collect(Collectors.toMap(HoodieSchemaField::name, field -> field)));
     }
     return fieldMap;
   }
@@ -1384,7 +1374,12 @@ public class HoodieSchema implements Serializable {
     return HoodieSchema.createUnion(nonNullTypes);
   }
 
-  boolean containsBlobType() {
+  /**
+   * Recursively checks whether this schema is or contains a BLOB type at any nesting depth,
+   * descending through arrays, maps, unions and record fields. Unlike {@link #isBlobField()},
+   * this also finds BLOBs nested inside records.
+   */
+  public boolean containsBlobType() {
     if (getType() == HoodieSchemaType.BLOB) {
       return true;
     } else if (getType() == HoodieSchemaType.ARRAY) {

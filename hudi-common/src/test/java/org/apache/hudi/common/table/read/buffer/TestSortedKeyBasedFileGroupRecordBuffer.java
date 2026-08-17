@@ -19,13 +19,14 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -40,7 +41,6 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.generic.IndexedRecord;
@@ -56,6 +56,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -98,7 +99,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
         ClosableIterator.wrap(Arrays.asList(testRecord6, testRecord4, testRecord1, testRecord6Update, testRecord2Update).iterator()));
 
     HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
-    when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[] {DeleteRecord.create("3", "")});
+    mockDeleteRecords(deleteBlock, DeleteRecord.create("3", ""));
     fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
     fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
 
@@ -125,7 +126,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
-        properties, mock(HoodieTableMetaClient.class));
+        properties, createMockMetaClient(tableConfig));
     readerContext.setSchemaHandler(schemaHandler);
     readerContext.initRecordMerger(properties);
     List<HoodieRecord> inputRecords =
@@ -175,7 +176,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     when(dataBlock2.getEngineRecordIterator(mockReaderContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2Update, testRecord5, testRecord3, testRecord1).iterator()));
 
     HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
-    when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[] {DeleteRecord.create("3", "")});
+    mockDeleteRecords(deleteBlock, DeleteRecord.create("3", ""));
     fileGroupRecordBuffer.processDataBlock(dataBlock1, Option.empty());
     fileGroupRecordBuffer.processDataBlock(dataBlock2, Option.empty());
     fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
@@ -188,9 +189,44 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     assertEquals(1, readStats.getNumDeletes());
   }
 
+  @Test
+  void readBaseFileAndLogFileWithBinaryKeys() throws IOException {
+    // U+E000 (UTF-8 lead byte 0xEE) sorts BEFORE U+20000 (UTF-8 lead byte 0xF0) in raw UTF-8 byte
+    // order, but AFTER it under String.compareTo (UTF-16). The base-file record carries the
+    // U+E000-prefixed (UTF-8-smaller, UTF-16-larger) key and the log carries the U+20000-prefixed
+    // (UTF-8-larger, UTF-16-smaller) key, so a correct merge must emit them in UTF-8 byte order.
+    String bmpPrivateUse = new String(Character.toChars(0xE000));
+    String supplementary = new String(Character.toChars(0x20000));
+    TestRecord asciiA = new TestRecord("a", 0);
+    TestRecord asciiB = new TestRecord("b", 0);
+    TestRecord bmpRecord = new TestRecord(bmpPrivateUse + "-base", 0);
+    TestRecord supplementaryRecord = new TestRecord(supplementary + "-log", 0);
+
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieReaderContext<TestRecord> mockReaderContext = mock(HoodieReaderContext.class, RETURNS_DEEP_STUBS);
+    SortedKeyBasedFileGroupRecordBuffer<TestRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(mockReaderContext, readStats);
+
+    // Base-file records must already be in UTF-8 byte order: "a" (0x61) then the U+E000 key (0xEE...).
+    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(asciiA, bmpRecord).iterator()));
+
+    // Log records are supplied shuffled; the buffer sorts them by UTF-8 bytes before merging.
+    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+    when(dataBlock.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
+    when(dataBlock.getEngineRecordIterator(mockReaderContext)).thenReturn(
+        ClosableIterator.wrap(Arrays.asList(supplementaryRecord, asciiB).iterator()));
+    fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
+
+    List<TestRecord> actualRecords = getActualRecordsForSortedKeyBased(fileGroupRecordBuffer);
+    // Expected UTF-8 byte order: "a", "b", U+E000 key, U+20000 key; nothing is dropped.
+    assertEquals(Arrays.asList(asciiA, asciiB, bmpRecord, supplementaryRecord), actualRecords);
+    // The U+E000-prefixed base record precedes the U+20000-prefixed log record (reverse of UTF-16).
+    assertTrue(actualRecords.indexOf(bmpRecord) < actualRecords.indexOf(supplementaryRecord));
+  }
+
   private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<TestRecord> mockReaderContext, HoodieReadStats readStats) {
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(mockReaderContext.getSchemaHandler().getSchemaEvolutionTransformer(any(), any())).thenReturn(Option.empty());
     when(mockReaderContext.getRecordContext().getDeleteRow(any())).thenAnswer(invocation -> {
       String recordKey = invocation.getArgument(0);
       return new TestRecord(recordKey, 0);
@@ -199,7 +235,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     when(mockReaderContext.getRecordContext().getOrderingValue(any(), any(), anyList())).thenReturn(0);
     when(mockReaderContext.getRecordContext().getSchemaFromBufferRecord(any())).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(mockReaderContext.getRecordContext().toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
-    when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(mockReaderContext.getRecordContext().seal(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     RecordMergeMode recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;
     Option<PartialUpdateMode> partialUpdateModeOpt = Option.empty();

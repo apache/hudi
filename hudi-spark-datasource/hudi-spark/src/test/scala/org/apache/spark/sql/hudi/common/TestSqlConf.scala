@@ -22,7 +22,8 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadata
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
+import org.apache.hudi.common.util.HoodieStorageUtils
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.scalatest.BeforeAndAfter

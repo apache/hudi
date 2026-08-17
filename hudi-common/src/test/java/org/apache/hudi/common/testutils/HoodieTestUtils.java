@@ -20,6 +20,7 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -46,6 +47,7 @@ import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNamePa
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultTimelineFactory;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -53,7 +55,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -91,7 +92,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
-import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
+import static org.apache.hudi.common.util.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -151,6 +152,24 @@ public class HoodieTestUtils {
 
   public static HoodieStorage getStorage(StoragePath path) {
     return HoodieStorageUtils.getStorage(path, getDefaultStorageConf());
+  }
+
+  /**
+   * Lists all native (v2) log files (e.g. {@code *.log.parquet} / {@code *.deletes.parquet}) under
+   * the given base path, scanning recursively.
+   */
+  public static List<StoragePath> listNativeLogFiles(HoodieStorage storage, String basePath) throws IOException {
+    return storage.listFiles(new StoragePath(basePath)).stream()
+        .map(StoragePathInfo::getPath)
+        .filter(path -> FSUtils.isNativeLogFile(path.getName()))
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Whether the table at the given base path contains any native (v2) log files.
+   */
+  public static boolean hasNativeLogFiles(HoodieStorage storage, String basePath) throws IOException {
+    return !listNativeLogFiles(storage, basePath).isEmpty();
   }
 
   public static HoodieTableMetaClient init(String basePath) throws IOException {

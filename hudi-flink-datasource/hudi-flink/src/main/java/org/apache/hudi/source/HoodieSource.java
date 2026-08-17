@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -33,6 +34,7 @@ import org.apache.hudi.source.reader.HoodieSourceReader;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.DefaultHoodieSplitDiscover;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
+import org.apache.hudi.source.split.GlobalHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplitSerializer;
@@ -43,6 +45,7 @@ import org.apache.hudi.source.split.assign.HoodieSplitAssigner;
 import org.apache.hudi.source.split.assign.HoodieSplitAssigners;
 import org.apache.hudi.util.FileIndexReader;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.connector.source.Source;
@@ -53,8 +56,6 @@ import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -71,11 +72,10 @@ import java.util.stream.Collectors;
  *
  * @param <T> the record type to emit
  */
+@Slf4j
 public class HoodieSource<T> extends FileIndexReader implements Source<T, HoodieSourceSplit, HoodieSplitEnumeratorState> {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSource.class);
-
   private final HoodieScanContext scanContext;
-  private final SplitReaderFunction<T> readerFunction;
+  private final SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier;
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
   private final HoodieTableMetaClient metaClient;
   private final HoodieRecordEmitter<T> recordEmitter;
@@ -83,18 +83,18 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
 
   public HoodieSource(
       HoodieScanContext scanContext,
-      SplitReaderFunction<T> readerFunction,
+      SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
       SerializableComparator<HoodieSourceSplit> splitComparator,
       HoodieTableMetaClient metaClient,
       HoodieRecordEmitter<T> recordEmitter) {
     ValidationUtils.checkArgument(scanContext != null, "scanContext can't be null.");
-    ValidationUtils.checkArgument(readerFunction != null, "readerFunction can't be null.");
+    ValidationUtils.checkArgument(readerFunctionSupplier != null, "readerFunctionSupplier can't be null.");
     ValidationUtils.checkArgument(splitComparator != null, "splitComparator can't be null.");
     ValidationUtils.checkArgument(metaClient != null, "metaClient can't be null.");
     ValidationUtils.checkArgument(recordEmitter != null, "recordEmitter can't be null.");
 
     this.scanContext = scanContext;
-    this.readerFunction = readerFunction;
+    this.readerFunctionSupplier = readerFunctionSupplier;
     this.splitComparator = splitComparator;
     this.metaClient = metaClient;
     this.recordEmitter = recordEmitter;
@@ -129,29 +129,40 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
 
   @Override
   public SourceReader<T, HoodieSourceSplit> createReader(SourceReaderContext readerContext) throws Exception {
-    return new HoodieSourceReader<T>(tableName, recordEmitter, scanContext, readerContext, readerFunction, splitComparator);
+    return new HoodieSourceReader<T>(
+        tableName, recordEmitter, scanContext, readerContext, readerFunctionSupplier, splitComparator);
   }
 
   private SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> createEnumerator(
       SplitEnumeratorContext<HoodieSourceSplit> enumContext,
       @Nullable HoodieSplitEnumeratorState enumeratorState) {
-    HoodieSplitProvider splitProvider;
-    HoodieSplitAssigner splitAssigner = HoodieSplitAssigners.createHoodieSplitAssigner(
-            scanContext.getConf(), enumContext.currentParallelism());
+    final boolean streaming = scanContext.isStreaming();
 
-    if (enumeratorState == null) {
+    // Streaming keeps per-subtask assignment (DefaultHoodieSplitProvider) so that a file id's
+    // successive incremental splits stay affine to one reader. Bounded reads instead use a shared
+    // work-stealing pool: the full split set is known up front and each split is independent and
+    // order-free (one split per file group, no cross-commit continuation), so any reader can read
+    // any split. Serving from one pool keeps every reader busy until it is drained, which removes
+    // the straggler tail that count-balanced, non-stealing assignment produces.
+    HoodieSplitProvider splitProvider;
+    if (streaming) {
+      HoodieSplitAssigner splitAssigner = HoodieSplitAssigners.createHoodieSplitAssigner(
+          scanContext.getConf(), enumContext.currentParallelism());
       splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
     } else {
-      LOG.info(
+      splitProvider = new GlobalHoodieSplitProvider();
+    }
+
+    if (enumeratorState != null) {
+      log.info(
           "Hoodie source restored {} splits from state for table {}",
           enumeratorState.getPendingSplitStates().size(), tableName);
       List<HoodieSourceSplit> pendingSplits =
           enumeratorState.getPendingSplitStates().stream().map(HoodieSourceSplitState::getSplit).collect(Collectors.toList());
-      splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
       splitProvider.onDiscoveredSplits(pendingSplits);
     }
 
-    if (scanContext.isStreaming()) {
+    if (streaming) {
       HoodieContinuousSplitDiscover discover = new DefaultHoodieSplitDiscover(
           scanContext);
 
@@ -179,7 +190,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
             List<HoodieSourceSplit> splits = buildHoodieSplits(metaClient, flinkConf);
             if (splits.isEmpty()) {
               // When there is no input splits, just return an empty source.
-              LOG.info("No input splits generate for MERGE_ON_READ input format. Returning empty collection");
+              log.info("No input splits generate for MERGE_ON_READ input format. Returning empty collection");
             }
             return splits;
           case COPY_ON_WRITE:

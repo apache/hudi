@@ -23,6 +23,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.index.expression.HoodieExpressionIndex;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

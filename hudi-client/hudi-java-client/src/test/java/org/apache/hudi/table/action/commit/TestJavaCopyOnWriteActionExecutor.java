@@ -366,7 +366,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     int counts = 0;
     for (File file : Paths.get(basePath, "2016/01/31").toFile().listFiles()) {
       if (file.getName().endsWith(table.getBaseFileExtension()) && FSUtils.getCommitTime(file.getName()).equals(instantTime)) {
-        log.info(file.getName() + "-" + file.length());
+        log.info("{}-{}", file.getName(), file.length());
         counts++;
       }
     }

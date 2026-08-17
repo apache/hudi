@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.timeline.TimelineArchiverV1;
 import org.apache.hudi.client.timeline.TimelineArchivers;
-import org.apache.hudi.client.timeline.versioning.v1.TimelineArchiverV1;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;

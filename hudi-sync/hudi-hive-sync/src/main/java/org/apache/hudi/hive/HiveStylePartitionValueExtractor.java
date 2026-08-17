@@ -34,7 +34,9 @@ public class HiveStylePartitionValueExtractor implements PartitionValueExtractor
   @Override
   public List<String> extractPartitionValuesInPath(String partitionPath) {
     // partition path is expected to be in this format partition_key=partition_value.
-    String[] splits = partitionPath.split("=");
+    // Split on the first '=' only so a value that itself contains '=' (e.g. base64 padding)
+    // is kept intact rather than making the split produce more than two parts.
+    String[] splits = partitionPath.split("=", 2);
     if (splits.length != 2) {
       throw new IllegalArgumentException(
               "Partition path " + partitionPath + " is not in the form partition_key=partition_value.");

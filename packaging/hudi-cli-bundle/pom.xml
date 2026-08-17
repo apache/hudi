@@ -36,7 +36,7 @@
     <jakarta.validation.version>2.0.2</jakarta.validation.version>
     <jline.version>3.21.0</jline.version>
     <hudi.cli.gson.version>2.11.0</hudi.cli.gson.version>
-    <commons-configuration-2.version>2.11.0</commons-configuration-2.version>
+    <commons-configuration-2.version>2.15.0</commons-configuration-2.version>
   </properties>
 
   <build>

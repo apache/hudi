@@ -28,8 +28,8 @@ import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.client.heartbeat.WriterHeartbeatUtils;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.TimelineArchivers;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
@@ -424,6 +424,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         );
       }
       log.info("Compacted successfully on commit {}", compactionCommitTime);
+      fireCommitCallbackIfNecessary(compactionCommitTime, HoodieTimeline.COMMIT_ACTION,
+          writeStats, table::getBaseFileOnlyView, Option.empty());
     } finally {
       if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
         this.heartbeatClient.stop(compactionCommitTime);
@@ -496,6 +498,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       );
     }
     log.info("Log Compacted successfully on commit {}", logCompactionCommitTime);
+    fireCommitCallbackIfNecessary(logCompactionCommitTime, HoodieTimeline.DELTA_COMMIT_ACTION,
+        writeStats, table::getBaseFileOnlyView, Option.empty());
   }
 
   /**
@@ -640,6 +644,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       heartbeatClient.stop(clusteringCommitTime);
     }
     log.info("Clustering successfully on commit {} for table {}", clusteringCommitTime, table.getConfig().getBasePath());
+    fireCommitCallbackIfNecessary(clusteringCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION,
+        writeStats, table::getBaseFileOnlyView, Option.empty());
   }
 
   protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
@@ -725,6 +731,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // so it is handled differently to avoid locking for planning.
       return scheduleCleaning(createTable(config, storageConf), providedInstantTime);
     }
+    // Only enrich metadata after early-return checks, when we're actually going to use it
+    extraMetadata = updateExtraMetadata(extraMetadata);
     Option<HoodieInstant> lastCompletedInstant = lastCompletedTxnAndMetadata.isPresent()
         ? Option.of(lastCompletedTxnAndMetadata.get().getLeft())
         : Option.empty();
@@ -1114,11 +1122,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
         // do we need to handle failed rollback of a bootstrap
         rollbackFailedBootstrap();
-        HeartbeatUtils.deleteHeartbeatFile(storage, basePath, entry.getKey(), config);
+        WriterHeartbeatUtils.deleteHeartbeatFile(storage, basePath, entry.getKey(), config);
         break;
       } else {
         rollback(entry.getKey(), entry.getValue(), skipLocking, skipVersionCheck);
-        HeartbeatUtils.deleteHeartbeatFile(storage, basePath, entry.getKey(), config);
+        WriterHeartbeatUtils.deleteHeartbeatFile(storage, basePath, entry.getKey(), config);
       }
     }
   }
@@ -1429,7 +1437,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       case CLEAN:
         return tableServiceManagerClient.executeClean();
       default:
-        log.info("Not supported delegate to table service manager, tableServiceType : " + tableServiceType.getAction());
+        log.info("Not supported delegate to table service manager, tableServiceType : {}", tableServiceType.getAction());
         return Option.empty();
     }
   }

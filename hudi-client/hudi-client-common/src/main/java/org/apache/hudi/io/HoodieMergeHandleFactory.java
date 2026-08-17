@@ -118,9 +118,11 @@ public class HoodieMergeHandleFactory {
       String maxInstantTime,
       HoodieRecord.HoodieRecordType recordType) {
 
-    boolean isFallbackEnabled = config.isMergeHandleFallbackEnabled();
-
-    String mergeHandleClass = config.getCompactionMergeHandleClassName();
+    String mergeHandleClass = hoodieTable.getMetaClient().getTableConfig().isLSMTreeStorageLayout()
+        ? LsmFileGroupReaderBasedMergeHandle.class.getName()
+        : config.getCompactionMergeHandleClassName();
+    boolean isFallbackEnabled = config.isMergeHandleFallbackEnabled()
+        && !LsmFileGroupReaderBasedMergeHandle.class.getName().equals(mergeHandleClass);
     String logContext = String.format("for fileId %s and partitionPath %s at commit %s", operation.getFileId(), operation.getPartitionPath(), instantTime);
     log.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClass, logContext);
 
@@ -165,26 +167,22 @@ public class HoodieMergeHandleFactory {
     String mergeHandleClass;
     String fallbackMergeHandleClass = null;
 
-    // Overwrite to a different implementation for {@link HoodieWriteMergeHandle} if sorting or CDC is enabled.
-    if (table.requireSortedRecords()) {
-      if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
-        mergeHandleClass = HoodieSortedMergeHandleWithChangeLog.class.getName();
-      } else {
-        mergeHandleClass = HoodieSortedMergeHandle.class.getName();
-      }
+    // Overwrite to file-group-reader based implementations if sorted output is required.
+    if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+      mergeHandleClass = LsmFileGroupReaderBasedMergeHandle.class.getName();
     } else if (!WriteOperationType.isChangingRecords(operationType) && writeConfig.allowDuplicateInserts()) {
       mergeHandleClass = writeConfig.getConcatHandleClassName();
       if (!mergeHandleClass.equals(HoodieWriteConfig.CONCAT_HANDLE_CLASS_NAME.defaultValue())) {
         fallbackMergeHandleClass = HoodieWriteConfig.CONCAT_HANDLE_CLASS_NAME.defaultValue();
       }
-    } else if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
+    } else if (table.requireSortedRecords() || table.getMetaClient().getTableConfig().isCDCEnabled()) {
       if (writeConfig.getMergeHandleClassName().equals(FileGroupReaderBasedMergeHandle.class.getName())) {
         mergeHandleClass = writeConfig.getMergeHandleClassName();
         if (!mergeHandleClass.equals(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue())) {
           fallbackMergeHandleClass = HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue();
         }
       } else {
-        mergeHandleClass = HoodieMergeHandleWithChangeLog.class.getName();
+        mergeHandleClass = FileGroupReaderBasedMergeHandle.class.getName();
       }
     } else {
       mergeHandleClass = writeConfig.getMergeHandleClassName();
@@ -196,6 +194,9 @@ public class HoodieMergeHandleFactory {
     return Pair.of(mergeHandleClass, fallbackMergeHandleClass);
   }
 
+  /**
+   * IMPORTANT: this is only for compaction paths without file group reader.
+   */
   @VisibleForTesting
   static Pair<String, String> getMergeHandleClassesCompaction(HoodieWriteConfig writeConfig, HoodieTable table) {
     String mergeHandleClass;

@@ -199,4 +199,52 @@ public class TestCheckpointUtils {
     assertInstanceOf(StreamerCheckpointV1.class, checkpoint);
     assertEquals(CHECKPOINT_TO_RESUME, checkpoint.getCheckpointKey());
   }
+
+  @Test
+  public void testResolveToV1V2CheckpointWithRequestTime() {
+    String checkpoint = "20240301";
+    UnresolvedStreamerCheckpointBasedOnCfg mockCheckpoint = mock(UnresolvedStreamerCheckpointBasedOnCfg.class);
+    when(mockCheckpoint.getCheckpointKey()).thenReturn("resumeFromInstantRequestTime:" + checkpoint);
+
+    Checkpoint result = CheckpointUtils.resolveToActualCheckpointVersion(mockCheckpoint);
+
+    assertInstanceOf(StreamerCheckpointV1.class, result);
+    assertEquals(checkpoint, result.getCheckpointKey());
+  }
+
+  @Test
+  public void testResolveToV1V2CheckpointWithCompletionTime() {
+    String checkpoint = "20240302";
+    UnresolvedStreamerCheckpointBasedOnCfg mockCheckpoint = mock(UnresolvedStreamerCheckpointBasedOnCfg.class);
+    when(mockCheckpoint.getCheckpointKey()).thenReturn("resumeFromInstantCompletionTime:" + checkpoint);
+
+    Checkpoint result = CheckpointUtils.resolveToActualCheckpointVersion(mockCheckpoint);
+
+    assertInstanceOf(StreamerCheckpointV2.class, result);
+    assertEquals(checkpoint, result.getCheckpointKey());
+  }
+
+  @Test
+  public void testResolveToV1V2CheckpointWithInvalidPrefix() {
+    UnresolvedStreamerCheckpointBasedOnCfg mockCheckpoint = mock(UnresolvedStreamerCheckpointBasedOnCfg.class);
+    when(mockCheckpoint.getCheckpointKey()).thenReturn("invalidPrefix:20240303");
+
+    IllegalArgumentException exception = assertThrows(
+        IllegalArgumentException.class,
+        () -> CheckpointUtils.resolveToActualCheckpointVersion(mockCheckpoint)
+    );
+    assertTrue(exception.getMessage().contains("Illegal checkpoint key override"));
+  }
+
+  @Test
+  public void testResolveToV1V2CheckpointWithMalformedInput() {
+    UnresolvedStreamerCheckpointBasedOnCfg mockCheckpoint = mock(UnresolvedStreamerCheckpointBasedOnCfg.class);
+    when(mockCheckpoint.getCheckpointKey()).thenReturn("malformedInput");
+
+    IllegalArgumentException exception = assertThrows(
+        IllegalArgumentException.class,
+        () -> CheckpointUtils.resolveToActualCheckpointVersion(mockCheckpoint)
+    );
+    assertTrue(exception.getMessage().contains("Illegal checkpoint key override"));
+  }
 }

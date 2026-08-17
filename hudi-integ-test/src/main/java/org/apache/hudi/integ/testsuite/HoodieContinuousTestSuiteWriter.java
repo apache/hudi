@@ -40,9 +40,8 @@ import java.util.Properties;
 /**
  * Test suite Writer that assists in testing async table operations with Deltastreamer continuous mode.
  *
- * TODO: [HUDI-8294]
  * Sample command
- * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+ * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.12:3.5.5 \
  *  --conf spark.task.cpus=1 --conf spark.executor.cores=1 \
  * --conf spark.task.maxFailures=100 \
  * --conf spark.memory.fraction=0.4 \

@@ -18,10 +18,10 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -65,7 +65,7 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
           .collect(Collectors.toList());
       HoodieSchema recordKeySchema = HoodieSchemaUtils.generateProjectionSchema(schema, recordKeyColumns);
 
-      LOG.info("Schema to be used for reading record keys: " + recordKeySchema);
+      LOG.info("Schema to be used for reading record keys: {}", recordKeySchema);
 
       executeBootstrap(bootstrapHandle, sourceFilePath, keyGenerator, partitionPath, recordKeySchema);
     } catch (Exception e) {

@@ -57,16 +57,16 @@ public class SqlQueryEqualityPreCommitValidator<T, I, K, O extends HoodieData<Wr
     try {
       prevRows = executeSqlQuery(
           sqlContext, query, prevTableSnapshot, "previous state").cache();
-      log.info("Total rows in prevRows " + prevRows.count());
+      log.info("Total rows in prevRows {}", prevRows.count());
       newRows = executeSqlQuery(
           sqlContext, query, newTableSnapshot, "new state").cache();
-      log.info("Total rows in newRows " + newRows.count());
+      log.info("Total rows in newRows {}", newRows.count());
       printAllRowsIfDebugEnabled(prevRows);
       printAllRowsIfDebugEnabled(newRows);
       boolean areDatasetsEqual = prevRows.intersect(newRows).count() == prevRows.count();
-      log.info("Completed Equality Validation, datasets equal? " + areDatasetsEqual);
+      log.info("Completed Equality Validation, datasets equal? {}", areDatasetsEqual);
       if (!areDatasetsEqual) {
-        log.error("query validation failed. See stdout for sample query results. Query: " + query);
+        log.error("query validation failed. See stdout for sample query results. Query: {}", query);
         System.out.println("Expected result (sample records only):");
         prevRows.show();
         System.out.println("Actual result (sample records only):");

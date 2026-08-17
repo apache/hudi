@@ -18,13 +18,13 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex;
 import org.apache.hudi.storage.StoragePath;
 
 import org.slf4j.Logger;

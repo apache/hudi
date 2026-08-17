@@ -22,9 +22,9 @@ package org.apache.spark.sql.execution.datasources.lance
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.util
 import org.apache.hudi.common.util.collection.ClosableIterator
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.memory.HoodieArrowAllocator
 import org.apache.hudi.io.storage.{BlobDescriptorTransform, LanceRecordIterator, VectorConversionUtils}
 import org.apache.hudi.storage.StorageConfiguration
@@ -131,25 +131,35 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           null
         }
 
-        // Honor `hoodie.read.blob.inline.mode`. CONTENT (default) materializes INLINE bytes in
-        // the `data` column; DESCRIPTOR surfaces per-row {position, size} which the descriptor
-        // iterator rewrites into Hudi OUT_OF_LINE references. Non-blob Lance columns ignore
-        // the option regardless.
+        // Honor `hoodie.read.blob.inline.mode`. DESCRIPTOR (default) surfaces per-row
+        // {position, size} which the descriptor iterator turns into a synthesized `reference`
+        // while leaving `type = INLINE`; CONTENT is the opt-in mode that materializes INLINE
+        // bytes in the `data` column. Non-blob Lance columns ignore the option regardless.
         val blobMode = resolveBlobReadMode(storageConf)
         val readOpts = FileReadOptions.builder().blobReadMode(blobMode).build()
-        val arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE, readOpts)
 
         // Compose the DESCRIPTOR-aware blob transform only when the user opted into that mode
         // AND the request actually has BLOB columns (otherwise the rewrite has nothing to do).
-        val blobFieldNames: java.util.Set[String] =
-          iteratorSchema.fields.collect { case f if isBlobField(f) => f.name }.toSet.asJava
-        val blobTransform = if (blobMode == BlobReadMode.DESCRIPTOR && !blobFieldNames.isEmpty) {
-          new BlobDescriptorTransform(blobFieldNames, filePath)
+        val blobFieldNames: Set[String] =
+          iteratorSchema.fields.collect { case f if isBlobField(f) => f.name }.toSet
+        val blobTransform = if (blobMode == BlobReadMode.DESCRIPTOR && blobFieldNames.nonEmpty) {
+          new BlobDescriptorTransform(blobFieldNames.asJava, filePath)
         } else {
           null
         }
-        lanceIterator = new LanceRecordIterator(
-          allocator, lanceReader, arrowReader, iteratorSchema, filePath, blobTransform)
+        // lance-core 4.0.0 aborts the JVM when a single readAll stream crosses Lance's internal
+        // BLOB page boundary (512 rows). For BLOB-containing reads, drain the file in <=512-row
+        // range chunks (one fresh readAll each); non-BLOB reads keep the single streamed reader.
+        // The detection recurses so a nested BLOB (unsupported by the writer today) still chunks.
+        lanceIterator = if (containsBlobField(iteratorSchema)) {
+          LanceRecordIterator.chunkedBlobReader(
+            allocator, lanceReader, columnNames, readOpts, lanceReader.numRows(),
+            iteratorSchema, filePath, blobTransform)
+        } else {
+          val arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE, readOpts)
+          new LanceRecordIterator(
+            allocator, lanceReader, arrowReader, iteratorSchema, filePath, blobTransform)
+        }
 
         // Register cleanup listener
         Option(TaskContext.get()).foreach { ctx =>
@@ -248,6 +258,14 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       md.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
       HoodieSchema.parseTypeDescriptor(md.getString(HoodieSchema.TYPE_METADATA_FIELD))
         .getType == HoodieSchemaType.BLOB
+  }
+
+  /** Recursively checks for a BLOB field (see [[isBlobField]]) at any nesting depth. */
+  private def containsBlobField(dt: DataType): Boolean = dt match {
+    case s: StructType => s.fields.exists(f => isBlobField(f) || containsBlobField(f.dataType))
+    case a: ArrayType => containsBlobField(a.elementType)
+    case m: MapType => containsBlobField(m.valueType)
+    case _ => false
   }
 
   private def forceFieldNullable(field: StructField): StructField =

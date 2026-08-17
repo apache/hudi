@@ -19,18 +19,22 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypeUtils;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -40,10 +44,13 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -55,8 +62,11 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 /**
  * Abstract class defining a block in HoodieLogFile.
  */
+@AllArgsConstructor
+@Getter
+@Slf4j
 public abstract class HoodieLogBlock {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogBlock.class);
+
   /**
    * The current version of the log block. Anytime the logBlock format changes this version needs to be bumped and
    * corresponding changes need to be made to {@link HoodieLogBlockVersion} TODO : Change this to a class, something
@@ -65,31 +75,26 @@ public abstract class HoodieLogBlock {
    */
   public static int version = 3;
   // Header for each log block
+  @Nonnull
   private final Map<HeaderMetadataType, String> logBlockHeader;
   // Footer for each log block
+  @Nonnull
   private final Map<FooterMetadataType, String> logBlockFooter;
   // Location of a log block on disk
+  @Nonnull
   private final Option<HoodieLogBlockContentLocation> blockContentLocation;
   // data for a specific block
+  @Nonnull
   private Option<byte[]> content;
+  @Getter(AccessLevel.PROTECTED)
+  @Nullable
   private final Supplier<SeekableDataInputStream> inputStreamSupplier;
   // Toggle flag, whether to read blocks lazily (I/O intensive) or not (Memory intensive)
+  @Getter(AccessLevel.NONE)
   protected boolean readBlockLazily;
 
-  public HoodieLogBlock(
-      @Nonnull Map<HeaderMetadataType, String> logBlockHeader,
-      @Nonnull Map<FooterMetadataType, String> logBlockFooter,
-      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
-      @Nonnull Option<byte[]> content,
-      @Nullable Supplier<SeekableDataInputStream> inputStreamSupplier,
-      boolean readBlockLazily) {
-    this.logBlockHeader = logBlockHeader;
-    this.logBlockFooter = logBlockFooter;
-    this.blockContentLocation = blockContentLocation;
-    this.content = content;
-    this.inputStreamSupplier = inputStreamSupplier;
-    this.readBlockLazily = readBlockLazily;
-  }
+  // Map of string schema to parsed schema.
+  private static final ConcurrentHashMap<String, HoodieSchema> SCHEMA_MAP = new ConcurrentHashMap<>();
 
   // Return the bytes representation of the data belonging to a LogBlock
   public ByteArrayOutputStream getContentBytes(HoodieStorage storage) throws IOException {
@@ -106,24 +111,23 @@ public abstract class HoodieLogBlock {
     return getBlockType().isDataOrDeleteBlock();
   }
 
+  protected HoodieSchema getSchemaFromHeader() {
+    String schemaStr = getLogBlockHeader().get(HeaderMetadataType.SCHEMA);
+    SCHEMA_MAP.computeIfAbsent(schemaStr,
+        schemaString -> {
+          try {
+            return HoodieSchema.parse(schemaStr);
+          } catch (HoodieAvroSchemaException e) {
+            // Archived commits from earlier hudi versions fail the schema check
+            // So we retry in this one specific instance with validation disabled
+            return HoodieSchema.parse(schemaStr, false);
+          }
+        });
+    return SCHEMA_MAP.get(schemaStr);
+  }
+
   public long getLogBlockLength() {
     throw new HoodieException("No implementation was provided");
-  }
-
-  public Option<HoodieLogBlockContentLocation> getBlockContentLocation() {
-    return this.blockContentLocation;
-  }
-
-  public Map<HeaderMetadataType, String> getLogBlockHeader() {
-    return logBlockHeader;
-  }
-
-  public Map<FooterMetadataType, String> getLogBlockFooter() {
-    return logBlockFooter;
-  }
-
-  public Option<byte[]> getContent() {
-    return content;
   }
 
   /**
@@ -140,11 +144,31 @@ public abstract class HoodieLogBlock {
    * {@link Roaring64NavigableMap} bitmap.
    * @throws IOException upon I/O error.
    */
-  public Roaring64NavigableMap getRecordPositions() throws IOException {
+  private Roaring64NavigableMap getRecordPositions() throws IOException {
     if (!logBlockHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS)) {
       return new Roaring64NavigableMap();
     }
     return LogReaderUtils.decodeRecordPositionsHeader(logBlockHeader.get(HeaderMetadataType.RECORD_POSITIONS));
+  }
+
+  /**
+   * @return record positions aligned with the block record iterator order.
+   * @throws IOException upon I/O error.
+   */
+  public List<Long> getRecordPositionList() throws IOException {
+    List<Long> positions = new ArrayList<>();
+    getRecordPositions().iterator().forEachRemaining(positions::add);
+    return positions;
+  }
+
+  /**
+   * Decodes ordered record positions stored for native log blocks.
+   */
+  protected static List<Long> decodeOrderedRecordPositionList(Map<HeaderMetadataType, String> logBlockHeader) throws IOException {
+    if (!logBlockHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS)) {
+      return Collections.emptyList();
+    }
+    return LogReaderUtils.decodeRecordPositionsLongList(logBlockHeader.get(HeaderMetadataType.RECORD_POSITIONS));
   }
 
   /**
@@ -161,10 +185,10 @@ public abstract class HoodieLogBlock {
       try {
         logBlockHeader.put(HeaderMetadataType.RECORD_POSITIONS, LogReaderUtils.encodePositions(positionSet));
       } catch (IOException e) {
-        LOG.error("Cannot write record positions to the log block header.", e);
+        log.error("Cannot write record positions to the log block header.", e);
       }
     } else {
-      LOG.warn("There are duplicate keys in the records (number of unique positions: {}, "
+      log.warn("There are duplicate keys in the records (number of unique positions: {}, "
               + "number of records: {}). Skip writing record positions to the log block header.",
           positionSet.size(), numRecords);
     }
@@ -176,7 +200,7 @@ public abstract class HoodieLogBlock {
   }
 
   protected void removeBaseFileInstantTimeOfPositions() {
-    LOG.info("There are records without valid positions. "
+    log.info("There are records without valid positions. "
         + "Skip writing record positions to the block header.");
     logBlockHeader.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
   }
@@ -231,7 +255,8 @@ public abstract class HoodieLogBlock {
     RECORD_POSITIONS(HoodieTableVersion.SIX),
     BLOCK_IDENTIFIER(HoodieTableVersion.SIX),
     IS_PARTIAL(HoodieTableVersion.EIGHT),
-    BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS(HoodieTableVersion.EIGHT);
+    BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS(HoodieTableVersion.EIGHT),
+    VERSION(HoodieTableVersion.NINE);
 
     @SuppressWarnings("unused")
     private final HoodieTableVersion earliestTableVersion;
@@ -252,7 +277,10 @@ public abstract class HoodieLogBlock {
    * This class is used to store the Location of the Content of a Log Block. It's used when a client chooses for a IO
    * intensive CompactedScanner, the location helps to lazily read contents from the log file
    */
+  @AllArgsConstructor
+  @Getter
   public static final class HoodieLogBlockContentLocation {
+
     // Storage Config required to access the file
     private final HoodieStorage storage;
     // The logFile that contains this block
@@ -263,38 +291,6 @@ public abstract class HoodieLogBlock {
     private final long blockSize;
     // The final position where the complete block ends
     private final long blockEndPos;
-
-    public HoodieLogBlockContentLocation(HoodieStorage storage,
-                                         HoodieLogFile logFile,
-                                         long contentPositionInLogFile,
-                                         long blockSize,
-                                         long blockEndPos) {
-      this.storage = storage;
-      this.logFile = logFile;
-      this.contentPositionInLogFile = contentPositionInLogFile;
-      this.blockSize = blockSize;
-      this.blockEndPos = blockEndPos;
-    }
-
-    public HoodieStorage getStorage() {
-      return storage;
-    }
-
-    public HoodieLogFile getLogFile() {
-      return logFile;
-    }
-
-    public long getContentPositionInLogFile() {
-      return contentPositionInLogFile;
-    }
-
-    public long getBlockSize() {
-      return blockSize;
-    }
-
-    public long getBlockEndPos() {
-      return blockEndPos;
-    }
   }
 
   /**
@@ -357,10 +353,6 @@ public abstract class HoodieLogBlock {
     ByteArrayOutputStream baos = new ByteArrayOutputStream(contentBytes.length);
     baos.write(contentBytes);
     return Option.of(baos);
-  }
-
-  protected Supplier<SeekableDataInputStream> getInputStreamSupplier() {
-    return inputStreamSupplier;
   }
 
   /**

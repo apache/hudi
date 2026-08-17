@@ -18,20 +18,26 @@
 
 package org.apache.hudi.source.reader.function;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.source.ExpressionPredicates;
+import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
+import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.types.AtomicDataType;
+import org.apache.flink.table.types.logical.IntType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
+import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -39,10 +45,13 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -70,8 +79,8 @@ public class TestAbstractSplitReaderFunction {
 
   /**
    * Minimal concrete implementation that exposes the protected helper methods
-   * ({@code getWriteConfig()} / {@code getHadoopConf()}) for testing, and leaves
-   * {@code read()} / {@code close()} as no-ops.
+   * ({@code getWriteConfig()} / {@code getHadoopConf()}) for testing. The template methods return an
+   * empty iterator / a trivial row type; the constructor and singleton tests never drive the cursor.
    */
   private static class MinimalSplitReaderFunction extends AbstractSplitReaderFunction {
 
@@ -84,12 +93,13 @@ public class TestAbstractSplitReaderFunction {
     }
 
     @Override
-    public RecordsWithSplitIds<HoodieRecordWithPosition<RowData>> read(HoodieSourceSplit split) {
-      return null;
+    protected ClosableIterator<RowData> createRecordIterator(HoodieSourceSplit split) {
+      return ClosableIterator.wrap(Collections.<RowData>emptyIterator());
     }
 
     @Override
-    public void close() throws Exception {
+    protected RowType producedRowType() {
+      return RowType.of(new IntType());
     }
 
     HoodieWriteConfig writeConfigForTest() {
@@ -242,5 +252,136 @@ public class TestAbstractSplitReaderFunction {
         "fn1's writeConfig must remain the same singleton across calls");
     assertSame(wc2, fn2.writeConfigForTest(),
         "fn2's writeConfig must remain the same singleton across calls");
+  }
+
+  // -----------------------------------------------------------------------
+  //  readBatch — copy-on-materialize (object-reuse regression guard)
+  // -----------------------------------------------------------------------
+
+  @Test
+  public void testReadBatchCopiesReusedRecordObjects() {
+    // Columnar readers return the SAME mutable RowData object on every next(); readBatch must copy
+    // each record, otherwise every entry in a materialized minibatch would alias the last row.
+    ReusedObjectSplitReaderFunction fn =
+        new ReusedObjectSplitReaderFunction(conf, mockInternalSchemaManager, 3);
+    HoodieSourceSplit split = createSplit();
+
+    fn.open(split);
+    BatchRecords<RowData> batch = fn.readBatch(split, 10, () -> false);
+    assertNotNull(batch);
+    batch.nextSplit();
+
+    RowData r0 = batch.nextRecordFromSplit().record();
+    RowData r1 = batch.nextRecordFromSplit().record();
+    RowData r2 = batch.nextRecordFromSplit().record();
+    assertNull(batch.nextRecordFromSplit());
+
+    // Distinct values despite the source reusing a single object.
+    assertEquals(0, r0.getInt(0));
+    assertEquals(1, r1.getInt(0));
+    assertEquals(2, r2.getInt(0));
+    assertNotSame(r0, r1, "records must be copies, not the reused source object");
+    assertNotSame(r1, r2);
+    // RowKind is preserved across the copy.
+    assertEquals(RowKind.DELETE, r0.getRowKind());
+    assertEquals(RowKind.INSERT, r1.getRowKind());
+    assertEquals(RowKind.DELETE, r2.getRowKind());
+  }
+
+  // -----------------------------------------------------------------------
+  //  readBatch — wake-up signal (cooperative cancellation between records)
+  // -----------------------------------------------------------------------
+
+  @Test
+  public void testReadBatchStopsOnWakeupSignal() {
+    // The wakeupSignal is polled between records; once it trips, materialization stops early and the
+    // records buffered so far are returned as a partial minibatch with continuous offsets.
+    ReusedObjectSplitReaderFunction fn =
+        new ReusedObjectSplitReaderFunction(conf, mockInternalSchemaManager, 5);
+    HoodieSourceSplit split = createSplit();
+    fn.open(split);
+
+    // Returns false, false, true: the loop buffers 2 records, then the 3rd poll stops it.
+    int[] polls = {0};
+    BooleanSupplier signal = () -> (++polls[0]) > 2;
+
+    BatchRecords<RowData> batch = fn.readBatch(split, 10, signal);
+    assertNotNull(batch);
+    batch.nextSplit();
+
+    // nextRecordFromSplit() returns the same reused position wrapper each call, so read each record's
+    // value/offset before advancing. Offsets are 1-based and continuous from the starting offset (0).
+    HoodieRecordWithPosition<RowData> rec = batch.nextRecordFromSplit();
+    assertNotNull(rec);
+    assertEquals(0, rec.record().getInt(0));
+    assertEquals(1L, rec.recordOffset());
+
+    rec = batch.nextRecordFromSplit();
+    assertNotNull(rec);
+    assertEquals(1, rec.record().getInt(0));
+    assertEquals(2L, rec.recordOffset());
+
+    assertNull(batch.nextRecordFromSplit(), "materialization must stop at 2 records on wake-up");
+  }
+
+  @Test
+  public void testReadBatchReturnsNullWhenWokenBeforeAnyRecord() {
+    // A wake-up that lands before the first record is buffered yields an empty batch, signalled as
+    // null (the same sentinel as EOF); HoodieSourceSplitReader.fetch() disambiguates the two.
+    ReusedObjectSplitReaderFunction fn =
+        new ReusedObjectSplitReaderFunction(conf, mockInternalSchemaManager, 5);
+    HoodieSourceSplit split = createSplit();
+    fn.open(split);
+
+    assertNull(fn.readBatch(split, 10, () -> true));
+  }
+
+  private HoodieSourceSplit createSplit() {
+    return new HoodieSourceSplit(
+        1, "base", Option.of(Collections.emptyList()), "/tbl", "/part",
+        "read_optimized", "19700101000000000", "file1", Option.empty());
+  }
+
+  /**
+   * Reader function whose iterator returns the SAME mutable {@link GenericRowData} instance on every
+   * {@code next()} (mimicking a columnar reader), used to prove readBatch copies each record.
+   */
+  private static class ReusedObjectSplitReaderFunction extends AbstractSplitReaderFunction {
+    private final int count;
+
+    ReusedObjectSplitReaderFunction(Configuration conf, InternalSchemaManager ism, int count) {
+      super(conf, Collections.emptyList(), ism, false);
+      this.count = count;
+    }
+
+    @Override
+    protected ClosableIterator<RowData> createRecordIterator(HoodieSourceSplit split) {
+      return new ClosableIterator<RowData>() {
+        private final GenericRowData reused = new GenericRowData(1);
+        private int i = 0;
+
+        @Override
+        public boolean hasNext() {
+          return i < count;
+        }
+
+        @Override
+        public RowData next() {
+          reused.setField(0, i);
+          reused.setRowKind(i % 2 == 0 ? RowKind.DELETE : RowKind.INSERT);
+          i++;
+          return reused; // same object every call
+        }
+
+        @Override
+        public void close() {
+        }
+      };
+    }
+
+    @Override
+    protected RowType producedRowType() {
+      return RowType.of(new IntType());
+    }
   }
 }

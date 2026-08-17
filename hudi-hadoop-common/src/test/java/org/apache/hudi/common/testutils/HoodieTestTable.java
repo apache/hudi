@@ -755,7 +755,7 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable withLogMarkerFile(String partitionPath, String fileId, IOType ioType) throws IOException {
-    String logFileName = FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, currentInstantTime, HoodieLogFile.LOGFILE_BASE_VERSION, HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
+    String logFileName = FSUtils.makeInlineLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, currentInstantTime, HoodieLogFile.LOGFILE_BASE_VERSION, HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
     String markerFileName = FileCreateUtils.markerFileName(logFileName, ioType);
     FileCreateUtils.createMarkerFile(metaClient, partitionPath, currentInstantTime, markerFileName);
     return this;
@@ -976,6 +976,8 @@ public class HoodieTestTable implements AutoCloseable {
 
   public List<StoragePathInfo> listAllBaseFiles(String fileExtension) throws IOException {
     return listRecursive(storage, new StoragePath(basePath)).stream()
+        .filter(fileInfo -> FSUtils.isBaseFile(fileInfo.getPath().getName()))
+        // filter out MDT base files.
         .filter(fileInfo -> fileInfo.getPath().getName().endsWith(fileExtension))
         .collect(Collectors.toList());
   }

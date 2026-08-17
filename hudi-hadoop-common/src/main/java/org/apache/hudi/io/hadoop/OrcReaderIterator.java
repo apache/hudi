@@ -20,10 +20,10 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.io.util.FileIOUtils;
 
 import org.apache.avro.generic.GenericData;

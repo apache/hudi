@@ -90,7 +90,7 @@ public class TableCommand {
       @ShellOption(value = {"--maxExpectedClockSkewMs"}, defaultValue = "200",
           help = "The max expected clock skew time for WaitBasedTimeGenerator in ms") final Long maxExpectedClockSkewMs,
       @ShellOption(value = {"--useDefaultLockProvider"}, defaultValue = "false",
-          help = "Use org.apache.hudi.client.transaction.lock.InProcessLockProvider") final boolean useDefaultLockProvider)
+          help = "Use org.apache.hudi.core.transaction.lock.InProcessLockProvider") final boolean useDefaultLockProvider)
       throws IOException {
     HoodieCLI
         .setConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(eventuallyConsistent)
@@ -206,8 +206,9 @@ public class TableCommand {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(client);
     HoodieSchema schema = tableSchemaResolver.getTableSchema();
     if (outputFilePath != null) {
-      log.info("Latest table schema : " + schema.toString(true));
-      writeToFile(outputFilePath, schema.toString(true));
+      String schemaStr = schema.toString(true);
+      log.info("Latest table schema : {}", schemaStr);
+      writeToFile(outputFilePath, schemaStr);
       return String.format("Latest table schema written to %s", outputFilePath);
     } else {
       return String.format("Latest table schema %s", schema.toString(true));

@@ -22,7 +22,7 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.io.HoodieParquetConfigInjector;
+import org.apache.hudi.core.io.HoodieParquetConfigInjector;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 

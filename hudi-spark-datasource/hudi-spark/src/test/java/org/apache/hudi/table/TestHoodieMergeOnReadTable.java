@@ -34,7 +34,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieLogFileReader;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -507,14 +507,14 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
             .keySet();
         assertEquals(allPartitions.size(), testTable.listAllBaseFiles().size());
 
-        // Verify that all data file has one log file
+        // Verify that all data files have an update log file and a delete log file
         HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
         for (String partitionPath : dataGen.getPartitionPaths()) {
           List<FileSlice> groupedLogFiles =
               table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
           for (FileSlice fileSlice : groupedLogFiles) {
             assertEquals(2, fileSlice.getLogFiles().count(),
-                "There should be 1 log file written for the latest data file - " + fileSlice);
+                "There should be an update log file and a delete log file written for the latest data file - " + fileSlice);
           }
         }
 
@@ -538,7 +538,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
               table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
           assertEquals(1, fileSlices.size());
           for (FileSlice slice : fileSlices) {
-            assertEquals(3, slice.getLogFiles().count(), "After compaction there will still be one log file.");
+            assertEquals(4, slice.getLogFiles().count(), "Log compaction should add compacted log files to the slice.");
             assertNotNull(slice.getBaseFile(), "Base file is not created by log compaction operation.");
           }
           assertTrue(result.getCommitMetadata().get().getWritePartitionPaths().stream().anyMatch(part -> part.contentEquals(partitionPath)));
@@ -602,13 +602,16 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   }
 
   private void validateLogCompactionMetadataHeaders(HoodieCommitMetadata compactionMetadata, StoragePath basePath, String expectedCompactedBlockTimes) {
+    HoodieTableMetaClient tableMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf())
+        .setBasePath(basePath)
+        .build();
     compactionMetadata.getFileIdAndFullPaths(basePath).values().stream()
         .map(StoragePath::new)
         .filter(path -> FSUtils.isLogFile(path.getName()))
         .forEach(logFilePath -> {
-          try {
-            HoodieLogFileReader reader = new HoodieLogFileReader(hoodieStorage(), new HoodieLogFile(logFilePath), HOODIE_SCHEMA, 10000, false,
-                false, "_row_key", null);
+          try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
+              tableMetaClient, new HoodieLogFile(logFilePath), HOODIE_SCHEMA)) {
             Map<HoodieLogBlock.HeaderMetadataType, String> headers = Collections.emptyMap();
             while (reader.hasNext()) {
               // Get headers from the final block

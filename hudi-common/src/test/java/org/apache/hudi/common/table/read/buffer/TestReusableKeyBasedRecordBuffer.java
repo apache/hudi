@@ -21,6 +21,10 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.expression.Literal;
+import org.apache.hudi.common.expression.Predicate;
+import org.apache.hudi.common.expression.Predicates;
+import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieReadStats;
@@ -28,10 +32,6 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.expression.Literal;
-import org.apache.hudi.expression.Predicate;
-import org.apache.hudi.expression.Predicates;
-import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.junit.jupiter.api.Test;
 
@@ -72,6 +72,7 @@ class TestReusableKeyBasedRecordBuffer {
     when(mockReaderContext.getKeyFilterOpt()).thenReturn(Option.of(keyFilter));
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(mockReaderContext.getSchemaHandler().getSchemaEvolutionTransformer(any(), any())).thenReturn(Option.empty());
     when(mockReaderContext.getRecordContext().getDeleteRow(any())).thenAnswer(invocation -> {
       String recordKey = invocation.getArgument(0);
       return new TestRecord(recordKey, 0);
@@ -86,7 +87,7 @@ class TestReusableKeyBasedRecordBuffer {
       return 1;
     });
     when(mockReaderContext.getRecordContext().toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
-    when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(mockReaderContext.getRecordContext().seal(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
 
     ReusableKeyBasedRecordBuffer<TestRecord> buffer = new ReusableKeyBasedRecordBuffer<>(mockReaderContext, metaClient,
         RecordMergeMode.EVENT_TIME_ORDERING, Option.empty(), new TypedProperties(), Collections.singletonList("value"), updateProcessor, preMergedLogRecords);

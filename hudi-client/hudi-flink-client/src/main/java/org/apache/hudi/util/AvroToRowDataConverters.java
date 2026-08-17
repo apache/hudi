@@ -412,7 +412,8 @@ public class AvroToRowDataConverters {
 
     public long convertDate(Object object) {
       final org.joda.time.LocalDate value = (org.joda.time.LocalDate) object;
-      return value.toDate().getTime();
+      return LocalDate.of(
+          value.getYear(), value.getMonthOfYear(), value.getDayOfMonth()).toEpochDay();
     }
 
     public int convertTime(Object object) {

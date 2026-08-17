@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
@@ -109,7 +108,7 @@ public class LockManager implements Serializable, AutoCloseable {
   public synchronized LockProvider getLockProvider() {
     // Perform lazy initialization of lock provider only if needed
     if (lockProvider == null) {
-      log.info("LockProvider " + writeConfig.getLockProviderClass());
+      log.info("LockProvider {}", writeConfig.getLockProviderClass());
       
       // Try to load lock provider with HoodieLockMetrics constructor first
       Class<?>[] metricsConstructorTypes = {LockConfiguration.class, StorageConfiguration.class, HoodieLockMetrics.class};

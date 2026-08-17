@@ -20,6 +20,7 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -586,7 +587,7 @@ public class TestWriteBase {
             }
           } else {
             if (ignoreLogs) {
-              if (!file.getName().startsWith(".")) {
+              if (FSUtils.isBaseFile(file.getName())) {
                 return true;
               }
             } else {

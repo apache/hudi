@@ -19,34 +19,22 @@
 package org.apache.hudi.client.model
 
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.unsafe.types.{GeographyVal, GeometryVal, UTF8String, VariantVal}
+import org.apache.spark.unsafe.types.{BinaryView, UTF8String}
 
 class Spark42HoodieInternalRow(
     metaFields: Array[UTF8String],
     sourceRow: InternalRow,
     sourceContainsMetaFields: Boolean)
-  extends HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields) {
+  extends Spark4HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields) {
 
-  override def getVariant(ordinal: Int): VariantVal = {
-    ruleOutMetaFieldsAccess(ordinal, classOf[VariantVal])
-    sourceRow.getVariant(rebaseOrdinal(ordinal))
+  override def getBinaryView(ordinal: Int): BinaryView = {
+    ruleOutMetaFieldsAccess(ordinal, classOf[BinaryView])
+    sourceRow.getBinaryView(rebaseOrdinal(ordinal))
   }
 
-  override def getGeography(ordinal: Int): GeographyVal = {
-    ruleOutMetaFieldsAccess(ordinal, classOf[GeographyVal])
-    sourceRow.getGeography(rebaseOrdinal(ordinal))
-  }
-
-  override def getGeometry(ordinal: Int): GeometryVal = {
-    ruleOutMetaFieldsAccess(ordinal, classOf[GeometryVal])
-    sourceRow.getGeometry(rebaseOrdinal(ordinal))
-  }
-
-  override def copy(): InternalRow = {
-    val copyMetaFields = metaFields.map(f => if (f != null) f.copy() else null)
-    new Spark42HoodieInternalRow(
-      copyMetaFields,
-      if (sourceRow == null) null else sourceRow.copy(),
-      sourceContainsMetaFields)
+  override protected def newInternalRow(metaFields: Array[UTF8String],
+                                        sourceRow: InternalRow,
+                                        sourceContainsMetaFields: Boolean): Spark4HoodieInternalRow = {
+    new Spark42HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
   }
 }

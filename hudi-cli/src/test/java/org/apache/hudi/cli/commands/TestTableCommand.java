@@ -118,7 +118,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     HoodieTimeGeneratorConfig timeGeneratorConfig = HoodieCLI.timeGeneratorConfig;
     assertEquals(tablePath, timeGeneratorConfig.getBasePath());
     assertEquals(888L, timeGeneratorConfig.getMaxExpectedClockSkewMs());
-    assertEquals("org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+    assertEquals("org.apache.hudi.core.transaction.lock.InProcessLockProvider",
         timeGeneratorConfig.getLockConfiguration().getConfig().getString(HoodieTimeGeneratorConfig.LOCK_PROVIDER_KEY));
 
     // Check default values
@@ -145,7 +145,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     HoodieTimeGeneratorConfig timeGeneratorConfig = HoodieCLI.timeGeneratorConfig;
     assertEquals(tablePath, timeGeneratorConfig.getBasePath());
     assertEquals(200L, timeGeneratorConfig.getMaxExpectedClockSkewMs());
-    assertEquals("org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+    assertEquals("org.apache.hudi.core.transaction.lock.InProcessLockProvider",
         timeGeneratorConfig.getLockConfiguration().getConfig().getString(HoodieTimeGeneratorConfig.LOCK_PROVIDER_KEY));
     assertEquals(TimeGeneratorType.valueOf("WAIT_TO_ADJUST_SKEW"), timeGeneratorConfig.getTimeGeneratorType());
   }

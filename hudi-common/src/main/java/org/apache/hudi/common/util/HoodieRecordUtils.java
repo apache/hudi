@@ -50,7 +50,10 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -218,6 +221,18 @@ public class HoodieRecordUtils {
       return record.getCurrentLocation().getInstantTime();
     }
     return null;
+  }
+
+  /**
+   * Returns an iterator over the input records sorted by record key in UTF-8 byte order. Callers
+   * use this to feed HFile-backed writers ({@code requireSortedRecords()}), and HFiles order keys
+   * by their raw UTF-8 bytes, not String (UTF-16) order.
+   */
+  public static <T> Iterator<HoodieRecord<T>> sortRecordsByRecordKey(Iterator<HoodieRecord<T>> records) {
+    List<HoodieRecord<T>> sortedRecords = new ArrayList<>();
+    records.forEachRemaining(sortedRecords::add);
+    sortedRecords.sort(Comparator.comparing(HoodieRecord::getRecordKey, StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR));
+    return sortedRecords.iterator();
   }
 
   public static List<String> getOrderingFieldNames(RecordMergeMode mergeMode,

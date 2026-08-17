@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartitionPathParser;
@@ -42,7 +43,6 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -51,7 +51,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -70,7 +69,7 @@ import java.util.stream.Stream;
  *            in Spark and {@code RowData} in Flink.
  */
 @AllArgsConstructor
-public final class HoodieFileGroupReader<T> implements Closeable {
+public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
 
   private final HoodieReaderContext<T> readerContext;
   private final HoodieTableMetaClient metaClient;
@@ -198,7 +197,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
     }
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    this.props = ConfigUtils.getMergeProps(props, tableConfig);
+    props = ConfigUtils.getMergeProps(props, tableConfig);
+    this.props = props;
     this.partitionPathFields = tableConfig.getPartitionFields();
     readerContext.initRecordMerger(props);
     readerContext.setTablePath(tablePath);
@@ -220,7 +220,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
     if (inputSplit.hasNoRecordsToMerge()) {
-      this.baseFileIterator = new CloseableMappingIterator<>(iter, rec -> readerContext.getRecordContext().seal(rec));
+      HoodieSchema requiredSchema = readerContext.getSchemaHandler().getRequiredSchema();
+      this.baseFileIterator = new CloseableMappingIterator<>(iter,
+          rec -> readerContext.getRecordContext().seal(requiredSchema, rec));
     } else {
       this.baseFileIterator = iter;
       Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult = recordBufferLoader.getRecordBuffer(
@@ -289,7 +291,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         for (int i = 0; i < partitionFields.length; i++) {
           String field = partitionFields[i];
           if (dataSchema.getField(field).isPresent()) {
-            filterFieldsAndValues.add(Pair.of(field, readerContext.getRecordContext().convertPartitionValueToEngineType((Comparable) partitionValues[i])));
+            filterFieldsAndValues.add(Pair.of(field, readerContext.getRecordContext().convertValueToEngineType((Comparable) partitionValues[i])));
           }
         }
         return filterFieldsAndValues;

@@ -498,4 +498,47 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <profiles>
+    <!-- Vortex requires Java 17 (vortex-jni/vortex-spark ship Java 17 bytecode). The Vortex
+         round-trip test compiles/runs only under JDK 17; Java 11 builds skip it. -->
+    <profile>
+      <id>vortex</id>
+      <activation>
+        <jdk>[17,)</jdk>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>dev.vortex</groupId>
+          <artifactId>${vortex.spark.artifact}</artifactId>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>add-vortex-test-source</id>
+                <phase>generate-test-sources</phase>
+                <goals>
+                  <goal>add-test-source</goal>
+                </goals>
+                <configuration>
+                  <!-- Vortex is only supported on Spark 3.5+/4.x; skip the test on Spark 3.3/3.4
+                       (vortex.skip.tests=true) where its Spark 3.5+ APIs are unavailable. -->
+                  <skipAddTestSource>${vortex.skip.tests}</skipAddTestSource>
+                  <sources>
+                    <source>src/test/java-vortex</source>
+                  </sources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.avro.AvroRecordContext;
+import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -43,12 +44,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -81,10 +81,10 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  * This results in two I/O passes over the log file.
  */
 @NotThreadSafe
+@Slf4j
 public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     implements Iterable<HoodieRecord>, Closeable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordScanner.class);
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
   // Map of compacted/merged records
@@ -92,9 +92,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
   private final Set<String> scannedPrefixes;
   // count of merged records in log
+  @Getter
   private long numMergedRecordsInLog;
   private final long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
+  @Getter
   private long totalTimeTakenToReadAndMergeBlocks;
   private final String[] orderingFields;
   private final DeleteContext deleteContext;
@@ -220,8 +222,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = records.size();
 
-    if (LOG.isInfoEnabled()) {
-      LOG.info("Scanned {} log files with stats: MaxMemoryInBytes => {}, MemoryBasedMap => {} entries, {} total bytes, DiskBasedMap => {} entries, {} total bytes",
+    if (log.isInfoEnabled()) {
+      log.info("Scanned {} log files with stats: MaxMemoryInBytes => {}, MemoryBasedMap => {} entries, {} total bytes, DiskBasedMap => {} entries, {} total bytes",
           logFilePaths.size(), maxMemorySizeInBytes, records.getInMemoryMapNumEntries(), records.getCurrentInMemoryMapSize(),
           records.getDiskBasedMapNumEntries(), records.getSizeOfFileOnDiskInBytes());
     }
@@ -238,10 +240,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
 
   public HoodieRecord.HoodieRecordType getRecordType() {
     return recordMerger.getRecordType();
-  }
-
-  public long getNumMergedRecordsInLog() {
-    return numMergedRecordsInLog;
   }
 
   /**
@@ -311,10 +309,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
       records.put(key, record);
     }
-  }
-
-  public long getTotalTimeTakenToReadAndMergeBlocks() {
-    return totalTimeTakenToReadAndMergeBlocks;
   }
 
   @Override

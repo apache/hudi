@@ -27,6 +27,8 @@ import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
+
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
@@ -36,7 +38,7 @@ class TestBucketIndexPartitionerFactory {
 
   @Test
   void testCreateLocalBucketIndexPartitioner() {
-    Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.create(getSimpleBucketConf(), "id");
+    Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.create(getSimpleBucketConf(), Collections.singletonList("id"));
 
     assertInstanceOf(BucketIndexPartitioner.class, partitioner);
   }
@@ -46,7 +48,7 @@ class TestBucketIndexPartitionerFactory {
     Configuration conf = getSimpleBucketConf();
     conf.setString(HoodieIndexConfig.BUCKET_PARTITIONER.key(), "true");
 
-    Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.create(conf, "id");
+    Partitioner<HoodieKey> partitioner = BucketIndexPartitionerFactory.create(conf, Collections.singletonList("id"));
 
     assertInstanceOf(BucketIndexRemotePartitioner.class, partitioner);
   }

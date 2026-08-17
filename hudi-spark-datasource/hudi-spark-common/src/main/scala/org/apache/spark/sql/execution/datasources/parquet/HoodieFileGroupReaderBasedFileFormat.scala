@@ -21,19 +21,21 @@ import org.apache.hudi.{HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, Hoo
 import org.apache.hudi.cdc.{CDCFileGroupIterator, HoodieCDCFileGroupSplit, HoodieCDCFileIndex}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.HoodieSchemaRepair
 import org.apache.hudi.common.schema.HoodieSchemaUtils
+import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, ParquetTableSchemaResolver}
-import org.apache.hudi.common.table.read.HoodieFileGroupReader
-import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.common.table.read.{HoodieFileGroupReader, HoodieRecordReader}
+import org.apache.hudi.common.table.read.lsm.{HoodieLsmFileGroupReader, LsmReaderUtils}
+import org.apache.hudi.common.util.{ConfigUtils, Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieNotSupportedException
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.io.IOUtils
+import org.apache.hudi.io.MergeUtils
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 import org.apache.hudi.io.storage.VectorConversionUtils
 import org.apache.hudi.storage.StorageConfiguration
@@ -42,7 +44,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapreduce.Job
-import org.apache.parquet.schema.{HoodieSchemaRepair, MessageType}
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
@@ -285,7 +287,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
     val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-    val maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(engineContext.getTaskContextSupplier, options.asJava)
+    val maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(engineContext.getTaskContextSupplier, options.asJava)
 
     // Create metaclient on driver to avoid expensive operations on executors
     val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
@@ -313,21 +315,41 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
               } else {
                 0
               }
-              val reader = HoodieFileGroupReader.builder()
-                .withReaderContext(readerContext)
-                .withHoodieTableMetaClient(metaClient)
-                .withLatestCommitTime(queryTimestamp)
-                .withBaseFileOption(fileSlice.getBaseFile)
-                .withLogFiles(fileSlice.getLogFiles)
-                .withPartitionPath(fileSlice.getPartitionPath)
-                .withDataSchema(dataSchema)
-                .withRequestedSchema(requestedSchema)
-                .withInternalSchemaOpt(internalSchemaOpt)
-                .withProps(props)
-                .withStart(file.start)
-                .withLength(baseFileLength)
-                .withShouldUseRecordPosition(shouldUseRecordPosition)
-                .build()
+              val reader: HoodieRecordReader[InternalRow] =
+                if (LsmReaderUtils.shouldUseLsmReader(
+                  metaClient.getTableConfig,
+                  ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true))) {
+                  HoodieLsmFileGroupReader.builder[InternalRow]()
+                    .withReaderContext(readerContext)
+                    .withHoodieTableMetaClient(metaClient)
+                    .withLatestCommitTime(queryTimestamp)
+                    .withBaseFileOption(fileSlice.getBaseFile)
+                    .withLogFiles(fileSlice.getLogFiles)
+                    .withPartitionPath(fileSlice.getPartitionPath)
+                    .withDataSchema(dataSchema)
+                    .withRequestedSchema(requestedSchema)
+                    .withInternalSchemaOpt(internalSchemaOpt)
+                    .withProps(props)
+                    .withStart(file.start)
+                    .withLength(baseFileLength)
+                    .build()
+                } else {
+                  HoodieFileGroupReader.builder[InternalRow]()
+                    .withReaderContext(readerContext)
+                    .withHoodieTableMetaClient(metaClient)
+                    .withLatestCommitTime(queryTimestamp)
+                    .withBaseFileOption(fileSlice.getBaseFile)
+                    .withLogFiles(fileSlice.getLogFiles)
+                    .withPartitionPath(fileSlice.getPartitionPath)
+                    .withDataSchema(dataSchema)
+                    .withRequestedSchema(requestedSchema)
+                    .withInternalSchemaOpt(internalSchemaOpt)
+                    .withProps(props)
+                    .withStart(file.start)
+                    .withLength(baseFileLength)
+                    .withShouldUseRecordPosition(shouldUseRecordPosition)
+                    .build()
+                }
               // Append partition values to rows and project to output schema
               appendPartitionAndProject(
                 reader.getClosableIterator,
@@ -362,13 +384,16 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       val parquetReader = sparkAdapter.createParquetFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration)
       val orcReader = sparkAdapter.createOrcFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration, dataSchema)
       val lanceReader = sparkAdapter.createLanceFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration).orNull
-      new MultipleColumnarFileFormatReader(parquetReader, orcReader, lanceReader)
+      val vortexReader = sparkAdapter.createVortexFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration).orNull
+      new MultipleColumnarFileFormatReader(parquetReader, orcReader, lanceReader, vortexReader)
     } else if (hoodieFileFormat == HoodieFileFormat.PARQUET) {
       sparkAdapter.createParquetFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration)
     } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
       sparkAdapter.createOrcFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration, dataSchema)
     } else if (hoodieFileFormat == HoodieFileFormat.LANCE) {
       sparkAdapter.createLanceFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration).orNull
+    } else if (hoodieFileFormat == HoodieFileFormat.VORTEX) {
+      sparkAdapter.createVortexFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration).orNull
     } else {
       throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
     }

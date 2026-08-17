@@ -25,7 +25,7 @@ import org.apache.spark.sql.BaseHoodieCatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.Origin
@@ -61,6 +61,9 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
     case TimeTravelRelation(ResolvesToHudiTable(table), timestamp, version) =>
       if (timestamp.isEmpty && version.nonEmpty) {
         throw new HoodieAnalysisException("Version expression is not supported for time travel")
+      }
+      if (timestamp.exists(_.references.nonEmpty) || timestamp.exists(SubqueryExpression.hasSubquery)) {
+        throw new HoodieAnalysisException("timestamp expression cannot refer to any columns or contain subqueries")
       }
 
       val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
@@ -185,7 +188,14 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
       val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
       val m = mO.asInstanceOf[MergeIntoTable].copy(targetTable = targetTable, sourceTable = sourceTable)
       // END: custom Hudi change
-      EliminateSubqueryAliases(targetTable) match {
+      // If the source table still has unresolved references (e.g. a non-existent
+      // column in the source query, or a missing source table), return the
+      // partially-resolved MIT and let Spark's CheckAnalysis surface the error.
+      // Continuing into the resolve-assignments path would either lose the column
+      // context or throw a less informative UnresolvedException.
+      if (!sourceTable.resolved) {
+        m
+      } else EliminateSubqueryAliases(targetTable) match {
         case r: NamedRelation if r.skipSchemaResolution =>
           // Do not resolve the expression if the target table accepts any schema.
           // This allows data sources to customize their own resolution logic using

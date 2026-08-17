@@ -108,7 +108,11 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     Option<HoodieCommitMetadata> metadata = HoodieClientTestUtils.getCommitMetadataForInstant(
         metaClient, metaClient.getActiveTimeline().lastInstant().get());
     assertFalse(metadata.isEmpty());
-    assertEquals(metadata.get().getExtraMetadata(), expectedMetadata);
+    // Assert expected entries are a subset of the actual extra metadata. CommitMetadataProperties
+    // also enriches commit metadata with hudi.version, engine, and config.* entries on every write,
+    // so the actual map is a superset.
+    Map<String, String> actual = metadata.get().getExtraMetadata();
+    expectedMetadata.forEach((k, v) -> assertEquals(v, actual.get(k), "extraMetadata[" + k + "]"));
   }
 
 

@@ -42,6 +42,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -52,7 +53,6 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BaseCommitActionExecutor;
@@ -204,14 +204,12 @@ public class SparkBootstrapCommitActionExecutor<T>
     HoodieTableMetaClient metaClient = table.getMetaClient();
     try (BootstrapIndex.IndexWriter indexWriter = BootstrapIndex.getBootstrapIndex(metaClient)
         .createWriter(metaClient.getTableConfig().getBootstrapBasePath().get())) {
-      log.info("Starting to write bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
-          + config.getBasePath());
+      log.info("Starting to write bootstrap index for source {} in table {}", config.getBootstrapSourceBasePath(), config.getBasePath());
       indexWriter.begin();
       bootstrapSourceAndStats.forEach((key, value) -> indexWriter.appendNextPartition(key,
           value.stream().map(Pair::getKey).collect(Collectors.toList())));
       indexWriter.finish();
-      log.info("Finished writing bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
-          + config.getBasePath());
+      log.info("Finished writing bootstrap index for source {} in table {}", config.getBootstrapSourceBasePath(), config.getBasePath());
     }
     commit(result, bootstrapSourceAndStats.values().stream()
         .flatMap(f -> f.stream().map(Pair::getValue)).collect(Collectors.toList()));
@@ -278,7 +276,7 @@ public class SparkBootstrapCommitActionExecutor<T>
     log.info("Fetching Bootstrap Schema !!");
     HoodieBootstrapSchemaProvider sourceSchemaProvider = new HoodieSparkBootstrapSchemaProvider(config);
     bootstrapSchema = sourceSchemaProvider.getBootstrapSchema(context, folders).toString();
-    log.info("Bootstrap Schema :" + bootstrapSchema);
+    log.info("Bootstrap Schema :{}", bootstrapSchema);
 
     BootstrapModeSelector selector =
         (BootstrapModeSelector) ReflectionUtils.loadClass(config.getBootstrapModeSelectorClass(), config);

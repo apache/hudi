@@ -21,14 +21,18 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -54,7 +58,12 @@ public interface HoodieLogFormat {
    * The current version of the log format. Anytime the log format changes this version needs to be bumped and
    * corresponding changes need to be made to {@link HoodieLogFormatVersion}
    */
-  int CURRENT_VERSION = 1;
+  int CURRENT_VERSION = 2;
+
+  /**
+   * The current version of the inline log format.
+   */
+  int INLINE_LOG_FORMAT_VERSION = 1;
 
   String UNKNOWN_WRITE_TOKEN = "1-0-1";
 
@@ -176,7 +185,7 @@ public interface HoodieLogFormat {
 
       // Initialise logFile
       StoragePath logPath = new StoragePath(parentPath,
-          FSUtils.makeLogFileName(this.logFileId, this.fileExtension, this.instantTime, this.logVersion, this.logWriteToken));
+          FSUtils.makeInlineLogFileName(this.logFileId, this.fileExtension, this.instantTime, this.logVersion, this.logWriteToken));
       log.info("HoodieLogFile on path {}", logPath);
       this.logFile = new HoodieLogFile(logPath, this.fileSize);
     }
@@ -233,12 +242,24 @@ public interface HoodieLogFormat {
     HoodieLogBlock prev() throws IOException;
   }
 
-  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema)
-      throws IOException {
-    return new HoodieLogFileReader(storage, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE);
+  static HoodieLogFormat.Reader newReader(HoodieTableMetaClient metaClient, HoodieLogFile logFile,
+                                          HoodieSchema readerSchema) throws IOException {
+    return newReader(metaClient, logFile, readerSchema, false);
   }
 
-  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema, boolean reverseReader) throws IOException {
+  static HoodieLogFormat.Reader newReader(HoodieTableMetaClient metaClient, HoodieLogFile logFile,
+                                          HoodieSchema readerSchema, boolean reverseReader) throws IOException {
+    HoodieStorage storage = metaClient.getStorage();
+    if (FSUtils.isNativeLogFile(logFile.getFileName())) {
+      StoragePath logFileParent = logFile.getPath().getParent();
+      return new HoodieNativeLogFileReader(
+          storage,
+          logFile,
+          readerSchema,
+          HoodieRecordUtils.getOrderingFieldNames(metaClient.getTableConfig().getRecordMergeMode(), metaClient),
+          FSUtils.getRelativePartitionPath(metaClient.getBasePath(), logFileParent),
+          metaClient.getTableConfig().getProps());
+    }
     return new HoodieLogFileReader(storage, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, reverseReader);
   }
 
@@ -246,17 +267,11 @@ public interface HoodieLogFormat {
    * A set of feature flags associated with a log format. Versions are changed when the log format changes. TODO(na) -
    * Implement policies around major/minor versions
    */
+  @AllArgsConstructor(access = AccessLevel.PACKAGE)
+  @Getter
   abstract class LogFormatVersion {
 
     private final int version;
-
-    LogFormatVersion(int version) {
-      this.version = version;
-    }
-
-    public int getVersion() {
-      return version;
-    }
 
     public abstract boolean hasMagicHeader();
 

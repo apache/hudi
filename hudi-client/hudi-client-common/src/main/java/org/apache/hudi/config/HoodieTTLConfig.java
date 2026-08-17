@@ -84,6 +84,16 @@ public class HoodieTTLConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("max partitions to delete in partition ttl management");
 
+  public static final ConfigProperty<Integer> STATS_MAX_PARALLELISM = ConfigProperty
+      .key(PARTITION_TTL_STRATEGY_PARAM_PREFIX + "stats.max.parallelism")
+      .defaultValue(200)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Max parallelism used to collect the last commit time for candidate partitions "
+          + "during partition ttl management. The effective parallelism is the smaller of the candidate "
+          + "partition count and this value. When a table enables partition ttl for the first time, there "
+          + "may be a large number of historical partitions, so a higher value than the default may be desired.");
+
   public static class Builder {
     private final HoodieTTLConfig ttlConfig = new HoodieTTLConfig();
 
@@ -94,6 +104,11 @@ public class HoodieTTLConfig extends HoodieConfig {
 
     public HoodieTTLConfig.Builder withTTLDaysRetain(Integer daysRetain) {
       ttlConfig.setValue(DAYS_RETAIN, daysRetain.toString());
+      return this;
+    }
+
+    public HoodieTTLConfig.Builder withTTLStatsMaxParallelism(Integer statsMaxParallelism) {
+      ttlConfig.setValue(STATS_MAX_PARALLELISM, statsMaxParallelism.toString());
       return this;
     }
 

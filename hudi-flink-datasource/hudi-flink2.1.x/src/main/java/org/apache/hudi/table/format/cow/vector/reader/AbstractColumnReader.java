@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.cow.vector.reader;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.formats.parquet.vector.ParquetDictionary;
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
@@ -37,8 +38,6 @@ import org.apache.parquet.column.page.PageReader;
 import org.apache.parquet.column.values.ValuesReader;
 import org.apache.parquet.io.ParquetDecodingException;
 import org.apache.parquet.schema.PrimitiveType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -54,10 +53,9 @@ import static org.apache.parquet.column.ValuesType.REPETITION_LEVEL;
  * <p>Note: Reference Flink release 1.11.2 {@link org.apache.flink.formats.parquet.vector.reader.AbstractColumnReader}
  * because some of the package scope methods.
  */
+@Slf4j(topic = "org.apache.flink.formats.parquet.vector.reader.AbstractColumnReader")
 public abstract class AbstractColumnReader<V extends WritableColumnVector>
     implements ColumnReader<V> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(org.apache.flink.formats.parquet.vector.reader.AbstractColumnReader.class);
 
   private final PageReader pageReader;
 
@@ -277,7 +275,7 @@ public abstract class AbstractColumnReader<V extends WritableColumnVector>
         throw new UnsupportedOperationException("Unsupported encoding: " + dataEncoding);
       }
       this.dictionaryIdsDecoder = null;
-      LOG.debug("init from page at offset {} for length {}", in.position(), in.available());
+      log.debug("init from page at offset {} for length {}", in.position(), in.available());
       this.dataInputStream = in.remainingStream();
       this.isCurrentPageDictionaryEncoded = false;
     }

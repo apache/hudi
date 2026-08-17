@@ -19,8 +19,8 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.avro.ConvertingGenericData;
-import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.common.avro.ConvertingGenericData;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;

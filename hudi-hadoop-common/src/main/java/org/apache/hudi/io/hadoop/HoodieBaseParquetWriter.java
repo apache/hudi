@@ -167,4 +167,8 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
   public void close() throws IOException {
     this.parquetWriter.close();
   }
+
+  public Object getFileFormatMetadata() {
+    return this.parquetWriter.getFooter();
+  }
 }

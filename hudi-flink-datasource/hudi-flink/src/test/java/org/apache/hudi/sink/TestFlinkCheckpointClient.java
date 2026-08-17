@@ -23,11 +23,10 @@ import org.apache.hudi.sink.FlinkCheckpointClient.CheckpointRequest;
 import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
 import org.apache.hudi.sink.muttley.AthenaIngestionGateway.CheckpointKafkaOffsetInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -45,14 +44,13 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 
+@Slf4j
 public class TestFlinkCheckpointClient {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestFlinkCheckpointClient.class);
 
   @Test
   @Disabled("Requires real connection to Athena service")
   public void testGetKafkaCheckpointsInfo() throws IOException {
-    LOG.info("Test starts");
+    log.info("Test starts");
     // Create client with MuttleyClient implementation
     // TODO: Update with actual Athena service endpoint when available
     FlinkCheckpointClient client = new FlinkCheckpointClient(
@@ -83,21 +81,21 @@ public class TestFlinkCheckpointClient {
       
       // Assert the result
       assertNotNull(result);
-      LOG.info("Result is not null");
+      log.info("Result is not null");
       if (result.isPresent()) {
         CheckpointKafkaOffsetInfo info = result.get();
-        LOG.info("Checkpoint info retrieved successfully:");
-        LOG.info("  Checkpoint ID: {}", info.getCheckpointId());
-        LOG.info("  Checkpoint Timestamp: {}", info.getCheckpointTimestamp());
-        LOG.info("  Hudi Commit Time: {}", info.getHudiCommitInstantTime());
-        LOG.info("  Kafka Offsets Info: {}", info.getKafkaOffsetsInfo());
+        log.info("Checkpoint info retrieved successfully:");
+        log.info("  Checkpoint ID: {}", info.getCheckpointId());
+        log.info("  Checkpoint Timestamp: {}", info.getCheckpointTimestamp());
+        log.info("  Hudi Commit Time: {}", info.getHudiCommitInstantTime());
+        log.info("  Kafka Offsets Info: {}", info.getKafkaOffsetsInfo());
       } else {
-        LOG.warn("No checkpoint info found");
+        log.warn("No checkpoint info found");
       }
     } catch (IOException e) {
-      LOG.error("Failed to connect to Athena service", e);
+      log.error("Failed to connect to Athena service", e);
       // This is expected when not connected to a real Athena service
-      LOG.info("Test skipped - requires actual Athena service connection");
+      log.info("Test skipped - requires actual Athena service connection");
     }
   }
   

@@ -22,12 +22,15 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.expression.Predicate;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -45,8 +48,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
-import org.apache.hudi.expression.Predicate;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -58,6 +59,7 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -208,6 +210,35 @@ public abstract class HoodieReaderContext<T> {
       StoragePathInfo storagePathInfo, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException {
     return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, storage);
+  }
+
+  /**
+   * Optionally returns an iterator over records matching the given keys directly from the file.
+   *
+   * <p>Reader contexts can override this when the underlying engine-specific reader supports key
+   * seeking. The default implementation scans the file and filters records by key.
+   */
+  public ClosableIterator<T> lookupRecords(
+      StoragePath filePath,
+      HoodieFileFormat fileFormat,
+      HoodieSchema readerSchema,
+      HoodieStorage storage,
+      List<String> keys,
+      boolean fullKey) throws IOException {
+    ClosableIterator<T> fileRecordIterator = getFileRecordIterator(
+        filePath, 0, FSUtils.getFileSize(storage, filePath), readerSchema, readerSchema, storage);
+    if (keys.isEmpty()) {
+      return fileRecordIterator;
+    }
+
+    HashSet<String> keySet = new HashSet<>(keys);
+    return new CloseableFilterIterator<>(fileRecordIterator, record -> {
+      String recordKey = recordContext.getRecordKey(record, readerSchema);
+      if (recordKey == null) {
+        throw new IllegalStateException(String.format("Record without a key (%s)", record));
+      }
+      return fullKey ? keySet.contains(recordKey) : keys.stream().anyMatch(recordKey::startsWith);
+    });
   }
 
   /**

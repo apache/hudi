@@ -17,15 +17,16 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties, DataSkippingFailureMode}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -105,6 +106,9 @@ case class HoodieFileIndex(spark: SparkSession,
 
   @transient protected var hasPushedDownPartitionPredicates: Boolean = false
 
+  @transient private lazy val hoodieConfig =
+    new HoodieConfig(TypedProperties.fromMap(options.filter(_._2 != null).asJava))
+
   /** True when any partition column is a nested field path (e.g. "nested_record.level"). */
   private val hasNestedPartitionColumns: Boolean =
     getPartitionColumns.exists(_.contains("."))
@@ -116,7 +120,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * during `lookupCandidateFilesInMetadataTable`
    */
   @transient private lazy val indicesSupport: List[SparkBaseIndexSupport] = List(
-    new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
+    RecordLevelIndexSupport.create(spark, metadataConfig, metaClient),
     if (PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(metaClient.getStorageConf, metaClient.getBasePath.toString)) {
       new PartitionBucketIndexSupport(spark, metadataConfig, metaClient,
         options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant))
@@ -218,7 +222,7 @@ case class HoodieFileIndex(spark: SparkSession,
           PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(
             partitionValues,
             fileSlice,
-            options)
+            hoodieConfig)
         } else {
           val baseFileStatusOpt = getBaseFileInfo(Option.apply(fileSlice.getBaseFile.orElse(null)))
           val logPathInfoStream = fileSlice.getLogFiles.map[StoragePathInfo](JFunction.toJavaFunction[HoodieLogFile, StoragePathInfo](lf => lf.getPathInfo))

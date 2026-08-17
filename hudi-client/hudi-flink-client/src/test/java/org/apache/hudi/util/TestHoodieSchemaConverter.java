@@ -524,6 +524,63 @@ public class TestHoodieSchemaConverter {
     assertFalse(rowType.getTypeAt(1).isNullable());
   }
 
+  @Test
+  public void testConvertVectorColumnsFromFlinkSchema() {
+    RowType rowType = (RowType) DataTypes.ROW(
+        DataTypes.FIELD("id", DataTypes.STRING().notNull()),
+        DataTypes.FIELD("embedding", DataTypes.ARRAY(DataTypes.FLOAT().notNull()).notNull()),
+        DataTypes.FIELD("features", DataTypes.ARRAY(DataTypes.DOUBLE().notNull()).nullable()),
+        DataTypes.FIELD("codes", DataTypes.ARRAY(DataTypes.TINYINT().notNull()).notNull()))
+        .notNull()
+        .getLogicalType();
+
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType, "test_record", " embedding , features:64,codes:32 ");
+
+    HoodieSchema embedding = schema.getField("embedding").get().schema().getNonNullType();
+    assertEquals(HoodieSchemaType.VECTOR, embedding.getType());
+    assertEquals(128, ((HoodieSchema.Vector) embedding).getDimension());
+    assertEquals(HoodieSchema.Vector.VectorElementType.FLOAT,
+        ((HoodieSchema.Vector) embedding).getVectorElementType());
+
+    HoodieSchema features = schema.getField("features").get().schema();
+    assertTrue(features.isNullable());
+    HoodieSchema featuresVector = features.getNonNullType();
+    assertEquals(64, ((HoodieSchema.Vector) featuresVector).getDimension());
+    assertEquals(HoodieSchema.Vector.VectorElementType.DOUBLE,
+        ((HoodieSchema.Vector) featuresVector).getVectorElementType());
+
+    HoodieSchema codes = schema.getField("codes").get().schema().getNonNullType();
+    assertEquals(32, ((HoodieSchema.Vector) codes).getDimension());
+    assertEquals(HoodieSchema.Vector.VectorElementType.INT8,
+        ((HoodieSchema.Vector) codes).getVectorElementType());
+
+    HoodieSchema defaultRecordSchema = HoodieSchemaConverter.convertToSchema(rowType, "record", "embedding:2");
+    assertEquals("record", defaultRecordSchema.getName());
+    HoodieSchema defaultEmbedding = defaultRecordSchema.getField("embedding").get().schema().getNonNullType();
+    assertEquals(2, ((HoodieSchema.Vector) defaultEmbedding).getDimension());
+  }
+
+  @Test
+  public void testConvertVectorColumnsValidation() {
+    RowType rowType = (RowType) DataTypes.ROW(
+        DataTypes.FIELD("embedding", DataTypes.ARRAY(DataTypes.FLOAT().notNull()).notNull()),
+        DataTypes.FIELD("tags", DataTypes.ARRAY(DataTypes.STRING().notNull()).notNull()),
+        DataTypes.FIELD("plain", DataTypes.STRING()))
+        .notNull()
+        .getLogicalType();
+
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaConverter.convertToSchema(rowType, "test_record", "embedding:0"));
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaConverter.convertToSchema(rowType, "test_record", "embedding,embedding:64"));
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaConverter.convertToSchema(rowType, "test_record", "missing"));
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaConverter.convertToSchema(rowType, "test_record", "plain"));
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaConverter.convertToSchema(rowType, "test_record", "tags"));
+  }
+
   private void assertVectorArray(DataType dataType, LogicalTypeRoot elementTypeRoot, boolean nullable) {
     ArrayType arrayType = assertInstanceOf(ArrayType.class, dataType.getLogicalType());
     assertEquals(elementTypeRoot, arrayType.getElementType().getTypeRoot());
@@ -770,6 +827,23 @@ public class TestHoodieSchemaConverter {
     RowType blobLikeRowType = (RowType) blobLikeRow.getLogicalType();
     HoodieSchema convertedSchema = HoodieSchemaConverter.convertToSchema(blobLikeRowType);
     assertEquals(HoodieSchemaType.BLOB, convertedSchema.getType());
+
+    // Positive case: same structure but every nested field nullable. Flink SQL CREATE TABLE does not
+    // preserve NOT NULL on nested ROW fields, so detection must not depend on nested nullability.
+    DataType allNullableBlobRow = DataTypes.ROW(
+        DataTypes.FIELD(HoodieSchema.Blob.TYPE, DataTypes.STRING().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.INLINE_DATA_FIELD, DataTypes.BYTES().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE, DataTypes.ROW(
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, DataTypes.STRING().nullable()),
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, DataTypes.BIGINT().nullable()),
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, DataTypes.BIGINT().nullable()),
+            DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, DataTypes.BOOLEAN().nullable())
+        ).nullable())
+    ).notNull();
+
+    RowType allNullableBlobRowType = (RowType) allNullableBlobRow.getLogicalType();
+    HoodieSchema allNullableConverted = HoodieSchemaConverter.convertToSchema(allNullableBlobRowType);
+    assertEquals(HoodieSchemaType.BLOB, allNullableConverted.getType());
 
     // Negative case 1: Different field names
     DataType differentNames = DataTypes.ROW(

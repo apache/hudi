@@ -21,13 +21,14 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
 import java.util.Properties;
 
-public class TestFileWriter implements HoodieFileWriter {
+public class TestFileWriter implements HoodieFileWriter<Object> {
   private boolean closed = false;
   private boolean failOnWrite = false;
 
@@ -60,6 +61,16 @@ public class TestFileWriter implements HoodieFileWriter {
 
   @Override
   public void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
+    if (closed) {
+      throw new IOException("Writer is closed");
+    }
+    if (failOnWrite) {
+      throw new IOException("Simulated file writer write failure");
+    }
+  }
+
+  @Override
+  public void writeRow(String recordKey, Object record) throws IOException {
     if (closed) {
       throw new IOException("Writer is closed");
     }

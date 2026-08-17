@@ -31,6 +31,9 @@ import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -38,9 +41,6 @@ import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
@@ -143,6 +143,20 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
                       boolean supportsParquetRowIndex,
                       boolean hasBuiltInDelete) throws IOException {
     super.testMor(mergeMode, hasPrecombine, isProjectionCompatible, mergeUseRecordPosition, supportsParquetRowIndex, hasBuiltInDelete);
+  }
+
+  @Test
+  public void testMorNestedMandatoryFieldMergesIntoNarrowedRecord() throws IOException {
+    setupMORTable(RecordMergeMode.CUSTOM, false, hoodieTableConfig);
+    HoodieRecordMerger merger = mockRecordMerger(true, new String[] {"fare.currency"});
+    HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, true, false, false, merger);
+
+    //the request narrows "fare" to its "amount" leaf while the merger declares the sibling leaf
+    //"fare.currency" mandatory, so the handler has to merge the two projections of "fare"
+    HoodieSchema requestedSchema = narrowFareToAmountOnly(generateProjectionSchema("begin_lat", "fare", "rider"));
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, false);
+    assertEquals(generateProjectionSchema("begin_lat", "fare", "rider"), schemaHandler.getRequiredSchema());
+    assertFalse(readerContext.getNeedsBootstrapMerge());
   }
 
   @ParameterizedTest

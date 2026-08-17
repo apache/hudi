@@ -22,8 +22,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
 import org.apache.hudi.sink.muttley.AthenaIngestionGateway.CheckpointKafkaOffsetInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Map;
@@ -32,9 +31,8 @@ import java.util.Map;
  * Client for fetching Kafka checkpoint information from Athena Ingestion Gateway using MuttleyClient.
  * This uses the MuttleyClient implementation for RPC communication.
  */
+@Slf4j
 public class FlinkCheckpointClient {
-  
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkCheckpointClient.class);
   
   private final AthenaIngestionGateway athenaGateway;
 
@@ -65,15 +63,15 @@ public class FlinkCheckpointClient {
    * @throws IOException if the HTTP request fails
    */
   public Option<CheckpointKafkaOffsetInfo> getKafkaCheckpointsInfo(CheckpointRequest request) throws IOException {
-    LOG.info("getKafkaCheckpointsInfo called with request: {}", request);
-    LOG.debug("Request details - DC: {}, Env: {}, CheckpointId: {}, JobName: {}, HadoopUser: {}, "
+    log.info("getKafkaCheckpointsInfo called with request: {}", request);
+    log.debug("Request details - DC: {}, Env: {}, CheckpointId: {}, JobName: {}, HadoopUser: {}, "
         + "SourceCluster: {}, TargetCluster: {}, CheckpointLookback: {}, TopicOperatorIds: {}, ServiceTier: {}, ServiceName: {}",
         request.getDc(), request.getEnv(), request.getCheckpointId(), request.getJobName(),
         request.getHadoopUser(), request.getSourceCluster(), request.getTargetCluster(),
         request.getCheckpointLookback(), request.getTopicOperatorIds(), request.getServiceTier(), request.getServiceName());
     
     try {
-      LOG.info("Calling athenaGateway.getKafkaCheckpointsInfo...");
+      log.info("Calling athenaGateway.getKafkaCheckpointsInfo...");
       Option<CheckpointKafkaOffsetInfo> result = athenaGateway.getKafkaCheckpointsInfo(
           request.getDc(),
           request.getEnv(),
@@ -87,13 +85,13 @@ public class FlinkCheckpointClient {
           request.getServiceTier(),
           request.getServiceName()
       );
-      LOG.info("Call to athenaGateway completed. Result present: {}", result.isPresent());
+      log.info("Call to athenaGateway completed. Result present: {}", result.isPresent());
       return result;
     } catch (IOException e) {
-      LOG.error("IOException in getKafkaCheckpointsInfo: {}", e.getMessage(), e);
+      log.error("IOException in getKafkaCheckpointsInfo: {}", e.getMessage(), e);
       throw e;
     } catch (Exception e) {
-      LOG.error("Unexpected exception in getKafkaCheckpointsInfo: {}", e.getMessage(), e);
+      log.error("Unexpected exception in getKafkaCheckpointsInfo: {}", e.getMessage(), e);
       throw new IOException("Unexpected error getting checkpoint info", e);
     }
   }

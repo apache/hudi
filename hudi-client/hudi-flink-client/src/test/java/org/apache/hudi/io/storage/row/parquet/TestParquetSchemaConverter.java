@@ -20,7 +20,10 @@ package org.apache.hudi.io.storage.row.parquet;
 
 import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.storage.row.HoodieRowDataParquetWriteSupport;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
@@ -38,6 +41,7 @@ import org.apache.flink.table.types.logical.SmallIntType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.TinyIntType;
 import org.apache.flink.table.types.logical.VarCharType;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
@@ -48,6 +52,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -84,7 +89,7 @@ public class TestParquetSchemaConverter {
           new MapType(
               new VarCharType(VarCharType.MAX_LENGTH),
               new VarCharType(VarCharType.MAX_LENGTH)),
-          new MapType(new IntType(), new BooleanType()),
+          new MapType(new VarCharType(VarCharType.MAX_LENGTH), new BooleanType()),
           RowType.of(new VarCharType(VarCharType.MAX_LENGTH), new IntType()));
 
   private static final RowType NESTED_ARRAY_MAP_TYPE =
@@ -121,7 +126,9 @@ public class TestParquetSchemaConverter {
   void testParquetFlinkTypeConverting() {
     MessageType messageType = ParquetSchemaConverter.convertToParquetMessageType("flink_schema", ROW_TYPE);
     RowType rowType = ParquetSchemaConverter.convertToRowType(messageType);
-    assertThat(rowType, is(ROW_TYPE));
+    // The parquet schema is derived from the avro-based HoodieSchema, which has no byte/short
+    // types, so TINYINT/SMALLINT (including as array elements) are normalized to INT on the round trip.
+    assertThat(rowType, is((RowType) normalizeByteShortToInt(ROW_TYPE)));
 
     messageType = ParquetSchemaConverter.convertToParquetMessageType("flink_schema", NESTED_ARRAY_MAP_TYPE);
     rowType = ParquetSchemaConverter.convertToRowType(messageType);
@@ -134,7 +141,7 @@ public class TestParquetSchemaConverter {
         DataTypes.FIELD("f_array",
             DataTypes.ARRAY(DataTypes.CHAR(10).notNull())),
         DataTypes.FIELD("f_map",
-            DataTypes.MAP(DataTypes.INT(), DataTypes.VARCHAR(20))),
+            DataTypes.MAP(DataTypes.STRING(), DataTypes.VARCHAR(20))),
         DataTypes.FIELD("f_row",
             DataTypes.ROW(
                 DataTypes.FIELD("f_row_f0", DataTypes.INT()),
@@ -154,7 +161,7 @@ public class TestParquetSchemaConverter {
         + "  }\n"
         + "  optional group f_map (MAP) {\n"
         + "    repeated group key_value {\n"
-        + "      required int32 key;\n"
+        + "      required binary key (STRING);\n"
         + "      optional binary value (STRING);\n"
         + "    }\n"
         + "  }\n"
@@ -179,11 +186,12 @@ public class TestParquetSchemaConverter {
                 DataTypes.FIELD("f_array_f1", DataTypes.VARCHAR(10).notNull()),
                 DataTypes.FIELD("f_array_f3", DataTypes.ARRAY(DataTypes.CHAR(10).notNull()))).notNull())),
         DataTypes.FIELD("f_map",
-            DataTypes.MAP(DataTypes.INT(), DataTypes.ROW(
+            DataTypes.MAP(DataTypes.STRING(), DataTypes.ROW(
                 DataTypes.FIELD("f_map_f0", DataTypes.INT()),
                 DataTypes.FIELD("f_map_f1", DataTypes.VARCHAR(10))).notNull())));
 
-    org.apache.parquet.schema.MessageType messageType = ParquetSchemaConverter.convertToParquetMessageType("converted", (RowType) dataType.getLogicalType());
+    org.apache.parquet.schema.MessageType messageType =
+        ParquetSchemaConverter.convertToParquetMessageType("converted", (RowType) dataType.getLogicalType());
 
     assertThat(messageType.getColumns().size(), is(6));
     final String expected = "message converted {\n"
@@ -202,7 +210,7 @@ public class TestParquetSchemaConverter {
         + "  }\n"
         + "  optional group f_map (MAP) {\n"
         + "    repeated group key_value {\n"
-        + "      required int32 key;\n"
+        + "      required binary key (STRING);\n"
         + "      required group value {\n"
         + "        optional int32 f_map_f0;\n"
         + "        optional binary f_map_f1 (STRING);\n"
@@ -214,20 +222,147 @@ public class TestParquetSchemaConverter {
   }
 
   @Test
+  void testConvertVectorColumnsWithHoodieSchema() {
+    HoodieSchema hoodieSchema = HoodieSchema.createRecord(
+        "vector_record",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("embedding", HoodieSchema.createVector(2)),
+            HoodieSchemaField.of("features", HoodieSchema.createVector(2, HoodieSchema.Vector.VectorElementType.DOUBLE))));
+    MessageType messageType = ParquetSchemaConverter.convertToParquetMessageType("converted", hoodieSchema);
+
+    PrimitiveType embeddingType = messageType.getType("embedding").asPrimitiveType();
+    assertEquals(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, embeddingType.getPrimitiveTypeName());
+    assertEquals(8, embeddingType.getTypeLength());
+    PrimitiveType featuresType = messageType.getType("features").asPrimitiveType();
+    assertEquals(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, featuresType.getPrimitiveTypeName());
+    assertEquals(16, featuresType.getTypeLength());
+  }
+
+  @Test
+  void testDecimalFixedLenWidthFromHoodieSchema() {
+    HoodieSchema hoodieSchema = HoodieSchema.parse(
+        "{\"type\":\"record\",\"name\":\"rec\",\"fields\":["
+            + "{\"name\":\"fixed_decimal\",\"type\":{\"type\":\"fixed\",\"name\":\"dec_fixed\","
+            + "\"size\":10,\"logicalType\":\"decimal\",\"precision\":20,\"scale\":2}},"
+            + "{\"name\":\"bytes_decimal\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\","
+            + "\"precision\":20,\"scale\":2}}]}");
+
+    MessageType messageType = ParquetSchemaConverter.convertToParquetMessageType("converted", hoodieSchema);
+
+    assertEquals(10, messageType.getType("fixed_decimal").asPrimitiveType().getTypeLength());
+    assertEquals(9, messageType.getType("bytes_decimal").asPrimitiveType().getTypeLength());
+  }
+
+  @Test
+  void testUnannotatedFixedLenByteArrayConvertsToBytes() {
+    MessageType messageType = new MessageType(
+        "test",
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.REQUIRED).named("id"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, Type.Repetition.OPTIONAL)
+            .length(8)
+            .named("embedding"));
+
+    RowType rowType = ParquetSchemaConverter.convertToRowType(messageType);
+
+    assertEquals(DataTypes.BYTES().getLogicalType(), rowType.getTypeAt(1));
+  }
+
+  @Test
+  void testVectorFooterMetadataComesFromHoodieSchema() {
+    HoodieSchema hoodieSchema = HoodieSchema.createRecord(
+        "vector_record",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("embedding", HoodieSchema.createVector(2))));
+
+    HoodieRowDataParquetWriteSupport writeSupport =
+        new HoodieRowDataParquetWriteSupport(new Configuration(), hoodieSchema, null);
+    Map<String, String> metadata = writeSupport.finalizeWrite().getExtraMetaData();
+
+    assertEquals("embedding:VECTOR(2)", metadata.get(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY));
+  }
+
+  @Test
   void testConvertTimestampTypes() {
     DataType dataType = DataTypes.ROW(
         DataTypes.FIELD("ts_3", DataTypes.TIMESTAMP(3)),
-        DataTypes.FIELD("ts_6", DataTypes.TIMESTAMP(6)),
-        DataTypes.FIELD("ts_9", DataTypes.TIMESTAMP(9)));
+        DataTypes.FIELD("ts_6", DataTypes.TIMESTAMP(6)));
     org.apache.parquet.schema.MessageType messageType =
         ParquetSchemaConverter.convertToParquetMessageType("converted", (RowType) dataType.getLogicalType());
-    assertThat(messageType.getColumns().size(), is(3));
+    assertThat(messageType.getColumns().size(), is(2));
     final String expected = "message converted {\n"
         + "  optional int64 ts_3 (TIMESTAMP(MILLIS,true));\n"
         + "  optional int64 ts_6 (TIMESTAMP(MICROS,true));\n"
-        + "  optional int96 ts_9;\n"
         + "}\n";
     assertThat(messageType.toString(), is(expected));
+  }
+
+  @Test
+  void testConvertAnnotatedPrimitiveParquetTypes() {
+    MessageType parquet = new MessageType("annotated",
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.REQUIRED)
+            .as(LogicalTypeAnnotation.decimalType(2, 8)).named("decimal32"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.intType(8, true)).named("tiny"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.intType(16, true)).named("small"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.intType(32, true)).named("number"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.dateType()).named("day"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.timeType(true, LogicalTypeAnnotation.TimeUnit.MILLIS)).named("time"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, Type.Repetition.OPTIONAL)
+            .as(LogicalTypeAnnotation.decimalType(3, 12)).named("decimal64"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.INT96, Type.Repetition.OPTIONAL)
+            .named("timestamp96"),
+        Types.primitive(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, Type.Repetition.OPTIONAL)
+            .length(8).as(LogicalTypeAnnotation.decimalType(4, 16)).named("decimal_fixed"));
+
+    RowType converted = ParquetSchemaConverter.convertToRowType(parquet);
+    assertEquals("DECIMAL(8, 2) NOT NULL", converted.getTypeAt(0).asSummaryString());
+    assertEquals("TINYINT", converted.getTypeAt(1).asSummaryString());
+    assertEquals("SMALLINT", converted.getTypeAt(2).asSummaryString());
+    assertEquals("INT", converted.getTypeAt(3).asSummaryString());
+    assertEquals("DATE", converted.getTypeAt(4).asSummaryString());
+    assertEquals("TIME(0)", converted.getTypeAt(5).asSummaryString());
+    assertEquals("DECIMAL(12, 3)", converted.getTypeAt(6).asSummaryString());
+    assertEquals("TIMESTAMP(9)", converted.getTypeAt(7).asSummaryString());
+    assertEquals("DECIMAL(16, 4)", converted.getTypeAt(8).asSummaryString());
+  }
+
+  @Test
+  void testConvertLocalZonedTimestampToParquet() {
+    RowType rowType = (RowType) DataTypes.ROW(
+        DataTypes.FIELD("local_millis", DataTypes.TIMESTAMP_LTZ(3)),
+        DataTypes.FIELD("local_micros", DataTypes.TIMESTAMP_LTZ(6))).notNull().getLogicalType();
+    MessageType parquet = ParquetSchemaConverter.convertToParquetMessageType("local", rowType);
+    assertEquals(LogicalTypeAnnotation.timestampType(
+            false, LogicalTypeAnnotation.TimeUnit.MILLIS),
+        parquet.getType("local_millis").getLogicalTypeAnnotation());
+    assertEquals(LogicalTypeAnnotation.timestampType(
+            false, LogicalTypeAnnotation.TimeUnit.MICROS),
+        parquet.getType("local_micros").getLogicalTypeAnnotation());
+  }
+
+  @Test
+  void testConvertBinaryDateAndTimeToParquet() {
+    RowType rowType = (RowType) DataTypes.ROW(
+        DataTypes.FIELD("payload", DataTypes.BYTES()),
+        DataTypes.FIELD("day", DataTypes.DATE()),
+        DataTypes.FIELD("time", DataTypes.TIME(3))).notNull().getLogicalType();
+    MessageType parquet = ParquetSchemaConverter.convertToParquetMessageType("primitives", rowType);
+    assertEquals(PrimitiveType.PrimitiveTypeName.BINARY,
+        parquet.getType("payload").asPrimitiveType().getPrimitiveTypeName());
+    assertEquals(LogicalTypeAnnotation.dateType(),
+        parquet.getType("day").getLogicalTypeAnnotation());
+    assertEquals(LogicalTypeAnnotation.timeType(true, LogicalTypeAnnotation.TimeUnit.MILLIS),
+        parquet.getType("time").getLogicalTypeAnnotation());
   }
 
   /**
@@ -364,4 +499,24 @@ public class TestParquetSchemaConverter {
         "Error message should mention VARIANT");
   }
 
+  /**
+   * Replaces TINYINT/SMALLINT with INT recursively, mirroring the lossy conversion that happens
+   * when a parquet schema is built from the avro-based {@link HoodieSchema}.
+   * The problem is tracked here: <a href="https://github.com/apache/hudi/issues/18974">Issue#18974</a>.
+   */
+  private static LogicalType normalizeByteShortToInt(LogicalType type) {
+    if (type instanceof TinyIntType || type instanceof SmallIntType) {
+      return new IntType();
+    } else if (type instanceof ArrayType) {
+      return new ArrayType(normalizeByteShortToInt(((ArrayType) type).getElementType()));
+    } else if (type instanceof RowType) {
+      RowType row = (RowType) type;
+      LogicalType[] children = new LogicalType[row.getFieldCount()];
+      for (int i = 0; i < children.length; i++) {
+        children[i] = normalizeByteShortToInt(row.getTypeAt(i));
+      }
+      return RowType.of(children);
+    }
+    return type;
+  }
 }

@@ -22,11 +22,12 @@ package org.apache.hudi.functional;
 import org.apache.hudi.DefaultSparkRecordMerger;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
-import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.expression.Predicate;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -51,7 +52,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.io.CustomMerger;
 import org.apache.hudi.io.CustomPayload;
 import org.apache.hudi.storage.HoodieStorage;
@@ -959,6 +959,11 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
+    public HoodieRecord.HoodieRecordType getEngineRecordType() {
+      return HoodieRecord.HoodieRecordType.SPARK;
+    }
+
+    @Override
     public InternalRow mergeWithEngineRecord(HoodieSchema schema,
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<InternalRow> baseRecord) {
@@ -986,7 +991,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public InternalRow seal(InternalRow record) {
+    public InternalRow seal(HoodieSchema schema, InternalRow record) {
       return null;
     }
 

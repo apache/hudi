@@ -21,7 +21,7 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
 
 import org.apache.flink.table.data.RowData;
 
@@ -31,19 +31,12 @@ import java.util.Properties;
 /**
  * Abstraction to assist in writing {@link RowData}s to be used in datasource implementation.
  */
-public interface HoodieRowDataFileWriter extends HoodieFileWriter {
+public interface HoodieRowDataFileWriter extends HoodieFileWriter<RowData> {
 
   /**
    * Returns {@code true} if this RowFileWriter can take in more writes. else {@code false}.
    */
   boolean canWrite();
-
-  /**
-   * Writes an {@link RowData} to the {@link HoodieRowDataFileWriter}. Also takes in associated record key to be added to bloom filter if required.
-   *
-   * @throws IOException on any exception while writing.
-   */
-  void writeRow(String key, RowData row) throws IOException;
 
   /**
    * Writes an {@link RowData} into the {@link HoodieRowDataFileWriter} with metadata fields.

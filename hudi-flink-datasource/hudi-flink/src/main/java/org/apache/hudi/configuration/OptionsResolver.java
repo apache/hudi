@@ -70,7 +70,8 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_GR
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP;
-import static org.apache.hudi.metadata.HoodieBackedTableMetadataWriter.RECORD_INDEX_AVERAGE_RECORD_SIZE;
+import static org.apache.hudi.common.table.HoodieTableConfig.TableStorageLayout.LSM_TREE;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
 /**
  * Tool helping to resolve the flink options {@link FlinkOptions}.
@@ -160,6 +161,27 @@ public class OptionsResolver {
     return conf.get(FlinkOptions.TABLE_TYPE)
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+  }
+
+  /**
+   * Returns the configured table storage layout.
+   *
+   * <p>Insert operations preserve duplicate record keys and therefore default to the regular
+   * storage layout. Other operations use Flink's LSM tree default.
+   */
+  public static HoodieTableConfig.TableStorageLayout getTableStorageLayout(Configuration conf) {
+    return HoodieTableConfig.TableStorageLayout.fromConfigValue(conf.getString(
+        HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        isInsertOperation(conf)
+            ? HoodieTableConfig.TableStorageLayout.DEFAULT.configValue()
+            : HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue()));
+  }
+
+  /**
+   * Returns whether the table uses LSM tree storage layout.
+   */
+  public static boolean isLsmTreeStorageLayout(Configuration conf) {
+    return getTableStorageLayout(conf) == LSM_TREE;
   }
 
   /**
@@ -561,6 +583,13 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns the index key fields as a list, parsing the comma-separated config value once.
+   */
+  public static List<String> getIndexKeyFields(Configuration conf) {
+    return KeyGenUtils.getIndexKeyFields(getIndexKeyField(conf));
+  }
+
+  /**
    * Returns the conflict resolution strategy.
    */
   public static ConflictResolutionStrategy getConflictResolutionStrategy(Configuration conf) {
@@ -601,6 +630,16 @@ public class OptionsResolver {
    */
   public static boolean isNonBlockingConcurrencyControl(Configuration config) {
     return WriteConcurrencyMode.isNonBlockingConcurrencyControl(config.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()));
+  }
+
+  /**
+   * Returns whether this is optimistic concurrency control.
+   */
+  public static boolean isOptimisticConcurrencyControl(Configuration config) {
+    return WriteConcurrencyMode.valueOf(config.getString(
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()).toUpperCase(Locale.ROOT))
+        .isOptimisticConcurrencyControl();
   }
 
   /**

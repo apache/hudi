@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -212,9 +212,9 @@ public class BootstrapOperator
         .filter(logFile -> isValidFile(logFile.getPathInfo()))
         .forEach(scanFileSlice::addLogFile);
 
-    HoodieFileGroupReader<RowData> fileGroupReader = FormatUtils.createFileGroupReader(metaClient, writeConfig, internalSchemaManager, scanFileSlice,
+    HoodieRecordReader<RowData> recordReader = FormatUtils.createRecordReader(metaClient, writeConfig, internalSchemaManager, scanFileSlice,
         tableSchema, tableSchema, scanFileSlice.getLatestInstantTime(), FlinkOptions.REALTIME_PAYLOAD_COMBINE, true, Collections.emptyList(), Option.empty());
-    return fileGroupReader.getClosableKeyIterator();
+    return recordReader.getClosableKeyIterator();
   }
 
   protected void insertIndexStreamRecord(String recordKey, String partitionPath, FileSlice fileSlice) {

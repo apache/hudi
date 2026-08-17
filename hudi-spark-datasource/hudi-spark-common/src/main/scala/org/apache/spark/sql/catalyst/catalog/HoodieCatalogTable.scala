@@ -26,11 +26,12 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.HoodieTableConfig.{HIVE_STYLE_PARTITIONING_ENABLE, URL_ENCODE_PARTITIONING}
 import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.util.{HoodieTableConfigUtils, StringUtils, ValidationUtils}
+import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils}
+import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.util.SparkConfigUtils
 import org.apache.hudi.util.SparkConfigUtils.getStringWithAltKeys
 

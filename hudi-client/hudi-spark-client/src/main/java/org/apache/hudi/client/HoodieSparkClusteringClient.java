@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.async.BaseClusterer;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;

@@ -55,10 +55,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
-import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE;
-import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
-import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
+import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
+import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE;
+import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
+import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 /**
@@ -205,11 +205,21 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
         columnNames.add(field.name());
       }
 
-      // Pinned to CONTENT: compaction/merge/log-replay need actual bytes to rewrite.
-      // The user-facing `hoodie.read.blob.inline.mode` is honored by SparkLanceReaderBase.
+      // Pinned to CONTENT: callers (LanceUtils stats/key reads, bloom-index lookups via
+      // HoodieReadHandle, old-base-file reads in the legacy HoodieWriteMergeHandle merge path)
+      // need actual bytes. Default-path compaction/merge reads go through SparkLanceReaderBase
+      // instead, which honors the user-facing `hoodie.read.blob.inline.mode`.
       FileReadOptions readOpts = FileReadOptions.builder().blobReadMode(BlobReadMode.CONTENT).build();
-      ArrowReader arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE, readOpts);
 
+      // BLOB reads must be chunked to dodge a lance-core FFI abort (see LanceRecordIterator).
+      // containsBlobType() recurses through nested records/arrays/maps/unions, so a BLOB at any
+      // depth routes through the chunked path; a top-level-only check would silently skip
+      // chunking (and re-introduce the abort) if the writer ever gains nested-BLOB support.
+      if (requestedSchema.containsBlobType()) {
+        return LanceRecordIterator.chunkedBlobReader(allocator, lanceReader, columnNames, readOpts,
+            lanceReader.numRows(), requestedSparkSchema, path.toString(), null);
+      }
+      ArrowReader arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE, readOpts);
       return new LanceRecordIterator(allocator, lanceReader, arrowReader, requestedSparkSchema, path.toString());
     } catch (Exception e) {
       allocator.close();

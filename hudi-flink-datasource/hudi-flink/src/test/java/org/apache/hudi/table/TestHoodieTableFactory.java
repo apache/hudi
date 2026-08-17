@@ -22,8 +22,12 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
@@ -48,6 +52,8 @@ import org.apache.flink.table.factories.DynamicTableFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -58,6 +64,7 @@ import java.util.Objects;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -91,6 +98,8 @@ public class TestHoodieTableFactory {
     this.conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath());
     this.conf.set(FlinkOptions.TABLE_NAME, "t1");
     this.conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    this.conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
     StreamerUtil.initTableIfNotExists(this.conf);
   }
 
@@ -278,6 +287,32 @@ public class TestHoodieTableFactory {
     assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext6));
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieIndex.IndexType.class, names = {"GLOBAL_RECORD_LEVEL_INDEX", "RECORD_LEVEL_INDEX"})
+  void testRecordLevelIndexDoesNotSupportMultipleWriters(HoodieIndex.IndexType indexType) {
+    ResolvedSchema schema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+
+    Configuration rliConf = new Configuration(this.conf);
+    rliConf.set(FlinkOptions.INDEX_TYPE, indexType.name());
+    rliConf.set(FlinkOptions.OPERATION, "upsert");
+    rliConf.set(FlinkOptions.METADATA_ENABLED, true);
+    rliConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED,
+        indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX);
+    rliConf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
+        WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+
+    IllegalArgumentException exception = assertThrows(
+        IllegalArgumentException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(rliConf, schema, "")));
+    assertThat(exception.getMessage(),
+        containsString("record level index does not support multiple writers"));
+  }
+
   @Test
   void testTableTypeCheck() {
     ResolvedSchema schema = SchemaBuilder.instance()
@@ -331,12 +366,16 @@ public class TestHoodieTableFactory {
     tableConf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     tableConf.set(FlinkOptions.PAYLOAD_CLASS_NAME, "my_payload");
     tableConf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    tableConf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
 
     StreamerUtil.initTableIfNotExists(tableConf);
 
     Configuration writeConf = new Configuration();
     writeConf.set(FlinkOptions.PATH, tablePath);
     writeConf.set(FlinkOptions.TABLE_NAME, "t2");
+    writeConf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
 
     // fallback to table config
     ResolvedSchema schema1 = SchemaBuilder.instance()
@@ -364,6 +403,12 @@ public class TestHoodieTableFactory {
         source1.getConf().get(FlinkOptions.PAYLOAD_CLASS_NAME), is("my_payload"));
     assertThat("payload class not provided, fallback to table config",
         sink1.getConf().get(FlinkOptions.PAYLOAD_CLASS_NAME), is("my_payload"));
+    assertThat("table storage layout should come from table config",
+        source1.getConf().getString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), null),
+        is(HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue()));
+    assertThat("table storage layout should come from table config",
+        sink1.getConf().getString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), null),
+        is(HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue()));
 
     // write config always has higher priority
     // set up a different primary key and pre_combine key with table config options
@@ -850,6 +895,69 @@ public class TestHoodieTableFactory {
     lanceConf.set(FlinkOptions.RECORD_KEY_FIELD, "f0");
     final MockContext keyedContext = MockContext.getInstance(lanceConf, appendOnlySchema, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(keyedContext));
+  }
+
+  @Test
+  void testStorageLayoutValidationAndBulkInsertSort() throws IOException {
+    Configuration insertConf = new Configuration();
+    insertConf.set(FlinkOptions.PATH, new File(tempFile, "insert").getAbsolutePath());
+    insertConf.set(FlinkOptions.TABLE_NAME, "t_insert");
+    insertConf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    insertConf.set(FlinkOptions.OPERATION, "insert");
+    insertConf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    assertThrows(IllegalArgumentException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(insertConf)));
+
+    Configuration bulkInsertConf = new Configuration();
+    bulkInsertConf.set(FlinkOptions.PATH, new File(tempFile, "bulk_insert").getAbsolutePath());
+    bulkInsertConf.set(FlinkOptions.TABLE_NAME, "t_bulk_insert");
+    bulkInsertConf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    bulkInsertConf.set(FlinkOptions.OPERATION, "bulk_insert");
+    bulkInsertConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
+    bulkInsertConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, false);
+    HoodieTableSink lsmSink = (HoodieTableSink) new HoodieTableFactory()
+        .createDynamicTableSink(MockContext.getInstance(bulkInsertConf));
+    assertThat(OptionsResolver.isLsmTreeStorageLayout(lsmSink.getConf()), is(true));
+    assertThat(lsmSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT), is(true));
+    assertThat(lsmSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY), is(true));
+
+    Configuration defaultBulkInsertConf = new Configuration(bulkInsertConf);
+    defaultBulkInsertConf.set(FlinkOptions.PATH,
+        new File(tempFile, "default_bulk_insert").getAbsolutePath());
+    defaultBulkInsertConf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
+    defaultBulkInsertConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
+    defaultBulkInsertConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, false);
+    HoodieTableSink defaultSink = (HoodieTableSink) new HoodieTableFactory()
+        .createDynamicTableSink(MockContext.getInstance(defaultBulkInsertConf));
+    assertThat(OptionsResolver.isLsmTreeStorageLayout(defaultSink.getConf()), is(false));
+    assertThat(defaultSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT), is(false));
+    assertThat(defaultSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY), is(false));
+
+    Configuration tableConf = new Configuration();
+    tableConf.set(FlinkOptions.PATH, new File(tempFile, "existing_lsm").getAbsolutePath());
+    tableConf.set(FlinkOptions.TABLE_NAME, "existing_lsm");
+    tableConf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    tableConf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    StreamerUtil.initTableIfNotExists(tableConf);
+
+    Configuration writeConf = new Configuration();
+    writeConf.set(FlinkOptions.PATH, tableConf.get(FlinkOptions.PATH));
+    writeConf.set(FlinkOptions.TABLE_NAME, tableConf.get(FlinkOptions.TABLE_NAME));
+    writeConf.set(FlinkOptions.OPERATION, "insert");
+    assertThrows(IllegalArgumentException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(writeConf)));
+
+    writeConf.set(FlinkOptions.OPERATION, "bulk_insert");
+    writeConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
+    writeConf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, false);
+    HoodieTableSink existingLsmSink = (HoodieTableSink) new HoodieTableFactory()
+        .createDynamicTableSink(MockContext.getInstance(writeConf));
+    assertThat(OptionsResolver.isLsmTreeStorageLayout(existingLsmSink.getConf()), is(true));
+    assertThat(existingLsmSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT), is(true));
+    assertThat(existingLsmSink.getConf().get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY), is(true));
   }
 
   // -------------------------------------------------------------------------

@@ -17,7 +17,6 @@
 
 package org.apache.hudi.async;
 
-import org.apache.hudi.client.BaseCompactor;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -71,16 +70,16 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
     return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentCompaction).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
       try {
         // Set Compactor Pool Name for allowing users to prioritize compaction
-        log.info("Setting pool name for compaction to " + COMPACT_POOL_NAME);
+        log.info("Setting pool name for compaction to {}", COMPACT_POOL_NAME);
         context.setProperty(EngineProperty.COMPACTION_POOL_NAME, COMPACT_POOL_NAME);
 
         while (!isShutdownRequested()) {
           final String instantTime = fetchNextAsyncServiceInstant();
 
           if (null != instantTime) {
-            log.info("Starting Compaction for instant " + instantTime);
+            log.info("Starting Compaction for instant {}", instantTime);
             compactor.compact(instantTime);
-            log.info("Finished Compaction for instant " + instantTime);
+            log.info("Finished Compaction for instant {}", instantTime);
           }
         }
         log.info("Compactor shutting down properly!!");

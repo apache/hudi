@@ -408,8 +408,8 @@ Set up a few environment variables to simplify Maven commands that follow. This 
    1. This will deploy jar artifacts to the Apache Nexus Repository, which is the staging area for deploying jars to Maven Central.
    2. Review all staged artifacts (https://repository.apache.org/). They should contain all relevant parts for each module, including pom.xml, jar, test jar, source, test source, javadoc, etc. Carefully review any new artifacts.
    3. git checkout ${RELEASE_BRANCH}
-   4. Given that certain bundle jars are built by Java 17 (Spark 4 bundle), multiple
-      scripts need to be run. Run each from the repository root directory (the one containing `packaging/`).
+   4. Given that certain artifacts require newer JDKs (Java 17 for the Spark 4 bundles, Java 25 for hudi-trino),
+      multiple scripts need to be run. Run each from the repository root directory (the one containing `packaging/`).
        1. For most modules with Java 11 build, run `export JAVA_HOME=$(/usr/libexec/java_home -v 11)` and
           `./scripts/release/deploy_staging_jars.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy1.log"`
            1. when prompted for the passphrase, if you have multiple gpg keys in your keyring, make sure that you enter
@@ -425,23 +425,29 @@ Set up a few environment variables to simplify Maven commands that follow. This 
               module. See [checklist](#checklist-to-proceed-to-the-next-step).
        2. Continue with Java 17 build for Spark 4 bundle, run `export JAVA_HOME=$(/usr/libexec/java_home -v 17)` and
           `./scripts/release/deploy_staging_jars_java17.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy2.log"`
-   5. Note that the artifacts from Java 17 build are uploaded to a separate staging repo. Use the
-      `copy_staging_repo.sh` script to copy all artifacts from the Java 17 staging repo into the Java 11 staging repo
+       3. Continue with Java 25 build for the hudi-trino connector, run `export JAVA_HOME=$(/usr/libexec/java_home -v 25)`
+          and `./scripts/release/deploy_staging_jars_java25.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy3.log"`.
+          This step must run after the Java 11 step in 9.4.1, which installs the upstream Hudi modules that hudi-trino
+          resolves from the local m2 (the script does not pass `-am` because Lombok cannot run on JDK 25).
+   5. Note that each of the Java 17 and Java 25 builds uploads its artifacts to its own separate staging repo. Use the
+      `copy_staging_repo.sh` script once per extra staging repo to copy all artifacts into the Java 11 staging repo
       so that all artifacts stay in the same repo.
-      1. Identify both staging repo IDs from [Apache Nexus Staging Repositories](https://repository.apache.org/#stagingRepositories)
-         (e.g., `orgapachehudi-1177` for Java 17, `orgapachehudi-1176` for Java 11). Make sure both repos are still in
-         the "open" state (not closed).
+      1. Identify all staging repo IDs from [Apache Nexus Staging Repositories](https://repository.apache.org/#stagingRepositories)
+         (e.g., `orgapachehudi-1177` for Java 17, `orgapachehudi-1178` for Java 25, `orgapachehudi-1176` for Java 11).
+         Make sure all repos are still in the "open" state (not closed).
       2. First do a dry-run to verify the list of artifacts to be copied:
          ```shell
          ./scripts/release/copy_staging_repo.sh --dry-run <java17-repo-id> <java11-repo-id>
+         ./scripts/release/copy_staging_repo.sh --dry-run <java25-repo-id> <java11-repo-id>
          ```
-      3. Then run the actual copy:
+      3. Then run the actual copies:
          ```shell
          ./scripts/release/copy_staging_repo.sh <java17-repo-id> <java11-repo-id> 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.copy_staging.log"
+         ./scripts/release/copy_staging_repo.sh <java25-repo-id> <java11-repo-id> 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.copy_staging.log"
          ```
       4. The script reads Nexus credentials from `~/.m2/settings.xml` (server id `apache.releases.https`), downloads
-         every artifact from the source repo, and re-uploads them to the target repo. After it finishes, drop the
-         Java 17 staging repo on Apache Nexus.
+         every artifact from the source repo, and re-uploads them to the target repo. After it finishes, drop both the
+         Java 17 and the Java 25 staging repos on Apache Nexus.
    6. Review all staged artifacts by logging into Apache Nexus and clicking on "Staging Repositories" link on left pane.
       Then find a "open" entry for apachehudi
    7. Ensure it contains all 2 (2.12 and 2.13) artifacts, mainly hudi-spark-bundle-2.12/2.13,

@@ -48,9 +48,10 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -235,15 +236,15 @@ public class SecondaryIndexRecordGenerationUtils {
   }
 
   public static <T> HoodieData<HoodieRecord> readSecondaryKeysFromFileSlices(HoodieEngineContext engineContext,
-                                                                             List<Pair<String, FileSlice>> partitionFileSlicePairs,
+                                                                             List<FileSliceAndPartition> fileSlices,
                                                                              int secondaryIndexMaxParallelism,
                                                                              String activeModule, HoodieTableMetaClient metaClient,
                                                                              HoodieIndexDefinition indexDefinition,
                                                                              TypedProperties props) {
-    if (partitionFileSlicePairs.isEmpty()) {
+    if (fileSlices.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
-    final int parallelism = Math.min(partitionFileSlicePairs.size(), secondaryIndexMaxParallelism);
+    final int parallelism = Math.min(fileSlices.size(), secondaryIndexMaxParallelism);
     final StoragePath basePath = metaClient.getBasePath();
     HoodieSchema tableSchema;
     try {
@@ -252,11 +253,11 @@ public class SecondaryIndexRecordGenerationUtils {
       throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePath(), e);
     }
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
-    engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFileSlicePairs.size() + " file slices");
+    engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + fileSlices.size() + " file slices");
     HoodieFileFormat baseFileFormat = metaClient.getTableConfig().getBaseFileFormat();
-    return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
-      final String partition = partitionAndBaseFile.getKey();
-      final FileSlice fileSlice = partitionAndBaseFile.getValue();
+    return engineContext.parallelize(fileSlices, parallelism).flatMap(partitionAndBaseFile -> {
+      final String partition = partitionAndBaseFile.getPartitionPath();
+      final FileSlice fileSlice = partitionAndBaseFile.getFileSlice();
       Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> FSUtils.getAbsoluteFilePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
       HoodieSchema readerSchema;
       if (dataFilePath.isPresent()) {

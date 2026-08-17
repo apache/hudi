@@ -23,8 +23,8 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.core.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
-import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.IndexedRecord;
@@ -32,6 +32,7 @@ import org.apache.avro.generic.IndexedRecord;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if
@@ -82,6 +83,11 @@ public class HoodieAvroParquetWriter
     if (populateMetaFields) {
       writeSupport.add(key);
     }
+  }
+
+  @Override
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    footerMetadata.forEach(writeSupport::addFooterMetadata);
   }
 
   @Override

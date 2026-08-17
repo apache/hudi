@@ -22,8 +22,8 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.SparkFileFormatInternalRecordContext;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.model.HoodieInternalRow;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.read.DeleteContext;
@@ -357,11 +357,15 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
             HoodieInternalRowUtils.getCachedPosList(structType, field);
         if (cachedNestedFieldPath.isDefined()) {
           NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+          Object value = HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
+          if (value == null) {
+            return OrderingValues.getDefault();
+          }
           if (nestedFieldPath.parts()[0]._2.dataType() instanceof org.apache.spark.sql.types.StringType) {
             return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory()
-                .wrapUTF8String((UTF8String) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath));
+                .wrapUTF8String(((UTF8String) value).copy());
           }
-          return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
+          return (Comparable<?>) value;
         }
         return OrderingValues.getDefault();
       });

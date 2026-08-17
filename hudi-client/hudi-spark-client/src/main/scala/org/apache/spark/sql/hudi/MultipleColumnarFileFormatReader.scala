@@ -20,8 +20,8 @@ package org.apache.spark.sql.hudi
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieFileFormat
+import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.util
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.spark.sql.catalyst.InternalRow
@@ -29,12 +29,12 @@ import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumna
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-class MultipleColumnarFileFormatReader(parquetReader: SparkColumnarFileReader, orcReader: SparkColumnarFileReader, lanceReader: SparkColumnarFileReader)
+class MultipleColumnarFileFormatReader(parquetReader: SparkColumnarFileReader, orcReader: SparkColumnarFileReader, lanceReader: SparkColumnarFileReader, vortexReader: SparkColumnarFileReader)
   extends SparkColumnarFileReader with SparkAdapterSupport {
 
   def this(parquetReader: SparkColumnarFileReader, orcReader: SparkColumnarFileReader) = {
-    // constructor for Spark versions without Lance support
-    this(parquetReader, orcReader, null)
+    // constructor for Spark versions without Lance or Vortex support
+    this(parquetReader, orcReader, null, null)
   }
 
   /**
@@ -63,6 +63,11 @@ class MultipleColumnarFileFormatReader(parquetReader: SparkColumnarFileReader, o
           throw new UnsupportedOperationException("Lance format is only supported in Spark 3.4 and above")
         }
         lanceReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaOpt)
+      case HoodieFileFormat.VORTEX =>
+        if (vortexReader == null) {
+          throw new UnsupportedOperationException("Vortex format is only supported in Spark 3.5 and above")
+        }
+        vortexReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaOpt)
       case _ =>
         throw new IllegalArgumentException(s"Unsupported file format for file: $filePath")
     }

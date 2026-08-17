@@ -33,12 +33,12 @@ import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.AfterEach;
@@ -357,6 +357,8 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertTrue(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.INITIAL_VERSION, HoodieTableVersion.EIGHT));
     assertTrue(HoodieTableConfig.validateConfigVersion(ConfigProperty.key("").noDefaultValue().withDocumentation(""),
         HoodieTableVersion.SIX));
+    assertFalse(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.TABLE_STORAGE_LAYOUT, HoodieTableVersion.NINE));
+    assertTrue(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.TABLE_STORAGE_LAYOUT, HoodieTableVersion.TEN));
     assertFalse(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.INITIAL_VERSION, HoodieTableVersion.SIX));
   }
 
@@ -384,7 +386,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(44, configProperties.size());
+    assertEquals(45, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());
@@ -395,7 +397,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   void testTableMergeProperties() throws IOException {
     // for out of the box, there are no merge properties
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
-    assertTrue(config.getTableMergeProperties().isEmpty());
+    assertTrue(config.getTableMergeProperties(config.getPayloadClass()).isEmpty());
 
     // delete and re-create w/ merge properties
     storage.deleteFile(cfgPath);
@@ -414,7 +416,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     Map<String, String> expectedProps = new HashMap<>();
     expectedProps.put("key1","value1");
     expectedProps.put("key2","value2");
-    assertEquals(expectedProps, config.getTableMergeProperties());
+    assertEquals(expectedProps, config.getTableMergeProperties(config.getPayloadClass()));
   }
 
   private static Stream<Arguments> testInferMergingConfigsForPreV9Table() {
@@ -796,4 +798,3 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals("Unsupported flow for table versions less than 9", ioException.getMessage().toString());
   }
 }
-

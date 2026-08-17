@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -28,13 +28,14 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
-import org.apache.hudi.stats.ValueMetadata;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.metadata.stats.ValueMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -52,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -257,7 +259,9 @@ public abstract class FileFormatUtils {
    * @param filePath the data file path.
    * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file.
    */
-  public abstract ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath);
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
+    return fetchRecordKeysWithPositions(storage, filePath, Option.empty(), Option.empty());
+  }
 
   /**
    * Provides a closable iterator for reading the given data file.
@@ -280,7 +284,9 @@ public abstract class FileFormatUtils {
    * @param filePath the data file path.
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file.
    */
-  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath);
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
+    return getHoodieKeyIterator(storage, filePath, Option.empty(), Option.empty());
+  }
 
   protected HoodieSchema getKeyIteratorSchema(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
     return keyGeneratorOpt
@@ -302,10 +308,14 @@ public abstract class FileFormatUtils {
    * @param partitionPath optional partition path for the file, if provided only the record key is read from the file
    * @return {@link Iterator} of pairs of {@link HoodieKey} and position fetched from the data file.
    */
-  public abstract ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
-                                                                                       StoragePath filePath,
-                                                                                       Option<BaseKeyGenerator> keyGeneratorOpt,
-                                                                                       Option<String> partitionPath);
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
+                                                                               StoragePath filePath,
+                                                                               Option<BaseKeyGenerator> keyGeneratorOpt,
+                                                                               Option<String> partitionPath) {
+    AtomicLong position = new AtomicLong(0);
+    return new CloseableMappingIterator<>(getHoodieKeyIterator(storage, filePath, keyGeneratorOpt, partitionPath),
+        key -> Pair.of(key, position.getAndIncrement()));
+  }
 
   /**
    * Read the Avro schema of the data file.

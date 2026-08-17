@@ -18,10 +18,10 @@
 
 package org.apache.hudi.table.action.compact;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.AvroReaderContextFactory;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
@@ -41,13 +41,15 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.FileGroupReaderBasedAppendHandle;
+import org.apache.hudi.io.FileGroupReaderBasedInlineLogAppendHandle;
+import org.apache.hudi.io.FileGroupReaderBasedNativeLogAppendHandle;
+import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.CommonClientUtils;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -130,8 +132,16 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
     if (operationType == WriteOperationType.LOG_COMPACT) {
+      ReaderContextFactory<?> readerContextFactory;
+      if (metaClient.isMetadataTable()) {
+        readerContextFactory = new AvroReaderContextFactory(metaClient, metaClient.getTableConfig().getPayloadClass(), instantRange, config.getProps());
+      } else {
+        readerContextFactory = context.getReaderContextFactory(metaClient);
+      }
+
       return context.parallelize(operations).map(
-              operation -> logCompact(config, operation, compactionInstantTime, instantRange, table, taskContextSupplier))
+              operation -> logCompact(config, operation, compactionInstantTime, table, taskContextSupplier,
+                  readerContextFactory.getContext()))
           .flatMap(List::iterator);
     } else {
       ReaderContextFactory<T> readerContextFactory;
@@ -164,14 +174,14 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
   }
 
   public List<WriteStatus> logCompact(HoodieWriteConfig writeConfig,
-                                      CompactionOperation operation,
-                                      String instantTime,
-                                      Option<InstantRange> instantRange,
-                                      HoodieTable table,
-                                      TaskContextSupplier taskContextSupplier) throws IOException {
-    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
-        table.getStorageConf(), table.getMetaClient().getTableConfig(), instantRange, Option.empty(), writeConfig.getProps());
-    FileGroupReaderBasedAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = new FileGroupReaderBasedAppendHandle<>(writeConfig, instantTime, table, operation,  taskContextSupplier, readerContext);
+                                          CompactionOperation operation,
+                                          String instantTime,
+                                          HoodieTable table,
+                                          TaskContextSupplier taskContextSupplier,
+                                          HoodieReaderContext readerContext) throws IOException {
+    HoodieAppendHandle<T, ?, ?, ?> appendHandle = CommonClientUtils.shouldWriteNativeLogs(writeConfig)
+        ? new FileGroupReaderBasedNativeLogAppendHandle<>(writeConfig, instantTime, table, operation, taskContextSupplier, readerContext)
+        : new FileGroupReaderBasedInlineLogAppendHandle<>(writeConfig, instantTime, table, operation, taskContextSupplier, readerContext);
     appendHandle.doAppend();
     return appendHandle.close();
   }

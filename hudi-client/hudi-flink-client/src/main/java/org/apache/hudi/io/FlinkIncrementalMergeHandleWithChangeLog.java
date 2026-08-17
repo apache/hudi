@@ -27,6 +27,8 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.cdc.HoodieCDCLogWriter;
+import org.apache.hudi.io.cdc.HoodieCDCLogWriterFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -48,21 +50,34 @@ import java.util.List;
 public class FlinkIncrementalMergeHandleWithChangeLog<T, I, K, O>
     extends FlinkIncrementalMergeHandle<T, I, K, O> {
 
-  private final HoodieCDCLogger cdcLogger;
+  private final HoodieCDCLogWriter<IndexedRecord> cdcLogger;
 
   public FlinkIncrementalMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                   Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                                                   TaskContextSupplier taskContextSupplier, StoragePath basePath) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, basePath);
-    this.cdcLogger = new HoodieCDCLogger(
+    this.cdcLogger = createCDCLogWriter(instantTime, config, hoodieTable, partitionPath, fileId, taskContextSupplier);
+  }
+
+  private HoodieCDCLogWriter<IndexedRecord> createCDCLogWriter(
+      String instantTime,
+      HoodieWriteConfig config,
+      HoodieTable<T, I, K, O> hoodieTable,
+      String partitionPath,
+      String fileId,
+      TaskContextSupplier taskContextSupplier) {
+    return HoodieCDCLogWriterFactory.createAvroCDCLogWriter(
         instantTime,
         config,
-        hoodieTable.getMetaClient().getTableConfig(),
+        hoodieTable,
         partitionPath,
         getStorage(),
         getWriterSchema(),
-        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
-        IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
+        fileId,
+        writeToken,
+        getLogCreationCallback(),
+        taskContextSupplier,
+        () -> createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()));
   }
 
   @Override

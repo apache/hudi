@@ -21,8 +21,8 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.avro.AvroRecordContext;
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.AvroRecordContext;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;

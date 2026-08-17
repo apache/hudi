@@ -35,6 +35,9 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType, HoodieSchemaUtils => HoodieCommonSchemaUtils}
+import org.apache.hudi.common.schema.internal.InternalSchema
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, Option => HOption, StringUtils}
@@ -48,9 +51,6 @@ import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
-import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.keygen.{BaseKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
@@ -299,6 +299,7 @@ class HoodieSparkSqlWriterInternal {
           .setTableType(tableType)
           .setTableVersion(tableVersion)
           .setTableFormat(tableFormat)
+          .setTableStorageLayout(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_STORAGE_LAYOUT))
           .setDatabaseName(databaseName)
           .setTableName(tblName)
           .setBaseFileFormat(baseFileFormat)
@@ -768,6 +769,7 @@ class HoodieSparkSqlWriterInternal {
           .setRecordKeyFields(recordKeyFields)
           .setTableVersion(tableVersion)
           .setTableFormat(tableFormat)
+          .setTableStorageLayout(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_STORAGE_LAYOUT))
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(payloadClass)
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
@@ -991,7 +993,7 @@ class HoodieSparkSqlWriterInternal {
                                              extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]]
                                             ): (Boolean, HOption[java.lang.String], HOption[java.lang.String]) = {
     val hasErrors = new AtomicBoolean(false)
-    log.info("Proceeding to commit the write.")
+    log.debug("Proceeding to commit the write.")
     // get extra metadata from props
     // 1. properties starting with commit metadata key prefix
     // 2. properties related to checkpoint in spark streaming
@@ -1020,7 +1022,7 @@ class HoodieSparkSqlWriterInternal {
           common.util.Option.empty()
         }
 
-      log.info(s"Compaction Scheduled is $compactionInstant")
+      log.debug(s"Compaction Scheduled is $compactionInstant")
 
       val asyncClusteringEnabled = isAsyncClusteringEnabled(client, parameters)
       val clusteringInstant: common.util.Option[java.lang.String] =
@@ -1030,12 +1032,12 @@ class HoodieSparkSqlWriterInternal {
           common.util.Option.empty()
         }
 
-      log.info(s"Clustering Scheduled is $clusteringInstant")
+      log.debug(s"Clustering Scheduled is $clusteringInstant")
 
       val metaSyncSuccess = metaSync(spark, HoodieWriterUtils.convertMapToHoodieConfig(parameters),
         tableInstantInfo.basePath, schema)
 
-      log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
+      log.debug(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
       (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
     } else {
       (false, common.util.Option.empty(), common.util.Option.empty())
@@ -1045,7 +1047,7 @@ class HoodieSparkSqlWriterInternal {
   private def isAsyncCompactionEnabled(client: SparkRDDWriteClient[_],
                                        tableConfig: HoodieTableConfig,
                                        parameters: Map[String, String], configuration: Configuration): Boolean = {
-    log.info(s"Config.inlineCompactionEnabled ? ${client.getConfig.inlineCompactionEnabled}")
+    log.debug(s"Config.inlineCompactionEnabled ? ${client.getConfig.inlineCompactionEnabled}")
     (asyncCompactionTriggerFnDefined && !client.getConfig.inlineCompactionEnabled
       && parameters.get(ASYNC_COMPACT_ENABLE.key).exists(r => r.toBoolean)
       && tableConfig.getTableType == MERGE_ON_READ)
@@ -1053,7 +1055,7 @@ class HoodieSparkSqlWriterInternal {
 
   private def isAsyncClusteringEnabled(client: SparkRDDWriteClient[_],
                                        parameters: Map[String, String]): Boolean = {
-    log.info(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
+    log.debug(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
     (asyncClusteringTriggerFnDefined && !client.getConfig.inlineClusteringEnabled
       && client.getConfig.isAsyncClusteringEnabled)
   }

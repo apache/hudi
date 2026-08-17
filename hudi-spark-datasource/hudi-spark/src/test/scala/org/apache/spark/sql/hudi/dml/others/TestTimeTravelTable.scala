@@ -20,9 +20,14 @@
 package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.concurrent.TimeUnit
 
 class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   test("Test Insert and Update Record with time travel") {
@@ -337,5 +342,123 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
         )
       }
     })
+  }
+
+  test("Test time travel with SQL:2011 temporal clause spellings") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+      val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
+      val instant1 = metaClient.getActiveTimeline.getAllCommitsTimeline
+        .lastInstant().get().requestedTime
+
+      spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+
+      Seq(
+        s"select id, name, price, ts from $tableName SYSTEM_TIME AS OF '$instant1'",
+        s"select id, name, price, ts from $tableName FOR SYSTEM_TIME AS OF '$instant1'",
+        s"select id, name, price, ts from $tableName FOR TIMESTAMP AS OF '$instant1'"
+      ).foreach { sql =>
+        checkAnswer(sql)(Seq(1, "a1", 10.0, 1000))
+      }
+    }
+  }
+
+  test("Test time travel with epoch and datetime timestamp formats") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      // Separate the two commits by more than a second in each direction so that a
+      // second-granularity timestamp captured between them resolves to the first commit.
+      Thread.sleep(2000)
+      val betweenMillis = System.currentTimeMillis()
+      val betweenSeconds = TimeUnit.MILLISECONDS.toSeconds(betweenMillis)
+      val betweenDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(betweenMillis))
+      Thread.sleep(2000)
+      spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+
+      // Spark's native parser produces these timestamp expressions (an integer literal and a
+      // string literal); the bridge carries them into the Hudi time-travel resolution, which
+      // normalizes epoch-seconds and 'yyyy-MM-dd HH:mm:ss' strings to a commit instant.
+      Seq(
+        s"select id, name, price, ts from $tableName TIMESTAMP AS OF $betweenSeconds",
+        s"select id, name, price, ts from $tableName TIMESTAMP AS OF '$betweenDate'"
+      ).foreach { sql =>
+        spark.sessionState.catalog.invalidateAllCachedTables()
+        checkAnswer(sql)(Seq(1, "a1", 10.0, 1000))
+      }
+    }
+  }
+
+  test("Test time travel validation errors") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+      // Every version-travel spelling is rejected: Hudi does not support version-based time travel.
+      Seq(
+        s"select * from $tableName VERSION AS OF 1",
+        s"select * from $tableName FOR VERSION AS OF 1",
+        s"select * from $tableName SYSTEM_VERSION AS OF 1",
+        s"select * from $tableName FOR SYSTEM_VERSION AS OF 1"
+      ).foreach { sql =>
+        checkExceptionContain(sql)("Version expression is not supported for time travel")
+      }
+
+      // Spark 3.3 rejects a subquery timestamp at parse time; Spark 3.4+ defer to the Hudi guard.
+      val subqueryError = if (HoodieSparkUtils.isSpark3_3) {
+        "Invalid time travel spec: timestamp expression cannot contain subqueries"
+      } else {
+        "timestamp expression cannot refer to any columns or contain subqueries"
+      }
+      checkExceptionContain(
+        s"select * from $tableName TIMESTAMP AS OF (select max(ts) from $tableName)")(
+        subqueryError)
+    }
   }
 }

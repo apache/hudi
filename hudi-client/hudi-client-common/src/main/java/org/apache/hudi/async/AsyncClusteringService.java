@@ -19,7 +19,6 @@
 
 package org.apache.hudi.async;
 
-import org.apache.hudi.client.BaseClusterer;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -71,7 +70,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
     return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentClustering).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
       try {
         // Set Compactor Pool Name for allowing users to prioritize compaction
-        log.info("Setting pool name for clustering to " + CLUSTERING_POOL_NAME);
+        log.info("Setting pool name for clustering to {}", CLUSTERING_POOL_NAME);
         context.setProperty(EngineProperty.CLUSTERING_POOL_NAME, CLUSTERING_POOL_NAME);
         while (!isShutdownRequested()) {
           final String instant = fetchNextAsyncServiceInstant();

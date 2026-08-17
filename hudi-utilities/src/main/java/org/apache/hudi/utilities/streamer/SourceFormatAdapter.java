@@ -22,7 +22,7 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.avro.MercifulJsonConverter;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;

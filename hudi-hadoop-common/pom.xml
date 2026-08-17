@@ -164,4 +164,48 @@
       <artifactId>lance-core</artifactId>
     </dependency>
   </dependencies>
+
+  <profiles>
+    <!-- Vortex requires Java 17: dev.vortex:vortex-jni ships Java 17 bytecode (class file major
+         version 61), which javac 11 (used by the Java 11 CI jobs) cannot read. Compile the Vortex
+         sources under src/main/java-vortex and pull in vortex-jni only when building on JDK 17;
+         Java 8/11 builds skip the format entirely. -->
+    <profile>
+      <id>vortex</id>
+      <activation>
+        <jdk>[17,)</jdk>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>dev.vortex</groupId>
+          <artifactId>vortex-jni</artifactId>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>add-vortex-source</id>
+                <phase>generate-sources</phase>
+                <goals>
+                  <goal>add-source</goal>
+                </goals>
+                <configuration>
+                  <!-- Vortex is only supported on Spark 3.5+/4.x; skip the source on Spark 3.3/3.4
+                       (vortex.skip.tests=true) where its Spark 3.5+ APIs are unavailable. -->
+                  <skipAddSource>${vortex.skip.tests}</skipAddSource>
+                  <sources>
+                    <source>src/main/java-vortex</source>
+                  </sources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

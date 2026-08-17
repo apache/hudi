@@ -24,6 +24,8 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
 
+import java.util.List;
+
 /**
  * Factory for simple bucket index partitioners.
  */
@@ -33,12 +35,12 @@ public class BucketIndexPartitionerFactory {
   }
 
   public static Partitioner<HoodieKey> create(Configuration conf) {
-    return create(conf, OptionsResolver.getIndexKeyField(conf));
+    return create(conf, OptionsResolver.getIndexKeyFields(conf));
   }
 
-  public static Partitioner<HoodieKey> create(Configuration conf, String indexKeyFields) {
+  public static Partitioner<HoodieKey> create(Configuration conf, List<String> indexKeyFieldList) {
     return OptionsResolver.shouldUseBucketRemotePartitioner(conf)
-        ? new BucketIndexRemotePartitioner<>(conf, indexKeyFields)
-        : new BucketIndexPartitioner<>(conf, indexKeyFields);
+        ? new BucketIndexRemotePartitioner<>(conf, indexKeyFieldList)
+        : new BucketIndexPartitioner<>(conf, indexKeyFieldList);
   }
 }

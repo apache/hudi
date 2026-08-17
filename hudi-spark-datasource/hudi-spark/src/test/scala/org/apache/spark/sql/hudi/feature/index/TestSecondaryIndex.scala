@@ -24,7 +24,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.WriteOperationType
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
@@ -197,11 +197,11 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
   /**
    * Test case to verify that secondary indexes are automatically dropped when a table is upgraded
-   * from version 8 to version 9. This test:
+   * from version 8 to the current table version. This test:
    * 1. Creates a table with version 8
    * 2. Creates secondary indexes on 'name' and 'price' columns
    * 3. Verifies the indexes are created successfully
-   * 4. Upgrades the table to version 9
+   * 4. Upgrades the table to the current table version
    * 5. Verifies that the secondary indexes are retained
    * 6. Tests this behavior for both COW and MOR table types
    */
@@ -265,6 +265,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
           withSQLConf("hoodie.embed.timeline.server" -> "false",
+            "hoodie.write.table.version" -> "8",
             "hoodie.spark.sql.insert.into.operation" -> "upsert") {
 
             // Create table with version 8
@@ -310,8 +311,9 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
               Seq(3, "a3", 30, 1000)
             ))
 
-            // Upgrade table to version 9 and verify secondary indexes are dropped
-            withSparkSqlSessionConfig(s"hoodie.write.table.version" -> "9") {
+            val currentVersion = HoodieTableVersion.current().versionCode()
+            // Upgrade table to current version and verify secondary indexes are retained
+            withSparkSqlSessionConfig("hoodie.write.table.version" -> currentVersion.toString) {
               // Update a record to trigger version upgrade
               spark.sql(s"insert into $tableName values(1, 'a1', 11, 1001)")
               // Both indexes should be shown
@@ -327,10 +329,10 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
                 Seq(3, "a3", 30, 1000)
               )
               verifyData(tableName, expected)
-              verifyIndexVersion(basePath, 9, 1)
+              verifyIndexVersion(basePath, currentVersion, 1)
 
-              // Verify that secondary indexes are dropped after upgrade
-              dropRecreateIdxAndValidate(tableName, basePath, 9, 2, dropRecreate = true, expected)
+              // Verify that recreated secondary indexes use the current index version after upgrade
+              dropRecreateIdxAndValidate(tableName, basePath, currentVersion, 2, dropRecreate = true, expected)
             }
           }
         }
@@ -690,7 +692,9 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
   private def loadInitialBatchAndCreateSecondaryIndex(tableName: String, basePath: String, dataGen: HoodieTestDataGenerator, numInserts: Integer = 50) = {
     val initialRecords = recordsToStrings(dataGen.generateInserts(getInstantTime, numInserts, true)).asScala
     val initialDf = spark.read.json(spark.sparkContext.parallelize(initialRecords.toSeq, 2))
-    val hudiOpts = commonOpts ++ Map(TABLE_TYPE.key -> "MERGE_ON_READ", HoodieWriteConfig.TBL_NAME.key -> tableName)
+    val hudiOpts = commonOpts ++ Map(
+      TABLE_TYPE.key -> "MERGE_ON_READ",
+      HoodieWriteConfig.TBL_NAME.key -> tableName)
     initialDf.write.format("hudi")
       .options(hudiOpts)
       .option(OPERATION.key, INSERT_OPERATION_OPT_VAL)

@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -125,7 +126,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   @Override
   public RowData convertAvroRecord(IndexedRecord avroRecord) {
     Schema recordSchema = avroRecord.getSchema();
-    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataQueryContexts.fromSchema(HoodieSchema.fromAvroSchema(recordSchema), utcTimezone).getAvroToRowDataConverter();
+    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataQueryContexts.fromSchema(HoodieAvroSchemaCache.intern(recordSchema), utcTimezone).getAvroToRowDataConverter();
     RowData rowData = (RowData) converter.convert(avroRecord);
     Schema.Field operationField = recordSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD);
     if (operationField != null) {
@@ -152,6 +153,11 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
+  public HoodieRecord.HoodieRecordType getEngineRecordType() {
+    return HoodieRecord.HoodieRecordType.FLINK;
+  }
+
+  @Override
   public RowData mergeWithEngineRecord(HoodieSchema schema,
                                        Map<Integer, Object> updateValues,
                                        BufferedRecord<RowData> baseRecord) {
@@ -168,11 +174,15 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public RowData seal(RowData rowData) {
+  public RowData seal(HoodieSchema schema, RowData rowData) {
+    if (rowData instanceof GenericRowData) {
+      return rowData;
+    }
     if (rowData instanceof BinaryRowData) {
       return ((BinaryRowData) rowData).copy();
     }
-    return rowData;
+    RowDataSerializer rowDataSerializer = RowDataQueryContexts.getRowDataSerializer(schema);
+    return rowDataSerializer.copy(rowData);
   }
 
   @Override

@@ -24,11 +24,10 @@ import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -52,14 +51,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
 
 /**
  * Utility functions related to accessing the file storage on Hadoop.
@@ -284,7 +278,7 @@ public class HadoopFSUtils {
    * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
    */
   public static boolean isGCSFileSystem(FileSystem fs) {
-    return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
+    return StorageSchemes.GCS.getScheme().equals(getScheme(fs));
   }
 
   /**
@@ -292,7 +286,42 @@ public class HadoopFSUtils {
    * Wrapped by {@code BoundedFsDataInputStream}, to check whether the desired offset is out of the file size in advance.
    */
   public static boolean isCHDFileSystem(FileSystem fs) {
-    return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
+    return StorageSchemes.CHDFS.getScheme().equals(getScheme(fs));
+  }
+
+  /**
+   * Resolves the scheme of {@code fs} without depending on {@link FileSystem#getScheme()}.
+   *
+   * <p>{@code getScheme()} is optional in Hadoop: {@link FileSystem}'s own implementation throws
+   * {@link UnsupportedOperationException}, and proxy implementations such as Presto's
+   * {@code PrestoS3FileSystem} do not override it, so calling it unguarded turns an unrelated read into
+   * "Not implemented by the PrestoS3FileSystem FileSystem implementation" (HUDI-4602).
+   * {@link FileSystem#getUri()} is abstract, so every implementation supplies one to fall back on.
+   *
+   * <p>The two are not interchangeable, which is why {@code getScheme()} is tried first:
+   * {@code InLineFileSystem} returns {@code "inlinefs"} from {@code getScheme()} while its
+   * {@code getUri()} is {@code URI.create("inlinefs")}, which has no colon and so carries no scheme at all.
+   * A URI with no scheme is therefore a resolution failure rather than a value to pass on - returning null
+   * would surface much later as {@code does not support scheme null} or {@code Unsupported scheme :null},
+   * with the original {@code UnsupportedOperationException} discarded.
+   *
+   * @param fs instance of {@link FileSystem} in use.
+   * @return the scheme of {@code fs}, never null.
+   * @throws HoodieException if {@code getScheme()} is unimplemented and the URI carries no scheme.
+   */
+  public static String getScheme(FileSystem fs) {
+    try {
+      return fs.getScheme();
+    } catch (UnsupportedOperationException e) {
+      String scheme = fs.getUri().getScheme();
+      if (scheme == null) {
+        // HoodieException rather than HoodieIOException: the latter only accepts an IOException cause, and
+        // discarding the UnsupportedOperationException is the thing being fixed here.
+        throw new HoodieException("Cannot resolve the scheme of " + fs.getClass().getName()
+            + ": getScheme() is unimplemented and its URI " + fs.getUri() + " carries no scheme", e);
+      }
+      return scheme;
+    }
   }
 
   private static StorageConfiguration<Configuration> getStorageConf(Configuration conf, boolean copy) {
@@ -301,7 +330,7 @@ public class HadoopFSUtils {
 
   public static Configuration registerFileSystem(StoragePath file, Configuration conf) {
     Configuration returnConf = new Configuration(conf);
-    String scheme = HadoopFSUtils.getFs(file.toString(), conf).getScheme();
+    String scheme = getScheme(HadoopFSUtils.getFs(file.toString(), conf));
     returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
         HoodieWrapperFileSystem.class.getName());
     return returnConf;
@@ -381,10 +410,6 @@ public class HadoopFSUtils {
     }
   }
 
-  public static long getFileSize(FileSystem fs, Path path) throws IOException {
-    return fs.getFileStatus(path).getLen();
-  }
-
   /**
    * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
@@ -397,37 +422,18 @@ public class HadoopFSUtils {
    * the file name.
    */
   public static String getFileIdFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
-      throw new InvalidHoodiePathException(path.toString(), "LogFile");
-    }
-    return matcher.group(1);
+    return FSUtils.getFileIdFromLogPath(new StoragePath(path.toUri()));
   }
 
   /**
    * Get the second part of the file name in the log file. That will be the delta commit time.
    */
   public static String getDeltaCommitTimeFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.matches()) {
-      throw new InvalidHoodiePathException(path.toString(), "LogFile");
-    }
-    return matcher.group(2);
-  }
-
-  /**
-   * Check if the file is a base file of a log file. Then get the fileId appropriately.
-   */
-  public static String getFileIdFromFilePath(Path filePath) {
-    if (isLogFile(filePath)) {
-      return getFileIdFromLogPath(filePath);
-    }
-    return FSUtils.getFileId(filePath.getName());
+    return FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(path.toUri()));
   }
 
   public static boolean isBaseFile(Path path) {
-    String extension = FSUtils.getFileExtension(path.getName());
-    return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension);
+    return FSUtils.isBaseFile(new StoragePath(path.toUri()));
   }
 
   public static boolean isLogFile(Path logPath) {
@@ -439,29 +445,6 @@ public class HadoopFSUtils {
    */
   public static boolean isDataFile(Path path) {
     return isBaseFile(path) || isLogFile(path);
-  }
-
-  /**
-   * Get the names of all the base and log files in the given partition path.
-   */
-  public static FileStatus[] getAllDataFilesInPartition(FileSystem fs, Path partitionPath) throws IOException {
-    final Set<String> validFileExtensions = Arrays.stream(HoodieFileFormat.values())
-        .map(HoodieFileFormat::getFileExtension).collect(Collectors.toCollection(HashSet::new));
-    final String logFileExtension = HoodieFileFormat.HOODIE_LOG.getFileExtension();
-
-    try {
-      return Arrays.stream(fs.listStatus(partitionPath, path -> {
-        String extension = FSUtils.getFileExtension(path.getName());
-        return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
-      })).filter(FileStatus::isFile).toArray(FileStatus[]::new);
-    } catch (IOException e) {
-      // return empty FileStatus if partition does not exist already
-      if (!fs.exists(partitionPath)) {
-        return new FileStatus[0];
-      } else {
-        throw e;
-      }
-    }
   }
 
   /**

@@ -242,6 +242,10 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     doWrite(record, schema, props);
   }
 
+  public void write(Map<String, HoodieRecord<T>> recordMap) {
+    recordMap.values().forEach(record -> write(record, writeSchema, config.getProps()));
+  }
+
   protected void markClosed() {
     this.closed = true;
   }

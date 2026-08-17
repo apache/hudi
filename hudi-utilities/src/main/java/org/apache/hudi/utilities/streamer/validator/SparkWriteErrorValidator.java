@@ -19,11 +19,11 @@
 
 package org.apache.hudi.utilities.streamer.validator;
 
-import org.apache.hudi.client.validator.BasePreCommitValidator;
-import org.apache.hudi.client.validator.ValidationContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig.ValidationFailurePolicy;
+import org.apache.hudi.core.validator.BasePreCommitValidator;
+import org.apache.hudi.core.validator.ValidationContext;
 import org.apache.hudi.exception.HoodieValidationException;
 
 import org.slf4j.Logger;

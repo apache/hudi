@@ -244,6 +244,20 @@ trait SparkAdapter extends Serializable {
                             hadoopConf: Configuration): Option[SparkColumnarFileReader]
 
   /**
+   * Get Vortex file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return Vortex file reader wrapped in Option; None if Vortex format is not supported in current Spark version (i.e 3.3, 3.4)
+   */
+  def createVortexFileReader(vectorized: Boolean,
+                             sqlConf: SQLConf,
+                             options: Map[String, String],
+                             hadoopConf: Configuration): Option[SparkColumnarFileReader]
+
+  /**
    * Build the [[HoodieParquetReadSupport]] for a parquet read. Spark 4.0 overrides to return
    * its variant-aware subclass (variant group field reorder for the positional converter).
    * int96 rebase mode is fixed to LEGACY (Hudi convention for timestamp compatibility).
@@ -503,6 +517,23 @@ trait SparkAdapter extends Serializable {
    */
   def buildVariantProjector(sparkDataSchema: StructType,
                             sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = None
+
+  /**
+   * Rewrites each top-level VariantType field of `schema` into the full-variant projection
+   * struct that PushVariantIntoScan would request for whole-variant access: a single child
+   * field "0" of VariantType carrying `VariantMetadata` for path "$". Requesting that shape
+   * makes the parquet reader reconstruct shredded variants by field name; requesting native
+   * VariantType instead clips a shredded file group down to {metadata, value} and reads
+   * value=null (#19556).
+   *
+   * Used by internal (non-catalyst) reads of parquet base files, which have no
+   * PushVariantIntoScan to do this for them. The caller restores the native VariantType
+   * shape by projecting child 0 of each rewritten field.
+   *
+   * Returns None when the schema has no top-level VariantType field or the Spark version has
+   * no shredded-read support (Spark 3.x / 4.0).
+   */
+  def buildFullVariantReadSchema(schema: StructType): Option[StructType] = None
 
   /**
    * Generates a shredded Variant schema and marks it with write shredding metadata.

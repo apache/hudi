@@ -61,6 +61,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -73,6 +74,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.data.HoodieSparkRDDUtils;
 import org.apache.hudi.exception.ExceptionUtil;
@@ -81,8 +84,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -90,7 +91,7 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.util.BloomFilterData;
@@ -111,11 +112,13 @@ import org.apache.spark.storage.StorageLevel;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -150,7 +153,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLocationFromRe
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLogFileColumnRangeMetadata;
 
 /**
- * TODO: [HUDI-8294]
  * A validator with spark-submit to compare information, such as partitions, file listing, index, etc.,
  * between metadata table and filesystem.
  * <p>
@@ -177,7 +179,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLogFileColumnR
  * --master spark://xxxx:7077 \
  * --driver-memory 1g \
  * --executor-memory 1g \
- * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.13.0-SNAPSHOT.jar \
+ * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.3.0-SNAPSHOT.jar \
  * --base-path basePath \
  * --validate-latest-file-slices \
  * --validate-latest-base-files \
@@ -195,7 +197,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLogFileColumnR
  * --master spark://xxxx:7077 \
  * --driver-memory 1g \
  * --executor-memory 1g \
- * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.13.0-SNAPSHOT.jar \
+ * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.3.0-SNAPSHOT.jar \
  * --base-path basePath \
  * --validate-latest-file-slices \
  * --validate-latest-base-files \
@@ -208,6 +210,10 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLogFileColumnR
 public class HoodieMetadataTableValidator implements Serializable {
 
   private static final long serialVersionUID = 1L;
+
+  // Advance the metadata table query instant by this much so that instants derived from a data table
+  // instant, which carry a three-digit suffix, fall inside the queried window. See #metadataTableInstantFor.
+  private static final long METADATA_INSTANT_LOOKAHEAD_MS = 1;
 
   // Spark context
   private transient JavaSparkContext jsc;
@@ -1236,7 +1242,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         .select(RECORD_KEY_METADATA_FIELD)
         .count();
     long countKeyFromRecordIndex = sparkEngineContext.getSqlContext().read().format("hudi")
-        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(),latestCompletedCommit)
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), metadataTableInstantFor(latestCompletedCommit))
         .load(getMetadataTableBasePath(basePath))
         .select("key")
         .filter("type = 5")
@@ -1338,6 +1344,37 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
+  /**
+   * Returns the instant to query the metadata table with, so that the snapshot reflects the data
+   * table as of {@code dataTableInstant}.
+   * <p>
+   * Metadata table instants derived from a data table instant carry a three-digit numeric suffix:
+   * partition initialization appends 010 and up (see
+   * {@code HoodieTableMetadataUtil#createIndexInitTimestamp}), and metadata-table-internal
+   * compaction, clean, restore, indexing, log compaction and rollback append 001 to 006. Hudi
+   * compares instants as strings, so every one of those derived instants sorts AFTER the bare data
+   * instant, and a snapshot taken as of the data instant itself excludes them - leaving, for
+   * instance, the record index unreadable until the data table receives another commit.
+   * <p>
+   * The bound is therefore advanced by a single millisecond. That is strictly greater than any
+   * {@code <dataTableInstant><suffix>} (which shares the whole 17-character prefix and so compares
+   * lower), while still being a valid {@code yyyyMMddHHmmssSSS} instant - the time travel option
+   * rejects anything else, see {@code HoodieSqlCommonUtils#formatQueryInstant}. Instants that are
+   * not timestamps (legacy or test instants such as "100") are returned unchanged; they have no
+   * metadata table counterpart to include.
+   */
+  @VisibleForTesting
+  static String metadataTableInstantFor(String dataTableInstant) {
+    try {
+      Date dataTableInstantDate = TimelineUtils.parseDateFromInstantTime(dataTableInstant);
+      return TimelineUtils.formatDate(new Date(dataTableInstantDate.getTime() + METADATA_INSTANT_LOOKAHEAD_MS));
+    } catch (ParseException e) {
+      log.warn("Cannot parse instant {} as a timestamp; querying the metadata table as of it verbatim",
+          dataTableInstant);
+      return dataTableInstant;
+    }
+  }
+
   @VisibleForTesting
   JavaPairRDD<String, Pair<String, String>> getRecordLocationsFromFSBasedListing(HoodieSparkEngineContext sparkEngineContext,
                                                                                                       String basePath,
@@ -1358,7 +1395,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                                                                       String basePath,
                                                                       String latestCompletedCommit) {
     return sparkEngineContext.getSqlContext().read().format("hudi")
-        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), metadataTableInstantFor(latestCompletedCommit))
         .load(getMetadataTableBasePath(basePath))
         .filter("type = 5")
         .select(functions.col("key"),
@@ -1654,13 +1691,13 @@ public class HoodieMetadataTableValidator implements Serializable {
     for (String logFilePathStr : logFilePathSet) {
       HoodieLogFormat.Reader reader = null;
       try {
-        HoodieSchema readerSchema = TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePathStr));
+        HoodieSchema readerSchema = TableSchemaResolver.readSchemaFromLogFile(metaClient, new StoragePath(logFilePathStr));
         if (readerSchema == null) {
           log.warn("Cannot read schema from log file {}. Skip the check as it's likely being written by an inflight instant.", logFilePathStr);
           continue;
         }
         reader =
-            HoodieLogFormat.newReader(storage, new HoodieLogFile(logFilePathStr), readerSchema, false);
+            HoodieLogFormat.newReader(metaClient, new HoodieLogFile(logFilePathStr), readerSchema, false);
         // read the avro blocks
         if (reader.hasNext()) {
           HoodieLogBlock block = reader.next();

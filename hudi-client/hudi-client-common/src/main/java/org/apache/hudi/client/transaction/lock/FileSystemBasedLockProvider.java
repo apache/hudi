@@ -19,13 +19,13 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieLockConfig;
@@ -34,7 +34,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
@@ -169,17 +168,15 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         return true;
       }
     } catch (IOException | HoodieIOException e) {
-      log.error(generateLogStatement(LockState.ALREADY_RELEASED) + " failed to get lockFile's modification time", e);
+      log.error("{} failed to get lockFile's modification time", generateLogStatement(LockState.ALREADY_RELEASED), e);
     }
     return false;
   }
 
   private void acquireLock() {
     try (OutputStream os = storage.create(this.lockFile, false)) {
-      if (!storage.exists(this.lockFile)) {
-        initLockInfo();
-        os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
-      }
+      initLockInfo();
+      os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
     }

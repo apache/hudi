@@ -493,7 +493,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     // Number of files obtained if file index has include log files as true is double of number of parquet files
     val numberOfParquetFiles = 9
     assertEquals(numberOfParquetFiles * 2, files.size)
-    assertEquals(numberOfParquetFiles, files.count(f => f.endsWith("parquet")))
+    assertEquals(numberOfParquetFiles, files.count(f => FSUtils.isBaseFile(f)))
 
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + ("path" -> basePath), includeLogFiles = false)
     files = cis.getPrunedPartitionsAndFileNames(fileIndex, fileSlices._2)._2

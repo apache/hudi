@@ -19,12 +19,16 @@
 
 package org.apache.hudi.storage.hadoop;
 
+import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.io.storage.BaseTestStorageConfiguration;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
+import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests {@link HadoopStorageConfiguration}.
@@ -40,5 +44,26 @@ public class TestHadoopStorageConfiguration extends BaseTestStorageConfiguration
     Configuration conf = new Configuration();
     mapping.forEach(conf::set);
     return conf;
+  }
+
+  /**
+   * Verifies getInline() derives from this object's underlying config (caller-supplied
+   * configs like S3 credentials carry over) as an independent copy, with the inline FS
+   * implementation registered.
+   */
+  @Test
+  public void testGetInlineCarriesOverExistingConfigs() {
+    Configuration conf = new Configuration();
+    conf.set("fs.s3a.access.key", "test-access-key");
+    StorageConfiguration<Configuration> storageConf = new HadoopStorageConfiguration(conf);
+
+    StorageConfiguration<Configuration> inlineConf = storageConf.getInline();
+    assertEquals("test-access-key", inlineConf.getString("fs.s3a.access.key").get());
+    assertEquals(InLineFileSystem.class.getName(),
+        inlineConf.getString("fs." + InLineFileSystem.SCHEME + ".impl").get());
+
+    // the inline conf is a copy; mutating it must not leak back into the source conf
+    inlineConf.set("fs.s3a.access.key", "mutated");
+    assertEquals("test-access-key", storageConf.getString("fs.s3a.access.key").get());
   }
 }

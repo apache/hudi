@@ -18,13 +18,13 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metrics.HoodieGauge;
 import org.apache.hudi.metrics.Metrics;
@@ -67,6 +67,7 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String INITIALIZE_STR = "initialize";
   public static final String REBOOTSTRAP_STR = "rebootstrap_count";
   public static final String BOOTSTRAP_ERR_STR = "bootstrap_error";
+  public static final String SKIPPED_ZERO_SIZE_FILES_ON_INITIALIZE_STR = "skipped_zero_size_files_on_initialize";
 
   // Stats names
   public static final String STAT_TOTAL_BASE_FILE_SIZE = "totalBaseFileSizeInBytes";
@@ -85,10 +86,12 @@ public class HoodieMetadataMetrics implements Serializable {
 
   private final transient MetricRegistry metricsRegistry;
   private final transient Metrics metrics;
+  private final boolean detailedMetricsEnabled;
 
-  public HoodieMetadataMetrics(HoodieMetricsConfig metricsConfig, HoodieStorage storage) {
+  public HoodieMetadataMetrics(HoodieMetricsConfig metricsConfig, HoodieStorage storage, boolean detailedMetricsEnabled) {
     this.metrics = Metrics.getInstance(metricsConfig, storage);
     this.metricsRegistry = metrics.getRegistry();
+    this.detailedMetricsEnabled = detailedMetricsEnabled;
   }
 
   public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
@@ -99,6 +102,10 @@ public class HoodieMetadataMetrics implements Serializable {
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to get metadata stats.", ioe);
     }
+  }
+
+  public boolean isDetailedMetricsEnabled() {
+    return detailedMetricsEnabled;
   }
 
   private Map<String, String> getStats(HoodieTableFileSystemView fsView, boolean detailed, HoodieTableMetadata tableMetadata, Set<String> metadataPartitions)
@@ -165,7 +172,7 @@ public class HoodieMetadataMetrics implements Serializable {
     gaugeOpt.ifPresent(gauge -> gauge.setValue(gauge.getValue() + value));
   }
 
-  protected void setMetric(String action, long value) {
+  public void setMetric(String action, long value) {
     metrics.registerGauge(action, value);
   }
 

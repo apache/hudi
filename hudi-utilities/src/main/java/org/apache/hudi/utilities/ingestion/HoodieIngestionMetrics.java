@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.ingestion;
 
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 
 import com.codahale.metrics.Timer;
 
@@ -47,6 +47,10 @@ public abstract class HoodieIngestionMetrics {
   public abstract Timer.Context getErrorTableWriteTimerContext();
 
   public abstract void updateStreamerMetrics(long durationNanos);
+
+  public abstract void emitStreamerJobSuccessMetrics();
+
+  public abstract void emitStreamerJobFailedMetrics();
 
   public abstract void updateStreamerMetaSyncMetrics(String syncClassShortName, long syncTimeNanos);
 

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
@@ -29,7 +28,7 @@ import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.functional.TestHoodieMetadataBase;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
@@ -40,6 +39,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -92,11 +92,12 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.ColumnStatsIndexPrefixRawKey;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
@@ -108,8 +109,8 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.RawKey;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.metrics.Metrics;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -162,11 +163,12 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.common.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
@@ -504,7 +506,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Step 5: Verify column stats log files contain valid column stats records
     List<HoodieLogFile> colStatsLogFiles = colStatsSlicesAfter.get(0)
         .getLogFiles().collect(Collectors.toList());
-    verifyMetadataColumnStatsRecords(storage, colStatsLogFiles);
+    verifyMetadataColumnStatsRecords(metadataMetaClient, colStatsLogFiles);
   }
 
   @Test
@@ -964,7 +966,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         assertEquals("0000003", completedReplaceInstant.get().requestedTime());
 
         final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
-        metadataWriter.getEnabledPartitionTypes().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
+        metadataWriter.getEnabledIndexerMap().keySet().forEach(partitionType -> metadataEnabledPartitionTypes.put(partitionType.getPartitionPath(), partitionType));
         HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metadataMetaClient, metadataMetaClient.getActiveTimeline());
         metadataTablePartitions.forEach(partition -> {
           List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
@@ -1612,14 +1614,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
       HoodieSchema writerSchema  =
-          TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath());
+          TableSchemaResolver.readSchemaFromLogFile(table.getMetaClient(), logFile.getPath());
       if (writerSchema == null) {
         // not a data block
         continue;
       }
 
-      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
-          new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
+      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(
+          table.getMetaClient(), new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();
           if (logBlock instanceof HoodieDataBlock) {
@@ -1942,6 +1944,180 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     init(COPY_ON_WRITE, writeConfig);
     testTableOperationsForMetaIndexImpl(writeConfig);
+  }
+
+  /**
+   * Record index bootstrap over binary / non-ASCII record keys must succeed. The RI HFile orders
+   * keys by their raw UTF-8 bytes, so the bulk-insert partitioner must sort by UTF-8 bytes too;
+   * sorting by {@link String#compareTo(String)} (UTF-16) lays the HFile entries out of order
+   * relative to their UTF-8 bytes.
+   *
+   * <p>The failure is read-side, not write-side: the native {@code HFileWriterImpl.append} does no
+   * key-order validation, so a mis-sorted HFile is still written successfully. The forward-only
+   * HFile reader ({@code HFileReaderImpl.seekTo}) then either throws {@code IllegalStateException}
+   * on a backward seek or silently misses keys, which the read-back count assertion at the end of
+   * this test catches.
+   *
+   * <p>{@code riFileGroupCount == 1} covers the single-slice lookup path; {@code riFileGroupCount == 4}
+   * covers the multi-slice {@code mapGroupsByKey} lookup path in
+   * {@code HoodieBackedTableMetadata#lookupIndexRecords}, which repartitions keys in String/UTF-16
+   * order before doing a forward-only HFile seek in UTF-8 order.
+   */
+  @ParameterizedTest
+  @ValueSource(ints = {1, 4})
+  public void testRecordIndexBootstrapWithBinaryRecordKeys(int riFileGroupCount) throws Exception {
+    init(COPY_ON_WRITE, true);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    // First commit with the record index disabled: write base files with binary record keys.
+    List<HoodieRecord> records = generateRecordsWithBinaryKeys(WriteClientTestUtils.createNewInstantTime(), 0, 200);
+    HoodieWriteConfig firstConfig = getWriteConfigBuilder(true, true, false).build();
+    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, firstConfig)) {
+      WriteClientTestUtils.startCommitWithTime(client, firstCommitTime);
+      List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), firstCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      client.commit(firstCommitTime, jsc.parallelize(writeStatuses));
+    }
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+
+    // Enable the record index. The next commit triggers the bootstrap, reading the binary keys from
+    // the base files above. One file group puts all keys in a single HFile; more than one file group
+    // exercises the multi-slice lookup path on read-back.
+    HoodieWriteConfig riConfig = getWriteConfigBuilder(false, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableGlobalRecordLevelIndex(true)
+            .withRecordIndexFileGroupCount(riFileGroupCount, riFileGroupCount)
+            .build())
+        .build();
+
+    String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
+    // Disjoint key range so the bootstrapped keys are not mutated.
+    List<HoodieRecord> secondBatch = generateRecordsWithBinaryKeys(secondCommitTime, 1000, 20);
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, riConfig)) {
+      WriteClientTestUtils.startCommitWithTime(client, secondCommitTime);
+      // Without the fix the mis-sorted record-index HFile is still written; the failure surfaces on
+      // read-back below, so the write itself is expected to succeed here.
+      List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      client.commit(secondCommitTime, jsc.parallelize(writeStatuses));
+    }
+
+    // The record index partition should exist and resolve every key: the bootstrapped keys live in
+    // the record-index base HFiles, while the second-batch keys still sit in un-compacted metadata
+    // log files at this point, so the lookup covers the log-side seek path with binary keys too.
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+    HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
+        context, storage, riConfig.getMetadataConfig(), riConfig.getBasePath());
+    List<String> allKeys = Stream.concat(records.stream(), secondBatch.stream())
+        .map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+    // With more than one file group, readRecordIndexLocationsWithKeys triggers the mapGroupsByKey
+    // multi-slice path.
+    HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData = metadataReader
+        .readRecordIndexLocationsWithKeys(HoodieListData.eager(allKeys));
+    try {
+      Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData);
+      assertEquals(allKeys.size(), result.size(),
+          "Record index should resolve every binary key, bootstrapped or still in a metadata log file.");
+    } finally {
+      recordIndexData.unpersistWithDependencies();
+    }
+  }
+
+  /**
+   * Generates {@code count} records with binary record keys interleaving U+E000 (BMP) and U+20000
+   * (supplementary) prefixes, whose UTF-16 char order is the reverse of their UTF-8 byte order.
+   */
+  private List<HoodieRecord> generateRecordsWithBinaryKeys(String commitTime, int startIndex, int count) {
+    List<HoodieRecord> baseRecords = dataGen.generateInserts(commitTime, count);
+    String[] binaryPrefixes = {new String(Character.toChars(0xE000)), new String(Character.toChars(0x20000))};
+    List<HoodieRecord> binaryRecords = new ArrayList<>(count);
+    for (int i = 0; i < count; i++) {
+      HoodieRecord baseRecord = baseRecords.get(i);
+      int index = startIndex + i;
+      String binaryKey = binaryPrefixes[index % binaryPrefixes.length] + String.format("%08d", index);
+      binaryRecords.add(new HoodieAvroIndexedRecord(
+          new HoodieKey(binaryKey, baseRecord.getPartitionPath()),
+          (IndexedRecord) baseRecord.getData()));
+    }
+    return binaryRecords;
+  }
+
+  /**
+   * Same as {@link #testRecordIndexBootstrapWithBinaryRecordKeys(int)} but forces an MDT compaction after
+   * bootstrap, exercising the {@code BaseCreateHandle} / {@code SortedKeyBasedFileGroupRecordBuffer}
+   * sort-order paths hit when the record-index base HFile is rewritten.
+   */
+  @Test
+  public void testRecordIndexBootstrapWithBinaryRecordKeysAfterCompaction() throws Exception {
+    init(COPY_ON_WRITE, true);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    List<HoodieRecord> records = generateRecordsWithBinaryKeys(WriteClientTestUtils.createNewInstantTime(), 0, 200);
+    HoodieWriteConfig firstConfig = getWriteConfigBuilder(true, true, false).build();
+    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, firstConfig)) {
+      WriteClientTestUtils.startCommitWithTime(client, firstCommitTime);
+      List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), firstCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      client.commit(firstCommitTime, jsc.parallelize(writeStatuses));
+    }
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+
+    // A single delta commit is enough to trigger compaction on the very next delta commit.
+    HoodieWriteConfig riConfig = getWriteConfigBuilder(false, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableGlobalRecordLevelIndex(true)
+            .withRecordIndexFileGroupCount(1, 1)
+            .withMaxNumDeltaCommitsBeforeCompaction(1)
+            .build())
+        .build();
+
+    List<HoodieRecord> allKeys = new ArrayList<>(records);
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, riConfig)) {
+      // Bootstrap: writes the initial record-index HFile from the binary keys above.
+      String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
+      List<HoodieRecord> secondBatch = generateRecordsWithBinaryKeys(secondCommitTime, 1000, 20);
+      WriteClientTestUtils.startCommitWithTime(client, secondCommitTime);
+      // The mis-sorted bootstrap write succeeds; key ordering is validated by the read-back below.
+      List<WriteStatus> secondWriteStatuses = client.insert(jsc.parallelize(secondBatch, 1), secondCommitTime).collect();
+      assertNoWriteErrors(secondWriteStatuses);
+      client.commit(secondCommitTime, jsc.parallelize(secondWriteStatuses));
+      allKeys.addAll(secondBatch);
+
+      // The next delta commit on the record index partition triggers compaction, rewriting the base
+      // HFile via BaseCreateHandle / SortedKeyBasedFileGroupRecordBuffer.
+      String thirdCommitTime = WriteClientTestUtils.createNewInstantTime();
+      List<HoodieRecord> thirdBatch = generateRecordsWithBinaryKeys(thirdCommitTime, 2000, 20);
+      WriteClientTestUtils.startCommitWithTime(client, thirdCommitTime);
+      // The compaction rewrite of the base HFile also succeeds; ordering is validated on read-back.
+      List<WriteStatus> thirdWriteStatuses = client.insert(jsc.parallelize(thirdBatch, 1), thirdCommitTime).collect();
+      assertNoWriteErrors(thirdWriteStatuses);
+      client.commit(thirdCommitTime, jsc.parallelize(thirdWriteStatuses));
+      allKeys.addAll(thirdBatch);
+    }
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
+        context, storage, riConfig.getMetadataConfig(), riConfig.getBasePath());
+    assertTrue(metadataReader.getLatestCompactionTime().isPresent(),
+        "Record index partition should have been compacted by now.");
+
+    List<String> allRecordKeys = allKeys.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+    HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData = metadataReader
+        .readRecordIndexLocationsWithKeys(HoodieListData.eager(allRecordKeys));
+    try {
+      Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData);
+      assertEquals(allRecordKeys.size(), result.size(),
+          "Record index should resolve every binary key after the record index partition has been compacted.");
+    } finally {
+      recordIndexData.unpersistWithDependencies();
+    }
   }
 
   /**
@@ -2705,7 +2881,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withClusteringSortColumns("_row_key").withInlineClustering(true)
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
 
-    HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
+    HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.LAZY)
         .withClusteringConfig(clusteringConfig)
         .withRollbackUsingMarkers(false)
         .build();
@@ -2721,6 +2897,22 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         partitionFiles.getValue().stream().forEach(file ->
             replacedFileIds.add(new HoodieFileGroupId(partitionFiles.getKey(), file))));
 
+    // manually remove clustering completed instant from .hoodie folder to mimic clustering
+    // succeeded in metadata table, but failed before committing to data table. This must happen
+    // before any subsequent metadata-table read so that no reader ever sees the first attempt's
+    // instant as committed, matching the crash scenario this test simulates.
+    FileCreateUtilsLegacy.deleteReplaceCommit(basePath, clusteringCommitTime);
+
+    // preconditions: clustering is pending on the data table while its deltacommit is completed
+    // in the metadata table.
+    metaClient.reloadActiveTimeline();
+    assertFalse(metaClient.getActiveTimeline().filterCompletedInstants().containsInstant(clusteringCommitTime));
+    assertTrue(metaClient.getActiveTimeline().filterPendingClusteringTimeline().containsInstant(clusteringCommitTime));
+    HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(
+        metaClient.getStorageConf(), getMetadataTableBasePath(basePath));
+    assertTrue(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline()
+        .filterCompletedInstants().containsInstant(clusteringCommitTime));
+
     // trigger new write to mimic other writes succeeding before re-attempt.
     newCommitTime = "0000003";
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
@@ -2728,10 +2920,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
     assertTrue(client.commit(newCommitTime, jsc.parallelize(writeStatuses), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty()));
     assertNoWriteErrors(writeStatuses);
-    validateMetadata(client);
+    // ignore the first clustering attempt's uncommitted files when comparing listings.
+    validateMetadata(client, Option.of(clusteringCommitTime));
 
-    // manually remove clustering completed instant from .hoodie folder and to mimic succeeded clustering in metadata table, but failed in data table.
-    FileCreateUtilsLegacy.deleteReplaceCommit(basePath, clusteringCommitTime);
+    // the new write must leave the pending clustering and its metadata-table deltacommit intact.
+    metaClient.reloadActiveTimeline();
+    assertTrue(metaClient.getActiveTimeline().filterPendingClusteringTimeline().containsInstant(clusteringCommitTime));
+    assertTrue(metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline()
+        .filterCompletedInstants().containsInstant(clusteringCommitTime));
+
     HoodieWriteMetadata<JavaRDD<WriteStatus>> updatedClusterMetadata = newClient.cluster(clusteringCommitTime, true);
 
     metaClient.reloadActiveTimeline();
@@ -4088,13 +4285,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // in the .hoodie folder.
     List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient, false);
     // Secondary index is enabled by default but no MDT partition corresponding to it is available
-    final boolean isPartitionStatsEnabled;
-    if (!metadataWriter.getEnabledPartitionTypes().contains(COLUMN_STATS)) {
-      isPartitionStatsEnabled = false;
-    } else {
-      isPartitionStatsEnabled = true;
-    }
-    long enabledMDTPartitionsSize = metadataWriter.getEnabledPartitionTypes().stream()
+    final boolean isPartitionStatsEnabled = metadataWriter.getEnabledIndexerMap().containsKey(COLUMN_STATS);
+    long enabledMDTPartitionsSize = metadataWriter.getEnabledIndexerMap().keySet().stream()
         .filter(partition -> !partition.equals(SECONDARY_INDEX))
         // Filter out partition stats if column stats is disabled since it does not get initialized in such a case
         .filter(partition -> isPartitionStatsEnabled || !partition.equals(PARTITION_STATS))
@@ -4102,7 +4294,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertEquals(enabledMDTPartitionsSize, metadataTablePartitions.size());
 
     final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
-    metadataWriter.getEnabledPartitionTypes().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
+    metadataWriter.getEnabledIndexerMap().keySet().forEach(partitionType -> metadataEnabledPartitionTypes.put(partitionType.getPartitionPath(), partitionType));
 
     // Metadata table should automatically compact and clean
     // versions are +1 as autoclean / compaction happens end of commits
@@ -4119,7 +4311,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           verifyMetadataRawRecords(table, logFiles, false);
         }
         if (COLUMN_STATS.getPartitionPath().equals(partition)) {
-          verifyMetadataColumnStatsRecords(storage, logFiles);
+          verifyMetadataColumnStatsRecords(metadataMetaClient, logFiles);
         }
       } catch (IOException e) {
         log.error("Metadata record validation failed", e);
@@ -4267,7 +4459,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // check if the last instant is restore, then the metadata table should have only the partitions that are not deleted
       metaClient.reloadActiveTimeline().getReverseOrderedInstants().findFirst().ifPresent(instant -> {
         if (instant.getAction().equals(HoodieActiveTimeline.RESTORE_ACTION)) {
-          metadataWriter.getEnabledPartitionTypes().stream().filter(partitionType -> !MetadataPartitionType.shouldDeletePartitionOnRestore(partitionType.getPartitionPath()))
+          metadataWriter.getEnabledIndexerMap().keySet().stream().filter(
+              partitionType -> !MetadataPartitionType.shouldDeletePartitionOnRestore(partitionType.getPartitionPath()))
               .forEach(partitionType -> assertTrue(metadataTablePartitions.contains(partitionType.getPartitionPath())));
         }
       });
@@ -4285,7 +4478,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             verifyMetadataRawRecords(table, logFiles, false);
           }
           if (COLUMN_STATS.getPartitionPath().equals(partition)) {
-            verifyMetadataColumnStatsRecords(storage, logFiles);
+            verifyMetadataColumnStatsRecords(metadataMetaClient, logFiles);
           }
         } catch (Exception e) {
           log.error("Metadata record validation failed", e);
@@ -4298,18 +4491,20 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
-  private static void verifyMetadataColumnStatsRecords(HoodieStorage storage, List<HoodieLogFile> logFiles) throws IOException {
+  private static void verifyMetadataColumnStatsRecords(HoodieTableMetaClient metadataMetaClient,
+                                                       List<HoodieLogFile> logFiles) throws IOException {
+    HoodieStorage storage = metadataMetaClient.getStorage();
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
       HoodieSchema writerSchema =
-          TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath());
+          TableSchemaResolver.readSchemaFromLogFile(metadataMetaClient, logFile.getPath());
       if (writerSchema == null) {
         // not a data block
         continue;
       }
 
-      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
-          new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
+      try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(
+          metadataMetaClient, new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();
           if (logBlock instanceof HoodieDataBlock) {

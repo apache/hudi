@@ -60,7 +60,7 @@ public class BootstrapColumnStichingRecordReader implements RecordReader<NullWri
           .toArray(new String[0]);
       values = new ArrayWritable(vals);
     }
-    LOG.info("Total ArrayWritable Length :" + values.get().length);
+    LOG.info("Total ArrayWritable Length :{}", values.get().length);
   }
 
   @Override

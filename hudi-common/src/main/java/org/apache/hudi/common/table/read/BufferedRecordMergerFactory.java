@@ -33,15 +33,16 @@ import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import java.io.IOException;
 
 /**
  * Factory to create a {@link BufferedRecordMerger}.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class BufferedRecordMergerFactory {
-
-  private BufferedRecordMergerFactory() {
-  }
 
   public static <T> BufferedRecordMerger<T> create(HoodieReaderContext<T> readerContext,
                                                    RecordMergeMode recordMergeMode,
@@ -109,6 +110,7 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
+    @Deprecated
     public Option<DeleteRecord> deltaMerge(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
       return Option.of(deleteRecord);
     }
@@ -138,6 +140,9 @@ public class BufferedRecordMergerFactory {
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
                                                 BufferedRecord<T> existingRecord) {
+      if (newRecord.isDelete()) {
+        return Option.of(newRecord);
+      }
       if (existingRecord != null) {
         HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
         newRecord = partialUpdateHandler.partialMerge(
@@ -153,6 +158,9 @@ public class BufferedRecordMergerFactory {
     @Override
     public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord,
                                      BufferedRecord<T> newerRecord) {
+      if (newerRecord.isDelete()) {
+        return newerRecord;
+      }
       HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
       newerRecord = partialUpdateHandler.partialMerge(
           newerRecord,
@@ -184,6 +192,7 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
+    @Deprecated
     public Option<DeleteRecord> deltaMerge(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
       return deltaMergeDeleteRecord(deleteRecord, existingRecord, recordContext);
     }
@@ -215,6 +224,9 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
+      if (newRecord.isDelete()) {
+        return super.deltaMerge(newRecord, existingRecord);
+      }
       if (existingRecord == null) {
         return Option.of(newRecord);
       } else if (shouldKeepNewerRecord(existingRecord, newRecord)) {
@@ -241,6 +253,9 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      if (newerRecord.isDelete()) {
+        return super.finalMerge(olderRecord, newerRecord);
+      }
       if (newerRecord.isCommitTimeOrderingDelete()) {
         return newerRecord;
       }
@@ -296,6 +311,9 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException {
+      if (newRecord.isDelete()) {
+        return deleteRecordMerger.deltaMerge(newRecord, existingRecord);
+      }
       if (existingRecord == null) {
         return Option.of(newRecord);
       }
@@ -317,12 +335,16 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
+    @Deprecated
     public Option<DeleteRecord> deltaMerge(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
       return this.deleteRecordMerger.deltaMerge(deleteRecord, existingRecord);
     }
 
     @Override
     public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
+      if (newerRecord.isDelete()) {
+        return deleteRecordMerger.finalMerge(olderRecord, newerRecord);
+      }
       // TODO(HUDI-7843): decouple the merging logic from the merger
       //  and use the record merge mode to control how to merge partial updates
       return recordMerger.get().partialMerge(olderRecord, newerRecord, readerSchema, recordContext, props);
@@ -441,6 +463,7 @@ public class BufferedRecordMergerFactory {
     public abstract Option<BufferedRecord<T>> deltaMergeRecords(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException;
 
     @Override
+    @Deprecated
     public Option<DeleteRecord> deltaMerge(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
       BufferedRecord<T> deleteBufferedRecord = BufferedRecords.fromDeleteRecord(deleteRecord, recordContext);
       try {

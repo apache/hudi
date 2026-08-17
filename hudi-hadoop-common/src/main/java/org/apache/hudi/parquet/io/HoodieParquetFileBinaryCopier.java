@@ -18,9 +18,9 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.io.storage.HoodieFileBinaryCopier;
+import org.apache.hudi.core.io.storage.HoodieFileBinaryCopier;
+import org.apache.hudi.core.io.storage.HoodieFileMetadataMerger;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.HoodieFileMetadataMerger;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
@@ -315,7 +315,7 @@ public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase i
         }
         return new PrefetchResult(targetBuffer, requiredSize);
       } catch (IOException e) {
-        log.error("Failed to prefetch file: " + fileToPrefetch, e);
+        log.error("Failed to prefetch file: {}", fileToPrefetch, e);
         throw new RuntimeException(e);
       }
     }, prefetchExecutor);

@@ -24,8 +24,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
+import org.apache.hudi.sink.bucket.LsmBucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.BulkInsertWriteFunction;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.RowDataKeyGens;
@@ -72,6 +74,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final Configuration conf;
   private final RowType rowType;
   private final RowType rowTypeWithFileId;
+  private final RowType sortInputRowType;
 
   private final IOManager ioManager;
   private final MockStreamingRuntimeContext runtimeContext;
@@ -81,6 +84,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   @Getter
   private StreamWriteOperatorCoordinator coordinator;
   private final boolean needSortInput;
+  private final boolean lsmSortInput;
 
   private BulkInsertWriteFunction<RowData> writeFunction;
   private MapFunction<RowData, RowData> mapFunction;
@@ -100,9 +104,14 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.conf = conf;
     this.rowType = (RowType) HoodieSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
     this.rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
+    this.lsmSortInput = OptionsResolver.isLsmTreeStorageLayout(conf);
+    this.sortInputRowType = lsmSortInput
+        ? LsmBucketBulkInsertWriterHelper.rowTypeWithFileIdAndKey(rowType)
+        : rowTypeWithFileId;
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
-    this.needSortInput = conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
+    this.needSortInput =
+        lsmSortInput || conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
   }
 
   public void openFunction() throws Exception {
@@ -116,12 +125,12 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void invoke(I record) throws Exception {
-    RowData recordWithFileId = mapFunction.map((RowData) record);
+    RowData routedRecord = mapFunction.map((RowData) record);
     if (needSortInput) {
       // Sort input first, trigger writeFunction at the #endInput
-      sortOperator.processElement(new StreamRecord(recordWithFileId));
+      sortOperator.processElement(new StreamRecord(routedRecord));
     } else {
-      writeFunction.processElement(recordWithFileId, null, null);
+      writeFunction.processElement(routedRecord, null, null);
     }
   }
 
@@ -213,10 +222,16 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   private void setupMapFunction() {
     RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
-    String indexKeys = OptionsResolver.getIndexKeyField(conf);
+    List<String> indexKeyFieldList = OptionsResolver.getIndexKeyFields(conf);
+    NumBucketsFunction numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
+        conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
     boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
     this.bucketIdToFileId = new HashMap<>();
-    this.mapFunction = r -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, r, indexKeys, conf, needFixedFileIdSuffix);
+    this.mapFunction = lsmSortInput
+        ? r -> LsmBucketBulkInsertWriterHelper.rowWithFileIdAndKey(
+            bucketIdToFileId, keyGen, r, indexKeyFieldList, numBucketsFunction, needFixedFileIdSuffix)
+        : r -> BucketBulkInsertWriterHelper.rowWithFileId(
+            bucketIdToFileId, keyGen, r, indexKeyFieldList, numBucketsFunction, needFixedFileIdSuffix);
   }
 
   private void setupSortOperator() throws Exception {
@@ -229,13 +244,15 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
         .setConfig(new StreamConfig(conf))
         .setExecutionConfig(new ExecutionConfig().enableObjectReuse())
         .build();
-    SortOperatorGen sortOperatorGen = BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
+    SortOperatorGen sortOperatorGen = lsmSortInput
+        ? LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(sortInputRowType)
+        : BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
     this.sortOperator = (SortOperator) sortOperatorGen.createSortOperator(conf);
     this.sortOperator.setProcessingTimeService(new TestProcessingTimeService());
     this.output = new CollectOutputAdapter<>();
     StreamConfig streamConfig = new StreamConfig(conf);
     streamConfig.setOperatorID(new OperatorID());
-    RowDataSerializer inputSerializer = new RowDataSerializer(rowTypeWithFileId);
+    RowDataSerializer inputSerializer = new RowDataSerializer(sortInputRowType);
     TestStreamConfigs.setupNetworkInputs(streamConfig, inputSerializer);
     streamConfig.setManagedMemoryFractionOperatorOfUseCase(ManagedMemoryUseCase.OPERATOR, .99);
     this.sortOperator.setup(streamTask, streamConfig, output);

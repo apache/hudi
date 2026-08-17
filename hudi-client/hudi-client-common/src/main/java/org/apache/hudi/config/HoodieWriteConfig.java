@@ -21,7 +21,6 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
@@ -37,6 +36,10 @@ import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.common.config.metrics.HoodieMetricsGraphiteConfig;
+import org.apache.hudi.common.config.metrics.HoodieMetricsJmxConfig;
+import org.apache.hudi.common.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
@@ -49,6 +52,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -64,13 +68,10 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.queue.DisruptorWaitStrategyType;
 import org.apache.hudi.common.util.queue.ExecutorType;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
-import org.apache.hudi.estimator.AverageRecordSizeEstimator;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
+import org.apache.hudi.execution.estimator.AverageRecordSizeEstimator;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieConcatHandle;
@@ -153,7 +154,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withValidValues(
           String.valueOf(HoodieTableVersion.SIX.versionCode()),
           String.valueOf(HoodieTableVersion.EIGHT.versionCode()),
-          String.valueOf(HoodieTableVersion.NINE.versionCode())
+          String.valueOf(HoodieTableVersion.NINE.versionCode()),
+          String.valueOf(HoodieTableVersion.TEN.versionCode())
       )
       .sinceVersion("1.0.0")
       .withDocumentation("The table version this writer is storing the table in. This should match the current table version.");
@@ -228,7 +230,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Class that estimates the size of records written by implementing "
-          + "`org.apache.hudi.estimator.RecordSizeEstimator`. Default implementation is `org.apache.hudi.estimator.AverageRecordSizeEstimator`");
+          + "`org.apache.hudi.execution.estimator.RecordSizeEstimator`. Default implementation is `org.apache.hudi.execution.estimator.AverageRecordSizeEstimator`");
 
   public static final ConfigProperty<Integer> RECORD_SIZE_ESTIMATOR_MAX_COMMITS = ConfigProperty
       .key("_hoodie.record.size.estimator.max.commits")
@@ -679,9 +681,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES = ConfigProperty
       .key("hoodie.client.heartbeat.tolerable.misses")
-      .defaultValue(2)
+      .defaultValue(10)
       .markAdvanced()
-      .withDocumentation("Number of heartbeat misses, before a writer is deemed not alive and all pending writes are aborted.");
+      .withDocumentation("Number of heartbeat misses, before a writer is deemed not alive and all pending writes are aborted. "
+          + "A higher value tolerates transient driver pauses (e.g. GC) or storage-latency spikes that would otherwise "
+          + "delay a heartbeat and cause a still-healthy writer's commit to be aborted.");
 
   public static final ConfigProperty<Boolean> CLUSTERING_BLOCK_FOR_PENDING_INGESTION = ConfigProperty
       .key("hoodie.clustering.fail.on.pending.ingestion.during.conflict.resolution")
@@ -2018,6 +2022,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE);
   }
 
+  public int getMigrationCommitArchivalBatchSize() {
+    return getInt(HoodieArchivalConfig.MIGRATION_COMMITS_ARCHIVAL_BATCH_SIZE);
+  }
+
   public boolean shouldBlockArchivalOnCleanECTR() {
     return getBoolean(HoodieArchivalConfig.BLOCK_ARCHIVAL_ON_LATEST_CLEAN_ECTR);
   }
@@ -2262,7 +2270,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return {@code true} if the partition stats index is enabled, {@code false} otherwise.
    */
   public boolean isPartitionStatsIndexEnabled() {
-    return isMetadataColumnStatsIndexEnabled();
+    // Delegate to the metadata config (which already requires column stats) so the build and delete
+    // paths stay consistent.
+    return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled();
   }
 
   /**
@@ -2449,6 +2459,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean parquetBloomFilterEnabled() {
     return getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED);
+  }
+
+  public boolean hfileBloomFilterEnabled() {
+    return getBooleanOrDefault(HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED);
   }
 
   public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
@@ -3044,6 +3058,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public Integer getPartitionTTLMaxPartitionsToDelete() {
     return getInt(HoodieTTLConfig.MAX_PARTITION_TO_DELETE);
+  }
+
+  public Integer getPartitionTTLStatsMaxParallelism() {
+    return getInt(HoodieTTLConfig.STATS_MAX_PARALLELISM);
   }
 
   public boolean isSecondaryIndexEnabled() {
@@ -3769,7 +3787,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
       // for a single writer scenario, with all table services inline, lets set InProcessLockProvider
       if (writeConfig.isAutoAdjustLockConfigs() && writeConfig.getWriteConcurrencyMode() == WriteConcurrencyMode.SINGLE_WRITER && !writeConfig.areAnyTableServicesAsync()) {
-        if (writeConfig.getLockProviderClass() != null && !writeConfig.getLockProviderClass().equals(InProcessLockProvider.class.getCanonicalName())) {
+        if (writeConfig.getLockProviderClass() != null && !InProcessLockProvider.isInProcessLockProvider(writeConfig.getLockProviderClass())) {
           // add logs only when explicitly overridden by the user.
           log.warn("For a single writer mode, overriding lock provider class ({}) to {}. So, user configured lock provider {} may not take effect",
               HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName(), writeConfig.getLockProviderClass());
@@ -3857,10 +3875,20 @@ public class HoodieWriteConfig extends HoodieConfig {
               + "schedule inline compaction (%s) can be enabled. Both can't be set to true at the same time. %s, %s", HoodieCompactionConfig.INLINE_COMPACT.key(),
           HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key(), inlineCompact, inlineCompactSchedule));
 
+      // Parse-and-discard so a malformed 'field:type' entry fails at client build time rather
+      // than deep inside deduceWriterSchema on the first commit. Empty (default) is a no-op.
+      SchemaChangeUtils.parseTimestampLogicalTypeOverrides(
+          writeConfig.getStringOrDefault(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES));
+
       int lookbackCommits = writeConfig.getInt(ROLLING_METADATA_TIMELINE_LOOKBACK_COMMITS);
       checkArgument(lookbackCommits >= 0,
           String.format("%s must be non-negative, but was %d",
               ROLLING_METADATA_TIMELINE_LOOKBACK_COMMITS.key(), lookbackCommits));
+
+      int ttlStatsMaxParallelism = writeConfig.getInt(HoodieTTLConfig.STATS_MAX_PARALLELISM);
+      checkArgument(ttlStatsMaxParallelism > 0,
+          String.format("%s must be positive, but was %d",
+              HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), ttlStatsMaxParallelism));
     }
 
     public HoodieWriteConfig build() {
@@ -3890,7 +3918,9 @@ public class HoodieWriteConfig extends HoodieConfig {
           }
         case FLINK:
         case JAVA:
-          // Timeline-server-based marker is not supported for Flink and Java engines
+          // Timeline-server-based markers are not the default for Flink and Java, but they are not
+          // unsupported either: setting hoodie.write.markers.type explicitly selects them, subject to the
+          // same gates WriteMarkersFactory applies to every engine.
           return MarkerType.DIRECT.toString();
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);

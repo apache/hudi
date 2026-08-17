@@ -155,7 +155,7 @@ public class HoodieTableSink implements
 
   @Override
   public DynamicTableSink copy() {
-    return new HoodieTableSink(this.conf, this.schema, this.overwrite);
+    return new HoodieTableSink(new Configuration(this.conf), this.schema, this.overwrite);
   }
 
   @Override

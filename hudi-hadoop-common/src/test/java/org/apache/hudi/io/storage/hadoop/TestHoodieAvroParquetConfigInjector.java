@@ -25,7 +25,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.DisableDictionaryInjector;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 

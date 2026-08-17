@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.procedure
 import org.apache.hudi.DummyActiveAction
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry
-import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter
+import org.apache.hudi.client.timeline.LSMTimelineWriter
 import org.apache.hudi.common.engine.{HoodieEngineContext, HoodieLocalEngineContext}
 import org.apache.hudi.common.engine.LocalTaskContextSupplier
 import org.apache.hudi.common.model.{ActionType, HoodieArchivedLogFile, HoodieAvroIndexedRecord, HoodieCommitMetadata, HoodieLogFile, HoodieRecord, WriteOperationType}

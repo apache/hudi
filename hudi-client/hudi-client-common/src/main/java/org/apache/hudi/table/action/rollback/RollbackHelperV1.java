@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -43,7 +44,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -52,7 +52,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.AppendMarkerHandler;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.util.CommonClientUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -141,7 +140,12 @@ public class RollbackHelperV1 extends RollbackHelper {
           }
         }
 
-        Pair<Integer, String> sentinel = Pair.of(HoodieLogFile.LOGFILE_BASE_VERSION, HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
+        // Insert a sentinel for file groups with no existing log files so the caller can skip a
+        // redundant per-request FS listing. The sentinel uses a null write-token to distinguish
+        // it from a real entry whose token happens to equal UNKNOWN_WRITE_TOKEN; otherwise tests
+        // (and any callers that previously wrote logs with the legacy "1-0-1" token) would be
+        // indistinguishable from "no log file present".
+        Pair<Integer, String> sentinel = Pair.of(HoodieLogFile.LOGFILE_BASE_VERSION, null);
         for (String expectedKey : expectedKeys) {
           logVersionMap.putIfAbsent(expectedKey, sentinel);
         }
@@ -315,7 +319,7 @@ public class RollbackHelperV1 extends RollbackHelper {
           HoodieLogFormatWriter.HoodieLogFormatWriterBuilder writerBuilder = HoodieLogFormatWriter.builder()
               .withParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath))
               .withLogFileId(fileId)
-              .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
+              .withLogWriteToken(FSUtils.makeWriteToken(taskContextSupplier))
               .withInstantTime(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
                   ? instantToRollback.requestedTime() : rollbackRequest.getLatestBaseInstant()
               )
@@ -324,16 +328,30 @@ public class RollbackHelperV1 extends RollbackHelper {
               .withTableVersion(tableVersion)
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION);
 
-          // Supply the pre-computed latest log version and its write token so that
-          // WriterBuilder.build() skips the per-request FSUtils.getLatestLogVersion() listing.
-          // This produces the same result: build() would discover (N, T_existing), construct
-          // path (N, T_existing), find it exists, and roll over to N+1. Pre-computation
-          // feeds the same (N, T_existing), triggering the identical rollover in getOutputStream().
+          // Apply pre-computed log version if available. Always keep the per-task write token
+          // generated above (via FSUtils.makeWriteToken) so that retried/repeated
+          // rollbacks do not collide on UNKNOWN_WRITE_TOKEN or inherit a prior log's write token.
+          //
+          // When doDelete=true, we actually create a new rollback log file: explicitly bump the
+          // version (latest + 1) so the new file is written with the per-task write token instead
+          // of rolling over and inheriting the existing log file's token. When doDelete=false we
+          // are only collecting stats (no append), so we let WriterBuilder.build() discover the
+          // existing version itself — bumping here would point to a non-existent path and break
+          // the downstream storage.getPathInfo lookup.
+          //
+          // The sentinel value (right == null) means "partition listed but no log file for this
+          // file group" — write at the base version.
           String logVersionKey = logVersionLookupKey(partitionPath, fileId, rollbackRequest.getLatestBaseInstant());
           Pair<Integer, String> preComputedVersion = logVersionMap.get(logVersionKey);
           if (preComputedVersion != null) {
-            writerBuilder.withLogVersion(preComputedVersion.getLeft())
-                .withLogWriteToken(preComputedVersion.getRight());
+            if (preComputedVersion.getRight() == null) {
+              writerBuilder.withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION);
+            } else if (doDelete) {
+              writerBuilder.withLogVersion(preComputedVersion.getLeft() + 1);
+            } else {
+              writerBuilder.withLogVersion(preComputedVersion.getLeft())
+                  .withLogWriteToken(preComputedVersion.getRight());
+            }
           }
 
           writer = writerBuilder.build();

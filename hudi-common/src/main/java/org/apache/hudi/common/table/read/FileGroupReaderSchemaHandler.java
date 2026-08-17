@@ -28,6 +28,9 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -37,9 +40,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.Getter;
@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -135,7 +136,33 @@ public class FileGroupReaderSchemaHandler<T> {
     if (internalSchema.isEmptySchema()) {
       return Pair.of(requiredSchema, Collections.emptyMap());
     }
-    long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(path.getName()));
+    return getRequiredSchemaForInstantAndRenamedColumns(FSUtils.getCommitTime(path.getName()));
+  }
+
+  /**
+   * Creates the same writer-schema-to-evolved-schema transformer used for inline log blocks.
+   *
+   * <p>When schema evolution is enabled, log records must first be decoded with their writer
+   * schema and then rewritten to the schema applicable to that log instant. Both inline log blocks
+   * and native log files use this transformer so the evolution semantics stay aligned.
+   */
+  public Option<Pair<Function<T, T>, HoodieSchema>> getSchemaEvolutionTransformer(
+      HoodieSchema writerSchema, String instantTime) {
+    if (internalSchema.isEmptySchema()) {
+      return Option.empty();
+    }
+    Pair<HoodieSchema, Map<String, String>> requiredSchemaAndRenamedColumns =
+        getRequiredSchemaForInstantAndRenamedColumns(instantTime);
+    return Option.of(Pair.of(
+        readerContext.getRecordContext().projectRecord(
+            writerSchema,
+            requiredSchemaAndRenamedColumns.getLeft(),
+            requiredSchemaAndRenamedColumns.getRight()),
+        requiredSchemaAndRenamedColumns.getLeft()));
+  }
+
+  private Pair<HoodieSchema, Map<String, String>> getRequiredSchemaForInstantAndRenamedColumns(String instantTime) {
+    long commitInstantTime = Long.parseLong(instantTime);
     InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient);
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false, false).mergeSchemaGetRenamed();

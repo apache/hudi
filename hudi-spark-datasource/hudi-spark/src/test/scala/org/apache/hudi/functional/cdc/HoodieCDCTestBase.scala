@@ -20,15 +20,16 @@ package org.apache.hudi.functional.cdc
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieKey, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
+import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, OP_KEY_ONLY}
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
@@ -91,6 +92,15 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
   }
 
   /**
+   * Returns the instant 1ms before the given one, for use as the exclusive begin instant
+   * of an incremental query. Numeric `-1` on the timestamp string is invalid when the
+   * instant falls on a minute boundary (e.g. ...110700000 - 1 = ...110699999, second=99).
+   */
+  protected def instantBefore(instant: String): String = {
+    HoodieInstantTimeGenerator.instantTimeMinusMillis(instant, 1)
+  }
+
+  /**
    * whether this instant will create a cdc log file.
    */
   protected def hasCDCLogFile(instant: HoodieInstant): Boolean = {
@@ -99,7 +109,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     hoodieWriteStats.exists { hoodieWriteStat =>
       val cdcPaths = hoodieWriteStat.getCdcStats
       cdcPaths != null && !cdcPaths.isEmpty &&
-        cdcPaths.keySet().asScala.forall(_.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+        cdcPaths.keySet().asScala.forall(FSUtils.isCDCLogFile)
     }
   }
 
@@ -120,7 +130,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
   protected def getCDCBlocks(relativeLogFile: String, cdcSchema: HoodieSchema): List[HoodieDataBlock] = {
     val logFile = new HoodieLogFile(
       metaClient.getStorage.getPathInfo(new StoragePath(metaClient.getBasePath, relativeLogFile)))
-    val reader = HoodieLogFormat.newReader(storage, logFile, cdcSchema)
+    val reader = HoodieLogFormat.newReader(metaClient, logFile, cdcSchema)
     val blocks = scala.collection.mutable.ListBuffer.empty[HoodieDataBlock]
     while(reader.hasNext) {
       blocks.asJava.add(reader.next().asInstanceOf[HoodieDataBlock])

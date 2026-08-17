@@ -62,6 +62,7 @@ public class UpgradeDowngrade {
   ));
 
   private static final Set<Pair<Integer, Integer>> DOWNGRADE_HANDLERS_REQUIRING_ROLLBACK_ANDCOMPACT = new HashSet<>(Arrays.asList(
+      Pair.of(10, 9), // TenToNineDowngradeHandler
       Pair.of(8, 7), // EightToSevenDowngradeHandler
       Pair.of(9, 8), // NineToEightDowngradeHandler
       Pair.of(6, 5)  // SixToFiveDowngradeHandler
@@ -208,7 +209,7 @@ public class UpgradeDowngrade {
 
 
     // Perform the actual upgrade/downgrade; this has to be idempotent, for now.
-    log.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
+    log.info("Attempting to move table from version {} to {}", fromVersion, toVersion);
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
     Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     if (isUpgrade) {
@@ -302,6 +303,8 @@ public class UpgradeDowngrade {
       return new SevenToEightUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.EIGHT && toVersion == HoodieTableVersion.NINE) {
       return new EightToNineUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.NINE && toVersion == HoodieTableVersion.TEN) {
+      return new NineToTenUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), true);
     }
@@ -326,6 +329,8 @@ public class UpgradeDowngrade {
       return new EightToSevenDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.NINE && toVersion == HoodieTableVersion.EIGHT) {
       return new NineToEightDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.TEN && toVersion == HoodieTableVersion.NINE) {
+      return new TenToNineDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
     }

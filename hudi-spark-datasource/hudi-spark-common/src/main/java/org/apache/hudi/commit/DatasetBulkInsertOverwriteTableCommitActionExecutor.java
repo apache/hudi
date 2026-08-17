@@ -28,6 +28,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +45,14 @@ public class DatasetBulkInsertOverwriteTableCommitActionExecutor extends Dataset
   @Override
   public WriteOperationType getWriteOperationType() {
     return WriteOperationType.INSERT_OVERWRITE_TABLE;
+  }
+
+  @Override
+  protected List<String> resolveTargetPartitions(Dataset<Row> preparedRecords) {
+    // Table-wide overwrite replaces every file group in every partition; enumerate them all.
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(writeClient.getEngineContext(),
+        table.getMetaClient(), writeConfig.getMetadataConfig());
+    return partitionPaths == null ? Collections.emptyList() : partitionPaths;
   }
 
   @Override

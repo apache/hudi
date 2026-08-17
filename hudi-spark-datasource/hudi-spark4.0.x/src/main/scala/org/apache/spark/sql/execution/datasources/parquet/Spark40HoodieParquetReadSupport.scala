@@ -31,7 +31,7 @@ import java.time.ZoneId
 
 import scala.collection.JavaConverters._
 
-// TODO: Delete this file when the hudi-spark4.0.x module is removed. Spark 4.1+ reads
+// TODO(#18935): Delete this file when the hudi-spark4.0.x module is removed. Spark 4.1+ reads
 //  variant fields by name via SPARK-54410, so the reorder workaround below is no longer
 //  needed there. Spark 4.0.x's ParquetUnshreddedVariantConverter builds its converters
 //  array in hardcoded [value, metadata] order, then indexes by schema position. If the

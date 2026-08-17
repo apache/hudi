@@ -32,10 +32,10 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeG
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.core.index.record.HoodieRecordIndex
 import org.apache.hudi.exception.{HoodieException, HoodieMetadataException}
 import org.apache.hudi.functional.TestRecordLevelIndex.TestPartitionedRecordLevelIndexTestCase
 import org.apache.hudi.index.HoodieIndex.IndexType.RECORD_LEVEL_INDEX
-import org.apache.hudi.index.record.HoodieRecordIndex
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
@@ -146,7 +146,8 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
       "Metadata files partition count should be lower than data table file count after rebootstrap")
   }
 
-  def testRecordLevelIndex(tableType: HoodieTableType, streamingWriteEnabled: Boolean, holder: testRecordLevelIndexHolder): Unit = {
+  def testRecordLevelIndex(tableType: HoodieTableType, streamingWriteEnabled: Boolean, holder: testRecordLevelIndexHolder,
+                           rliInitDeferred: Boolean = false): Unit = {
     val dataGen = new HoodieTestDataGenerator();
     val inserts = dataGen.generateInserts("001", 5)
     val latestBatchDf = toDataset(spark, inserts)
@@ -156,9 +157,10 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
       RECORDKEY_FIELD.key -> "_row_key",
       PARTITIONPATH_FIELD.key -> "data_partition_path",
       HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
-      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key()-> "false",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
       HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
       HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> streamingWriteEnabled.toString,
+      HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key() -> rliInitDeferred.toString,
       HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
       HoodieIndexConfig.INDEX_TYPE.key() -> RECORD_LEVEL_INDEX.name())
     holder.options = options
@@ -167,11 +169,19 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
       .mode(SaveMode.Overwrite)
       .save(basePath)
     assertEquals(10, spark.read.format("hudi").load(basePath).count())
+    if (rliInitDeferred) {
+      // With defer enabled, the first commit should NOT have initialized the RLI partition.
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath),
+        "RLI partition should not be initialized after the first commit when defer is enabled")
+    }
     val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(options).asJava)
     val writeConfig = HoodieWriteConfig.newBuilder()
       .withProps(props)
       .withPath(basePath)
       .build()
+    // Constructing the metadata writer here will initialize RLI (lazily, on this second metadata-writer entry)
+    // when defer is enabled, since there is now 1 completed commit on the data table.
     var metadata = metadataWriter(writeConfig).getTableMetadata
     val recordKeys = inserts.asScala.map(i => i.getRecordKey).asJava.stream().collect(Collectors.toList())
     holder.recordKeys = recordKeys
@@ -303,6 +313,108 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
+  def testPartitionedRecordLevelIndexDefer(streamingWriteEnabled: Boolean): Unit = {
+    val holder = new testRecordLevelIndexHolder
+    testRecordLevelIndex(HoodieTableType.MERGE_ON_READ, streamingWriteEnabled, holder, true)
+    assertEquals("deltacommit", metaClient.getActiveTimeline.lastInstant().get().getAction)
+    val writeConfig = getWriteConfig(holder.options)
+    var metadata = metadataWriter(writeConfig).getTableMetadata
+    doAllAssertions(holder, metadata)
+    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    val timeOpt = writeClient.scheduleCompaction(HOption.empty())
+    assertTrue(timeOpt.isPresent)
+    writeClient.compact(timeOpt.get())
+    metaClient.reloadActiveTimeline()
+    assertEquals("compaction", metaClient.getActiveTimeline.lastInstant().get().getAction)
+    metadata = metadataWriter(writeConfig).getTableMetadata
+    doAllAssertions(holder, metadata)
+    writeClient.close()
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPartitionedRecordLevelIndexDeferWithBulkInsert(streamingWriteEnabled: Boolean): Unit = {
+    val tableType = HoodieTableType.MERGE_ON_READ
+    val dataGen = new HoodieTestDataGenerator()
+    val inserts1 = dataGen.generateInserts("001", 5)
+    val batch1Df = toDataset(spark, inserts1)
+    val insertDf1 = batch1Df.withColumn("data_partition_path", lit("partition1"))
+      .union(batch1Df.withColumn("data_partition_path", lit("partition2")))
+
+    val options = Map(
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      RECORDKEY_FIELD.key -> "_row_key",
+      PARTITIONPATH_FIELD.key -> "data_partition_path",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
+      HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> streamingWriteEnabled.toString,
+      HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key() -> "true",
+      HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
+      HoodieIndexConfig.INDEX_TYPE.key() -> RECORD_LEVEL_INDEX.name())
+
+    // Commit #1: bulk_insert on a fresh table with defer enabled.
+    insertDf1.write.format("hudi")
+      .options(options)
+      .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    assertEquals(10, spark.read.format("hudi").load(basePath).count())
+
+    // Defer should have kicked in: RLI partition is not initialized after the first bulk_insert.
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath),
+      "RLI partition should not be initialized after the first bulk_insert when defer is enabled")
+
+    // Commit #2: another bulk_insert into a new partition. New rows must use distinct record keys.
+    val inserts2 = dataGen.generateInserts("002", 5)
+    val batch2Df = toDataset(spark, inserts2)
+    val insertDf2 = batch2Df.withColumn("data_partition_path", lit("partition3"))
+
+    insertDf2.write.format("hudi")
+      .options(options)
+      .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    assertEquals(15, spark.read.format("hudi").load(basePath).count())
+
+    // Build metadata writer/reader; this entry will initialize RLI now that there is a completed commit.
+    val writeConfig = getWriteConfig(options)
+    val metadata = metadataWriter(writeConfig).getTableMetadata
+
+    // RLI partition should now be present in the metadata table.
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath),
+      "RLI partition should be initialized once a completed commit exists on the data table")
+    assertTrue(HoodieRecordIndex.isPartitioned(
+      metaClient.getIndexMetadata.get().getIndexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)),
+      "RLI should be initialized as partitioned RLI")
+
+    // Validate record key -> location mapping for both batches against the data.
+    val tableRows = spark.read.format("hudi").load(basePath).collect()
+
+    val batch1Keys = inserts1.asScala.map(_.getRecordKey).asJava.stream().collect(Collectors.toList())
+    val partition1Locations = readRecordIndex(metadata, batch1Keys, HOption.of("partition1"))
+    assertEquals(5, partition1Locations.size)
+    validateDFWithLocations(tableRows, partition1Locations, "partition1")
+    val partition2Locations = readRecordIndex(metadata, batch1Keys, HOption.of("partition2"))
+    assertEquals(5, partition2Locations.size)
+    validateDFWithLocations(tableRows, partition2Locations, "partition2")
+
+    val batch2Keys = inserts2.asScala.map(_.getRecordKey).asJava.stream().collect(Collectors.toList())
+    val partition3Locations = readRecordIndex(metadata, batch2Keys, HOption.of("partition3"))
+    assertEquals(5, partition3Locations.size)
+    validateDFWithLocations(tableRows, partition3Locations, "partition3")
+
+    // Cross-partition lookups for batch1 keys against partition3 (and vice versa) should be empty.
+    assertEquals(0, readRecordIndex(metadata, batch1Keys, HOption.of("partition3")).size)
+    assertEquals(0, readRecordIndex(metadata, batch2Keys, HOption.of("partition1")).size)
+    assertEquals(0, readRecordIndex(metadata, batch2Keys, HOption.of("partition2")).size)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
   def testPartitionedRecordLevelIndexCompact(streamingWriteEnabled: Boolean): Unit = {
     val holder = new testRecordLevelIndexHolder
     testRecordLevelIndex(HoodieTableType.MERGE_ON_READ, streamingWriteEnabled, holder)
@@ -391,6 +503,41 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     assertEquals(0, partition2Locations.size)
     partition3Locations = readRecordIndex(metadata, holder.bulkRecordKeys, HOption.of("partition3"))
     assertEquals(0, partition3Locations.size)
+  }
+
+  @Test
+  def testPartitionedRecordLevelIndexLookupUsesFullKey(): Unit = {
+    initMetaClient(HoodieTableType.COPY_ON_WRITE)
+    val dataGen = new HoodieTestDataGenerator()
+    val inserts = dataGen.generateInserts("001", 3)
+    val insertDf = toDataset(spark, inserts).withColumn("data_partition_path", lit("partition1"))
+    val options = Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      RECORDKEY_FIELD.key -> "_row_key",
+      PARTITIONPATH_FIELD.key -> "data_partition_path",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
+      HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieIndexConfig.INDEX_TYPE.key() -> RECORD_LEVEL_INDEX.name())
+    insertDf.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val writeConfig = getWriteConfig(options)
+    val metadata = metadataWriter(writeConfig).getTableMetadata
+    val recordKeys = inserts.asScala.map(i => i.getRecordKey).asJava
+    assertEquals(3, readRecordIndex(metadata, recordKeys, HOption.of("partition1")).size)
+
+    // Partitioned RLI lookup is still a full record-key lookup within the data partition.
+    // A prefix-only key would incorrectly match real records if the lookup used prefix matching.
+    val recordKeySet = recordKeys.asScala.toSet
+    val prefixOnlyKey = recordKeys.asScala
+      .flatMap(key => (1 until key.length).map(key.substring(0, _)))
+      .find(prefix => !recordKeySet.contains(prefix))
+      .get
+    assertTrue(readRecordIndex(metadata, util.Collections.singletonList(prefixOnlyKey), HOption.of("partition1")).isEmpty)
   }
 
   @ParameterizedTest
@@ -662,6 +809,108 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
       case t: Throwable =>
         fail(s"Expected HoodieMetadataException but got ${t.getClass.getName}: ${t.getMessage}")
     }
+  }
+
+  /**
+   * Tests that when a zero-size base file is skipped during MDT bootstrap, a subsequent upsert
+   * still succeeds and produces consistent data. Because the skipped file group is absent from MDT,
+   * the upsert treats those records as new inserts and writes them to a new file group. The test
+   * verifies the final record count and that every RLI entry points to a real, readable file.
+   */
+  @Test
+  def testUpsertAfterSkippingZeroSizeFileOnInitialize(): Unit = {
+    // Use a single-partition data generator so all inserts land in one parquet file.
+    val singlePartitionDataGen = HoodieTestDataGenerator.createTestGeneratorFirstPartition()
+    val singlePartition = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH
+    val insertedRecords = 10
+    val inserts = singlePartitionDataGen.generateInserts("001", insertedRecords)
+    val insertDf = toDataset(spark, inserts)
+
+    val baseOptions = Map(
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      RECORDKEY_FIELD.key -> "_row_key",
+      PARTITIONPATH_FIELD.key -> "partition_path",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieCompactionConfig.INLINE_COMPACT.key() -> "false")
+
+    insertDf.write.format("hudi")
+      .options(baseOptions)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    assertEquals(insertedRecords, spark.read.format("hudi").load(basePath).count())
+
+    // Confirm there is exactly one parquet base file in the single partition.
+    val partitionPath = new StoragePath(basePath, singlePartition)
+    val baseFilesBeforeCorruption = storage.listDirectEntries(partitionPath).asScala
+      .filter(_.getPath.getName.endsWith(".parquet"))
+      .toSeq
+    assertEquals(1, baseFilesBeforeCorruption.size, "Expected exactly one parquet file in the single partition")
+    val zeroSizeFileId = FSUtils.getFileId(baseFilesBeforeCorruption.head.getPath.getName)
+
+    // Replace the only base file with an empty (zero-size) file.
+    replaceOneBaseFileWithEmpty(Seq(singlePartition))
+
+    // Delete MDT to force a full rebootstrap.
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    HoodieTableMetadataUtil.deleteMetadataTable(metaClient, context, false)
+    assertFalse(storage.exists(new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))),
+      "Metadata table should be absent before rebootstrap")
+
+    // The upsert triggers MDT rebootstrap (since MDT was deleted). Skip config is set so
+    // the zero-size file is skipped during bootstrap. Because RLI has no entries for these
+    // records (they were in the skipped file), the upsert treats them as new inserts.
+    // Use global RLI so that the MDT bootstraps at least minFileGroupCount (10) file groups
+    // for record_index even when all data files were skipped as zero-size.
+    metaClient.reloadActiveTimeline()
+    val latestSchema = new TableSchemaResolver(metaClient).getTableSchemaFromLatestCommit(false).get().toString
+    val optionsWithSkip = baseOptions ++ Map(
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
+      HoodieIndexConfig.INDEX_TYPE.key() -> "GLOBAL_RECORD_LEVEL_INDEX",
+      HoodieMetadataConfig.SKIP_ZERO_SIZE_FILES_ON_INITIALIZE.key() -> "true",
+      HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> latestSchema)
+
+    // Reuse the same 10 records for the upsert. Since RLI has no entries for these record keys
+    // (the original file was zero-size and skipped during bootstrap), the upsert treats them as
+    // new inserts and writes them to a brand-new file group — NOT the zero-size one.
+    val upsertDf = toDataset(spark, inserts)
+    // Upsert should succeed — any exception here fails the test.
+    upsertDf.write.format("hudi")
+      .options(optionsWithSkip)
+      .option(DataSourceWriteOptions.OPERATION.key(), UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Data consistency check: all 10 records must be readable in the new file group.
+    // (The zero-size base file contributes 0 readable records; the new file group has 10.)
+    val readDf = spark.read.format("hudi").load(basePath)
+    assertEquals(insertedRecords, readDf.count(),
+      "All records should be readable after upsert into a new file group")
+
+    // RLI consistency check: every live record must be indexed at the location where it actually lives.
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val writeConfig = getWriteConfig(optionsWithSkip)
+    val postUpsertMetadata = metadataWriter(writeConfig).getTableMetadata.asInstanceOf[HoodieBackedTableMetadata]
+
+    // MDT files partition must not track the zero-size file group.
+    val allMdtFiles = getFilesInAllPartitions(postUpsertMetadata)
+    assertFalse(allMdtFiles.exists(_.getPath.getName.contains(zeroSizeFileId)),
+      s"MDT should not contain the zero-size file group $zeroSizeFileId after bootstrap with skip enabled")
+
+    // Global RLI: look up all record keys without a partition hint.
+    val recordKeys = inserts.asScala.map(_.getRecordKey).asJava.stream().collect(Collectors.toList())
+    val postUpsertLocations = readRecordIndex(postUpsertMetadata, recordKeys, HOption.empty())
+    assertEquals(insertedRecords, postUpsertLocations.size,
+      "All upserted records should have an RLI entry after upsert")
+    val df = readDf.collect()
+    validateDFWithLocations(df, postUpsertLocations, singlePartition)
+
+    // The zero-size file group must not have been selected as the write target — its file ID
+    // should not appear in any of the post-upsert RLI locations.
+    assertFalse(postUpsertLocations.values.exists(_.getFileId == zeroSizeFileId),
+      "The zero-size file group should not have been picked as a write target during upsert")
   }
 
   private def replaceOneBaseFileWithEmpty(partitionPaths: Seq[String]): String = {

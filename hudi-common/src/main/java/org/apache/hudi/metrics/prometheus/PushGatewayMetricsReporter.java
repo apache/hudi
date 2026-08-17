@@ -18,8 +18,8 @@
 
 package org.apache.hudi.metrics.prometheus;
 
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricUtils;
 import org.apache.hudi.metrics.MetricsReporter;
 

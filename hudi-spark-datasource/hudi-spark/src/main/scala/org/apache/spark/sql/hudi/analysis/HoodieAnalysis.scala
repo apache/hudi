@@ -18,8 +18,8 @@
 package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport}
-import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
+import org.apache.hudi.common.util.ValidationUtils
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -65,8 +65,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark40DataSourceV2ToV1Fallback"
     } else if (HoodieSparkUtils.isSpark3_5) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
-    } else {
+    } else if (HoodieSparkUtils.isSpark3_4) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
+    } else {
+      // Spark 3.3.x
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
     }
     val dataSourceV2ToV1Fallback: RuleBuilder =
       session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
@@ -97,16 +100,12 @@ object HoodieAnalysis extends SparkAdapterSupport {
     }
 
     val resolveAlterTableCommandsClass =
-      if (HoodieSparkUtils.isSpark4_2) {
-        "org.apache.spark.sql.hudi.Spark42ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.isSpark4_1) {
-        "org.apache.spark.sql.hudi.Spark41ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.isSpark4_0) {
-        "org.apache.spark.sql.hudi.Spark40ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.gteqSpark3_5) {
-        "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
+      if (HoodieSparkUtils.isSpark4) {
+        "org.apache.spark.sql.hudi.Spark4ResolveHudiAlterTableCommand"
+      } else if (HoodieSparkUtils.isSpark3) {
+        "org.apache.spark.sql.hudi.Spark3ResolveHudiAlterTableCommand"
       } else {
-        "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
+        throw new IllegalStateException("Unsupported Spark version")
       }
 
     val resolveAlterTableCommands: RuleBuilder =
@@ -143,22 +142,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // Default rules
     )
 
-    val nestedSchemaPruningClass =
-      if (HoodieSparkUtils.isSpark4_2) {
-        "org.apache.spark.sql.execution.datasources.Spark42NestedSchemaPruning"
-      } else if (HoodieSparkUtils.isSpark4_1) {
-        "org.apache.spark.sql.execution.datasources.Spark41NestedSchemaPruning"
-      } else if (HoodieSparkUtils.isSpark4_0) {
-        "org.apache.spark.sql.execution.datasources.Spark40NestedSchemaPruning"
-      } else if (HoodieSparkUtils.gteqSpark3_5) {
-        "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
-      } else {
-        "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
-      }
-
-    val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
-    rules += (_ => nestedSchemaPruningRule)
-
     // NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's
     //       [[PruneFileSourcePartitions]] and as such should be executed at the same stage.
     //       However, currently Spark doesn't allow [[SparkSessionExtensions]] to inject into
@@ -170,9 +153,12 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
     val pruneFileSourcePartitionsClass = if (HoodieSparkUtils.gteqSpark4_0) {
       "org.apache.spark.sql.hudi.analysis.Spark4HoodiePruneFileSourcePartitions"
-    } else {
+    } else if (HoodieSparkUtils.gteqSpark3_4) {
       // Spark 3.4 and 3.5: PhysicalOperation and ScanOperation unified (SPARK-39764)
       "org.apache.spark.sql.hudi.analysis.Spark3HoodiePruneFileSourcePartitions"
+    } else {
+      // Spark 3.3: Use ScanOperation for better compatibility
+      "org.apache.spark.sql.hudi.analysis.Spark33HoodiePruneFileSourcePartitions"
     }
     rules += (spark => instantiateKlass(pruneFileSourcePartitionsClass, spark))
 
@@ -318,7 +304,12 @@ object HoodieAnalysis extends SparkAdapterSupport {
           analyzer.execute(plan)
         }
 
-        if (resolved.output.exists(attr => isMetaField(attr.name))) {
+        // If the plan is still not fully resolved (e.g., it references non-existent
+        // tables or columns), fall through. Spark's CheckAnalysis runs later and
+        // produces precise UNRESOLVED_COLUMN / TABLE_OR_VIEW_NOT_FOUND errors with
+        // "did you mean" suggestions; intercepting UnresolvedException here would
+        // discard that context. Only inspect the output once the plan is resolved.
+        if (resolved.resolved && resolved.output.exists(attr => isMetaField(attr.name))) {
           Some(resolved.output)
         } else {
           None

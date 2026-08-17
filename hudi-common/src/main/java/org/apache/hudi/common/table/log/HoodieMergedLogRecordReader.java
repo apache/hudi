@@ -20,6 +20,9 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.expression.Expression;
+import org.apache.hudi.common.expression.Predicate;
+import org.apache.hudi.common.expression.Predicates;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -28,14 +31,11 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.expression.Expression;
-import org.apache.hudi.expression.Predicate;
-import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Closeable;
 import java.io.Serializable;
@@ -52,9 +52,11 @@ import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
  *
  * @param <T> type of engine-specific record representation.
  */
+@Getter
+@Slf4j
 public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     implements Iterable<BufferedRecord<T>>, Closeable {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordReader.class);
+
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
   // count of merged records in log
@@ -102,8 +104,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = recordBuffer.size();
 
-    LOG.info("Number of log files scanned => {}", logFiles.size());
-    LOG.info("Number of entries in Map => {}", recordBuffer.size());
+    log.info("Number of log files scanned => {}", logFiles.size());
+    log.info("Number of entries in Map => {}", recordBuffer.size());
   }
 
   static Option<KeySpec> createKeySpec(Option<Predicate> filter) {
@@ -134,19 +136,11 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     return recordBuffer.getLogRecords();
   }
 
-  public long getNumMergedRecordsInLog() {
-    return numMergedRecordsInLog;
-  }
-
   /**
    * Returns the builder for {@code HoodieMergedLogRecordReader}.
    */
   public static <T> Builder<T> newBuilder() {
     return new Builder<>();
-  }
-
-  public long getTotalTimeTakenToReadAndMergeBlocks() {
-    return totalTimeTakenToReadAndMergeBlocks;
   }
 
   @Override

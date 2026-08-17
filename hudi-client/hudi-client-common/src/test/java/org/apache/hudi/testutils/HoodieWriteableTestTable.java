@@ -19,8 +19,8 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -41,7 +41,7 @@ import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.io.storage.HoodieOrcConfig;
+import org.apache.hudi.core.io.storage.HoodieOrcConfig;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroOrcWriter;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -111,7 +111,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
 
     StoragePath baseFilePath = new StoragePath(Paths.get(basePath, partition, fileName).toString());
     if (storage.exists(baseFilePath)) {
-      log.warn("Deleting the existing base file " + baseFilePath);
+      log.warn("Deleting the existing base file {}", baseFilePath);
       storage.deleteFile(baseFilePath);
     }
 

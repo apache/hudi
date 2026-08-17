@@ -24,7 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 
 import org.apache.avro.Schema;

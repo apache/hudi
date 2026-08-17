@@ -30,6 +30,7 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD;
@@ -84,6 +85,11 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
     if (populateMetaFields) {
       writeSupport.add(UTF8String.fromString(recordKey));
     }
+  }
+
+  @Override
+  public void addFooterMetadata(Map<String, String> footerMetadata) {
+    writeSupport.addFooterMetadata(footerMetadata);
   }
 
   @Override

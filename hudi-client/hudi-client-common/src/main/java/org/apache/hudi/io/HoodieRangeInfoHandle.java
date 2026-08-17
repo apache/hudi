@@ -21,7 +21,7 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;

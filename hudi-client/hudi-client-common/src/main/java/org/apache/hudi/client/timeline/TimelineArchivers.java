@@ -19,8 +19,6 @@
 
 package org.apache.hudi.client.timeline;
 
-import org.apache.hudi.client.timeline.versioning.v1.TimelineArchiverV1;
-import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.config.HoodieWriteConfig;

@@ -37,19 +37,23 @@ object HoodieParquetFileFormatHelper {
                                     requiredSchema: StructType): (java.util.Map[Integer, Pair[DataType, DataType]], StructType) = {
     val originalSchema = parquetFileMetaData.getSchema
 
+    val fileStruct = convertParquetSchemaToSparkSchema(hadoopConf, originalSchema)
+    SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileStruct, requiredSchema)
+  }
+
+  def convertParquetSchemaToSparkSchema(hadoopConf: Configuration, schema: MessageType): StructType = {
     // Spark 3.3's ParquetToSparkSchemaConverter throws "Illegal Parquet type: FIXED_LEN_BYTE_ARRAY"
     // for unannotated FLBA columns (e.g., Hudi VECTOR type). This was fixed in Spark 3.4
     // (SPARK-41096 / https://github.com/apache/spark/pull/38628) which maps bare FLBA to BinaryType.
     // On Spark 3.3 only, rewrite bare FLBA to BINARY before conversion.
     val safeSchema = if (!HoodieSparkUtils.gteqSpark3_4) {
-      rewriteFixedLenByteArrayToBinary(originalSchema)
+      rewriteFixedLenByteArrayToBinary(schema)
     } else {
-      originalSchema
+      schema
     }
 
     val convert = new ParquetToSparkSchemaConverter(hadoopConf)
-    val fileStruct = convert.convert(safeSchema)
-    SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileStruct, requiredSchema)
+    convert.convert(safeSchema)
   }
 
   /**

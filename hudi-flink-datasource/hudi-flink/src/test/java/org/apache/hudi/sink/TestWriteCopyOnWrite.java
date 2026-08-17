@@ -62,6 +62,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -620,13 +621,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   protected Map<String, String> getMiniBatchExpected() {
-    Map<String, String> expected = new HashMap<>();
-    // the last 2 lines are merged
-    expected.put("par1", "["
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1" + "]");
-    return expected;
+    // For UPSERT, the classic layout may retain duplicate incoming records when pre-combine is disabled.
+    // In contrast, the LSM merge combines records with the same record key and emits only the winning record.
+    return Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,1,par1]");
   }
 
   protected Map<String, String> getUpsertWithDeleteExpected() {
@@ -637,10 +634,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     expected.put("par3", "[id6,par3,id6,Emma,20,6,par3]");
     expected.put("par4", "[id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
     return expected;
-  }
-
-  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
-    return EXPECTED2;
   }
 
   @Test
@@ -678,7 +671,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpoint(1)
         .assertBootstrapped()
         .assertNextEvent()
-        .checkWrittenData(getExpectedBeforeCheckpointComplete())
+        .checkWrittenData(EXPECTED1)
         .checkpointComplete(1)
         .checkWrittenData(EXPECTED2)
         .end();
@@ -752,7 +745,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   protected void validateNonBlockingConcurrencyControlConditions() {
     assertThrows(
-        IllegalArgumentException.class,
+        HoodieException.class,
         () -> preparePipeline(conf),
         "Non-blocking concurrency control requires the MOR table with simple bucket index");
   }

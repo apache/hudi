@@ -129,6 +129,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
               && !conf.contains(FlinkOptions.HIVE_STYLE_PARTITIONING)) {
             conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, tableConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
           }
+          conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+              tableConfig.getTableStorageLayout().configValue());
           if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
             if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
               log.error("Table type conflict : {} in {} and {} in table options. Update your config to match the table type in hoodie.properties.",
@@ -176,11 +178,24 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     checkTableType(conf);
     checkBaseFileFormatForWrite(conf);
     checkIndexType(conf);
+    checkStorageLayout(conf);
 
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
     }
     StreamerUtil.checkOrderingFields(conf, schema.getColumnNames());
+  }
+
+  /**
+   * Validate the table storage layout.
+   */
+  private void checkStorageLayout(
+      Configuration conf) {
+    HoodieTableConfig.TableStorageLayout storageLayout = OptionsResolver.getTableStorageLayout(conf);
+    ValidationUtils.checkArgument(
+        !OptionsResolver.isInsertOperation(conf)
+            || storageLayout != HoodieTableConfig.TableStorageLayout.LSM_TREE,
+        "The LSM tree storage layout does not support insert operations because they allow duplicate record keys.");
   }
 
   /**
@@ -198,6 +213,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
             String.format("Metadata table should be enabled when %s is %s.", FlinkOptions.INDEX_TYPE.key(), HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX));
         ValidationUtils.checkArgument(conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED),
             String.format("Partition level index updating is not supported for GLOBAL_RECORD_LEVEL_INDEX, please set '%s' = 'true'.", FlinkOptions.INDEX_GLOBAL_ENABLED.key()));
+        ValidationUtils.checkArgument(!OptionsResolver.isMultiWriter(conf),
+            "Flink global record level index does not support multiple writers, set hoodie.write.concurrency.mode=SINGLE_WRITER instead.");
 
         boolean deferredRLI = Boolean.parseBoolean(conf.getString(
             HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key(), HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.defaultValue().toString()));
@@ -209,6 +226,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
             "Partitioned record level index supports only Flink streaming upsert and insert overwrite.");
         ValidationUtils.checkArgument(!OptionsResolver.isNonBlockingConcurrencyControl(conf),
             "Partitioned record level index does not support non-blocking concurrency control.");
+        ValidationUtils.checkArgument(!OptionsResolver.isMultiWriter(conf),
+            "Flink record level index does not support multiple writers, set hoodie.write.concurrency.mode=SINGLE_WRITER instead.");
         break;
       default:
         break;
@@ -487,6 +506,13 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * Sets up the table exec sort options.
    */
   private void setupSortOptions(Configuration conf, ReadableConfig contextConfig) {
+    if (OptionsResolver.isBulkInsertOperation(conf)
+        && OptionsResolver.isLsmTreeStorageLayout(conf)) {
+      // An LSM run must always be ordered by its encoded record key. These options are mandatory
+      // for LSM bulk insert even when the user explicitly disables the regular bulk-insert sort.
+      conf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, true);
+      conf.set(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, true);
+    }
     if (contextConfig.getOptional(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES).isPresent()) {
       conf.set(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES,
           contextConfig.get(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES));
@@ -516,7 +542,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private static void inferAvroSchema(Configuration conf, LogicalType rowType) {
     if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isEmpty()
         && conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isEmpty()) {
-      String inferredSchema = HoodieSchemaConverter.convertToSchema(rowType, HoodieSchemaUtils.getRecordQualifiedName(conf.get(FlinkOptions.TABLE_NAME))).toString();
+      String inferredSchema = HoodieSchemaConverter.convertToSchema(
+          rowType,
+          HoodieSchemaUtils.getRecordQualifiedName(conf.get(FlinkOptions.TABLE_NAME)),
+          conf.get(FlinkOptions.VECTOR_COLUMNS)).toString();
       conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, inferredSchema);
     }
   }

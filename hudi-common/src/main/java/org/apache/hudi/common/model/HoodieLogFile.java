@@ -19,7 +19,8 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.fs.FileNameParser;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -30,10 +31,10 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.Comparator;
-import java.util.regex.Matcher;
-
-import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Abstracts a single log file. Contains methods to extract metadata like
@@ -49,9 +50,19 @@ public class HoodieLogFile implements Serializable {
   public static final String DELTA_EXTENSION = ".log";
   public static final String LOG_FILE_PREFIX = ".";
   public static final Integer LOGFILE_BASE_VERSION = 1;
+  private static final Map<String, Integer> EXTENSION_PRECEDENCE;
 
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR_REVERSED = new LogFileComparator().reversed();
+
+  static {
+    Map<String, Integer> extensionPrecedence = new HashMap<>();
+    extensionPrecedence.put(LogExtensions.DATA_LOG_EXTENSION, 0);
+    extensionPrecedence.put(LogExtensions.DELETE_LOG_EXTENSION, 1); // the deletes come after logs to ensure commit time sequence.
+    extensionPrecedence.put(LogExtensions.CDC_LOG_EXTENSION, 2);
+    extensionPrecedence.put(LogExtensions.ARCHIVE_LOG_EXTENSION, 3);
+    EXTENSION_PRECEDENCE = Collections.unmodifiableMap(extensionPrecedence);
+  }
 
   @Getter
   @Setter
@@ -66,6 +77,8 @@ public class HoodieLogFile implements Serializable {
   private String logWriteToken;
   private String fileExtension;
   private String suffix;
+  private Boolean nativeLogFile;
+  private Boolean cdcLogFile;
   @Getter
   @Setter
   @ToString.Include
@@ -81,6 +94,8 @@ public class HoodieLogFile implements Serializable {
     this.logWriteToken = logFile.getLogWriteToken();
     this.fileExtension = logFile.getFileExtension();
     this.suffix = logFile.getSuffix();
+    this.nativeLogFile = logFile.isNativeLogFile();
+    this.cdcLogFile = logFile.isCDC();
     this.fileSize = logFile.getFileSize();
   }
 
@@ -109,16 +124,19 @@ public class HoodieLogFile implements Serializable {
   }
 
   private void parseFieldsFromPath() {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(getPath().getName());
-    if (!matcher.matches()) {
+    Option<FileNameParser.LogFileName> parsedLogFileName = FileNameParser.parseLogFile(getPath().getName());
+    if (!parsedLogFileName.isPresent()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
-    this.fileId = matcher.group(1);
-    this.deltaCommitTime = matcher.group(2);
-    this.fileExtension = matcher.group(3);
-    this.logVersion = Integer.parseInt(matcher.group(4));
-    this.logWriteToken = matcher.group(6);
-    this.suffix = matcher.group(10) == null ? "" : matcher.group(10);
+    FileNameParser.LogFileName logFileName = parsedLogFileName.get();
+    this.fileId = logFileName.getFileId();
+    this.deltaCommitTime = logFileName.getDeltaCommitTime();
+    this.fileExtension = logFileName.getFileExtension();
+    this.logVersion = logFileName.getLogVersion();
+    this.logWriteToken = logFileName.getWriteToken();
+    this.suffix = logFileName.getSuffix();
+    this.nativeLogFile = logFileName.isNativeLogFile();
+    this.cdcLogFile = logFileName.isCDCLogFile();
   }
 
   public String getFileId() {
@@ -157,7 +175,10 @@ public class HoodieLogFile implements Serializable {
   }
 
   public boolean isCDC() {
-    return getSuffix().equals(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
+    if (cdcLogFile == null) {
+      parseFieldsFromPath();
+    }
+    return cdcLogFile;
   }
 
   public String getSuffix() {
@@ -165,6 +186,13 @@ public class HoodieLogFile implements Serializable {
       parseFieldsFromPath();
     }
     return suffix;
+  }
+
+  public boolean isNativeLogFile() {
+    if (nativeLogFile == null) {
+      parseFieldsFromPath();
+    }
+    return nativeLogFile;
   }
 
   public StoragePath getPath() {
@@ -182,9 +210,14 @@ public class HoodieLogFile implements Serializable {
     String fileId = getFileId();
     String deltaCommitTime = getDeltaCommitTime();
     StoragePath path = getPath();
+    if (isNativeLogFile()) {
+      return new HoodieLogFile(new StoragePath(path.getParent(),
+          FSUtils.makeNativeLogFileName(fileId, logWriteToken, deltaCommitTime, logVersion + 1,
+              fileExtension, HoodieFileFormat.fromFileExtension("." + getSuffix()))));
+    }
     String extension = "." + fileExtension;
     return new HoodieLogFile(new StoragePath(path.getParent(),
-        FSUtils.makeLogFileName(fileId, extension, deltaCommitTime, logVersion + 1, logWriteToken)));
+        FSUtils.makeInlineLogFileName(fileId, extension, deltaCommitTime, logVersion + 1, logWriteToken)));
   }
 
   public static Comparator<HoodieLogFile> getLogFileComparator() {
@@ -223,8 +256,13 @@ public class HoodieLogFile implements Serializable {
           int compareWriteToken = getWriteTokenComparator().compare(o1.getLogWriteToken(), o2.getLogWriteToken());
           if (compareWriteToken == 0) {
 
-            // Compare by suffix when write token is same
-            return o1.getSuffix().compareTo(o2.getSuffix());
+            int p1 = EXTENSION_PRECEDENCE.getOrDefault(o1.getFileExtension(), Integer.MAX_VALUE);
+            int p2 = EXTENSION_PRECEDENCE.getOrDefault(o2.getFileExtension(), Integer.MAX_VALUE);
+            if (p1 == p2) {
+              // Compare by suffix when file extension is same
+              return o1.getSuffix().compareTo(o2.getSuffix());
+            }
+            return Integer.compare(p1, p2);
           }
 
           // Compare by write token when delta-commit and log-version is same

@@ -21,13 +21,6 @@ package org.apache.hudi.client.transaction.lock;
 import org.apache.hudi.client.transaction.lock.audit.AuditOperationState;
 import org.apache.hudi.client.transaction.lock.audit.AuditService;
 import org.apache.hudi.client.transaction.lock.audit.AuditServiceFactory;
-import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
-import org.apache.hudi.client.transaction.lock.models.HeartbeatManager;
-import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.LockProviderHeartbeatManager;
-import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
-import org.apache.hudi.client.transaction.lock.models.StorageLockData;
-import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
@@ -637,16 +630,22 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockThrottledMetric);
           // Let heartbeat retry later.
           return true;
-        case SUCCESS:
-          // Only positive outcome
-          this.setLock(currentLock.getRight().get());
-          hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
-              (int) (oldExpirationMs - getCurrentEpochMs())));
-          logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
-              ownerId, oldExpirationMs - getCurrentEpochMs(), lockFilePath);
+        case SUCCESS: {
+          // Only positive outcome. Source the deadline metric and log from the renewed lock file
+          // returned by the storage client (same as the acquisition path), not the locally
+          // computed expiration, so both callers agree on where the deadline comes from.
+          StorageLockFile renewedLock = currentLock.getRight().get();
+          this.setLock(renewedLock);
+          // Read the clock once so the metric and the log line below report the same deadline.
+          long renewalCompletionMs = getCurrentEpochMs();
+          long remainingLeaseMs = renewedLock.getValidUntilMs() - renewalCompletionMs;
+          hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric((int) remainingLeaseMs));
+          logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before old expiration. The lock will expire in {} ms for lock {}.",
+              ownerId, oldExpirationMs - renewalCompletionMs, remainingLeaseMs, lockFilePath);
           recordAuditOperation(AuditOperationState.RENEW, acquisitionTimestamp);
           // Let heartbeat continue to renew lock lease again later.
           return true;
+        }
         default:
           throw new HoodieLockException("Unexpected lock update result: " + currentLock.getLeft());
       }

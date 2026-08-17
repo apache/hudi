@@ -18,11 +18,19 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils;
+import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -30,20 +38,14 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.execution.ExecutorFactory;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.ExecutorFactory;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -82,7 +84,16 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieFileReader bootstrapFileReader = null;
 
     HoodieSchema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
-    HoodieSchema readerSchema = baseFileReader.getSchema();
+    // A shredded variant column loses its logical type through the parquet footer, so the base
+    // file's schema surfaces it as a plain {metadata, value, typed_value} record. Align such
+    // columns to the writer's variant form once, here, because every downstream use of the reader
+    // schema needs the aligned form: the strict-projection check below (RECORD vs VARIANT can
+    // never pass), and - whichever branch it lands on - the schema the reader is handed, since
+    // HoodieVariantReconstruction anchors on the requested column being a variant. Read at the raw
+    // footer schema instead and reconstruction stays disengaged, so the rewrite below copies
+    // {metadata, value} by name and silently drops typed_value (#19567). Returns the file schema
+    // untouched when no column has the shredded shape, so non-variant tables are unaffected.
+    HoodieSchema readerSchema = VariantSchemaUtils.alignShreddedVariants(baseFileReader.getSchema(), writerSchema);
 
     // In case Advanced Schema Evolution is enabled we might need to rewrite currently
     // persisted records to adhere to an evolved schema
@@ -170,8 +181,10 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     // TODO support bootstrap
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
       // check implicitly add columns, and position reorder(spark sql may change cols order)
-      InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema.toAvroSchema(),
-          querySchemaOpt.get(), writeConfig.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
+      InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema,
+          querySchemaOpt.get(), writeConfig.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS),
+          SchemaChangeUtils.parseTimestampLogicalTypeOverrides(
+              writeConfig.getStringOrDefault(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES)));
       long commitInstantTime = Long.parseLong(baseFile.getCommitTime());
       InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, metaClient);
       if (fileSchema.isEmptySchema() && writeConfig.getBoolean(HoodieCommonConfig.RECONCILE_SCHEMA)) {

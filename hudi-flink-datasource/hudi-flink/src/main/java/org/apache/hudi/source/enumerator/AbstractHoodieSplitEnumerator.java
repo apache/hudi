@@ -78,7 +78,7 @@ abstract class AbstractHoodieSplitEnumerator
       this.enumeratorMetrics = new FlinkStreamReadMetrics(this.enumeratorContext.metricGroup(), tableName);
       this.enumeratorMetrics.registerMetrics();
     } else {
-      // The metrics group returned from enumeratorContext is null in Flink 1.17.
+      // Some test or runtime contexts can omit the metrics group.
       enumeratorMetrics = null;
     }
   }
