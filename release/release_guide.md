@@ -302,7 +302,7 @@ Source Release step) -- otherwise the voted tarball ships a `-SNAPSHOT` Trino pi
 3. If the pin is behind the tag, advance master's pin to `TAG_SHA` first by dispatching the
    `Hudi Trino SPI Compatibility` workflow with `trino_ref=NNN` (it then verifies and pins exactly that tag rather
    than master HEAD) and merging the pin PR a committer opens from the pushed `bot/trino-pin` branch. If the pin is ahead of the tag, enumerate the adaptations that would be lost with
-   `git log NNN..<pin> -- core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs`
+   `git log NNN..<pin> -- core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs lib/trino-memory-context`
    and revert them forward on the release branch only, never on master.
 4. On the release branch set `trino.version=NNN`, `trino.sha=TAG_SHA` and `trino.e2e.version=NNN` in the root
    pom, the `<parent>` version in `docker/trino/shim/pom.xml`, and the `ARG TRINO_VERSION` default in
