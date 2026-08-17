@@ -80,7 +80,11 @@ class TestHoodieAvroWriteSupportShredding {
    * {@code Schema.Field} still bound to the source record throws, so any table with a shredded
    * variant AND at least one other column failed here. #18938 fixed exactly that defect in the
    * sibling HoodieVariantReconstruction and left this twin behind. Nested variants must be
-   * stripped too, since the row writer shreds at any depth.
+   * stripped too, but this AVRO path's own hook is not what puts one there -
+   * {@code applyForcedShreddingSchema} walks top-level fields only. The ROW write path shreds at
+   * any depth its forced-shredding DDL asks (HoodieRowParquetWriteSupport.processNestedDataType),
+   * so a clustering/compaction schema read back from such a file can carry typed_value below the
+   * top level, which is why the nested leg is pinned here at unit level.
    */
   @Test
   void disablingShreddingStripsTypedValueAtEveryDepth() {

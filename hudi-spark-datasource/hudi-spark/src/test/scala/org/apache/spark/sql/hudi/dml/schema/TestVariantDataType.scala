@@ -504,19 +504,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
 
           // Pin the layout the CDC reads: without this, one leg silently degrades into a
           // second copy of the other and its half of the rewrite branch goes uncovered.
-          val baseFiles = listDataParquetFiles(tablePath)
-          assert(baseFiles.nonEmpty, s"[$leg] should have a base parquet file after the insert")
-          baseFiles.foreach { filePath =>
-            val parquetSchema = readParquetSchema(filePath)
-            val variantGroup = getFieldAsGroup(parquetSchema, "v")
-            if (shredded) {
-              assert(variantGroup.containsField("typed_value"),
-                s"[$leg] base file should carry typed_value. Schema:\n$variantGroup")
-            } else {
-              assert(!variantGroup.containsField("typed_value"),
-                s"[$leg] base file must not carry typed_value. Schema:\n$variantGroup")
-            }
-          }
+          assertVariantLayout(tablePath, shredded, leg)
 
           spark.sql(s"""update $tableName set v = parse_json('{"key":"value2"}'), ts = 1001 where id = 1""")
 

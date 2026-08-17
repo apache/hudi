@@ -732,9 +732,12 @@ jobs:
 #          - scalaProfile: "scala-2.13"
 #            sparkProfile: "spark4.1"
 #            sparkModules: "hudi-spark-datasource/hudi-spark4.1.x"
+          # hudi-spark4-common runs here (and only here): the other spark lanes either pin a
+          # fixed test-class list or run scala/functional profiles, so without this entry the
+          # module's java unit tests are compiled but never executed in CI.
           - scalaProfile: "scala-2.13"
             sparkProfile: "spark4.2"
-            sparkModules: "hudi-spark-datasource/hudi-spark4.2.x"
+            sparkModules: "hudi-spark-datasource/hudi-spark4-common,hudi-spark-datasource/hudi-spark4.2.x"
 
     steps:
       - if: needs.changes.outputs.relevant == 'true'

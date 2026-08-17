@@ -223,6 +223,7 @@ class TestHoodieVariantReconstruction {
   void ignoresFourFieldStructThatMerelyCarriesTypedValue(@TempDir Path tmp) {
     // The other side of relaxing the field count: a user struct that happens to hold metadata,
     // value and typed_value plus anything else is not a variant group and must stay untouched.
+    // The field-count guard rejects this one before any field is inspected.
     HoodieSchema fourField = HoodieSchema.createRecord("v", "org.apache.hudi.test", null, Arrays.asList(
         HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
         HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
@@ -230,6 +231,20 @@ class TestHoodieVariantReconstruction {
         HoodieSchemaField.of("extra", HoodieSchema.createNullable(HoodieSchemaType.STRING))));
     assertNull(HoodieVariantReconstruction.create(
         recordWithIdAndVariant(fourField), recordWithIdAndVariant(HoodieSchema.createVariant()),
+        storageWithReadingShredded(tmp, false)));
+  }
+
+  @Test
+  void ignoresThreeFieldStructWhoseThirdFieldIsNotValue(@TempDir Path tmp) {
+    // Unlike the four-field case above, this one survives the field-count guard and reaches the
+    // no-`value` arm of the shape check: three fields carrying typed_value but no `value` must be
+    // read as a user struct, because a shredded group's only optional third field is `value`.
+    HoodieSchema threeField = HoodieSchema.createRecord("v", "org.apache.hudi.test", null, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("extra", HoodieSchema.createNullable(HoodieSchemaType.STRING))));
+    assertNull(HoodieVariantReconstruction.create(
+        recordWithIdAndVariant(threeField), recordWithIdAndVariant(HoodieSchema.createVariant()),
         storageWithReadingShredded(tmp, false)));
   }
 
