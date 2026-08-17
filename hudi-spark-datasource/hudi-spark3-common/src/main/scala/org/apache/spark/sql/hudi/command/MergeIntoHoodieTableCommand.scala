@@ -115,6 +115,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   private var sparkSession: SparkSession = _
 
+  /** Resolved write config for this statement; populated at the top of [[run]]. */
+  private var mergeIntoProps: Map[String, String] = Map.empty
+
   /**
    * The target table schema without hoodie meta fields.
    */
@@ -266,11 +269,130 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       "ordering fields",
       updatingActions.flatMap(_.assignments))
 
+  /**
+   * Mapping of the target table's partition columns onto the [[sourceTable]] expression that
+   * supplies each one, resolved the same way as the record-key and ordering fields.
+   *
+   * This is required, not optional. For a target table bearing a record key the incoming batch is
+   * written from the [[sourceTable]] alone (see [[getProcessedInputDf]]) and Hudi's index tagging
+   * is what identifies updates - tagging keys off `(recordKey, partitionPath)`. When the partition
+   * column reaches the writer unset, the key generator resolves it to the default partition, so
+   * tagging looks in the wrong partition, finds nothing, and treats every incoming record as
+   * not-matched. That is silently destructive rather than merely wrong:
+   *
+   *  - with only `WHEN MATCHED` clauses the record falls through to [[HoodieRecord.SENTINEL]] in
+   *    `ExpressionPayload#processNotMatchedRecord` and is dropped - the statement reports success
+   *    and writes an *empty commit*;
+   *  - with a `WHEN NOT MATCHED ... INSERT` clause the record is instead inserted into the default
+   *    partition, **duplicating the primary key across two partitions** while the intended update
+   *    is lost.
+   *
+   * Resolving the column here means the merge places records in the right partition whenever the
+   * value is derivable. Two sources are consulted, in order:
+   *
+   *  1. the `ON` condition, via [[recordKeyAttributeToConditionExpression]], which already
+   *     enumerates partition fields but leaves them optional (see the "allow partition path to be
+   *     part of the merge condition but not required" note there) - reused as-is so a column
+   *     matched under a different source name (`ON t.dt = s.event_dt`) keeps working, and so the
+   *     same target attribute is never contributed twice;
+   *  2. the source-table output, via [[resolveFieldAssociationsBetweenSourceAndTarget]];
+   *  3. otherwise the statement is rejected, rather than letting the write silently corrupt the
+   *     table.
+   *
+   * NOTE: the MERGE assignments are deliberately NOT a source here. Key generation runs over the
+   *       incoming source row *before* the payload evaluates any assignment, so an assignment
+   *       states the record's *new* partition, not the one its existing version occupies. Deriving
+   *       the partition from `UPDATE SET t.dt = s.new_dt` would tag the record in `new_dt`, miss
+   *       the existing version, and drop it as [[HoodieRecord.SENTINEL]] - reinstating the very
+   *       defect this guards against. It only appears to work when the assigned value happens to
+   *       equal the current partition. Partition-changing updates require a global index with
+   *       `update.partition.path=true`.
+   *
+   * This does not apply, and resolves to nothing, when:
+   *
+   *  - the target bears no record key. A primary-keyless target takes the other branch of
+   *    [[getProcessedInputDf]], where the source is left-outer-joined with the target and the meta
+   *    columns are projected, and [[MergeIntoKeyGenerator.getPartitionPath]] reads
+   *    `_hoodie_partition_path` off that meta - so a matched row is already placed correctly
+   *    without the source carrying the column at all;
+   *  - the statement cannot insert AND a global index will re-key the record to the partition its
+   *    existing version occupies, which makes the incoming partition value irrelevant - see
+   *    [[isGlobalIndexRekeyingToExistingPartition]]. The re-keying covers matched records only:
+   *    `HoodieIndexUtils#tagGlobalLocationBackToRecords` returns a record the global lookup did
+   *    NOT find untouched, so it keeps the partition it arrived with. A `WHEN NOT MATCHED ...
+   *    INSERT` row therefore still lands in the default partition, which is exactly the corruption
+   *    this guards against - so a statement carrying an insert clause must supply the column even
+   *    on a re-keying global index. Whether a given row matches is data-dependent and unknowable
+   *    at plan time, so the presence of the clause is what decides.
+   */
+  private lazy val partitionFieldsAssociatedExpressions: Seq[(Attribute, Expression)] =
+    if (!hasPrimaryKey()
+      || hoodieCatalogTable.partitionFields.isEmpty
+      || (insertingActions.isEmpty && isGlobalIndexRekeyingToExistingPartition(mergeIntoProps))) {
+      Seq.empty
+    } else {
+      val resolver = sparkSession.sessionState.conf.resolver
+      // Associations the ON-condition path has already produced; anything covered there needs no
+      // further resolution, and re-adding it would put two aliases for one column in the projection.
+      val resolvedFromCondition = recordKeyAttributeToConditionExpression
+      hoodieCatalogTable.partitionFields.toSeq.flatMap { partitionField =>
+        if (resolvedFromCondition.exists { case (attr, _) => resolver(attr.name, partitionField) }) {
+          Seq.empty
+        } else {
+          try {
+            resolveFieldAssociationsBetweenSourceAndTarget(
+              resolver,
+              mergeInto.targetTable,
+              mergeInto.sourceTable,
+              Seq(partitionField),
+              "partition fields",
+              Seq.empty)
+          } catch {
+            case _: MergeIntoFieldResolutionException =>
+              throw new MergeIntoFieldResolutionException(
+                s"Failed to resolve partition fields `$partitionField` w/in the source-table output. " +
+                  s"Project `$partitionField` in the source query, or match on it in the ON condition.")
+          }
+        }
+      }
+    }
+
+  /**
+   * True when a global index will re-key an incoming record onto the partition its existing
+   * version occupies, which makes the partition value that record carries irrelevant.
+   *
+   * NOTE: this describes the index only. It holds for records the global lookup FINDS; a record
+   *       with no existing location is returned untouched and keeps its incoming partition path,
+   *       so callers must additionally establish that the statement cannot insert before treating
+   *       the partition column as unnecessary - see [[partitionFieldsAssociatedExpressions]].
+   *
+   * With `hoodie.<index>.update.partition.path` disabled - the default for `RECORD_INDEX` -
+   * `HoodieIndexUtils#tagGlobalLocationBackToRecords` takes the
+   * `createNewTaggedHoodieRecord(incomingRecord, currentLoc)` branch and, in its own words, "the
+   * incoming record will be tagged to the existing record's partition regardless of being equal or
+   * not". A global lookup is by record key across partitions, so it finds the record even when the
+   * incoming partition path is wrong. Such a merge is correct today with the partition column
+   * absent from the source, and must not be rejected.
+   *
+   * NOTE: [[isGlobalIndexEnabled]] returns the value of the index's `update.partition.path` flag,
+   *       so it is true precisely when this re-keying does NOT happen - hence the negation. The
+   *       index type must be checked separately, since that helper returns false both for a
+   *       non-global index and for a global one with partition updates disabled.
+   */
+  private def isGlobalIndexRekeyingToExistingPartition(props: Map[String, String]): Boolean =
+    props.get(HoodieIndexConfig.INDEX_TYPE.key).exists { indexType =>
+      isGlobalIndexType(indexType) && !isGlobalIndexEnabled(indexType, props)
+    }
+
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
     // TODO move to analysis phase
     // Create the write parameters
     val props = buildMergeIntoConfig(hoodieCatalogTable)
+    // Captured so the source-projection path can consult the resolved write config (specifically
+    // the index type) without threading it through [[getProcessedInputDf]] and its callers.
+    // Set before validate() so it is populated for every downstream lazy val.
+    this.mergeIntoProps = props
     validate(props)
 
     val processedInputDf: DataFrame = getProcessedInputDf
@@ -361,7 +483,20 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val inputPlanAttributes = inputPlan.output
 
-    val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ orderingFieldsAssociatedExpressions
+    // NOTE: partition columns are required here for the same reason the record-key columns are:
+    //       the incoming batch is written from the source alone, so a partition column the source
+    //       does not carry would be resolved to the default partition by the key generator, sending
+    //       index tagging to the wrong partition. See [[partitionFieldsAssociatedExpressions]].
+    //       Deduped by target attribute: a column can legitimately be reached by more than one of
+    //       these paths (e.g. an ordering column that is also matched on in the ON condition), and
+    //       each surviving entry contributes its own Alias below - two entries for one column would
+    //       project it twice.
+    val requiredAttributesMap =
+      (recordKeyAttributeToConditionExpression ++ orderingFieldsAssociatedExpressions ++ partitionFieldsAssociatedExpressions)
+        .foldLeft(Seq.empty[(Attribute, Expression)]) { (acc, association) =>
+          if (acc.exists { case (seen, _) => resolver(seen.name, association._1.name) }) acc
+          else acc :+ association
+        }
 
     val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
       case (keyAttr, _) => inputPlanAttributes.exists(attr => resolver(keyAttr.name, attr.name))
@@ -899,7 +1034,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     */
   private def checkSchemaMergeIntoCompatibility(assignments: Seq[Assignment], props: Map[String, String]): Unit = {
     if (assignments.nonEmpty) {
-      // Assert data type matching for partition key
+      // Assert data type matching for partition key.
+      //
+      // NOTE: an unresolvable partition column is deliberately not an error *here* - this method
+      //       only type-checks, and it is invoked per action with that action's assignments, so a
+      //       column supplied by the other clause would look unresolvable. Whether the column can
+      //       be resolved at all is enforced separately, and later, by
+      //       [[partitionFieldsAssociatedExpressions]] when the source projection is built - which
+      //       is also why this swallow no longer hides the mis-partitioning bug it once did. For a
+      //       primary-keyless target there is nothing to enforce: the partition path is read from
+      //       the target's `_hoodie_partition_path` meta column by [[MergeIntoKeyGenerator]].
       hoodieCatalogTable.partitionFields.foreach {
         partitionField => {
           try {
@@ -1123,12 +1267,33 @@ object MergeIntoHoodieTableCommand {
     }
   }
 
+  // Index types whose lookup spans partitions, i.e. by record key alone. Must agree with
+  // SparkHoodieIndexFactory#isGlobalIndex - GLOBAL_RECORD_LEVEL_INDEX is the non-deprecated
+  // spelling of RECORD_INDEX and resolves to the same SparkMetadataTableGlobalRecordLevelIndex,
+  // so omitting it would reject merges that the re-keying makes correct.
+  private val globalIndexTypes: Set[String] = Set(
+    HoodieIndex.IndexType.GLOBAL_SIMPLE.name,
+    HoodieIndex.IndexType.GLOBAL_BLOOM.name,
+    HoodieIndex.IndexType.RECORD_INDEX.name,
+    HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name)
+
+  def isGlobalIndexType(indexType: String): Boolean = globalIndexTypes.contains(indexType)
+
   // Check if goal index is enabled for specific indexes.
+  //
+  // NOTE: every entry of [[globalIndexTypes]] must appear here too. A type present in that set but
+  //       absent from this mapping falls through to `false`, which inverts
+  //       [[isGlobalIndexRekeyingToExistingPartition]] - the table would be exempted from the
+  //       partition-column requirement even with `update.partition.path` enabled, where the
+  //       incoming partition value does decide placement.
   def isGlobalIndexEnabled(indexType: String, parameters: Map[String, String]): Boolean = {
     Seq(
       HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
       HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE
+      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+      // Both record-index spellings are served by SparkMetadataTableGlobalRecordLevelIndex, which
+      // reads `hoodie.record.index.update.partition.path` for either.
+      HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE
     ).collectFirst {
       case (hoodieIndex, config) if indexType == hoodieIndex.name =>
         parameters.getOrElse(config.key, config.defaultValue().toString).toBoolean
