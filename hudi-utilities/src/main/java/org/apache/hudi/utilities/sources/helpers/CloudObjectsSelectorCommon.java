@@ -82,6 +82,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_INCREMENTAL_MERGE_SCHEMA;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.EXISTS_CHECK_PARALLELISM;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.EXISTS_CHECK_PARTITIONS;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.PATH_BASED_PARTITION_FIELDS;
@@ -126,7 +127,7 @@ public class CloudObjectsSelectorCommon {
    * @param storageUrlSchemePrefix    Eg: s3:// or gs://. The storage-provider-specific prefix to use within the URL.
    * @param storageConf               storage configuration.
    * @param checkIfExists             check if each file exists, before adding it to the returned list
-   * @param existsCheckParallelism    number of threads per task for the existence checks; values <= 1 check sequentially
+   * @param existsCheckParallelism    number of threads per task for the existence checks (getObjectMetadata validates it is >= 1); 1 checks sequentially
    */
   public static MapPartitionsFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(
       String storageUrlSchemePrefix, StorageConfiguration<Configuration> storageConf,
@@ -141,7 +142,10 @@ public class CloudObjectsSelectorCommon {
 
       List<Row> rowList = new ArrayList<>();
       rows.forEachRemaining(rowList::add);
-      ExecutorService executor = Executors.newFixedThreadPool(existsCheckParallelism,
+      if (rowList.isEmpty()) {
+        return Collections.emptyIterator();
+      }
+      ExecutorService executor = Executors.newFixedThreadPool(Math.min(existsCheckParallelism, rowList.size()),
           new CustomizedThreadFactory("cloud-exists-check", true));
       try {
         List<CompletableFuture<Option<CloudObjectMetadata>>> futures = rowList.stream()
@@ -169,16 +173,19 @@ public class CloudObjectsSelectorCommon {
   }
 
   /**
-   * {@link FutureUtils#allOf} wraps the first failure in one or more {@link CompletionException}s; surface the same
-   * exception the sequential path throws so callers see one failure shape regardless of the parallelism setting.
+   * {@link FutureUtils#allOf} wraps the failure of a check in one or more {@link CompletionException}s; rethrow the
+   * original exception so callers see the same failure the sequential path throws, whatever the parallelism.
    */
-  private static HoodieException unwrapExistsCheckFailure(CompletionException e) {
+  private static RuntimeException unwrapExistsCheckFailure(CompletionException e) {
     Throwable cause = e;
     while (cause instanceof CompletionException && cause.getCause() != null) {
       cause = cause.getCause();
     }
-    return cause instanceof HoodieException
-        ? (HoodieException) cause
+    if (cause instanceof Error) {
+      throw (Error) cause;
+    }
+    return cause instanceof RuntimeException
+        ? (RuntimeException) cause
         : new HoodieException("Failed during parallel cloud object existence check", cause);
   }
 
@@ -219,8 +226,6 @@ public class CloudObjectsSelectorCommon {
   private static Option<String> getUrlForFile(Row row, String storageUrlSchemePrefix,
                                               StorageConfiguration<Configuration> storageConf,
                                               boolean checkIfExists) {
-    final Configuration configuration = storageConf.unwrapCopy();
-
     String bucket = row.getString(0);
     String filePath = storageUrlSchemePrefix + bucket + StoragePath.SEPARATOR + row.getString(1);
 
@@ -229,7 +234,7 @@ public class CloudObjectsSelectorCommon {
       if (!checkIfExists) {
         return Option.of(filePathUrl);
       }
-      boolean exists = checkIfFileExists(storageUrlSchemePrefix, bucket, filePathUrl, configuration);
+      boolean exists = checkIfFileExists(storageUrlSchemePrefix, bucket, filePathUrl, storageConf.unwrapCopy());
       return exists ? Option.of(filePathUrl) : Option.empty();
     } catch (Exception exception) {
       log.error("Failed to generate path to cloud file {}", filePath, exception);
@@ -346,7 +351,7 @@ public class CloudObjectsSelectorCommon {
       // The upstream Window.orderBy() in IncrSourceHelper collapses the dataset to one partition and AQE keeps the
       // distinct() output there, which would serialize every existence check on one task. Spread the checks over
       // the cluster: repartition(n) is not coalesced by AQE, and defaultParallelism tracks the registered cores.
-      int numPartitions = jsc.defaultParallelism();
+      int numPartitions = existsCheckNumPartitions(props, jsc);
       log.info("Checking cloud object existence over {} partitions with {} threads per task", numPartitions, existsCheckParallelism);
       distinctObjects = distinctObjects.repartition(numPartitions);
     }
@@ -355,6 +360,15 @@ public class CloudObjectsSelectorCommon {
             getCloudObjectMetadataPerPartition(prefix, storageConf, checkIfExists, existsCheckParallelism),
             Encoders.kryo(CloudObjectMetadata.class))
         .collectAsList();
+  }
+
+  /**
+   * Number of partitions the existence checks are spread over: {@link CloudSourceConfig#EXISTS_CHECK_PARTITIONS}
+   * when set to a positive value, otherwise the Spark default parallelism. Never below 1 (repartition rejects 0).
+   */
+  static int existsCheckNumPartitions(TypedProperties props, JavaSparkContext jsc) {
+    int configured = getIntWithAltKeys(props, EXISTS_CHECK_PARTITIONS);
+    return Math.max(1, configured > 0 ? configured : jsc.defaultParallelism());
   }
 
   public Option<Dataset<Row>> loadAsDataset(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata,

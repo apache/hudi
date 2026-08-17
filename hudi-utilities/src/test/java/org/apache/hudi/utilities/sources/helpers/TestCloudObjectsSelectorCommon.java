@@ -24,12 +24,16 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
@@ -44,6 +48,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -336,8 +341,9 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
   }
 
   @Test
-  void s3ObjectMetadataDedupesAndFiltersMissingFilesWithExistsCheck() throws IOException {
-    Path existingFile1 = Files.write(tempDir.resolve("file1.json"), Collections.singletonList("{}"));
+  void s3ObjectMetadataDedupesAndFiltersMissingFilesWithExistsCheck(@TempDir Path tempDir) throws IOException {
+    // a space in the name: the event key is percent-encoded and getUrlForFile must decode it
+    Path existingFile1 = Files.write(tempDir.resolve("we ird.json"), Collections.singletonList("{}"));
     Path existingFile2 = Files.write(tempDir.resolve("file2.json"), Collections.singletonList("{}"));
     Path missingFile = tempDir.resolve("missing.json");
     // bucket "" + key = absolute path without its leading separator, so prefix + bucket + "/" + key is a file:// URL
@@ -355,21 +361,26 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
         CloudObjectsSelectorCommon.Type.S3, jsc, cloudObjectMetadataDF, true, props));
 
     props.put(CloudSourceConfig.EXISTS_CHECK_PARALLELISM.key(), "4");
+    Assertions.assertEquals(jsc.defaultParallelism(), CloudObjectsSelectorCommon.existsCheckNumPartitions(props, jsc));
+    props.put(CloudSourceConfig.EXISTS_CHECK_PARTITIONS.key(), "2");
+    Assertions.assertEquals(2, CloudObjectsSelectorCommon.existsCheckNumPartitions(props, jsc));
     List<CloudObjectMetadata> result = CloudObjectsSelectorCommon.getObjectMetadata(
         CloudObjectsSelectorCommon.Type.S3, jsc, cloudObjectMetadataDF, true, props);
 
+    Assertions.assertEquals(2, result.size(), "distinct() should have collapsed the duplicate event");
     Map<String, Long> pathToSize = result.stream()
         .collect(Collectors.toMap(CloudObjectMetadata::getPath, CloudObjectMetadata::getSize));
     Map<String, Long> expected = new HashMap<>();
-    expected.put(existingFile1.toUri().toString(), 100L);
-    expected.put(existingFile2.toUri().toString(), 200L);
+    expected.put("file://" + existingFile1.toAbsolutePath(), 100L);
+    expected.put("file://" + existingFile2.toAbsolutePath(), 200L);
     Assertions.assertEquals(expected, pathToSize);
   }
 
   @ParameterizedTest
   @ValueSource(ints = {1, 8})
-  void existsCheckDropsMissingFiles(int parallelism) throws Exception {
-    Path existingFile1 = Files.write(tempDir.resolve("file1.json"), Collections.singletonList("{}"));
+  void existsCheckDropsMissingFiles(int parallelism, @TempDir Path tempDir) throws Exception {
+    // a space in the name: the event key is percent-encoded and getUrlForFile must decode it
+    Path existingFile1 = Files.write(tempDir.resolve("we ird.json"), Collections.singletonList("{}"));
     Path existingFile2 = Files.write(tempDir.resolve("file2.json"), Collections.singletonList("{}"));
     Path missingFile = tempDir.resolve("missing.json");
     List<Row> rows = Arrays.asList(
@@ -377,32 +388,54 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
         cloudEventRow(missingFile, 300L),
         cloudEventRow(existingFile2, 200L));
 
+    Configuration conf = storageConf.unwrapCopy();
+    conf.setClass("fs.file.impl", ThreadRecordingLocalFileSystem.class, FileSystem.class);
+    conf.setBoolean("fs.file.impl.disable.cache", true);
+    ThreadRecordingLocalFileSystem.EXISTS_CALL_THREADS.clear();
+
     List<CloudObjectMetadata> result = new ArrayList<>();
-    CloudObjectsSelectorCommon.getCloudObjectMetadataPerPartition("file://", storageConf, true, parallelism)
+    CloudObjectsSelectorCommon.getCloudObjectMetadataPerPartition(
+            "file://", new HadoopStorageConfiguration(conf), true, parallelism)
         .call(rows.iterator()).forEachRemaining(result::add);
 
     // both branches must produce the same objects, in input order
     Assertions.assertEquals(
-        Arrays.asList(existingFile1.toUri().toString(), existingFile2.toUri().toString()),
+        Arrays.asList("file://" + existingFile1.toAbsolutePath(), "file://" + existingFile2.toAbsolutePath()),
         result.stream().map(CloudObjectMetadata::getPath).collect(Collectors.toList()));
     Assertions.assertEquals(Arrays.asList(100L, 200L),
         result.stream().map(CloudObjectMetadata::getSize).collect(Collectors.toList()));
+
+    // one exists() per row; on pool threads for the parallel branch, on the caller thread for the sequential one
+    List<String> threads = new ArrayList<>(ThreadRecordingLocalFileSystem.EXISTS_CALL_THREADS);
+    Assertions.assertEquals(3, threads.size(), threads.toString());
+    if (parallelism > 1) {
+      Assertions.assertTrue(threads.stream().allMatch(t -> t.startsWith("cloud-exists-check-")), threads.toString());
+    } else {
+      Assertions.assertEquals(Collections.singleton(Thread.currentThread().getName()), new HashSet<>(threads));
+    }
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {1, 8})
-  void existsCheckSurfacesRowFailure(int parallelism) throws Exception {
-    // a key with a malformed percent escape fails URL decoding inside processRow; both branches must throw the
-    // same exception instead of dropping the file
-    List<Row> rows = Arrays.asList(
-        cloudEventRow(Files.write(tempDir.resolve("file1.json"), Collections.singletonList("{}")), 100L),
-        RowFactory.create("", "path/bad%zz.json", 200L));
+  @CsvSource({"1, escape", "8, escape", "1, size", "8, size"})
+  void existsCheckSurfacesRowFailure(int parallelism, String failure, @TempDir Path tempDir) throws Exception {
+    // both branches must throw the same exception instead of dropping the file: a key with a malformed percent
+    // escape fails URL decoding inside getUrlForFile (HoodieException), a non-numeric size string fails
+    // Long.parseLong in processRow (raw NumberFormatException)
+    Path existingFile = Files.write(tempDir.resolve("file1.json"), Collections.singletonList("{}"));
+    Row badRow = failure.equals("escape")
+        ? RowFactory.create("", "path/bad%zz.json", 200L)
+        : RowFactory.create("", localFileKey(existingFile), "not-a-number");
+    List<Row> rows = Arrays.asList(cloudEventRow(existingFile, 100L), badRow);
     MapPartitionsFunction<Row, CloudObjectMetadata> fn =
         CloudObjectsSelectorCommon.getCloudObjectMetadataPerPartition("file://", storageConf, true, parallelism);
 
-    HoodieException e = Assertions.assertThrows(HoodieException.class, () -> fn.call(rows.iterator()));
-    Assertions.assertTrue(e.getMessage().contains("path/bad%zz.json"), e.getMessage());
-    Assertions.assertTrue(e.getCause() instanceof IllegalArgumentException, String.valueOf(e.getCause()));
+    if (failure.equals("escape")) {
+      HoodieException e = Assertions.assertThrows(HoodieException.class, () -> fn.call(rows.iterator()));
+      Assertions.assertTrue(e.getMessage().contains("path/bad%zz.json"), e.getMessage());
+      Assertions.assertInstanceOf(IllegalArgumentException.class, e.getCause());
+    } else {
+      Assertions.assertThrows(NumberFormatException.class, () -> fn.call(rows.iterator()));
+    }
   }
 
   /**
@@ -447,13 +480,28 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     return RowFactory.create("", localFileKey(file), size);
   }
 
-  /** S3 event notification whose bucket is empty and whose key is the absolute path without the leading separator, so
-   * that prefix "file://" + bucket + "/" + key resolves to the local file. */
+  /** S3 event notification whose bucket is empty and whose key is the URL-encoded absolute path without the leading
+   * separator (the shape S3 event notifications carry), so that prefix "file://" + bucket + "/" + key decodes to the
+   * local file. */
   private static String s3EventJson(Path file, long size) {
     return "{\"s3\":{\"bucket\":{\"name\":\"\"},\"object\":{\"key\":\"" + localFileKey(file) + "\",\"size\":" + size + "}}}";
   }
 
   private static String localFileKey(Path file) {
-    return file.toUri().getPath().substring(1);
+    return file.toUri().getRawPath().substring(1);
+  }
+
+  /**
+   * LocalFileSystem that records the thread each exists() call ran on, so the tests can tell the pooled branch
+   * from the sequential one. Registered as fs.file.impl with the FileSystem cache disabled.
+   */
+  public static class ThreadRecordingLocalFileSystem extends LocalFileSystem {
+    static final List<String> EXISTS_CALL_THREADS = Collections.synchronizedList(new ArrayList<>());
+
+    @Override
+    public boolean exists(org.apache.hadoop.fs.Path f) throws IOException {
+      EXISTS_CALL_THREADS.add(Thread.currentThread().getName());
+      return super.exists(f);
+    }
   }
 }
