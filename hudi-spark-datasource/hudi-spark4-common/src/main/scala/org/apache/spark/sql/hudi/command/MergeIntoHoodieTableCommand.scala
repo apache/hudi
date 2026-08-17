@@ -117,6 +117,17 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   // safety) does not also hide the source/target/merge-condition from EXPLAIN, lineage
   // extractors, and other plan walkers. `innerChildren` is not traversed by `transform`
   // or `mapChildren`.
+  //
+  // NOTE: this exposes the *analyzed* `MergeIntoTable`, carrying the statement's assignments
+  // exactly as written -- deliberately not a post-alignment plan. Hudi does expand partial
+  // `UPDATE SET` / `INSERT (...)` clauses to the full target schema, in `alignAssignments`,
+  // but that expansion is serialized into the write config (`PAYLOAD_*_CONDITION_AND_ASSIGNMENTS`)
+  // and never materialized as a `MergeIntoTable`. It also would not be a faithful description
+  // of the write if it were: the filler assignments are bound against the source-joined-target
+  // payload rather than the target alone, and under `ORIGINAL_VALUE` on a MOR table an untouched
+  // column is encoded as `Literal(null)` -- a plan walker would read that as "written as NULL"
+  // when it means "left alone". Consumers needing whole-row fidelity should fill in the
+  // unassigned target columns themselves.
   override def innerChildren: Seq[QueryPlan[_]] = Seq(mergeInto)
 
   private var sparkSession: SparkSession = _

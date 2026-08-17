@@ -660,37 +660,53 @@ object HoodieIncrementalRelationIdentifier extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan =
     AnalysisHelper.allowInvokingTransformsInAnalyzer {
       plan transform {
-        // Type pattern + guard avoids destructuring `LogicalRelation`, whose case-class
-        // arity differs between Spark 3.x (4 args) and Spark 4.x (5 args). This rule
-        // lives in `hudi-spark`, which is compiled against every supported profile.
-        case lr: LogicalRelation
-            if lr.catalogTable.isEmpty
-              && lr.relation.isInstanceOf[HadoopFsRelation]
-              && isIncrementalOrCDC(lr.relation.asInstanceOf[HadoopFsRelation].location) =>
-          val fsRelation = lr.relation.asInstanceOf[HadoopFsRelation]
-          val metaClient = fsRelation.location.asInstanceOf[HoodieFileIndex].metaClient
-          lr.copy(catalogTable = Some(buildCatalogTable(metaClient, lr.schema)))
+        // Type pattern + nested match avoids destructuring `LogicalRelation`, whose
+        // case-class arity differs between Spark 3.x (4 args) and Spark 4.x (5 args). This
+        // rule lives in `hudi-spark`, which is compiled against every supported profile.
+        case lr: LogicalRelation if lr.catalogTable.isEmpty =>
+          lr.relation match {
+            case fsRelation: HadoopFsRelation =>
+              incrementalOrCDCIndex(fsRelation.location)
+                .flatMap(index => buildCatalogTable(index.metaClient, lr.schema))
+                .map(catalogTable => lr.copy(catalogTable = Some(catalogTable)))
+                .getOrElse(lr)
+            case _ => lr
+          }
       }
     }
 
-  private def isIncrementalOrCDC(location: FileIndex): Boolean =
-    location.isInstanceOf[HoodieIncrementalFileIndex] ||
-      location.isInstanceOf[HoodieCDCFileIndex]
+  /**
+   * Narrows a [[FileIndex]] to the incremental/CDC Hudi indexes this rule handles, or
+   * `None` for anything else. Both are [[HoodieFileIndex]] subclasses, so the widening is
+   * checked by the compiler rather than by an `asInstanceOf` that a future third index
+   * type could silently break.
+   */
+  private def incrementalOrCDCIndex(location: FileIndex): Option[HoodieFileIndex] =
+    location match {
+      case index: HoodieIncrementalFileIndex => Some(index)
+      case index: HoodieCDCFileIndex => Some(index)
+      case _ => None
+    }
 
   private def buildCatalogTable(
       metaClient: HoodieTableMetaClient,
-      schema: StructType): CatalogTable = {
+      schema: StructType): Option[CatalogTable] = {
     val tableConfig = metaClient.getTableConfig
-    // Falls back to Spark's `default` database when `hoodie.database.name` is unset --
-    // matches existing path-based DataFrame read behavior.
-    val dbName = Option(tableConfig.getDatabaseName).filter(_.nonEmpty)
-    CatalogTable(
-      identifier = TableIdentifier(tableConfig.getTableName, dbName),
-      tableType = CatalogTableType.EXTERNAL,
-      storage = CatalogStorageFormat.empty.copy(
-        locationUri = Some(metaClient.getBasePath.toUri)),
-      schema = schema,
-      provider = Some("hudi")
-    )
+    // `hoodie.table.name` is required for a valid Hudi table, but if it is somehow unset
+    // leave `catalogTable` as `None` -- the pre-existing behavior -- rather than synthesize
+    // a `TableIdentifier(null)` that would surface downstream as a garbage dataset name.
+    Option(tableConfig.getTableName).filter(_.nonEmpty).map { tableName =>
+      // Falls back to Spark's `default` database when `hoodie.database.name` is unset --
+      // matches existing path-based DataFrame read behavior.
+      val dbName = Option(tableConfig.getDatabaseName).filter(_.nonEmpty)
+      CatalogTable(
+        identifier = TableIdentifier(tableName, dbName),
+        tableType = CatalogTableType.EXTERNAL,
+        storage = CatalogStorageFormat.empty.copy(
+          locationUri = Some(metaClient.getBasePath.toUri)),
+        schema = schema,
+        provider = Some("hudi")
+      )
+    }
   }
 }

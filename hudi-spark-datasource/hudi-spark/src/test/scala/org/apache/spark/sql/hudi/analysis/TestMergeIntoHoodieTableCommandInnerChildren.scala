@@ -23,7 +23,8 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
-import org.apache.spark.sql.catalyst.plans.logical.MergeIntoTable
+import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.plans.logical.{MergeIntoTable, UpdateAction}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand
@@ -122,6 +123,66 @@ class TestMergeIntoHoodieTableCommandInnerChildren extends HoodieClientTestBase 
       s"Expected exactly one matched action, got: ${mergeIntoTable.matchedActions}")
     assertEquals(1, mergeIntoTable.notMatchedActions.size,
       s"Expected exactly one notMatched action, got: ${mergeIntoTable.notMatchedActions}")
+  }
+
+  /**
+   * Pins *what* `innerChildren` exposes, not just its shape: the analyzed plan carrying the
+   * statement's assignments as written. A partial `UPDATE SET` must stay partial here. Hudi's
+   * expansion to the full target schema happens in `alignAssignments` and is serialized into
+   * the write config, never into a `MergeIntoTable`; substituting that expanded form here would
+   * report untouched columns as written (as `Literal(null)` on MOR). This is the tripwire.
+   */
+  @Test
+  def testInnerChildrenExposesUnalignedAssignments(): Unit = {
+    spark.sql(
+      s"""
+         |CREATE TABLE $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         |) USING hudi
+         |TBLPROPERTIES (
+         |  type = 'cow',
+         |  primaryKey = 'id',
+         |  orderingFields = 'ts'
+         |)
+         |LOCATION '$basePath/$tableName'
+         """.stripMargin)
+
+    spark.sql(s"INSERT INTO $tableName VALUES (1, 'a1', 10.0, 1000)")
+
+    spark.sql(s"CREATE OR REPLACE TEMPORARY VIEW $sourceTableName AS " +
+      s"SELECT 1 AS id, 'a1_updated' AS name, 99.0 AS price, 2000L AS ts")
+
+    // `price` is deliberately left out, so this stays a partial update. The ordering field
+    // (`ts`) must be assigned -- `checkUpdatingActions` rejects an update that omits it under
+    // event-time ordering -- so it is the target's `price` alone that distinguishes the
+    // statement's assignments from the full-schema aligned form.
+    val mergeSql =
+      s"""
+         |MERGE INTO $tableName AS t
+         |USING $sourceTableName AS s
+         |ON t.id = s.id
+         |WHEN MATCHED THEN UPDATE SET t.name = s.name, t.ts = s.ts
+         """.stripMargin
+
+    val analyzed = spark.sql(mergeSql).queryExecution.analyzed
+
+    val cmdOpt = analyzed.collectFirst { case c: MergeIntoHoodieTableCommand => c }
+    assertTrue(cmdOpt.isDefined,
+      s"Expected MergeIntoHoodieTableCommand in analyzed plan, got:\n$analyzed")
+
+    val mergeIntoTable = cmdOpt.get.innerChildren.head.asInstanceOf[MergeIntoTable]
+    val assignedColumns = mergeIntoTable.matchedActions.collect {
+      case update: UpdateAction => update.assignments
+    }.flatten.map(_.key).collect { case attr: Attribute => attr.name }.sorted
+
+    // Exactly the two columns the statement assigns -- not the four the aligned form carries.
+    assertEquals(Seq("name", "ts"), assignedColumns,
+      "innerChildren must expose the analyzed MergeIntoTable with the statement's own " +
+        "assignments, not Hudi's post-alignment expansion to the full target schema. " +
+        s"Got: $assignedColumns")
   }
 
   @Test
