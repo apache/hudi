@@ -779,18 +779,18 @@ public class FSUtils {
    * supply a trailing slash (or surrounding whitespace) DO move to a new lock key, so all
    * writers of such a table must be upgraded together rather than one at a time.
    *
-   * <p>Deliberately NOT normalized, since collapsing these could map unrelated tables onto one
-   * lock:
+   * <p>NOT normalized here, and for two different reasons:
    * <ul>
-   *   <li>Inner consecutive slashes - {@code "s3://b//x"} and {@code "s3://b/x"} stay distinct,
-   *       even though {@code StoragePath} collapses them. A lock key is not a path lookup, so
-   *       it cannot assume the storage layer's equivalences.</li>
-   *   <li>Scheme spelling beyond s3a - {@code "/x"}, {@code "file:/x"} and {@code "file:///x"}
-   *       stay distinct.</li>
-   *   <li>URL encoding - Hudi does not re-encode paths internally.</li>
+   *   <li>Inner consecutive slashes ({@code "s3://b//x"} vs {@code "s3://b/x"}) and scheme
+   *       spelling ({@code "file:///x"} vs {@code "file:/x"}) are a KNOWN RESIDUAL GAP, not a
+   *       safety choice. {@code HoodieTableMetaClient} wraps the base path in a
+   *       {@code StoragePath}, which collapses both, so those spellings genuinely address the
+   *       same table while still deriving different lock keys. Left alone only to keep this
+   *       change's rollout surface to the drift actually seen in the field; closing it moves
+   *       more keys and wants its own change.</li>
+   *   <li>URL encoding is deliberately left alone - Hudi does not re-encode paths internally,
+   *       and an encoded and decoded spelling are not interchangeable to the storage layer.</li>
    * </ul>
-   * Writers that disagree on any of the above still take different locks; this helper covers
-   * the drift actually observed in the field.
    *
    * <p>Scheme-root inputs for any scheme (e.g. {@code "s3://"}, {@code "s3a:///"},
    * {@code "file:///"}, {@code "hdfs:/"}) and all-slash inputs (e.g. {@code "/"},

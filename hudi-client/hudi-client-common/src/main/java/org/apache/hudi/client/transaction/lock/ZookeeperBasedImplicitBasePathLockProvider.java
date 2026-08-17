@@ -30,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import static org.apache.hudi.common.fs.FSUtils.normalizeBasePathForLocking;
+import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
 
 /**
  * A zookeeper based lock. This {@link LockProvider} implementation allows to lock table operations
@@ -49,8 +50,7 @@ public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBas
    * Compute the Zookeeper lock base path for a given Hudi table base path.
    *
    * <p>Accepts a raw basePath - normalization is applied here. {@code normalizeBasePathForLocking}
-   * is idempotent, so callers that already hold a normalized value (e.g. the constructor's
-   * {@code normalizedHudiTableBasePath} field) can pass it through without harm.
+   * is idempotent, so an already-normalized value can be passed through without harm.
    *
    * <p>ROLLOUT: for a table whose configured {@code hoodie.base.path} ends in '/' or carries
    * surrounding whitespace, this returns a different znode than releases before HUDI's
@@ -63,6 +63,18 @@ public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBas
     String lockBasePath = "/tmp/" + HashID.generateXXHashAsString(normalized, HashID.Size.BITS_64);
     log.info("The Zookeeper lock key for the base path {} (normalized: {}) is {}",
         hudiTableBasePath, normalized, lockBasePath);
+    // Releases before this change hashed s3aToS3(basePath) directly. When the canonical form
+    // differs, this writer has moved to a new znode and cannot exclude a writer still running
+    // the old code, so say so loudly rather than leaving it to be inferred from the INFO line.
+    String legacyForm = s3aToS3(hudiTableBasePath);
+    if (!legacyForm.equals(normalized)) {
+      log.warn("Zookeeper lock key for base path {} moved from {} to {}. Every writer of this "
+              + "table must be upgraded together; a writer still on the previous release locks "
+              + "on the old znode and will NOT be excluded by this one.",
+          hudiTableBasePath,
+          "/tmp/" + HashID.generateXXHashAsString(legacyForm, HashID.Size.BITS_64),
+          lockBasePath);
+    }
     return lockBasePath;
   }
 

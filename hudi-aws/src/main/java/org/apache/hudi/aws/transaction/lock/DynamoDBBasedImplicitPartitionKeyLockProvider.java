@@ -21,6 +21,7 @@ package org.apache.hudi.aws.transaction.lock;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -31,6 +32,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import static org.apache.hudi.common.fs.FSUtils.normalizeBasePathForLocking;
+import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
 
 /**
  * A DynamoDB based lock.
@@ -71,11 +73,24 @@ public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBased
    * rolling upgrade would leave old and new writers on two different lock rows for the same
    * table, losing mutual exclusion. Base paths without a trailing slash are unaffected.
    */
+  @VisibleForTesting
   public static String derivePartitionKey(String hudiTableBasePath) {
     String normalized = normalizeBasePathForLocking(hudiTableBasePath);
     String partitionKey = HashID.generateXXHashAsString(normalized, HashID.Size.BITS_64);
     LOG.info("The DynamoDB partition key of the lock provider for the base path {} (normalized: {}) is {}",
         hudiTableBasePath, normalized, partitionKey);
+    // Releases before this change hashed s3aToS3(basePath) directly. When the canonical form
+    // differs, this writer has moved to a new lock row and cannot exclude a writer still running
+    // the old code, so say so loudly rather than leaving it to be inferred from the INFO line.
+    String legacyForm = s3aToS3(hudiTableBasePath);
+    if (!legacyForm.equals(normalized)) {
+      LOG.warn("DynamoDB partition key for base path {} moved from {} to {}. Every writer of this "
+              + "table must be upgraded together; a writer still on the previous release locks on "
+              + "the old partition key and will NOT be excluded by this one.",
+          hudiTableBasePath,
+          HashID.generateXXHashAsString(legacyForm, HashID.Size.BITS_64),
+          partitionKey);
+    }
     return partitionKey;
   }
 
