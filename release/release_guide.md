@@ -305,8 +305,8 @@ Source Release step) -- otherwise the voted tarball ships a `-SNAPSHOT` Trino pi
    `git log NNN..<pin> -- core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs`
    and revert them forward on the release branch only, never on master.
 4. On the release branch set `trino.version=NNN`, `trino.sha=TAG_SHA` and `trino.e2e.version=NNN` in the root
-   pom, the `<parent>` version in `docker/trino/shim/pom.xml`, and the `docker/trino` defaults
-   (`TRINO_VERSION` in `build_image.sh`, `ARG TRINO_VERSION` in `Dockerfile`). Re-check SPI-surface-coupled
+   pom, the `<parent>` version in `docker/trino/shim/pom.xml`, and the `ARG TRINO_VERSION` default in
+   `docker/trino/Dockerfile` (`build_image.sh` reads `trino.e2e.version` from the root pom). Re-check SPI-surface-coupled
    dependency scopes against `NNN` (e.g. `jts-core` is `provided` because it joined the Trino SPI surface in 482;
    the shim's SpiDependencyChecker fails the build loudly if a scope no longer matches the target release).
 5. Verify the released Trino resolves from Central against an empty local repository

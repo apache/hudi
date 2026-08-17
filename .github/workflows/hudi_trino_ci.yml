@@ -114,6 +114,11 @@ jobs:
           set -euo pipefail
           TRINO_SHA=$(sed -n 's|.*<trino.sha>\(.*\)</trino.sha>.*|\1|p' pom.xml)
           TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+          # sed -n ...p exits 0 on no match; an empty value would checkout/cache garbage.
+          if [ -z "$TRINO_SHA" ] || [ -z "$TRINO_VERSION" ]; then
+            echo "ERROR: could not read trino.sha/trino.version from pom.xml" >&2
+            exit 1
+          fi
           echo "Pinned trinodb/trino $TRINO_VERSION at $TRINO_SHA"
           echo "trino_sha=$TRINO_SHA" >> "$GITHUB_OUTPUT"
           echo "trino_version=$TRINO_VERSION" >> "$GITHUB_OUTPUT"
@@ -152,7 +157,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository/io/trino
-          key: trino-m2-v2-${{ steps.trino-pin.outputs.trino_sha }}
+          key: trino-m2-v2-${{ hashFiles('scripts/trino/bootstrap_trino.sh') }}-${{ steps.trino-pin.outputs.trino_sha }}
           # No restore-keys on purpose: a partial restore from another pin collides on the
           # same SNAPSHOT coordinates and poisons the build.
       - name: Checkout trinodb/trino at the pinned commit

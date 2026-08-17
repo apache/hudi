@@ -77,6 +77,12 @@ jobs:
           TRINO_SHA=$(sed -n 's|.*<trino.sha>\(.*\)</trino.sha>.*|\1|p' pom.xml)
           TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
           E2E_VERSION=$(sed -n 's|.*<trino.e2e.version>\(.*\)</trino.e2e.version>.*|\1|p' pom.xml)
+          # sed -n ...p exits 0 on no match; an empty sha would make the commits API answer
+          # for the default branch and silently skip the suite, so fail loudly instead.
+          if [ -z "$TRINO_SHA" ] || [ -z "$TRINO_VERSION" ] || [ -z "$E2E_VERSION" ]; then
+            echo "ERROR: could not read trino.sha/trino.version/trino.e2e.version from pom.xml" >&2
+            exit 1
+          fi
           echo "Connector builds at $TRINO_VERSION ($TRINO_SHA); server image is $E2E_VERSION"
           echo "trino_sha=$TRINO_SHA" >> "$GITHUB_OUTPUT"
           echo "trino_version=$TRINO_VERSION" >> "$GITHUB_OUTPUT"
@@ -99,15 +105,17 @@ jobs:
           # any commit reachable from the pin that touched a boundary-crossing path after the
           # released tag's commit date (excluding the tag commit itself) is drift. Existence
           # is enough, so the first page settles it -- truncation cannot yield a false pass.
-          # Only two surfaces cross the plugin/server boundary and are therefore gated:
-          # core/trino-spi (the server provides it to the plugin classloader) and the
-          # reflective HdfsFileSystemLoader contract (bundled trino-filesystem-manager loads
-          # the server image's version-matched hdfs jar set; see docker/trino/Dockerfile).
-          # lib/trino-filesystem ships inside the plugin dir, so it cannot skew the boot.
+          # Gated paths are the surfaces where server-built and pin-built classes meet:
+          # core/trino-spi (the server provides it to the plugin classloader), and the
+          # HdfsFileSystemLoader contract, where bundled trino-filesystem-manager loads the
+          # server image's version-matched hdfs jar set (see docker/trino/Dockerfile) whose
+          # HdfsClassLoader then delegates the exact packages io.trino.filesystem and
+          # io.trino.memory.context back to the plugin's bundled copies -- so those two libs
+          # cross the boundary precisely BECAUSE they are bundled.
           TAG_SHA=$(gh api "repos/trinodb/trino/commits/${E2E_VERSION}" --jq .sha)
           TAG_DATE=$(gh api "repos/trinodb/trino/commits/${E2E_VERSION}" --jq .commit.committer.date)
           DRIFTED=false
-          for p in core/trino-spi lib/trino-filesystem-manager lib/trino-hdfs; do
+          for p in core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs lib/trino-memory-context; do
             # Assign before iterating: a failing substitution in the for-list would not trip
             # set -e, and gh api prints the error body to stdout, so a transient API error
             # would otherwise iterate over error JSON and silently skip the suite.
@@ -178,7 +186,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository/io/trino
-          key: trino-m2-v2-${{ steps.trino-pin.outputs.trino_sha }}
+          key: trino-m2-v2-${{ hashFiles('scripts/trino/bootstrap_trino.sh') }}-${{ steps.trino-pin.outputs.trino_sha }}
           # No restore-keys on purpose: a partial restore from another pin collides on the
           # same SNAPSHOT coordinates and poisons the build.
       - name: Checkout trinodb/trino at the pinned commit
