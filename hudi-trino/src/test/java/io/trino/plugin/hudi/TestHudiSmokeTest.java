@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 import io.trino.Session;
+import io.trino.blob.cache.alluxio.AlluxioBlobCachePlugin;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.filesystem.TrinoInputFile;
@@ -100,15 +101,23 @@ public class TestHudiSmokeTest
     protected QueryRunner createQueryRunner()
             throws Exception
     {
-        return HudiQueryRunner.builder()
+        HudiQueryRunner.Builder builder = HudiQueryRunner.builder()
                 .setDataLoader(new ResourceHudiTablesInitializer())
-                .addConnectorProperties(getAdditionalHudiProperties())
-                .build();
+                .addConnectorProperties(getAdditionalHudiProperties());
+        getBlobCacheProperties().ifPresent(cacheProperties -> builder
+                .withPlugin(new AlluxioBlobCachePlugin())
+                .withBlobCache("alluxio", cacheProperties));
+        return builder.build();
     }
 
     protected ImmutableMap<String, String> getAdditionalHudiProperties()
     {
         return ImmutableMap.of();
+    }
+
+    protected Optional<Map<String, String>> getBlobCacheProperties()
+    {
+        return Optional.empty();
     }
 
     @Test

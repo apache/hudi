@@ -168,7 +168,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository/io/trino
-          key: trino-m2-v1-${{ steps.trino-pin.outputs.trino_sha }}
+          key: trino-m2-v2-${{ steps.trino-pin.outputs.trino_sha }}
           # No restore-keys on purpose: a partial restore from another pin collides on the
           # same SNAPSHOT coordinates and poisons the build.
       - name: Checkout trinodb/trino at the pinned commit
