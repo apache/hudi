@@ -40,6 +40,7 @@ import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeContext;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.storage.StoragePath;
@@ -214,7 +215,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       if (btype.equals(BucketType.INSERT)) {
         return handleInsert(binfo.fileIdPrefix, recordItr);
       } else if (btype.equals(BucketType.UPDATE)) {
-        return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, recordItr);
+        return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, binfo.getNumUpdates(), recordItr);
       } else {
         throw new HoodieUpsertException("Unknown bucketType " + btype + " for partition :" + partition);
       }
@@ -232,6 +233,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
+                                                  long numUpdates,
                                                   Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
@@ -240,11 +242,13 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates
-    HoodieMergeHandle<?, ?, ?, ?> mergeHandle = getUpdateHandle(partitionPath, fileId, recordItr);
+    HoodieMergeHandle<?, ?, ?, ?> mergeHandle = getUpdateHandle(partitionPath, fileId, numUpdates, recordItr);
     return IOUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
-  protected HoodieMergeHandle<?, ?, ?, ?> getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  protected HoodieMergeHandle<?, ?, ?, ?> getUpdateHandle(String partitionPath, String fileId,
+                                                          long numUpdates,
+                                                          Iterator<HoodieRecord<T>> recordItr) {
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
     if (!config.populateMetaFields()) {
       try {
@@ -254,7 +258,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
             + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
       }
     }
-    return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
+    MergeContext<T> mergeContext = MergeContext.create(numUpdates, recordItr);
+    return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, mergeContext, partitionPath, fileId,
         taskContextSupplier, keyGeneratorOpt);
   }
 

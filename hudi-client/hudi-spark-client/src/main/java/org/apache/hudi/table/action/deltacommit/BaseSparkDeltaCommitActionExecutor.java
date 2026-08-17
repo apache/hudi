@@ -70,12 +70,13 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-      Iterator<HoodieRecord<T>> recordItr) throws IOException {
+                                                  long numUpdates,
+                                                  Iterator<HoodieRecord<T>> recordItr) throws IOException {
     log.info("Merging updates for commit {} for file {}", instantTime, fileId);
     if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner != null
         && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
       log.info("Small file corrections for updates for commit {} for file {}", instantTime, fileId);
-      return super.handleUpdate(partitionPath, fileId, recordItr);
+      return super.handleUpdate(partitionPath, fileId, numUpdates, recordItr);
     } else {
       HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,
           partitionPath, fileId, recordItr, taskContextSupplier);

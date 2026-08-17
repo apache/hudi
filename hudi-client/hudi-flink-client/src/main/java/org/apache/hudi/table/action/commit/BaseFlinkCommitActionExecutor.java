@@ -37,6 +37,7 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeContext;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -167,13 +168,13 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         // and append instead of UPDATE.
         return handleInsert(fileIdHint, recordItr);
       } else if (this.writeHandle instanceof HoodieWriteMergeHandle) {
-        return handleUpdate(partitionPath, fileIdHint, recordItr);
+        return handleUpdate(partitionPath, fileIdHint, MergeContext.UNKNOWN_NUM_UPDATES, recordItr);
       } else {
         switch (bucketType) {
           case INSERT:
             return handleInsert(fileIdHint, recordItr);
           case UPDATE:
-            return handleUpdate(partitionPath, fileIdHint, recordItr);
+            return handleUpdate(partitionPath, fileIdHint, MergeContext.UNKNOWN_NUM_UPDATES, recordItr);
           default:
             throw new AssertionError();
         }
@@ -187,6 +188,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
+                                                  long numUpdates,
                                                   Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     ValidationUtils.checkArgument(this.writeHandle instanceof HoodieMergeHandle,

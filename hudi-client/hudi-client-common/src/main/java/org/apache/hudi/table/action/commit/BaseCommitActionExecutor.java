@@ -281,6 +281,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
                                                               Iterator<HoodieRecord<T>> recordItr) throws Exception;
 
   protected abstract Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
+                                                              long numUpdates,
                                                               Iterator<HoodieRecord<T>> recordItr) throws IOException;
 
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> executeClustering(HoodieClusteringPlan clusteringPlan) {
