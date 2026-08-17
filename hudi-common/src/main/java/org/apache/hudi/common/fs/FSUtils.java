@@ -758,6 +758,86 @@ public class FSUtils {
     return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
   }
 
+  /**
+   * Canonicalize a Hudi table base path for use as the input to implicit lock-key derivation.
+   *
+   * <p>Implicit lock providers (DynamoDB and Zookeeper variants) hash this string to choose the
+   * lock row / znode for a table. Two callers writing to the same table must produce the same
+   * hash, so any benign formatting drift in the basePath has to be eliminated before hashing.
+   * This method normalizes s3a:// to s3://, then strips every trailing '/' and whitespace
+   * character in a single pass.
+   *
+   * <p>The single pass is what makes the result idempotent. Trimming first and stripping
+   * slashes afterwards leaves a trailing space behind on an input like {@code "s3://b/t /"},
+   * which would then hash differently from {@code "s3://b/t"} - the very drift this method
+   * exists to remove.
+   *
+   * <p>No trailing slash is appended: most callers already supply a basePath without one, so
+   * the canonical form matches what previous releases hashed (which applied only s3aToS3) for
+   * those callers, keeping the derived lock key stable across the upgrade. Callers that did
+   * supply a trailing slash (or surrounding whitespace) DO move to a new lock key, so all
+   * writers of such a table must be upgraded together rather than one at a time.
+   *
+   * <p>NOT normalized here, and for two different reasons:
+   * <ul>
+   *   <li>Inner consecutive slashes ({@code "s3://b//x"} vs {@code "s3://b/x"}) and scheme
+   *       spelling ({@code "file:///x"} vs {@code "file:/x"}) are a KNOWN RESIDUAL GAP, not a
+   *       safety choice. {@code HoodieTableMetaClient} wraps the base path in a
+   *       {@code StoragePath}, which collapses both, so those spellings genuinely address the
+   *       same table while still deriving different lock keys. Left alone only to keep this
+   *       change's rollout surface to the drift actually seen in the field; closing it moves
+   *       more keys and wants its own change.</li>
+   *   <li>URL encoding is deliberately left alone - Hudi does not re-encode paths internally,
+   *       and an encoded and decoded spelling are not interchangeable to the storage layer.</li>
+   * </ul>
+   *
+   * <p>Scheme-root inputs for any scheme (e.g. {@code "s3://"}, {@code "s3a:///"},
+   * {@code "file:///"}, {@code "hdfs:/"}) and all-slash inputs (e.g. {@code "/"},
+   * {@code "///"}) are rejected - stripping the trailing slashes from those leaves nothing
+   * meaningful to lock against. Note this is a behaviour change: those inputs previously
+   * hashed to a working lock key, and now fail the writer at provider construction with
+   * {@link IllegalArgumentException}. Paths whose final key segment legitimately ends with
+   * {@code ':'} (e.g. {@code "s3://bucket/foo:/"}) are preserved - S3 object keys are allowed
+   * to contain {@code ':'}.
+   *
+   * <p>One consequence of stripping trailing whitespace: a base path that differs from another
+   * only by trailing whitespace shares its lock. Such a key is legal in S3 but not something
+   * Hudi can address, since {@code StoragePath} keeps it distinct while the rest of the config
+   * plumbing does not. Over-serializing two such tables is the safe direction to err in.
+   */
+  public static String normalizeBasePathForLocking(String basePath) {
+    if (basePath == null) {
+      throw new IllegalArgumentException("Hudi table base path cannot be null");
+    }
+    String trimmed = basePath.trim();
+    if (trimmed.isEmpty()) {
+      throw new IllegalArgumentException("Hudi table base path cannot be empty");
+    }
+    String schemeNormalized = s3aToS3(trimmed);
+    // Strip trailing slashes and whitespace together, not in two separate passes - see the
+    // idempotence note above. The whitespace test is deliberately `<= ' '` rather than
+    // Character.isWhitespace: it has to match String#trim above exactly. isWhitespace is a
+    // different set (it excludes U+0000-U+0008 and U+000E-U+001B, which trim does strip), and
+    // any disagreement between the two reopens the non-idempotence this loop exists to close.
+    int end = schemeNormalized.length();
+    while (end > 0
+        && (schemeNormalized.charAt(end - 1) == '/'
+            || schemeNormalized.charAt(end - 1) <= ' ')) {
+      end--;
+    }
+    // Reject "///"-style inputs (nothing left after stripping) and scheme-only inputs
+    // like "s3://" / "s3a:///" - those collapse to just "<scheme>:" with no '/' character
+    // remaining. Real paths that end with ':' (e.g. "s3://bucket/foo:/") keep the '/'
+    // characters from the scheme's "://" separator, so they pass this check.
+    if (end == 0
+        || (schemeNormalized.charAt(end - 1) == ':'
+            && schemeNormalized.lastIndexOf('/', end - 1) < 0)) {
+      throw new IllegalArgumentException(
+          "Hudi table base path is not a valid lockable path: '" + basePath + "'");
+    }
+    return schemeNormalized.substring(0, end);
+  }
+
   public static StoragePathInfo toStoragePathInfo(HoodieFileStatus fileStatus) {
     if (null == fileStatus) {
       return null;
