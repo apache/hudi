@@ -31,6 +31,7 @@ import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
+import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.streamer.TableExecutionContext;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
@@ -44,6 +45,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -240,6 +242,75 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
       totalTable2Records += table2Records;
       // sync and verify
       syncAndVerify(streamer, targetBasePath1, targetBasePath2, totalTable1Records, totalTable2Records);
+    }
+  }
+
+  @Test
+  public void testFailFastOnContinuousDefaultsToFalse() {
+    HoodieMultiTableDeltaStreamer.Config cfg = new HoodieMultiTableDeltaStreamer.Config();
+    assertFalse(cfg.failFastOnContinuousMode);
+  }
+
+  @Test
+  public void testMultiTableContinuousModeSyncsAllTablesInParallel() throws IOException {
+    // ingest test data to 2 parquet source paths
+    String parquetSourceRoot1 = basePath + "/parquetContSrc1/";
+    prepareParquetDFSFiles(10, parquetSourceRoot1);
+    String parquetSourceRoot2 = basePath + "/parquetContSrc2/";
+    prepareParquetDFSFiles(5, parquetSourceRoot2);
+
+    String parquetPropsFile = populateCommonPropsAndWriteToFile();
+
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(parquetPropsFile, basePath + "/config", ParquetDFSSource.class.getName(), false, false,
+        false, "multi_table_parquet_continuous", null);
+    // Continuous mode blocks per table, so tables must be synced concurrently.
+    cfg.continuousMode = true;
+
+    HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    List<TableExecutionContext> executionContexts = streamer.getTableExecutionContexts();
+    ingestPerParquetSourceProps(executionContexts, Arrays.asList(new String[] {parquetSourceRoot1, parquetSourceRoot2}));
+    // A termination strategy ensures each table's streamer shuts down once there is no new data, so the test does not hang.
+    setTerminationStrategy(executionContexts);
+
+    String targetBasePath1 = executionContexts.get(0).getConfig().targetBasePath;
+    String targetBasePath2 = executionContexts.get(1).getConfig().targetBasePath;
+
+    streamer.sync();
+
+    assertEquals(2, streamer.getSuccessTables().size());
+    assertTrue(streamer.getFailedTables().isEmpty());
+    assertRecordCount(10, targetBasePath1, sqlContext);
+    assertRecordCount(5, targetBasePath2, sqlContext);
+  }
+
+  @Test
+  public void testFailFastOnContinuousThrowsWhenATableFails() throws IOException {
+    String parquetSourceRoot1 = basePath + "/parquetFailFastSrc1/";
+    prepareParquetDFSFiles(10, parquetSourceRoot1);
+    String parquetSourceRoot2 = basePath + "/parquetFailFastSrc2/";
+    prepareParquetDFSFiles(5, parquetSourceRoot2);
+
+    String parquetPropsFile = populateCommonPropsAndWriteToFile();
+
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(parquetPropsFile, basePath + "/config", ParquetDFSSource.class.getName(), false, false,
+        false, "multi_table_parquet_fail_fast", null);
+    cfg.continuousMode = true;
+    cfg.failFastOnContinuousMode = true;
+
+    HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    List<TableExecutionContext> executionContexts = streamer.getTableExecutionContexts();
+    ingestPerParquetSourceProps(executionContexts, Arrays.asList(new String[] {parquetSourceRoot1, parquetSourceRoot2}));
+    setTerminationStrategy(executionContexts);
+    // Break the second table's source so its sync fails.
+    executionContexts.get(1).getProperties().setProperty("hoodie.streamer.source.dfs.root", basePath + "/does_not_exist");
+
+    assertThrows(HoodieException.class, streamer::sync);
+    assertFalse(streamer.getFailedTables().isEmpty());
+  }
+
+  private void setTerminationStrategy(List<TableExecutionContext> executionContexts) {
+    for (TableExecutionContext context : executionContexts) {
+      context.getConfig().postWriteTerminationStrategyClass = NoNewDataTerminationStrategy.class.getName();
     }
   }
 
