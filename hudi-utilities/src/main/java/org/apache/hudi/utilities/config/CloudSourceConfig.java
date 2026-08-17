@@ -217,4 +217,25 @@ public class CloudSourceConfig extends HoodieConfig {
           + "Note: the per-read mergeSchema option is honored by Spark's native Parquet reader and by Spark's "
           + "native ORC reader (Spark 3.0+, default ORC impl since Spark 2.4). On older runtimes the option is "
           + "silently ignored.");
+
+  public static final ConfigProperty<Integer> EXISTS_CHECK_PARALLELISM = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.parallelism")
+      .defaultValue(16)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Number of threads per Spark task used to check cloud object existence concurrently when "
+          + ENABLE_EXISTS_CHECK.key() + " is enabled. Must be >= 1; 1 checks sequentially. All tasks on an executor "
+          + "share one cached FileSystem client, so keep executor cores x this value within the client's connection "
+          + "pool (fs.s3a.connection.maximum, 96 by default on Hadoop 3.3, 500 on 3.4+) to avoid connection pool timeouts.");
+
+  public static final ConfigProperty<Integer> EXISTS_CHECK_PARTITIONS = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.partitions")
+      .defaultValue(0)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Number of Spark partitions the cloud object existence checks are spread over when "
+          + ENABLE_EXISTS_CHECK.key() + " is enabled; each partition checks with " + EXISTS_CHECK_PARALLELISM.key()
+          + " threads. The default 0 sizes to the cluster (spark default parallelism, i.e. the registered executor "
+          + "cores). Set explicitly to cap the total concurrency (partitions x threads) against the storage client's "
+          + "connection pool and request rate limits.");
 }
