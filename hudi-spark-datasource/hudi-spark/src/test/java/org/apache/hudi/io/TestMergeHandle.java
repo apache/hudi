@@ -82,7 +82,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -95,6 +94,7 @@ import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplement
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.toTypedRecordIterator;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -157,7 +157,7 @@ public class TestMergeHandle extends BaseTestHandle {
     }
     assertTrue(numDeletes > 0);
     HoodieWriteMergeHandle mergeHandle;
-    MergeContext mergeContext = MergeContext.create(newRecords.size(), (Iterator) newRecords.iterator());
+    MergeContext mergeContext = MergeContext.create(newRecords.size(), toTypedRecordIterator(newRecords));
     if (useFileGroupReader) {
       mergeHandle = new FileGroupReaderBasedMergeHandle(config, instantTime, table, mergeContext, partitionPath, fileId,
           new LocalTaskContextSupplier(), Option.empty());
@@ -245,7 +245,7 @@ public class TestMergeHandle extends BaseTestHandle {
     // Merge the UTF-8-larger key in directly via HoodieSortedMergeHandle.
     List<HoodieRecord> newRecords = withRowKey(dataGenerator.generateInserts("001", 1), supplementaryKey, partitionPath);
     HoodieSortedMergeHandle mergeHandle = new HoodieSortedMergeHandle(
-        config, "001", table, MergeContext.create((Iterator) newRecords.iterator()), partitionPath, fileId, new LocalTaskContextSupplier(), Option.empty());
+        config, "001", table, MergeContext.create(toTypedRecordIterator(newRecords)), partitionPath, fileId, new LocalTaskContextSupplier(), Option.empty());
     mergeHandle.doMerge();
     WriteStatus writeStatus = (WriteStatus) mergeHandle.close().get(0);
 
@@ -291,7 +291,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     List<HoodieRecord> newRecords = dataGenerator.generateInserts("001", 2);
     HoodieConcatHandle concatHandle = new HoodieConcatHandle(
-        config, "001", table, MergeContext.create(newRecords.size(), (Iterator) newRecords.iterator()),
+        config, "001", table, MergeContext.create(newRecords.size(), toTypedRecordIterator(newRecords)),
         partitionPath, fileId, new LocalTaskContextSupplier(), Option.empty());
     assertEquals(newRecords.size(), concatHandle.getNumUpdates(),
         "The concat handle should carry numUpdates from the merge context");
@@ -346,7 +346,7 @@ public class TestMergeHandle extends BaseTestHandle {
     // can use either inline Avro CDC or native CDC depending on the effective log format, but both paths must retract
     // CDC and index callback state when the final file write fails for a record.
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
-        config, instantTime, table, MergeContext.create(updates.size(), (Iterator) updates.iterator()), partitionPath, fileId,
+        config, instantTime, table, MergeContext.create(updates.size(), toTypedRecordIterator(updates)), partitionPath, fileId,
         new LocalTaskContextSupplier(), Option.empty()) {
       @Override
       protected void writeToFile(HoodieKey key, HoodieRecord record, HoodieSchema schema, Properties props,
@@ -460,7 +460,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
         config, instantTime, table,
-        MergeContext.create(inputAndExpectedDataSet.getRecordsToMerge().size(), (Iterator) inputAndExpectedDataSet.getRecordsToMerge().iterator()),
+        MergeContext.create(inputAndExpectedDataSet.getRecordsToMerge().size(), toTypedRecordIterator(inputAndExpectedDataSet.getRecordsToMerge())),
         partitionPath, fileId, new LocalTaskContextSupplier(), Option.empty());
     assertEquals(inputAndExpectedDataSet.getRecordsToMerge().size(), fileGroupReaderBasedMergeHandle.getNumUpdates(),
         "Merge handle should receive the correct numUpdates");

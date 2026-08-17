@@ -72,7 +72,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -83,6 +82,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.extractPartitionFromTimeField;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.toTypedRecordIterator;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -161,7 +161,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     jsc.parallelize(Arrays.asList(1)).map(x -> {
       Executable executable = () -> {
         HoodieWriteMergeHandle mergeHandle = new HoodieWriteMergeHandle(updateTable.getConfig(), "101", updateTable,
-            MergeContext.create(updateRecords.size(), (Iterator) updateRecords.iterator()), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
+            MergeContext.create(updateRecords.size(), toTypedRecordIterator(updateRecords)), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
         List<GenericRecord> oldRecords = HoodieIOFactory.getIOFactory(updateTable.getStorage())
             .getFileFormatUtils(updateTable.getBaseFileFormat())
             .readAvroRecords(updateTable.getStorage(),
@@ -339,7 +339,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     HoodieSparkTable table = HoodieSparkTable.create(config, context);
     List<String> mergedFilePaths = jsc.parallelize(Arrays.asList(1)).map(x -> {
       HoodieWriteMergeHandle mergeHandle = new HoodieWriteMergeHandle(config, "101", table,
-          MergeContext.create((Iterator) updateRecords.iterator()), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
+          MergeContext.create(toTypedRecordIterator(updateRecords)), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
       // `doMerge` is the only entry point into HoodieMergeHelper: it reads the base file and feeds the handle
       mergeHandle.doMerge();
       return ((WriteStatus) mergeHandle.close().get(0)).getStat().getPath();
