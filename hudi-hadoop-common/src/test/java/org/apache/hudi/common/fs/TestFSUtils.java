@@ -758,6 +758,11 @@ public class TestFSUtils extends HoodieCommonTestHarness {
       "  s3://my-bucket/path  ",
       "s3://my-bucket/path /",
       "s3://my-bucket/path /// ",
+      // Control characters that String#trim strips but Character#isWhitespace does not. The
+      // strip loop has to use the same rule as trim, or these reopen the non-idempotence.
+      "s3://my-bucket/path\u0001/",
+      "s3://my-bucket/path\u001b//",
+      "\u0002s3a://my-bucket/path\u0008/",
       "s3a://my-bucket/path//",
       "s3://my-bucket//inner/path/",
       "s3://my-bucket/foo:/",
@@ -778,7 +783,12 @@ public class TestFSUtils extends HoodieCommonTestHarness {
    * to lock against, and hashing them would collapse unrelated tables onto one lock.
    */
   @ParameterizedTest
-  @ValueSource(strings = {"", "   ", "/", "///", " / ", "s3://", "s3:///", "s3a://", "s3a:///"})
+  @ValueSource(strings = {
+      "", "   ", "/", "///", " / ",
+      // Scheme roots are rejected for every scheme, not just s3. These previously hashed to a
+      // working lock key, so this is a behaviour change, not just tightened validation.
+      "s3://", "s3:///", "s3a://", "s3a:///", "file:/", "file://", "file:///", "hdfs:/", "gs:///",
+  })
   void testNormalizeBasePathForLockingRejectsUnlockablePaths(String basePath) {
     assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking(basePath));
   }

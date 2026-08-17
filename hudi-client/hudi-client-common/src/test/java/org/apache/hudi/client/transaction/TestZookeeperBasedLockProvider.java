@@ -193,22 +193,27 @@ public class TestZookeeperBasedLockProvider {
   @Test
   void testTrailingSlashBasePathContendsForTheSameLock() {
     String tableBasePath = "s3://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/contended_table";
+    // Each constructor starts its own curator client, so they are nested rather than created
+    // side by side: if writerB's constructor throws, writerA still gets closed.
     ZookeeperBasedImplicitBasePathLockProvider writerA =
         new ZookeeperBasedImplicitBasePathLockProvider(implicitLockConfig(tableBasePath), null);
-    ZookeeperBasedImplicitBasePathLockProvider writerB =
-        new ZookeeperBasedImplicitBasePathLockProvider(implicitLockConfig(tableBasePath + "/"), null);
     try {
-      Assertions.assertTrue(writerA.tryLock(1000, TimeUnit.MILLISECONDS));
-      // BaseZookeeperBasedLockProvider#tryLock throws rather than returning false when the
-      // mutex cannot be acquired within the timeout.
-      Assertions.assertThrows(HoodieLockException.class,
-          () -> writerB.tryLock(1000, TimeUnit.MILLISECONDS),
-          "Writer B derived a different znode for the same table and lost mutual exclusion");
+      ZookeeperBasedImplicitBasePathLockProvider writerB =
+          new ZookeeperBasedImplicitBasePathLockProvider(implicitLockConfig(tableBasePath + "/"), null);
+      try {
+        Assertions.assertTrue(writerA.tryLock(1000, TimeUnit.MILLISECONDS));
+        // BaseZookeeperBasedLockProvider#tryLock throws rather than returning false when the
+        // mutex cannot be acquired within the timeout.
+        Assertions.assertThrows(HoodieLockException.class,
+            () -> writerB.tryLock(1000, TimeUnit.MILLISECONDS),
+            "Writer B derived a different znode for the same table and lost mutual exclusion");
+      } finally {
+        // close() releases the lock if held and then shuts the curator client down, so it
+        // covers unlock() as well and never throws.
+        writerB.close();
+      }
     } finally {
-      writerA.unlock();
-      writerB.unlock();
       writerA.close();
-      writerB.close();
     }
   }
 

@@ -792,11 +792,19 @@ public class FSUtils {
    * Writers that disagree on any of the above still take different locks; this helper covers
    * the drift actually observed in the field.
    *
-   * <p>Scheme-only inputs (e.g. {@code "s3://"}, {@code "s3a:///"}) and all-slash inputs
-   * (e.g. {@code "///"}) are rejected - stripping the trailing slashes from those leaves
-   * nothing meaningful to lock against. Paths whose final key segment legitimately ends
-   * with {@code ':'} (e.g. {@code "s3://bucket/foo:/"}) are preserved - S3 object keys
-   * are allowed to contain {@code ':'}.
+   * <p>Scheme-root inputs for any scheme (e.g. {@code "s3://"}, {@code "s3a:///"},
+   * {@code "file:///"}, {@code "hdfs:/"}) and all-slash inputs (e.g. {@code "/"},
+   * {@code "///"}) are rejected - stripping the trailing slashes from those leaves nothing
+   * meaningful to lock against. Note this is a behaviour change: those inputs previously
+   * hashed to a working lock key, and now fail the writer at provider construction with
+   * {@link IllegalArgumentException}. Paths whose final key segment legitimately ends with
+   * {@code ':'} (e.g. {@code "s3://bucket/foo:/"}) are preserved - S3 object keys are allowed
+   * to contain {@code ':'}.
+   *
+   * <p>One consequence of stripping trailing whitespace: a base path that differs from another
+   * only by trailing whitespace shares its lock. Such a key is legal in S3 but not something
+   * Hudi can address, since {@code StoragePath} keeps it distinct while the rest of the config
+   * plumbing does not. Over-serializing two such tables is the safe direction to err in.
    */
   public static String normalizeBasePathForLocking(String basePath) {
     if (basePath == null) {
@@ -808,11 +816,14 @@ public class FSUtils {
     }
     String schemeNormalized = s3aToS3(trimmed);
     // Strip trailing slashes and whitespace together, not in two separate passes - see the
-    // idempotence note above.
+    // idempotence note above. The whitespace test is deliberately `<= ' '` rather than
+    // Character.isWhitespace: it has to match String#trim above exactly. isWhitespace is a
+    // different set (it excludes U+0000-U+0008 and U+000E-U+001B, which trim does strip), and
+    // any disagreement between the two reopens the non-idempotence this loop exists to close.
     int end = schemeNormalized.length();
     while (end > 0
         && (schemeNormalized.charAt(end - 1) == '/'
-            || Character.isWhitespace(schemeNormalized.charAt(end - 1)))) {
+            || schemeNormalized.charAt(end - 1) <= ' ')) {
       end--;
     }
     // Reject "///"-style inputs (nothing left after stripping) and scheme-only inputs

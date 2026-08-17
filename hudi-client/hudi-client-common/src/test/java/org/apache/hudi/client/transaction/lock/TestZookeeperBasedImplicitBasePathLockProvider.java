@@ -54,7 +54,7 @@ class TestZookeeperBasedImplicitBasePathLockProvider {
   }
 
   @Test
-  void aBasePathWithoutTrailingSlashKeepsThePreNormalizationZnode() {
+  void basePathWithoutTrailingSlashKeepsThePreNormalizationZnode() {
     // Releases before the normalization fix hashed s3aToS3(basePath) directly. For the common
     // no-trailing-slash form the canonicalized input is byte-identical, so the znode must not
     // move - otherwise every in-flight lock is orphaned on upgrade.

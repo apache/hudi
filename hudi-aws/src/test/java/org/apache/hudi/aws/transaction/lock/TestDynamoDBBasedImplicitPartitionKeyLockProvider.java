@@ -54,7 +54,7 @@ class TestDynamoDBBasedImplicitPartitionKeyLockProvider {
   }
 
   @Test
-  void aBasePathWithoutTrailingSlashKeepsThePreNormalizationKey() {
+  void basePathWithoutTrailingSlashKeepsThePreNormalizationKey() {
     // Releases before the normalization fix hashed s3aToS3(basePath) directly. For the common
     // no-trailing-slash form the canonicalized input is byte-identical, so the partition key must
     // not move - otherwise every deployed lock row is orphaned on upgrade.
