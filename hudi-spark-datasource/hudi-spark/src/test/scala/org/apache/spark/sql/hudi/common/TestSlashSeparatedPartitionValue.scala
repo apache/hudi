@@ -90,6 +90,61 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test slash separated date partitions written through the row writer") {
+    withSQLConf("hoodie.sql.bulk.insert.enable" -> "true", "hoodie.sql.insert.mode" -> "non-strict",
+      "hoodie.datasource.write.row.writer.enable" -> "true") {
+      withTempDir { tmp =>
+        val targetTable = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
+
+        spark.sql(
+          s"""
+             |create table $targetTable (
+             |  `id` string,
+             |  `name` string,
+             |  `ts` bigint,
+             |  `datestr` STRING
+             |) using hudi
+             | tblproperties (
+             |  'primaryKey' = 'id',
+             |  'type' = 'COW',
+             |  'preCombineField'='ts',
+             |  'hoodie.datasource.write.slash.separated.date.partitioning'='true'
+             | )
+             | partitioned by (`datestr`)
+             | location '$tablePath'
+          """.stripMargin)
+
+        // NOTE: The row writer derives the partition path off of an [[InternalRow]], which used to
+        //       blow up with a [[ClassCastException]]; a null partition value used to NPE
+        spark.sql(
+          s"""
+             | insert into $targetTable values
+             | (1, 'a1', 1000, "2026-01-05"),
+             | (2, 'a2', 2000, "2026-01-06"),
+             | (3, 'a3', 3000, null)
+          """.stripMargin)
+
+        checkAnswer(s"select id, name, ts, _hoodie_partition_path from $targetTable order by id")(
+          Seq("1", "a1", 1000, "2026/01/05"),
+          Seq("2", "a2", 2000, "2026/01/06"),
+          Seq("3", "a3", 3000, "__HIVE_DEFAULT_PARTITION__")
+        )
+
+        val metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+          .setBasePath(tablePath)
+          .build()
+        assertTrue(metaClient.getStorage.exists(new StoragePath(tablePath, "2026/01/05")),
+          s"Partition path 2026/01/05 should exist")
+        assertTrue(metaClient.getStorage.exists(new StoragePath(tablePath, "2026/01/06")),
+          s"Partition path 2026/01/06 should exist")
+        assertTrue(metaClient.getStorage.exists(new StoragePath(tablePath, "__HIVE_DEFAULT_PARTITION__")),
+          s"Partition path __HIVE_DEFAULT_PARTITION__ should exist")
+      }
+    }
+  }
+
   test("Test slash separated date partitions with already formatted input") {
     Seq(true, false).foreach { slashSeparatedPartitioning =>
       withTempDir { tmp =>

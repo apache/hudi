@@ -33,6 +33,9 @@ public class UTF8StringPartitionPathFormatter extends PartitionPathFormatterBase
 
   protected static final UTF8String HUDI_DEFAULT_PARTITION_PATH_UTF8 = UTF8String.fromString(HUDI_DEFAULT_PARTITION_PATH);
 
+  private static final UTF8String DASH_UTF8 = UTF8String.fromString("-");
+  private static final UTF8String SLASH_UTF8 = UTF8String.fromString("/");
+
   public UTF8StringPartitionPathFormatter(Supplier<StringBuilder<UTF8String>> stringBuilderFactory,
                                           boolean useHiveStylePartitioning,
                                           boolean useEncoding,
@@ -57,6 +60,11 @@ public class UTF8StringPartitionPathFormatter extends PartitionPathFormatterBase
     }
 
     return partitionPathPart;
+  }
+
+  @Override
+  protected UTF8String replaceDashesWithSlashes(UTF8String partitionPathPart) {
+    return partitionPathPart.replace(DASH_UTF8, SLASH_UTF8);
   }
 
   public static class UTF8StringBuilder implements StringBuilder<UTF8String> {

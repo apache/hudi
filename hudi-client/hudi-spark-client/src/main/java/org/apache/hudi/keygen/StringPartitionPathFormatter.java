@@ -56,6 +56,11 @@ public class StringPartitionPathFormatter extends PartitionPathFormatterBase<Str
     }
   }
 
+  @Override
+  protected String replaceDashesWithSlashes(String partitionPathPart) {
+    return partitionPathPart.replace('-', '/');
+  }
+
   public static class JavaStringBuilder implements PartitionPathFormatterBase.StringBuilder<String> {
     private final java.lang.StringBuilder sb = new java.lang.StringBuilder();
 

@@ -213,4 +213,34 @@ class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
     Assertions.assertEquals("key1", key.getRecordKey());
     Assertions.assertEquals("2026/01/01", key.getPartitionPath());
   }
+
+  @Test
+  void testSlashSeparatedDatePartitioningOnRowWritingPaths() {
+    TypedProperties properties = getPropsWithSlashSeparatedDatePartitioning();
+    // NOTE: "ts_ms" is the string-typed field of the example schema, "timestamp" is a long
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "ts_ms");
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(properties);
+
+    GenericRecord avroRecord = getRecord();
+    Assertions.assertEquals("2020/03/21", keyGenerator.getPartitionPath(avroRecord));
+
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    Assertions.assertEquals("2020/03/21", keyGenerator.getPartitionPath(row));
+
+    InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
+    Assertions.assertEquals(UTF8String.fromString("2020/03/21"),
+        keyGenerator.getPartitionPath(internalRow, row.schema()));
+  }
+
+  @Test
+  void testSlashSeparatedDatePartitioningWithNullValue() {
+    TypedProperties properties = getPropsWithSlashSeparatedDatePartitioning();
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "nested_col.prop1");
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(properties);
+
+    GenericRecord avroRecord = getRecord(getNestedColRecord(null, 10L));
+
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    Assertions.assertEquals(HUDI_DEFAULT_PARTITION_PATH, keyGenerator.getPartitionPath(row));
+  }
 }

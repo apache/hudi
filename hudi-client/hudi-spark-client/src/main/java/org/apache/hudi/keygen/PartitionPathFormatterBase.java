@@ -62,11 +62,11 @@ public abstract class PartitionPathFormatterBase<S> {
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
     if (!useHiveStylePartitioning && partitionPathParts.length == 1) {
-      if (slashSeparatedDatePartitioning) {
-        return ((S) ((String) toString(partitionPathParts[0])).replace('-', '/'));
-      } else {
-        return tryEncode(handleEmpty(toString(partitionPathParts[0])));
-      }
+      S partitionPathPart = tryEncode(handleEmpty(toString(partitionPathParts[0])));
+      // NOTE: Slash-separated date partitioning only kicks in for a table partitioned by a single
+      //       (date) column, mirroring [[KeyGenUtils#getRecordPartitionPath]] used on the Avro
+      //       write-path: both write-paths have to derive the very same partition path for a record
+      return slashSeparatedDatePartitioning ? replaceDashesWithSlashes(partitionPathPart) : partitionPathPart;
     }
 
     StringBuilder<S> sb = stringBuilderFactory.get();
@@ -75,14 +75,10 @@ public abstract class PartitionPathFormatterBase<S> {
 
       if (useHiveStylePartitioning) {
         sb.appendJava(partitionPathFields.get(i))
-            .appendJava("=")
-            .append(partitionPathPartStr);
-      } else if (slashSeparatedDatePartitioning) {
-        String res = ((String) partitionPathPartStr).replace('-', '/');
-        sb.append(((S) res));
-      } else {
-        sb.append(partitionPathPartStr);
+            .appendJava("=");
       }
+
+      sb.append(partitionPathPartStr);
 
       if (i < partitionPathParts.length - 1) {
         sb.appendJava(DEFAULT_PARTITION_PATH_SEPARATOR);
@@ -101,6 +97,15 @@ public abstract class PartitionPathFormatterBase<S> {
   protected abstract S encode(S partitionPathPart);
 
   protected abstract S handleEmpty(S partitionPathPart);
+
+  /**
+   * Turns a {@code yyyy-MM-dd} formatted date value into the {@code yyyy/MM/dd} directory structure
+   * requested by {@code hoodie.datasource.write.slash.separated.date.partitioning}.
+   *
+   * <p>NOTE: This has to be implemented by every sub-class, since the substitution has to be
+   * performed on the concrete string representation {@code S} the formatter operates on.
+   */
+  protected abstract S replaceDashesWithSlashes(S partitionPathPart);
 
   /**
    * This is a generic interface closing the gap and unifying the {@link java.lang.StringBuilder} with
