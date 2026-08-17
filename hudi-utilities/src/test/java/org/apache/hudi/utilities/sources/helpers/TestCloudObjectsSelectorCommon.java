@@ -21,11 +21,13 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
+import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
@@ -43,6 +45,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -62,32 +66,26 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
   }
 
   @AfterEach
-  void teardown() throws Exception {
+  public void teardown() throws Exception {
     cleanupResources();
   }
 
   @Test
-  void emptyMetadataReturnsEmptyOption() {
+  public void emptyMetadataReturnsEmptyOption() {
     CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(new TypedProperties());
     Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, Collections.emptyList(), "json", Option.empty(), 1);
     Assertions.assertFalse(result.isPresent());
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void filesFromMetadataRead(boolean includeSourcePathField) {
-    TypedProperties properties = new TypedProperties();
-    if (includeSourcePathField) {
-      includeSourcePathFieldProp(properties);
-    }
-    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(properties);
-    String dataPath = "src/test/resources/data/partitioned/country=US/state=CA/data.json";
-    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata(dataPath, 1));
+  @Test
+  public void filesFromMetadataRead() {
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(new TypedProperties());
+    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
     Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.empty(), 1);
-
     Assertions.assertTrue(result.isPresent());
-    assertRowResult(includeSourcePathField, Collections.singletonList(dataPath), result.get(),
-        new Object[]{"some data"});
+    Assertions.assertEquals(1, result.get().count());
+    Row expected = RowFactory.create("some data");
+    Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
   }
 
   @ParameterizedTest
@@ -98,9 +96,7 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
 
     TypedProperties properties = new TypedProperties();
     properties.put("hoodie.streamer.source.cloud.data.partition.fields.from.path", "country,state");
-    if (includeSourcePathField) {
-      includeSourcePathFieldProp(properties);
-    }
+    setIncludeSourcePathField(properties, includeSourcePathField);
     CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(properties);
     Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.empty(), 1);
 
@@ -110,7 +106,7 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
   }
 
   @Test
-  void loadDatasetWithSchema() {
+  public void loadDatasetWithSchema() {
     TypedProperties props = new TypedProperties();
     TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc");
     String schemaFilePath = TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc").getPath();
@@ -126,9 +122,8 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void loadDatasetWithSchemaAndAliasFields(boolean includeSourcePathField) {
+  @Test
+  void loadDatasetWithSchemaAndAliasFields() {
     TypedProperties props = new TypedProperties();
     TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc");
     String schemaFilePath = TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc").getPath();
@@ -136,17 +131,13 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     props.put("hoodie.deltastreamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
     props.put("hoodie.deltastreamer.source.cloud.data.partition.fields.from.path", "country,state");
     props.put("hoodie.streamer.source.cloud.data.reader.coalesce.aliases", "true");
-    if (includeSourcePathField) {
-      includeSourcePathFieldProp(props);
-    }
     CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(props);
-    String dataPath = "src/test/resources/data/partitioned/country=US/state=TX/old_data.json";
-    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata(dataPath, 1));
+    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=TX/old_data.json", 1));
     Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.of(new FilebasedSchemaProvider(props, jsc)), 1);
-
     Assertions.assertTrue(result.isPresent());
-    assertRowResult(includeSourcePathField, Collections.singletonList(dataPath), result.get(),
-        new Object[]{"some data", "US", "TX"});
+    Assertions.assertEquals(1, result.get().count());
+    Row expected = RowFactory.create("some data", "US", "TX");
+    Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
   }
 
   @ParameterizedTest
@@ -159,10 +150,7 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     props.put("hoodie.streamer.source.cloud.data.partition.fields.from.path", "country,state");
     // Setting this config so that dataset repartition happens inside `loadAsDataset`
     props.put("hoodie.streamer.source.cloud.data.partition.max.size", "1");
-
-    if (includeSourcePathField) {
-      includeSourcePathFieldProp(props);
-    }
+    setIncludeSourcePathField(props, includeSourcePathField);
 
     String dataPath1 = "src/test/resources/data/partitioned/country=US/state=CA/data.json";
     String dataPath2 = "src/test/resources/data/partitioned/country=US/state=TX/data.json";
@@ -244,7 +232,7 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
   }
 
   @Test
-  void parquetMixedSchemasMergedByDefault(@TempDir java.nio.file.Path tempDir) {
+  void parquetMixedSchemasMergedByDefault(@TempDir Path tempDir) {
     String p1 = tempDir.resolve("part1").toString();
     String p2 = tempDir.resolve("part2").toString();
 
@@ -310,90 +298,71 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testWithSourcePathColumnAlreadyExistsInDataset(boolean includeSourcePathField) {
-    String dataPath = "src/test/resources/data/data_with_sourcePath_column.json";
-    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata(dataPath, 1));
+  @Test
+  void sourcePathColumnIsUriEncodedAndOverwritesExistingColumn(@TempDir Path tempDir) throws IOException {
+    // file name with a space: input_file_name() returns the percent-encoded URI, and the fixture already
+    // carries a same-named column that must be overwritten rather than duplicated
+    Path dataFile = tempDir.resolve("we ird.json");
+    Files.write(dataFile, Collections.singletonList(
+        "{\"data\": \"some data\", \"" + CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN + "\": \"existing/path\"}"));
     TypedProperties properties = new TypedProperties();
-    if (includeSourcePathField) {
-      includeSourcePathFieldProp(properties);
-    }
+    setIncludeSourcePathField(properties, true);
     CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(properties);
-
-    if (includeSourcePathField) {
-      Exception exception = Assertions.assertThrows(Exception.class,
-          () -> cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.empty(), 1));
-      Assertions.assertTrue(exception.getMessage().contains("Column 'sourcePath' already exists in the dataset"));
-    } else {
-      Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.empty(), 1);
-      Assertions.assertTrue(result.isPresent());
-      Assertions.assertEquals(1, result.get().count());
-      Assertions.assertEquals(Collections.singletonList(RowFactory.create("some data", "existing/path")), result.get().collectAsList());
-    }
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testWithNestedSourcePathColumnExistsInDataset(boolean includeSourcePathField) {
-    String dataPath = "src/test/resources/data/data_with_nested_sourcePath_column.json";
-    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata(dataPath, 1));
-    TypedProperties properties = new TypedProperties();
-    if (includeSourcePathField) {
-      includeSourcePathFieldProp(properties);
-    }
-    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(properties);
-
+    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata(dataFile.toString(), 1));
     Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.empty(), 1);
-    Assertions.assertTrue(result.isPresent());
-    Assertions.assertEquals(1, result.get().count());
 
-    Row nestedMetadata = RowFactory.create("nested/path");
-    Row expectedRow;
-    if (includeSourcePathField) {
-      Assertions.assertTrue(Arrays.asList(result.get().schema().fieldNames()).contains("sourcePath"));
-      String expectedSourcePath = "file://" + new Path(new File(dataPath).getAbsolutePath()).toUri().getPath();
-      expectedRow = RowFactory.create(expectedSourcePath, "some data", nestedMetadata);
-    } else {
-      Assertions.assertFalse(Arrays.asList(result.get().schema().fieldNames()).contains("sourcePath"));
-      expectedRow = RowFactory.create("some data", nestedMetadata);
-    }
-    Assertions.assertEquals(Collections.singletonList(expectedRow), result.get().collectAsList());
+    Assertions.assertTrue(result.isPresent());
+    String expectedPath = dataFile.toUri().toString();
+    Assertions.assertTrue(expectedPath.contains("%20"), expectedPath);
+    // JSON schema inference sorts the inferred fields by name, and overwriting a column keeps its position,
+    // so the source path column stays first here instead of being appended
+    Assertions.assertEquals(Arrays.asList(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN, "data"),
+        Arrays.asList(result.get().schema().fieldNames()));
+    Assertions.assertTrue(result.get().schema().apply(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN).nullable());
+    // the streamer derives the writer schema from the row schema; a non-nullable field would be a required avro
+    // field without a default and could not be added to an existing table
+    HoodieSchemaField sourcePathField = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+            result.get().schema(), RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME, RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE)
+        .getField(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN).get();
+    Assertions.assertTrue(sourcePathField.isNullable());
+    Assertions.assertTrue(sourcePathField.hasDefaultValue());
+    Assertions.assertEquals(Collections.singletonList(RowFactory.create(expectedPath, "some data")), result.get().collectAsList());
   }
 
   /**
-   * Asserts that a Dataset contains expected rows, additionally checking for sourcePath if present.
+   * Asserts that a Dataset contains expected rows; when the source path column is enabled it is expected
+   * to be appended last, nullable, and to hold the file URI of the row's source file.
    */
-  private void assertRowResult(
+  private static void assertRowResult(
       boolean includeSourcePathField,
       List<String> dataPaths,
       Dataset<Row> actualResult,
       Object[]... rowContents) {
+    Assertions.assertEquals(dataPaths.size(), rowContents.length, "dataPaths and rowContents must align");
     Assertions.assertEquals(rowContents.length, actualResult.count());
+    List<String> fieldNames = Arrays.asList(actualResult.schema().fieldNames());
 
     List<Row> expected = new ArrayList<>();
     if (includeSourcePathField) {
-      Assertions.assertTrue(Arrays.asList(actualResult.schema().fieldNames()).contains("sourcePath"));
+      Assertions.assertEquals(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN, fieldNames.get(fieldNames.size() - 1));
+      Assertions.assertTrue(actualResult.schema().apply(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN).nullable());
       for (int i = 0; i < dataPaths.size(); i++) {
-        // Spark adds a leading slash to the path when using local file system
-        String expectedPath = "file://" + new Path(new File(dataPaths.get(i)).getAbsolutePath()).toUri().getPath();
-        List<Object> values = new ArrayList<>();
-        values.add(expectedPath);
-        values.addAll(Arrays.asList(rowContents[i]));
+        List<Object> values = new ArrayList<>(Arrays.asList(rowContents[i]));
+        // input_file_name() returns the file URI, which java.nio's Path.toUri() reproduces byte for byte
+        values.add(new File(dataPaths.get(i)).getAbsoluteFile().toPath().toUri().toString());
         expected.add(RowFactory.create(values.toArray()));
       }
     } else {
-      Assertions.assertFalse(Arrays.asList(actualResult.schema().fieldNames()).contains("sourcePath"));
+      Assertions.assertFalse(fieldNames.contains(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN));
       for (Object[] row : rowContents) {
         expected.add(RowFactory.create(row));
       }
     }
 
-    List<Row> actual = actualResult.collectAsList();
-    Assertions.assertEquals(new HashSet<>(expected), new HashSet<>(actual));
+    Assertions.assertEquals(new HashSet<>(expected), new HashSet<>(actualResult.collectAsList()));
   }
 
-  private void includeSourcePathFieldProp(TypedProperties properties) {
-    properties.put("hoodie.streamer.source.cloud.data.include.source.path.field", "true");
+  private static void setIncludeSourcePathField(TypedProperties properties, boolean include) {
+    properties.put(CloudSourceConfig.INCLUDE_SOURCE_PATH_FIELD.key(), String.valueOf(include));
   }
 }

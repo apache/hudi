@@ -86,6 +86,7 @@ import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.coalesceOrRepartition;
 import static org.apache.spark.sql.functions.input_file_name;
 import static org.apache.spark.sql.functions.split;
+import static org.apache.spark.sql.functions.when;
 
 /**
  * Generic helper methods to fetch from Cloud Storage during incremental fetch from cloud storage buckets.
@@ -100,9 +101,9 @@ public class CloudObjectsSelectorCommon {
   public static final String S3_BUCKET_NAME = "s3.bucket.name";
   public static final String GCS_OBJECT_KEY = "name";
   public static final String GCS_OBJECT_SIZE = "size";
+  public static final String CLOUD_SOURCE_PATH_COLUMN = "_hoodie_cloud_source_path";
   private static final String SPACE_DELIMTER = " ";
   private static final String GCS_PREFIX = "gs://";
-  private static final String SOURCE_PATH_COLUMN = "sourcePath";
 
   private final TypedProperties properties;
 
@@ -345,16 +346,17 @@ public class CloudObjectsSelectorCommon {
       }
     }
 
-    // add source file path to dataset if INCLUDE_SOURCE_PATH_FIELD config is enabled
+    // append the source file path if configured. input_file_name() is non-nullable, so wrap it to make the
+    // column nullable (required to add it to an existing table); the wrapper also maps Spark's "unknown file"
+    // empty string to null. Overwrites a same-named column, matching the partition columns above.
     if (getBooleanWithAltKeys(properties, CloudSourceConfig.INCLUDE_SOURCE_PATH_FIELD)) {
-      boolean sourcePathColumnExists = Arrays.stream(dataset.schema().fieldNames())
-          .anyMatch(name -> name.equalsIgnoreCase(SOURCE_PATH_COLUMN));
-      if (sourcePathColumnExists) {
-        throw new HoodieException(String.format("Column '%s' already exists in the dataset. Dataset columns: [%s]",
-            SOURCE_PATH_COLUMN, String.join(", ", dataset.schema().fieldNames())));
+      if (rowSchema != null && !Arrays.asList(rowSchema.fieldNames()).contains(CLOUD_SOURCE_PATH_COLUMN)) {
+        // the streamer rewrites row sources to the configured schema provider's schema before writing
+        log.warn("Column {} is not declared in the configured schema provider's schema; it will be dropped before "
+            + "the write unless it is declared there", CLOUD_SOURCE_PATH_COLUMN);
       }
-      log.info("Adding source path field to dataset");
-      dataset = dataset.selectExpr("input_file_name() AS " + SOURCE_PATH_COLUMN, "*");
+      log.info("Adding column {} to dataset", CLOUD_SOURCE_PATH_COLUMN);
+      dataset = dataset.withColumn(CLOUD_SOURCE_PATH_COLUMN, when(input_file_name().notEqual(""), input_file_name()));
     }
 
     dataset = coalesceOrRepartition(dataset, numPartitions);
