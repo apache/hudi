@@ -182,6 +182,20 @@ public class CloudSourceConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Boolean value to allow coalesce alias columns with actual columns while reading from source");
 
+  public static final ConfigProperty<Boolean> INCLUDE_SOURCE_PATH_FIELD = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.include.source.path.field")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled, appends a nullable string column named _hoodie_cloud_source_path holding the "
+          + "fully-qualified URI of the source file each record was read from, as returned by Spark's "
+          + "input_file_name() (percent-encoded, e.g. s3a://bucket/dir/file%20name.json). A same-named column "
+          + "already present in the dataset is overwritten. If a schema provider is configured "
+          + "(hoodie.streamer.schemaprovider.class), declare the column in its schema (the source schema for the "
+          + "file-based and schema-registry providers) or it is dropped before the write, with or without a "
+          + "transformer. Once enabled on a table, disabling it fails schema validation on the next sync unless "
+          + "hoodie.write.set.null.for.missing.columns is enabled.");
+
   public static final ConfigProperty<Boolean> CLOUD_INCREMENTAL_MERGE_SCHEMA = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.merge.schema.enable")
       .defaultValue(true)
