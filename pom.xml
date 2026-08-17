@@ -131,7 +131,14 @@
     <hive.parquet.version>1.10.1</hive.parquet.version>
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
-    <trino.version>481</trino.version>
+    <!-- trino.sha is the exact trinodb/trino commit hudi-trino builds against; its project
+         version must equal trino.version and the two advance only together. trino.e2e.version is
+         the latest released Trino (e2e server image, trino-jdbc for the integ tests); the nightly
+         pin-advance job refreshes all three, humans merge its bot/trino-pin branch. Keep each
+         property on one line: the workflows and scripts/trino/bootstrap_trino.sh read them with sed. -->
+    <trino.version>484-SNAPSHOT</trino.version>
+    <trino.sha>5b82ec9e7116ec1ed3a83f4cc2f8cf9aaa87b12f</trino.sha>
+    <trino.e2e.version>483</trino.e2e.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.spark.version>1.6.0</orc.spark.version>
@@ -1758,7 +1765,7 @@
       <dependency>
         <groupId>io.trino</groupId>
         <artifactId>trino-jdbc</artifactId>
-        <version>${trino.version}</version>
+        <version>${trino.e2e.version}</version>
       </dependency>
 
       <!-- Zookeeper -->

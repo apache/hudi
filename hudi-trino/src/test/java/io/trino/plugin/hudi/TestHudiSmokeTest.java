@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 import io.trino.Session;
+import io.trino.blob.cache.alluxio.AlluxioBlobCachePlugin;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.filesystem.TrinoInputFile;
@@ -100,15 +101,23 @@ public class TestHudiSmokeTest
     protected QueryRunner createQueryRunner()
             throws Exception
     {
-        return HudiQueryRunner.builder()
+        HudiQueryRunner.Builder builder = HudiQueryRunner.builder()
                 .setDataLoader(new ResourceHudiTablesInitializer())
-                .addConnectorProperties(getAdditionalHudiProperties())
-                .build();
+                .addConnectorProperties(getAdditionalHudiProperties());
+        getBlobCacheProperties().ifPresent(cacheProperties -> builder
+                .withPlugin(new AlluxioBlobCachePlugin())
+                .withBlobCache("alluxio", cacheProperties));
+        return builder.build();
     }
 
     protected ImmutableMap<String, String> getAdditionalHudiProperties()
     {
         return ImmutableMap.of();
+    }
+
+    protected Optional<Map<String, String>> getBlobCacheProperties()
+    {
+        return Optional.empty();
     }
 
     @Test
@@ -926,6 +935,42 @@ public class TestHudiSmokeTest
 
         // Exercise query and check output
         assertQuery(query, "VALUES (1, 'a1', 100.0, 1000), (3, 'a3', 101.0, 1001)");
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ResourceHudiTablesInitializer.TestingTable.class,
+            names = {"HUDI_MULTI_FG_PT_V6_MOR", "HUDI_MULTI_FG_PT_V8_MOR"})
+    public void testDynamicFilterEliminatesAllSplits(ResourceHudiTablesInitializer.TestingTable table)
+    {
+        Session session = SessionBuilder
+                .from(getSession())
+                .withDynamicFilterTimeout("10s")
+                .build();
+        final String tableIdentifier = "hudi:tests." + table.getRoTableName();
+
+        // The build side matches no rows, so the completed dynamic filter is NONE and the
+        // probe-side split source must report itself finished instead of draining the queue
+        @Language("SQL") String query = "SELECT t1.id FROM " +
+                table + " t1 " +
+                "INNER JOIN " + table + " t2 ON t1.id = t2.id " +
+                "WHERE t2.price < 0";
+        MaterializedResult explainRes = getQueryRunner().execute(session, "EXPLAIN ANALYZE " + query);
+        Pattern scanFilterInputRowsPattern = getScanFilterInputRowsPattern(tableIdentifier);
+        Matcher matcher = scanFilterInputRowsPattern.matcher(explainRes.toString());
+        assertThat(matcher.find())
+                .withFailMessage("Could not find 'ScanFilter' for table '%s' with 'dynamicFilters' and 'Input: X rows' stats in EXPLAIN output.\nOutput was:\n%s",
+                        tableIdentifier, explainRes.toString())
+                .isTrue();
+
+        // Zero probe-side input rows pins split elimination at the source: without the NONE
+        // short-circuit the probe would scan all rows and the join would discard them, which
+        // returns the same empty result but reads Input: 4 rows here
+        assertThat(Long.parseLong(matcher.group(1)))
+                .describedAs("Probe side (%s) should read no rows when the dynamic filter is NONE", tableIdentifier)
+                .isEqualTo(0);
+
+        assertThat(getQueryRunner().execute(session, query).getRowCount()).isEqualTo(0);
     }
 
     @ParameterizedTest

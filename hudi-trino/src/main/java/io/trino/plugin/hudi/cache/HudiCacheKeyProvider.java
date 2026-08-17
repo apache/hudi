@@ -15,6 +15,7 @@ package io.trino.plugin.hudi.cache;
 
 import io.trino.filesystem.TrinoInputFile;
 import io.trino.filesystem.cache.CacheKeyProvider;
+import io.trino.spi.cache.CacheKey;
 
 import java.util.Optional;
 
@@ -22,7 +23,7 @@ public class HudiCacheKeyProvider
         implements CacheKeyProvider
 {
     @Override
-    public Optional<String> getCacheKey(TrinoInputFile inputFile)
+    public Optional<CacheKey> getCacheKey(TrinoInputFile inputFile)
     {
         String path = inputFile.location().path();
         if (path.endsWith(".trinoSchema") || path.contains("/.trinoPermissions/")
@@ -32,7 +33,8 @@ public class HudiCacheKeyProvider
             // and Hudi table properties file that can be mutable
             return Optional.empty();
         }
-        // Other Hudi data and metadata files are immutable
-        return Optional.of(path);
+        // Other Hudi data and metadata files are immutable, so the location alone identifies the
+        // contents; keying by its components also lets a directory's entries be invalidated by prefix
+        return Optional.of(CacheKeyProvider.locationKey(inputFile.location()));
     }
 }
