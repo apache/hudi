@@ -109,7 +109,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    * @param config instance of {@link HoodieWriteConfig} to use.
    * @param instantTime instant time of the current commit.
    * @param hoodieTable instance of {@link HoodieTable} being updated.
-   * @param mergeContext context carrying incoming data to merge and characteristics
+   * @param mergeContext Context carrying incoming data to merge and its characteristics.
    * @param partitionPath partition path of the base file.
    * @param fileId file ID of the base file.
    * @param taskContextSupplier instance of {@link TaskContextSupplier} to use.
@@ -128,7 +128,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    * @param config instance of {@link HoodieWriteConfig} to use.
    * @param instantTime instant time of the current commit.
    * @param hoodieTable instance of {@link HoodieTable} being updated.
-   * @param mergeContext context carrying incoming data to merge and characteristics
+   * @param mergeContext Context carrying incoming data to merge and its characteristics.
    * @param partitionPath partition path of the base file.
    * @param fileId file ID of the base file.
    * @param taskContextSupplier instance of {@link TaskContextSupplier} to use.
@@ -145,7 +145,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     this.maxInstantTime = instantTime;
     initRecordType(hoodieTable.getConfig().getRecordMerger().getRecordType());
     this.props = TypedProperties.copy(config.getProps());
-    this.incomingRecordsItr = mergeContext.getRecordItr();
+    this.incomingRecordsItr = mergeContext.getRecordIterator();
   }
 
   /**

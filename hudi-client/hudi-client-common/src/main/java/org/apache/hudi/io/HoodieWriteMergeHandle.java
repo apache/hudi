@@ -124,7 +124,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
                                 MergeContext<T> mergeContext, String partitionPath, String fileId,
                                 TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt, false);
-    populateIncomingRecordsMap(mergeContext.getRecordItr());
+    populateIncomingRecordsMap(mergeContext.getRecordIterator());
     initMarkerFileAndFileWriter(fileId, partitionPath);
     this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
     this.orderingFields = ConfigUtils.getOrderingFields(config.getProps());
@@ -132,6 +132,10 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
   /**
    * Called by compactor code path.
+   *
+   * <p>The incoming records arrive as the {@code keyToNewRecords} map instead of an iterator,
+   * so the {@link MergeContext} passed to the parent carries an empty iterator and
+   * {@link MergeContext#UNKNOWN_NUM_UPDATES}; workload profiling does not run on this path.
    */
   public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                 Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,

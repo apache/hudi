@@ -23,39 +23,49 @@ import org.apache.hudi.common.model.HoodieRecord;
 import java.util.Iterator;
 
 /**
- * Context for merge handle creation, carrying incoming data and characteristics
+ * Context for merge handle creation, carrying incoming data to merge and its characteristics.
  */
 public class MergeContext<T> {
 
   /**
-   * The estimated number of incoming update and delete records to merge
-   * A value of -1 means unknown.
+   * Sentinel value indicating that the number of update records is unknown.
    */
-  private final long numIncomingUpdates;
+  public static final long UNKNOWN_NUM_UPDATES = -1L;
+
+  /**
+   * The number of incoming update and delete records tagged to the file group based on
+   * workload profiling, or {@link #UNKNOWN_NUM_UPDATES} if unknown.
+   *
+   * <p>This is a lower bound of the record count of {@link #recordIterator}, not its exact
+   * size: with small-file handling, inserts routed to the same file group also flow through
+   * the iterator but are not counted here. Do not use this value to pre-size a data structure
+   * that must hold all incoming records.
+   */
+  private final long numUpdates;
 
   /**
    * Iterator over the incoming records to be merged.
    */
-  private final Iterator<HoodieRecord<T>> recordItr;
+  private final Iterator<HoodieRecord<T>> recordIterator;
 
-  private MergeContext(long numIncomingUpdates, Iterator<HoodieRecord<T>> recordItr) {
-    this.numIncomingUpdates = numIncomingUpdates;
-    this.recordItr = recordItr;
+  private MergeContext(long numUpdates, Iterator<HoodieRecord<T>> recordIterator) {
+    this.numUpdates = numUpdates;
+    this.recordIterator = recordIterator;
   }
 
-  public static <T> MergeContext<T> create(long numIncomingUpdates, Iterator<HoodieRecord<T>> recordItr) {
-    return new MergeContext<>(numIncomingUpdates, recordItr);
+  public static <T> MergeContext<T> create(long numUpdates, Iterator<HoodieRecord<T>> recordIterator) {
+    return new MergeContext<>(numUpdates, recordIterator);
   }
 
-  public static <T> MergeContext<T> create(Iterator<HoodieRecord<T>> recordItr) {
-    return new MergeContext<>(-1L, recordItr);
+  public static <T> MergeContext<T> create(Iterator<HoodieRecord<T>> recordIterator) {
+    return new MergeContext<>(UNKNOWN_NUM_UPDATES, recordIterator);
   }
 
-  public long getNumIncomingUpdates() {
-    return numIncomingUpdates;
+  public long getNumUpdates() {
+    return numUpdates;
   }
 
-  public Iterator<HoodieRecord<T>> getRecordItr() {
-    return recordItr;
+  public Iterator<HoodieRecord<T>> getRecordIterator() {
+    return recordIterator;
   }
 }

@@ -46,9 +46,12 @@ import java.util.NoSuchElementException;
 @Slf4j
 public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> implements HoodieMergeHandle<T, I, K, O> {
 
-  // The number of incoming update records based on tagging; -1 means unknown
+  // The number of incoming update and delete records based on tagging; see the
+  // MergeContext#numUpdates javadoc for the exact semantics (lower bound, not iterator size).
+  // MergeContext.UNKNOWN_NUM_UPDATES on code paths without workload profiling, e.g.,
+  // compaction and metadata table writes.
   @Getter
-  protected long numIncomingUpdates = -1L;
+  protected long numUpdates = MergeContext.UNKNOWN_NUM_UPDATES;
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected StoragePath newFilePath;
   @Getter
@@ -67,7 +70,7 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
    * @param config Hoodie writer configs.
    * @param instantTime current instant time.
    * @param hoodieTable an instance of {@link HoodieTable}
-   * @param mergeContext context carrying incoming data to merge and characteristics
+   * @param mergeContext Context carrying incoming data to merge and its characteristics.
    * @param partitionPath Partition path of the upsert and insert records.
    * @param fileId New file id of the target base file.
    * @param taskContextSupplier Base task context supplier
@@ -78,7 +81,7 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
                                    MergeContext<T> mergeContext, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
                                    HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt, boolean preserveMetadata) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, preserveMetadata);
-    this.numIncomingUpdates = mergeContext.getNumIncomingUpdates();
+    this.numUpdates = mergeContext.getNumUpdates();
     this.baseFileToMerge = baseFile;
     this.keyGeneratorOpt = keyGeneratorOpt;
     initPartitionMetadataAndFilePaths(partitionPath);

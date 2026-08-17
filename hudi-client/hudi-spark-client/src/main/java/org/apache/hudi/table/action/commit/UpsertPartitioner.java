@@ -212,6 +212,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
               bucket = updateLocationToBucket.get(smallFile.location.getFileId());
               log.debug("Assigning {} inserts to existing update bucket {}", recordsToAppend, bucket);
             } else {
+              // the bucket receives inserts only, so no tagged updates are expected
               bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId(), 0L);
               log.debug("Assigning {} inserts to new update bucket {}", recordsToAppend, bucket);
             }
