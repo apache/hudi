@@ -27,6 +27,7 @@ on:
       - 'hudi-integ-test/**'
       - 'pom.xml'
       - '.github/workflows/hudi_trino_e2e.yml'
+      - 'scripts/trino/**'
   pull_request:
     branches:
       - master
@@ -41,6 +42,7 @@ on:
       - 'hudi-integ-test/**'
       - 'pom.xml'
       - '.github/workflows/hudi_trino_e2e.yml'
+      - 'scripts/trino/**'
   workflow_dispatch:
 
 concurrency:
@@ -91,24 +93,23 @@ jobs:
           E2E_VERSION: ${{ steps.trino-pin.outputs.e2e_version }}
         run: |
           set -euo pipefail
-          COMPARE="$RUNNER_TEMP/trino-compare.json"
-          gh api "repos/trinodb/trino/compare/${E2E_VERSION}...${TRINO_SHA}" > "$COMPARE"
-          COUNT=$(jq '.files | length' "$COMPARE")
+          # Per-path commit queries, NOT the compare API: compare caps its file list at 300
+          # and a single Trino release cycle already exceeds that, so a capped compare would
+          # flag every pin more than a release old as drifted. The commits API is uncapped;
+          # any commit reachable from the pin that touched an SPI-relevant path after the
+          # released tag's commit date (excluding the tag commit itself) is drift. Existence
+          # is enough, so the first page settles it -- truncation cannot yield a false pass.
+          TAG_SHA=$(gh api "repos/trinodb/trino/commits/${E2E_VERSION}" --jq .sha)
+          TAG_DATE=$(gh api "repos/trinodb/trino/commits/${E2E_VERSION}" --jq .commit.committer.date)
           DRIFTED=false
-          # The compare API caps the file list at 300; treat a capped list as drifted rather
-          # than trusting a truncated sample.
-          if [ "$COUNT" -ge 300 ]; then
-            DRIFTED=true
-          fi
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            case "$f" in
-              core/trino-spi/*|lib/trino-filesystem/*|lib/trino-filesystem-manager/*|lib/trino-hdfs/*)
-                echo "SPI-relevant change: $f"
+          for p in core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs; do
+            for c in $(gh api "repos/trinodb/trino/commits?sha=${TRINO_SHA}&path=${p}&since=${TAG_DATE}" --jq '.[].sha'); do
+              if [ "$c" != "$TAG_SHA" ]; then
+                echo "SPI-relevant change under ${p}: ${c}"
                 DRIFTED=true
-                ;;
-            esac
-          done <<< "$(jq -r '.files[].filename' "$COMPARE")"
+              fi
+            done
+          done
           echo "drifted=$DRIFTED" >> "$GITHUB_OUTPUT"
           if [ "$DRIFTED" = "true" ]; then
             {

@@ -941,6 +941,26 @@ public class TestHudiSmokeTest
     @EnumSource(
             value = ResourceHudiTablesInitializer.TestingTable.class,
             names = {"HUDI_MULTI_FG_PT_V6_MOR", "HUDI_MULTI_FG_PT_V8_MOR"})
+    public void testDynamicFilterEliminatesAllSplits(ResourceHudiTablesInitializer.TestingTable table)
+    {
+        Session session = SessionBuilder
+                .from(getSession())
+                .withDynamicFilterTimeout("10s")
+                .build();
+
+        // The build side matches no rows, so the completed dynamic filter is NONE and the
+        // probe-side split source must report itself finished instead of draining the queue
+        @Language("SQL") String query = "SELECT t1.id FROM " +
+                table + " t1 " +
+                "INNER JOIN " + table + " t2 ON t1.id = t2.id " +
+                "WHERE t2.price < 0";
+        assertThat(getQueryRunner().execute(session, query).getRowCount()).isEqualTo(0);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ResourceHudiTablesInitializer.TestingTable.class,
+            names = {"HUDI_MULTI_FG_PT_V6_MOR", "HUDI_MULTI_FG_PT_V8_MOR"})
     public void testDynamicFilterDisabledPredicatePushdown(ResourceHudiTablesInitializer.TestingTable table)
     {
         Session session = SessionBuilder.from(getSession())

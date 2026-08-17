@@ -21,7 +21,7 @@ Hudi connector for Trino (RFC-105). Published as `org.apache.hudi:hudi-trino` --
 
 ## Bootstrap Trino (do this first)
 
-On master no `io.trino` artifact resolves from Maven Central: master tracks `trinodb/trino` master at the commit pinned by `trino.sha` in the root pom, and Trino publishes no SNAPSHOT artifacts. One time per pin advance, clone `trinodb/trino` (or reuse a checkout) and build it under JDK 25:
+On master no `io.trino` artifact resolves from Maven Central: master tracks `trinodb/trino` master at the commit pinned by `trino.sha` in the root pom, and Trino publishes no SNAPSHOT artifacts. Pin ownership: the nightly `Hudi Trino SPI Compatibility` job verifies trino HEAD and pushes a `bot/trino-pin` branch (also refreshing `trino.e2e.version`); a committer opens and merges its PR, so the pin advances roughly nightly-to-weekly. One time per pin advance, clone `trinodb/trino` (or reuse a checkout) and build it under JDK 25:
 
 ```
 scripts/trino/bootstrap_trino.sh /path/to/trino
@@ -82,13 +82,15 @@ mvn -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
 #    shadow the real io.trino:trino-hudi release coordinates in the local m2).
 #    dep.hudi.version comes from the reactor pom: the shim sits outside the
 #    reactor, so cut_release_branch.sh cannot bump its literal default.
+#    The unzip lives here, not in step 4: the fast-iteration loop below repeats
+#    steps 2-3 only, and `clean` wipes the previously exploded dir.
 HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
+TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
 mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
+unzip -o -q "docker/trino/shim/target/trino-hudi-$TRINO_VERSION.zip" -d docker/trino/shim/target  # trino-maven-plugin 24 emits only the zip
 
 # 4. Build the Trino image (locally tagged; never published). The base server defaults to
 #    trino.e2e.version; pass --trino-version to override it.
-TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
-unzip -o -q "docker/trino/shim/target/trino-hudi-$TRINO_VERSION.zip" -d docker/trino/shim/target  # trino-maven-plugin 24 emits only the zip
 docker/trino/build_image.sh --plugin-dir "docker/trino/shim/target/trino-hudi-$TRINO_VERSION"
 
 # 5. JDK 17: run the suite (only the spark402 compose pair has the trino service)

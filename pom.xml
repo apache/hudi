@@ -133,7 +133,8 @@
     <presto.version>0.273</presto.version>
     <!-- trino.sha is the exact trinodb/trino commit hudi-trino builds against; its project
          version must equal trino.version and the two advance only together. trino.e2e.version is
-         the latest released Trino (e2e server image, trino-jdbc for the integ tests). Keep each
+         the latest released Trino (e2e server image, trino-jdbc for the integ tests); the nightly
+         pin-advance job refreshes all three, humans merge its bot/trino-pin branch. Keep each
          property on one line: the workflows and scripts/trino/bootstrap_trino.sh read them with sed. -->
     <trino.version>484-SNAPSHOT</trino.version>
     <trino.sha>5b82ec9e7116ec1ed3a83f4cc2f8cf9aaa87b12f</trino.sha>

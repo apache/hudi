@@ -290,6 +290,31 @@ Here is how to go about a bug fix release.
 - Go to apache/hudi repo locally and pull this branch. Here after you can work on this branch and push to origin when need be.
 - Do not forget to set the env variables from above section.
 
+## hudi-trino Trino pin-back
+
+On master hudi-trino tracks `trinodb/trino` master at the commit in `trino.sha`, whose `trino.version` is a
+`-SNAPSHOT` that resolves from nowhere but a local build. A release must depend on a released Trino, and the pin-back
+must land on the release branch before the source release is generated (see "Build a release candidate", the Generate
+Source Release step) -- otherwise the voted tarball ships a `-SNAPSHOT` Trino pin that cannot be built from Central.
+
+1. Wait for the latest released Trino `NNN` to be available on Maven Central.
+2. In a `trinodb/trino` checkout, find the tagged commit: `TAG_SHA=$(git rev-list -n1 NNN)`.
+3. If the pin is behind the tag, advance master's pin to `TAG_SHA` first by running the
+   `Hudi Trino SPI Compatibility` workflow via `workflow_dispatch` and merging the pin PR a committer opens from the
+   pushed `bot/trino-pin` branch. If the pin is ahead of the tag, enumerate the adaptations that would be lost with
+   `git log NNN..<pin> -- core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs`
+   and revert them forward on the release branch only, never on master.
+4. On the release branch set `trino.version=NNN`, `trino.sha=TAG_SHA` and `trino.e2e.version=NNN` in the root
+   pom, the `<parent>` version in `docker/trino/shim/pom.xml`, and the `docker/trino` defaults
+   (`TRINO_VERSION` in `build_image.sh`, `ARG TRINO_VERSION` in `Dockerfile`). Re-check SPI-surface-coupled
+   dependency scopes against `NNN` (e.g. `jts-core` is `provided` because it joined the Trino SPI surface in 482;
+   the shim's SpiDependencyChecker fails the build loudly if a scope no longer matches the target release).
+5. Verify the released Trino resolves from Central against an empty local repository
+   (scope the check to io.trino: the module's hudi siblings are not on Central until this release completes):
+   `mvn dependency:get -Dartifact=io.trino:trino-hive:NNN -Dmaven.repo.local=$(mktemp -d)`
+6. CI and the E2E workflow then run with zero SPI drift; the staging deploy flow in "Build a release candidate"
+   is unchanged.
+
 ## Verify that a Release Build Works
 
 Run "mvn -Prelease clean install" to ensure that the build processes are in good shape. // You need to execute this command once you have the release branch in apache/hudi
@@ -429,23 +454,8 @@ Set up a few environment variables to simplify Maven commands that follow. This 
           and `./scripts/release/deploy_staging_jars_java25.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy3.log"`.
           This step must run after the Java 11 step in 9.4.1, which installs the upstream Hudi modules that hudi-trino
           resolves from the local m2 (the script does not pass `-am` because Lombok cannot run on JDK 25).
-       4. hudi-trino Trino pin-back, to be done on the release branch before 9.4.3. On master hudi-trino tracks
-          `trinodb/trino` master at the commit in `trino.sha`, whose `trino.version` is a `-SNAPSHOT` that resolves from
-          nowhere but a local build; a release must depend on a released Trino instead.
-           1. Wait for the latest released Trino `NNN` to be available on Maven Central.
-           2. In a `trinodb/trino` checkout, find the tagged commit: `TAG_SHA=$(git rev-list -n1 NNN)`.
-           3. If the pin is behind the tag, advance master's pin to `TAG_SHA` first by running the
-              `Hudi Trino SPI Compatibility` workflow via `workflow_dispatch` and merging the pin PR it opens. If the pin
-              is ahead of the tag, enumerate the adaptations that would be lost with
-              `git log NNN..<pin> -- core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs`
-              and revert them forward on the release branch only, never on master.
-           4. On the release branch set `trino.version=NNN`, `trino.sha=TAG_SHA` and `trino.e2e.version=NNN` in the root
-              pom, the `<parent>` version in `docker/trino/shim/pom.xml`, and the `docker/trino` defaults
-              (`TRINO_VERSION` in `build_image.sh`, `ARG TRINO_VERSION` in `Dockerfile`).
-           5. Verify the released Trino resolves from Central against an empty local repository
-              (scope the check to io.trino: the module's hudi siblings are not on Central until this release completes):
-              `mvn dependency:get -Dartifact=io.trino:trino-hive:NNN -Dmaven.repo.local=$(mktemp -d)`
-           6. CI and the E2E workflow then run with zero SPI drift; the staging deploy flow above is unchanged.
+       4. The hudi-trino Trino pin-back already happened when the release branch was cut (see the
+          "hudi-trino Trino pin-back" section under "Cut a release branch"); the Java 25 deploy needs no extra steps.
    5. Note that each of the Java 17 and Java 25 builds uploads its artifacts to its own separate staging repo. Use the
       `copy_staging_repo.sh` script once per extra staging repo to copy all artifacts into the Java 11 staging repo
       so that all artifacts stay in the same repo.

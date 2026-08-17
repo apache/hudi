@@ -5,12 +5,14 @@ on:
     - cron: '17 4 * * *'
   workflow_dispatch:
 
-# The failure handler files/updates a drift report issue; on success the job pushes the
-# pin-advance branch and opens its PR.
+# Two jobs on purpose: the build job executes mvnw from a fresh trinodb/trino master
+# checkout, so it must never hold a push-capable token; the propose job holds
+# contents: write but runs no third-party code. The failure handler files/updates a
+# drift report issue; on success the propose job pushes the pin-advance branch and a
+# human opens the PR (a GITHUB_TOKEN-created PR would start no workflow runs, so the
+# required checks could never report).
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 env:
   MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip
@@ -19,6 +21,12 @@ jobs:
   compile-against-trino-master:
     name: Compile hudi-trino against trinodb/trino master
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      head_sha: ${{ steps.trino-head.outputs.head_sha }}
+      trino_version: ${{ steps.trino-version.outputs.trino_version }}
     steps:
       - name: Checkout Hudi
         uses: actions/checkout@v5
@@ -89,40 +97,6 @@ jobs:
         with:
           path: ~/.m2/repository/io/trino
           key: trino-m2-v2-${{ steps.trino-head.outputs.head_sha }}
-      - name: Propose pin advance
-        # Pin PRs are human-merged by policy. Org settings may forbid GITHUB_TOKEN from creating
-        # PRs; the branch still lands and the PR is then opened by hand.
-        working-directory: hudi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ steps.trino-head.outputs.head_sha }}
-          TRINO_VERSION: ${{ steps.trino-version.outputs.trino_version }}
-          BASE_BRANCH: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          PINNED_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git checkout -B bot/trino-pin
-          sed -i "s|<trino.sha>.*</trino.sha>|<trino.sha>${HEAD_SHA}</trino.sha>|" pom.xml
-          if [ "$TRINO_VERSION" != "$PINNED_VERSION" ]; then
-            # Version rollover: the shim's parent tracks trino.version.
-            sed -i "s|<trino.version>.*</trino.version>|<trino.version>${TRINO_VERSION}</trino.version>|" pom.xml
-            sed -i "/<parent>/,/<\/parent>/ s|<version>.*</version>|<version>${TRINO_VERSION}</version>|" docker/trino/shim/pom.xml
-          fi
-          if git diff --quiet; then
-            echo "Pin is already at ${HEAD_SHA}; nothing to propose."
-            exit 0
-          fi
-          TITLE="build(trino): advance trino master pin to ${HEAD_SHA:0:12}"
-          git commit -am "$TITLE"
-          git push --force origin bot/trino-pin
-          if [ -n "$(gh pr list --head bot/trino-pin --state open --json number --jq '.[].number')" ]; then
-            echo "Open pin PR picked up the force-push."
-            exit 0
-          fi
-          gh pr create --base "$BASE_BRANCH" --head bot/trino-pin --title "$TITLE" \
-            --body "hudi-trino compiles against trinodb/trino ${TRINO_VERSION} at ${HEAD_SHA}."
       - name: Open issue on failure
         # Only a connector compile failure is SPI drift. A bare failure() would also file
         # the issue for a failed checkout or a broken trinodb/trino master build, with an
@@ -155,3 +129,59 @@ jobs:
               title: `hudi-trino SPI drift detected against Trino ${version}`,
               body: `${marker}\nNightly compatibility build failed against Trino ${version}. See ${runUrl}.`,
             });
+
+  propose-pin-advance:
+    name: Push pin-advance branch
+    runs-on: ubuntu-latest
+    needs: compile-against-trino-master
+    # The only job with a push credential; it checks out apache/hudi alone and runs no
+    # Maven or third-party code. Pin PRs are opened and merged by humans.
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Hudi
+        uses: actions/checkout@v5
+      - name: Push pin-advance branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ needs.compile-against-trino-master.outputs.head_sha }}
+          TRINO_VERSION: ${{ needs.compile-against-trino-master.outputs.trino_version }}
+          BASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          PINNED_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B bot/trino-pin
+          sed -i "s|<trino.sha>.*</trino.sha>|<trino.sha>${HEAD_SHA}</trino.sha>|" pom.xml
+          if [ "$TRINO_VERSION" != "$PINNED_VERSION" ]; then
+            # Version rollover: the shim's parent tracks trino.version.
+            sed -i "s|<trino.version>.*</trino.version>|<trino.version>${TRINO_VERSION}</trino.version>|" pom.xml
+            sed -i "/<parent>/,/<\/parent>/ s|<version>.*</version>|<version>${TRINO_VERSION}</version>|" docker/trino/shim/pom.xml
+          fi
+          # Keep trino.e2e.version current too; without this it silently stops being
+          # "the latest released Trino" at the next upstream release. Best-effort: an
+          # API hiccup must not block the pin advance.
+          LATEST_RELEASE=$(gh api repos/trinodb/trino/releases/latest --jq .tag_name || true)
+          if printf '%s' "$LATEST_RELEASE" | grep -qE '^[0-9]+$'; then
+            sed -i "s|<trino.e2e.version>.*</trino.e2e.version>|<trino.e2e.version>${LATEST_RELEASE}</trino.e2e.version>|" pom.xml
+          else
+            echo "Could not determine the latest Trino release ('${LATEST_RELEASE}'); leaving trino.e2e.version unchanged."
+          fi
+          if git diff --quiet; then
+            echo "Pin is already at ${HEAD_SHA}; nothing to propose."
+            exit 0
+          fi
+          TITLE="chore(trino): advance trino master pin to ${HEAD_SHA:0:12}"
+          git commit -am "$TITLE"
+          git push --force origin bot/trino-pin
+          {
+            echo "## Pin advance pushed to bot/trino-pin"
+            echo ""
+            echo "hudi-trino compiles against trinodb/trino ${TRINO_VERSION} at ${HEAD_SHA}."
+            echo "Open the PR (bot-created PRs trigger no workflow runs, so a human does this):"
+            echo ""
+            echo '```'
+            echo "gh pr create --repo ${GITHUB_REPOSITORY} --base ${BASE_BRANCH} --head bot/trino-pin --title \"${TITLE}\" --body \"Nightly-verified pin advance; see the Hudi Trino SPI Compatibility run.\""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
