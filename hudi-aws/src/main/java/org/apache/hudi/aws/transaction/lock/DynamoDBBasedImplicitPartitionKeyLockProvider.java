@@ -21,7 +21,6 @@ package org.apache.hudi.aws.transaction.lock;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -73,7 +72,6 @@ public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBased
    * rolling upgrade would leave old and new writers on two different lock rows for the same
    * table, losing mutual exclusion. Base paths without a trailing slash are unaffected.
    */
-  @VisibleForTesting
   public static String derivePartitionKey(String hudiTableBasePath) {
     String normalized = normalizeBasePathForLocking(hudiTableBasePath);
     String partitionKey = HashID.generateXXHashAsString(normalized, HashID.Size.BITS_64);
