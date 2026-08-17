@@ -59,10 +59,18 @@ public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBased
    * Compute the DynamoDB partition key for a given Hudi table base path. Exposed as a static
    * helper so that the formula is testable without standing up a DynamoDB client.
    *
-   * <p>Accepts a raw basePath — normalization is applied here. {@code normalizeBasePathForLocking}
+   * <p>Accepts a raw basePath - normalization is applied here. {@code normalizeBasePathForLocking}
    * is idempotent, so passing an already-normalized path is safe. Note that the instance field
    * {@code normalizedHudiTableBasePath} cannot be used here: the parent constructor invokes this
    * through {@code getDynamoDBPartitionKey} before the subclass has a chance to assign the field.
+   * That ordering is also why the path is normalized twice per construction - once here and once
+   * for the field; it is a pure function over a short string, run once per provider.
+   *
+   * <p>ROLLOUT: for a table whose configured {@code hoodie.base.path} ends in '/' or carries
+   * surrounding whitespace, this returns a different DynamoDB partition key than releases before
+   * HUDI's normalization fix. Such a table must have all of its writers upgraded together - a
+   * rolling upgrade would leave old and new writers on two different lock rows for the same
+   * table, losing mutual exclusion. Base paths without a trailing slash are unaffected.
    */
   public static String derivePartitionKey(String hudiTableBasePath) {
     String normalized = normalizeBasePathForLocking(hudiTableBasePath);

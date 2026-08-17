@@ -164,6 +164,54 @@ public class TestZookeeperBasedLockProvider {
     Assertions.assertEquals(IllegalArgumentException.class, ex.getCause().getCause().getClass());
   }
 
+  /**
+   * Build an implicit-provider lock config for {@code hudiTableBasePath}, independent of the
+   * shared fixtures above (those are mutated progressively in {@link #setup()}).
+   */
+  private static LockConfiguration implicitLockConfig(String hudiTableBasePath) {
+    Properties props = new Properties();
+    props.setProperty(ZK_CONNECT_URL_PROP_KEY, server.getConnectString());
+    props.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
+    props.setProperty(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY, "3000");
+    props.setProperty(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "3");
+    props.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
+    props.setProperty(ZK_SESSION_TIMEOUT_MS_PROP_KEY, "10000");
+    props.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, "10000");
+    props.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "1000");
+    props.setProperty(HoodieCommonConfig.BASE_PATH.key(), hudiTableBasePath);
+    props.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "ma_po_tofu_is_awesome");
+    return new LockConfiguration(props);
+  }
+
+  /**
+   * Two writers on the SAME table whose base paths differ only by a trailing slash must contend
+   * for one znode. Before the base path was canonicalized they hashed to two different znodes and
+   * both acquired, silently losing mutual exclusion and letting concurrent writers corrupt the
+   * timeline. This is the end-to-end guard for that; the pure-function coverage lives in
+   * {@code TestZookeeperBasedImplicitBasePathLockProvider}.
+   */
+  @Test
+  void testTrailingSlashBasePathContendsForTheSameLock() {
+    String tableBasePath = "s3://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/contended_table";
+    ZookeeperBasedImplicitBasePathLockProvider writerA =
+        new ZookeeperBasedImplicitBasePathLockProvider(implicitLockConfig(tableBasePath), null);
+    ZookeeperBasedImplicitBasePathLockProvider writerB =
+        new ZookeeperBasedImplicitBasePathLockProvider(implicitLockConfig(tableBasePath + "/"), null);
+    try {
+      Assertions.assertTrue(writerA.tryLock(1000, TimeUnit.MILLISECONDS));
+      // BaseZookeeperBasedLockProvider#tryLock throws rather than returning false when the
+      // mutex cannot be acquired within the timeout.
+      Assertions.assertThrows(HoodieLockException.class,
+          () -> writerB.tryLock(1000, TimeUnit.MILLISECONDS),
+          "Writer B derived a different znode for the same table and lost mutual exclusion");
+    } finally {
+      writerA.unlock();
+      writerB.unlock();
+      writerA.close();
+      writerB.close();
+    }
+  }
+
   @Test
   public void testUnLock() {
     ZookeeperBasedLockProvider zookeeperBasedLockProvider = new ZookeeperBasedLockProvider(zkConfWithZkBasePathAndLockKeyLock, null);

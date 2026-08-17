@@ -22,6 +22,7 @@ package org.apache.hudi.client.transaction.lock;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -60,9 +61,29 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
     TypedProperties typedProperties = lockConfiguration.getConfig();
     basePath = lockConfiguration.getConfig().getProperty(HoodieCommonConfig.BASE_PATH.key());
     ValidationUtils.checkArgument(basePath != null);
-    lock = LOCK_INSTANCE_PER_BASEPATH.computeIfAbsent(basePath, (ignore) -> new ReentrantReadWriteLock());
+    lock = LOCK_INSTANCE_PER_BASEPATH.computeIfAbsent(
+        canonicalizeBasePath(basePath), (ignore) -> new ReentrantReadWriteLock());
     maxWaitTimeMillis = typedProperties.getLong(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,
         LockConfiguration.DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS);
+  }
+
+  /**
+   * Key the per-table lock on the canonical base path, so that two writers in this JVM that
+   * disagree only on a trailing slash, s3a-vs-s3 scheme, or surrounding whitespace still contend
+   * for the same lock instead of running concurrently.
+   *
+   * <p>Degenerate paths that {@code normalizeBasePathForLocking} refuses to canonicalize (notably
+   * the empty path used by {@code HoodieTimeGeneratorConfig.defaultConfig("")}) fall back to the
+   * raw string, preserving the previous behaviour for those callers. Unlike the DynamoDB and
+   * Zookeeper implicit providers, this map lives only in-process, so changing the key carries no
+   * upgrade or rollout risk.
+   */
+  private static String canonicalizeBasePath(String basePath) {
+    try {
+      return FSUtils.normalizeBasePathForLocking(basePath);
+    } catch (IllegalArgumentException e) {
+      return basePath;
+    }
   }
 
   @Override

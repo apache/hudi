@@ -18,50 +18,73 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.junit.jupiter.api.Assertions;
+import org.apache.hudi.common.util.hash.HashID;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Exercises {@link ZookeeperBasedImplicitBasePathLockProvider#getLockBasePath} as a pure
- * function — no Zookeeper server required. Verifies that benign formatting variations in the
- * hudi table base path (trailing slash, multi-slash, whitespace, s3a vs s3 scheme) all produce
- * the same Zookeeper lock base path. Without this invariant, two engines writing the same Hudi
- * table can take independent locks and lose mutual exclusion.
+ * Exercises {@link ZookeeperBasedImplicitBasePathLockProvider#getLockBasePath} as a pure function
+ * - no Zookeeper server required. See
+ * {@code TestZookeeperBasedLockProvider#testTrailingSlashBasePathContendsForTheSameLock} for the
+ * end-to-end proof that two providers deriving the same znode actually exclude each other.
+ *
+ * <p>The lock base path is a znode that deployed clusters hold, so this pins the exact string
+ * rather than only asserting that variants agree with each other.
  */
 class TestZookeeperBasedImplicitBasePathLockProvider {
 
-  private static final String BASE_PATH_WITH_SLASH = "s3://my-bucket/my_lake/my_table/";
-  private static final String BASE_PATH_NO_SLASH = "s3://my-bucket/my_lake/my_table";
+  private static final String CANONICAL_BASE_PATH = "s3://my-bucket/my_lake/my_table";
+
+  /**
+   * Golden value. Deliberately a literal rather than a recomputation: an equality-only test
+   * ({@code path(a).equals(path(b))}) still passes if the whole derivation changes, which is
+   * exactly how a lock-key scheme change ships undetected.
+   */
+  private static final String CANONICAL_LOCK_BASE_PATH = "/tmp/C0E15D0CE1AD11CC";
 
   @Test
-  void trailingSlashVariantsProduceSameLockBasePath() {
-    String withSlash = ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(BASE_PATH_WITH_SLASH);
-    String noSlash = ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(BASE_PATH_NO_SLASH);
-    Assertions.assertEquals(withSlash, noSlash);
-    Assertions.assertTrue(withSlash.startsWith("/tmp/"), "Lock path must keep its /tmp/ prefix");
+  void derivesThePinnedLockBasePathForTheCanonicalBasePath() {
+    assertEquals(CANONICAL_LOCK_BASE_PATH,
+        ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(CANONICAL_BASE_PATH));
   }
 
   @Test
-  void multipleTrailingSlashesProduceSameLockBasePath() {
-    String once = ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(BASE_PATH_WITH_SLASH);
-    String twice = ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(BASE_PATH_NO_SLASH + "//");
-    String thrice = ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(BASE_PATH_NO_SLASH + "///");
-    Assertions.assertEquals(once, twice);
-    Assertions.assertEquals(once, thrice);
+  void aBasePathWithoutTrailingSlashKeepsThePreNormalizationZnode() {
+    // Releases before the normalization fix hashed s3aToS3(basePath) directly. For the common
+    // no-trailing-slash form the canonicalized input is byte-identical, so the znode must not
+    // move - otherwise every in-flight lock is orphaned on upgrade.
+    assertEquals("/tmp/" + HashID.generateXXHashAsString(CANONICAL_BASE_PATH, HashID.Size.BITS_64),
+        ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(CANONICAL_BASE_PATH));
   }
 
-  @Test
-  void surroundingWhitespaceProducesSameLockBasePath() {
-    String clean = ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(BASE_PATH_WITH_SLASH);
-    String padded = ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath("  " + BASE_PATH_NO_SLASH + "  ");
-    Assertions.assertEquals(clean, padded);
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "s3://my-bucket/my_lake/my_table/",
+      "s3://my-bucket/my_lake/my_table//",
+      "s3://my-bucket/my_lake/my_table///",
+      "  s3://my-bucket/my_lake/my_table  ",
+      "\ts3://my-bucket/my_lake/my_table/\n",
+      // Whitespace in front of the trailing slash: the strip must consume both, otherwise a
+      // trailing space survives and this hashes to a different znode than the canonical form.
+      "s3://my-bucket/my_lake/my_table /",
+      "s3a://my-bucket/my_lake/my_table",
+      "s3a://my-bucket/my_lake/my_table/",
+      "S3A://my-bucket/my_lake/my_table//",
+  })
+  void benignFormattingVariantsFoldOntoTheCanonicalLockBasePath(String basePath) {
+    assertEquals(CANONICAL_LOCK_BASE_PATH,
+        ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(basePath));
   }
 
-  @Test
-  void s3aSchemeProducesSameLockBasePathAsS3() {
-    String s3 = ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(BASE_PATH_WITH_SLASH);
-    String s3a = ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(
-        BASE_PATH_WITH_SLASH.replaceFirst("^s3://", "s3a://"));
-    Assertions.assertEquals(s3, s3a);
+  @ParameterizedTest
+  @ValueSource(strings = {"", "   ", "/", "///", "s3://", "s3a:///"})
+  void unlockableBasePathsAreRejected(String basePath) {
+    assertThrows(IllegalArgumentException.class,
+        () -> ZookeeperBasedImplicitBasePathLockProvider.getLockBasePath(basePath));
   }
 }

@@ -765,17 +765,37 @@ public class FSUtils {
    * <p>Implicit lock providers (DynamoDB and Zookeeper variants) hash this string to choose the
    * lock row / znode for a table. Two callers writing to the same table must produce the same
    * hash, so any benign formatting drift in the basePath has to be eliminated before hashing.
-   * This method trims surrounding whitespace, normalizes s3a:// to s3://, then strips any
-   * trailing slashes. Inner double slashes are intentionally preserved.
+   * This method normalizes s3a:// to s3://, then strips every trailing '/' and whitespace
+   * character in a single pass.
+   *
+   * <p>The single pass is what makes the result idempotent. Trimming first and stripping
+   * slashes afterwards leaves a trailing space behind on an input like {@code "s3://b/t /"},
+   * which would then hash differently from {@code "s3://b/t"} - the very drift this method
+   * exists to remove.
    *
    * <p>No trailing slash is appended: most callers already supply a basePath without one, so
    * the canonical form matches what previous releases hashed (which applied only s3aToS3) for
-   * those callers, keeping the derived lock key stable across the upgrade.
+   * those callers, keeping the derived lock key stable across the upgrade. Callers that did
+   * supply a trailing slash (or surrounding whitespace) DO move to a new lock key, so all
+   * writers of such a table must be upgraded together rather than one at a time.
+   *
+   * <p>Deliberately NOT normalized, since collapsing these could map unrelated tables onto one
+   * lock:
+   * <ul>
+   *   <li>Inner consecutive slashes - {@code "s3://b//x"} and {@code "s3://b/x"} stay distinct,
+   *       even though {@code StoragePath} collapses them. A lock key is not a path lookup, so
+   *       it cannot assume the storage layer's equivalences.</li>
+   *   <li>Scheme spelling beyond s3a - {@code "/x"}, {@code "file:/x"} and {@code "file:///x"}
+   *       stay distinct.</li>
+   *   <li>URL encoding - Hudi does not re-encode paths internally.</li>
+   * </ul>
+   * Writers that disagree on any of the above still take different locks; this helper covers
+   * the drift actually observed in the field.
    *
    * <p>Scheme-only inputs (e.g. {@code "s3://"}, {@code "s3a:///"}) and all-slash inputs
-   * (e.g. {@code "///"}) are rejected — stripping the trailing slashes from those leaves
+   * (e.g. {@code "///"}) are rejected - stripping the trailing slashes from those leaves
    * nothing meaningful to lock against. Paths whose final key segment legitimately ends
-   * with {@code ':'} (e.g. {@code "s3://bucket/foo:/"}) are preserved — S3 object keys
+   * with {@code ':'} (e.g. {@code "s3://bucket/foo:/"}) are preserved - S3 object keys
    * are allowed to contain {@code ':'}.
    */
   public static String normalizeBasePathForLocking(String basePath) {
@@ -787,12 +807,16 @@ public class FSUtils {
       throw new IllegalArgumentException("Hudi table base path cannot be empty");
     }
     String schemeNormalized = s3aToS3(trimmed);
+    // Strip trailing slashes and whitespace together, not in two separate passes - see the
+    // idempotence note above.
     int end = schemeNormalized.length();
-    while (end > 0 && schemeNormalized.charAt(end - 1) == '/') {
+    while (end > 0
+        && (schemeNormalized.charAt(end - 1) == '/'
+            || Character.isWhitespace(schemeNormalized.charAt(end - 1)))) {
       end--;
     }
     // Reject "///"-style inputs (nothing left after stripping) and scheme-only inputs
-    // like "s3://" / "s3a:///" — those collapse to just "<scheme>:" with no '/' character
+    // like "s3://" / "s3a:///" - those collapse to just "<scheme>:" with no '/' character
     // remaining. Real paths that end with ':' (e.g. "s3://bucket/foo:/") keep the '/'
     // characters from the scheme's "://" separator, so they pass this check.
     if (end == 0

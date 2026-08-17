@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -49,9 +48,15 @@ public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBas
   /**
    * Compute the Zookeeper lock base path for a given Hudi table base path.
    *
-   * <p>Accepts a raw basePath — normalization is applied here. {@code normalizeBasePathForLocking}
+   * <p>Accepts a raw basePath - normalization is applied here. {@code normalizeBasePathForLocking}
    * is idempotent, so callers that already hold a normalized value (e.g. the constructor's
    * {@code normalizedHudiTableBasePath} field) can pass it through without harm.
+   *
+   * <p>ROLLOUT: for a table whose configured {@code hoodie.base.path} ends in '/' or carries
+   * surrounding whitespace, this returns a different znode than releases before HUDI's
+   * normalization fix. Such a table must have all of its writers upgraded together - a rolling
+   * upgrade would leave old and new writers holding two different znodes for the same table,
+   * losing mutual exclusion. Base paths without a trailing slash are unaffected.
    */
   public static String getLockBasePath(String hudiTableBasePath) {
     String normalized = normalizeBasePathForLocking(hudiTableBasePath);
@@ -69,9 +74,9 @@ public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBas
 
   @Override
   protected String getZkBasePath(LockConfiguration lockConfiguration) {
-    String hudiTableBasePath = lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key());
-    ValidationUtils.checkArgument(hudiTableBasePath != null);
-    return getLockBasePath(hudiTableBasePath);
+    // No explicit null check: TypedProperties#getString already throws IllegalArgumentException
+    // for a missing key, and getLockBasePath rejects null/blank/unlockable paths.
+    return getLockBasePath(lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key()));
   }
 
   @Override

@@ -18,49 +18,73 @@
 
 package org.apache.hudi.aws.transaction.lock;
 
-import org.junit.jupiter.api.Assertions;
+import org.apache.hudi.common.util.hash.HashID;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Exercises {@link DynamoDBBasedImplicitPartitionKeyLockProvider#derivePartitionKey} as a pure
- * function — no DynamoDB client required. Verifies that benign formatting variations in the
- * hudi table base path (trailing slash, multi-slash, whitespace, s3a vs s3 scheme) all produce
- * the same DynamoDB partition key. Without this invariant, two engines writing the same Hudi
- * table can take independent locks and lose mutual exclusion.
+ * function - no DynamoDB client required.
+ *
+ * <p>Two writers on the same Hudi table must derive the same DynamoDB partition key, or they take
+ * independent locks and lose mutual exclusion. This class pins both halves of that contract: the
+ * exact key produced for the canonical base path (so the formula cannot move silently), and the
+ * set of benign formatting variants that must fold onto it.
  */
 class TestDynamoDBBasedImplicitPartitionKeyLockProvider {
 
-  private static final String BASE_PATH_WITH_SLASH = "s3://my-bucket/my_lake/my_table/";
-  private static final String BASE_PATH_NO_SLASH = "s3://my-bucket/my_lake/my_table";
+  private static final String CANONICAL_BASE_PATH = "s3://my-bucket/my_lake/my_table";
+
+  /**
+   * Golden value. Deliberately a literal rather than a recomputation: an equality-only test
+   * ({@code key(a).equals(key(b))}) still passes if the whole derivation changes, which is
+   * exactly how a lock-key scheme change ships undetected.
+   */
+  private static final String CANONICAL_PARTITION_KEY = "C0E15D0CE1AD11CC";
 
   @Test
-  void trailingSlashVariantsProduceSamePartitionKey() {
-    String withSlash = DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(BASE_PATH_WITH_SLASH);
-    String noSlash = DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(BASE_PATH_NO_SLASH);
-    Assertions.assertEquals(withSlash, noSlash);
+  void derivesThePinnedPartitionKeyForTheCanonicalBasePath() {
+    assertEquals(CANONICAL_PARTITION_KEY,
+        DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(CANONICAL_BASE_PATH));
   }
 
   @Test
-  void multipleTrailingSlashesProduceSamePartitionKey() {
-    String once = DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(BASE_PATH_WITH_SLASH);
-    String twice = DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(BASE_PATH_NO_SLASH + "//");
-    String thrice = DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(BASE_PATH_NO_SLASH + "///");
-    Assertions.assertEquals(once, twice);
-    Assertions.assertEquals(once, thrice);
+  void aBasePathWithoutTrailingSlashKeepsThePreNormalizationKey() {
+    // Releases before the normalization fix hashed s3aToS3(basePath) directly. For the common
+    // no-trailing-slash form the canonicalized input is byte-identical, so the partition key must
+    // not move - otherwise every deployed lock row is orphaned on upgrade.
+    assertEquals(HashID.generateXXHashAsString(CANONICAL_BASE_PATH, HashID.Size.BITS_64),
+        DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(CANONICAL_BASE_PATH));
   }
 
-  @Test
-  void surroundingWhitespaceProducesSamePartitionKey() {
-    String clean = DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(BASE_PATH_WITH_SLASH);
-    String padded = DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey("  " + BASE_PATH_NO_SLASH + "  ");
-    Assertions.assertEquals(clean, padded);
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "s3://my-bucket/my_lake/my_table/",
+      "s3://my-bucket/my_lake/my_table//",
+      "s3://my-bucket/my_lake/my_table///",
+      "  s3://my-bucket/my_lake/my_table  ",
+      "\ts3://my-bucket/my_lake/my_table/\n",
+      // Whitespace in front of the trailing slash: the strip must consume both, otherwise a
+      // trailing space survives and this hashes to a different row than the canonical form.
+      "s3://my-bucket/my_lake/my_table /",
+      "s3a://my-bucket/my_lake/my_table",
+      "s3a://my-bucket/my_lake/my_table/",
+      "S3A://my-bucket/my_lake/my_table//",
+  })
+  void benignFormattingVariantsFoldOntoTheCanonicalPartitionKey(String basePath) {
+    assertEquals(CANONICAL_PARTITION_KEY,
+        DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(basePath));
   }
 
-  @Test
-  void s3aSchemeProducesSamePartitionKeyAsS3() {
-    String s3 = DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(BASE_PATH_WITH_SLASH);
-    String s3a = DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(
-        BASE_PATH_WITH_SLASH.replaceFirst("^s3://", "s3a://"));
-    Assertions.assertEquals(s3, s3a);
+  @ParameterizedTest
+  @ValueSource(strings = {"", "   ", "/", "///", "s3://", "s3a:///"})
+  void unlockableBasePathsAreRejected(String basePath) {
+    assertThrows(IllegalArgumentException.class,
+        () -> DynamoDBBasedImplicitPartitionKeyLockProvider.derivePartitionKey(basePath));
   }
 }
