@@ -65,6 +65,18 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
     if (!getConfiguredOrderingFields(properties).isPresent()) {
       return preCombine(oldValue);
     }
+    // Deliberately bypasses any connector-specific preCombine(oldValue) override: with ordering fields
+    // configured, dedup must use the plain orderingVal comparison. The helper is private so the bypass
+    // cannot be undone by a subclass override.
+    return pickByOrderingValue(oldValue);
+  }
+
+  @Override
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
+    return pickByOrderingValue(oldValue);
+  }
+
+  private OverwriteWithLatestAvroPayload pickByOrderingValue(OverwriteWithLatestAvroPayload oldValue) {
     if (oldValue.getRecordBytes().length == 0) {
       // use natural order for delete record
       return this;
@@ -74,20 +86,6 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
       return oldValue;
     }
     return this;
-  }
-
-  @Override
-  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
-    if (oldValue.getRecordBytes().length == 0) {
-      // use natural order for delete record
-      return this;
-    }
-    if (((Comparable) oldValue.getOrderingValue()).compareTo(orderingVal) > 0) {
-      // pick the payload with greatest ordering value
-      return oldValue;
-    } else {
-      return this;
-    }
   }
 
   @Override
