@@ -19,7 +19,9 @@
 package org.apache.hudi.common.model.debezium;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -221,14 +223,50 @@ public class TestMySqlDebeziumAvroPayload {
   }
 
   @Test
-  public void testMergeWithCompositeOrderingFieldFallsBackToSeq() throws IOException {
-    // Composite (comma-separated) ordering is not supported yet: fall back to the connector seq compare.
+  public void testMergeWithCompositeOrderingFieldsComparesElementWise() throws IOException {
+    Schema schema = createSchemaWithOrderingField();
+    Properties props = orderingProps("event_ts,event_ts2");
+    // First ordering field ties (99 == 99); the second decides (7 > 5) -> incoming wins,
+    // even though the seq order (00001 < 00005) says otherwise.
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(
+        DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00001.100", 99L, 7L), 99L);
+    GenericRecord existing = DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00005.100", 99L, 5L);
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, props);
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00001.100", 99L);
+
+    // First ordering field decides outright when it differs (98 < 99) -> stored record kept.
+    MySqlDebeziumAvroPayload older = new MySqlDebeziumAvroPayload(
+        DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00009.100", 98L, 100L), 98L);
+    merged = older.combineAndGetUpdateValue(existing, schema, props);
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00005.100", 99L);
+  }
+
+  @Test
+  public void testPreCombineWithCompositeOrderingFields() {
+    Schema schema = createSchemaWithOrderingField();
+    Properties props = orderingProps("event_ts,event_ts2");
+    // Composite orderingVal, first field tied: the second field decides the dedup winner.
+    MySqlDebeziumAvroPayload lower = new MySqlDebeziumAvroPayload(
+        DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00005.100", 99L, 5L),
+        OrderingValues.create(new Comparable[] {99L, 5L}));
+    MySqlDebeziumAvroPayload higher = new MySqlDebeziumAvroPayload(
+        DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00001.100", 99L, 7L),
+        OrderingValues.create(new Comparable[] {99L, 7L}));
+    assertEquals(higher, higher.preCombine(lower, props));
+    assertEquals(higher, lower.preCombine(higher, props));
+  }
+
+  @Test
+  public void testCompositeOrderingIncludingConnectorColumnIsRejected() {
+    // The connector column's encoded "file.pos" representation cannot participate in a plain
+    // Comparable composite: reject loudly on both entry points instead of mis-ordering.
     Properties props = orderingProps("event_ts," + DebeziumConstants.ADDED_SEQ_COL_NAME);
     GenericRecord incoming = createRecord(2, Operation.UPDATE, "2.11");
     MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incoming, "2.11");
     GenericRecord existing = createRecord(2, Operation.INSERT, "10.111");
-    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, avroSchema, props);
-    validateRecord(merged, 2, Operation.INSERT, "10.111");
+    assertThrows(HoodieException.class, () -> payload.combineAndGetUpdateValue(existing, avroSchema, props));
+    MySqlDebeziumAvroPayload other = new MySqlDebeziumAvroPayload(createRecord(2, Operation.INSERT, "1.11"), "1.11");
+    assertThrows(HoodieException.class, () -> payload.preCombine(other, props));
   }
 
   @Test

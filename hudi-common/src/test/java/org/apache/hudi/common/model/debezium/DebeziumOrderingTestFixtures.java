@@ -43,6 +43,7 @@ final class DebeziumOrderingTestFixtures {
 
   static final String KEY_FIELD = "Key";
   static final String ORDERING_FIELD = "event_ts";
+  static final String SECOND_ORDERING_FIELD = "event_ts2";
 
   private DebeziumOrderingTestFixtures() {
   }
@@ -55,6 +56,8 @@ final class DebeziumOrderingTestFixtures {
         new Schema.Field(connectorColumn,
             Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(connectorType)), "", null),
         new Schema.Field(ORDERING_FIELD,
+            Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)), "", null),
+        new Schema.Field(SECOND_ORDERING_FIELD,
             Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)), "", null)
     ));
   }
@@ -66,6 +69,14 @@ final class DebeziumOrderingTestFixtures {
     record.put(DebeziumConstants.FLATTENED_OP_COL_NAME, Objects.toString(op, null));
     record.put(connectorColumn, connectorValue);
     record.put(ORDERING_FIELD, orderingValue);
+    return record;
+  }
+
+  static GenericRecord recordWithCompositeOrdering(Schema schema, int key, @Nullable Object op, String connectorColumn,
+                                                   @Nullable Object connectorValue, @Nullable Long orderingValue,
+                                                   @Nullable Long secondOrderingValue) {
+    GenericRecord record = recordWithOrdering(schema, key, op, connectorColumn, connectorValue, orderingValue);
+    record.put(SECOND_ORDERING_FIELD, secondOrderingValue);
     return record;
   }
 

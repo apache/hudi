@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import lombok.extern.slf4j.Slf4j;
@@ -62,7 +63,7 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
     // Same dispatch as combineAndGetUpdateValue: intra-batch dedup must order by the same column as the
     // against-storage merge, or a configured non-connector ordering field would still be parsed as a
     // connector seq/LSN here (MySQL's "file.pos" parser throws on plain values).
-    if (!getConfiguredOrderingField(properties).isPresent()) {
+    if (!getConfiguredOrderingFields(properties).isPresent()) {
       return preCombine(oldValue);
     }
     if (oldValue.getRecordBytes().length == 0) {
@@ -109,9 +110,9 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
     if (!insertValue.isPresent()) {
       return Option.empty();
     }
-    Option<String> orderingField = getConfiguredOrderingField(properties);
-    boolean pickCurrentRecord = orderingField.isPresent()
-        ? !needUpdatingPersistedRecord(currentValue, insertValue.get(), orderingField.get(), properties)
+    Option<String[]> orderingFields = getConfiguredOrderingFields(properties);
+    boolean pickCurrentRecord = orderingFields.isPresent()
+        ? !needUpdatingPersistedRecord(currentValue, insertValue.get(), orderingFields.get(), properties)
         : shouldPickCurrentRecord(currentValue, insertValue.get(), schema);
     if (pickCurrentRecord) {
       return Option.of(currentValue);
@@ -130,45 +131,70 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
   protected abstract String getConnectorOrderingField();
 
   /**
-   * Resolves the single configured ordering field to dispatch on, or empty to use the connector-hardcoded
-   * ordering: nothing configured, a composite (multi-field) ordering (not supported yet), or the
-   * connector's own column (MySQL's "file.pos" seq needs segment-wise numeric compare; a plain Comparable
-   * is lexicographic). The value is trimmed so stray whitespace in user config cannot silently reroute
-   * the comparison.
+   * Resolves the configured ordering field(s) to dispatch on, or empty to use the connector-hardcoded
+   * ordering: nothing configured, or a single field equal to the connector's own column (MySQL's
+   * "file.pos" seq needs segment-wise numeric compare; a plain Comparable is lexicographic). Values are
+   * trimmed so stray whitespace in user config cannot silently reroute the comparison. A composite
+   * (multi-field) ordering is supported element-wise, but must not include the connector column — its
+   * encoded representation cannot participate in a plain Comparable composite — and fails loudly if it does.
    */
-  private Option<String> getConfiguredOrderingField(Properties properties) {
+  private Option<String[]> getConfiguredOrderingFields(Properties properties) {
     String[] orderingFields = ConfigUtils.getOrderingFields(properties);
-    if (orderingFields == null || orderingFields.length != 1) {
+    if (orderingFields == null) {
       return Option.empty();
     }
-    String orderingField = orderingFields[0].trim();
-    if (orderingField.isEmpty() || orderingField.equals(getConnectorOrderingField())) {
-      return Option.empty();
+    String[] trimmedFields = new String[orderingFields.length];
+    for (int i = 0; i < orderingFields.length; i++) {
+      trimmedFields[i] = orderingFields[i].trim();
     }
-    return Option.of(orderingField);
+    if (trimmedFields.length == 1) {
+      return trimmedFields[0].isEmpty() || trimmedFields[0].equals(getConnectorOrderingField())
+          ? Option.empty() : Option.of(trimmedFields);
+    }
+    for (String field : trimmedFields) {
+      if (field.equals(getConnectorOrderingField())) {
+        throw new HoodieException(String.format("Debezium composite ordering cannot include the connector ordering column %s, found: %s",
+            getConnectorOrderingField(), String.join(",", trimmedFields)));
+      }
+    }
+    return Option.of(trimmedFields);
   }
 
   /**
-   * Mirrors {@code DefaultHoodieRecordPayload#needUpdatingPersistedRecord}: the record in storage needs
-   * updating unless its configured ordering value is strictly greater than the incoming record's
-   * (ties go to the incoming record; a null persisted value, e.g. bootstrapped rows, takes the incoming).
-   * A null incoming ordering value fails loudly with the record in the message, matching the connector
-   * paths, instead of surfacing as a bare NPE.
+   * Mirrors {@code DefaultHoodieRecordPayload#needUpdatingPersistedRecord}, extended to composite ordering:
+   * fields are compared element-wise and the first non-equal field decides; the record in storage needs
+   * updating unless its ordering is strictly greater than the incoming record's (ties go to the incoming
+   * record; a null persisted value, e.g. bootstrapped rows, takes the incoming). A null incoming ordering
+   * value fails loudly with the field and record in the message, matching the connector paths, instead of
+   * surfacing as a bare NPE.
    */
   private boolean needUpdatingPersistedRecord(IndexedRecord currentValue, IndexedRecord incomingRecord,
-                                              String orderingField, Properties properties) throws HoodieDebeziumAvroPayloadException {
+                                              String[] orderingFields, Properties properties) throws HoodieDebeziumAvroPayloadException {
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-    Comparable incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
-        orderingField, true, consistentLogicalTimestampEnabled);
-    if (incomingOrderingVal == null) {
-      throw new HoodieDebeziumAvroPayloadException(String.format("ordering field %s cannot be null in insert record: %s",
-          orderingField, incomingRecord));
+    Comparable[] incomingOrderingVals = new Comparable[orderingFields.length];
+    for (int i = 0; i < orderingFields.length; i++) {
+      incomingOrderingVals[i] = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
+          orderingFields[i], true, consistentLogicalTimestampEnabled);
+      if (incomingOrderingVals[i] == null) {
+        throw new HoodieDebeziumAvroPayloadException(String.format("ordering field %s cannot be null in insert record: %s",
+            orderingFields[i], incomingRecord));
+      }
     }
-    Object persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
-        orderingField, true, consistentLogicalTimestampEnabled);
-    return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
+    for (int i = 0; i < orderingFields.length; i++) {
+      Object persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
+          orderingFields[i], true, consistentLogicalTimestampEnabled);
+      if (persistedOrderingVal == null) {
+        return true;
+      }
+      int comparison = ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVals[i]);
+      if (comparison != 0) {
+        return comparison < 0;
+      }
+    }
+    // all ordering fields equal: tie goes to the incoming record
+    return true;
   }
 
   private Option<IndexedRecord> handleDeleteOperation(IndexedRecord insertRecord) {
