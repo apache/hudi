@@ -155,8 +155,8 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
    * A null incoming ordering value fails loudly with the record in the message, matching the connector
    * paths, instead of surfacing as a bare NPE.
    */
-  protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue, IndexedRecord incomingRecord,
-                                                String orderingField, Properties properties) throws HoodieDebeziumAvroPayloadException {
+  private boolean needUpdatingPersistedRecord(IndexedRecord currentValue, IndexedRecord incomingRecord,
+                                              String orderingField, Properties properties) throws HoodieDebeziumAvroPayloadException {
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));

@@ -208,6 +208,19 @@ public class TestMySqlDebeziumAvroPayload {
   }
 
   @Test
+  public void testMergeWithWhitespacePaddedConfiguredOrderingFieldIsTrimmed() throws IOException {
+    Schema schema = createSchemaWithOrderingField();
+    // The other trimming direction: a padded NON-connector field must route to the configured-field
+    // compare. Without the trim, " event_ts " resolves no field (null ordering value) and throws,
+    // so this asserts the trim rather than accidentally passing through the connector path.
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00005.100", 50L), 50L);
+    GenericRecord existing = createRecordWithOrdering(schema, 1, Operation.INSERT, "00001.100", 99L);
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, orderingProps(" event_ts "));
+    // Stored row wins on event_ts (99 > 50); the seq order (00005 > 00001) would have picked the incoming
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00001.100", 99L);
+  }
+
+  @Test
   public void testMergeWithCompositeOrderingFieldFallsBackToSeq() throws IOException {
     // Composite (comma-separated) ordering is not supported yet: fall back to the connector seq compare.
     Properties props = orderingProps("event_ts," + DebeziumConstants.ADDED_SEQ_COL_NAME);
