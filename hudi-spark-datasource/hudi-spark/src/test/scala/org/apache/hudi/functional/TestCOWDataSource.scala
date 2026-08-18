@@ -24,7 +24,7 @@ import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteC
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, RecordMergeMode}
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{INPUT_TIME_UNIT, TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieReplaceCommitMetadata, WriteOperationType}
@@ -1461,7 +1461,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .withColumn("current_date_string",
         date_format((col("current_ts") / 1000).cast("timestamp"), "yyyy-MM-dd HH:mm:ss"))
       .withColumn("current_ts_hours", (col("current_ts") / 3600000).cast("long"))
-      .withColumn("current_ts_seconds", (col("current_ts") / 1000).cast("long"))
 
     case class TestCase(partitionCol: String, tsType: String, outFmt: String,
                         extraOpts: Map[String, String] = Map.empty,
@@ -1482,13 +1481,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       assertTrue(readDF.filter(col("_hoodie_partition_path") =!= tc.expectedPartitionUdf(col(tc.partitionCol))).count() == 0)
     }
 
-    // Test 1: EPOCHMILLISECONDS with timezone GMT+8:00
+    // Test 1: EPOCHMILLISECONDS with timezone GMT+08:00
     val tzMillisOutFmt = "yyyy-MM-dd HH"
     val udfMillisTz = udf((millis: Long) =>
-      new DateTime(millis).withZone(org.joda.time.DateTimeZone.forID("GMT+8:00"))
-        .toString(DateTimeFormat.forPattern(tzMillisOutFmt).withZone(org.joda.time.DateTimeZone.forID("GMT+8:00"))))
+      new DateTime(millis).withZone(org.joda.time.DateTimeZone.forID("GMT+08:00"))
+        .toString(DateTimeFormat.forPattern(tzMillisOutFmt).withZone(org.joda.time.DateTimeZone.forID("GMT+08:00"))))
     runTestCase(TestCase("current_ts", "EPOCHMILLISECONDS", tzMillisOutFmt,
-      Map(TIMESTAMP_TIMEZONE_FORMAT.key -> "GMT+8:00"), udfMillisTz))
+      Map(TIMESTAMP_TIMEZONE_FORMAT.key -> "GMT+08:00"), udfMillisTz))
 
     // Test 2: EPOCHMICROSECONDS
     val microsOutFmt = "yyyy-MM-dd HH"
@@ -1501,12 +1500,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val dateStrOutFmt = "yyyy-MM-dd HH"
     val dateStrInFmt = "yyyy-MM-dd HH:mm:ss"
     val udfDateStrTz = udf((s: String) =>
-      DateTime.parse(s, DateTimeFormat.forPattern(dateStrInFmt))
-        .withZone(org.joda.time.DateTimeZone.forID("GMT+8:00"))
-        .toString(DateTimeFormat.forPattern(dateStrOutFmt).withZone(org.joda.time.DateTimeZone.forID("GMT+8:00"))))
+      DateTime.parse(s, DateTimeFormat.forPattern(dateStrInFmt).withZone(org.joda.time.DateTimeZone.forID("GMT+08:00")))
+        .toString(DateTimeFormat.forPattern(dateStrOutFmt).withZone(org.joda.time.DateTimeZone.forID("GMT+08:00"))))
     runTestCase(TestCase("current_date_string", "DATE_STRING", dateStrOutFmt,
-      Map("hoodie.keygen.timebased.input.dateformat" -> dateStrInFmt,
-        TIMESTAMP_TIMEZONE_FORMAT.key -> "GMT+8:00"), udfDateStrTz))
+      Map(TIMESTAMP_INPUT_DATE_FORMAT.key -> dateStrInFmt,
+        TIMESTAMP_TIMEZONE_FORMAT.key -> "GMT+08:00"), udfDateStrTz))
 
     // Test 4: SCALAR with hours
     val scalarHoursOutFmt = "yyyy-MM-dd HH"
@@ -1514,7 +1512,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       new DateTime(java.util.concurrent.TimeUnit.HOURS.toMillis(hours))
         .toString(DateTimeFormat.forPattern(scalarHoursOutFmt)))
     runTestCase(TestCase("current_ts_hours", "SCALAR", scalarHoursOutFmt,
-      Map("hoodie.keygen.timebased.timestamp.scalar.time.unit" -> "hours"), udfScalarHours))
+      Map(INPUT_TIME_UNIT.key -> "hours"), udfScalarHours))
   }
 
   @ParameterizedTest
