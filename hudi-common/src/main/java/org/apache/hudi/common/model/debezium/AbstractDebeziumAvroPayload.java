@@ -59,9 +59,9 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
 
   @Override
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue, Properties properties) {
-    // Same dispatch as combineAndGetUpdateValue: intra-batch dedup must order by the same column as the
-    // against-storage merge, or a configured non-connector ordering field would still be parsed as a
-    // connector seq/LSN here (MySQL's "file.pos" parser throws on plain values).
+    // Same dispatch as combineAndGetUpdateValue: intra-batch dedup must order by the same column(s) as
+    // the against-storage merge. Without this, a configured ordering field would still be fed into the
+    // connector-specific preCombine (MySQL's "file.pos" seq parser, which throws on plain values).
     if (!getConfiguredOrderingFields(properties).isPresent()) {
       return preCombine(oldValue);
     }
