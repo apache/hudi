@@ -194,6 +194,17 @@ public class TestPostgresDebeziumAvroPayload {
   }
 
   @Test
+  public void testMergeWithConfiguredOrderingFieldNullIncomingThrows() {
+    Schema schema = createSchemaWithOrderingField();
+    GenericRecord incoming = createRecordWithOrdering(schema, 2, Operation.UPDATE, 200L, null);
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(incoming, 0L);
+    GenericRecord existing = createRecordWithOrdering(schema, 2, Operation.INSERT, 100L, 99L);
+    assertThrows(HoodieDebeziumAvroPayloadException.class,
+        () -> payload.combineAndGetUpdateValue(existing, schema, orderingProps("event_ts")),
+        "null configured ordering value in the incoming record must fail loudly, not NPE");
+  }
+
+  @Test
   public void testMergeWithoutOrderingFieldFallsBackToLsn() throws IOException {
     // Properties present but no ordering field configured -> legacy hardcoded LSN comparison.
     GenericRecord lateRecord = createRecord(3, Operation.UPDATE, 98L);

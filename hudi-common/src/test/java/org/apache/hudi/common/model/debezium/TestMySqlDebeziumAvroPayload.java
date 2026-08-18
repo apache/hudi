@@ -196,6 +196,29 @@ public class TestMySqlDebeziumAvroPayload {
   }
 
   @Test
+  public void testMergeWithWhitespacePaddedSeqOrderingFieldStaysOnSeqCompare() throws IOException {
+    // Whitespace in the configured field must not silently reroute the connector column
+    // into the generic Comparable compare (lexicographic, wrong for "file.pos").
+    Properties props = orderingProps(" " + DebeziumConstants.ADDED_SEQ_COL_NAME + " ");
+    GenericRecord incoming = createRecord(2, Operation.UPDATE, "2.11");
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incoming, "2.11");
+    GenericRecord existing = createRecord(2, Operation.INSERT, "10.111");
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, avroSchema, props);
+    validateRecord(merged, 2, Operation.INSERT, "10.111");
+  }
+
+  @Test
+  public void testMergeWithCompositeOrderingFieldFallsBackToSeq() throws IOException {
+    // Composite (comma-separated) ordering is not supported yet: fall back to the connector seq compare.
+    Properties props = orderingProps("event_ts," + DebeziumConstants.ADDED_SEQ_COL_NAME);
+    GenericRecord incoming = createRecord(2, Operation.UPDATE, "2.11");
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incoming, "2.11");
+    GenericRecord existing = createRecord(2, Operation.INSERT, "10.111");
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, avroSchema, props);
+    validateRecord(merged, 2, Operation.INSERT, "10.111");
+  }
+
+  @Test
   public void testMergeWithoutOrderingFieldFallsBackToSeq() throws IOException {
     // Properties present but no ordering field configured -> legacy hardcoded seq comparison.
     GenericRecord lateRecord = createRecord(3, Operation.UPDATE, "00000.222");
