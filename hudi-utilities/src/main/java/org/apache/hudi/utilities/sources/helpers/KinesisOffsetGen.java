@@ -309,24 +309,31 @@ public class KinesisOffsetGen {
   }
 
   /**
-   * Assume-role credentials providers cached by {@code region|roleArn}. Kinesis clients are built
-   * per {@code mapPartitions} task, so creating a fresh STS client each time would leak one (with its
-   * own HTTP connection pool) per micro-batch on a long-lived streaming executor — AWS SDK v2 does not
-   * close a user-supplied credentials provider (nor its injected StsClient) when the KinesisClient
-   * closes. Caching means at most one provider/StsClient per distinct role per executor JVM, reused
-   * across partitions and micro-batches. Providers auto-refresh and live for the JVM lifetime, so they
-   * are intentionally never closed.
+   * Assume-role credentials providers cached by {@code region|roleArn|externalId|sessionName}. Kinesis
+   * clients are built per {@code mapPartitions} task, so building a fresh StsClient (with its own HTTP
+   * connection pool) each time would pile one up per micro-batch on a long-lived streaming executor. Note
+   * that AWS SDK v2 DOES close a user-supplied credentials provider when the KinesisClient closes, but
+   * StsAssumeRoleCredentialsProvider.close() only stops background prefetch (a no-op with the default
+   * synchronous refresh strategy) and never closes the injected StsClient, so a cached provider stays
+   * usable across clients. For that reason asyncCredentialUpdateEnabled must never be turned on for this
+   * shared provider: the first client close would permanently disable its background refresh. Providers
+   * live for the JVM lifetime and are intentionally never closed.
    */
   private static final Map<String, StsAssumeRoleCredentialsProvider> ASSUME_ROLE_PROVIDERS =
       new ConcurrentHashMap<>();
 
-  private static StsAssumeRoleCredentialsProvider assumeRoleProvider(String region, String roleArn) {
-    return ASSUME_ROLE_PROVIDERS.computeIfAbsent(region + "|" + roleArn, ignored ->
+  private static StsAssumeRoleCredentialsProvider getOrCreateAssumeRoleProvider(
+      String region, String roleArn, String roleExternalId, String roleSessionName) {
+    String cacheKey = String.join("|", region, roleArn, String.valueOf(roleExternalId), roleSessionName);
+    return ASSUME_ROLE_PROVIDERS.computeIfAbsent(cacheKey, ignored ->
         StsAssumeRoleCredentialsProvider.builder()
+            // Regional STS endpoint of the stream's region; the Kinesis endpoint.url override is
+            // deliberately not applied here (it may be a Kinesis-only VPC interface endpoint).
             .stsClient(StsClient.builder().region(Region.of(region)).build())
             .refreshRequest(AssumeRoleRequest.builder()
                 .roleArn(roleArn)
-                .roleSessionName("hudi-kinesis-source")
+                .roleSessionName(roleSessionName)
+                .externalId(roleExternalId)
                 .build())
             .build());
   }
@@ -334,10 +341,11 @@ public class KinesisOffsetGen {
   /**
    * Builds a Kinesis client from explicit parameters. Used by both the instance method
    * {@link #createKinesisClient()} and by {@link org.apache.hudi.utilities.sources.JsonKinesisSource}
-   * from serializable {@link KinesisReadConfig} in Spark closures.
+   * from serializable {@link KinesisReadConfig} in Spark closures. Credential precedence: static
+   * access/secret keys, then STS assume-role when {@code roleArn} is set, else the default chain.
    */
   public static KinesisClient createKinesisClient(String region, String endpointUrl,
-      String accessKey, String secretKey, String roleArn) {
+      String accessKey, String secretKey, String roleArn, String roleExternalId, String roleSessionName) {
     KinesisClientBuilder builder = KinesisClient.builder().region(Region.of(region));
     if (endpointUrl != null && !endpointUrl.isEmpty()) {
       builder = builder.endpointOverride(URI.create(endpointUrl));
@@ -347,10 +355,11 @@ public class KinesisOffsetGen {
       builder = builder.credentialsProvider(
           StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));
     } else if (roleArn != null && !roleArn.isEmpty()) {
-      // Cross-account stream: assume the customer-provided role via STS, using a per-executor cached
-      // provider (see ASSUME_ROLE_PROVIDERS) so we don't leak an StsClient per micro-batch. The base
-      // STS client uses the default credential chain, which must be granted sts:AssumeRole on this ARN.
-      builder = builder.credentialsProvider(assumeRoleProvider(region, roleArn));
+      // Cross-account stream: assume the role via STS with a per-JVM cached provider (see
+      // ASSUME_ROLE_PROVIDERS). The base STS client uses the default credential chain, which must be
+      // granted sts:AssumeRole on this ARN.
+      builder = builder.credentialsProvider(
+          getOrCreateAssumeRoleProvider(region, roleArn, roleExternalId, roleSessionName));
     }
     return builder.build();
   }
@@ -359,7 +368,10 @@ public class KinesisOffsetGen {
     String accessKey = getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ACCESS_KEY, null);
     String secretKey = getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_SECRET_KEY, null);
     String roleArn = getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ROLE_ARN, null);
-    return createKinesisClient(region, endpointUrl.orElse(null), accessKey, secretKey, roleArn);
+    String roleExternalId = getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ROLE_EXTERNAL_ID, null);
+    String roleSessionName = getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ROLE_SESSION_NAME, true);
+    return createKinesisClient(region, endpointUrl.orElse(null), accessKey, secretKey,
+        roleArn, roleExternalId, roleSessionName);
   }
 
   /**

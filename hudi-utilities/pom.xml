@@ -537,7 +537,8 @@
       <artifactId>kinesis</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
-    <!-- STS: assume-role credentials for reading a Kinesis stream in a different AWS account. -->
+    <!-- STS: assume-role credentials for cross-account Kinesis reads. Already on the classpath transitively
+         via hudi-aws; declared directly because KinesisOffsetGen references StsClient itself. -->
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sts</artifactId>

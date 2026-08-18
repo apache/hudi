@@ -22,52 +22,86 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.KinesisSourceConfig;
 
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.identity.spi.IdentityProvider;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
+import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
- * Covers the credential-provider branches of {@link KinesisOffsetGen#createKinesisClient}. AWS SDK v2
- * clients resolve credentials lazily (only on the first request), so a client can be built for each
- * branch without any AWS environment or network access.
+ * Covers the credential-provider branches of {@link KinesisOffsetGen#createKinesisClient} and the
+ * per-JVM assume-role provider cache. AWS SDK v2 clients resolve credentials lazily (only on the first
+ * request), so a client can be built for each branch without any AWS environment or network access, and
+ * the chosen provider is observable through {@code serviceClientConfiguration().credentialsProvider()}.
  */
 class TestKinesisOffsetGenClient {
 
   private static final String REGION = "us-west-2";
-  private static final String ROLE_ARN = "arn:aws:iam::123456789012:role/kinesis-cross-account-read";
+  private static final String ROLE_ARN_PREFIX = "arn:aws:iam::123456789012:role/kinesis-cross-account-";
+  private static final String SESSION_NAME = "hudi-kinesis-source";
+
+  private static IdentityProvider<?> providerOf(KinesisClient client) {
+    return client.serviceClientConfiguration().credentialsProvider();
+  }
 
   @Test
-  void buildsClientWithAssumeRoleProviderWhenArnPresent() {
-    try (KinesisClient client = KinesisOffsetGen.createKinesisClient(REGION, null, null, null, ROLE_ARN)) {
-      assertNotNull(client);
+  void testAssumeRoleProviderUsedWhenRoleArnPresent() {
+    try (KinesisClient client = KinesisOffsetGen.createKinesisClient(
+        REGION, null, null, null, ROLE_ARN_PREFIX + "arn-only", null, SESSION_NAME)) {
+      assertInstanceOf(StsAssumeRoleCredentialsProvider.class, providerOf(client));
     }
   }
 
   @Test
-  void buildsClientWithDefaultChainWhenNoArnOrKeys() {
-    try (KinesisClient client = KinesisOffsetGen.createKinesisClient(REGION, null, null, null, null)) {
-      assertNotNull(client);
+  void testDefaultChainUsedWhenNoRoleArnOrKeys() {
+    try (KinesisClient client = KinesisOffsetGen.createKinesisClient(
+        REGION, null, null, null, null, null, SESSION_NAME)) {
+      assertInstanceOf(DefaultCredentialsProvider.class, providerOf(client));
     }
   }
 
   @Test
-  void staticKeysTakePrecedenceOverAssumeRole() {
-    // Both static keys and an ARN set: the static-credentials branch wins (no STS assume-role).
-    try (KinesisClient client =
-        KinesisOffsetGen.createKinesisClient(REGION, null, "access", "secret", ROLE_ARN)) {
-      assertNotNull(client);
+  void testStaticKeysTakePrecedenceOverAssumeRole() {
+    // Both static keys and a role ARN set: the static-credentials branch wins (no STS assume-role).
+    try (KinesisClient client = KinesisOffsetGen.createKinesisClient(
+        REGION, null, "access", "secret", ROLE_ARN_PREFIX + "with-keys", null, SESSION_NAME)) {
+      assertInstanceOf(StaticCredentialsProvider.class, providerOf(client));
     }
   }
 
   @Test
-  void instanceClientReadsRoleArnFromProps() {
+  void testAssumeRoleProviderCachedPerRoleExternalIdAndSession() {
+    String roleArn = ROLE_ARN_PREFIX + "cached";
+    try (KinesisClient first = KinesisOffsetGen.createKinesisClient(
+             REGION, null, null, null, roleArn, "ext-1", SESSION_NAME);
+         KinesisClient second = KinesisOffsetGen.createKinesisClient(
+             REGION, null, null, null, roleArn, "ext-1", SESSION_NAME);
+         KinesisClient otherExternalId = KinesisOffsetGen.createKinesisClient(
+             REGION, null, null, null, roleArn, "ext-2", SESSION_NAME);
+         KinesisClient otherRole = KinesisOffsetGen.createKinesisClient(
+             REGION, null, null, null, ROLE_ARN_PREFIX + "cached-other", "ext-1", SESSION_NAME)) {
+      // Same role/external id/session name: one provider (and one StsClient) shared across clients,
+      // and it survives the first client being closed.
+      assertSame(providerOf(first), providerOf(second));
+      assertNotSame(providerOf(first), providerOf(otherExternalId));
+      assertNotSame(providerOf(first), providerOf(otherRole));
+    }
+  }
+
+  @Test
+  void testInstanceClientReadsRoleConfigFromProps() {
     TypedProperties props = new TypedProperties();
     props.setProperty(KinesisSourceConfig.KINESIS_STREAM_NAME.key(), "test-stream");
     props.setProperty(KinesisSourceConfig.KINESIS_REGION.key(), REGION);
-    props.setProperty(KinesisSourceConfig.KINESIS_ROLE_ARN.key(), ROLE_ARN);
+    props.setProperty(KinesisSourceConfig.KINESIS_ROLE_ARN.key(), ROLE_ARN_PREFIX + "from-props");
+    props.setProperty(KinesisSourceConfig.KINESIS_ROLE_EXTERNAL_ID.key(), "ext-props");
 
     try (KinesisClient client = new KinesisOffsetGen(props).createKinesisClient()) {
-      assertNotNull(client);
+      assertInstanceOf(StsAssumeRoleCredentialsProvider.class, providerOf(client));
     }
   }
 }

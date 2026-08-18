@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.KinesisSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -108,16 +109,22 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
     this.offsetGen = new KinesisOffsetGen(props);
   }
 
-  @Override
-  protected JavaRDD<String> toBatch(KinesisOffsetGen.KinesisShardRange[] shardRanges, long sourceLimit) {
+  /**
+   * Builds the serializable per-batch read config shipped to executors; the Kinesis client is rebuilt from
+   * it inside {@code mapPartitions}, so every credential-related property must be carried here.
+   */
+  @VisibleForTesting
+  KinesisReadConfig buildReadConfig(KinesisOffsetGen.KinesisShardRange[] shardRanges, long sourceLimit) {
     long numEvents = calculateNumEvents(sourceLimit, props);
-    KinesisReadConfig readConfig = new KinesisReadConfig(
+    return new KinesisReadConfig(
         offsetGen.getStreamName(),
         offsetGen.getRegion(),
         offsetGen.getEndpointUrl().orElse(null),
         getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ACCESS_KEY, null),
         getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_SECRET_KEY, null),
         getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ROLE_ARN, null),
+        getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ROLE_EXTERNAL_ID, null),
+        getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ROLE_SESSION_NAME, true),
         offsetGen.getStartingPositionStrategy(),
         shouldAddMetaFields,
         getBooleanWithAltKeys(props, KinesisSourceConfig.KINESIS_ENABLE_DEAGGREGATION),
@@ -128,6 +135,11 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
         getLongWithAltKeys(props, KinesisSourceConfig.KINESIS_RETRY_INITIAL_INTERVAL_MS),
         getLongWithAltKeys(props, KinesisSourceConfig.KINESIS_RETRY_MAX_INTERVAL_MS),
         getLongWithAltKeys(props, KinesisSourceConfig.KINESIS_THROTTLE_TIMEOUT_MS));
+  }
+
+  @Override
+  protected JavaRDD<String> toBatch(KinesisOffsetGen.KinesisShardRange[] shardRanges, long sourceLimit) {
+    KinesisReadConfig readConfig = buildReadConfig(shardRanges, sourceLimit);
 
     JavaRDD<ShardFetchResult> fetchRdd = sparkContext.parallelize(
         java.util.Arrays.asList(shardRanges), shardRanges.length)
@@ -136,7 +148,7 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
           try (KinesisClient client = KinesisOffsetGen.createKinesisClient(
               readConfig.getRegion(), readConfig.getEndpointUrl(),
               readConfig.getAccessKey(), readConfig.getSecretKey(),
-              readConfig.getRoleArn())) {
+              readConfig.getRoleArn(), readConfig.getRoleExternalId(), readConfig.getRoleSessionName())) {
             while (shardRangeIt.hasNext()) {
               KinesisOffsetGen.KinesisShardRange range = shardRangeIt.next();
               // Lazy iterator: fetches one GetRecords page at a time, keeping only one page in
