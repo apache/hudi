@@ -133,11 +133,12 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
         || (orderingFields.length == 1 && orderingFields[0].trim().isEmpty())) {
       return Option.empty();
     }
-    String[] trimmedFields = new String[orderingFields.length];
+    // Trim in place: ConfigUtils returns a freshly split array on every call, so mutating it is safe
+    // and avoids a second per-record array allocation on the merge path.
     for (int i = 0; i < orderingFields.length; i++) {
-      trimmedFields[i] = orderingFields[i].trim();
+      orderingFields[i] = orderingFields[i].trim();
     }
-    return Option.of(trimmedFields);
+    return Option.of(orderingFields);
   }
 
   /**
