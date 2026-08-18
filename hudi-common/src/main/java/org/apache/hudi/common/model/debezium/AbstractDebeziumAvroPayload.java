@@ -19,10 +19,10 @@
 package org.apache.hudi.common.model.debezium;
 
 import org.apache.hudi.common.avro.HoodieAvroUtils;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
@@ -45,7 +45,7 @@ import java.util.Properties;
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */
 @Slf4j
-public abstract class AbstractDebeziumAvroPayload extends DefaultHoodieRecordPayload {
+public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvroPayload {
 
   public AbstractDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -96,13 +96,6 @@ public abstract class AbstractDebeziumAvroPayload extends DefaultHoodieRecordPay
   }
 
   @Override
-  public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
-    // Pin to the Debezium delete-op handling; DefaultHoodieRecordPayload's properties-aware variant
-    // (event-time tracking, DELETE_KEY/DELETE_MARKER) must not replace it
-    return getInsertValue(schema);
-  }
-
-  @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     return combineAndGetUpdateValue(currentValue, schema, new Properties());
   }
@@ -123,7 +116,7 @@ public abstract class AbstractDebeziumAvroPayload extends DefaultHoodieRecordPay
       // a plain Comparable is lexicographic)
       pickCurrentRecord = shouldPickCurrentRecord(currentValue, insertValue.get(), schema);
     } else {
-      pickCurrentRecord = !needUpdatingPersistedRecord(currentValue, insertValue, properties);
+      pickCurrentRecord = !needUpdatingPersistedRecord(currentValue, insertValue.get(), properties);
     }
     if (pickCurrentRecord) {
       return Option.of(currentValue);
@@ -139,6 +132,27 @@ public abstract class AbstractDebeziumAvroPayload extends DefaultHoodieRecordPay
    * {@link #shouldPickCurrentRecord(IndexedRecord, IndexedRecord, Schema)} implements.
    */
   protected abstract String getConnectorOrderingField();
+
+  /**
+   * Mirrors {@code DefaultHoodieRecordPayload#needUpdatingPersistedRecord}: the record in storage needs
+   * updating unless its configured ordering value is strictly greater than the incoming record's
+   * (ties go to the incoming record; a null persisted value, e.g. bootstrapped rows, takes the incoming).
+   */
+  protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue, IndexedRecord incomingRecord, Properties properties) {
+    String[] orderingFields = ConfigUtils.getOrderingFields(properties);
+    if (orderingFields == null || orderingFields.length != 1) {
+      return true;
+    }
+    String orderingField = orderingFields[0];
+    boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+    Object persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
+        orderingField, true, consistentLogicalTimestampEnabled);
+    Comparable incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
+        orderingField, true, consistentLogicalTimestampEnabled);
+    return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
+  }
 
   private Option<IndexedRecord> handleDeleteOperation(IndexedRecord insertRecord) {
     boolean delete = false;
