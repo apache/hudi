@@ -98,4 +98,16 @@ final class DebeziumOrderingTestFixtures {
     assertEquals(Objects.toString(connectorValue, null), Objects.toString(record.get(connectorColumn), null));
     assertEquals(orderingValue, record.get(ORDERING_FIELD));
   }
+
+  /**
+   * Composite variant: additionally asserts {@link #SECOND_ORDERING_FIELD}, the field the composite
+   * tests turn on — without it, a merge that picked the right row by the first ordering field and the
+   * wrong second one would pass.
+   */
+  static void validateOrderingRecord(Option<IndexedRecord> merged, int key, @Nullable Object op, String connectorColumn,
+                                     @Nullable Object connectorValue, @Nullable Long orderingValue,
+                                     @Nullable Long secondOrderingValue) {
+    validateOrderingRecord(merged, key, op, connectorColumn, connectorValue, orderingValue);
+    assertEquals(secondOrderingValue, ((GenericRecord) merged.get()).get(SECOND_ORDERING_FIELD));
+  }
 }

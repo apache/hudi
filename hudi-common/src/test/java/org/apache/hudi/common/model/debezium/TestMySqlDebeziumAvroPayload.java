@@ -26,6 +26,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -186,9 +187,8 @@ public class TestMySqlDebeziumAvroPayload {
   @Test
   public void testMergeWithWhitespacePaddedConfiguredOrderingFieldIsTrimmed() throws IOException {
     Schema schema = createSchemaWithOrderingField();
-    // The other trimming direction: a padded NON-connector field must route to the configured-field
-    // compare. Without the trim, " event_ts " resolves no field (null ordering value) and throws,
-    // so this asserts the trim rather than accidentally passing through the connector path.
+    // Trimming is what keeps a padded configured field resolving to a real column: without it,
+    // " event_ts " resolves no field (null ordering value) and the null-incoming guard throws.
     MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00005.100", 50L), 50L);
     GenericRecord existing = createRecordWithOrdering(schema, 1, Operation.INSERT, "00001.100", 99L);
     Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, orderingProps(" event_ts "));
@@ -197,22 +197,78 @@ public class TestMySqlDebeziumAvroPayload {
   }
 
   @Test
-  public void testMergeWithCompositeOrderingFieldsComparesElementWise() throws IOException {
+  public void testMergeWithCompositeOrderingFieldsSecondFieldDecides() throws IOException {
     Schema schema = createSchemaWithOrderingField();
-    Properties props = orderingProps("event_ts,event_ts2");
     // First ordering field ties (99 == 99); the second decides (7 > 5) -> incoming wins,
     // even though the seq order (00001 < 00005) says otherwise.
     MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(
         DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00001.100", 99L, 7L), 99L);
     GenericRecord existing = DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00005.100", 99L, 5L);
-    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, props);
-    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00001.100", 99L);
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, orderingProps("event_ts,event_ts2"));
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00001.100", 99L, 7L);
+  }
 
-    // First ordering field decides outright when it differs (98 < 99) -> stored record kept.
-    MySqlDebeziumAvroPayload older = new MySqlDebeziumAvroPayload(
+  @Test
+  public void testMergeWithCompositeOrderingFieldsFirstFieldDecides() throws IOException {
+    Schema schema = createSchemaWithOrderingField();
+    // First ordering field decides outright when it differs (98 < 99) -> stored record kept,
+    // regardless of the second field (100 > 5 would say otherwise).
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(
         DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00009.100", 98L, 100L), 98L);
-    merged = older.combineAndGetUpdateValue(existing, schema, props);
-    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00005.100", 99L);
+    GenericRecord existing = DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00005.100", 99L, 5L);
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, orderingProps("event_ts,event_ts2"));
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00005.100", 99L, 5L);
+  }
+
+  @Test
+  public void testMergeWithCompositeOrderingNullPersistedSecondFieldFirstDecides() throws IOException {
+    Schema schema = createSchemaWithOrderingField();
+    // Persisted second element is null but the FIRST field strictly decides (stored 99 > incoming 98):
+    // the element-wise loop returns at the first field without ever touching the null.
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(
+        DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00009.100", 98L, 100L), 98L);
+    GenericRecord existing = DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00005.100", 99L, null);
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, orderingProps("event_ts,event_ts2"));
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00005.100", 99L, null);
+  }
+
+  @Test
+  public void testMergeWithCompositeOrderingNullPersistedSecondFieldOnTieTakesIncoming() throws IOException {
+    Schema schema = createSchemaWithOrderingField();
+    // First field ties and the persisted second element is null (e.g. bootstrapped rows): the incoming
+    // record wins — the null-persisted rule applies per element, no NPE.
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(
+        DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00001.100", 99L, 7L), 99L);
+    GenericRecord existing = DebeziumOrderingTestFixtures.recordWithCompositeOrdering(schema, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00005.100", 99L, null);
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, orderingProps("event_ts,event_ts2"));
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00001.100", 99L, 7L);
+  }
+
+  @Test
+  public void testMergeWithMySqlNativeCompositeOrderingPosDecides() throws IOException {
+    Schema schema = createMySqlNativeOrderingSchema();
+    // The composite every MySQL table actually configures (ORDERING_FIELDS = _event_bin_file,_event_pos):
+    // mixed element types (String file, long pos). Same binlog file -> the numeric pos decides.
+    GenericRecord incoming = createMySqlNativeOrderingRecord(schema, 1, Operation.UPDATE, "mysql-bin.000001", 200L);
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incoming, 200L);
+    GenericRecord existing = createMySqlNativeOrderingRecord(schema, 1, Operation.INSERT, "mysql-bin.000001", 100L);
+    GenericRecord merged = (GenericRecord) payload.combineAndGetUpdateValue(existing, schema,
+        orderingProps(MySqlDebeziumAvroPayload.ORDERING_FIELDS)).get();
+    assertEquals(200L, merged.get(DebeziumConstants.FLATTENED_POS_COL_NAME));
+    assertEquals(Operation.UPDATE.op, merged.get(DebeziumConstants.FLATTENED_OP_COL_NAME).toString());
+  }
+
+  @Test
+  public void testMergeWithMySqlNativeCompositeOrderingFileDecides() throws IOException {
+    Schema schema = createMySqlNativeOrderingSchema();
+    // Binlog file differs -> the String file name decides before pos is consulted; stored record kept.
+    GenericRecord incoming = createMySqlNativeOrderingRecord(schema, 1, Operation.UPDATE, "mysql-bin.000001", 999L);
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incoming, 999L);
+    GenericRecord existing = createMySqlNativeOrderingRecord(schema, 1, Operation.INSERT, "mysql-bin.000002", 5L);
+    GenericRecord merged = (GenericRecord) payload.combineAndGetUpdateValue(existing, schema,
+        orderingProps(MySqlDebeziumAvroPayload.ORDERING_FIELDS)).get();
+    assertEquals(5L, merged.get(DebeziumConstants.FLATTENED_POS_COL_NAME));
+    assertEquals(Operation.INSERT.op, merged.get(DebeziumConstants.FLATTENED_OP_COL_NAME).toString());
   }
 
   @Test
@@ -231,17 +287,21 @@ public class TestMySqlDebeziumAvroPayload {
   }
 
   @Test
-  public void testMergeWithoutOrderingFieldFallsBackToSeq() throws IOException {
+  public void testMergeWithoutOrderingFieldLateRecordLosesOnSeq() throws IOException {
     // Properties present but no ordering field configured -> legacy hardcoded seq comparison.
     GenericRecord lateRecord = createRecord(3, Operation.UPDATE, "00000.222");
     MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(lateRecord, "00000.222");
     GenericRecord existingRecord = createRecord(3, Operation.INSERT, "00001.111");
     Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema, new Properties());
     validateRecord(mergedRecord, 3, Operation.INSERT, "00001.111");
+  }
 
+  @Test
+  public void testMergeWithoutOrderingFieldFreshRecordWinsOnSeq() throws IOException {
     GenericRecord freshRecord = createRecord(3, Operation.UPDATE, "00002.11");
-    payload = new MySqlDebeziumAvroPayload(freshRecord, "00002.11");
-    mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema, new Properties());
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(freshRecord, "00002.11");
+    GenericRecord existingRecord = createRecord(3, Operation.INSERT, "00001.111");
+    Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema, new Properties());
     validateRecord(mergedRecord, 3, Operation.UPDATE, "00002.11");
   }
 
@@ -283,6 +343,28 @@ public class TestMySqlDebeziumAvroPayload {
     MySqlDebeziumAvroPayload olderSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.INSERT, "00001.111", 99L), "00001.111");
     MySqlDebeziumAvroPayload newerSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00002.111", 99L), "00002.111");
     assertEquals(newerSeq, newerSeq.preCombine(olderSeq, new Properties()));
+  }
+
+  private Schema createMySqlNativeOrderingSchema() {
+    return Schema.createRecord("test_mysql_native_ordering", null, "test_namespace", false, Arrays.asList(
+        new Schema.Field(KEY_FIELD_NAME, Schema.create(Schema.Type.INT), "", 0),
+        new Schema.Field(DebeziumConstants.FLATTENED_OP_COL_NAME,
+            Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)), "", null),
+        new Schema.Field(DebeziumConstants.FLATTENED_FILE_COL_NAME,
+            Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)), "", null),
+        new Schema.Field(DebeziumConstants.FLATTENED_POS_COL_NAME,
+            Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)), "", null)
+    ));
+  }
+
+  private GenericRecord createMySqlNativeOrderingRecord(Schema schema, int key, Operation op, String binlogFile, Long pos) {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put(KEY_FIELD_NAME, key);
+    record.put(DebeziumConstants.FLATTENED_OP_COL_NAME, Objects.toString(op, null));
+    // Utf8, matching what the persisted side carries in production (both sides come from Avro decoding)
+    record.put(DebeziumConstants.FLATTENED_FILE_COL_NAME, new Utf8(binlogFile));
+    record.put(DebeziumConstants.FLATTENED_POS_COL_NAME, pos);
+    return record;
   }
 
   private Schema createSchemaWithOrderingField() {

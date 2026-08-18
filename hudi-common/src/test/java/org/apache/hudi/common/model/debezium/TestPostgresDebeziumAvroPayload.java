@@ -212,17 +212,21 @@ public class TestPostgresDebeziumAvroPayload {
   }
 
   @Test
-  public void testMergeWithoutOrderingFieldFallsBackToLsn() throws IOException {
+  public void testMergeWithoutOrderingFieldLateRecordLosesOnLsn() throws IOException {
     // Properties present but no ordering field configured -> legacy hardcoded LSN comparison.
     GenericRecord lateRecord = createRecord(3, Operation.UPDATE, 98L);
     PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(lateRecord, 98L);
     GenericRecord existingRecord = createRecord(3, Operation.INSERT, 99L);
     Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema, new Properties());
     validateRecord(mergedRecord, 3, Operation.INSERT, 99L);
+  }
 
+  @Test
+  public void testMergeWithoutOrderingFieldFreshRecordWinsOnLsn() throws IOException {
     GenericRecord freshRecord = createRecord(3, Operation.UPDATE, 100L);
-    payload = new PostgresDebeziumAvroPayload(freshRecord, 100L);
-    mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema, new Properties());
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(freshRecord, 100L);
+    GenericRecord existingRecord = createRecord(3, Operation.INSERT, 99L);
+    Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema, new Properties());
     validateRecord(mergedRecord, 3, Operation.UPDATE, 100L);
   }
 
