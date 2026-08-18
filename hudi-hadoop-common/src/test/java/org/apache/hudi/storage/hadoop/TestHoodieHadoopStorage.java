@@ -19,17 +19,26 @@
 
 package org.apache.hudi.storage.hadoop;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.TestHoodieStorageBase;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.Test;
 
+import java.io.FilterOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link HoodieHadoopStorage}.
@@ -69,5 +78,40 @@ public class TestHoodieHadoopStorage extends TestHoodieStorageBase {
     // which can be caught here.
     assertSame(fileSystem, storage.getFileSystem());
     assertSame(fileSystem, HadoopFSUtils.getFs(getTempDir(), conf, true));
+  }
+
+  @Test
+  void testCreateImmutableFileCleansTemporaryFileAfterCloseFailure() throws IOException {
+    Configuration conf = new Configuration();
+    FileSystem fileSystem = HadoopFSUtils.getFs(getTempDir(), conf, true);
+    HoodieStorage storage = new CloseFailingHoodieHadoopStorage(fileSystem);
+    StoragePath directory = new StoragePath(getTempDir(), "testImmutableFileCloseFailure");
+    StoragePath path = new StoragePath(directory, "1.file");
+    storage.createDirectory(directory);
+
+    HoodieIOException exception = assertThrows(HoodieIOException.class,
+        () -> storage.createImmutableFileInPath(path,
+            Option.of(HoodieInstantWriter.convertByteArrayToWriter(new byte[] {42}))));
+
+    assertTrue(exception.getMessage().startsWith("Failed to close file "));
+    assertFalse(storage.exists(path));
+    assertTrue(storage.listDirectEntries(directory).isEmpty());
+  }
+
+  private static class CloseFailingHoodieHadoopStorage extends HoodieHadoopStorage {
+    CloseFailingHoodieHadoopStorage(FileSystem fileSystem) {
+      super(fileSystem);
+    }
+
+    @Override
+    public OutputStream create(StoragePath path, boolean overwrite) throws IOException {
+      return new FilterOutputStream(super.create(path, overwrite)) {
+        @Override
+        public void close() throws IOException {
+          super.close();
+          throw new IOException("close failure");
+        }
+      };
+    }
   }
 }
