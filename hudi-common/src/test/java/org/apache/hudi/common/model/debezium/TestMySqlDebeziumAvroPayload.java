@@ -21,7 +21,6 @@ package org.apache.hudi.common.model.debezium;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
-import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -185,31 +184,6 @@ public class TestMySqlDebeziumAvroPayload {
   }
 
   @Test
-  public void testMergeWithSeqOrderingFieldKeepsNumericCompare() throws IOException {
-    // Ordering field configured to the connector seq column: the "file.pos" segments must still be
-    // compared numerically. Unpadded values discriminate: lexicographically "2.11" > "10.111",
-    // numerically file 2 < file 10 -> the stored record must win.
-    Properties props = orderingProps(DebeziumConstants.ADDED_SEQ_COL_NAME);
-    GenericRecord incoming = createRecord(2, Operation.UPDATE, "2.11");
-    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incoming, "2.11");
-    GenericRecord existing = createRecord(2, Operation.INSERT, "10.111");
-    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, avroSchema, props);
-    validateRecord(merged, 2, Operation.INSERT, "10.111");
-  }
-
-  @Test
-  public void testMergeWithWhitespacePaddedSeqOrderingFieldStaysOnSeqCompare() throws IOException {
-    // Whitespace in the configured field must not silently reroute the connector column
-    // into the generic Comparable compare (lexicographic, wrong for "file.pos").
-    Properties props = orderingProps(" " + DebeziumConstants.ADDED_SEQ_COL_NAME + " ");
-    GenericRecord incoming = createRecord(2, Operation.UPDATE, "2.11");
-    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incoming, "2.11");
-    GenericRecord existing = createRecord(2, Operation.INSERT, "10.111");
-    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, avroSchema, props);
-    validateRecord(merged, 2, Operation.INSERT, "10.111");
-  }
-
-  @Test
   public void testMergeWithWhitespacePaddedConfiguredOrderingFieldIsTrimmed() throws IOException {
     Schema schema = createSchemaWithOrderingField();
     // The other trimming direction: a padded NON-connector field must route to the configured-field
@@ -254,19 +228,6 @@ public class TestMySqlDebeziumAvroPayload {
         OrderingValues.create(new Comparable[] {99L, 7L}));
     assertEquals(higher, higher.preCombine(lower, props));
     assertEquals(higher, lower.preCombine(higher, props));
-  }
-
-  @Test
-  public void testCompositeOrderingIncludingConnectorColumnIsRejected() {
-    // The connector column's encoded "file.pos" representation cannot participate in a plain
-    // Comparable composite: reject loudly on both entry points instead of mis-ordering.
-    Properties props = orderingProps("event_ts," + DebeziumConstants.ADDED_SEQ_COL_NAME);
-    GenericRecord incoming = createRecord(2, Operation.UPDATE, "2.11");
-    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incoming, "2.11");
-    GenericRecord existing = createRecord(2, Operation.INSERT, "10.111");
-    assertThrows(HoodieException.class, () -> payload.combineAndGetUpdateValue(existing, avroSchema, props));
-    MySqlDebeziumAvroPayload other = new MySqlDebeziumAvroPayload(createRecord(2, Operation.INSERT, "1.11"), "1.11");
-    assertThrows(HoodieException.class, () -> payload.preCombine(other, props));
   }
 
   @Test
@@ -316,13 +277,12 @@ public class TestMySqlDebeziumAvroPayload {
   @Test
   public void testPreCombineWithoutOrderingFieldUsesSeqCompare() {
     Schema schema = createSchemaWithOrderingField();
-    // No ordering field configured, or configured to the connector seq column ->
-    // the legacy numeric seq comparison still applies. On this path real ingestion sets
-    // orderingVal from the seq column (precombine = _event_seq), so construct accordingly.
+    // No ordering field configured -> the legacy numeric seq comparison still applies. On this
+    // path real ingestion sets orderingVal from the seq column (precombine = _event_seq), so
+    // construct accordingly.
     MySqlDebeziumAvroPayload olderSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.INSERT, "00001.111", 99L), "00001.111");
     MySqlDebeziumAvroPayload newerSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00002.111", 99L), "00002.111");
     assertEquals(newerSeq, newerSeq.preCombine(olderSeq, new Properties()));
-    assertEquals(newerSeq, newerSeq.preCombine(olderSeq, orderingProps(DebeziumConstants.ADDED_SEQ_COL_NAME)));
   }
 
   private Schema createSchemaWithOrderingField() {

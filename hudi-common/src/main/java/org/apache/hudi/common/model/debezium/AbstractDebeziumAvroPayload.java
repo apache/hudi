@@ -24,7 +24,6 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import lombok.extern.slf4j.Slf4j;
@@ -125,37 +124,20 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
   protected abstract boolean shouldPickCurrentRecord(IndexedRecord currentRecord, IndexedRecord insertRecord, Schema schema) throws IOException;
 
   /**
-   * The connector-hardcoded ordering column (e.g. LSN / seq) whose comparison semantics
-   * {@link #shouldPickCurrentRecord(IndexedRecord, IndexedRecord, Schema)} implements.
-   */
-  protected abstract String getConnectorOrderingField();
-
-  /**
-   * Resolves the configured ordering field(s) to dispatch on, or empty to use the connector-hardcoded
-   * ordering: nothing configured, or a single field equal to the connector's own column (MySQL's
-   * "file.pos" seq needs segment-wise numeric compare; a plain Comparable is lexicographic). Values are
-   * trimmed so stray whitespace in user config cannot silently reroute the comparison. A composite
-   * (multi-field) ordering is supported element-wise, but must not include the connector column — its
-   * encoded representation cannot participate in a plain Comparable composite — and fails loudly if it does.
+   * Resolves the configured ordering field(s) to dispatch on, or empty when nothing is configured — in
+   * which case the connector-hardcoded ordering ({@link #shouldPickCurrentRecord}) applies. Values are
+   * trimmed so stray whitespace in user config cannot silently change which field is compared. A
+   * composite (multi-field) ordering is supported element-wise.
    */
   private Option<String[]> getConfiguredOrderingFields(Properties properties) {
     String[] orderingFields = ConfigUtils.getOrderingFields(properties);
-    if (orderingFields == null) {
+    if (orderingFields == null || orderingFields.length == 0
+        || (orderingFields.length == 1 && orderingFields[0].trim().isEmpty())) {
       return Option.empty();
     }
     String[] trimmedFields = new String[orderingFields.length];
     for (int i = 0; i < orderingFields.length; i++) {
       trimmedFields[i] = orderingFields[i].trim();
-    }
-    if (trimmedFields.length == 1) {
-      return trimmedFields[0].isEmpty() || trimmedFields[0].equals(getConnectorOrderingField())
-          ? Option.empty() : Option.of(trimmedFields);
-    }
-    for (String field : trimmedFields) {
-      if (field.equals(getConnectorOrderingField())) {
-        throw new HoodieException(String.format("Debezium composite ordering cannot include the connector ordering column %s, found: %s",
-            getConnectorOrderingField(), String.join(",", trimmedFields)));
-      }
     }
     return Option.of(trimmedFields);
   }

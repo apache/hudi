@@ -76,11 +76,6 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
   }
 
   @Override
-  protected String getConnectorOrderingField() {
-    return DebeziumConstants.FLATTENED_LSN_COL_NAME;
-  }
-
-  @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
     // Specific to Postgres: If the updated record has TOASTED columns,
     // we will need to keep the previous value for those columns
