@@ -169,3 +169,27 @@ class TestEdgeCases:
         raw = "hello world"
         result = parse_cli_output(raw)
         assert result.raw == raw
+
+
+class TestSilentFailureMarkers:
+    """Real CLI outputs that previously slipped through as success."""
+
+    def test_failed_colon_prefix_is_error(self):
+        from hudi_cli_mcp.parser import _is_error_line as is_error_line
+
+        assert is_error_line('Failed: Could not create savepoint "20260806230427155".')
+        assert is_error_line('Failed: Could not delete savepoint "20260806230427155".')
+
+    def test_commit_not_found_is_error(self):
+        from hudi_cli_mcp.parser import _is_error_line as is_error_line
+
+        assert is_error_line(
+            "Commit 20260806230427155 not found in Commits "
+            "org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2"
+        )
+
+    def test_plain_output_not_flagged(self):
+        from hudi_cli_mcp.parser import _is_error_line as is_error_line
+
+        assert not is_error_line('The commit "20260806230427155" has been savepointed.')
+        assert not is_error_line("Savepoint \"20260806230427155\" deleted.")

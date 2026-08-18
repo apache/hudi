@@ -57,6 +57,10 @@ ERROR_MARKERS = [
     re.compile(r"\bcommand (failed|error)\b", re.IGNORECASE),
     re.compile(r"\bfailed to\b", re.IGNORECASE),
     re.compile(r"can only be run", re.IGNORECASE),  # e.g. compaction on a COW table
+    # savepoint/rollback style: 'Failed: Could not create savepoint "..."'
+    re.compile(r"^Failed:", re.IGNORECASE),
+    # e.g. 'Commit 202608... not found in Commits' -- the op silently did nothing
+    re.compile(r"\bnot found in Commits\b"),
 ]
 
 # Benign JVM warnings that superficially match an error marker but are NOT command
