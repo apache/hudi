@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.model.debezium;
 
-import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
@@ -163,23 +162,24 @@ public class TestMySqlDebeziumAvroPayload {
   }
 
   @Test
-  public void testMergeWithConfiguredOrderingFieldOverridesSeq() throws IOException {
+  public void testMergeWithConfiguredOrderingFieldStoredRecordWins() throws IOException {
     Schema schema = createSchemaWithOrderingField();
-    Properties props = orderingProps("event_ts");
-
     // Incoming has a HIGHER seq but a LOWER configured ordering value -> stored record must win,
     // proving the configured field (not the hardcoded seq) decides.
-    GenericRecord incoming = createRecordWithOrdering(schema, 1, Operation.UPDATE, "00005.100", 50L);
-    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incoming, "00005.100");
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00005.100", 50L), 50L);
     GenericRecord existing = createRecordWithOrdering(schema, 1, Operation.INSERT, "00001.100", 99L);
-    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, props);
-    assertEquals(99L, (long) ((GenericRecord) merged.get()).get("event_ts"));
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, orderingProps("event_ts"));
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.INSERT, DebeziumConstants.ADDED_SEQ_COL_NAME, "00001.100", 99L);
+  }
 
+  @Test
+  public void testMergeWithConfiguredOrderingFieldIncomingRecordWins() throws IOException {
+    Schema schema = createSchemaWithOrderingField();
     // Incoming has a LOWER seq but a HIGHER configured ordering value -> incoming wins.
-    incoming = createRecordWithOrdering(schema, 1, Operation.UPDATE, "00000.100", 120L);
-    payload = new MySqlDebeziumAvroPayload(incoming, "00000.100");
-    merged = payload.combineAndGetUpdateValue(existing, schema, props);
-    assertEquals(120L, (long) ((GenericRecord) merged.get()).get("event_ts"));
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00000.100", 120L), 120L);
+    GenericRecord existing = createRecordWithOrdering(schema, 1, Operation.INSERT, "00001.100", 99L);
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, orderingProps("event_ts"));
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.UPDATE, DebeziumConstants.ADDED_SEQ_COL_NAME, "00000.100", 120L);
   }
 
   @Test
@@ -234,27 +234,37 @@ public class TestMySqlDebeziumAvroPayload {
   }
 
   @Test
-  public void testPreCombineWithConfiguredOrderingField() {
+  public void testPreCombineEqualConfiguredOrderingValuesTieGoesToNewer() {
     Schema schema = createSchemaWithOrderingField();
-    Properties props = orderingProps("event_ts");
-
     // Two records with EQUAL configured ordering values: the seq parser would throw here
-    // ("99".split("\\.") has no position segment -> ArrayIndexOutOfBoundsException); the
+    // ("99".split(".") has no position segment -> ArrayIndexOutOfBoundsException); the
     // configured-field compare must not throw, and the newer payload wins the tie.
     MySqlDebeziumAvroPayload older = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.INSERT, "00001.111", 99L), 99L);
     MySqlDebeziumAvroPayload newer = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00002.111", 99L), 99L);
-    assertEquals(newer, newer.preCombine(older, props));
+    assertEquals(newer, newer.preCombine(older, orderingProps("event_ts")));
+  }
 
-    // The configured field decides, even when the seq order says otherwise.
+  @Test
+  public void testPreCombineConfiguredOrderingFieldOverridesSeq() {
+    Schema schema = createSchemaWithOrderingField();
+    // The configured field decides, in both directions, even when the seq order says otherwise.
     MySqlDebeziumAvroPayload lowerTsHigherSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00005.100", 50L), 50L);
     MySqlDebeziumAvroPayload higherTsLowerSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00000.100", 120L), 120L);
-    assertEquals(higherTsLowerSeq, higherTsLowerSeq.preCombine(lowerTsHigherSeq, props));
-    assertEquals(higherTsLowerSeq, lowerTsHigherSeq.preCombine(higherTsLowerSeq, props));
+    assertEquals(higherTsLowerSeq, higherTsLowerSeq.preCombine(lowerTsHigherSeq, orderingProps("event_ts")));
+    assertEquals(higherTsLowerSeq, lowerTsHigherSeq.preCombine(higherTsLowerSeq, orderingProps("event_ts")));
+  }
 
-    // Delete record (empty payload) keeps natural order.
+  @Test
+  public void testPreCombineDeleteRecordKeepsNaturalOrder() {
+    Schema schema = createSchemaWithOrderingField();
+    MySqlDebeziumAvroPayload newer = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00002.111", 99L), 99L);
     MySqlDebeziumAvroPayload empty = new MySqlDebeziumAvroPayload(Option.empty());
-    assertEquals(newer, newer.preCombine(empty, props));
+    assertEquals(newer, newer.preCombine(empty, orderingProps("event_ts")));
+  }
 
+  @Test
+  public void testPreCombineWithoutOrderingFieldUsesSeqCompare() {
+    Schema schema = createSchemaWithOrderingField();
     // No ordering field configured, or configured to the connector seq column ->
     // the legacy numeric seq comparison still applies. On this path real ingestion sets
     // orderingVal from the seq column (precombine = _event_seq), so construct accordingly.
@@ -265,31 +275,16 @@ public class TestMySqlDebeziumAvroPayload {
   }
 
   private Schema createSchemaWithOrderingField() {
-    return Schema.createRecord("test_ordering", null, "test_namespace", false, Arrays.asList(
-        new Schema.Field(KEY_FIELD_NAME, Schema.create(Schema.Type.INT), "", 0),
-        new Schema.Field(DebeziumConstants.FLATTENED_OP_COL_NAME,
-            Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)), "", null),
-        new Schema.Field(DebeziumConstants.ADDED_SEQ_COL_NAME,
-            Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)), "", null),
-        new Schema.Field("event_ts",
-            Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)), "", null)
-    ));
+    return DebeziumOrderingTestFixtures.schemaWithOrderingField(DebeziumConstants.ADDED_SEQ_COL_NAME, Schema.Type.STRING);
   }
 
   private GenericRecord createRecordWithOrdering(Schema schema, int primaryKeyValue, @Nullable Operation op,
                                                  @Nullable String seqValue, @Nullable Long orderingValue) {
-    GenericRecord record = new GenericData.Record(schema);
-    record.put(KEY_FIELD_NAME, primaryKeyValue);
-    record.put(DebeziumConstants.FLATTENED_OP_COL_NAME, Objects.toString(op, null));
-    record.put(DebeziumConstants.ADDED_SEQ_COL_NAME, seqValue);
-    record.put("event_ts", orderingValue);
-    return record;
+    return DebeziumOrderingTestFixtures.recordWithOrdering(schema, primaryKeyValue, op, DebeziumConstants.ADDED_SEQ_COL_NAME, seqValue, orderingValue);
   }
 
   private Properties orderingProps(String orderingField) {
-    Properties props = new Properties();
-    props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingField);
-    return props;
+    return DebeziumOrderingTestFixtures.orderingProps(orderingField);
   }
 
   private GenericRecord createRecord(int primaryKeyValue, @Nullable Operation op, @Nullable String seqValue) {
