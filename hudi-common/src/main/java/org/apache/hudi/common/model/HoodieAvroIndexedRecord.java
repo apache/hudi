@@ -22,7 +22,6 @@ import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.avro.JoinedGenericRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -44,8 +43,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
-
-import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 
 /**
  * This only use by reader returning.
@@ -285,10 +282,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     // Resolve via hoodie.meta.fields.mode — reading the deprecated boolean alone would report
     // "populated" for a selective-mode table (whose _hoodie_record_key column is null), sending us
     // down the meta-column branch below and NPE-ing on the null field.
-    boolean recordKeyPopulated = MetaFieldsMode.resolve(
-        props.getProperty(HoodieTableConfig.META_FIELDS_MODE.key()),
-        Boolean.parseBoolean(props.getOrDefault(POPULATE_META_FIELDS.key(),
-            POPULATE_META_FIELDS.defaultValue().toString()).toString())).isRecordKeyPopulated();
+    boolean recordKeyPopulated = MetaFieldsMode.resolve(props).isRecordKeyPopulated();
     if (keyGen.isPresent() && !recordKeyPopulated) {
       BaseKeyGenerator keyGeneratorOpt = keyGen.get();
       key = keyGeneratorOpt.getRecordKey(record);

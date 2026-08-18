@@ -43,6 +43,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -227,6 +228,8 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     Properties props = new Properties();
     props.putAll(metaClient.getTableConfig().getProps());
     props.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
+    props.put(HoodieTableConfig.META_FIELDS_MODE.key(),
+        (populateMetaFields ? MetaFieldsMode.ALL : MetaFieldsMode.NONE).name());
     HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
     metaClient = HoodieTableMetaClient.reload(metaClient);
   }

@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -148,14 +147,13 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testMetaFieldsModeDerivesLegacyBooleanAndRejectsContradictions() throws IOException {
+  void testMetaFieldsModeDerivesLegacyBooleanAndOverridesContradictions() throws IOException {
     // hoodie.properties must never record a legacy boolean that contradicts the mode: a pre-1.3.0
     // reader ignores hoodie.meta.fields.mode entirely and would otherwise treat a selectively
     // written table as ALL. For NONE that is unsafe — an old incremental reader would run against
     // all-null commit times and silently return no rows.
     //
-    // The invariant is upheld two ways: an unstated boolean is derived from the mode, and a stated
-    // one that contradicts it is rejected rather than silently overridden.
+    // The mode is the only source of truth: the deprecated boolean is always derived from it.
     for (MetaFieldsMode mode : MetaFieldsMode.values()) {
       final String path = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-derive-" + mode.name();
       HoodieTableMetaClient created = HoodieTableMetaClient.newTableBuilder()
@@ -177,22 +175,19 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
           .initTable(this.metaClient.getStorageConf(), restatedPath);
       assertEquals(mode, restated.getTableConfig().getMetaFieldsMode());
 
-      // Contradicting it is rejected, naming both properties so the user knows which to drop.
+      // A contradicting legacy boolean is ignored in favor of the mode.
       final String conflictPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-conflict-" + mode.name();
-      HoodieException thrown = assertThrows(HoodieException.class, () ->
-          HoodieTableMetaClient.newTableBuilder()
-              .setTableType(HoodieTableType.COPY_ON_WRITE.name())
-              .setTableName("mfm-conflict-" + mode.name())
-              .setPopulateMetaFields(!mode.toLegacyPopulateMetaFields())
-              .setMetaFieldsMode(mode)
-              .initTable(this.metaClient.getStorageConf(), conflictPath),
-          "a contradicting boolean must be rejected for " + mode);
-      assertTrue(thrown.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key())
-          && thrown.getMessage().contains(HoodieTableConfig.POPULATE_META_FIELDS.key()));
+      HoodieTableMetaClient conflict = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+          .setTableName("mfm-conflict-" + mode.name())
+          .setPopulateMetaFields(!mode.toLegacyPopulateMetaFields())
+          .setMetaFieldsMode(mode)
+          .initTable(this.metaClient.getStorageConf(), conflictPath);
+      assertEquals(mode, conflict.getTableConfig().getMetaFieldsMode());
+      assertEquals(mode.toLegacyPopulateMetaFields(), conflict.getTableConfig().populateMetaFields());
     }
 
-    // No explicit mode: pre-1.3.0 behavior preserved, only the legacy boolean is recorded, and it is
-    // never a conflict because there is no mode for it to contradict.
+    // No explicit mode: pre-1.3.0 behavior is preserved by inferring and recording the mode.
     final String legacyPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-legacy";
     HoodieTableMetaClient legacy = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
@@ -200,6 +195,9 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .setPopulateMetaFields(false)
         .initTable(this.metaClient.getStorageConf(), legacyPath);
     assertEquals(MetaFieldsMode.NONE, legacy.getTableConfig().getMetaFieldsMode());
+    assertEquals(MetaFieldsMode.NONE.name(),
+        legacy.getTableConfig().getString(HoodieTableConfig.META_FIELDS_MODE),
+        "legacy table settings must be normalized to the mode property");
     assertFalse(legacy.getTableConfig().populateMetaFields());
   }
 
@@ -214,8 +212,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
    * that are physically null. A table only reaches v10 once everything touching it understands the
    * mode, so by then the boolean is redundant.
    *
-   * <p>Note this covers tables *created* at v10. One upgraded from v9 keeps both, since a 1.x reader
-   * may still be reading it -- see {@code NineToTenUpgradeHandler}.
+   * <p>The v9-to-v10 upgrade similarly persists the mode and removes the deprecated boolean.
    */
   @Test
   void testMetaFieldsModeDropsTheLegacyBooleanFromTableVersionTen() throws IOException {

@@ -18,10 +18,17 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
 
 import static org.apache.hudi.common.model.MetaFieldsMode.ALL;
 import static org.apache.hudi.common.model.MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME;
@@ -38,6 +45,58 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code TestHoodieMetaFieldsMode}, which exercises the same enum through {@code HoodieTableConfig}.
  */
 class TestMetaFieldsMode {
+
+  @Test
+  void modePropertyHasNoDefaultValue() {
+    assertFalse(HoodieTableConfig.META_FIELDS_MODE.hasDefaultValue());
+  }
+
+  @Test
+  void resolveDefaultsMissingAndEmptyModesToAll() {
+    HoodieConfig config = new HoodieConfig();
+    assertEquals(ALL, MetaFieldsMode.resolve(config));
+
+    config.setValue(HoodieTableConfig.META_FIELDS_MODE, "");
+    assertEquals(ALL, MetaFieldsMode.resolve(config));
+  }
+
+  @Test
+  void resolveConfigFallsBackToLegacyBooleanWithoutMutation() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+
+    assertEquals(NONE, MetaFieldsMode.resolve(config));
+    assertFalse(config.contains(HoodieTableConfig.META_FIELDS_MODE));
+
+    config.setValue(HoodieTableConfig.META_FIELDS_MODE, "file_name_only");
+    assertEquals(FILE_NAME_ONLY, MetaFieldsMode.resolve(config));
+  }
+
+  @Test
+  void resolvePropertiesFallsBackToLegacyBooleanWithoutMutation() {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+
+    assertEquals(NONE, MetaFieldsMode.resolve(props));
+    assertFalse(props.containsKey(HoodieTableConfig.META_FIELDS_MODE.key()));
+
+    props.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), "commit_time_only");
+    assertEquals(COMMIT_TIME_ONLY, MetaFieldsMode.resolve(props));
+  }
+
+  @Test
+  void resolveMapFallsBackToLegacyBooleanWithoutMutation() {
+    Map<String, String> propsMap = new HashMap<>();
+    assertEquals(ALL, MetaFieldsMode.resolve(propsMap));
+
+    propsMap.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+
+    assertEquals(NONE, MetaFieldsMode.resolve(propsMap));
+    assertFalse(propsMap.containsKey(HoodieTableConfig.META_FIELDS_MODE.key()));
+
+    propsMap.put(HoodieTableConfig.META_FIELDS_MODE.key(), "commit_time_and_file_name");
+    assertEquals(COMMIT_TIME_AND_FILE_NAME, MetaFieldsMode.resolve(propsMap));
+  }
 
   @Test
   void isSelectiveIsTrueForExactlyTheModesTheLegacyBooleanCannotExpress() {

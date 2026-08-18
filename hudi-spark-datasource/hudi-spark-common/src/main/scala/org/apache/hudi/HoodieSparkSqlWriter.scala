@@ -293,7 +293,7 @@ class HoodieSparkSqlWriterInternal {
           } else {
             null
           }
-        val metaFieldsMode = hoodieConfig.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE)
+        val metaFieldsMode = hoodieConfig.getString(HoodieTableConfig.META_FIELDS_MODE)
         val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT);
         val payloadClass = hoodieConfig.getString(DataSourceWriteOptions.PAYLOAD_CLASS_NAME)
         val recordMergeStrategyId = hoodieConfig.getString(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID)
@@ -767,10 +767,7 @@ class HoodieSparkSqlWriterInternal {
           parameters.get(HoodieTableConfig.POPULATE_META_FIELDS.key())
             .map(v => java.lang.Boolean.valueOf(v))
             .orNull
-        val metaFieldsMode = parameters.getOrElse(
-          HoodieTableConfig.META_FIELDS_MODE.key(),
-          HoodieTableConfig.META_FIELDS_MODE.defaultValue()
-        )
+        val metaFieldsMode = parameters.get(HoodieTableConfig.META_FIELDS_MODE.key()).orNull
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
         val useBaseFormatMetaFile = java.lang.Boolean.parseBoolean(parameters.getOrElse(
           HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),

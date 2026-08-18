@@ -273,20 +273,18 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
   @Test
   void validateAgainstTablePropertiesRejectsADefaultWriterAgainstANoneTable() throws IOException {
     initMetaClient();
-    // A default writer states neither meta-field property and so resolves to the ALL default. Against
-    // a NONE table that is a widening: it would populate all five meta columns on a table that has
-    // none of them. Nothing reconciles the write config beforehand any more, so this must be caught
-    // here rather than quietly corrected -- the mode is read again downstream by handles and writer
+    // A default writer is normalized to the ALL mode. Against a NONE table that is a widening: it
+    // would populate all five meta columns on a table that has none of them. This must be caught here
+    // rather than quietly corrected -- the mode is read again downstream by handles and writer
     // factories that cannot repeat any correction made at this point.
     HoodieWriteConfig defaultWriteConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     assertEquals(MetaFieldsMode.ALL, defaultWriteConfig.getMetaFieldsMode(),
-        "precondition: on its own a default writer resolves to ALL");
+        "precondition: a default writer is normalized to ALL");
 
     HoodieException ex = assertThrows(HoodieException.class, () ->
         validatorClient(defaultWriteConfig).validateAgainstTableProperties(
             tableConfigWithMode(MetaFieldsMode.NONE), defaultWriteConfig));
-    assertTrue(ex.getMessage().contains("does not state one"),
-        "the message must say the writer stated nothing, not that it requested ALL: " + ex.getMessage());
+    assertTrue(ex.getMessage().contains("requests ALL"), ex.getMessage());
     assertTrue(ex.getMessage().contains("NONE"), ex.getMessage());
     // The rejected validation must not have mutated the write config.
     assertEquals(MetaFieldsMode.ALL, defaultWriteConfig.getMetaFieldsMode(),

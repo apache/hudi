@@ -103,24 +103,19 @@ class TestHoodieWriteConfigMetaFieldsMode {
   }
 
   @Test
-  void explicitlyContradictingTheModeIsRejected() {
-    // A selective mode implies populate.meta.fields=false. Setting the boolean to true alongside it
-    // is a contradiction, and the caller is told rather than having half their request discarded --
-    // consistent with BaseHoodieWriteClient#validateAgainstTableProperties, which likewise rejects an
-    // explicitly-set boolean that disagrees with the table.
-    IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () ->
-        baseBuilder()
-            .withPopulateMetaFields(true)
-            .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
-            .build());
-    assertTrue(thrown.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()));
-    assertTrue(thrown.getMessage().contains(HoodieTableConfig.POPULATE_META_FIELDS.key()));
+  void modeOverridesContradictingLegacyBoolean() {
+    HoodieWriteConfig config = baseBuilder()
+        .withPopulateMetaFields(true)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .build();
+
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, config.getMetaFieldsMode());
+    assertFalse(config.populateMetaFields());
   }
 
   @Test
   void restatingTheDerivedBooleanIsAccepted() {
-    // Only a genuine contradiction fails. Restating what the mode already implies is a coherent, if
-    // redundant, request and must not be rejected.
+    // Restating what the mode already implies is a coherent, if redundant, request.
     HoodieWriteConfig selective = baseBuilder()
         .withPopulateMetaFields(false)
         .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
@@ -137,33 +132,36 @@ class TestHoodieWriteConfigMetaFieldsMode {
   }
 
   @Test
-  void contradictionIsRejectedInEitherBuilderOrder() {
-    // The check runs in build(), not in either setter, so call order cannot smuggle a contradiction
-    // through. Deriving inside withMetaFieldsMode alone would have let mode-then-boolean pass.
-    assertThrows(IllegalArgumentException.class, () ->
-        baseBuilder()
-            .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
-            .withPopulateMetaFields(true)
-            .build());
-    assertThrows(IllegalArgumentException.class, () ->
-        baseBuilder()
-            .withPopulateMetaFields(true)
-            .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
-            .build());
+  void modePrecedenceIsIndependentOfBuilderOrder() {
+    HoodieWriteConfig modeFirst = baseBuilder()
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .withPopulateMetaFields(true)
+        .build();
+    HoodieWriteConfig modeLast = baseBuilder()
+        .withPopulateMetaFields(true)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .build();
+
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, modeFirst.getMetaFieldsMode());
+    assertFalse(modeFirst.populateMetaFields());
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, modeLast.getMetaFieldsMode());
+    assertFalse(modeLast.populateMetaFields());
   }
 
   @Test
-  void everyModeRejectsItsContradictingBooleanInBothOrders() {
+  void everyModeOverridesItsContradictingBooleanInBothOrders() {
     // Pinned by construction across all five modes rather than by hand-picked cases.
     for (MetaFieldsMode mode : MetaFieldsMode.values()) {
       boolean contradicting = !mode.toLegacyPopulateMetaFields();
 
-      assertThrows(IllegalArgumentException.class, () ->
-              baseBuilder().withPopulateMetaFields(contradicting).withMetaFieldsMode(mode).build(),
-          "mode set last must still reject the contradiction for " + mode);
-      assertThrows(IllegalArgumentException.class, () ->
-              baseBuilder().withMetaFieldsMode(mode).withPopulateMetaFields(contradicting).build(),
-          "mode set first must still reject the contradiction for " + mode);
+      HoodieWriteConfig modeLast =
+          baseBuilder().withPopulateMetaFields(contradicting).withMetaFieldsMode(mode).build();
+      HoodieWriteConfig modeFirst =
+          baseBuilder().withMetaFieldsMode(mode).withPopulateMetaFields(contradicting).build();
+      assertEquals(mode, modeLast.getMetaFieldsMode());
+      assertEquals(mode.toLegacyPopulateMetaFields(), modeLast.populateMetaFields());
+      assertEquals(mode, modeFirst.getMetaFieldsMode());
+      assertEquals(mode.toLegacyPopulateMetaFields(), modeFirst.populateMetaFields());
 
       // And the derived value is what lands when the boolean is left alone.
       HoodieWriteConfig unstated = baseBuilder().withMetaFieldsMode(mode).build();
@@ -187,14 +185,14 @@ class TestHoodieWriteConfigMetaFieldsMode {
   }
 
   @Test
-  void explicitAllModeWithLegacyFalseIsRejected() {
-    // ALL implies populate.meta.fields=true, so pairing it with false is the same contradiction in
-    // the other direction, and fails the same way.
-    assertThrows(IllegalArgumentException.class, () ->
-        baseBuilder()
-            .withPopulateMetaFields(false)
-            .withMetaFieldsMode(MetaFieldsMode.ALL)
-            .build());
+  void explicitAllModeOverridesLegacyFalse() {
+    HoodieWriteConfig config = baseBuilder()
+        .withPopulateMetaFields(false)
+        .withMetaFieldsMode(MetaFieldsMode.ALL)
+        .build();
+
+    assertEquals(MetaFieldsMode.ALL, config.getMetaFieldsMode());
+    assertTrue(config.populateMetaFields());
   }
 
   @Test
@@ -245,17 +243,8 @@ class TestHoodieWriteConfigMetaFieldsMode {
   }
 
   /**
-   * The LSM timeline writer's config shape, which archival builds on every table.
-   *
-   * <p>{@code LSMTimelineWriter#getOrCreateWriterConfig} inherits the parent config's props and then
-   * sets {@code populateMetaFields=false} -- it writes timeline instants, not records, so it never
-   * wants meta columns. On a table upgraded to version 10 the inherited props carry
-   * {@code hoodie.meta.fields.mode=ALL} (written by {@code NineToTenUpgradeHandler} for every v9
-   * table), so the builder sees {@code ALL} next to an explicit {@code false}.
-   *
-   * <p>That is not a contradiction the caller stated: the mode arrived in a props blob and the boolean
-   * is what this caller actually asked for. Rejecting it would fail archival on every upgraded table
-   * once it passes {@code hoodie.keep.min.commits} -- the default case, not an edge case.
+   * The builder treats the mode as authoritative regardless of whether it arrived through inherited
+   * properties or a direct setter, and rewrites the legacy boolean instead of rejecting the config.
    */
   @Test
   void inheritedModeDoesNotConflictWithAnExplicitBoolean() {
@@ -267,10 +256,8 @@ class TestHoodieWriteConfigMetaFieldsMode {
         .withPopulateMetaFields(false)
         .build();
 
-    // The caller's explicit boolean wins over a mode it never stated.
-    assertEquals(MetaFieldsMode.NONE, config.getMetaFieldsMode(),
-        "an explicitly-set populate=false must narrow an inherited ALL, not throw");
-    assertFalse(config.populateMetaFields());
+    assertEquals(MetaFieldsMode.ALL, config.getMetaFieldsMode());
+    assertTrue(config.populateMetaFields());
   }
 
   /**
@@ -293,20 +280,6 @@ class TestHoodieWriteConfigMetaFieldsMode {
     assertEquals(MetaFieldsMode.NONE, config.getMetaFieldsMode(),
         "an explicitly-stated mode must override an inherited boolean, not throw");
     assertFalse(config.populateMetaFields());
-  }
-
-  /**
-   * A caller that states both on this builder, contradicting itself, is still rejected -- that is the
-   * case the check exists for and it must survive the fix above.
-   */
-  @Test
-  void statedContradictionIsStillRejected() {
-    HoodieWriteConfig.Builder builder = baseBuilder()
-        .withMetaFieldsMode(MetaFieldsMode.ALL)
-        .withPopulateMetaFields(false);
-
-    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, builder::build);
-    assertTrue(ex.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()), ex.getMessage());
   }
 
   /**

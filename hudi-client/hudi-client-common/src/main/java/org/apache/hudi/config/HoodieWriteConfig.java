@@ -1799,10 +1799,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * @return the {@link MetaFieldsMode} resolved from the write config.
-   * {@code hoodie.meta.fields.mode} is the source of truth; configs written before that property
-   * existed fall back to {@link MetaFieldsMode#ALL} or {@link MetaFieldsMode#NONE} based on the
-   * deprecated {@code hoodie.populate.meta.fields} boolean.
+   * @return the {@link MetaFieldsMode} configured for writes.
    */
   public MetaFieldsMode getMetaFieldsMode() {
     return MetaFieldsMode.resolve(this);
@@ -3636,22 +3633,9 @@ public class HoodieWriteConfig extends HoodieConfig {
      * @deprecated since 1.3.0, use {@link #withMetaFieldsMode(MetaFieldsMode)} instead
      * ({@code true} maps to {@link MetaFieldsMode#ALL}, {@code false} to {@link MetaFieldsMode#NONE}).
      */
-    /**
-     * Whether this builder's own {@code withPopulateMetaFields} / {@code withMetaFieldsMode} setters were
-     * called, as opposed to the value arriving through {@code withProperties} / {@code withProps}.
-     *
-     * <p>The two are indistinguishable once written into the config, but they mean very different
-     * things. A caller that sets both on this builder and contradicts itself should be told. A caller
-     * that sets one while the other rides in on an inherited props blob is not contradicting anything
-     * -- it is overriding, which is what a setter is for.
-     */
-    private Boolean statedPopulateMetaFields = null;
-    private boolean statedMetaFieldsMode = false;
-
     @Deprecated
     public Builder withPopulateMetaFields(boolean populateMetaFields) {
       writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
-      this.statedPopulateMetaFields = populateMetaFields;
       return this;
     }
 
@@ -3661,7 +3645,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       // disagree by calling the setters in either order.
       writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE,
           metaFieldsMode == null ? "" : metaFieldsMode.name());
-      this.statedMetaFieldsMode = true;
       return this;
     }
 
@@ -3677,55 +3660,14 @@ public class HoodieWriteConfig extends HoodieConfig {
      * copies raw write-config props into {@code hoodie.properties}, misleading pre-1.3.0 readers
      * into treating the table as ALL.
      */
-    private void deriveLegacyPopulateMetaFieldsFromMode() {
-      String rawMode = writeConfig.getString(HoodieTableConfig.META_FIELDS_MODE);
-      if (StringUtils.isNullOrEmpty(rawMode)) {
-        // No mode, but a stated boolean: derive the mode from it so meta.fields.mode is the single
-        // truth every reader on the write path can consult, rather than some sites reading the mode
-        // and others falling back to the deprecated boolean.
-        if (statedPopulateMetaFields != null) {
-          writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE,
-              (statedPopulateMetaFields ? MetaFieldsMode.ALL : MetaFieldsMode.NONE).name());
-        }
-        return;
-      }
-      boolean derived = MetaFieldsMode.parse(rawMode).toLegacyPopulateMetaFields();
+    private void deriveMetaFieldsPopulationOptions() {
+      MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(writeConfig);
+      writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
 
-      // An explicitly-set boolean beats a mode this caller never stated. LSMTimelineWriter and the
-      // upgrade handlers all build a config by inheriting a props blob and then overriding one of the
-      // two properties; on a table upgraded to v10 that blob carries meta.fields.mode=ALL, so treating
-      // the inherited mode as authoritative would fail archival on every upgraded table. Narrow to what
-      // the caller actually asked for instead.
-      if (statedPopulateMetaFields != null && !statedMetaFieldsMode
-          && statedPopulateMetaFields != derived) {
-        writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE,
-            (statedPopulateMetaFields ? MetaFieldsMode.ALL : MetaFieldsMode.NONE).name());
-        return;
-      }
-      // Conversely, an explicitly-stated mode overrides an inherited boolean rather than colliding
-      // with it -- the mode is the source of truth, and the boolean is only its pre-1.3.0 fallback.
-      //
-      // What remains is a caller that stated *both* on this builder and contradicted itself. That is
-      // rejected rather than silently half-applied.
-      checkArgument(
-          statedPopulateMetaFields == null || !statedMetaFieldsMode
-              || statedPopulateMetaFields == derived,
-          () -> String.format(
-              "Conflicting meta-field settings on the write config: %s=%s implies %s=%s, but %s was "
-                  + "explicitly set to %s. %s is the source of truth and the boolean is only its "
-                  + "pre-1.3.0 fallback, so the two cannot be set to different things. Drop %s, or set "
-                  + "it to %s.",
-              HoodieTableConfig.META_FIELDS_MODE.key(), rawMode,
-              HoodieTableConfig.POPULATE_META_FIELDS.key(), derived,
-              HoodieTableConfig.POPULATE_META_FIELDS.key(),
-              writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS),
-              HoodieTableConfig.META_FIELDS_MODE.key(),
-              HoodieTableConfig.POPULATE_META_FIELDS.key(), derived));
-      // Only when absent: if the property is already there it has passed the check above, so it
-      // equals `derived` and rewriting it would be a no-op.
-      if (!writeConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS)) {
-        writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(derived));
-      }
+      // The mode is the source of truth. Always rewrite the deprecated boolean so inherited props,
+      // direct builder calls, and their ordering all produce the same coherent config.
+      writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+          Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
     }
 
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
@@ -3908,6 +3850,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieTTLConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
+      // Keep the legacy boolean coherent after every explicit and derived default has been applied.
+      deriveMetaFieldsPopulationOptions();
     }
 
     private boolean isLockRequiredForSingleWriter() {
@@ -4055,8 +3999,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     @VisibleForTesting
     public HoodieWriteConfig build(boolean shouldValidate) {
       setDefaults();
-      // Before validate(), so the MoR / engine-type checks see the same mode the built config will.
-      deriveLegacyPopulateMetaFieldsFromMode();
       if (shouldValidate) {
         validate();
       }

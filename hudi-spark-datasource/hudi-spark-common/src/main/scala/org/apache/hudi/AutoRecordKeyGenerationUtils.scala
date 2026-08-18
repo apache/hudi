@@ -44,12 +44,13 @@ object AutoRecordKeyGenerationUtils {
       if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
         throw new HoodieKeyGeneratorException("Enabling " + INSERT_DROP_DUPS.key() + " is not supported with auto generation of record keys ")
       }
-      // Virtual keys are not supported with auto generation of record keys. Resolved through
-      // MetaFieldsMode rather than read off the deprecated boolean: a config that states only
-      // hoodie.meta.fields.mode has no populate.meta.fields entry, so reading the raw parameter would
-      // take the `true` default and let the write through. The rows would then land with no identity
-      // at all -- the record key is neither supplied nor generated.
-      if (!MetaFieldsMode.resolve(hoodieConfig).isRecordKeyPopulated) {
+      // Virtual keys are not supported with auto generation of record keys. Normalize legacy input
+      // into MetaFieldsMode rather than reading the deprecated boolean directly: a config that states
+      // only hoodie.meta.fields.mode has no populate.meta.fields entry, so reading the raw parameter
+      // would take the `true` default and let the write through. The rows would then land with no
+      // identity at all -- the record key is neither supplied nor generated.
+      val metaFieldsMode = MetaFieldsMode.resolve(hoodieConfig)
+      if (!metaFieldsMode.isRecordKeyPopulated) {
         // Name whichever property the caller actually set, so the message points at the thing they
         // have to change rather than at its alias.
         val statedKey =

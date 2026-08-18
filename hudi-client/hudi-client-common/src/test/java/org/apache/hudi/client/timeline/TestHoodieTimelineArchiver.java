@@ -102,10 +102,10 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
    * The LSM writer must build its config on a table upgraded to version 10.
    *
    * <p>{@code LSMTimelineWriter#getOrCreateWriterConfig} inherits the parent config's props and then
-   * sets {@code populateMetaFields=false} -- it writes timeline instants, not records. On an upgraded
+   * sets {@code metaFieldsMode=NONE} -- it writes timeline instants, not records. On an upgraded
    * table those inherited props carry {@code hoodie.meta.fields.mode=ALL}, written by
    * {@code NineToTenUpgradeHandler} for every version 9 table. If the builder treated that inherited
-   * mode as a stated contradiction of the explicit {@code false}, archival would throw on every
+   * mode as authoritative over the writer's override, archival would use the wrong mode on every
    * upgraded table once it passed {@code hoodie.keep.min.commits} -- the default case.
    *
    * <p>This exercises the writer's own config construction rather than a full archival run, because
@@ -114,11 +114,9 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
    */
   @Test
   void lsmWriterConfigSurvivesAnUpgradedTablesInheritedMode() {
-    // What an upgraded v9 -> v10 table hands down: the mode written by the upgrade handler, alongside
-    // the legacy boolean it leaves in place.
+    // What an upgraded v9 -> v10 table hands down: the mode written by the upgrade handler.
     TypedProperties upgradedTableProps = new TypedProperties();
     upgradedTableProps.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.ALL.name());
-    upgradedTableProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
 
     HoodieWriteConfig parentConfig = HoodieWriteConfig.newBuilder()
         .withPath(tempDir.toString())
@@ -130,11 +128,11 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
     // Exactly what LSMTimelineWriter#getOrCreateWriterConfig does.
     HoodieWriteConfig lsmConfig = HoodieWriteConfig.newBuilder()
         .withProperties(parentConfig.getProps())
-        .withPopulateMetaFields(false)
+        .withMetaFieldsMode(MetaFieldsMode.NONE)
         .build();
 
     assertEquals(MetaFieldsMode.NONE, lsmConfig.getMetaFieldsMode(),
-        "the LSM writer's explicit populate=false must win over the table's inherited ALL");
+        "the LSM writer's explicit NONE mode must win over the table's inherited ALL");
     assertFalse(lsmConfig.populateMetaFields());
   }
 

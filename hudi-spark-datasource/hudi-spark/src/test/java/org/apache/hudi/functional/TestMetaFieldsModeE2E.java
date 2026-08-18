@@ -220,22 +220,19 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  void explicitlyContradictingTheModeIsRejectedAtTableCreation() {
-    // A selective mode implies populate.meta.fields=false. Stating the boolean as true alongside it
-    // is a contradiction, and the user is told rather than having half their request discarded.
-    // This is the datasource end of the check in HoodieTableMetaClient.TableBuilder.
+  void explicitlyContradictingLegacyBooleanDoesNotOverrideModeAtTableCreation() {
+    // The mode is authoritative. Even when the deprecated boolean explicitly disagrees, derive it
+    // from the mode before the table properties are persisted.
     Map<String, String> options = baseOptions();
     options.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
     options.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.COMMIT_TIME_ONLY.name());
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
 
-    Throwable thrown = assertThrows(Throwable.class, () ->
-        writeSampleAndGetTableConfig(options, basePath()));
+    HoodieTableConfig tc = writeSampleAndGetTableConfig(options, basePath());
 
-    String rootMessage = rootMessageOf(thrown);
-    assertTrue(rootMessage.contains(HoodieTableConfig.META_FIELDS_MODE.key())
-            && rootMessage.contains(HoodieTableConfig.POPULATE_META_FIELDS.key()),
-        "the error must name both properties so the user knows which to drop, got: " + rootMessage);
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, tc.getMetaFieldsMode());
+    assertFalse(tc.populateMetaFields());
+    assertMetaColumnPopulation(basePath(), MetaFieldsMode.COMMIT_TIME_ONLY);
   }
 
   @Test

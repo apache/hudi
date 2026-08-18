@@ -61,28 +61,24 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
   }
 
   /**
-   * The meta-fields-mode guard compares resolved modes, not raw property presence. A table written
-   * before {@code hoodie.meta.fields.mode} existed carries only the legacy boolean and resolves to
-   * ALL or NONE, so a write that restates that same mode is asking for exactly what the table
-   * already is and must be accepted. This matters because the property is backfilled only by
-   * {@code NineToTenUpgradeHandler} while {@code HoodieTableVersion.current()} is already TEN — a
-   * table at v10 without the property will never be upgraded again, so rejecting an explicit
-   * restatement would leave it no way to adopt the property at all.
+   * The meta-fields-mode guard compares normalized modes, not raw legacy property presence. A table
+   * written before {@code hoodie.meta.fields.mode} existed is normalized to ALL or NONE when its
+   * {@link HoodieTableConfig} is constructed, so a write that restates that same mode is asking for
+   * exactly what the table already is and must be accepted.
    */
   private void assertModeAgainstTable(String requestedMode, MetaFieldsMode tableMode,
                                       String tableDir, boolean expectThrow) throws IOException {
     Properties tableProps = new Properties();
-    // Persist the legacy boolean ONLY, so the table resolves through the fallback path — this is the
-    // shape of every table created before the mode property existed.
+    // Start from a legacy boolean and verify table construction records the corresponding mode.
     tableProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(),
         String.valueOf(tableMode.toLegacyPopulateMetaFields()));
     HoodieTableMetaClient metaClient = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, tableProps, "")
         .initTable(storageConf, tempDir.resolve(tableDir).toString());
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     assertEquals(tableMode, tableConfig.getMetaFieldsMode(),
-        "precondition: table must resolve to " + tableMode + " from the legacy boolean alone");
-    assertFalse(tableConfig.getProps().containsKey(HoodieTableConfig.META_FIELDS_MODE.key()),
-        "precondition: the mode property must be absent on disk");
+        "precondition: table construction must infer " + tableMode + " from the legacy boolean");
+    assertTrue(tableConfig.getProps().containsKey(HoodieTableConfig.META_FIELDS_MODE.key()),
+        "table construction must populate the authoritative mode property");
 
     TypedProperties writeProps = TypedProperties.copy(tableConfig.getProps());
     writeProps.put(HoodieTableConfig.META_FIELDS_MODE.key(), requestedMode);

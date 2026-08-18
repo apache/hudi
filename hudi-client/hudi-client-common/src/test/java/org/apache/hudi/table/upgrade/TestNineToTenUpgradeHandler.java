@@ -29,6 +29,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.util.Collections;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -65,23 +67,20 @@ class TestNineToTenUpgradeHandler {
     UpgradeDowngrade.TableConfigChangeSet changeSet = new NineToTenUpgradeHandler().upgrade(
         mock(HoodieWriteConfig.class), mock(HoodieEngineContext.class), "001", helperFor(expected));
 
-    assertTrue(changeSet.propertiesToDelete().isEmpty());
+    assertEquals(Collections.singleton(HoodieTableConfig.POPULATE_META_FIELDS),
+        changeSet.propertiesToDelete());
     assertEquals(1, changeSet.propertiesToUpdate().size());
     assertEquals(expected.name(),
         changeSet.propertiesToUpdate().get(HoodieTableConfig.META_FIELDS_MODE));
   }
 
   @Test
-  void upgradeNeitherRewritesNorDeletesTheLegacyBoolean() {
-    // Unlike EightToNineUpgradeHandler, which removes the legacy property it translates, the boolean
-    // must survive here: POPULATE_META_FIELDS defaults to true, so a table left carrying only the
-    // mode resolves to ALL as soon as TenToNineDowngradeHandler deletes it. Assert the absence
-    // explicitly on both sides of the change set — the parameterized test above only pins the mode.
+  void upgradeRemovesTheLegacyBoolean() {
     UpgradeDowngrade.TableConfigChangeSet changeSet = new NineToTenUpgradeHandler().upgrade(
         mock(HoodieWriteConfig.class), mock(HoodieEngineContext.class), "001",
         helperFor(MetaFieldsMode.NONE));
 
     assertFalse(changeSet.propertiesToUpdate().containsKey(HoodieTableConfig.POPULATE_META_FIELDS));
-    assertFalse(changeSet.propertiesToDelete().contains(HoodieTableConfig.POPULATE_META_FIELDS));
+    assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.POPULATE_META_FIELDS));
   }
 }

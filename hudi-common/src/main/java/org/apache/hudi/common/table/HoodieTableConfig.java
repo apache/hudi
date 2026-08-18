@@ -354,7 +354,7 @@ public class HoodieTableConfig extends HoodieConfig {
   // than on this property will therefore be wrong for those tables.
   public static final ConfigProperty<String> META_FIELDS_MODE = ConfigProperty
       .key("hoodie.meta.fields.mode")
-      .defaultValue("")
+      .noDefaultValue()
       .withDocumentation("Which Hudi meta columns are physically populated on disk. Allowed values are "
           + "ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY and COMMIT_TIME_AND_FILE_NAME. This supersedes the "
           + "deprecated hoodie.populate.meta.fields boolean, which is consulted only when this property is unset "
@@ -679,6 +679,12 @@ public class HoodieTableConfig extends HoodieConfig {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
+
+      MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(hoodieConfig);
+      if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+        hoodieConfig.setValue(POPULATE_META_FIELDS,
+            Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
+      }
 
       dropInvalidConfigs(hoodieConfig);
       storeProperties(hoodieConfig.getProps(), outputStream, propertyPath);
@@ -1270,24 +1276,12 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
-   * @return the raw, deprecated {@code hoodie.populate.meta.fields} value, used only as the
-   * fallback when {@link #META_FIELDS_MODE} is absent. Callers should use
-   * {@link #getMetaFieldsMode()} instead.
-   */
-  private boolean legacyPopulateMetaFields() {
-    return Boolean.parseBoolean(getStringOrDefault(POPULATE_META_FIELDS));
-  }
-
-  /**
-   * @return the {@link MetaFieldsMode} resolved from the on-disk properties. {@link #META_FIELDS_MODE}
-   * is the source of truth; tables written before that property existed fall back to
-   * {@link MetaFieldsMode#ALL} or {@link MetaFieldsMode#NONE} based on the deprecated
-   * {@link #POPULATE_META_FIELDS} boolean.
+   * @return the configured {@link MetaFieldsMode}, falling back to the deprecated
+   * {@link #POPULATE_META_FIELDS} setting for legacy tables. This method is side-effect free and
+   * never returns {@code null}.
    */
   public MetaFieldsMode getMetaFieldsMode() {
-    // Deliberately the two-argument form rather than resolve(this): the fallback must be the *raw*
-    // property, and populateMetaFields() on this class is itself derived from the mode.
-    return MetaFieldsMode.resolve(getStringOrDefault(META_FIELDS_MODE), legacyPopulateMetaFields());
+    return MetaFieldsMode.resolve(this);
   }
 
   /**

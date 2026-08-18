@@ -226,7 +226,7 @@ object HoodieWriterUtils {
   }
 
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
-                          tableConfig: HoodieConfig): Unit = {
+                          tableConfig: HoodieTableConfig): Unit = {
     validateTableConfig(spark, params, tableConfig, false)
   }
 
@@ -261,7 +261,7 @@ object HoodieWriterUtils {
    * Detects conflicts between new parameters and existing table configurations
    */
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
-                          tableConfig: HoodieConfig, isOverWriteMode: Boolean): Unit = {
+                          tableConfig: HoodieTableConfig, isOverWriteMode: Boolean): Unit = {
     // If Overwrite is set as save mode, we don't need to do table config validation.
     if (!isOverWriteMode) {
       val resolver = spark.sessionState.conf.resolver
@@ -359,8 +359,9 @@ object HoodieWriterUtils {
         // this on its own: it only flags a key when the on-disk value is non-null, so a table
         // predating the property would let a null → selective transition slip through.
         //
-        // Compare *resolved* modes rather than raw presence. A table with only the legacy boolean
-        // resolves to ALL or NONE, so null → COMMIT_TIME_ONLY is still rejected, while a write that
+        // Compare resolved modes rather than raw presence. A legacy table resolves to ALL or NONE
+        // through its deprecated boolean, so null → COMMIT_TIME_ONLY is still
+        // rejected, while a write that
         // restates the mode the table already has (mode=ALL against a default table, or mode=NONE
         // against populate.meta.fields=false) is no longer a spurious conflict. That case matters
         // because the property is backfilled only by NineToTenUpgradeHandler and current() is
@@ -368,14 +369,11 @@ object HoodieWriterUtils {
         // explicit restatement would leave it no way to adopt the property at all.
         val paramsMetaFieldsMode = params.getOrElse(HoodieTableConfig.META_FIELDS_MODE.key(), "")
         if (paramsMetaFieldsMode.nonEmpty) {
-          val requestedMode = MetaFieldsMode.parse(paramsMetaFieldsMode)
-          // resolve(HoodieConfig) rather than a cast to HoodieTableConfig: HoodieCatalogTable passes
-          // a plain HoodieConfig built from a map (convertMapToHoodieConfig), so a cast would throw
-          // ClassCastException on the Spark SQL path. The overload reads the same two properties.
-          val resolvedTableMode = MetaFieldsMode.resolve(tableConfig)
-          if (requestedMode != resolvedTableMode) {
+          val requestedMode = MetaFieldsMode.resolve(params.asJava)
+          val tableMetaFieldsMode = tableConfig.getMetaFieldsMode
+          if (requestedMode != tableMetaFieldsMode) {
             diffConfigs.append(
-              s"${HoodieTableConfig.META_FIELDS_MODE.key()}:\t$requestedMode\t$resolvedTableMode"
+              s"${HoodieTableConfig.META_FIELDS_MODE.key()}:\t$requestedMode\t$tableMetaFieldsMode"
                 + " (immutable at runtime; set only at table creation / hudi-cli / upgrade; "
                 + "existing tables must be recreated to change this)\n")
           }

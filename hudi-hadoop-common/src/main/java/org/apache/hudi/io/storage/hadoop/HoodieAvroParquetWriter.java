@@ -36,6 +36,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if
@@ -81,7 +82,7 @@ public class HoodieAvroParquetWriter
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
-    this.metaFieldsMode = metaFieldsMode == null ? MetaFieldsMode.NONE : metaFieldsMode;
+    this.metaFieldsMode = Objects.requireNonNull(metaFieldsMode, "metaFieldsMode");
   }
 
   @Override

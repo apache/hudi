@@ -1571,30 +1571,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // cannot tell the two apart; narrowing would leave rows the table still advertises as populated,
     // which incremental queries then silently skip. Only hudi-cli or an upgrade may change the mode.
     //
-    // This is checked on the resolved values rather than only on what the writer stated, so it also
-    // catches the writer that stated nothing at all. Such a writer resolves to the ALL default, which
-    // agrees with an ALL table -- the overwhelmingly common case, and the reason nearly every existing
-    // caller is unaffected -- but disagrees with every other mode. Against those, saying nothing is
-    // not a request to inherit; it is a writer that has not been told, and it would go on to stamp the
-    // wrong set of meta columns.
+    // HoodieWriteConfig normalizes legacy input into hoodie.meta.fields.mode as its last defaulting
+    // step. Consequently this comparison has one source of truth on both sides, including when the
+    // caller supplied only the deprecated boolean or no meta-field option at all.
     MetaFieldsMode writeMetaFieldsMode = writeConfig.getMetaFieldsMode();
     if (writeMetaFieldsMode != tableMetaFieldsMode) {
-      // Whether the writer said anything changes only the advice, not the outcome: a writer that
-      // stated nothing needs to be told to state the table's mode, while one that stated a different
-      // mode needs to be told it disagrees. The deprecated boolean counts as a statement of intent
-      // too, so a writer passing populate.meta.fields=false is told it "requests NONE".
-      boolean writerStatedMetaFields =
-          (writeConfig.contains(HoodieTableConfig.META_FIELDS_MODE)
-              && !StringUtils.isNullOrEmpty(writeConfig.getString(HoodieTableConfig.META_FIELDS_MODE)))
-              || writeConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS);
       throw new HoodieException(String.format(
-          "%s mismatch: table is %s but the writer %s. Meta columns are physical, so the writer must "
+          "%s mismatch: table is %s but the writer requests %s. Meta columns are physical, so the writer must "
               + "match the table%s. Set %s=%s on the writer, or change the table's mode through "
               + "hudi-cli.",
-          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode,
-          writerStatedMetaFields
-              ? "requests " + writeMetaFieldsMode
-              : "does not state one and so resolves to " + writeMetaFieldsMode,
+          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode, writeMetaFieldsMode,
           writeMetaFieldsMode.isWiderThan(tableMetaFieldsMode)
               ? " -- enabling a column now would leave earlier commits without it"
               : " -- writing fewer of them leaves rows the table still advertises as populated",

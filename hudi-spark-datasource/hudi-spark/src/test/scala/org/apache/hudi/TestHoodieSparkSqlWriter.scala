@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.DataSourceWriteOptions.{DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY, INSERT_DROP_DUPS, INSERT_DUP_POLICY}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, RecordMergeMode}
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieReplaceCommitMetadata, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieReplaceCommitMetadata, HoodieTableType, MetaFieldsMode, WriteOperationType}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineUtils}
@@ -339,7 +339,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
    * Test case for disable and enable meta fields.
    */
   @Test
-  def testDisableAndEnableMetaFields(): Unit = {
+  def testLegacyBooleanDoesNotOverrideDisabledMetaFields(): Unit = {
     testBulkInsertWithSortMode(BulkInsertSortMode.NONE, populateMetaFields = false)
     //create a new table
     val fooTableModifier = commonTableModifier.updated("hoodie.bulkinsert.shuffle.parallelism", "4")
@@ -353,14 +353,10 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val inserts = DataSourceTestUtils.generateRandomRows(1000)
     val df = spark.createDataFrame(sc.parallelize(inserts.asScala.toSeq), structType)
-    try {
-      // write to Hudi
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
-      fail("Should have thrown exception")
-    } catch {
-      case e: HoodieException => assertTrue(e.getMessage.startsWith("Config conflict"))
-      case e: Exception => fail(e);
-    }
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
+
+    assertEquals(MetaFieldsMode.NONE,
+      createMetaClient(spark, tempBasePath).getTableConfig.getMetaFieldsMode)
   }
 
   /**

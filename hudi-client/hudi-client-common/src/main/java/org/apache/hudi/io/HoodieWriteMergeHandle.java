@@ -112,8 +112,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   // Read from the TABLE config, not the write config -- see the note on BaseCreateHandle. Resolved
   // once rather than per record: writeToFile consults it on the preserve-metadata path, which runs
   // for every record copied forward during a merge.
-  private final MetaFieldsMode metaFieldsMode = MetaFieldsMode.orAllIfUnknown(
-      hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode());
+  private final MetaFieldsMode metaFieldsMode =
+      hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode();
 
   protected long recordsWritten = 0;
   protected long recordsDeleted = 0;

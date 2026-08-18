@@ -22,8 +22,12 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
 
+import lombok.Getter;
+
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 /**
@@ -43,10 +47,10 @@ import java.util.stream.Collectors;
  * or none of them beyond the two selectable ones. If you need any of the remaining columns, set
  * {@code hoodie.populate.meta.fields=true}.
  *
- * <p>This enum is the single source of truth for meta-column population. The legacy boolean
- * {@code hoodie.populate.meta.fields} is deprecated and consulted only when
- * {@code hoodie.meta.fields.mode} is absent, so that tables written before the mode property
- * existed keep their behavior:
+ * <p>This enum is the single source of truth for meta-column population. When the mode property is
+ * absent, the {@code resolve} overloads fall back to the deprecated {@code
+ * hoodie.populate.meta.fields} boolean so that tables written before the mode property existed keep
+ * their behavior:
  *
  * <ul>
  *   <li>{@code populate.meta.fields=true} (or absent) → {@link #ALL} — today's default.</li>
@@ -56,6 +60,7 @@ import java.util.stream.Collectors;
  * <p>On-disk representation: the enum {@link #name()} is persisted in {@code hoodie.properties}
  * under the property {@code hoodie.meta.fields.mode}.
  */
+@Getter
 public enum MetaFieldsMode {
   /**
    * All five Hudi meta columns are populated — today's default.
@@ -93,14 +98,6 @@ public enum MetaFieldsMode {
     this.fileNamePopulated = fileNamePopulated;
   }
 
-  public boolean isCommitTimePopulated() {
-    return commitTimePopulated;
-  }
-
-  public boolean isFileNamePopulated() {
-    return fileNamePopulated;
-  }
-
   /**
    * @return true when all five meta columns are populated (i.e. this is {@link #ALL}). Selective
    * modes never populate {@code _hoodie_record_key}, {@code _hoodie_partition_path}, or
@@ -124,59 +121,55 @@ public enum MetaFieldsMode {
   }
 
   /**
-   * Resolve the effective mode from any {@link HoodieConfig} that may carry the two properties —
-   * a table config, a write config, or a bare config built from write options. Preferred over the
-   * two-argument overload: it keeps the property keys and the precedence rule in one place instead
-   * of repeating them at every call site.
+   * Resolve the configured meta-fields mode, falling back to the deprecated population boolean.
+   *
+   * <p>When {@link HoodieTableConfig#META_FIELDS_MODE} is set, it is always authoritative. Legacy
+   * configs without the mode resolve to {@link #ALL} or {@link #NONE} from
+   * {@link HoodieTableConfig#POPULATE_META_FIELDS} without mutating the config.
    */
   public static MetaFieldsMode resolve(HoodieConfig config) {
-    return resolve(config.getStringOrDefault(HoodieTableConfig.META_FIELDS_MODE),
-        config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS));
-  }
-
-  /**
-   * Resolve the effective mode. {@code hoodie.meta.fields.mode} is the source of truth; the
-   * deprecated {@code hoodie.populate.meta.fields} boolean is a fallback for tables written before
-   * the mode property existed. Precedence:
-   *
-   * <ul>
-   *   <li>non-empty mode → the parsed enum value (the legacy boolean is not consulted).</li>
-   *   <li>null/empty mode + {@code populateMetaFields=false} → {@link #NONE}.</li>
-   *   <li>null/empty mode + {@code populateMetaFields=true} → {@link #ALL}.</li>
-   * </ul>
-   *
-   * @param rawMode             raw {@code hoodie.meta.fields.mode} value; may be null or empty.
-   * @param legacyPopulateMetaFields value of the deprecated {@code hoodie.populate.meta.fields}.
-   * @throws IllegalArgumentException when the raw mode value does not match any enum value. This
-   *         includes the pre-enum comma-separated format — callers that upgrade an old table must
-   *         migrate the value through the hudi-cli.
-   */
-  public static MetaFieldsMode resolve(String rawMode, boolean legacyPopulateMetaFields) {
+    String rawMode = config.getString(HoodieTableConfig.META_FIELDS_MODE);
     if (StringUtils.isNullOrEmpty(rawMode)) {
-      return legacyPopulateMetaFields ? ALL : NONE;
+      return config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS) ? ALL : NONE;
     }
     return parse(rawMode);
   }
 
   /**
-   * Resolve the mode from a table config that may not be able to answer, defaulting to {@link #ALL}.
-   *
-   * <p>For write handles, which read the mode from the table rather than the write config. A real
-   * {@link org.apache.hudi.common.table.HoodieTableConfig#getMetaFieldsMode()} never returns null --
-   * it falls back through the deprecated boolean to {@code ALL}. But a handle constructed against a
-   * partially-stubbed table (as several unit tests do) would otherwise take a null here and NPE later,
-   * at the point of use, far from the cause. {@code ALL} is the safe default: it is the pre-feature
-   * behavior, so a caller that cannot state a mode gets what it would have got before this existed.
+   * Resolve the configured meta-fields mode from raw properties, falling back to the deprecated
+   * population boolean without mutating the properties.
    */
-  public static MetaFieldsMode orAllIfUnknown(MetaFieldsMode mode) {
-    return mode == null ? ALL : mode;
+  public static MetaFieldsMode resolve(Properties props) {
+    String rawMode = props.getProperty(HoodieTableConfig.META_FIELDS_MODE.key());
+    if (StringUtils.isNullOrEmpty(rawMode)) {
+      return Boolean.parseBoolean(props.getProperty(
+          HoodieTableConfig.POPULATE_META_FIELDS.key(),
+          HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString()))
+          ? ALL : NONE;
+    }
+    return parse(rawMode);
+  }
+
+  /**
+   * Resolve the configured meta-fields mode from a string map, falling back to the deprecated
+   * population boolean without mutating the map.
+   */
+  public static MetaFieldsMode resolve(Map<String, String> propsMap) {
+    String rawMode = propsMap.get(HoodieTableConfig.META_FIELDS_MODE.key());
+    if (StringUtils.isNullOrEmpty(rawMode)) {
+      return Boolean.parseBoolean(propsMap.getOrDefault(
+          HoodieTableConfig.POPULATE_META_FIELDS.key(),
+          HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString()))
+          ? ALL : NONE;
+    }
+    return parse(rawMode);
   }
 
   /**
    * Parse a raw {@code hoodie.meta.fields.mode} value into an enum constant, with a message that
-   * lists the allowed values. Prefer this over {@link #valueOf(String)} for user-supplied input.
+   * lists the allowed values.
    */
-  public static MetaFieldsMode parse(String rawMode) {
+  private static MetaFieldsMode parse(String rawMode) {
     try {
       // Case-insensitive: users hand-editing hoodie.properties or passing write options should not
       // have to match the enum's casing exactly.
@@ -196,6 +189,10 @@ public enum MetaFieldsMode {
     return this == ALL;
   }
 
+  public static MetaFieldsMode fromLegacyPopulateMetaFields(Boolean populateMetaFields) {
+    return populateMetaFields == null || populateMetaFields ? MetaFieldsMode.ALL : MetaFieldsMode.NONE;
+  }
+
   /**
    * @return true when this mode populates at least one meta column that {@code other} does not.
    *
@@ -209,8 +206,7 @@ public enum MetaFieldsMode {
    *
    * <ul>
    *   <li>A writer must match the table exactly. It cannot narrow either — the mode is a table
-   *       property, so a writer that did not state one inherits the table's rather than changing it
-   *       (see {@code BaseHoodieWriteClient#inferMetaFieldsModeFromTable}).</li>
+   *       property and runtime validation rejects any mismatch.</li>
    *   <li>The sanctioned mutation paths — hudi-cli and upgrade — may narrow, and only narrow.
    *       Dropping a meta column leaves earlier files carrying values nothing reads, which is
    *       recoverable; adding one leaves later files claiming a column earlier files lack, which is

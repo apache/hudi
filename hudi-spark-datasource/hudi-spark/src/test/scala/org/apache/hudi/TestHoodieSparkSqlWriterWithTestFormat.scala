@@ -205,7 +205,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
    * Test case for disable and enable meta fields.
    */
   @Test
-  def testDisableAndEnableMetaFields(): Unit = {
+  def testLegacyBooleanDoesNotOverrideDisabledMetaFields(): Unit = {
     testBulkInsertWithSortMode(BulkInsertSortMode.NONE, populateMetaFields = false)
     //create a new table
     val fooTableModifier = commonTableModifier.updated("hoodie.bulkinsert.shuffle.parallelism", "4")
@@ -220,14 +220,10 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val inserts = DataSourceTestUtils.generateRandomRows(1000)
     val df = spark.createDataFrame(sc.parallelize(inserts.asScala.toSeq), structType)
-    try {
-      // write to Hudi
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
-      fail("Should have thrown exception")
-    } catch {
-      case e: HoodieException => assertTrue(e.getMessage.startsWith("Config conflict"))
-      case e: Exception => fail(e);
-    }
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
+
+    assertEquals(MetaFieldsMode.NONE,
+      createMetaClient(spark, tempBasePath).getTableConfig.getMetaFieldsMode)
   }
 
   /**

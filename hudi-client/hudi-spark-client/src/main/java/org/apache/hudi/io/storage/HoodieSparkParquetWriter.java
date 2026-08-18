@@ -32,6 +32,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD;
@@ -60,7 +61,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
-    this.metaFieldsMode = metaFieldsMode == null ? MetaFieldsMode.NONE : metaFieldsMode;
+    this.metaFieldsMode = Objects.requireNonNull(metaFieldsMode, "metaFieldsMode");
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);

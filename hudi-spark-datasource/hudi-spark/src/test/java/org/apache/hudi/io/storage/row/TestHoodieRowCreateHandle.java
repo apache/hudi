@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -93,6 +94,8 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
     Properties tableProps = new Properties();
     tableProps.putAll(metaClient.getTableConfig().getProps());
     tableProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
+    tableProps.put(HoodieTableConfig.META_FIELDS_MODE.key(),
+        (populateMetaFields ? MetaFieldsMode.ALL : MetaFieldsMode.NONE).name());
     HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), tableProps);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 

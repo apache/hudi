@@ -85,6 +85,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -1176,11 +1177,8 @@ public class HoodieTableMetaClient implements Serializable {
 
     /**
      * @param populateMetaFields {@code null} when the caller did not state the property. That is
-     *        distinct from {@code false}: an unstated boolean defers entirely to
-     *        {@code hoodie.meta.fields.mode}, whereas a stated one that contradicts the mode is
-     *        rejected at build time. Callers reading the value through {@code getBooleanOrDefault}
-     *        must pass {@code null} rather than the default, or every writer that never mentioned
-     *        the property would look like it had asked for {@code true}.
+     *        distinct from {@code false}: when no mode is stated, {@code false} is inferred as
+     *        {@link MetaFieldsMode#NONE}, while an unstated value defaults to {@link MetaFieldsMode#ALL}.
      * @deprecated since 1.3.0, use {@link #setMetaFieldsMode(MetaFieldsMode)} instead
      * ({@code true} maps to {@link MetaFieldsMode#ALL}, {@code false} to {@link MetaFieldsMode#NONE}).
      */
@@ -1205,7 +1203,7 @@ public class HoodieTableMetaClient implements Serializable {
         this.metaFieldsMode = null;
         return this;
       }
-      this.metaFieldsMode = MetaFieldsMode.parse(rawMode);
+      this.metaFieldsMode = MetaFieldsMode.valueOf(rawMode.trim().toUpperCase(Locale.ROOT));
       return this;
     }
 
@@ -1571,51 +1569,18 @@ public class HoodieTableMetaClient implements Serializable {
           tableConfig.setValue(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE, cdcSupplementalLoggingMode);
         }
       }
-      // hoodie.meta.fields.mode is the source of truth, and hoodie.properties must never contradict
-      // it: a table written selectively that still recorded populate.meta.fields=true would be read
-      // as ALL by a pre-1.3.0 reader, which ignores the mode property entirely. For NONE that is
-      // actively unsafe — an older incremental reader would run against all-null commit times and
-      // silently return no rows.
-      //
-      // A caller that states both and disagrees is rejected rather than silently overridden. Half
-      // their request would otherwise be discarded without a word, and it would be inconsistent with
-      // BaseHoodieWriteClient#validateAgainstTableProperties, which already rejects an explicitly-set
-      // boolean that disagrees with the table. Only a genuine contradiction fails: ALL + true and
-      // NONE + false are coherent restatements and pass.
-      if (null != metaFieldsMode) {
-        boolean derivedPopulateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
-        if (null != populateMetaFields && populateMetaFields != derivedPopulateMetaFields) {
-          throw new HoodieException(String.format(
-              "Conflicting meta-field settings at table creation: %s=%s implies %s=%s, but %s was "
-                  + "explicitly set to %s. %s is the source of truth and the boolean is only its "
-                  + "pre-1.3.0 fallback, so the two cannot be set to different things. Drop %s, or set "
-                  + "it to %s.",
-              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
-              HoodieTableConfig.POPULATE_META_FIELDS.key(), derivedPopulateMetaFields,
-              HoodieTableConfig.POPULATE_META_FIELDS.key(), populateMetaFields,
-              HoodieTableConfig.META_FIELDS_MODE.key(),
-              HoodieTableConfig.POPULATE_META_FIELDS.key(), derivedPopulateMetaFields));
-        }
-        tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
-        // Below table version 10, also record the deprecated boolean. Selective modes have to work
-        // on older tables -- they are supported on any version 1.x can write, and a fleet migrating
-        // onto this feature runs patched and unpatched pipelines against the same v6 tables for a
-        // while. An unpatched reader knows only the boolean, and with the property absent it falls
-        // back to its `true` default and would treat a selective table as ALL, i.e. over-claim meta
-        // columns that are physically null.
-        //
-        // From v10 the mode alone is enough: a table is only upgraded to v10 once every reader and
-        // writer touching it understands the mode, so there is no unpatched reader left to mislead.
-        // Note this applies to tables *created* at v10; one upgraded from v9 keeps both, since a
-        // 1.x reader may still be reading it (see NineToTenUpgradeHandler).
-        if (null == tableVersion || tableVersion.lesserThan(HoodieTableVersion.TEN)) {
-          tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
-              Boolean.toString(derivedPopulateMetaFields));
-        }
-      } else if (null != populateMetaFields) {
-        // No explicit mode: preserve pre-1.3.0 behavior and record only the legacy boolean, which
-        // resolves to ALL / NONE on read.
-        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
+      // Resolve legacy input through the shared mode precedence and persist the result for every
+      // newly created table.
+      if (metaFieldsMode == null) {
+        metaFieldsMode = MetaFieldsMode.fromLegacyPopulateMetaFields(populateMetaFields);
+      }
+
+      tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
+      if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+        // Below table version 10, also record the deprecated boolean for unpatched readers. From v10
+        // the mode alone is sufficient, including after upgrading from v9.
+        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+            Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
       }
       if (null != keyGeneratorClassProp) {
         KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);

@@ -482,7 +482,7 @@ public class StreamSync implements Serializable, Closeable {
         .setPopulateMetaFields(props.containsKey(HoodieTableConfig.POPULATE_META_FIELDS.key())
             ? props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key()) : null)
         .setMetaFieldsModeFromString(props.getString(HoodieTableConfig.META_FIELDS_MODE.key(),
-            HoodieTableConfig.META_FIELDS_MODE.defaultValue()))
+            null))
         .setKeyGeneratorClassProp(keyGenClassName)
         .setPartitionValueExtractorClass(partitionValueExtractorClassName)
         .setOrderingFields(cfg.sourceOrderingFields)

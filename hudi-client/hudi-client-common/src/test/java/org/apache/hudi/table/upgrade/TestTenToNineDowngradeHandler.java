@@ -209,7 +209,7 @@ class TestTenToNineDowngradeHandler {
         mock(HoodieWriteConfig.class), mock(HoodieEngineContext.class), "001", helperFor(mode));
     UpgradeDowngrade.TableConfigChangeSet down = downgradeWith(mode);
 
-    // Up records the mode and leaves the boolean; down restores the boolean and drops the mode. A
+    // Up records the mode and removes the boolean; down restores the boolean and drops the mode. A
     // v9 table therefore reads back the same meta-field layout it started with.
     assertEquals(mode.name(), up.propertiesToUpdate().get(HoodieTableConfig.META_FIELDS_MODE));
     assertEquals(String.valueOf(mode.toLegacyPopulateMetaFields()),

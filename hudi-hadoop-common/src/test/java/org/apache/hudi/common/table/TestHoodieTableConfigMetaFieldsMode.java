@@ -28,13 +28,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@link HoodieTableConfig} resolution of {@code hoodie.meta.fields.mode} into a
- * {@link MetaFieldsMode}, including the precedence between the mode and the deprecated
- * {@code hoodie.populate.meta.fields} boolean.
+ * {@link HoodieTableConfig} resolution of current and legacy meta-field settings as a
+ * {@link MetaFieldsMode}.
  *
  * <p>Deliberately separate from its two siblings, which cover different layers:
  * <ul>
- *   <li>{@code TestMetaFieldsMode} (hudi-common) — the enum's own semantics: {@code parse},
+   *   <li>{@code TestMetaFieldsMode} (hudi-common) — the enum's own resolution semantics,
  *       {@code isWiderThan}, {@code toLegacyPopulateMetaFields}. No config involved.</li>
  *   <li>{@code TestHoodieTableConfig#testMetaFieldsModeSurvivesAPropertiesRoundTrip} — the same
  *       resolution against real storage, proving the value survives a {@code hoodie.properties}
@@ -46,14 +45,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestHoodieTableConfigMetaFieldsMode {
 
   private static HoodieTableConfig configOf(Boolean populate, String mode) {
-    HoodieTableConfig cfg = new HoodieTableConfig();
+    HoodieTableConfig config = new HoodieTableConfig();
     if (populate != null) {
-      cfg.setValue(HoodieTableConfig.POPULATE_META_FIELDS, String.valueOf(populate));
+      config.setValue(HoodieTableConfig.POPULATE_META_FIELDS, String.valueOf(populate));
     }
     if (mode != null) {
-      cfg.setValue(HoodieTableConfig.META_FIELDS_MODE, mode);
+      config.setValue(HoodieTableConfig.META_FIELDS_MODE, mode);
     }
-    return cfg;
+    return config;
   }
 
   @Test
@@ -61,6 +60,8 @@ class TestHoodieTableConfigMetaFieldsMode {
     HoodieTableConfig cfg = configOf(null, null);
     assertTrue(cfg.populateMetaFields(), "populateMetaFields default must remain true");
     assertEquals(MetaFieldsMode.ALL, cfg.getMetaFieldsMode());
+    assertFalse(cfg.contains(HoodieTableConfig.META_FIELDS_MODE),
+        "resolving a default must not mutate the table config");
     assertTrue(cfg.isCommitTimePopulated());
     assertTrue(cfg.isFileNamePopulated());
     assertTrue(cfg.isRecordKeyPopulated());
@@ -71,6 +72,7 @@ class TestHoodieTableConfigMetaFieldsMode {
     HoodieTableConfig cfg = configOf(false, "");
     assertFalse(cfg.populateMetaFields());
     assertEquals(MetaFieldsMode.NONE, cfg.getMetaFieldsMode());
+    assertEquals("", cfg.getString(HoodieTableConfig.META_FIELDS_MODE));
     assertFalse(cfg.isCommitTimePopulated());
     assertFalse(cfg.isFileNamePopulated());
     assertFalse(cfg.isRecordKeyPopulated());
@@ -82,6 +84,8 @@ class TestHoodieTableConfigMetaFieldsMode {
     HoodieTableConfig cfg = configOf(false, null);
     assertFalse(cfg.populateMetaFields());
     assertEquals(MetaFieldsMode.NONE, cfg.getMetaFieldsMode());
+    assertFalse(cfg.contains(HoodieTableConfig.META_FIELDS_MODE),
+        "legacy fallback must not mutate the table config");
     assertFalse(cfg.isCommitTimePopulated());
     assertFalse(cfg.isFileNamePopulated());
     assertFalse(cfg.isRecordKeyPopulated());
@@ -135,8 +139,8 @@ class TestHoodieTableConfigMetaFieldsMode {
 
   @Test
   void unknownTokenIsRejected() {
-    HoodieTableConfig cfg = configOf(false, "GARBAGE_VALUE");
-    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, cfg::getMetaFieldsMode);
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        () -> configOf(false, "GARBAGE_VALUE").getMetaFieldsMode());
     assertTrue(ex.getMessage().contains("GARBAGE_VALUE"),
         "message must name the rejected value: " + ex.getMessage());
     assertTrue(ex.getMessage().contains("hoodie.meta.fields.mode"),

@@ -131,7 +131,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   private MetaFieldsMode metaFieldsMode = MetaFieldsMode.ALL;
 
   public void setMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
-    this.metaFieldsMode = MetaFieldsMode.orAllIfUnknown(metaFieldsMode);
+    this.metaFieldsMode = java.util.Objects.requireNonNull(metaFieldsMode, "metaFieldsMode");
   }
 
   public HoodieParquetBinaryCopyBase(Configuration conf) {

@@ -36,15 +36,8 @@ import java.util.Map;
  * resolve to {@code ALL} / {@code NONE} from the deprecated {@code hoodie.populate.meta.fields}
  * boolean. The upgrade records that derived value explicitly so upgraded tables describe their
  * meta-field layout the same way newly created version 10 tables do, rather than depending on the
- * legacy fallback. Behavior is unchanged either way — this only makes the on-disk state explicit.
- *
- * <p>Unlike {@link EightToNineUpgradeHandler}, which removes the legacy property it translates, the
- * boolean is deliberately kept here. {@code POPULATE_META_FIELDS} defaults to {@code true}, so a
- * table carrying only the mode would resolve to {@code ALL} the moment the mode is deleted — which
- * is exactly what {@link TenToNineDowngradeHandler} does. Keeping both properties in agreement makes
- * the version 9 ↔ 10 round trip lossless for {@code ALL} and {@code NONE}. The properties that
- * precedent removes ({@code hoodie.table.payload.class}, {@code hoodie.table.precombine.field}) have
- * no default, so deleting them is unambiguous in a way deleting this one is not.
+ * legacy fallback. Once the mode is persisted, the deprecated boolean is redundant and is removed.
+ * A later downgrade derives and restores the boolean from the mode before removing the mode.
  */
 public class NineToTenUpgradeHandler implements UpgradeHandler {
 
@@ -60,6 +53,7 @@ public class NineToTenUpgradeHandler implements UpgradeHandler {
     MetaFieldsMode metaFieldsMode = tableConfig.getMetaFieldsMode();
     Map<ConfigProperty, String> propertiesToUpdate = Collections.singletonMap(
         HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
-    return new UpgradeDowngrade.TableConfigChangeSet(propertiesToUpdate, Collections.emptySet());
+    return new UpgradeDowngrade.TableConfigChangeSet(propertiesToUpdate,
+        Collections.singleton(HoodieTableConfig.POPULATE_META_FIELDS));
   }
 }
