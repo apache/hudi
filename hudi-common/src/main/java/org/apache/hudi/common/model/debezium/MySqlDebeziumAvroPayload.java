@@ -80,6 +80,13 @@ public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
   }
 
   @Override
+  protected String getConnectorOrderingField() {
+    // The seq's "file.pos" encoding needs the segment-wise numeric comparison above;
+    // a plain Comparable compare is lexicographic and wrong for unpadded positions
+    return DebeziumConstants.ADDED_SEQ_COL_NAME;
+  }
+
+  @Override
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
     if (oldValue.getRecordBytes().length == 0) {
       // use natural order for delete record

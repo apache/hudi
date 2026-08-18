@@ -19,7 +19,9 @@
 package org.apache.hudi.common.model.debezium;
 
 import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Properties;
 
 /**
  * Base class that provides support for seamlessly applying changes captured via Debezium.
@@ -42,7 +45,7 @@ import java.io.IOException;
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */
 @Slf4j
-public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvroPayload {
+public abstract class AbstractDebeziumAvroPayload extends DefaultHoodieRecordPayload {
 
   public AbstractDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -73,14 +76,36 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
   }
 
   @Override
+  public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
+    // Pin to the Debezium delete-op handling; DefaultHoodieRecordPayload's properties-aware variant
+    // (event-time tracking, DELETE_KEY/DELETE_MARKER) must not replace it
+    return getInsertValue(schema);
+  }
+
+  @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+    return combineAndGetUpdateValue(currentValue, schema, new Properties());
+  }
+
+  @Override
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
     // Step 1: If the time occurrence of the current record in storage is higher than the time occurrence of the
     // insert record (including a delete record), pick the current record.
     Option<IndexedRecord> insertValue = getRecord(schema);
     if (!insertValue.isPresent()) {
       return Option.empty();
     }
-    if (shouldPickCurrentRecord(currentValue, insertValue.get(), schema)) {
+    String[] orderingFields = ConfigUtils.getOrderingFields(properties);
+    boolean pickCurrentRecord;
+    if (orderingFields == null || orderingFields.length != 1 || orderingFields[0].equals(getConnectorOrderingField())) {
+      // No ordering field configured, a composite ordering (not supported yet), or the connector's own column:
+      // use the connector-specific comparison (MySQL's "file.pos" seq needs segment-wise numeric compare;
+      // a plain Comparable is lexicographic)
+      pickCurrentRecord = shouldPickCurrentRecord(currentValue, insertValue.get(), schema);
+    } else {
+      pickCurrentRecord = !needUpdatingPersistedRecord(currentValue, insertValue, properties);
+    }
+    if (pickCurrentRecord) {
       return Option.of(currentValue);
     }
     // Step 2: Pick the insert record (as a delete record if it is a deleted event)
@@ -88,6 +113,12 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
   }
 
   protected abstract boolean shouldPickCurrentRecord(IndexedRecord currentRecord, IndexedRecord insertRecord, Schema schema) throws IOException;
+
+  /**
+   * The connector-hardcoded ordering column (e.g. LSN / seq) whose comparison semantics
+   * {@link #shouldPickCurrentRecord(IndexedRecord, IndexedRecord, Schema)} implements.
+   */
+  protected abstract String getConnectorOrderingField();
 
   private Option<IndexedRecord> handleDeleteOperation(IndexedRecord insertRecord) {
     boolean delete = false;
