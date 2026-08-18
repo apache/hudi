@@ -27,16 +27,20 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.identity.spi.IdentityProvider;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
+import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
- * Covers the credential-provider branches of {@link KinesisOffsetGen#createKinesisClient} and the
- * per-JVM assume-role provider cache. AWS SDK v2 clients resolve credentials lazily (only on the first
- * request), so a client can be built for each branch without any AWS environment or network access, and
- * the chosen provider is observable through {@code serviceClientConfiguration().credentialsProvider()}.
+ * Covers the credential-provider branches of {@link KinesisOffsetGen#createKinesisClient}, the per-JVM
+ * assume-role provider cache and the STS request it builds. AWS SDK v2 clients resolve credentials
+ * lazily (only on the first request), so a client can be built for each branch without any AWS
+ * environment or network access, and the chosen provider is observable through
+ * {@code serviceClientConfiguration().credentialsProvider()}.
  */
 class TestKinesisOffsetGenClient {
 
@@ -76,32 +80,66 @@ class TestKinesisOffsetGenClient {
   @Test
   void testAssumeRoleProviderCachedPerRoleExternalIdAndSession() {
     String roleArn = ROLE_ARN_PREFIX + "cached";
+    IdentityProvider<?> firstProvider;
     try (KinesisClient first = KinesisOffsetGen.createKinesisClient(
-             REGION, null, null, null, roleArn, "ext-1", SESSION_NAME);
-         KinesisClient second = KinesisOffsetGen.createKinesisClient(
+        REGION, null, null, null, roleArn, "ext-1", SESSION_NAME)) {
+      firstProvider = providerOf(first);
+    }
+    // The first client is closed above; the cached provider must still be handed to later clients with
+    // the same role tuple, and any change to external id, session name or role must yield a new one.
+    try (KinesisClient second = KinesisOffsetGen.createKinesisClient(
              REGION, null, null, null, roleArn, "ext-1", SESSION_NAME);
          KinesisClient otherExternalId = KinesisOffsetGen.createKinesisClient(
              REGION, null, null, null, roleArn, "ext-2", SESSION_NAME);
+         KinesisClient otherSession = KinesisOffsetGen.createKinesisClient(
+             REGION, null, null, null, roleArn, "ext-1", "other-session");
          KinesisClient otherRole = KinesisOffsetGen.createKinesisClient(
              REGION, null, null, null, ROLE_ARN_PREFIX + "cached-other", "ext-1", SESSION_NAME)) {
-      // Same role/external id/session name: one provider (and one StsClient) shared across clients,
-      // and it survives the first client being closed.
-      assertSame(providerOf(first), providerOf(second));
-      assertNotSame(providerOf(first), providerOf(otherExternalId));
-      assertNotSame(providerOf(first), providerOf(otherRole));
+      assertSame(firstProvider, providerOf(second));
+      assertNotSame(firstProvider, providerOf(otherExternalId));
+      assertNotSame(firstProvider, providerOf(otherSession));
+      assertNotSame(firstProvider, providerOf(otherRole));
     }
   }
 
   @Test
-  void testInstanceClientReadsRoleConfigFromProps() {
+  void testInstanceClientForwardsRoleTupleFromProps() {
+    String roleArn = ROLE_ARN_PREFIX + "from-props";
     TypedProperties props = new TypedProperties();
     props.setProperty(KinesisSourceConfig.KINESIS_STREAM_NAME.key(), "test-stream");
     props.setProperty(KinesisSourceConfig.KINESIS_REGION.key(), REGION);
-    props.setProperty(KinesisSourceConfig.KINESIS_ROLE_ARN.key(), ROLE_ARN_PREFIX + "from-props");
+    props.setProperty(KinesisSourceConfig.KINESIS_ROLE_ARN.key(), roleArn);
     props.setProperty(KinesisSourceConfig.KINESIS_ROLE_EXTERNAL_ID.key(), "ext-props");
 
-    try (KinesisClient client = new KinesisOffsetGen(props).createKinesisClient()) {
-      assertInstanceOf(StsAssumeRoleCredentialsProvider.class, providerOf(client));
+    try (KinesisClient fromProps = new KinesisOffsetGen(props).createKinesisClient();
+         KinesisClient expected = KinesisOffsetGen.createKinesisClient(REGION, null, null, null,
+             roleArn, "ext-props", KinesisSourceConfig.KINESIS_ROLE_SESSION_NAME.defaultValue())) {
+      // The cache is keyed by the full role tuple, so provider identity proves that role ARN, external
+      // id and the defaulted session name all reached the client in the right slots.
+      assertSame(providerOf(expected), providerOf(fromProps));
+    }
+  }
+
+  @Test
+  void testAssumeRoleRequestCarriesRoleExternalIdAndSession() {
+    String roleArn = ROLE_ARN_PREFIX + "request";
+    AssumeRoleRequest request = KinesisOffsetGen.buildAssumeRoleRequest(roleArn, "ext-req", "sess-req");
+    assertEquals(roleArn, request.roleArn());
+    assertEquals("ext-req", request.externalId());
+    assertEquals("sess-req", request.roleSessionName());
+    // No external id: omitted from the request rather than sent as an empty string.
+    assertNull(KinesisOffsetGen.buildAssumeRoleRequest(roleArn, null, "sess-req").externalId());
+  }
+
+  @Test
+  void testBlankExternalIdAndSessionNameTreatedAsUnset() {
+    String roleArn = ROLE_ARN_PREFIX + "blank";
+    try (KinesisClient blank = KinesisOffsetGen.createKinesisClient(
+             REGION, null, null, null, roleArn, "", "");
+         KinesisClient unset = KinesisOffsetGen.createKinesisClient(
+             REGION, null, null, null, roleArn, null, KinesisSourceConfig.KINESIS_ROLE_SESSION_NAME.defaultValue())) {
+      // Blank external id / session name normalize to unset / default, so both hit the same cache entry.
+      assertSame(providerOf(unset), providerOf(blank));
     }
   }
 }

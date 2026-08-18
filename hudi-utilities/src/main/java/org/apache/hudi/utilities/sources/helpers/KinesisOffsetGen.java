@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.KinesisSourceConfig;
@@ -324,18 +325,26 @@ public class KinesisOffsetGen {
 
   private static StsAssumeRoleCredentialsProvider getOrCreateAssumeRoleProvider(
       String region, String roleArn, String roleExternalId, String roleSessionName) {
-    String cacheKey = String.join("|", region, roleArn, String.valueOf(roleExternalId), roleSessionName);
+    String cacheKey = String.join("|", region, roleArn, roleExternalId == null ? "" : roleExternalId, roleSessionName);
     return ASSUME_ROLE_PROVIDERS.computeIfAbsent(cacheKey, ignored ->
         StsAssumeRoleCredentialsProvider.builder()
             // Regional STS endpoint of the stream's region; the Kinesis endpoint.url override is
             // deliberately not applied here (it may be a Kinesis-only VPC interface endpoint).
             .stsClient(StsClient.builder().region(Region.of(region)).build())
-            .refreshRequest(AssumeRoleRequest.builder()
-                .roleArn(roleArn)
-                .roleSessionName(roleSessionName)
-                .externalId(roleExternalId)
-                .build())
+            .refreshRequest(buildAssumeRoleRequest(roleArn, roleExternalId, roleSessionName))
             .build());
+  }
+
+  /**
+   * The STS request behind the cached provider; a null external id is omitted from the request.
+   */
+  @VisibleForTesting
+  static AssumeRoleRequest buildAssumeRoleRequest(String roleArn, String roleExternalId, String roleSessionName) {
+    return AssumeRoleRequest.builder()
+        .roleArn(roleArn)
+        .roleSessionName(roleSessionName)
+        .externalId(roleExternalId)
+        .build();
   }
 
   /**
@@ -357,9 +366,14 @@ public class KinesisOffsetGen {
     } else if (roleArn != null && !roleArn.isEmpty()) {
       // Cross-account stream: assume the role via STS with a per-JVM cached provider (see
       // ASSUME_ROLE_PROVIDERS). The base STS client uses the default credential chain, which must be
-      // granted sts:AssumeRole on this ARN.
+      // granted sts:AssumeRole on this ARN. Blank values (e.g. "role.external.id=" in a templated
+      // properties file) would be sent to STS verbatim and rejected lazily on the first request, so
+      // treat them as unset.
+      String externalId = StringUtils.isNullOrEmpty(roleExternalId) ? null : roleExternalId;
+      String sessionName = StringUtils.isNullOrEmpty(roleSessionName)
+          ? KinesisSourceConfig.KINESIS_ROLE_SESSION_NAME.defaultValue() : roleSessionName;
       builder = builder.credentialsProvider(
-          getOrCreateAssumeRoleProvider(region, roleArn, roleExternalId, roleSessionName));
+          getOrCreateAssumeRoleProvider(region, roleArn, externalId, sessionName));
     }
     return builder.build();
   }
