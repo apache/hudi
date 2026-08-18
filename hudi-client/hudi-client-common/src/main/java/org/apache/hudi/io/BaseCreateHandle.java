@@ -185,10 +185,13 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
    * clear.
    */
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, HoodieSchema schema, HoodieSchema targetSchema, String fileName, Properties prop) {
-    if (!metaFieldsMode.isFileNamePopulated()) {
-      return record;
+    MetadataValues metadataValues = new MetadataValues();
+    if (metaFieldsMode.isFileNamePopulated()) {
+      metadataValues.setFileName(fileName);
     }
-    return record.prependMetaFields(schema, targetSchema, new MetadataValues().setFileName(fileName), prop);
+    // Even with no file-name value to update, this projection is required to align Spark records
+    // with the writer schema (for example, by dropping the temporary row-index column).
+    return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
   }
 
   @Override

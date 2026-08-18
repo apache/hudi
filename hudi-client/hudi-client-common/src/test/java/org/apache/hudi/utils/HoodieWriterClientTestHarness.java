@@ -938,10 +938,15 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       assertEquals(insertedFileIds, replacedFileIds);
     }
     if (completeClustering) {
-      String clusteringCommitTime = createMetaClient().reloadActiveTimeline().getCompletedReplaceTimeline()
-              .getReverseOrderedInstants().findFirst().get().requestedTime();
-      verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft().getLeft(),
-              clusterMetadata.getWriteStatuses(), config, createKeyGeneratorFn.apply(config));
+      if (populateMetaFields) {
+        verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getLeft().getRight()),
+            allRecords.getLeft().getLeft(), clusterMetadata.getWriteStatuses());
+      } else {
+        String clusteringCommitTime = createMetaClient().reloadActiveTimeline().getCompletedReplaceTimeline()
+            .getReverseOrderedInstants().findFirst().get().requestedTime();
+        verifyRecordsWritten(clusteringCommitTime, false, allRecords.getLeft().getLeft(),
+            clusterMetadata.getWriteStatuses(), config, createKeyGeneratorFn.apply(config));
+      }
     }
   }
 
@@ -1210,15 +1215,13 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig hoodieWriteConfig = cfgBuilder.withMergeAllowDuplicateOnInserts(true).withTimelineLayoutVersion(VERSION_0).build();
 
-    // Re-initialising from the meta client drops the meta-fields setting, so state it here too:
-    // meta-field population is a table property, and a writer that disagrees with the table about
-    // which meta columns hold values is rejected rather than silently narrowing it.
-    HoodieTableMetaClient.newTableBuilder()
-        .fromMetaClient(metaClient)
-        .setTimelineLayoutVersion(VERSION_0)
-        .setPopulateMetaFields(populateMetaFields)
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+    // addConfigsForPopulateMetaFields may recreate the table with virtual-key fields. Reload before
+    // using its properties as the source for the timeline-layout rewrite so those fields are kept.
     metaClient = HoodieTableMetaClient.reload(metaClient);
+    metaClient = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(metaClient.getTableConfig().getProps())
+        .setTimelineLayoutVersion(VERSION_0)
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     BaseHoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
