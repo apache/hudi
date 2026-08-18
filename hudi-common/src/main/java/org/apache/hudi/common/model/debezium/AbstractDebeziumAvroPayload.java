@@ -56,6 +56,26 @@ public abstract class AbstractDebeziumAvroPayload extends DefaultHoodieRecordPay
   }
 
   @Override
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue, Properties properties) {
+    // Same dispatch as combineAndGetUpdateValue: intra-batch dedup must order by the same column as the
+    // against-storage merge, or a configured non-connector ordering field would still be parsed as a
+    // connector seq/LSN here (MySQL's "file.pos" parser throws on plain values).
+    String[] orderingFields = ConfigUtils.getOrderingFields(properties);
+    if (orderingFields == null || orderingFields.length != 1 || orderingFields[0].equals(getConnectorOrderingField())) {
+      return preCombine(oldValue);
+    }
+    if (oldValue.getRecordBytes().length == 0) {
+      // use natural order for delete record
+      return this;
+    }
+    if (((Comparable) oldValue.getOrderingValue()).compareTo(orderingVal) > 0) {
+      // pick the payload with greatest ordering value
+      return oldValue;
+    }
+    return this;
+  }
+
+  @Override
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
     if (oldValue.getRecordBytes().length == 0) {
       // use natural order for delete record

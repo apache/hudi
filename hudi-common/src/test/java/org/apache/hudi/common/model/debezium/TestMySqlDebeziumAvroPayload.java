@@ -210,6 +210,37 @@ public class TestMySqlDebeziumAvroPayload {
     validateRecord(mergedRecord, 3, Operation.UPDATE, "00002.11");
   }
 
+  @Test
+  public void testPreCombineWithConfiguredOrderingField() {
+    Schema schema = createSchemaWithOrderingField();
+    Properties props = orderingProps("event_ts");
+
+    // Two records with EQUAL configured ordering values: the seq parser would throw here
+    // ("99".split("\\.") has no position segment -> ArrayIndexOutOfBoundsException); the
+    // configured-field compare must not throw, and the newer payload wins the tie.
+    MySqlDebeziumAvroPayload older = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.INSERT, "00001.111", 99L), 99L);
+    MySqlDebeziumAvroPayload newer = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00002.111", 99L), 99L);
+    assertEquals(newer, newer.preCombine(older, props));
+
+    // The configured field decides, even when the seq order says otherwise.
+    MySqlDebeziumAvroPayload lowerTsHigherSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00005.100", 50L), 50L);
+    MySqlDebeziumAvroPayload higherTsLowerSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00000.100", 120L), 120L);
+    assertEquals(higherTsLowerSeq, higherTsLowerSeq.preCombine(lowerTsHigherSeq, props));
+    assertEquals(higherTsLowerSeq, lowerTsHigherSeq.preCombine(higherTsLowerSeq, props));
+
+    // Delete record (empty payload) keeps natural order.
+    MySqlDebeziumAvroPayload empty = new MySqlDebeziumAvroPayload(Option.empty());
+    assertEquals(newer, newer.preCombine(empty, props));
+
+    // No ordering field configured, or configured to the connector seq column ->
+    // the legacy numeric seq comparison still applies. On this path real ingestion sets
+    // orderingVal from the seq column (precombine = _event_seq), so construct accordingly.
+    MySqlDebeziumAvroPayload olderSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.INSERT, "00001.111", 99L), "00001.111");
+    MySqlDebeziumAvroPayload newerSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "00002.111", 99L), "00002.111");
+    assertEquals(newerSeq, newerSeq.preCombine(olderSeq, new Properties()));
+    assertEquals(newerSeq, newerSeq.preCombine(olderSeq, orderingProps(DebeziumConstants.ADDED_SEQ_COL_NAME)));
+  }
+
   private Schema createSchemaWithOrderingField() {
     return Schema.createRecord("test_ordering", null, "test_namespace", false, Arrays.asList(
         new Schema.Field(KEY_FIELD_NAME, Schema.create(Schema.Type.INT), "", 0),
