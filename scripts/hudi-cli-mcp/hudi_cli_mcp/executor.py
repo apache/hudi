@@ -26,6 +26,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 
+from hudi_cli_mcp.commands import with_spark_master
 from hudi_cli_mcp.parser import ParsedOutput, parse_cli_output
 
 # Caps on the structured output returned to the model. The CLI can emit very large
@@ -176,7 +177,7 @@ class HudiCliExecutor:
                 delete=False,
             )
             for cmd in commands:
-                cmd_file.write(cmd + "\n")
+                cmd_file.write(with_spark_master(cmd) + "\n")
             cmd_file.close()
 
             # Build environment

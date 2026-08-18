@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import os
 from enum import Enum
 
 
@@ -292,6 +293,51 @@ def build_command(base: str, **kwargs) -> str:
             parts.append(f"--{key}")
             parts.append(quote_arg(str(value)))
     return " ".join(parts)
+
+
+# CLI commands that spawn an inner spark-submit (they all accept --sparkMaster).
+# hudi-cli's SparkUtil defaults the master to "yarn", so on local/laptop setups
+# the inner job fails (often silently) unless a master is passed explicitly.
+SPARK_LAUNCHED_PREFIXES = (
+    "cleans run",
+    "clustering run",
+    "clustering schedule",
+    "clustering scheduleandexecute",
+    "commit rollback",
+    "compaction repair",
+    "compaction run",
+    "compaction schedule",
+    "compaction scheduleandexecute",
+    "compaction unschedule",
+    "compaction unschedulefileid",
+    "compaction validate",
+    "downgrade table",
+    "marker delete",
+    "metadata create",
+    "metadata init",
+    "metadata list-partitions",
+    "rename partition",
+    "repair deprecated partition",
+    "savepoint create",
+    "savepoint delete",
+    "savepoint rollback",
+    "upgrade table",
+)
+
+
+def with_spark_master(command: str) -> str:
+    """Append ``--sparkMaster $HUDI_MCP_SPARK_MASTER`` to spark-launched commands.
+
+    Only applies when the env var is set, the command is one that launches an
+    inner spark-submit, and the caller did not already pass --sparkMaster.
+    """
+    master = os.environ.get("HUDI_MCP_SPARK_MASTER", "").strip()
+    if not master or "--sparkmaster" in command.lower():
+        return command
+    lowered = command.strip().lower()
+    if any(_matches_prefix(lowered, prefix) for prefix in SPARK_LAUNCHED_PREFIXES):
+        return f"{command} --sparkMaster {quote_arg(master)}"
+    return command
 
 
 def quote_arg(value: str) -> str:

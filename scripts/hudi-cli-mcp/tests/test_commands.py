@@ -27,6 +27,7 @@ from hudi_cli_mcp.commands import (
     quote_arg,
     validate_command,
     validate_commands,
+    with_spark_master,
 )
 
 
@@ -185,3 +186,42 @@ class TestQuoteArg:
 
     def test_value_with_space_quoted(self):
         assert quote_arg("/data/my table") == '"/data/my table"'
+
+
+class TestWithSparkMaster:
+    """HUDI_MCP_SPARK_MASTER handling for CLI commands that spawn spark-submit.
+
+    hudi-cli defaults the inner spark master to "yarn", so on local setups these
+    commands fail (often silently -- e.g. `savepoint create` reports success but
+    writes nothing). The env var lets the operator route them to local[N].
+    """
+
+    def test_appends_master_to_spark_launched_command(self, monkeypatch):
+        monkeypatch.setenv("HUDI_MCP_SPARK_MASTER", "local[2]")
+        assert (
+            with_spark_master("savepoint create --commit 123")
+            == "savepoint create --commit 123 --sparkMaster local[2]"
+        )
+
+    def test_no_env_leaves_command_unchanged(self, monkeypatch):
+        monkeypatch.delenv("HUDI_MCP_SPARK_MASTER", raising=False)
+        assert with_spark_master("savepoint create --commit 123") == "savepoint create --commit 123"
+
+    def test_read_command_unchanged(self, monkeypatch):
+        monkeypatch.setenv("HUDI_MCP_SPARK_MASTER", "local[2]")
+        assert with_spark_master("commits show --limit 5") == "commits show --limit 5"
+
+    def test_existing_sparkmaster_not_duplicated(self, monkeypatch):
+        monkeypatch.setenv("HUDI_MCP_SPARK_MASTER", "local[2]")
+        cmd = "compaction run --sparkMaster local[4]"
+        assert with_spark_master(cmd) == cmd
+
+    def test_word_boundary_no_false_prefix_match(self, monkeypatch):
+        monkeypatch.setenv("HUDI_MCP_SPARK_MASTER", "local[2]")
+        # "cleans runX" is not "cleans run" -- must not be modified.
+        assert with_spark_master("cleans runx --flag") == "cleans runx --flag"
+
+    def test_camelcase_command_matches(self, monkeypatch):
+        monkeypatch.setenv("HUDI_MCP_SPARK_MASTER", "local[2]")
+        out = with_spark_master("compaction scheduleAndExecute --parallelism 2")
+        assert out.endswith("--sparkMaster local[2]")
