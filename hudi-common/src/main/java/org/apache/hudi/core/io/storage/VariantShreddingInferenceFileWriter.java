@@ -100,6 +100,18 @@ public class VariantShreddingInferenceFileWriter<T> implements HoodieFileWriter<
     default HoodieRecord prepare(HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
       return record;
     }
+
+    /**
+     * Bytes of state that every buffered record references but that is shared across them, so a
+     * deep object-size walk of one record counts it in full: the Avro {@code Schema} graph of an
+     * Avro record, the {@code StructType} of a Spark row. Subtracted from each record's size
+     * estimate so the byte cap budgets record payload rather than the schema times the record
+     * count (the HUDI-9499 class of over-estimate, which would shrink the inference sample to a
+     * fraction of the intended 4096 rows). Defaults to 0.
+     */
+    default long sharedSizeEstimate(HoodieSchema schema) {
+      return 0;
+    }
   }
 
   /** Creates the real file writer once the inferred typed_value schemas are known. */
@@ -230,7 +242,7 @@ public class VariantShreddingInferenceFileWriter<T> implements HoodieFileWriter<
     // Re-estimate periodically so a small first record cannot defeat the byte cap
     // (same moving-average idiom as ExternalSpillableMap).
     if (estimatedRecordSize == 0 || buffer.size() % SIZE_ESTIMATE_INTERVAL == 0) {
-      long sampled = Math.max(1, sizeEstimator.sizeEstimate(buffered));
+      long sampled = Math.max(1, sizeEstimator.sizeEstimate(buffered) - extractor.sharedSizeEstimate(schema));
       estimatedRecordSize = estimatedRecordSize == 0
           ? sampled : (long) (estimatedRecordSize * 0.9 + sampled * 0.1);
     }
@@ -275,7 +287,9 @@ public class VariantShreddingInferenceFileWriter<T> implements HoodieFileWriter<
     try {
       Map<String, HoodieSchema> inferred = inferrer.inferTypedValueSchemas(variantColumns, samples);
       return inferred == null ? Collections.emptyMap() : inferred;
-    } catch (Exception e) {
+    } catch (Exception | LinkageError e) {
+      // LinkageError too: an inferrer linked against another Spark than the runtime's must
+      // degrade to unshredded like any other inference failure, not fail the write.
       log.warn("Variant shredding schema inference failed for columns {}; writing unshredded variants.",
           variantColumns, e);
       return Collections.emptyMap();

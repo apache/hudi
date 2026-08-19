@@ -23,6 +23,7 @@ import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer.VariantSample;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter.VariantSampleExtractor;
 
@@ -43,9 +44,26 @@ import java.util.Properties;
 public class AvroVariantSampleExtractor implements VariantSampleExtractor {
 
   private final List<String> columnNames;
+  // Memoized per schema instance: the per-call schema is the same object for every record of a file.
+  private HoodieSchema sizedSchema;
+  private long sizedSchemaBytes;
 
   public AvroVariantSampleExtractor(List<String> columnNames) {
     this.columnNames = columnNames;
+  }
+
+  /**
+   * The Avro {@code Schema} graph every materialized record references; measured once per schema
+   * instance, since a deep size walk would otherwise charge it to every buffered record (the
+   * {@link AvroRecordSizeEstimator} idiom).
+   */
+  @Override
+  public long sharedSizeEstimate(HoodieSchema schema) {
+    if (schema != sizedSchema) {
+      sizedSchema = schema;
+      sizedSchemaBytes = ObjectSizeCalculator.getObjectSize(schema.toAvroSchema());
+    }
+    return sizedSchemaBytes;
   }
 
   /**

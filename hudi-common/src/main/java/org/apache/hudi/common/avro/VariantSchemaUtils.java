@@ -222,10 +222,14 @@ public class VariantSchemaUtils {
    * unshredded variants; columns with an explicit typed_value keep their schema-driven shredding.</p>
    */
   public static List<String> getInferableVariantColumns(HoodieConfig config, HoodieSchema schema) {
-    if (!isShreddingInferenceEnabled(config) || schema.getType() != HoodieSchemaType.RECORD) {
+    return isShreddingInferenceEnabled(config) ? unshreddedTopLevelVariantColumns(schema) : Collections.emptyList();
+  }
+
+  /** The top-level unshredded variant columns of {@code schema}; empty when it is not a record. */
+  private static List<String> unshreddedTopLevelVariantColumns(HoodieSchema schema) {
+    if (schema.getType() != HoodieSchemaType.RECORD) {
       return Collections.emptyList();
     }
-
     List<String> columns = new ArrayList<>();
     for (HoodieSchemaField field : schema.getFields()) {
       HoodieSchema unwrapped = field.schema().isNullable() ? field.schema().getNonNullType() : field.schema();
@@ -248,7 +252,7 @@ public class VariantSchemaUtils {
       return Collections.emptyList();
     }
     return getConfigWriteSchema(config)
-        .map(schema -> getInferableVariantColumns(config, schema))
+        .map(VariantSchemaUtils::unshreddedTopLevelVariantColumns)
         .orElse(Collections.emptyList());
   }
 

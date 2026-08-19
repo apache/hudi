@@ -22,10 +22,11 @@ import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer.VariantSample;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter.VariantSampleExtractor;
+import org.apache.hudi.io.storage.row.VariantShreddingInferenceInternalRowFileWriter;
 
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.List;
@@ -39,12 +40,17 @@ import java.util.Properties;
 public class SparkVariantSampleExtractor implements VariantSampleExtractor {
 
   private final int[] ordinals;
+  private final long structTypeBytes;
 
   public SparkVariantSampleExtractor(List<String> columnNames, StructType structType) {
-    this.ordinals = new int[columnNames.size()];
-    for (int i = 0; i < columnNames.size(); i++) {
-      this.ordinals[i] = fieldIndexOf(structType, columnNames.get(i));
-    }
+    this.ordinals = VariantShreddingInferenceInternalRowFileWriter.resolveOrdinals(structType, columnNames);
+    // Every HoodieSparkRecord of the file references this (cached, shared) StructType.
+    this.structTypeBytes = ObjectSizeCalculator.getObjectSize(structType);
+  }
+
+  @Override
+  public long sharedSizeEstimate(HoodieSchema schema) {
+    return structTypeBytes;
   }
 
   @Override
@@ -62,15 +68,5 @@ public class SparkVariantSampleExtractor implements VariantSampleExtractor {
       }
     }
     return out;
-  }
-
-  private static int fieldIndexOf(StructType structType, String name) {
-    StructField[] fields = structType.fields();
-    for (int i = 0; i < fields.length; i++) {
-      if (fields[i].name().equals(name)) {
-        return i;
-      }
-    }
-    return -1;
   }
 }

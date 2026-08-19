@@ -221,7 +221,9 @@ public class VariantShreddingInferenceInternalRowFileWriter implements HoodieInt
     try {
       Map<String, HoodieSchema> inferred = inferrer.inferTypedValueSchemas(variantColumns, samples);
       return inferred == null ? Collections.emptyMap() : inferred;
-    } catch (Exception e) {
+    } catch (Exception | LinkageError e) {
+      // LinkageError too: an inferrer linked against another Spark than the runtime's must
+      // degrade to unshredded like any other inference failure, not fail the write.
       log.warn("Variant shredding schema inference failed for columns {}; writing unshredded variants.",
           variantColumns, e);
       return Collections.emptyMap();

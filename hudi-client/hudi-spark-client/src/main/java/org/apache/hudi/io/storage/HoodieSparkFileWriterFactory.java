@@ -50,6 +50,7 @@ import org.apache.spark.sql.types.StructType;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
 
@@ -63,13 +64,14 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
       TaskContextSupplier taskContextSupplier) throws IOException {
     // The row write support resolves its HoodieSchema from the config (hoodie.write.schema /
     // hoodie.avro.schema), not the schema argument, so inferable columns are detected on that
-    // config schema (the one the splice below targets; detecting on the argument could buffer
-    // for a splice that never applies when the two differ) and the deferred creation splices a
-    // copied config. The schema argument stays original: it flows through the global schema
-    // cache (getCachedSchema), which must never see per-file spliced schemas, and its StructType
-    // is identical either way (the variant column remains VariantType); sample ordinals are
-    // resolved against it because that is the shape of the rows being written.
-    List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumnsFromConfig(config);
+    // config schema (the one the splice below targets) intersected with the schema argument's
+    // (the shape of the rows being written, which the samples come from). The argument is
+    // checked first because it is already parsed: native log, delete and CDC writers share this
+    // factory with schemas that have no top-level variant, and they must not pay a config-schema
+    // parse per file. The schema argument itself stays original: it flows through the global
+    // schema cache (getCachedSchema), which must never see per-file spliced schemas, and its
+    // StructType is identical either way (the variant column remains VariantType).
+    List<String> inferableColumns = inferableColumnsOf(config, schema);
     if (!inferableColumns.isEmpty()) {
       Option<VariantShreddingSchemaInferrer> inferrer = VariantShreddingRuntime.lookupInferrer();
       if (inferrer.isPresent()) {
@@ -83,6 +85,15 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
       }
     }
     return createParquetFileWriter(instantTime, path, config, schema, taskContextSupplier);
+  }
+
+  private static List<String> inferableColumnsOf(HoodieConfig config, HoodieSchema schema) {
+    List<String> inArgument = VariantSchemaUtils.getInferableVariantColumns(config, schema);
+    if (inArgument.isEmpty()) {
+      return inArgument;
+    }
+    List<String> inConfig = VariantSchemaUtils.getInferableVariantColumnsFromConfig(config);
+    return inArgument.stream().filter(inConfig::contains).collect(Collectors.toList());
   }
 
   private HoodieFileWriter createParquetFileWriter(

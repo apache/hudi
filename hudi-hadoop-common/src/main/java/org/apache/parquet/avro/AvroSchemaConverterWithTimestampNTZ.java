@@ -142,6 +142,15 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
     }
   }
 
+  /**
+   * Whether the running parquet version has the VARIANT logical type annotation (1.16+), i.e.
+   * whether {@link #convert(HoodieSchema)} tags variant groups with it. Exposed so tests can
+   * phrase version-aware expectations without repeating the reflection probe.
+   */
+  public static boolean isVariantLogicalTypeSupported() {
+    return variantLogicalType() != null;
+  }
+
   private List<Type> convertFields(List<HoodieSchemaField> fields, String schemaPath) {
     List<Type> types = new ArrayList<Type>(fields.size());
     for (HoodieSchemaField field : fields) {
