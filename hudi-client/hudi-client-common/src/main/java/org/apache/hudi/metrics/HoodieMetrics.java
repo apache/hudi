@@ -23,6 +23,8 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -39,6 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH;
 
@@ -456,8 +459,12 @@ public class HoodieMetrics {
     reportMetrics(HoodieTimeline.CLUSTERING_ACTION, "fileCreationTime", durationInMs);
   }
 
-  public void updateTableServiceInstantMetrics(final HoodieActiveTimeline activeTimeline) {
-    updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_CLUSTERING_INSTANT_STR, HoodieTimeline.CLUSTERING_ACTION);
+  public void updateTableServiceInstantMetrics(final HoodieActiveTimeline activeTimeline, final InstantGenerator instantGenerator) {
+    // Clustering is scheduled as CLUSTERING_ACTION only on timeline layout 2. On table version six it is scheduled as
+    // REPLACE_COMMIT_ACTION, which insert_overwrite and delete_partition share, so the clustering plan is what
+    // identifies it rather than the action name.
+    Predicate<HoodieInstant> pendingClustering = instant -> isPendingClusteringInstant(activeTimeline, instant, instantGenerator);
+    updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_CLUSTERING_INSTANT_STR, HoodieTimeline.CLUSTERING_ACTION, pendingClustering);
     updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_COMPACTION_INSTANT_STR, HoodieTimeline.COMPACTION_ACTION);
     updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_CLEAN_INSTANT_STR, HoodieTimeline.CLEAN_ACTION);
     updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_ROLLBACK_INSTANT_STR, HoodieTimeline.ROLLBACK_ACTION);
@@ -467,7 +474,7 @@ public class HoodieMetrics {
     updateLatestCompletedInstant(activeTimeline, LATEST_COMPLETED_CLEAN_INSTANT_STR, HoodieTimeline.CLEAN_ACTION);
     updateLatestCompletedInstant(activeTimeline, LATEST_COMPLETED_ROLLBACK_INSTANT_STR, HoodieTimeline.ROLLBACK_ACTION);
 
-    updatePendingInstantCount(activeTimeline, PENDING_CLUSTERING_INSTANT_COUNT_STR, HoodieTimeline.CLUSTERING_ACTION);
+    updatePendingInstantCount(activeTimeline, PENDING_CLUSTERING_INSTANT_COUNT_STR, HoodieTimeline.CLUSTERING_ACTION, pendingClustering);
     updatePendingInstantCount(activeTimeline, PENDING_COMPACTION_INSTANT_COUNT_STR, HoodieTimeline.COMPACTION_ACTION);
     updatePendingInstantCount(activeTimeline, PENDING_CLEAN_INSTANT_COUNT_STR, HoodieTimeline.CLEAN_ACTION);
     updatePendingInstantCount(activeTimeline, PENDING_ROLLBACK_INSTANT_COUNT_STR, HoodieTimeline.ROLLBACK_ACTION);
@@ -484,10 +491,32 @@ public class HoodieMetrics {
                                             final String metricName,
                                             final String action) {
     Set<String> validActions = CollectionUtils.createSet(action);
-    HoodieTimeline filteredInstants = activeTimeline.filterInflightsAndRequested().filter(instant -> validActions.contains(instant.getAction()));
+    updateEarliestPendingInstant(activeTimeline, metricName, action, instant -> validActions.contains(instant.getAction()));
+  }
+
+  private void updateEarliestPendingInstant(final HoodieActiveTimeline activeTimeline,
+                                            final String metricName,
+                                            final String action,
+                                            final Predicate<HoodieInstant> pendingFilter) {
+    HoodieTimeline filteredInstants = activeTimeline.filterInflightsAndRequested().filter(pendingFilter);
     Option<HoodieInstant> hoodieInstantOption = filteredInstants.firstInstant();
     if (hoodieInstantOption.isPresent()) {
       updateTimestampMetric(metricName, action, hoodieInstantOption);
+    }
+  }
+
+  /**
+   * Whether a pending instant belongs to a clustering operation, on any table version.
+   * A plan that cannot be read is treated as non-clustering so that metrics never fail the commit.
+   */
+  private boolean isPendingClusteringInstant(final HoodieActiveTimeline activeTimeline,
+                                             final HoodieInstant instant,
+                                             final InstantGenerator instantGenerator) {
+    try {
+      return ClusteringUtils.isClusteringInstant(activeTimeline, instant, instantGenerator);
+    } catch (Exception e) {
+      log.warn("Failed to read the replace metadata of {} while updating clustering instant metrics", instant, e);
+      return false;
     }
   }
 
@@ -539,7 +568,14 @@ public class HoodieMetrics {
                                          final String metricName,
                                          final String action) {
     Set<String> validActions = CollectionUtils.createSet(action);
-    HoodieTimeline filteredInstants = activeTimeline.filterInflightsAndRequested().filter(instant -> validActions.contains(instant.getAction()));
+    updatePendingInstantCount(activeTimeline, metricName, action, instant -> validActions.contains(instant.getAction()));
+  }
+
+  private void updatePendingInstantCount(final HoodieActiveTimeline activeTimeline,
+                                         final String metricName,
+                                         final String action,
+                                         final Predicate<HoodieInstant> pendingFilter) {
+    HoodieTimeline filteredInstants = activeTimeline.filterInflightsAndRequested().filter(pendingFilter);
     updateMetric(action, metricName, filteredInstants.countInstants());
   }
 
