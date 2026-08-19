@@ -23,6 +23,7 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 
@@ -329,57 +330,48 @@ public abstract class HoodieStorage implements Closeable {
   public final void createImmutableFileInPath(StoragePath path,
                                               Option<HoodieInstantWriter> contentWriter,
                                               boolean needTempFile) throws HoodieIOException {
-    OutputStream fsout = null;
     StoragePath tmpPath = null;
+    StoragePath pathToCreate = path;
+    if (contentWriter.isPresent() && needTempFile) {
+      StoragePath parent = path.getParent();
+      tmpPath = new StoragePath(parent, path.getName() + "." + UUID.randomUUID());
+      pathToCreate = tmpPath;
+    }
 
+    boolean fileCreated = false;
+    HoodieException failure = null;
     try {
-      if (!contentWriter.isPresent()) {
-        fsout = create(path, false);
+      try (OutputStream fsout = create(pathToCreate, false)) {
+        if (contentWriter.isPresent()) {
+          contentWriter.get().writeToStream(fsout);
+        }
       }
-
-      if (contentWriter.isPresent() && needTempFile) {
-        StoragePath parent = path.getParent();
-        tmpPath = new StoragePath(parent, path.getName() + "." + UUID.randomUUID());
-        fsout = create(tmpPath, false);
-        contentWriter.get().writeToStream(fsout);
+      fileCreated = tmpPath == null || rename(tmpPath, path);
+    } catch (Throwable t) {
+      if (t instanceof HoodieException) {
+        failure = (HoodieException) t;
+      } else if (t instanceof IOException) {
+        failure = new HoodieIOException("Failed to create immutable file " + path, (IOException) t);
+      } else {
+        failure = new HoodieException("Failed to create immutable file " + path, t);
       }
-
-      if (contentWriter.isPresent() && !needTempFile) {
-        fsout = create(path, false);
-        contentWriter.get().writeToStream(fsout);
-      }
-    } catch (IOException e) {
-      String errorMsg = "Failed to create file " + (tmpPath != null ? tmpPath : path);
-      throw new HoodieIOException(errorMsg, e);
+      throw failure;
     } finally {
-      try {
-        if (null != fsout) {
-          fsout.close();
-        }
-      } catch (IOException e) {
-        String errorMsg = "Failed to close file " + (needTempFile ? tmpPath : path);
-        throw new HoodieIOException(errorMsg, e);
-      }
-
-      boolean renameSuccess = false;
-      try {
-        if (null != tmpPath) {
-          renameSuccess = rename(tmpPath, path);
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException(
-            "Failed to rename " + tmpPath + " to the target " + path,
-            e);
-      } finally {
-        if (!renameSuccess && null != tmpPath) {
-          try {
-            deleteFile(tmpPath);
-            LOG.debug("Failed to rename {} to {}, target file exists: {}", tmpPath, path, exists(path));
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to delete tmp file " + tmpPath, e);
+      if (tmpPath != null && !fileCreated) {
+        try {
+          deleteFile(tmpPath);
+        } catch (Throwable t) {
+          if (failure != null) {
+            failure.addSuppressed(t);
+          } else {
+            throw new HoodieException("Failed to delete temporary file " + tmpPath, t);
           }
         }
       }
+    }
+
+    if (!fileCreated) {
+      LOG.debug("Failed to rename {} to {}; target file may already exist", tmpPath, path);
     }
   }
 

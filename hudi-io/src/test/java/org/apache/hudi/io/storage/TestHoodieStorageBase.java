@@ -20,6 +20,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.util.IOUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
@@ -149,6 +150,24 @@ public abstract class TestHoodieStorageBase {
     assertTrue(storage.createDirectory(path4));
     validatePathInfo(storage, path4, EMPTY_BYTES, true);
     assertTrue(storage.createDirectory(path4));
+  }
+
+  @Test
+  public void testImmutableFileIsNotPublishedOnWriteFailure() throws IOException {
+    HoodieStorage storage = getStorage();
+    StoragePath directory = new StoragePath(getTempDir(), "testImmutableFileWriteFailure");
+    StoragePath path = new StoragePath(directory, "1.file");
+    storage.createDirectory(directory);
+
+    HoodieIOException exception = assertThrows(HoodieIOException.class,
+        () -> storage.createImmutableFileInPath(path, Option.of(outputStream -> {
+          outputStream.write(42);
+          throw new IOException("write failure");
+        })));
+
+    assertEquals("write failure", exception.getCause().getMessage());
+    assertFalse(storage.exists(path));
+    assertTrue(storage.listDirectEntries(directory).isEmpty());
   }
 
   @Test
