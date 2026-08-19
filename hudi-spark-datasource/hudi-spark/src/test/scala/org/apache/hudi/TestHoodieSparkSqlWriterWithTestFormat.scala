@@ -22,7 +22,7 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
@@ -65,13 +65,15 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
    * @param sortMode           Bulk insert sort mode
    * @param populateMetaFields Flag for populating meta fields
    */
-  def testBulkInsertWithSortMode(sortMode: BulkInsertSortMode, populateMetaFields: Boolean = true, enableOCCConfigs: Boolean = false): Unit = {
+  def testBulkInsertWithSortMode(sortMode: BulkInsertSortMode, populateMetaFields: Boolean = true, enableOCCConfigs: Boolean = false,
+                                 tableVersion: Int = HoodieTableVersion.current().versionCode()): Unit = {
     //create a new table
     var fooTableModifier = commonTableModifier.updated("hoodie.bulkinsert.shuffle.parallelism", "4")
       .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
       .updated(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields))
       .updated(HoodieWriteConfig.BULK_INSERT_SORT_MODE.key(), sortMode.name())
+      .updated(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion.toString)
       .updated(HoodieTableConfig.TABLE_FORMAT.key, "test-format")
 
     if (enableOCCConfigs) {
@@ -204,15 +206,22 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
   /**
    * Test case for disable and enable meta fields.
    */
-  @Test
-  def testLegacyBooleanDoesNotOverrideDisabledMetaFields(): Unit = {
-    testBulkInsertWithSortMode(BulkInsertSortMode.NONE, populateMetaFields = false)
+  @ParameterizedTest
+  @ValueSource(ints = Array(8, 9, 10))
+  def testLegacyBooleanDoesNotOverrideDisabledMetaFields(tableVersion: Int): Unit = {
+    // Below 10 the table persists the deprecated boolean next to the mode, from 10 it carries the
+    // mode alone. The legacy boolean must not override the mode in either shape, and the persisted
+    // copy below 10 must not be held against the writer either. Version 6 is covered by the plain
+    // TestHoodieSparkSqlWriter: the test table format writes layout-v2 instant names that a v6
+    // (layout-v1) timeline cannot parse.
+    testBulkInsertWithSortMode(BulkInsertSortMode.NONE, populateMetaFields = false, tableVersion = tableVersion)
     //create a new table
     val fooTableModifier = commonTableModifier.updated("hoodie.bulkinsert.shuffle.parallelism", "4")
       .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
       .updated(HoodieWriteConfig.BULK_INSERT_SORT_MODE.key(), BulkInsertSortMode.NONE.name())
       .updated(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true")
+      .updated(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion.toString)
       .updated(HoodieTableConfig.TABLE_FORMAT.key, "test-format")
 
     // generate the inserts

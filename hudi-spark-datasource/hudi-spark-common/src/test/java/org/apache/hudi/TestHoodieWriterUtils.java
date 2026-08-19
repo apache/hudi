@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getMetaClientBuilder;
@@ -118,6 +119,62 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     // Narrowing is still a disagreement here: hoodie.properties would keep advertising ALL while the
     // writer stopped populating the columns.
     assertModeAgainstTable("NONE", MetaFieldsMode.ALL, "metaModeNoneOnAll", true);
+  }
+
+  /**
+   * Below table version 10 a table persists the deprecated {@code hoodie.populate.meta.fields} next to
+   * {@code hoodie.meta.fields.mode} (see {@code HoodieTableMetaClient.TableBuilder}). The key-by-key
+   * conflict loop must not hold a writer that still states the legacy boolean against that persisted
+   * copy: the mode is the source of truth and the boolean is consulted only when the mode is absent.
+   * Version 10 tables never hit this branch because they do not persist the boolean at all.
+   */
+  @Test
+  void validateTableConfigIgnoresTheLegacyBooleanOnceTheTableCarriesAMode() throws IOException {
+    for (MetaFieldsMode tableMode : new MetaFieldsMode[] {MetaFieldsMode.NONE, MetaFieldsMode.ALL}) {
+      HoodieTableConfig tableConfig = initTableBelowVersionTen(tableMode, "legacyBooleanIgnored-" + tableMode).getTableConfig();
+      assertEquals(String.valueOf(tableMode.toLegacyPopulateMetaFields()),
+          tableConfig.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+          "precondition: a table below v10 persists the derived boolean next to the mode");
+
+      // The writer states the opposite of what the table persisted, and nothing about the mode.
+      TypedProperties writeProps = TypedProperties.copy(tableConfig.getProps());
+      writeProps.remove(HoodieTableConfig.META_FIELDS_MODE.key());
+      writeProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+          String.valueOf(!tableMode.toLegacyPopulateMetaFields()));
+      Assertions.assertDoesNotThrow(() -> HoodieWriterUtils.validateTableConfig(
+          sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(writeProps), tableConfig),
+          "the deprecated boolean must not override a table that carries " + tableMode);
+    }
+  }
+
+  /**
+   * A table written before the mode property existed carries only the boolean, so the boolean is still
+   * the only statement of its meta-field layout and a contradicting writer must keep being rejected.
+   */
+  @Test
+  void validateTableConfigStillRejectsTheLegacyBooleanOnATableWithoutAMode() throws IOException {
+    HoodieTableMetaClient metaClient = initTableBelowVersionTen(MetaFieldsMode.NONE, "legacyBooleanRejected");
+    // Strip the mode the builder wrote, leaving the legacy shape: populate.meta.fields=false only.
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.META_FIELDS_MODE.key()));
+    HoodieTableConfig legacyTableConfig = HoodieTableMetaClient.reload(metaClient).getTableConfig();
+    assertFalse(legacyTableConfig.getProps().containsKey(HoodieTableConfig.META_FIELDS_MODE.key()),
+        "precondition: the table must carry only the legacy boolean");
+    assertEquals(MetaFieldsMode.NONE, legacyTableConfig.getMetaFieldsMode());
+
+    TypedProperties writeProps = TypedProperties.copy(legacyTableConfig.getProps());
+    writeProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
+    HoodieException ex = assertThrows(HoodieException.class, () -> HoodieWriterUtils.validateTableConfig(
+        sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(writeProps), legacyTableConfig));
+    assertTrue(ex.getMessage().contains(HoodieTableConfig.POPULATE_META_FIELDS.key()), ex.getMessage());
+  }
+
+  private HoodieTableMetaClient initTableBelowVersionTen(MetaFieldsMode mode, String tableDir) throws IOException {
+    Properties tableProps = new Properties();
+    tableProps.put(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    return getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, tableProps, "")
+        .setTableVersion(HoodieTableVersion.NINE.versionCode())
+        .initTable(storageConf, tempDir.resolve(tableDir).toString());
   }
 
   @Test
