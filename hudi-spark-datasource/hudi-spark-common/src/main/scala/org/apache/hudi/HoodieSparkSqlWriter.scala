@@ -283,7 +283,17 @@ class HoodieSparkSqlWriterInternal {
       } else {
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
         val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_HISTORY_PATH)
-        val populateMetaFields = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
+        // Only forward the deprecated boolean when the user actually stated it. TableBuilder rejects a
+        // boolean that contradicts an explicit meta.fields.mode, and getBooleanOrDefault would hand it
+        // the `true` default for every writer that never mentioned the property — turning a plain
+        // `hoodie.meta.fields.mode=COMMIT_TIME_ONLY` into a spurious conflict.
+        val populateMetaFields: java.lang.Boolean =
+          if (hoodieConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS)) {
+            hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS)
+          } else {
+            null
+          }
+        val metaFieldsMode = hoodieConfig.getString(HoodieTableConfig.META_FIELDS_MODE)
         val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT);
         val payloadClass = hoodieConfig.getString(DataSourceWriteOptions.PAYLOAD_CLASS_NAME)
         val recordMergeStrategyId = hoodieConfig.getString(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID)
@@ -309,6 +319,7 @@ class HoodieSparkSqlWriterInternal {
           .setOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(optParams.asJava))
           .setPartitionFields(partitionColumnsForKeyGenerator)
           .setPopulateMetaFields(populateMetaFields)
+          .setMetaFieldsModeFromString(metaFieldsMode)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
           .setSecondaryKeyFields(hoodieConfig.getString(SECONDARYKEY_COLUMN_NAME))
           .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
@@ -751,10 +762,12 @@ class HoodieSparkSqlWriterInternal {
             hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)
           else KeyGeneratorType.getKeyGeneratorClassName(hoodieConfig)
         val timestampKeyGeneratorConfigs = extractConfigsRelatedToTimestampBasedKeyGenerator(keyGenProp, parameters)
-        val populateMetaFields = java.lang.Boolean.parseBoolean(parameters.getOrElse(
-          HoodieTableConfig.POPULATE_META_FIELDS.key(),
-          String.valueOf(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue())
-        ))
+        // null when unstated — see the note on the non-bootstrap path above.
+        val populateMetaFields: java.lang.Boolean =
+          parameters.get(HoodieTableConfig.POPULATE_META_FIELDS.key())
+            .map(v => java.lang.Boolean.valueOf(v))
+            .orNull
+        val metaFieldsMode = parameters.get(HoodieTableConfig.META_FIELDS_MODE.key()).orNull
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
         val useBaseFormatMetaFile = java.lang.Boolean.parseBoolean(parameters.getOrElse(
           HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
@@ -782,6 +795,7 @@ class HoodieSparkSqlWriterInternal {
           .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(hoodieConfig.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE))
           .setPopulateMetaFields(populateMetaFields)
+          .setMetaFieldsModeFromString(metaFieldsMode)
           .setKeyGeneratorClassProp(keyGenProp)
           .setPartitionValueExtractorClass(partitionValueExtractorClassName)
           .set(timestampKeyGeneratorConfigs.asJava.asInstanceOf[java.util.Map[String, Object]])

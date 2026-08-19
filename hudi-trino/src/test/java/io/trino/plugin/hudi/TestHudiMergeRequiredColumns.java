@@ -115,7 +115,7 @@ class TestHudiMergeRequiredColumns
         assertThat(mergeRequiredColumnNames(tableConfig, RecordMergeMode.EVENT_TIME_ORDERING))
                 .doesNotContain("id1", "id2");
 
-        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+        tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, "NONE");
         assertThat(mergeRequiredColumnNames(tableConfig, RecordMergeMode.EVENT_TIME_ORDERING))
                 .contains("id1", "id2");
     }

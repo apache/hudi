@@ -431,10 +431,15 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
                | location '${tablePath}'
                | tblproperties (
                |  primaryKey = 'id',
-               |  preCombineField = 'ts'
+               |  preCombineField = 'ts',
+               |  '${HoodieTableConfig.POPULATE_META_FIELDS.key}' = '$populateMetaConfig'
                | )
                |""".stripMargin)
 
+          // Meta-field population is a table property, so it is declared at create time rather than
+          // only on the writer below. A writer that disagrees with the table about which meta columns
+          // hold values is rejected -- narrowing an existing ALL table on the fly used to happen
+          // silently and is what produced rows the table still advertised as populated.
           val rowsWithSimilarKey = Seq((1, "a1", 10.0, 1000L), (1, "a1", 11.0, 1001L))
           rowsWithSimilarKey.toDF("id", "name", "value", "ts")
             .write.format("hudi")

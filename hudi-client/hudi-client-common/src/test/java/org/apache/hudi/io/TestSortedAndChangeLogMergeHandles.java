@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -280,6 +281,7 @@ public class TestSortedAndChangeLogMergeHandles {
       when(metaClient.getTableConfig()).thenReturn(tableConfig);
       when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
       when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.TEN);
+      when(tableConfig.getMetaFieldsMode()).thenReturn(MetaFieldsMode.ALL);
       when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
       when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
       when(tableConfig.getPartitionMetafileFormat()).thenReturn(Option.empty());

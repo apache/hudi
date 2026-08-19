@@ -22,8 +22,8 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -56,7 +56,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
 
     Pair<StorageConfiguration, HoodieConfig> injectedConfigs = HoodieParquetConfigInjector.applyConfigInjector(path, storage.getConf(), config);
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
@@ -69,7 +69,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     }
 
     HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storageConfiguration, schema,
-        hoodieConfig, enableBloomFilter(populateMetaFields, hoodieConfig));
+        hoodieConfig, enableBloomFilter(metaFieldsMode, hoodieConfig));
     HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
         CompressionCodecName.fromConf(compressionCodecName),
         hoodieConfig.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
@@ -80,7 +80,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
         hoodieConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
     parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
 
-    return new HoodieSparkParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
+    return new HoodieSparkParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, metaFieldsMode);
   }
 
   protected HoodieFileWriter newParquetFileWriter(OutputStream outputStream, HoodieConfig config,
@@ -119,9 +119,10 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newLanceFileWriter(String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
                                                 TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieSparkLanceWriter.validateNoVariantColumns(schema);
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
+    boolean populateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
-    boolean enableBloomFilter = enableBloomFilter(populateMetaFields, config);
+    boolean enableBloomFilter = enableBloomFilter(metaFieldsMode, config);
     Option<BloomFilter> bloomFilter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     long maxFileSize = config.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE);
     long allocatorSize = config.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES);
@@ -144,9 +145,10 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   @Override
   protected HoodieFileWriter newVortexFileWriter(String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
                                                  TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
+    boolean populateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
-    boolean enableBloomFilter = enableBloomFilter(populateMetaFields, config);
+    boolean enableBloomFilter = enableBloomFilter(metaFieldsMode, config);
     Option<BloomFilter> bloomFilter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     long maxFileSize = config.getLongOrDefault(HoodieStorageConfig.VORTEX_MAX_FILE_SIZE);
     long allocatorSize = config.getLongOrDefault(HoodieStorageConfig.VORTEX_WRITE_ALLOCATOR_SIZE_BYTES);

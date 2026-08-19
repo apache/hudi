@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.RecordMergeMode.CUSTOM
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, MetaFieldsMode, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
@@ -226,7 +226,7 @@ object HoodieWriterUtils {
   }
 
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
-                          tableConfig: HoodieConfig): Unit = {
+                          tableConfig: HoodieTableConfig): Unit = {
     validateTableConfig(spark, params, tableConfig, false)
   }
 
@@ -261,7 +261,7 @@ object HoodieWriterUtils {
    * Detects conflicts between new parameters and existing table configurations
    */
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
-                          tableConfig: HoodieConfig, isOverWriteMode: Boolean): Unit = {
+                          tableConfig: HoodieTableConfig, isOverWriteMode: Boolean): Unit = {
     // If Overwrite is set as save mode, we don't need to do table config validation.
     if (!isOverWriteMode) {
       val resolver = spark.sessionState.conf.resolver
@@ -350,6 +350,32 @@ object HoodieWriterUtils {
           val mergeStrategyId = params.getOrElse(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), null)
           if (!StringUtils.isNullOrEmpty(mergeStrategyId)) {
             diffConfigs.append(s"${HoodieTableConfig.RECORD_MERGE_STRATEGY_ID}:\t$mergeStrategyId\tnull\n")
+          }
+        }
+
+        // hoodie.meta.fields.mode is a physical-storage decision baked into files at write time.
+        // Changing it at runtime would silently produce mixed-mode files whose incremental / file
+        // pruning behavior differs between old and new commits. The generic loop above cannot catch
+        // this on its own: it only flags a key when the on-disk value is non-null, so a table
+        // predating the property would let a null → selective transition slip through.
+        //
+        // Compare resolved modes rather than raw presence. A legacy table resolves to ALL or NONE
+        // through its deprecated boolean, so null → COMMIT_TIME_ONLY is still
+        // rejected, while a write that
+        // restates the mode the table already has (mode=ALL against a default table, or mode=NONE
+        // against populate.meta.fields=false) is no longer a spurious conflict. That case matters
+        // because the property is backfilled only by NineToTenUpgradeHandler and current() is
+        // already TEN — a table at v10 without it will never be upgraded again, so rejecting an
+        // explicit restatement would leave it no way to adopt the property at all.
+        val paramsMetaFieldsMode = params.getOrElse(HoodieTableConfig.META_FIELDS_MODE.key(), "")
+        if (paramsMetaFieldsMode.nonEmpty) {
+          val requestedMode = MetaFieldsMode.resolve(params.asJava)
+          val tableMetaFieldsMode = tableConfig.getMetaFieldsMode
+          if (requestedMode != tableMetaFieldsMode) {
+            diffConfigs.append(
+              s"${HoodieTableConfig.META_FIELDS_MODE.key()}:\t$requestedMode\t$tableMetaFieldsMode"
+                + " (immutable at runtime; set only at table creation / hudi-cli / upgrade; "
+                + "existing tables must be recreated to change this)\n")
           }
         }
       }

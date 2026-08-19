@@ -259,7 +259,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         val existingTableConfig = tableConfig.getProps.asScala.toMap
         val currentTableConfig = globalTableConfigs ++ existingTableConfig
         val catalogTableProps = mapSqlOptionsToTableConfigs(catalogProperties)
-        validateTableConfig(spark, catalogTableProps, convertMapToHoodieConfig(existingTableConfig))
+        validateTableConfig(spark, catalogTableProps, tableConfig)
 
         val options = extraTableConfig(hoodieTableExists, currentTableConfig) ++
           mapSqlOptionsToTableConfigs(sqlOptions) ++ currentTableConfig

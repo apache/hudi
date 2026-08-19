@@ -106,6 +106,9 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
         conf,
         CompressionCodecName.fromConf(config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
         fileMetadataMerger);
+    // From the TABLE config, as the write handles do: the mode is a table property, and the copier
+    // otherwise rewrites _hoodie_file_name on a table that does not populate it.
+    this.writer.setMetaFieldsMode(hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode());
   }
 
   public void write() {

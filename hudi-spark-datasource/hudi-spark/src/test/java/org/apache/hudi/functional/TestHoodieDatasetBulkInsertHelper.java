@@ -188,11 +188,13 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     }
 
     result.toJavaRDD().foreach(entry -> {
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD)).equals(""));
+      // The stub meta columns are now written as null (nullable=true) rather than empty strings —
+      // see HoodieDatasetBulkInsertHelper. Handle handle-level population fills them in later.
+      assertTrue(entry.isNullAt(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)));
+      assertTrue(entry.isNullAt(resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)));
+      assertTrue(entry.isNullAt(resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)));
+      assertTrue(entry.isNullAt(resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)));
+      assertTrue(entry.isNullAt(resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD)));
     });
 
     Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)

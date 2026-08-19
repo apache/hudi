@@ -21,15 +21,18 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -37,6 +40,7 @@ import java.util.Properties;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getMetaClientBuilder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieWriterUtils extends HoodieClientTestBase {
@@ -54,6 +58,66 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
   @Test
   void testReturnsKeyWhenTableConfigIsNull() {
     assertEquals("randomKey", HoodieWriterUtils.getKeyInTableConfig("randomKey", null));
+  }
+
+  /**
+   * The meta-fields-mode guard compares normalized modes, not raw legacy property presence. A table
+   * written before {@code hoodie.meta.fields.mode} existed is normalized to ALL or NONE when its
+   * {@link HoodieTableConfig} is constructed, so a write that restates that same mode is asking for
+   * exactly what the table already is and must be accepted.
+   */
+  private void assertModeAgainstTable(String requestedMode, MetaFieldsMode tableMode,
+                                      String tableDir, boolean expectThrow) throws IOException {
+    Properties tableProps = new Properties();
+    // Start from a legacy boolean and verify table construction records the corresponding mode.
+    tableProps.put(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+        String.valueOf(tableMode.toLegacyPopulateMetaFields()));
+    HoodieTableMetaClient metaClient = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, tableProps, "")
+        .initTable(storageConf, tempDir.resolve(tableDir).toString());
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    assertEquals(tableMode, tableConfig.getMetaFieldsMode(),
+        "precondition: table construction must infer " + tableMode + " from the legacy boolean");
+    assertTrue(tableConfig.getProps().containsKey(HoodieTableConfig.META_FIELDS_MODE.key()),
+        "table construction must populate the authoritative mode property");
+
+    TypedProperties writeProps = TypedProperties.copy(tableConfig.getProps());
+    writeProps.put(HoodieTableConfig.META_FIELDS_MODE.key(), requestedMode);
+    Executable validate = () -> HoodieWriterUtils.validateTableConfig(
+        sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(writeProps), tableConfig);
+
+    if (expectThrow) {
+      HoodieException ex = assertThrows(HoodieException.class, validate);
+      assertTrue(ex.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()), ex.getMessage());
+    } else {
+      Assertions.assertDoesNotThrow(validate);
+    }
+  }
+
+  @Test
+  void validateTableConfigAcceptsAllModeRestatedOnALegacyTrueTable() throws IOException {
+    // mode=ALL against a table whose only meta-field property is populate.meta.fields=true.
+    assertModeAgainstTable("ALL", MetaFieldsMode.ALL, "metaModeAllRestated", false);
+  }
+
+  @Test
+  void validateTableConfigAcceptsNoneModeRestatedOnALegacyFalseTable() throws IOException {
+    // Mirror case: mode=NONE against populate.meta.fields=false.
+    assertModeAgainstTable("NONE", MetaFieldsMode.NONE, "metaModeNoneRestated", false);
+  }
+
+  @Test
+  void validateTableConfigRejectsSelectiveModeOnATableWithoutTheProperty() throws IOException {
+    // The case the guard exists for, and the one that must keep throwing: a table that resolves to
+    // NONE cannot be turned into COMMIT_TIME_ONLY by a write option, because the meta columns of
+    // every earlier commit are already physically absent.
+    assertModeAgainstTable("COMMIT_TIME_ONLY", MetaFieldsMode.NONE, "metaModeSelectiveOnNone", true);
+  }
+
+  @Test
+  void validateTableConfigRejectsNoneModeOnAnAllTable() throws IOException {
+    // Narrowing is still a disagreement here: hoodie.properties would keep advertising ALL while the
+    // writer stopped populating the columns.
+    assertModeAgainstTable("NONE", MetaFieldsMode.ALL, "metaModeNoneOnAll", true);
   }
 
   @Test

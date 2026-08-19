@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
@@ -57,6 +58,13 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   protected long recordsDeleted = 0;
   protected Map<String, HoodieRecord<T>> recordMap;
   protected boolean useWriterSchema = false;
+  // Read from the TABLE config, not the write config. Meta-field population is a physical property
+  // of the table, so the table is the authority: a writer carrying a stale
+  // hoodie.populate.meta.fields would otherwise resolve to NONE and write null meta columns into a
+  // table whose earlier files have them populated. Resolved once rather than per record --
+  // updateFileName consults it on the preserve-metadata path.
+  private final MetaFieldsMode metaFieldsMode =
+      hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode();
 
   public BaseCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           String partitionPath, String fileId, Option<HoodieSchema> overriddenSchema,
@@ -151,7 +159,8 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
    */
   protected void writeRecordToFile(HoodieRecord record, HoodieSchema schema) throws IOException {
     if (preserveMetadata) {
-      HoodieRecord populatedRecord = updateFileName(record, schema, writeSchemaWithMetaFields, path.getName(), config.getProps());
+      HoodieRecord populatedRecord =
+          updateFileName(record, schema, writeSchemaWithMetaFields, path.getName(), config.getProps());
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(populatedRecord, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, config);
       }
@@ -166,8 +175,22 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
     }
   }
 
+  /**
+   * Rewrite {@code _hoodie_file_name} to the file being written, when the table populates it.
+   *
+   * <p>{@code preserveMetadata} marks a table-service rewrite -- compaction or clustering copying
+   * existing data files forward -- so the record already carries whatever meta columns the table
+   * populates. Set the file name only when the mode says that column holds values; on a mode that
+   * opts out it is already null in the source file, so there is nothing to rewrite and nothing to
+   * clear.
+   */
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, HoodieSchema schema, HoodieSchema targetSchema, String fileName, Properties prop) {
-    MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
+    MetadataValues metadataValues = new MetadataValues();
+    if (metaFieldsMode.isFileNamePopulated()) {
+      metadataValues.setFileName(fileName);
+    }
+    // Even with no file-name value to update, this projection is required to align Spark records
+    // with the writer schema (for example, by dropping the temporary row-index column).
     return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
   }
 

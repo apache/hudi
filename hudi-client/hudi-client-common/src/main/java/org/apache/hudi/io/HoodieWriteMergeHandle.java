@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
@@ -107,6 +108,12 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   protected HoodieFileWriter fileWriter;
   @Setter
   protected HoodieReaderContext<T> readerContext;
+
+  // Read from the TABLE config, not the write config -- see the note on BaseCreateHandle. Resolved
+  // once rather than per record: writeToFile consults it on the preserve-metadata path, which runs
+  // for every record copied forward during a merge.
+  private final MetaFieldsMode metaFieldsMode =
+      hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode();
 
   protected long recordsWritten = 0;
   protected long recordsDeleted = 0;
@@ -417,7 +424,13 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
       //       file holding this record even in cases when overall metadata is preserved
-      HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
+      //
+      // Rewrite it only when the table populates that column. This path copies a record forward from
+      // the previous base file, so it already carries whatever meta columns the table populates; on a
+      // mode that opts out the column is already null in the source and there is nothing to rewrite.
+      HoodieRecord populatedRecord = metaFieldsMode.isFileNamePopulated()
+          ? record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName())
+          : record;
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, props);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.

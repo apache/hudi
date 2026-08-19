@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
@@ -90,28 +91,31 @@ public class TestHoodieAvroFileWriterFactory extends HoodieClientTestBase {
   @Test
   public void testEnableBloomFilter() {
     HoodieWriteConfig config = getConfig(IndexType.BLOOM);
-    assertTrue(HoodieFileWriterFactory.enableBloomFilter(true, config));
-    assertFalse(HoodieFileWriterFactory.enableBloomFilter(false, config));
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.NONE, config));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.COMMIT_TIME_ONLY, config));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.FILE_NAME_ONLY, config));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME, config));
 
     config = getConfig(IndexType.SIMPLE);
-    assertTrue(HoodieFileWriterFactory.enableBloomFilter(true, config));
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
 
     config = getConfig(IndexType.SIMPLE);
-    assertTrue(HoodieFileWriterFactory.enableBloomFilter(true, config));
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
 
     config = getConfigBuilder(IndexType.BLOOM)
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .parquetBloomFilterEnable(false).build()).build();
-    assertTrue(HoodieFileWriterFactory.enableBloomFilter(true, config));
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
 
     config = getConfigBuilder(IndexType.SIMPLE)
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .parquetBloomFilterEnable(true).build()).build();
-    assertTrue(HoodieFileWriterFactory.enableBloomFilter(true, config));
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
 
     config = getConfigBuilder(IndexType.SIMPLE)
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .parquetBloomFilterEnable(false).build()).build();
-    assertFalse(HoodieFileWriterFactory.enableBloomFilter(true, config));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
   }
 }
