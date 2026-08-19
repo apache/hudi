@@ -65,6 +65,11 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
     return new GenericInternalRow(new Object[] {id});
   }
 
+  /** A row of about a kilobyte, so byte-cap arithmetic on the estimator is not dominated by rounding. */
+  private static InternalRow wideRow(long id) {
+    return new GenericInternalRow(new Object[] {id, UTF8String.fromString(new String(new char[1024]).replace('\0', 'x'))});
+  }
+
   /** A 16-byte UnsafeRow (8-byte null bitset + one long), so byte-cap arithmetic is exact. */
   private static UnsafeRow unsafeRow(long id) {
     UnsafeRow row = new UnsafeRow(1);
@@ -211,9 +216,11 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
   @Test
   public void testByteCapAccumulatesThroughTheEstimator() throws IOException {
     // Non-UnsafeRow rows of one shape estimate the same size, so a cap of 150 rows' worth
-    // materializes on exactly the 150th write, after the periodic re-estimation at row 100 (the
-    // small slack absorbs the moving average's floating-point rounding).
-    long perRow = new DefaultSizeEstimator<InternalRow>().sizeEstimate(row(0));
+    // materializes on exactly the 150th write, after the periodic re-estimation at row 100. The
+    // slack absorbs the moving average's long truncation (at most one byte per row after row
+    // 100), which is why the rows are about a kilobyte: the slack must stay well under one row.
+    long perRow = new DefaultSizeEstimator<InternalRow>().sizeEstimate(wideRow(0));
+    assertTrue(perRow > 1000, "expected a kilobyte-sized row, got " + perRow);
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
     VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN, map -> {
       factoryCalls.add(map);
@@ -221,10 +228,10 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
     }, 150 * perRow - 100);
 
     for (int i = 0; i < 149; i++) {
-      writer.writeRow(row(i));
+      writer.writeRow(wideRow(i));
     }
     assertTrue(factoryCalls.isEmpty(), "149 rows stay under a 150-row cap");
-    writer.writeRow(row(149));
+    writer.writeRow(wideRow(149));
     assertEquals(1, factoryCalls.size(), "the 150th row meets the cap");
     writer.close();
   }

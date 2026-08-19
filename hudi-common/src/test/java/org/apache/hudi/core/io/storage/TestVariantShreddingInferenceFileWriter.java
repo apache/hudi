@@ -453,7 +453,11 @@ public class TestVariantShreddingInferenceFileWriter {
     // Same-shaped records estimate the same size, so a cap of 150 records' worth materializes on
     // exactly the 150th write, after passing through the periodic re-estimation at record 100
     // (the small slack absorbs the moving average's floating-point rounding).
-    long perRecord = new DefaultSizeEstimator<HoodieRecord>().sizeEstimate(newRecord("r000"));
+    // Kilobyte-sized records keep the slack well under one record (the average truncates at most
+    // a byte per record after the re-estimation).
+    String padding = new String(new char[1024]).replace('\0', 'x');
+    long perRecord = new DefaultSizeEstimator<HoodieRecord>().sizeEstimate(newRecord("r000" + padding));
+    assertTrue(perRecord > 1000, "expected a kilobyte-sized record, got " + perRecord);
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
     VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
         map -> {
@@ -462,10 +466,10 @@ public class TestVariantShreddingInferenceFileWriter {
         }, 150 * perRecord - 100);
 
     for (int i = 0; i < 149; i++) {
-      writer.write("r" + i, newRecord(String.format("r%03d", i)), RECORD_SCHEMA, PROPS);
+      writer.write("r" + i, newRecord(String.format("r%03d", i) + padding), RECORD_SCHEMA, PROPS);
     }
     assertTrue(factoryCalls.isEmpty(), "149 records stay under a 150-record cap");
-    writer.write("r149", newRecord("r149"), RECORD_SCHEMA, PROPS);
+    writer.write("r149", newRecord("r149" + padding), RECORD_SCHEMA, PROPS);
     assertEquals(1, factoryCalls.size(), "the 150th record meets the cap");
     writer.close();
   }
