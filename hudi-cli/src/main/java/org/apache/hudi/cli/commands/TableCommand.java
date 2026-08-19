@@ -278,10 +278,13 @@ public class TableCommand {
       final boolean force) throws IOException {
     MetaFieldsMode targetMode;
     try {
-      // Routed through parse rather than valueOf: it is case-insensitive, trims, and lists the
-      // allowed values in its message, so an operator typing `commit_time_only` is not rejected and
-      // the error text matches what a bad value in hoodie.properties or a write option produces.
-      targetMode = MetaFieldsMode.parse(targetModeStr);
+      // Resolve through the public configuration API rather than valueOf: it is case-insensitive,
+      // trims, and lists the allowed values in its message, so an operator typing
+      // `commit_time_only` is not rejected and the error text matches what a bad value in
+      // hoodie.properties or a write option produces.
+      Properties targetProps = new Properties();
+      targetProps.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), targetModeStr);
+      targetMode = MetaFieldsMode.resolve(targetProps);
     } catch (IllegalArgumentException e) {
       throw new HoodieException("Invalid --target-mode: " + e.getMessage(), e);
     }

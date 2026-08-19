@@ -58,6 +58,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.CURR_VERSION;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -87,7 +88,8 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     tableName = tableName();
     tablePath = tablePath(tableName);
     metaPath = Paths.get(tablePath, METAFOLDER_NAME).toString();
-    archivePath = Paths.get(metaPath, HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue()).toString();
+    archivePath = Paths.get(metaPath, HoodieTableConfig.TIMELINE_PATH.defaultValue(),
+        HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue()).toString();
   }
 
   /**
@@ -137,11 +139,11 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
 
     // Test meta
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    assertEquals(archivePath, client.getArchivePath());
+    assertEquals(archivePath, client.getArchivePath().toString());
     assertEquals(tablePath, client.getBasePath().toString());
     assertEquals(metaPath, client.getMetaPath().toString());
     assertEquals(HoodieTableType.COPY_ON_WRITE, client.getTableType());
-    assertEquals(new Integer(1), client.getTimelineLayoutVersion().getVersion());
+    assertEquals(CURR_VERSION, client.getTimelineLayoutVersion().getVersion());
 
     HoodieTimeGeneratorConfig timeGeneratorConfig = HoodieCLI.timeGeneratorConfig;
     assertEquals(tablePath, timeGeneratorConfig.getBasePath());
@@ -252,7 +254,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
         + "           \"name\" : \"val\",\n"
         + "           \"type\" : [ \"null\", \"string\" ],\n"
         + "           \"default\" : null\n"
-        + "         }]};";
+        + "         }]}";
 
     generateData(schemaStr);
 
@@ -427,7 +429,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
   @Test
   public void testSetMetaFieldsModeAcceptsLowercaseTargetMode() {
     assertTrue(prepareTable());
-    // Routed through MetaFieldsMode.parse rather than valueOf, so an operator typing the mode in
+    // Routed through MetaFieldsMode.resolve rather than valueOf, so an operator typing the mode in
     // lower case is not rejected.
     Object result = shell.evaluate(() ->
         "table set-meta-fields-mode --target-mode commit_time_only");
