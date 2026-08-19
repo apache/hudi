@@ -24,7 +24,9 @@ import org.apache.hudi.utilities.config.UnstructuredFileSourceConfig;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -133,6 +135,23 @@ public class TestUnstructuredIngestHardening {
         assertThrows(IllegalArgumentException.class, () -> new UnstructuredFileRecordBuilder(props));
     assertTrue(thrown.getMessage().contains(UnstructuredFileSourceConfig.BLOB_INLINE_MAX_BYTES.key()),
         "the error must name the offending config key, got: " + thrown.getMessage());
+  }
+
+  /**
+   * The probe is what tells a user their table will have no text at all. hudi-utilities has
+   * the Tika parser modules on its test classpath, so here it must report that plain text
+   * extracts; a deployment running the shipped bundle alone gets false and the warning.
+   */
+  @Test
+  void testPlainTextProbeDetectsAvailableParserModules() {
+    assertTrue(TikaDocumentParser.canExtractPlainText(),
+        "tika-parsers-standard-package is on the test classpath, so the probe must find text");
+
+    ParseResult parsed = new TikaDocumentParser().parse(
+        new ByteArrayInputStream("hudi lakehouse probe text".getBytes(StandardCharsets.UTF_8)),
+        "probe.txt", 1000);
+    assertEquals(ParseResult.ParseStatus.SUCCESS, parsed.getStatus());
+    assertTrue(parsed.getText().contains("lakehouse"));
   }
 
   private static InputStream streamThrowing(Throwable failure) {
