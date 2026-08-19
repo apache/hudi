@@ -28,9 +28,7 @@ import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieSparkLanceWriter;
 import org.apache.hudi.storage.StoragePath;
@@ -86,26 +84,21 @@ public class HoodieInternalRowFileWriterFactory {
                                                                              Option<BloomFilter> bloomFilterOpt
   )
       throws IOException {
-    // resolveConfigSchema parses the avro schema string, so gate it behind the flag instead
-    // of paying that on every file creation when inference is disabled.
-    HoodieSchema configSchema =
-        writeConfig.getBooleanOrDefault(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED)
-            ? resolveConfigSchema(writeConfig) : null;
-    if (configSchema != null) {
-      List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumns(writeConfig, configSchema);
-      if (!inferableColumns.isEmpty()) {
-        Option<VariantShreddingSchemaInferrer> inferrer = VariantShreddingRuntime.lookupInferrer();
-        if (inferrer.isPresent()) {
-          // The row write support resolves its HoodieSchema from the config, so the deferred
-          // creation splices a copied config; the StructType argument stays original.
-          return new VariantShreddingInferenceInternalRowFileWriter(
-              inferableColumns,
-              VariantShreddingInferenceInternalRowFileWriter.resolveOrdinals(structType, inferableColumns),
-              inferrer.get(),
-              inferred -> createParquetInternalRowFileWriter(path, table, writeConfig,
-                  VariantSchemaUtils.applyInferredShreddingToConfig(writeConfig, inferred), structType, bloomFilterOpt),
-              writeConfig.getParquetMaxFileSize());
-        }
+    // The row write support resolves its HoodieSchema from the config (hoodie.write.schema /
+    // hoodie.avro.schema), so inferable columns are detected on that same config schema and the
+    // deferred creation splices a copied config; the StructType argument stays original.
+    // (getInferableVariantColumnsFromConfig only parses the schema once the flag gates pass.)
+    List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumnsFromConfig(writeConfig);
+    if (!inferableColumns.isEmpty()) {
+      Option<VariantShreddingSchemaInferrer> inferrer = VariantShreddingRuntime.lookupInferrer();
+      if (inferrer.isPresent()) {
+        return new VariantShreddingInferenceInternalRowFileWriter(
+            inferableColumns,
+            VariantShreddingInferenceInternalRowFileWriter.resolveOrdinals(structType, inferableColumns),
+            inferrer.get(),
+            inferred -> createParquetInternalRowFileWriter(path, table, writeConfig,
+                VariantSchemaUtils.applyInferredShreddingToConfig(writeConfig, inferred), structType, bloomFilterOpt),
+            writeConfig.getParquetMaxFileSize());
       }
     }
     return createParquetInternalRowFileWriter(path, table, writeConfig, writeConfig, structType, bloomFilterOpt);
@@ -133,18 +126,6 @@ public class HoodieInternalRowFileWriterFactory {
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled()
         ));
-  }
-
-  /**
-   * The schema the row write support will resolve from the config ({@code hoodie.write.schema}
-   * else {@code hoodie.avro.schema}), used to detect inferable variant columns; null when absent.
-   */
-  private static HoodieSchema resolveConfigSchema(HoodieWriteConfig writeConfig) {
-    String schemaString = writeConfig.getString(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE);
-    if (StringUtils.isNullOrEmpty(schemaString)) {
-      schemaString = writeConfig.getString(HoodieWriteConfig.AVRO_SCHEMA_STRING);
-    }
-    return StringUtils.isNullOrEmpty(schemaString) ? null : HoodieSchema.parse(schemaString);
   }
 
   private static HoodieInternalRowFileWriter newLanceInternalRowFileWriter(StoragePath path,

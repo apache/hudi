@@ -61,15 +61,18 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumns(config, schema);
+    // The row write support resolves its HoodieSchema from the config (hoodie.write.schema /
+    // hoodie.avro.schema), not the schema argument, so inferable columns are detected on that
+    // config schema (the one the splice below targets; detecting on the argument could buffer
+    // for a splice that never applies when the two differ) and the deferred creation splices a
+    // copied config. The schema argument stays original: it flows through the global schema
+    // cache (getCachedSchema), which must never see per-file spliced schemas, and its StructType
+    // is identical either way (the variant column remains VariantType); sample ordinals are
+    // resolved against it because that is the shape of the rows being written.
+    List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumnsFromConfig(config);
     if (!inferableColumns.isEmpty()) {
       Option<VariantShreddingSchemaInferrer> inferrer = VariantShreddingRuntime.lookupInferrer();
       if (inferrer.isPresent()) {
-        // The row write support resolves its HoodieSchema from the config (hoodie.write.schema /
-        // hoodie.avro.schema), not the schema argument, so the deferred creation splices a copied
-        // config. The schema argument stays original: it flows through the global schema cache
-        // (getCachedSchema), which must never see per-file spliced schemas, and its StructType is
-        // identical either way (the variant column remains VariantType).
         return new VariantShreddingInferenceFileWriter<>(
             inferableColumns,
             new SparkVariantSampleExtractor(inferableColumns, HoodieInternalRowUtils.getCachedSchema(schema)),
