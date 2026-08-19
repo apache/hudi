@@ -122,15 +122,17 @@ class TestHoodieAvroWriteSupportShredding {
    */
   @Test
   void shreddedVariantParquetGroupCarriesVariantLogicalType() {
-    // The forced DDL yielding a typed_value group is pinned by forcedShreddingDdlTreatsDecimalParensAsOneField;
-    // this test only cares about the annotation on that group.
     HoodieSchema effective = HoodieAvroWriteSupport.generateEffectiveSchema(
         singleVariantRecord(), forcedShreddingProps("a int, b string"));
     MessageType parquet = new AvroSchemaConverterWithTimestampNTZ().convert(effective);
     GroupType variantGroup = parquet.getType("v").asGroupType();
+    // The converter tags unshredded groups too, so pin that the group under test is the shredded
+    // one; on parquet < 1.16 (every CI lane today) this is the assertion that keeps the test honest.
+    assertTrue(variantGroup.containsField("typed_value"),
+        "expected a shredded typed_value group: " + variantGroup);
 
     LogicalTypeAnnotation annotation = variantGroup.getLogicalTypeAnnotation();
-    if (variantLogicalTypeSupported()) {
+    if (AvroSchemaConverterWithTimestampNTZ.isVariantLogicalTypeSupported()) {
       assertNotNull(annotation,
           "shredded variant group should carry the VARIANT logical type: " + variantGroup);
       assertTrue(annotation.toString().contains("VARIANT"),
@@ -155,12 +157,4 @@ class TestHoodieAvroWriteSupportShredding {
     return props;
   }
 
-  private static boolean variantLogicalTypeSupported() {
-    try {
-      LogicalTypeAnnotation.class.getMethod("variantType", byte.class);
-      return true;
-    } catch (NoSuchMethodException e) {
-      return false;
-    }
-  }
 }

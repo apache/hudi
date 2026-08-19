@@ -212,22 +212,18 @@ public class TestVariantSchemaUtils {
     // Non-variant-shaped records pass through; identity when nothing matches.
     assertEquals(HoodieSchemaType.STRING, stripped.getField("id").get().schema().getType());
     assertSame(stripped, VariantSchemaUtils.stripVariantShreddingByShape(stripped));
-  }
 
-  @Test
-  public void testStripVariantShreddingByShapeHasNoRequestedSideAnchor() {
-    // Documented limitation: the footer fallback has no table schema to anchor on, so unlike
-    // isShreddedVariantTarget the strip cannot tell a shredded variant from a plain user struct of
-    // the same shape and strips both. Pinned so that adding an anchor later is a deliberate change.
+    // Documented limitation: the footer fallback has no table schema to anchor on, so unlike the
+    // read path's isShreddedVariantTarget / alignShreddedVariants (which keep a same-shaped user
+    // struct intact, see TestHoodieSchemaCompatibility) this strip cannot tell a shredded variant
+    // from a plain user struct of the same shape and strips both. Pinned so that adding an anchor
+    // later is a deliberate change.
     HoodieSchema userStruct = HoodieSchemaTestUtils.createPlainShreddedVariantRecord("user_struct",
         HoodieSchema.create(HoodieSchemaType.LONG));
-    HoodieSchema schema = HoodieSchema.createRecord("rec", null, null,
-        Collections.singletonList(HoodieSchemaField.of("s", userStruct)));
-
-    HoodieSchema stripped = VariantSchemaUtils.stripVariantShreddingByShape(schema).getField("s").get().schema();
-    assertFalse(stripped.getField("typed_value").isPresent());
+    HoodieSchema userStructStripped = VariantSchemaUtils.stripVariantShreddingByShape(HoodieSchema.createRecord(
+        "rec", null, null, Collections.singletonList(HoodieSchemaField.of("s", userStruct)))).getField("s").get().schema();
     assertEquals(Arrays.asList("metadata", "value"),
-        stripped.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
+        userStructStripped.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
   }
 
   @Test
@@ -323,5 +319,21 @@ public class TestVariantSchemaUtils {
         .getField("v2").get().schema()).isShredded());
     // An absent key stays absent: the splice never invents a schema.
     assertNull(writeSpliced.getString("hoodie.avro.schema"));
+
+    // Detection reads hoodie.write.schema first while the splice writes every key that is set:
+    // when the two keys carry different schemas, each key is spliced on its own columns, so a key
+    // without the inferred column is left exactly as it was.
+    HoodieSchema noV2 = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("v1", HoodieSchema.createNullable(HoodieSchema.createVariant()))));
+    HoodieConfig differentKeys = new HoodieConfig();
+    differentKeys.setValue("hoodie.write.schema", schema.getAvroSchema().toString());
+    differentKeys.setValue("hoodie.avro.schema", noV2.getAvroSchema().toString());
+    HoodieConfig differentSpliced = VariantSchemaUtils.applyInferredShreddingToConfig(differentKeys, inferred);
+    assertTrue(((HoodieSchema.Variant) HoodieSchema.parse(differentSpliced.getString("hoodie.write.schema"))
+        .getField("v2").get().schema()).isShredded());
+    HoodieSchema avroSide = HoodieSchema.parse(differentSpliced.getString("hoodie.avro.schema"));
+    assertFalse(avroSide.getField("v2").isPresent());
+    assertFalse(((HoodieSchema.Variant) avroSide.getField("v1").get().schema().getNonNullType()).isShredded());
   }
 }

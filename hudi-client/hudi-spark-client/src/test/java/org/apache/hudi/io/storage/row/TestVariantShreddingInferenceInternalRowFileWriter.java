@@ -18,9 +18,11 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer;
 import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer.VariantSample;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter;
 
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -32,6 +34,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -113,8 +116,15 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
       int[] ordinals,
       VariantShreddingInferenceInternalRowFileWriter.InferredRowWriterFactory factory,
       long maxFileSize) {
-    return new VariantShreddingInferenceInternalRowFileWriter(
-        singletonList("v"), ordinals, (columns, samples) -> Collections.emptyMap(), factory, maxFileSize);
+    return writer(ordinals, (columns, samples) -> Collections.emptyMap(), factory, maxFileSize);
+  }
+
+  private static VariantShreddingInferenceInternalRowFileWriter writer(
+      int[] ordinals,
+      VariantShreddingSchemaInferrer inferrer,
+      VariantShreddingInferenceInternalRowFileWriter.InferredRowWriterFactory factory,
+      long maxFileSize) {
+    return new VariantShreddingInferenceInternalRowFileWriter(singletonList("v"), ordinals, inferrer, factory, maxFileSize);
   }
 
   @Test
@@ -137,8 +147,7 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
     List<List<VariantSample[]>> seenSamples = new ArrayList<>();
     RecordingRowWriter delegate = new RecordingRowWriter();
-    VariantShreddingInferenceInternalRowFileWriter writer = new VariantShreddingInferenceInternalRowFileWriter(
-        singletonList("v"), ABSENT_COLUMN,
+    VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN,
         (columns, samples) -> {
           seenSamples.add(new ArrayList<>(samples));
           return inferred;
@@ -182,6 +191,42 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
     writer.close();
     assertEquals(Arrays.asList("plain:1", "plain:2"), delegate.calls);
     assertFalse(delegate.rows.get(0) == reused);
+  }
+
+  @Test
+  public void testBufferedKeysAreCopies() throws IOException {
+    // Keys are reused by Spark iterators too: a key over a mutable buffer must be copied at write
+    // time, or the replay would carry whatever the buffer holds by then.
+    RecordingRowWriter delegate = new RecordingRowWriter();
+    VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN, map -> delegate, Long.MAX_VALUE);
+    byte[] keyBytes = "k1".getBytes(StandardCharsets.UTF_8);
+    UTF8String reusedKey = UTF8String.fromBytes(keyBytes);
+    writer.writeRow(reusedKey, row(1));
+    keyBytes[1] = '2';
+    writer.writeRow(reusedKey, row(2));
+    writer.close();
+    assertEquals(Arrays.asList("keyed:k1", "keyed:k2"), delegate.calls);
+  }
+
+  @Test
+  public void testByteCapAccumulatesThroughTheEstimator() throws IOException {
+    // Non-UnsafeRow rows of one shape estimate the same size, so a cap of 150 rows' worth
+    // materializes on exactly the 150th write, after the periodic re-estimation at row 100 (the
+    // small slack absorbs the moving average's floating-point rounding).
+    long perRow = new DefaultSizeEstimator<InternalRow>().sizeEstimate(row(0));
+    List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
+    VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN, map -> {
+      factoryCalls.add(map);
+      return new RecordingRowWriter();
+    }, 150 * perRow - 100);
+
+    for (int i = 0; i < 149; i++) {
+      writer.writeRow(row(i));
+    }
+    assertTrue(factoryCalls.isEmpty(), "149 rows stay under a 150-row cap");
+    writer.writeRow(row(149));
+    assertEquals(1, factoryCalls.size(), "the 150th row meets the cap");
+    writer.close();
   }
 
   @Test
@@ -239,8 +284,7 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
   public void testInferrerFailureDeclinesAndWritesUnshredded() throws IOException {
     RecordingRowWriter delegate = new RecordingRowWriter();
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
-    VariantShreddingInferenceInternalRowFileWriter writer = new VariantShreddingInferenceInternalRowFileWriter(
-        singletonList("v"), ABSENT_COLUMN,
+    VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN,
         (columns, samples) -> {
           throw new IllegalStateException("malformed variant");
         },
@@ -260,8 +304,7 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
   public void testZeroRowCloseStillCreatesDelegate() throws IOException {
     RecordingRowWriter delegate = new RecordingRowWriter();
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
-    VariantShreddingInferenceInternalRowFileWriter writer = new VariantShreddingInferenceInternalRowFileWriter(
-        singletonList("v"), ABSENT_COLUMN,
+    VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN,
         (columns, samples) -> {
           throw new AssertionError("inferrer must not be called with an empty buffer");
         },

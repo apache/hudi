@@ -19,6 +19,7 @@
 
 package org.apache.hudi.core.io.storage;
 
+import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer;
 import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer.VariantSample;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.generic.GenericData;
@@ -59,6 +61,14 @@ public class TestVariantShreddingInferenceFileWriter {
   private final VariantShreddingInferenceFileWriter.VariantSampleExtractor noopExtractor =
       (record, schema, props) -> new VariantSample[1];
 
+  /** A decorator over {@link #noopExtractor} for the column {@code v}. */
+  private VariantShreddingInferenceFileWriter<Object> writer(
+      VariantShreddingSchemaInferrer inferrer,
+      VariantShreddingInferenceFileWriter.InferredWriterFactory<Object> factory,
+      long maxFileSize) {
+    return new VariantShreddingInferenceFileWriter<>(singletonList("v"), noopExtractor, inferrer, factory, maxFileSize);
+  }
+
   private static HoodieRecord newRecord(String id) {
     GenericRecord data = new GenericData.Record(RECORD_SCHEMA.toAvroSchema());
     data.put("id", id);
@@ -72,7 +82,6 @@ public class TestVariantShreddingInferenceFileWriter {
     private final Map<String, String> footerMetadata = new LinkedHashMap<>();
     private final Object fileFormatMetadata = new Object();
     private int closeCount = 0;
-    private boolean closed = false;
     private IOException failWriteWith;
     private IOException failCloseWith;
 
@@ -113,7 +122,6 @@ public class TestVariantShreddingInferenceFileWriter {
     @Override
     public void close() throws IOException {
       closeCount++;
-      closed = true;
       failIfConfigured(failCloseWith);
     }
 
@@ -131,8 +139,7 @@ public class TestVariantShreddingInferenceFileWriter {
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
     RecordingWriter delegate = new RecordingWriter();
 
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> inferred,
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> inferred,
         map -> {
           factoryCalls.add(map);
           return delegate;
@@ -148,7 +155,6 @@ public class TestVariantShreddingInferenceFileWriter {
     assertEquals(1, factoryCalls.size());
     assertSame(inferred, factoryCalls.get(0));
     assertEquals(Arrays.asList("plain:r1", "meta:r2", "plain:r3"), delegate.calls);
-    assertTrue(delegate.closed);
     assertEquals(1, delegate.closeCount, "the delegate must be closed exactly once");
 
     // Idempotent close
@@ -161,8 +167,8 @@ public class TestVariantShreddingInferenceFileWriter {
   public void testRecordCountThresholdTriggersMaterialization() throws IOException {
     RecordingWriter delegate = new RecordingWriter();
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> {
+    VariantShreddingInferenceFileWriter<Object> writer = writer(
+        (columns, samples) -> {
           assertEquals(VariantShreddingInferenceFileWriter.MAX_BUFFERED_RECORDS, samples.size());
           return Collections.emptyMap();
         },
@@ -188,8 +194,7 @@ public class TestVariantShreddingInferenceFileWriter {
   @Test
   public void testByteCapTriggersEarlyMaterialization() throws IOException {
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
         map -> {
           factoryCalls.add(map);
           return new RecordingWriter();
@@ -205,8 +210,8 @@ public class TestVariantShreddingInferenceFileWriter {
   public void testInferrerFailureDeclinesAndWritesUnshredded() throws IOException {
     RecordingWriter delegate = new RecordingWriter();
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> {
+    VariantShreddingInferenceFileWriter<Object> writer = writer(
+        (columns, samples) -> {
           throw new IllegalStateException("malformed variant");
         },
         map -> {
@@ -220,15 +225,14 @@ public class TestVariantShreddingInferenceFileWriter {
     assertEquals(1, factoryCalls.size());
     assertTrue(factoryCalls.get(0).isEmpty());
     assertEquals(singletonList("plain:r1"), delegate.calls);
-    assertTrue(delegate.closed);
+    assertEquals(1, delegate.closeCount);
   }
 
   @Test
   public void testZeroRecordCloseStillCreatesDelegate() throws IOException {
     RecordingWriter delegate = new RecordingWriter();
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor,
+    VariantShreddingInferenceFileWriter<Object> writer = writer(
         (columns, samples) -> {
           throw new AssertionError("inferrer must not be called with an empty buffer");
         },
@@ -240,14 +244,13 @@ public class TestVariantShreddingInferenceFileWriter {
     writer.close();
     assertEquals(1, factoryCalls.size());
     assertTrue(factoryCalls.get(0).isEmpty());
-    assertTrue(delegate.closed);
+    assertEquals(1, delegate.closeCount);
   }
 
   @Test
   public void testWriterCreationFailureIsLatchedAndRethrown() throws IOException {
     IOException boom = new IOException("create failed");
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
         map -> {
           throw boom;
         }, Long.MAX_VALUE);
@@ -290,8 +293,7 @@ public class TestVariantShreddingInferenceFileWriter {
 
   @Test
   public void testCanWriteDelegatesAfterMaterialization() throws IOException {
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
         map -> new RecordingWriter() {
           @Override
           public boolean canWrite() {
@@ -308,8 +310,7 @@ public class TestVariantShreddingInferenceFileWriter {
   @Test
   public void testNullInferredMapTreatedAsDecline() throws IOException {
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> null,
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> null,
         map -> {
           factoryCalls.add(map);
           return new RecordingWriter();
@@ -326,8 +327,7 @@ public class TestVariantShreddingInferenceFileWriter {
   public void testWriteRowMaterializesAndPassesThrough() throws IOException {
     RecordingWriter delegate = new RecordingWriter();
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
         map -> {
           factoryCalls.add(map);
           return delegate;
@@ -348,8 +348,7 @@ public class TestVariantShreddingInferenceFileWriter {
   public void testFooterMetadataQueuedUntilMaterialization() throws IOException {
     RecordingWriter delegate = new RecordingWriter();
     // A 1-byte cap materializes on the first write, so the forwarded leg below runs on an open writer.
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
         map -> delegate, 1L);
 
     writer.addFooterMetadata(Collections.singletonMap("k1", "v1"));
@@ -367,8 +366,7 @@ public class TestVariantShreddingInferenceFileWriter {
   public void testGetFileFormatMetadataMaterializesAndDelegates() throws IOException {
     RecordingWriter delegate = new RecordingWriter();
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
         map -> {
           factoryCalls.add(map);
           return delegate;
@@ -392,8 +390,7 @@ public class TestVariantShreddingInferenceFileWriter {
     RecordingWriter delegate = new RecordingWriter();
     IOException boom = new IOException("replay failed");
     delegate.failWriteWith = boom;
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
         map -> delegate, Long.MAX_VALUE);
 
     writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS);
@@ -411,8 +408,7 @@ public class TestVariantShreddingInferenceFileWriter {
     RecordingWriter delegate = new RecordingWriter();
     IOException boom = new IOException("close failed");
     delegate.failCloseWith = boom;
-    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
-        singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
         map -> delegate, Long.MAX_VALUE);
 
     writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS);
@@ -450,5 +446,61 @@ public class TestVariantShreddingInferenceFileWriter {
 
     assertEquals(singletonList(prepared), sampled);
     assertEquals(singletonList(prepared), delegate.writtenRecords);
+  }
+
+  @Test
+  public void testByteCapAccumulatesThroughTheEstimator() throws IOException {
+    // Same-shaped records estimate the same size, so a cap of 150 records' worth materializes on
+    // exactly the 150th write, after passing through the periodic re-estimation at record 100
+    // (the small slack absorbs the moving average's floating-point rounding).
+    long perRecord = new DefaultSizeEstimator<HoodieRecord>().sizeEstimate(newRecord("r000"));
+    List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
+        map -> {
+          factoryCalls.add(map);
+          return new RecordingWriter();
+        }, 150 * perRecord - 100);
+
+    for (int i = 0; i < 149; i++) {
+      writer.write("r" + i, newRecord(String.format("r%03d", i)), RECORD_SCHEMA, PROPS);
+    }
+    assertTrue(factoryCalls.isEmpty(), "149 records stay under a 150-record cap");
+    writer.write("r149", newRecord("r149"), RECORD_SCHEMA, PROPS);
+    assertEquals(1, factoryCalls.size(), "the 150th record meets the cap");
+    writer.close();
+  }
+
+  @Test
+  public void testSharedSizeIsNotChargedPerRecord() throws IOException {
+    // An extractor reporting shared state (the schema graph every record references) has that
+    // much subtracted from each record's estimate: here all but 10 bytes, so a 25-byte cap holds
+    // two records and trips on the third instead of the first.
+    long perRecord = new DefaultSizeEstimator<HoodieRecord>().sizeEstimate(newRecord("r0"));
+    VariantShreddingInferenceFileWriter.VariantSampleExtractor sharing =
+        new VariantShreddingInferenceFileWriter.VariantSampleExtractor() {
+          @Override
+          public VariantSample[] extract(HoodieRecord record, HoodieSchema schema, Properties props) {
+            return new VariantSample[1];
+          }
+
+          @Override
+          public long sharedSizeEstimate(HoodieSchema schema) {
+            return perRecord - 10;
+          }
+        };
+    List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
+    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
+        singletonList("v"), sharing, (columns, samples) -> Collections.emptyMap(),
+        map -> {
+          factoryCalls.add(map);
+          return new RecordingWriter();
+        }, 25L);
+
+    writer.write("r0", newRecord("r0"), RECORD_SCHEMA, PROPS);
+    writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS);
+    assertTrue(factoryCalls.isEmpty(), "20 of 25 bytes: two records buffered");
+    writer.write("r2", newRecord("r2"), RECORD_SCHEMA, PROPS);
+    assertEquals(1, factoryCalls.size(), "30 of 25 bytes: materialize on the third");
+    writer.close();
   }
 }

@@ -127,12 +127,7 @@ public class TestAvroSchemaConverter {
    * {@code toString()} directly rather than through {@link #testAvroToParquetConversion}.
    */
   private static String variantAnnotation() {
-    try {
-      LogicalTypeAnnotation.class.getMethod("variantType", byte.class);
-      return " (VARIANT(1))";
-    } catch (NoSuchMethodException e) {
-      return "";
-    }
+    return AvroSchemaConverterWithTimestampNTZ.isVariantLogicalTypeSupported() ? " (VARIANT(1))" : "";
   }
 
   private void testVariantAvroToParquetConversion(HoodieSchema schema, String expectedMessageType) {
@@ -990,23 +985,6 @@ public class TestAvroSchemaConverter {
         throw e;
       }
     }
-  }
-
-  @Test
-  public void testVariantToParquetConversion() throws Exception {
-    // Create a record with a variant field
-    HoodieSchema variantSchema = HoodieSchema.createRecord("variantRecord", null, null, false,
-        Collections.singletonList(
-            HoodieSchemaField.of("v", HoodieSchema.createVariant(), null, null)));
-
-    String expectedParquet = "message variantRecord {\n"
-        + "  required group v" + variantAnnotation() + " {\n"
-        + "    required binary metadata;\n"
-        + "    required binary value;\n"
-        + "  }\n"
-        + "}\n";
-
-    testVariantAvroToParquetConversion(variantSchema, expectedParquet);
   }
 
   public static Configuration conf(String name, boolean value) {

@@ -3122,6 +3122,37 @@ public class TestHoodieSchema {
   }
 
   @Test
+  public void testGetPlainTypedValueSchemaNamesDistinguishConcatenatingPaths() {
+    // Two object paths whose segments concatenate to the same string ("x_y" > "z" and "x" > "y_z")
+    // must still yield distinct plain record names for the objects at their leaves; the path goes
+    // into the namespace, where the '.' separator keeps them apart (a flat "<path>_plain" name
+    // gave both leaves "typed_value_x_y_z_plain").
+    HoodieSchema leafObject = HoodieSchema.createRecord("typed_value", "leaf.ns", null,
+        Collections.singletonList(HoodieSchemaField.of("c",
+            HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("c_wrapper", HoodieSchema.create(HoodieSchemaType.LONG))))));
+    HoodieSchema underXy = HoodieSchema.createRecord("typed_value", "a.ns", null,
+        Collections.singletonList(HoodieSchemaField.of("z",
+            HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("z_wrapper", leafObject)))));
+    HoodieSchema underX = HoodieSchema.createRecord("typed_value", "b.ns", null,
+        Collections.singletonList(HoodieSchemaField.of("y_z",
+            HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("y_z_wrapper", leafObject)))));
+    HoodieSchema topTypedValue = HoodieSchema.createRecord("typed_value", "outer.ns", null, Arrays.asList(
+        HoodieSchemaField.of("x_y", HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("x_y_wrapper", underXy))),
+        HoodieSchemaField.of("x", HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("x_wrapper", underX)))));
+
+    HoodieSchema plain = HoodieSchema.createVariantShredded(topTypedValue).getPlainTypedValueSchema().get();
+    HoodieSchema zLeaf = plain.getField("x_y").get().schema().getNonNullType()
+        .getField("z").get().schema().getNonNullType();
+    HoodieSchema yzLeaf = plain.getField("x").get().schema().getNonNullType()
+        .getField("y_z").get().schema().getNonNullType();
+    assertEquals(HoodieSchemaType.RECORD, zLeaf.getType());
+    assertEquals(HoodieSchemaType.RECORD, yzLeaf.getType());
+    assertNotEquals(zLeaf.getFullName(), yzLeaf.getFullName());
+    // Serializing the whole tree (as the config-splice path does) must not alias the two leaves.
+    assertNotNull(plain.getAvroSchema().toString());
+  }
+
+  @Test
   public void testGetPlainTypedValueSchemaValueOnlyWrapper() {
     // A field whose wrapper has no typed_value stays untyped: plain form is VARIANT.
     HoodieSchema valueOnlyWrapper = HoodieSchema.createRecord("untyped_wrapper", null, null,

@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.GenericData;
@@ -46,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestAvroVariantSampleExtractor {
 
@@ -95,12 +97,13 @@ public class TestAvroVariantSampleExtractor {
     VariantSample[] fromArrays = extractor.extract(
         new HoodieAvroIndexedRecord(KEY, row(variant(rawValue, rawMetadata))), SCHEMA, PROPS);
     rawValue[0] = 9;
+    rawMetadata[0] = 9;
     assertArrayEquals(new byte[] {4}, fromArrays[0].getValue());
     assertArrayEquals(new byte[] {5}, fromArrays[0].getMetadata());
   }
 
   @Test
-  public void testAbsentColumnNullVariantAndMissingMemberYieldNullSamples() throws IOException {
+  public void testAbsentColumnNullVariantAndMalformedVariantYieldNullSamples() throws IOException {
     // "w" is not in the record's own schema (per-call schemas can differ from the writer schema);
     // it is skipped rather than failing the write.
     AvroVariantSampleExtractor extractor = new AvroVariantSampleExtractor(Arrays.asList("v", "w"));
@@ -110,10 +113,31 @@ public class TestAvroVariantSampleExtractor {
     assertNull(nullVariant[0]);
     assertNull(nullVariant[1]);
 
-    // A variant record without a value payload contributes nothing either.
-    VariantSample[] missingValue = extractor.extract(
+    // A variant record with a null value payload contributes nothing either...
+    VariantSample[] nullValue = extractor.extract(
         new HoodieAvroIndexedRecord(KEY, row(variant(null, ByteBuffer.wrap(new byte[] {1})))), SCHEMA, PROPS);
-    assertNull(missingValue[0]);
+    assertNull(nullValue[0]);
+
+    // ...nor does a variant-positioned record whose own schema lacks the value member, nor a
+    // non-record value in the variant position: malformed data declines sampling, never fails it.
+    GenericRecord metadataOnly = new GenericData.Record(HoodieSchema.createRecord("metadata_only", null, null,
+        singletonList(HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)))).toAvroSchema());
+    metadataOnly.put("metadata", ByteBuffer.wrap(new byte[] {1}));
+    assertNull(extractor.extract(new HoodieAvroIndexedRecord(KEY, row(metadataOnly)), SCHEMA, PROPS)[0]);
+    GenericRecord notARecord = new GenericData.Record(SCHEMA.toAvroSchema());
+    notARecord.put("id", "r1");
+    notARecord.put("v", "not a variant record");
+    assertNull(extractor.extract(new HoodieAvroIndexedRecord(KEY, notARecord), SCHEMA, PROPS)[0]);
+  }
+
+  @Test
+  public void testSharedSizeIsTheSchemaGraphMemoizedPerSchema() {
+    // The Avro Schema every materialized record references is charged once, not per record.
+    AvroVariantSampleExtractor extractor = new AvroVariantSampleExtractor(singletonList("v"));
+    long shared = extractor.sharedSizeEstimate(SCHEMA);
+    assertEquals(ObjectSizeCalculator.getObjectSize(SCHEMA.toAvroSchema()), shared);
+    assertTrue(shared > 0);
+    assertEquals(shared, extractor.sharedSizeEstimate(SCHEMA));
   }
 
   @Test

@@ -23,6 +23,7 @@ import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
 import org.apache.hudi.common.avro.VariantShreddingRuntime
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.HoodieSchemaException
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -1285,17 +1286,28 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         Seq(3, "{\"key\":\"value3\"}", 1000)
       )
 
-      // Split by file kind so the base-file leg cannot pass on the shredded log files alone.
-      val (baseFiles, logFiles) = listDataParquetFiles(tablePath)
-        .partition(f => FSUtils.isBaseFile(new HadoopPath(f).getName))
+      // Split by file kind so the base-file leg cannot pass on the shredded log files alone. Only
+      // native DATA logs (*.log.parquet) are checked on the log side: delete and CDC logs are
+      // parquet too but carry no variant column.
+      val parquetFiles = listDataParquetFiles(tablePath)
+      val baseFiles = parquetFiles.filter(f => FSUtils.isBaseFile(new HadoopPath(f).getName))
+      val nativeDataLogs = parquetFiles.filter(_.endsWith(".log.parquet"))
       assert(baseFiles.nonEmpty, "Compaction should have produced a base parquet file")
       assertInferredTypedValueIn(baseFiles, "v", "mor compacted base", present = Seq("key"))
-      // Native parquet log files are shredded per file by the same path (none exist only when
-      // the table version writes Avro log blocks, which stay unshredded by construction).
-      if (logFiles.nonEmpty) {
-        assertInferredTypedValueIn(logFiles, "v", "mor native log", present = Seq("key"))
-      }
+      // The default table version (10) writes native parquet log files, which are shredded per
+      // file by the same factory path. Asserted rather than guarded: a table version that wrote
+      // Avro log blocks here would silently turn this leg off.
+      assert(nativeDataLogs.nonEmpty, "table version 10 MOR tables write native parquet log files")
+      assertInferredTypedValueIn(nativeDataLogs, "v", "mor native log", present = Seq("key"))
     })
+  }
+
+  test("A shredding-schema inferrer is registered for every Spark version that ships one") {
+    // Spark 4.1+ ships InferVariantShreddingSchema. A Spark version module without a registered
+    // inferrer silently writes unshredded with the flag on and turns every inference test above
+    // into a skip, which is how the spark4.2 module first shipped without one. Deliberately not
+    // gated on the inferrer itself: this is the leg that notices the gap.
+    assertResult(HoodieSparkUtils.gteqSpark4_1)(VariantShreddingRuntime.lookupInferrer.isPresent)
   }
 
   test("Test Auto-Inferred Variant Shredding with Bulk Insert Row Writer") {
@@ -1331,6 +1343,9 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
           """.stripMargin)
       }
 
+      // Pin the path: the footer would look the same if the insert silently fell back to the
+      // record-based writers, which infer through a different decorator.
+      assertResult(WriteOperationType.BULK_INSERT)(getLastCommitMetadata(spark, tmp.getCanonicalPath).getOperationType)
       checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
         Seq(1, "{\"a\":1,\"b\":\"x\"}", 1000),
         Seq(2, "{\"a\":2,\"b\":\"y\"}", 1000)
@@ -1341,9 +1356,10 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   }
 
   /**
-   * Pins the on-disk layout of the `v` column across every base file. Without it a leg meant to
-   * exercise the shredded path can silently degenerate into the unshredded one, or the reverse,
-   * and the branch it was written for goes uncovered.
+   * Pins the on-disk layout of `column` (the single `v` column most tests declare, by default)
+   * across every data parquet file. Without it a leg meant to exercise the shredded path can
+   * silently degenerate into the unshredded one, or the reverse, and the branch it was written
+   * for goes uncovered.
    */
   private def assertVariantLayout(tablePath: String, shredded: Boolean, leg: String, column: String = "v"): Unit = {
     val files = listDataParquetFiles(tablePath)
@@ -1366,9 +1382,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
    */
   private def assertInferredTypedValue(tablePath: String, column: String, leg: String,
                                        present: Seq[String], absent: Seq[String] = Seq.empty): Unit = {
-    val files = listDataParquetFiles(tablePath)
-    assert(files.nonEmpty, s"[$leg] should have at least one data parquet file")
-    assertInferredTypedValueIn(files, column, leg, present, absent)
+    assertInferredTypedValueIn(listDataParquetFiles(tablePath), column, leg, present, absent)
   }
 
   /**

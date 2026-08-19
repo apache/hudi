@@ -73,6 +73,11 @@ public class TestHoodieAvroFileWriterFactoryVariantInference {
         HoodieSchemaField.of("v", HoodieSchema.createNullable(HoodieSchema.createVariant()))));
     HoodieConfig config = new HoodieConfig();
     config.setValue(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED, "true");
+    // Name a provider explicitly: the factory also declines when no shredding provider is available,
+    // and this module ships none, so without this the inferrer gate (the one under test) would never
+    // be reached. The class is never loaded: the write support only resolves it for shredded schemas.
+    config.setValue(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS,
+        "org.apache.hudi.variant.Spark4VariantShreddingProvider");
     // Inference applies as far as the config is concerned...
     assertEquals(singletonList("v"), VariantSchemaUtils.getInferableVariantColumns(config, schema));
 
