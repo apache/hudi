@@ -19,6 +19,12 @@
 package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
+
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -31,10 +37,15 @@ import java.util.Properties;
  * Storage related config.
  */
 @Immutable
+@Slf4j
 @ConfigClassProperty(name = "Storage Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that control aspects around writing, sizing, reading base and log files.")
 public class HoodieStorageConfig extends HoodieConfig {
+
+  private static final String GZIP_COMPRESSION_CODEC = "gzip";
+  private static final String ZSTD_COMPRESSION_CODEC = "zstd";
+  private static final String MIN_SPARK_VERSION_WITH_ZSTD_DEFAULT = "3.5.0";
 
   public static final ConfigProperty<String> PARQUET_MAX_FILE_SIZE = ConfigProperty
       .key("hoodie.parquet.max.file.size")
@@ -215,8 +226,12 @@ public class HoodieStorageConfig extends HoodieConfig {
   // Default compression codec for parquet
   public static final ConfigProperty<String> PARQUET_COMPRESSION_CODEC_NAME = ConfigProperty
       .key("hoodie.parquet.compression.codec")
-      .defaultValue("gzip")
-      .withDocumentation("Compression Codec for parquet files");
+      .defaultValue("zstd")
+      .withDocumentation("Compression codec for Parquet base and native log files. The storage-level default is "
+          + "ZSTD; Java and Spark versions older than 3.5 override it with GZIP. Spark 3.3 and 3.4 use a "
+          + "non-vectorized file-group reader affected by PARQUET-2160 when reading ZSTD files, which can leak "
+          + "off-heap memory; upgrade to Spark 3.5 or newer before using ZSTD. An explicitly configured value "
+          + "always takes precedence over the engine default.");
 
   public static final ConfigProperty<Boolean> PARQUET_DICTIONARY_ENABLED = ConfigProperty
       .key("hoodie.parquet.dictionary.enabled")
@@ -557,12 +572,47 @@ public class HoodieStorageConfig extends HoodieConfig {
     return getString(BLOOM_FILTER_TYPE);
   }
 
+  @VisibleForTesting
+  static String getDefaultParquetCompressionCodec(EngineType engineType) {
+    switch (engineType) {
+      case FLINK:
+        return ZSTD_COMPRESSION_CODEC;
+      case SPARK:
+        // Uses ZSTD as the default Parquet compression codec with Spark 3.5 and newer. Spark 3.3 and 3.4
+        // retain GZIP because the non-vectorized file-group reader uses parquet-java 1.12.x and can leak
+        // off-heap memory when reading ZSTD files https://issues.apache.org/jira/browse/PARQUET-2160.
+        Option<String> sparkVersion = getSparkRuntimeVersion();
+        return sparkVersion.isPresent()
+            && StringUtils.compareVersions(sparkVersion.get(), MIN_SPARK_VERSION_WITH_ZSTD_DEFAULT) >= 0
+            ? ZSTD_COMPRESSION_CODEC : GZIP_COMPRESSION_CODEC;
+      default:
+        // The Java client does not own its Parquet runtime: Parquet dependencies are provided by
+        // the embedding application, and older Parquet versions use Hadoop native ZSTD rather than
+        // zstd-jni. For example, the recommended Kafka HDFS Connector 10.1.0 uses Parquet 1.11.1,
+        // which risks leaking memory when reading ZSTD-compressed files. Keep GZIP as the portable
+        // default across supported Java deployments.
+        return GZIP_COMPRESSION_CODEC;
+    }
+  }
+
+  private static Option<String> getSparkRuntimeVersion() {
+    try {
+      Class<?> sparkPackageClass = Class.forName("org.apache.spark.package$");
+      Object sparkPackage = sparkPackageClass.getField("MODULE$").get(null);
+      return Option.of((String) sparkPackageClass.getMethod("SPARK_VERSION").invoke(sparkPackage));
+    } catch (ReflectiveOperationException | LinkageError e) {
+      log.debug("Unable to resolve the Spark runtime version; using the legacy Parquet compression codec default: {}", e.toString());
+      return Option.empty();
+    }
+  }
+
   public static HoodieStorageConfig.Builder newBuilder() {
     return new Builder();
   }
 
   public static class Builder {
 
+    private EngineType engineType = EngineType.SPARK;
     private final HoodieStorageConfig storageConfig = new HoodieStorageConfig();
 
     public Builder fromFile(File propertiesFile) throws IOException {
@@ -574,6 +624,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder fromProperties(Properties props) {
       this.storageConfig.getProps().putAll(props);
+      return this;
+    }
+
+    public Builder withEngineType(EngineType engineType) {
+      this.engineType = engineType;
       return this;
     }
 
@@ -788,6 +843,8 @@ public class HoodieStorageConfig extends HoodieConfig {
     }
 
     public HoodieStorageConfig build() {
+      storageConfig.setDefaultValue(
+          PARQUET_COMPRESSION_CODEC_NAME, getDefaultParquetCompressionCodec(engineType));
       storageConfig.setDefaults(HoodieStorageConfig.class.getName());
       return storageConfig;
     }

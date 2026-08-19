@@ -21,6 +21,7 @@ package org.apache.hudi;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -118,6 +120,30 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
   @BeforeEach
   public void setUp() {
     config = HoodieWriteConfig.newBuilder().withPath("/").build();
+  }
+
+  @Test
+  public void testSparkVersionSpecificParquetCompressionCodecDefault() {
+    String expectedCodec = StringUtils.compareVersions(HoodieSparkUtils.getSparkVersion(), "3.5.0") >= 0
+        ? "zstd" : "gzip";
+    assertEquals(expectedCodec, config.getParquetCompressionCodec());
+
+    HoodieWriteConfig configWithPartialStorage = HoodieWriteConfig.newBuilder()
+        .withPath("/")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build())
+        .build();
+    assertEquals(expectedCodec, configWithPartialStorage.getParquetCompressionCodec());
+
+    Map<String, String> params = new HashMap<>();
+    params.put(DataSourceWriteOptions.TABLE_TYPE().key(), DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL());
+    HoodieWriteConfig dataSourceConfig = DataSourceUtils.createHoodieConfig(
+        avroSchemaString, config.getBasePath(), "test", params);
+    assertEquals(expectedCodec, dataSourceConfig.getParquetCompressionCodec());
+
+    params.put(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME.key(), "snappy");
+    dataSourceConfig = DataSourceUtils.createHoodieConfig(
+        avroSchemaString, config.getBasePath(), "test", params);
+    assertEquals("snappy", dataSourceConfig.getParquetCompressionCodec());
   }
 
   @Test

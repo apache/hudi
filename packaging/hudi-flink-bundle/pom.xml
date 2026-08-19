@@ -105,6 +105,7 @@
                   <include>org.apache.parquet:parquet-format-structures</include>
                   <include>org.apache.parquet:parquet-encoding</include>
                   <include>org.apache.parquet:parquet-jackson</include>
+                  <include>com.github.luben:zstd-jni</include>
 
                   <include>org.apache.avro:avro</include>
                   <include>joda-time:joda-time</include>
