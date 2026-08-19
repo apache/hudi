@@ -303,12 +303,15 @@ public class HoodieStorageConfig extends HoodieConfig {
       .defaultValue(false)
       .sinceVersion("1.3.0")
       .withDocumentation("When enabled, the shredding schema for variant columns without an explicit "
-          + "typed_value in the write schema is inferred automatically per base file from a sample of "
+          + "typed_value in the write schema is inferred automatically per parquet file from a sample of "
           + "the records written to that file, mirroring Spark 4.1's "
           + "spark.sql.variant.inferShreddingSchema. Requires Spark 4.1+ on the writer classpath; "
-          + "writes stay unshredded otherwise (Spark 4.0, Flink, Java engines). Applies to parquet "
-          + "base files only: MOR log files are always written unshredded and shredding materializes "
-          + "at compaction time. Ignored when "
+          + "writes stay unshredded otherwise (Spark 4.0, Flink, Java engines). Applies to every "
+          + "parquet file the writer produces: base files and, on table version 10+, the native "
+          + "parquet log files of MOR tables (each infers its own schema); legacy Avro log blocks "
+          + "stay unshredded and shred at compaction. Up to 4096 records or 64MB are buffered per "
+          + "open file writer before the writer is created, on top of parquet's own row-group "
+          + "buffer, so size executor memory for concurrently open handles accordingly. Ignored when "
           + "hoodie.parquet.variant.force.shredding.schema.for.test is set or when write shredding "
           + "is disabled.");
 
