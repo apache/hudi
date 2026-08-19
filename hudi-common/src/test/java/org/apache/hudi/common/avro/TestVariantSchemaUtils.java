@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaTestUtils;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,6 +95,52 @@ public class TestVariantSchemaUtils {
   }
 
   @Test
+  public void testGetInferableVariantColumnsIsTopLevelOnly() {
+    // Inference never shreds a nested variant (struct member, array element, map value): the
+    // footer-fallback strip and the write supports' hooks share that top-level scope, so a
+    // recursive walk here would shred what nothing else accounts for.
+    HoodieSchema schema = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
+        HoodieSchemaField.of("top", HoodieSchema.createVariant()),
+        HoodieSchemaField.of("s", HoodieSchema.createRecord("s_rec", "ns", null,
+            Collections.singletonList(HoodieSchemaField.of("v", HoodieSchema.createVariant("s_variant", null, null))))),
+        HoodieSchemaField.of("a", HoodieSchema.createArray(HoodieSchema.createVariant("a_variant", null, null))),
+        HoodieSchemaField.of("m", HoodieSchema.createMap(HoodieSchema.createVariant("m_variant", null, null)))));
+
+    assertEquals(Collections.singletonList("top"),
+        VariantSchemaUtils.getInferableVariantColumns(inferenceEnabledConfig(), schema));
+  }
+
+  @Test
+  public void testGetInferableVariantColumnsFromConfig() {
+    HoodieSchema schema = schemaWithVariants();
+    String schemaString = schema.getAvroSchema().toString();
+    // Only the id column: distinguishes the write-schema key from the avro-schema key below.
+    String noVariantString = HoodieSchema.createRecord("rec", null, null,
+        Collections.singletonList(HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING))))
+        .getAvroSchema().toString();
+
+    // hoodie.write.schema takes precedence over hoodie.avro.schema, as in the row write support.
+    HoodieConfig writeOverridesAvro = inferenceEnabledConfig();
+    writeOverridesAvro.setValue("hoodie.avro.schema", schemaString);
+    writeOverridesAvro.setValue("hoodie.write.schema", noVariantString);
+    assertTrue(VariantSchemaUtils.getInferableVariantColumnsFromConfig(writeOverridesAvro).isEmpty());
+
+    HoodieConfig avroOnly = inferenceEnabledConfig();
+    avroOnly.setValue("hoodie.avro.schema", schemaString);
+    assertEquals(Arrays.asList("v1", "v2"), VariantSchemaUtils.getInferableVariantColumnsFromConfig(avroOnly));
+
+    HoodieConfig writeOnly = inferenceEnabledConfig();
+    writeOnly.setValue("hoodie.write.schema", schemaString);
+    assertEquals(Arrays.asList("v1", "v2"), VariantSchemaUtils.getInferableVariantColumnsFromConfig(writeOnly));
+
+    // No schema in the config, or inference disabled: nothing, and no schema parse attempted.
+    assertTrue(VariantSchemaUtils.getInferableVariantColumnsFromConfig(inferenceEnabledConfig()).isEmpty());
+    HoodieConfig disabled = new HoodieConfig();
+    disabled.setValue("hoodie.avro.schema", "not a schema");
+    assertTrue(VariantSchemaUtils.getInferableVariantColumnsFromConfig(disabled).isEmpty());
+  }
+
+  @Test
   public void testApplyInferredShredding() {
     HoodieSchema schema = schemaWithVariants();
     Map<String, HoodieSchema> inferred = new LinkedHashMap<>();
@@ -115,6 +163,12 @@ public class TestVariantSchemaUtils {
     // v2: untouched (declined)
     HoodieSchema v2 = spliced.getField("v2").get().schema();
     assertFalse(((HoodieSchema.Variant) v2).isShredded());
+
+    // Splicing the non-nullable v2 keeps it non-nullable: a bare shredded variant, no union.
+    HoodieSchema v2Spliced = VariantSchemaUtils.applyInferredShredding(schema,
+        Collections.singletonMap("v2", HoodieSchema.create(HoodieSchemaType.STRING))).getField("v2").get().schema();
+    assertFalse(v2Spliced.isNullable());
+    assertTrue(((HoodieSchema.Variant) v2Spliced).isShredded());
 
     // Pre-shredded column untouched
     HoodieSchema.Variant preShredded = (HoodieSchema.Variant) spliced.getField("shredded").get().schema();
@@ -142,11 +196,9 @@ public class TestVariantSchemaUtils {
   public void testStripVariantShreddingByShape() {
     // Footer-derived schemas lose the variant logical type: a shredded variant comes back as a
     // plain record {metadata: bytes, value: nullable bytes, typed_value}.
-    HoodieSchema footerVariant = HoodieSchema.createRecord("v", null, null, Arrays.asList(
-        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
-        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
-        HoodieSchemaField.of("typed_value", HoodieSchema.createRecord("tv", null, null,
-            Collections.singletonList(HoodieSchemaField.of("a", HoodieSchema.create(HoodieSchemaType.LONG)))))));
+    HoodieSchema footerVariant = HoodieSchemaTestUtils.createPlainShreddedVariantRecord("v",
+        HoodieSchema.createRecord("tv", null, null,
+            Collections.singletonList(HoodieSchemaField.of("a", HoodieSchema.create(HoodieSchemaType.LONG)))));
     HoodieSchema schema = HoodieSchema.createRecord("rec", null, null, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
         HoodieSchemaField.of("v", HoodieSchema.createNullable(footerVariant))));
@@ -160,6 +212,22 @@ public class TestVariantSchemaUtils {
     // Non-variant-shaped records pass through; identity when nothing matches.
     assertEquals(HoodieSchemaType.STRING, stripped.getField("id").get().schema().getType());
     assertSame(stripped, VariantSchemaUtils.stripVariantShreddingByShape(stripped));
+  }
+
+  @Test
+  public void testStripVariantShreddingByShapeHasNoRequestedSideAnchor() {
+    // Documented limitation: the footer fallback has no table schema to anchor on, so unlike
+    // isShreddedVariantTarget the strip cannot tell a shredded variant from a plain user struct of
+    // the same shape and strips both. Pinned so that adding an anchor later is a deliberate change.
+    HoodieSchema userStruct = HoodieSchemaTestUtils.createPlainShreddedVariantRecord("user_struct",
+        HoodieSchema.create(HoodieSchemaType.LONG));
+    HoodieSchema schema = HoodieSchema.createRecord("rec", null, null,
+        Collections.singletonList(HoodieSchemaField.of("s", userStruct)));
+
+    HoodieSchema stripped = VariantSchemaUtils.stripVariantShreddingByShape(schema).getField("s").get().schema();
+    assertFalse(stripped.getField("typed_value").isPresent());
+    assertEquals(Arrays.asList("metadata", "value"),
+        stripped.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
   }
 
   @Test
@@ -198,5 +266,62 @@ public class TestVariantSchemaUtils {
 
     // Identity when there is nothing to splice.
     assertSame(config, VariantSchemaUtils.applyInferredShreddingToConfig(config, Collections.emptyMap()));
+  }
+
+  @Test
+  public void testApplyInferredShreddingToConfigKeepsSameNamedVariantColumnsApart() {
+    // Variant columns commonly share one record type (the default name "variant"), which Avro
+    // serializes as a name reference after the first occurrence. Splicing one column's record
+    // under that shared name used to alias every other variant column to the shredded definition
+    // once the schema was re-parsed from the config (and two inferred columns could not coexist).
+    HoodieSchema schema = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("a", HoodieSchema.createVariant()),
+        HoodieSchemaField.of("b", HoodieSchema.createVariant())));
+    HoodieConfig config = new HoodieConfig();
+    config.setValue("hoodie.avro.schema", schema.getAvroSchema().toString());
+
+    // One column inferred, the sibling declined: the sibling must come back unshredded.
+    HoodieSchema oneSpliced = HoodieSchema.parse(VariantSchemaUtils.applyInferredShreddingToConfig(config,
+        Collections.singletonMap("a", HoodieSchema.create(HoodieSchemaType.LONG))).getString("hoodie.avro.schema"));
+    assertTrue(((HoodieSchema.Variant) oneSpliced.getField("a").get().schema()).isShredded());
+    assertFalse(((HoodieSchema.Variant) oneSpliced.getField("b").get().schema()).isShredded());
+
+    // Both inferred with different typed_values: each column keeps its own.
+    Map<String, HoodieSchema> both = new LinkedHashMap<>();
+    both.put("a", HoodieSchema.create(HoodieSchemaType.LONG));
+    both.put("b", HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema bothSpliced = HoodieSchema.parse(
+        VariantSchemaUtils.applyInferredShreddingToConfig(config, both).getString("hoodie.avro.schema"));
+    HoodieSchema.Variant a = (HoodieSchema.Variant) bothSpliced.getField("a").get().schema();
+    HoodieSchema.Variant b = (HoodieSchema.Variant) bothSpliced.getField("b").get().schema();
+    assertEquals(HoodieSchemaType.LONG, a.getTypedValueField().get().getNonNullType().getType());
+    assertEquals(HoodieSchemaType.STRING, b.getTypedValueField().get().getNonNullType().getType());
+    assertNotEquals(a.getFullName(), b.getFullName());
+  }
+
+  @Test
+  public void testApplyInferredShreddingToConfigSplicesEverySchemaKey() {
+    // The row write support resolves hoodie.write.schema first and falls back to
+    // hoodie.avro.schema, so whichever of the two is set (or both) must carry the splice.
+    HoodieSchema schema = schemaWithVariants();
+    Map<String, HoodieSchema> inferred = Collections.singletonMap("v2", HoodieSchema.create(HoodieSchemaType.STRING));
+
+    HoodieConfig bothKeys = new HoodieConfig();
+    bothKeys.setValue("hoodie.write.schema", schema.getAvroSchema().toString());
+    bothKeys.setValue("hoodie.avro.schema", schema.getAvroSchema().toString());
+    HoodieConfig bothSpliced = VariantSchemaUtils.applyInferredShreddingToConfig(bothKeys, inferred);
+    for (String key : Arrays.asList("hoodie.write.schema", "hoodie.avro.schema")) {
+      HoodieSchema.Variant v2 = (HoodieSchema.Variant) HoodieSchema.parse(bothSpliced.getString(key)).getField("v2").get().schema();
+      assertTrue(v2.isShredded(), key + " should carry the splice");
+    }
+
+    HoodieConfig writeOnly = new HoodieConfig();
+    writeOnly.setValue("hoodie.write.schema", schema.getAvroSchema().toString());
+    HoodieConfig writeSpliced = VariantSchemaUtils.applyInferredShreddingToConfig(writeOnly, inferred);
+    assertTrue(((HoodieSchema.Variant) HoodieSchema.parse(writeSpliced.getString("hoodie.write.schema"))
+        .getField("v2").get().schema()).isShredded());
+    // An absent key stays absent: the splice never invents a schema.
+    assertNull(writeSpliced.getString("hoodie.avro.schema"));
   }
 }

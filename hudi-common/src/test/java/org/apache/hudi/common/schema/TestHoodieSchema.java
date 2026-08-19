@@ -3088,23 +3088,16 @@ public class TestHoodieSchema {
     assertFalse(unshreddedVariant.getPlainTypedValueSchema().isPresent());
   }
 
-  /** A spec-form shredded-field wrapper: {value: nullable bytes, typed_value: nullable type}. */
-  private static HoodieSchema specWrapper(String name, HoodieSchema typedValue) {
-    return HoodieSchema.createRecord(name, null, null, Arrays.asList(
-        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
-        HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(typedValue))));
-  }
-
   @Test
   public void testGetPlainTypedValueSchemaNestedObjectRecursion() {
     // Depth-2 spec form: typed_value { a: wrapper{value, typed_value: { b: wrapper{value, typed_value: long} }} }.
     // Both record levels are named "typed_value", as the schema converters produce them.
     HoodieSchema innerObject = HoodieSchema.createRecord("typed_value", "inner.ns", null,
         Collections.singletonList(HoodieSchemaField.of("b",
-            HoodieSchema.createNullable(specWrapper("b_wrapper", HoodieSchema.create(HoodieSchemaType.LONG))))));
+            HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("b_wrapper", HoodieSchema.create(HoodieSchemaType.LONG))))));
     HoodieSchema topTypedValue = HoodieSchema.createRecord("typed_value", "outer.ns", null,
         Collections.singletonList(HoodieSchemaField.of("a",
-            HoodieSchema.createNullable(specWrapper("a_wrapper", innerObject)))));
+            HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("a_wrapper", innerObject)))));
     // Nullable typed_value, as produced by the inferred-shredding splice.
     HoodieSchema.Variant variant = HoodieSchema.createVariantShredded(HoodieSchema.createNullable(topTypedValue));
 
@@ -3135,7 +3128,7 @@ public class TestHoodieSchema {
         Collections.singletonList(
             HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES))));
     HoodieSchema topTypedValue = HoodieSchema.createRecord("typed_value", null, null, Arrays.asList(
-        HoodieSchemaField.of("a", HoodieSchema.createNullable(specWrapper("a_wrapper", HoodieSchema.create(HoodieSchemaType.INT)))),
+        HoodieSchemaField.of("a", HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("a_wrapper", HoodieSchema.create(HoodieSchemaType.INT)))),
         HoodieSchemaField.of("u", HoodieSchema.createNullable(valueOnlyWrapper))));
     HoodieSchema.Variant variant = HoodieSchema.createVariantShredded(topTypedValue);
 
@@ -3153,7 +3146,7 @@ public class TestHoodieSchema {
   public void testGetPlainTypedValueSchemaArrayTypedValue() {
     // Spec form for arrays: typed_value = array<wrapper{value, typed_value: string}>
     HoodieSchema arrayTypedValue = HoodieSchema.createArray(
-        specWrapper("element_wrapper", HoodieSchema.create(HoodieSchemaType.STRING)));
+        HoodieSchema.createShreddedFieldStruct("element_wrapper", HoodieSchema.create(HoodieSchemaType.STRING)));
     HoodieSchema.Variant variant = HoodieSchema.createVariantShredded(arrayTypedValue);
 
     HoodieSchema plain = variant.getPlainTypedValueSchema().get();

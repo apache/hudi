@@ -54,16 +54,8 @@ class TestHoodieAvroWriteSupportShredding {
    */
   @Test
   void forcedShreddingDdlTreatsDecimalParensAsOneField() {
-    HoodieSchema record = HoodieSchema.createRecord(
-        "test_record", "org.apache.hudi.test", null,
-        Collections.singletonList(HoodieSchemaField.of("v", HoodieSchema.createVariant())));
-
-    Properties props = new Properties();
-    props.setProperty(HoodieStorageConfig.PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.key(), "true");
-    props.setProperty(HoodieStorageConfig.PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST.key(),
-        "a int, b string, c decimal(15, 1)");
-
-    HoodieSchema effective = HoodieAvroWriteSupport.generateEffectiveSchema(record, props);
+    HoodieSchema effective = HoodieAvroWriteSupport.generateEffectiveSchema(
+        singleVariantRecord(), forcedShreddingProps("a int, b string, c decimal(15, 1)"));
 
     HoodieSchema variantField = effective.getFields().get(0).schema();
     HoodieSchema variant = variantField.isNullable() ? variantField.getNonNullType() : variantField;
@@ -130,20 +122,12 @@ class TestHoodieAvroWriteSupportShredding {
    */
   @Test
   void shreddedVariantParquetGroupCarriesVariantLogicalType() {
-    HoodieSchema record = HoodieSchema.createRecord(
-        "test_record", "org.apache.hudi.test", null,
-        Collections.singletonList(HoodieSchemaField.of("v", HoodieSchema.createVariant())));
-
-    Properties props = new Properties();
-    props.setProperty(HoodieStorageConfig.PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.key(), "true");
-    props.setProperty(HoodieStorageConfig.PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST.key(),
-        "a int, b string");
-
-    HoodieSchema effective = HoodieAvroWriteSupport.generateEffectiveSchema(record, props);
+    // The forced DDL yielding a typed_value group is pinned by forcedShreddingDdlTreatsDecimalParensAsOneField;
+    // this test only cares about the annotation on that group.
+    HoodieSchema effective = HoodieAvroWriteSupport.generateEffectiveSchema(
+        singleVariantRecord(), forcedShreddingProps("a int, b string"));
     MessageType parquet = new AvroSchemaConverterWithTimestampNTZ().convert(effective);
     GroupType variantGroup = parquet.getType("v").asGroupType();
-    assertTrue(variantGroup.containsField("typed_value"),
-        "expected a shredded typed_value group: " + variantGroup);
 
     LogicalTypeAnnotation annotation = variantGroup.getLogicalTypeAnnotation();
     if (variantLogicalTypeSupported()) {
@@ -154,6 +138,21 @@ class TestHoodieAvroWriteSupportShredding {
     } else {
       assertNull(annotation, "parquet < 1.16 has no VARIANT logical type: " + variantGroup);
     }
+  }
+
+  /** A record with one unshredded variant column {@code v}. */
+  private static HoodieSchema singleVariantRecord() {
+    return HoodieSchema.createRecord(
+        "test_record", "org.apache.hudi.test", null,
+        Collections.singletonList(HoodieSchemaField.of("v", HoodieSchema.createVariant())));
+  }
+
+  /** Write-support properties that shred every variant column with the given forced test DDL. */
+  private static Properties forcedShreddingProps(String forcedShreddingDdl) {
+    Properties props = new Properties();
+    props.setProperty(HoodieStorageConfig.PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.key(), "true");
+    props.setProperty(HoodieStorageConfig.PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST.key(), forcedShreddingDdl);
+    return props;
   }
 
   private static boolean variantLogicalTypeSupported() {

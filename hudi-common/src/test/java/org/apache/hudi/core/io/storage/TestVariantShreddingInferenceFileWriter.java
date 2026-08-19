@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -67,8 +68,13 @@ public class TestVariantShreddingInferenceFileWriter {
   /** Records every call so replay order and call kinds can be asserted. */
   private static class RecordingWriter implements HoodieFileWriter<Object> {
     private final List<String> calls = new ArrayList<>();
+    private final List<HoodieRecord> writtenRecords = new ArrayList<>();
     private final Map<String, String> footerMetadata = new LinkedHashMap<>();
+    private final Object fileFormatMetadata = new Object();
+    private int closeCount = 0;
     private boolean closed = false;
+    private IOException failWriteWith;
+    private IOException failCloseWith;
 
     @Override
     public boolean canWrite() {
@@ -76,13 +82,17 @@ public class TestVariantShreddingInferenceFileWriter {
     }
 
     @Override
-    public void writeWithMetadata(HoodieKey key, HoodieRecord record, HoodieSchema schema, Properties props) {
+    public void writeWithMetadata(HoodieKey key, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
+      failIfConfigured(failWriteWith);
       calls.add("meta:" + key.getRecordKey());
+      writtenRecords.add(record);
     }
 
     @Override
-    public void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) {
+    public void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
+      failIfConfigured(failWriteWith);
       calls.add("plain:" + recordKey);
+      writtenRecords.add(record);
     }
 
     @Override
@@ -96,8 +106,21 @@ public class TestVariantShreddingInferenceFileWriter {
     }
 
     @Override
-    public void close() {
+    public Object getFileFormatMetadata() {
+      return fileFormatMetadata;
+    }
+
+    @Override
+    public void close() throws IOException {
+      closeCount++;
       closed = true;
+      failIfConfigured(failCloseWith);
+    }
+
+    private static void failIfConfigured(IOException failure) throws IOException {
+      if (failure != null) {
+        throw failure;
+      }
     }
   }
 
@@ -126,10 +149,12 @@ public class TestVariantShreddingInferenceFileWriter {
     assertSame(inferred, factoryCalls.get(0));
     assertEquals(Arrays.asList("plain:r1", "meta:r2", "plain:r3"), delegate.calls);
     assertTrue(delegate.closed);
+    assertEquals(1, delegate.closeCount, "the delegate must be closed exactly once");
 
     // Idempotent close
     writer.close();
     assertEquals(1, factoryCalls.size());
+    assertEquals(1, delegate.closeCount);
   }
 
   @Test
@@ -322,18 +347,108 @@ public class TestVariantShreddingInferenceFileWriter {
   @Test
   public void testFooterMetadataQueuedUntilMaterialization() throws IOException {
     RecordingWriter delegate = new RecordingWriter();
+    // A 1-byte cap materializes on the first write, so the forwarded leg below runs on an open writer.
     VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
         singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
-        map -> delegate, Long.MAX_VALUE);
+        map -> delegate, 1L);
 
     writer.addFooterMetadata(Collections.singletonMap("k1", "v1"));
-    assertTrue(delegate.footerMetadata.isEmpty());
+    assertTrue(delegate.footerMetadata.isEmpty(), "queued until the real writer exists");
     writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS);
-    writer.close();
-    assertEquals("v1", delegate.footerMetadata.get("k1"));
+    assertEquals("v1", delegate.footerMetadata.get("k1"), "handed over at materialization");
 
     // After materialization the call is forwarded directly.
     writer.addFooterMetadata(Collections.singletonMap("k2", "v2"));
     assertEquals("v2", delegate.footerMetadata.get("k2"));
+    writer.close();
+  }
+
+  @Test
+  public void testGetFileFormatMetadataMaterializesAndDelegates() throws IOException {
+    RecordingWriter delegate = new RecordingWriter();
+    List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
+    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
+        singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
+        map -> {
+          factoryCalls.add(map);
+          return delegate;
+        }, Long.MAX_VALUE);
+
+    writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS);
+    assertTrue(factoryCalls.isEmpty());
+    // Footer metadata lives in the real writer, so asking for it creates that writer first.
+    assertSame(delegate.fileFormatMetadata, writer.getFileFormatMetadata());
+    assertEquals(1, factoryCalls.size());
+    assertEquals(singletonList("plain:r1"), delegate.calls);
+
+    // The native log-format writer asks after close() (column stats): still the delegate's answer.
+    writer.close();
+    assertSame(delegate.fileFormatMetadata, writer.getFileFormatMetadata());
+    assertEquals(1, factoryCalls.size());
+  }
+
+  @Test
+  public void testReplayFailureIsLatchedAndRethrown() throws IOException {
+    RecordingWriter delegate = new RecordingWriter();
+    IOException boom = new IOException("replay failed");
+    delegate.failWriteWith = boom;
+    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
+        singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
+        map -> delegate, Long.MAX_VALUE);
+
+    writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS);
+    IOException fromClose = assertThrows(IOException.class, writer::close);
+    assertSame(boom, fromClose);
+    // The delegate was created but never closed by the try path, so the catch path closes it once.
+    assertEquals(1, delegate.closeCount);
+    // Latched: the buffered record was never written, so every later call keeps failing.
+    assertSame(boom, assertThrows(IOException.class, () -> writer.write("r2", newRecord("r2"), RECORD_SCHEMA, PROPS)));
+    assertSame(boom, assertThrows(HoodieIOException.class, writer::getFileFormatMetadata).getCause());
+  }
+
+  @Test
+  public void testThrowingDelegateCloseSurfacesAndIsNotRetried() throws IOException {
+    RecordingWriter delegate = new RecordingWriter();
+    IOException boom = new IOException("close failed");
+    delegate.failCloseWith = boom;
+    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
+        singletonList("v"), noopExtractor, (columns, samples) -> Collections.emptyMap(),
+        map -> delegate, Long.MAX_VALUE);
+
+    writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS);
+    assertSame(boom, assertThrows(IOException.class, writer::close));
+    assertEquals(1, delegate.closeCount, "a throwing delegate.close() must surface, not be retried");
+  }
+
+  @Test
+  public void testPreparedRecordIsSampledAndReplayed() throws IOException {
+    // An extractor that materializes the record (the Avro one) hands the materialized form back
+    // via prepare(); the decorator samples that form and replays it, so the writer never redoes
+    // the materialization.
+    HoodieRecord prepared = newRecord("prepared");
+    List<HoodieRecord> sampled = new ArrayList<>();
+    VariantShreddingInferenceFileWriter.VariantSampleExtractor extractor =
+        new VariantShreddingInferenceFileWriter.VariantSampleExtractor() {
+          @Override
+          public VariantSample[] extract(HoodieRecord record, HoodieSchema schema, Properties props) {
+            sampled.add(record);
+            return new VariantSample[1];
+          }
+
+          @Override
+          public HoodieRecord prepare(HoodieRecord record, HoodieSchema schema, Properties props) {
+            return prepared;
+          }
+        };
+    RecordingWriter delegate = new RecordingWriter();
+    VariantShreddingInferenceFileWriter<Object> writer = new VariantShreddingInferenceFileWriter<>(
+        singletonList("v"), extractor, (columns, samples) -> Collections.emptyMap(),
+        map -> delegate, Long.MAX_VALUE);
+
+    writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS);
+    writer.close();
+
+    assertEquals(singletonList(prepared), sampled);
+    assertEquals(singletonList(prepared), delegate.writtenRecords);
   }
 }
