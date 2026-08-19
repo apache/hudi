@@ -345,6 +345,29 @@ public class TestMySqlDebeziumAvroPayload {
     assertEquals(newerSeq, newerSeq.preCombine(olderSeq, new Properties()));
   }
 
+  @Test
+  public void testMergeWithSeqOrderingFieldKeepsNumericCompare() throws IOException {
+    // Legacy config: ordering field = _event_seq (v8 tables / precombine convention). The "file.pos"
+    // segments must be compared numerically. Unpadded values discriminate: lexicographically
+    // "2.11" > "10.111", numerically file 2 < file 10 -> the stored record must win.
+    Properties props = orderingProps(DebeziumConstants.ADDED_SEQ_COL_NAME);
+    GenericRecord incoming = createRecord(2, Operation.UPDATE, "2.11");
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incoming, "2.11");
+    GenericRecord existing = createRecord(2, Operation.INSERT, "10.111");
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, avroSchema, props);
+    validateRecord(merged, 2, Operation.INSERT, "10.111");
+  }
+
+  @Test
+  public void testPreCombineWithSeqOrderingFieldKeepsNumericCompare() {
+    // Same carve-out on the dedup path: orderingVal carries seq strings when precombine = _event_seq.
+    // Numerically file 10 > file 9 -> newer wins; lexicographic "9.111" > "10.2" would invert it.
+    Schema schema = createSchemaWithOrderingField();
+    MySqlDebeziumAvroPayload olderSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.INSERT, "9.111", 99L), "9.111");
+    MySqlDebeziumAvroPayload newerSeq = new MySqlDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, "10.2", 99L), "10.2");
+    assertEquals(newerSeq, newerSeq.preCombine(olderSeq, orderingProps(DebeziumConstants.ADDED_SEQ_COL_NAME)));
+  }
+
   private Schema createMySqlNativeOrderingSchema() {
     return Schema.createRecord("test_mysql_native_ordering", null, "test_namespace", false, Arrays.asList(
         new Schema.Field(KEY_FIELD_NAME, Schema.create(Schema.Type.INT), "", 0),

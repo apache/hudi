@@ -127,7 +127,7 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
    * trimmed so stray whitespace in user config cannot silently change which field is compared. A
    * composite (multi-field) ordering is supported element-wise.
    */
-  private Option<String[]> getConfiguredOrderingFields(Properties properties) {
+  protected Option<String[]> getConfiguredOrderingFields(Properties properties) {
     String[] orderingFields = ConfigUtils.getOrderingFields(properties);
     if (orderingFields == null || orderingFields.length == 0
         || (orderingFields.length == 1 && orderingFields[0].trim().isEmpty())) {
