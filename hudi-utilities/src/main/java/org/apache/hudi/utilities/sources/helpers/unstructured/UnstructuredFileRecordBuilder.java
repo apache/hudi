@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Row;
@@ -84,10 +83,12 @@ public class UnstructuredFileRecordBuilder implements Serializable {
         getIntWithAltKeys(props, CHUNK_OVERLAP_CHARS));
   }
 
-  public Row buildRow(FileSystem fs, String pathStr) throws IOException {
+  public Row buildRow(FileSystem fs, UnstructuredFilePathSelector.FileEntry entry) throws IOException {
+    String pathStr = entry.path;
     Path path = new Path(pathStr);
-    FileStatus status = fs.getFileStatus(path);
-    long size = status.getLen();
+    // size and modification time come from the driver's listing; re-statting here would be a
+    // second full round of metadata requests against the object store
+    long size = entry.size;
     String fileName = path.getName();
 
     byte[] inlineBytes = null;
@@ -110,7 +111,7 @@ public class UnstructuredFileRecordBuilder implements Serializable {
         fileName,
         extensionOf(fileName),
         size,
-        status.getModificationTime(),
+        entry.modificationTime,
         blob,
         parseResult.getText(),
         // Spark's Row encoder requires a scala Map as the external type for MapType
