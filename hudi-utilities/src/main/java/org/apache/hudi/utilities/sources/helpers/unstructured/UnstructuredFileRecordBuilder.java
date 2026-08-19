@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.sources.helpers.unstructured;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -70,6 +71,11 @@ public class UnstructuredFileRecordBuilder implements Serializable {
   public UnstructuredFileRecordBuilder(TypedProperties props) {
     this.props = props;
     this.inlineMaxBytes = getLongWithAltKeys(props, BLOB_INLINE_MAX_BYTES);
+    // readFully narrows the size to int, so a threshold past Integer.MAX_VALUE would
+    // surface as a NegativeArraySizeException on the first oversized file instead
+    ValidationUtils.checkArgument(inlineMaxBytes >= 0 && inlineMaxBytes <= Integer.MAX_VALUE,
+        BLOB_INLINE_MAX_BYTES.key() + " must be between 0 and " + Integer.MAX_VALUE
+            + ", got " + inlineMaxBytes);
     this.parseEnabled = getBooleanWithAltKeys(props, PARSE_ENABLED);
     this.parseMaxBytes = getLongWithAltKeys(props, PARSE_MAX_BYTES);
     this.parseMaxTextChars = getIntWithAltKeys(props, PARSE_MAX_TEXT_CHARS);

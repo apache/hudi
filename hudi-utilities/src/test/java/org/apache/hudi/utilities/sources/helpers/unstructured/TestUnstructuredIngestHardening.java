@@ -19,6 +19,9 @@
 
 package org.apache.hudi.utilities.sources.helpers.unstructured;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.config.UnstructuredFileSourceConfig;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
@@ -30,8 +33,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Regression coverage for the hardening fixes on the unstructured ingest path: the bounded
- * chunk-boundary search preserves output, and an Error escapes the Tika parser. The cost
- * half of the chunker fix is a measurement, so it lives in the scale harness rather than here.
+ * chunk-boundary search preserves output, an Error escapes the Tika parser, and the inline
+ * blob threshold is validated. The cost half of the chunker fix is a measurement, so it
+ * lives in the scale harness rather than here.
  */
 public class TestUnstructuredIngestHardening {
 
@@ -112,6 +116,23 @@ public class TestUnstructuredIngestHardening {
     assertEquals(ParseResult.ParseStatus.FAILED, result.getStatus());
     assertTrue(result.getError().contains("synthetic failure"),
         "the parse error must be recorded on the row, got: " + result.getError());
+  }
+
+  /**
+   * readFully narrows the file size to an int, so a threshold above Integer.MAX_VALUE has
+   * to be rejected at construction. Before the fix it surfaced as a
+   * NegativeArraySizeException on the first oversized file, deep inside an executor.
+   */
+  @Test
+  void testInlineThresholdAboveIntMaxIsRejected() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(UnstructuredFileSourceConfig.BLOB_INLINE_MAX_BYTES.key(),
+        String.valueOf(Integer.MAX_VALUE + 1L));
+
+    IllegalArgumentException thrown =
+        assertThrows(IllegalArgumentException.class, () -> new UnstructuredFileRecordBuilder(props));
+    assertTrue(thrown.getMessage().contains(UnstructuredFileSourceConfig.BLOB_INLINE_MAX_BYTES.key()),
+        "the error must name the offending config key, got: " + thrown.getMessage());
   }
 
   private static InputStream streamThrowing(Throwable failure) {
