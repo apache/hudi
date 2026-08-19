@@ -35,16 +35,20 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
+import java.net.http.HttpClient;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Resource lifecycle on the embedding path: the worker pool is released however a task
- * ends. The leak is invisible in a successful run and only shows up as unbounded growth
- * on a long-lived executor, so it is asserted directly.
+ * ends, and HTTP clients are shared per JVM rather than created per Spark partition.
+ * Both leaks are invisible in a successful run and only show up as unbounded growth on a
+ * long-lived executor, so they are asserted directly.
  */
 public class TestEmbeddingResourceLifecycle extends UtilitiesTestBase {
 
@@ -87,6 +91,32 @@ public class TestEmbeddingResourceLifecycle extends UtilitiesTestBase {
     assertTrue(awaitPoolThreadsBackTo(before),
         "embedding worker threads leaked after the task failed: " + before
             + " before, " + livePoolThreads() + " still live after");
+  }
+
+  /**
+   * java.net.http.HttpClient is not Closeable before Java 21 and owns a selector thread
+   * plus a connection pool, so one per partition would accumulate on the executor with no
+   * release path. Providers sharing a connect timeout must share a client.
+   */
+  @Test
+  void testHttpClientsAreSharedAcrossProviderInstances() {
+    TypedProperties props = failingProps();
+
+    OpenAICompatibleEmbeddingProvider first = new OpenAICompatibleEmbeddingProvider();
+    first.init(props);
+    OpenAICompatibleEmbeddingProvider second = new OpenAICompatibleEmbeddingProvider();
+    second.init(props);
+
+    HttpClient firstClient = first.client();
+    assertSame(firstClient, first.client(), "repeated calls must reuse one client");
+    assertSame(firstClient, second.client(),
+        "a second provider with the same timeout must reuse the same client");
+
+    TypedProperties otherTimeout = failingProps();
+    otherTimeout.setProperty(EmbeddingTransformerConfig.TIMEOUT_MS.key(), "31000");
+    OpenAICompatibleEmbeddingProvider third = new OpenAICompatibleEmbeddingProvider();
+    third.init(otherTimeout);
+    assertNotSame(firstClient, third.client(), "a different connect timeout needs its own client");
   }
 
   private TypedProperties failingProps() {

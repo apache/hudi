@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.transform.embedding;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -35,6 +36,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -55,12 +57,16 @@ public class OpenAICompatibleEmbeddingProvider implements EmbeddingProvider {
   private static final int MAX_ATTEMPTS = 5;
   private static final long BASE_BACKOFF_MS = 1_000L;
 
+  // One client per JVM per connect timeout, shared by every partition on the executor.
+  // java.net.http.HttpClient is not Closeable before Java 21 and owns a selector thread
+  // plus a connection pool, so an instance-level client would accumulate one of each per
+  // Spark task with no way to release them.
+  private static final ConcurrentHashMap<Long, HttpClient> CLIENTS = new ConcurrentHashMap<>();
+
   private String endpointUrl;
   private String model;
   private String apiKeyEnv;
   private long timeoutMs;
-
-  private transient HttpClient client;
 
   @Override
   public void init(TypedProperties props) {
@@ -98,13 +104,12 @@ public class OpenAICompatibleEmbeddingProvider implements EmbeddingProvider {
     }
   }
 
-  // one client per provider instance, shared by concurrent batch requests: HttpClient is
-  // thread-safe and keep-alives/pools connections internally, so requests reuse sockets
-  private synchronized HttpClient client() {
-    if (client == null) {
-      client = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(timeoutMs)).build();
-    }
-    return client;
+  // HttpClient is thread-safe and keep-alives/pools connections internally, so sharing
+  // one across concurrent batch requests reuses sockets rather than contending
+  @VisibleForTesting
+  HttpClient client() {
+    return CLIENTS.computeIfAbsent(timeoutMs,
+        timeout -> HttpClient.newBuilder().connectTimeout(Duration.ofMillis(timeout)).build());
   }
 
   private HttpRequest buildRequest(List<String> texts) {
