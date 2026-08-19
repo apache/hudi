@@ -91,8 +91,7 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
   }
 
   test("Test slash separated date partitions written through the row writer") {
-    withSQLConf("hoodie.sql.bulk.insert.enable" -> "true", "hoodie.sql.insert.mode" -> "non-strict",
-      "hoodie.datasource.write.row.writer.enable" -> "true") {
+    withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
       withTempDir { tmp =>
         val targetTable = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
@@ -125,10 +124,10 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
              | (3, 'a3', 3000, null)
           """.stripMargin)
 
-        checkAnswer(s"select id, name, ts, _hoodie_partition_path from $targetTable order by id")(
-          Seq("1", "a1", 1000, "2026/01/05"),
-          Seq("2", "a2", 2000, "2026/01/06"),
-          Seq("3", "a3", 3000, "__HIVE_DEFAULT_PARTITION__")
+        checkAnswer(s"select id, name, ts, _hoodie_partition_path, datestr from $targetTable order by id")(
+          Seq("1", "a1", 1000, "2026/01/05", "2026-01-05"),
+          Seq("2", "a2", 2000, "2026/01/06", "2026-01-06"),
+          Seq("3", "a3", 3000, "__HIVE_DEFAULT_PARTITION__", null)
         )
 
         val metaClient = HoodieTableMetaClient.builder()
@@ -141,6 +140,59 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
           s"Partition path 2026/01/06 should exist")
         assertTrue(metaClient.getStorage.exists(new StoragePath(tablePath, "__HIVE_DEFAULT_PARTITION__")),
           s"Partition path __HIVE_DEFAULT_PARTITION__ should exist")
+      }
+    }
+  }
+
+  test("Test slash separated date partitions on a DATE typed partition column") {
+    Seq("insert", "bulk_insert").foreach { operation =>
+      withSQLConf("hoodie.spark.sql.insert.into.operation" -> operation) {
+        withTempDir { tmp =>
+          val targetTable = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
+
+          spark.sql(
+            s"""
+               |create table $targetTable (
+               |  `id` string,
+               |  `name` string,
+               |  `ts` bigint,
+               |  `datestr` DATE
+               |) using hudi
+               | tblproperties (
+               |  'primaryKey' = 'id',
+               |  'type' = 'COW',
+               |  'preCombineField'='ts',
+               |  'hoodie.datasource.write.slash.separated.date.partitioning'='true'
+               | )
+               | partitioned by (`datestr`)
+               | location '$tablePath'
+            """.stripMargin)
+
+          // NOTE: A DATE partition value is rendered through [[BuiltinKeyGenerator#convertToLogicalDataType]]
+          //       on the row-writer paths and [[HoodieAvroUtils#convertValueForAvroLogicalTypes]] on the
+          //       Avro one, so all three have to land in the very same directory
+          spark.sql(
+            s"""
+               | insert into $targetTable values
+               | (1, 'a1', 1000, date'2026-01-05'),
+               | (2, 'a2', 2000, date'2026-01-06')
+            """.stripMargin)
+
+          checkAnswer(s"select id, name, ts, _hoodie_partition_path, datestr from $targetTable order by id")(
+            Seq("1", "a1", 1000, "2026/01/05", java.sql.Date.valueOf("2026-01-05")),
+            Seq("2", "a2", 2000, "2026/01/06", java.sql.Date.valueOf("2026-01-06"))
+          )
+
+          val metaClient = HoodieTableMetaClient.builder()
+            .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+            .setBasePath(tablePath)
+            .build()
+          assertTrue(metaClient.getStorage.exists(new StoragePath(tablePath, "2026/01/05")),
+            s"Partition path 2026/01/05 should exist for operation $operation")
+          assertTrue(metaClient.getStorage.exists(new StoragePath(tablePath, "2026/01/06")),
+            s"Partition path 2026/01/06 should exist for operation $operation")
+        }
       }
     }
   }

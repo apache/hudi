@@ -29,6 +29,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Assertions;
@@ -242,5 +243,14 @@ class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
 
     Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
     Assertions.assertEquals(HUDI_DEFAULT_PARTITION_PATH, keyGenerator.getPartitionPath(row));
+
+    // NOTE: [[KeyGeneratorTestUtilities#getInternalRow]] builds a flat [[GenericInternalRow]], leaving
+    //       a nested value as a [[Row]], so the conversion has to go through Spark here. "nested_col.prop1"
+    //       is the only nullable field of the example schema, and a null on a non-nullable one is
+    //       rejected by [[org.apache.spark.sql.HoodieUnsafeRowUtils]] before the formatter is reached
+    InternalRow internalRow =
+        (InternalRow) CatalystTypeConverters.createToCatalystConverter(row.schema()).apply(row);
+    Assertions.assertEquals(UTF8String.fromString(HUDI_DEFAULT_PARTITION_PATH),
+        keyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 }

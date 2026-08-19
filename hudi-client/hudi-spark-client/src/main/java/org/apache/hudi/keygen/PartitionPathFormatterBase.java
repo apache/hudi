@@ -63,9 +63,15 @@ public abstract class PartitionPathFormatterBase<S> {
     // and Hive-style of partitioning is not required
     if (!useHiveStylePartitioning && partitionPathParts.length == 1) {
       S partitionPathPart = tryEncode(handleEmpty(toString(partitionPathParts[0])));
-      // NOTE: Slash-separated date partitioning only kicks in for a table partitioned by a single
-      //       (date) column, mirroring [[KeyGenUtils#getRecordPartitionPath]] used on the Avro
-      //       write-path: both write-paths have to derive the very same partition path for a record
+      // NOTE: For [[SimpleKeyGenerator]]/[[ComplexKeyGenerator]] slash-separated date partitioning
+      //       only kicks in for a table partitioned by a single (date) column, mirroring
+      //       [[KeyGenUtils#getPartitionPath]] (single field) and [[KeyGenUtils#getRecordPartitionPath]]
+      //       (which guards on a single field as well) driving the Avro write-path: both write-paths
+      //       have to derive the very same partition path for a record.
+      //       [[CustomKeyGenerator]] is not an exception to this: it builds one single-field
+      //       sub-key-generator per partition field, so every field takes this branch and a
+      //       multi-field table does get each of its values slash-separated -- on the Avro,
+      //       [[org.apache.spark.sql.Row]] and [[org.apache.spark.sql.catalyst.InternalRow]] paths alike
       return slashSeparatedDatePartitioning ? replaceDashesWithSlashes(partitionPathPart) : partitionPathPart;
     }
 

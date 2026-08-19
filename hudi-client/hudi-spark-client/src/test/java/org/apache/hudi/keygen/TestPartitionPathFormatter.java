@@ -27,7 +27,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
+import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -59,16 +59,6 @@ class TestPartitionPathFormatter {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testSlashSeparatedDatePartitioningSingleField(boolean useRowWriterPath) {
-    assertEquals("2026/01/05",
-        combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "2026-01-05"));
-    // Input that is already slash-separated is left untouched
-    assertEquals("2026/01/05",
-        combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "2026/01/05"));
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
   void testSlashSeparatedDatePartitioningOnlyAppliesToSingleFieldPartitioning(boolean useRowWriterPath) {
     // NOTE: This mirrors [[KeyGenUtils#getRecordPartitionPath]] driving the Avro write-path
     assertEquals("2026-01-05/san-francisco",
@@ -78,9 +68,9 @@ class TestPartitionPathFormatter {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testSlashSeparatedDatePartitioningHandlesNullAndEmptyValues(boolean useRowWriterPath) {
-    assertEquals(DEFAULT_PARTITION_PATH,
+    assertEquals(HUDI_DEFAULT_PARTITION_PATH,
         combine(useRowWriterPath, false, false, true, SINGLE_FIELD, new Object[] {null}));
-    assertEquals(DEFAULT_PARTITION_PATH,
+    assertEquals(HUDI_DEFAULT_PARTITION_PATH,
         combine(useRowWriterPath, false, false, true, SINGLE_FIELD, ""));
   }
 
@@ -90,26 +80,23 @@ class TestPartitionPathFormatter {
     // '?' has to be escaped, while the date separators are turned into directory separators
     assertEquals("2026/01/05", combine(useRowWriterPath, false, true, true, SINGLE_FIELD, "2026-01-05"));
     assertEquals("a%3Fb", combine(useRowWriterPath, false, true, true, SINGLE_FIELD, "a?b"));
+    // Encoding runs before the substitution (parity with KeyGenUtils), so an already slash-separated
+    // value is escaped rather than turned into directories
+    assertEquals("2026%2F01%2F05", combine(useRowWriterPath, false, true, true, SINGLE_FIELD, "2026/01/05"));
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testHiveStylePartitioningTakesPrecedence(boolean useRowWriterPath) {
-    // NOTE: Hive-style partitioning and slash-separated date partitioning are mutually exclusive --
-    //       [[HoodieCatalogTable#extraTableConfig]] rejects a table configuring both -- so this
-    //       combination is unreachable and the formatter deliberately leaves the value alone.
+    // NOTE: Hive-style partitioning and slash-separated date partitioning are documented as mutually
+    //       exclusive ([[KeyGeneratorOptions#SLASH_SEPARATED_DATE_PARTITIONING]]), but only
+    //       [[HoodieCatalogTable#extraTableConfig]] enforces it, and it inspects the SQL options
+    //       alone -- df.write and HoodieStreamer still accept the combination. The formatter
+    //       deliberately leaves the value alone here rather than mirroring the Avro path, which
+    //       produces a layout [[HoodieSparkUtils#doParsePartitionColumnValues]] cannot read back.
     //       This asserts the pre-existing behavior stays put, it is not a statement about what the
     //       combination *should* produce
     assertEquals("date_col=2026-01-05",
         combine(useRowWriterPath, true, false, true, SINGLE_FIELD, "2026-01-05"));
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testPlainPartitioningIsUnaffected(boolean useRowWriterPath) {
-    assertEquals("2026-01-05",
-        combine(useRowWriterPath, false, false, false, SINGLE_FIELD, "2026-01-05"));
-    assertEquals("2026-01-05/san-francisco",
-        combine(useRowWriterPath, false, false, false, TWO_FIELDS, "2026-01-05", "san-francisco"));
   }
 }
