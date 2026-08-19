@@ -310,13 +310,54 @@ Read more in depth about concurrency control in the [concurrency control concept
 `HoodieStreamer` uses checkpoints to keep track of what data has been read already so it can resume without needing to reprocess all data.
 When using a Kafka source, the checkpoint is the [Kafka Offset](https://cwiki.apache.org/confluence/display/KAFKA/Offset+Management) 
 When using a DFS source, the checkpoint is the 'last modified' timestamp of the latest file read.
-Checkpoints are saved in the .hoodie commit file as `streamer.checkpoint.key`.
+Checkpoints are saved in the .hoodie commit file. Completion time checkpoints are stored under
+`streamer.checkpoint.key.v2` and request time checkpoints under `deltastreamer.checkpoint.key`. Which one applies
+depends on the source, and for the Hudi incremental source also on the table version — see below.
 
 If you need to change the checkpoints for reprocessing or replaying data you can use the following options:
 
-- `--checkpoint` will set `streamer.checkpoint.reset_key` in the commit file to overwrite the current checkpoint. Format of checkpoint depends on [KAFKA_CHECKPOINT_TYPE](configurations.md#hoodiestreamersourcekafkacheckpointtype). By default (for type `string`), checkpoint should be provided as: `topicName,0:offset0,1:offset1,2:offset2`. For type `timestamp`, checkpoint should be provided as long value of desired timestamp. For type `single_offset`, we assume that topic consists of a single partition, so checkpoint should be provided as long value of desired offset.
+- `--checkpoint` will set the matching reset key in the commit file to overwrite the current checkpoint, either `streamer.checkpoint.reset.key.v2` or `deltastreamer.checkpoint.reset_key`. Format of checkpoint depends on [KAFKA_CHECKPOINT_TYPE](configurations.md#hoodiestreamersourcekafkacheckpointtype). By default (for type `string`), checkpoint should be provided as: `topicName,0:offset0,1:offset1,2:offset2`. For type `timestamp`, checkpoint should be provided as long value of desired timestamp. For type `single_offset`, we assume that topic consists of a single partition, so checkpoint should be provided as long value of desired offset.
 - `--source-limit` will set a maximum amount of data to read from the source. For DFS sources, this is max # of bytes read.
 For Kafka, this is the max # of events to read.
+
+#### Resetting the checkpoint for the Hudi incremental source
+
+When Hudi Streamer writes a target table at table version 8 or higher using `HoodieIncrSource`, it tracks progress by
+**completion time** instead of requested instant time, and records it in the commit metadata under
+`streamer.checkpoint.key.v2`. A bare timestamp would be ambiguous between the two, so `--checkpoint` has to state which
+one it is. This form is required from Hudi 1.0.1 onward; on 1.0.0 the prefixes are not recognised and `--checkpoint`
+takes a bare completion time.
+
+```shell
+# resume after the instant with this requested instant time
+--checkpoint resumeFromInstantRequestTime:20250110120000000
+
+# resume after the instant with this completion time
+--checkpoint resumeFromInstantCompletionTime:20250110120005000
+```
+
+Both forms resume from the same position. The request time form is translated internally to the completion time of that
+same instant, and ingestion proceeds in completion time order either way. Whichever value you pass is recorded verbatim
+under `streamer.checkpoint.reset.key.v2`.
+
+Passing a bare timestamp is rejected:
+
+```plain
+Illegal checkpoint key override `20250110120000000`. Valid format is either
+`resumeFromInstantRequestTime:<checkpoint value>` or `resumeFromInstantCompletionTime:<checkpoint value>`.
+```
+
+:::note
+`S3EventsHoodieIncrSource` and `GcsEventsHoodieIncrSource` are excluded from completion time checkpoints. They continue
+to take a plain `--checkpoint` value regardless of the table version.
+:::
+
+:::caution
+Do not pass `--checkpoint` or `--ignore-checkpoint` on the run that upgrades or downgrades the table version while using
+a Hudi incremental source. Rather than risk applying the override under the wrong checkpoint semantics, Hudi fails the
+job with a message asking you to drop those options. Let the upgrade finish first, then reset the checkpoint on a later
+run.
+:::
 
 ### Transformers
 
