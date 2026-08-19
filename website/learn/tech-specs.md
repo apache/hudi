@@ -463,6 +463,74 @@ The other fields can also be optional for writers depending on whether protectio
 ### Naming
 Indexes are stored under `.hoodie/metadata` storage path, with separate partitions of the  form `<index_type>_<index_name>`.
 
+### Index Definitions
+
+Every index carries a definition, serialized to JSON under the path in `hoodie.table.index.defs.path`
+(default `.hoodie/.index_defs/index.json`). All definitions for a table live in a single file, keyed by the
+metadata-table partition name:
+
+```json
+{
+  "indexDefinitions": {
+    "<partition_name>": {
+      "indexName": "<partition_name>",
+      "indexType": "<index_type>",
+      "indexFunction": "<index_function>",
+      "version": "<index_version>",
+      "sourceFields": ["<column_1>", "<column_2>"],
+      "indexOptions": {}
+    }
+  }
+}
+```
+
+*   `indexType` is one of `files`, `column_stats`, `partition_stats`, `bloom_filters`, `record_index`,
+    `secondary_index` or `expr_index`.
+*   `indexFunction` carries the transform for an expression index, and defaults to `identity` when an expression index
+    is created without an explicit function. For every other index type the field is not meaningful, and the value it
+    ends up with depends on the code path that registered the definition: empty when the built-in initialisation path
+    registers it, `identity` for a secondary index created through SQL `CREATE INDEX`, and the partition name for the
+    column-stats registration path. Use `indexType` to identify an index, not this field.
+*   `sourceFields` are the data-table columns the index is derived from. Metadata columns are permitted.
+*   `indexOptions` carries index-type-specific options, such as the expression-index function arguments.
+*   `version` is the storage-layout version of the index, described below.
+
+#### Index Versions
+
+`version` holds a `HoodieIndexVersion`, an index-level attribute introduced in table version 9. It allows the physical
+layout of an index to change without forcing a table-version upgrade or downgrade, so that readers and writers built
+against different releases agree on how to interpret a given index partition. Values take the form `V1`, `V2` and so on.
+
+A table version 8 definition may omit `version` entirely. From table version 9 onward a definition without a version is
+rejected as invalid, and secondary indexes on a table still at version 8 must be `V1`.
+
+Which version a newly created index gets depends on the index type and the table version:
+
+| Index type | Table version 8 | Table version 9 |
+|---|---|---|
+| `secondary_index` | `V1` | **`V2`** |
+| `column_stats` | `V1` | **`V2`** |
+| `partition_stats` | `V1` | **`V2`** |
+| `expr_index` | `V1` | **`V2`** |
+| `record_index` | `V1` | `V1` |
+| `bloom_filters` | `V1` | `V1` |
+| `files` | `V1` | `V1` |
+
+Only the layout changes; the logical contents of an index are unaffected by its version.
+
+#### Table Upgrade and Downgrade
+
+Index versions are reconciled when the table version changes.
+
+*   **Upgrading from table version 8 to 9** does not rebuild or drop any index. Definitions that carry no `version` are
+    stamped `V1`, so existing indexes keep their on-disk layout and continue to be read as `V1`. Indexes created after
+    the upgrade pick up the table version 9 defaults above.
+*   **Downgrading from table version 9 to 8** drops every metadata partition whose index version is newer than `V1`,
+    because table version 8 readers cannot interpret those layouts. Additionally, if a `V2` `column_stats` partition is
+    dropped, `partition_stats` is dropped with it, since partition stats may have no definition of their own to inspect.
+
+Dropped indexes have to be rebuilt after the downgrade.
+
 ### Bloom Filter Index
 
 The bloom filter index is used to accelerate 'presence checks' — validating whether a particular record is present in a file — which is used during merging, hash-based joins, point-lookup queries, etc.
@@ -506,7 +574,7 @@ Hudi supports near-standard [SQL syntax](/docs/sql_ddl#create-index) for creatin
 via Spark SQL, along with an asynchronous indexing table service that builds indexes without interrupting writers.
 
 A secondary index definition is serialized to JSON and saved at the path specified by `hoodie.table.index.defs.path`
-(see [Indexing Functions / Index Definitions](#indexing-functions) for the on-disk shape).
+(see [Index Definitions](#index-definitions) for the on-disk shape).
 The index itself is stored in the Hudi metadata table under the partition `secondary_index_<index_name>`. As with other
 metadata partitions the entry is a key/value, but the encoding is a little more nuanced.
 
@@ -532,12 +600,34 @@ For example, a secondary index on the `city` column, for a record with `city = C
 chennai$id1 -> {"isDeleted": false}
 ```
 
-Each secondary-index partition is tagged with a `HoodieIndexVersion` (stored on the corresponding `HoodieIndexDefinition`).
-Table version 8 constrained every secondary-index partition to `V1` (the encoding described above). Table version 9
-introduces `V2`, which shards records by the primary (record) key rather than by the secondary key. This makes secondary-index
-updates cheaper on writes with skewed secondary values, at the cost of secondary-key range scans having to visit more file
-groups. Readers pick their scan strategy from the per-partition `HoodieIndexVersion`. New tables created on version 9
-default to `V2` for secondary indexes; existing `V1` partitions from upgraded tables continue to be read with the V1 encoding.
+**Partitioning** decides which file group of the index partition an entry is written to. Hudi hashes a portion of the
+record key and takes that value modulo the number of file groups. Which portion is hashed is governed by the
+[`HoodieIndexVersion`](#index-versions) recorded on the index's `HoodieIndexDefinition`:
+
+*   **`V1`**, the default for table version 8, hashes the whole `<escaped-secondary-key>$<escaped-primary-key>` key.
+    Entries sharing a secondary value are distributed across all file groups, so resolving a secondary value to its
+    records reads every file group unless the primary key is already known.
+*   **`V2`**, the default for table version 9, hashes only the leading `<escaped-secondary-key>$` portion. All entries
+    sharing a secondary value therefore reside in one file group, and a lookup by secondary value alone reads that
+    single file group.
+
+The strategy is selected per partition from its recorded version, so `V1` partitions on an upgraded table continue to be
+read as `V1` while indexes created afterwards on the same table use `V2`.
+
+#### Limitations
+
+*   A secondary index may be defined on **exactly one column**. Attempting more fails with
+    `Only one column can be indexed for functional or secondary index.`
+*   The indexed column must resolve to one of the schema types `string`, `int`, `long`, `float`, `double`, `date`,
+    `time`, or a **UTC-adjusted** `timestamp`. In Spark SQL terms that covers `string`, `tinyint`, `smallint`, `int`,
+    `bigint`, `float`, `double`, `date` and `timestamp`, since `tinyint` and `smallint` are represented as `int`.
+    Rejected are `decimal`, `boolean`, `binary`, the nested types `array`, `map` and `struct`, and local
+    (non-UTC-adjusted) timestamps. A nullable column is supported when its non-null branch is a supported type.
+*   The **type of an indexed column cannot be changed** while the index exists. Both a SQL
+    `ALTER TABLE ... ALTER COLUMN ... TYPE ...` and a write that evolves the column through schema-on-read fail with
+    `Column '<column>' has secondary index '<index>' and cannot evolve from schema '<old>' to '<new>'`. Drop the index,
+    change the type, then rebuild the index. Changing only a column's nullability is permitted and does not require
+    dropping the index.
 
 ### Expression Indexes
 
