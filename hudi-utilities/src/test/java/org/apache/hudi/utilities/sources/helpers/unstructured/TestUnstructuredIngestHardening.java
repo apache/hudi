@@ -21,15 +21,17 @@ package org.apache.hudi.utilities.sources.helpers.unstructured;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.InputStream;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Regression coverage for the hardening fixes on the unstructured ingest path: the bounded
- * chunk-boundary search preserves output. The cost half of the fix is a measurement, so
- * it lives in the scale harness rather than here.
+ * chunk-boundary search preserves output, and an Error escapes the Tika parser. The cost
+ * half of the chunker fix is a measurement, so it lives in the scale harness rather than here.
  */
 public class TestUnstructuredIngestHardening {
 
@@ -92,4 +94,35 @@ public class TestUnstructuredIngestHardening {
     assertEquals(text.length(), last.charStart + last.text.length());
   }
 
+  /**
+   * A corrupt file must not fail the job, but an Error must not be swallowed: catching it
+   * would carry on with an undefined JVM state instead of failing the task so Spark can
+   * retry it elsewhere. Before the fix the parser caught Throwable and turned an
+   * OutOfMemoryError into an ordinary FAILED row.
+   */
+  @Test
+  void testParserPropagatesErrorButRecordsException() {
+    TikaDocumentParser parser = new TikaDocumentParser();
+
+    assertThrows(OutOfMemoryError.class,
+        () -> parser.parse(streamThrowing(new OutOfMemoryError("synthetic oom")), "doc.txt", 1000));
+
+    ParseResult result =
+        parser.parse(streamThrowing(new IllegalStateException("synthetic failure")), "doc.txt", 1000);
+    assertEquals(ParseResult.ParseStatus.FAILED, result.getStatus());
+    assertTrue(result.getError().contains("synthetic failure"),
+        "the parse error must be recorded on the row, got: " + result.getError());
+  }
+
+  private static InputStream streamThrowing(Throwable failure) {
+    return new InputStream() {
+      @Override
+      public int read() {
+        if (failure instanceof Error) {
+          throw (Error) failure;
+        }
+        throw (RuntimeException) failure;
+      }
+    };
+  }
 }
