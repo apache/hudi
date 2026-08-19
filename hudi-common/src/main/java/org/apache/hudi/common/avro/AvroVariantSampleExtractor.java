@@ -48,9 +48,23 @@ public class AvroVariantSampleExtractor implements VariantSampleExtractor {
     this.columnNames = columnNames;
   }
 
+  /**
+   * Materializes the record once up front: payload-backed records deserialize in
+   * {@code toIndexedRecord}, and the decorator replays what this returns, so the writer's own
+   * {@code toIndexedRecord} call at replay time is then a pass-through rather than a second
+   * deserialization (and a MERGE INTO expression payload evaluates once, not twice). Records
+   * without data (delete payloads) are buffered as they are.
+   */
+  @Override
+  public HoodieRecord prepare(HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
+    Option<HoodieAvroIndexedRecord> indexed = record.toIndexedRecord(schema, props);
+    return indexed.isPresent() ? indexed.get() : record;
+  }
+
   @Override
   public VariantSample[] extract(HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
     VariantSample[] out = new VariantSample[columnNames.size()];
+    // A pass-through for the HoodieAvroIndexedRecord that prepare() buffered.
     Option<HoodieAvroIndexedRecord> indexed = record.toIndexedRecord(schema, props);
     if (!indexed.isPresent()) {
       // Delete payload: no data to sample.

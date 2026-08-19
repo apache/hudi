@@ -51,9 +51,12 @@ import java.util.Properties;
  * {@code ParquetOutputWriterWithVariantShredding} (4096 rows / 64MB).
  *
  * <p>Buffered records are {@link HoodieRecord#copy() copied} because Spark iterators reuse row
- * instances. For record types where copy() is identity (Avro), replay additionally relies on
- * writer-level records being freshly allocated per record, which holds today; variant samples
- * are extracted eagerly into immutable byte arrays so inference itself never depends on it.
+ * instances, then handed to {@link VariantSampleExtractor#prepare} so an extractor that has to
+ * materialize the record to sample it (the Avro one deserializes payload-backed records) can
+ * return the materialized form for buffering and the replay does not repeat that work. For
+ * record types where copy() is identity (Avro), replay additionally relies on writer-level
+ * records being freshly allocated per record, which holds today; variant samples are extracted
+ * eagerly into immutable byte arrays so inference itself never depends on it.
  *
  * <p>Inference failures never fail the write: the file falls back to unshredded variants. This
  * deliberately diverges from Spark (which propagates inference failures) because a throwing
@@ -88,6 +91,15 @@ public class VariantShreddingInferenceFileWriter<T> implements HoodieFileWriter<
   @FunctionalInterface
   public interface VariantSampleExtractor {
     VariantSample[] extract(HoodieRecord record, HoodieSchema schema, Properties props) throws IOException;
+
+    /**
+     * Returns the record to buffer for replay; {@link #extract} is then called with that record.
+     * An extractor that must materialize the record to sample it returns the materialized form,
+     * so the replay does not redo the work. Defaults to the record itself.
+     */
+    default HoodieRecord prepare(HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
+      return record;
+    }
   }
 
   /** Creates the real file writer once the inferred typed_value schemas are known. */
@@ -210,15 +222,15 @@ public class VariantShreddingInferenceFileWriter<T> implements HoodieFileWriter<
   private void buffer(boolean withMetadata, HoodieKey key, String recordKey, HoodieRecord record,
                       HoodieSchema schema, Properties props) throws IOException {
     rethrowIfFailed();
-    HoodieRecord copied = record.copy();
+    HoodieRecord buffered = extractor.prepare(record.copy(), schema, props);
     // Eager extraction: immutable byte copies decouple inference from buffered-record identity,
     // and per-record extraction failures (corrupt binaries) surface exactly like an eager write.
-    samples.add(extractor.extract(copied, schema, props));
-    buffer.add(new BufferedWrite(withMetadata, key, recordKey, copied, schema, props));
+    samples.add(extractor.extract(buffered, schema, props));
+    buffer.add(new BufferedWrite(withMetadata, key, recordKey, buffered, schema, props));
     // Re-estimate periodically so a small first record cannot defeat the byte cap
     // (same moving-average idiom as ExternalSpillableMap).
     if (estimatedRecordSize == 0 || buffer.size() % SIZE_ESTIMATE_INTERVAL == 0) {
-      long sampled = Math.max(1, sizeEstimator.sizeEstimate(copied));
+      long sampled = Math.max(1, sizeEstimator.sizeEstimate(buffered));
       estimatedRecordSize = estimatedRecordSize == 0
           ? sampled : (long) (estimatedRecordSize * 0.9 + sampled * 0.1);
     }
