@@ -150,6 +150,32 @@ com.amazonaws:aws-java-sdk-dynamodb
 com.amazonaws:aws-java-sdk-core
 ```
 
+#### DynamoDB-Based Lock Provider with Implicit Partition Key
+
+```properties
+hoodie.write.lock.provider=org.apache.hudi.aws.transaction.lock.DynamoDBBasedImplicitPartitionKeyLockProvider
+```
+
+This variant behaves like the DynamoDB-based lock provider above, except in how it determines the DynamoDB partition
+key. Rather than reading `hoodie.write.lock.dynamodb.partition_key`, it derives the key from the table's base path: the
+64-bit xxHash of that path, with `s3a://` normalized to `s3://` so that writers reaching the same table through either
+scheme take the same lock.
+
+Prefer it when many tables share one lock table. The standard provider takes its partition key from
+`hoodie.write.lock.dynamodb.partition_key`, which you rarely set: when it is absent, Hudi fills it in from the table
+name. Two tables that happen to share a name, in different databases or under different paths, therefore resolve to the
+same lock and serialize writers that never touch the same data. Deriving the key from the base path keeps it unique per
+table with no per-table configuration.
+
+Everything else is unchanged: lock table, region, billing mode, endpoint URL, credentials and IAM permissions all work
+as described above, and `hoodie.write.lock.dynamodb.partition_key` is not read.
+
+:::note
+Because rows are keyed by a hash rather than the table name, entries in the DynamoDB lock table are not recognizable at
+a glance. The provider logs the base path together with its derived key when acquiring a lock, which is how to map one
+to the other.
+:::
+
 #### FileSystem based (not for production use)
 
 FileSystem based lock provider supports multiple writers cross different jobs/applications based on atomic create/delete operations of the underlying filesystem.
