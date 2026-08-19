@@ -100,7 +100,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     }
     HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(schema, config, storage.getConf(), false);
     HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
-        CompressionCodecName.fromConf(config.getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
+        CompressionCodecName.fromConf(config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
         config.getInt(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
         config.getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE),
         config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE), // todo: 1024*1024*1024

@@ -129,6 +129,20 @@ public class TestHoodieMetadataWriteUtils {
     assertEquals(hfileBloomFilterEnabled, metadataWriteConfig.hfileBloomFilterEnabled());
   }
 
+  @Test
+  public void testCreateMetadataWriteConfigPropagatesParquetCompressionCodec() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/base_path/")
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .parquetCompressionCodec("zstd")
+            .build())
+        .build();
+
+    HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+        writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
+    assertEquals("zstd", metadataWriteConfig.getParquetCompressionCodec());
+  }
+
   @ParameterizedTest
   @EnumSource(value = MetricsReporterType.class, names = {
       "GRAPHITE", "JMX", "PROMETHEUS_PUSHGATEWAY", "M3", "PROMETHEUS"

@@ -36,6 +36,7 @@ import org.apache.parquet.column.Encoding;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -43,6 +44,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -165,5 +167,10 @@ public class TestHoodieAvroParquetConfigInjector {
 
     // Verify the parquet file was created
     assertTrue(storage.exists(parquetPath));
+
+    try (ParquetFileReader reader = ParquetFileReader.open(new Configuration(), new Path(parquetPath.toUri()))) {
+      assertEquals(CompressionCodecName.ZSTD,
+          reader.getFooter().getBlocks().get(0).getColumns().get(0).getCodec());
+    }
   }
 }

@@ -139,6 +139,12 @@ Refer to the table below for building with different Spark and Scala versions.
 | `-Dspark4.2`              | hudi-spark4.2-bundle_2.13                    | For Spark 4.2 and Scala 2.13 (Needs java 17)     |
 | `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.5.x and Scala 2.12                   |
 
+Hudi uses ZSTD as the default Parquet compression codec with Spark 3.5 and newer. Spark 3.3 and 3.4
+retain GZIP because Hudi's non-vectorized file-group reader uses parquet-java 1.12.x and can leak
+off-heap memory when reading ZSTD files ([PARQUET-2160](https://issues.apache.org/jira/browse/PARQUET-2160)).
+Upgrade to Spark 3.5 or newer before using ZSTD. Keeping GZIP as the write default does not remove the
+risk when an older Spark runtime reads ZSTD files produced by another engine.
+
 Please note that only Spark-related bundles, i.e., `hudi-spark-bundle`, `hudi-utilities-bundle`,
 `hudi-utilities-slim-bundle`, can be built using `scala-2.13` profile. Hudi Flink bundle cannot be built
 using `scala-2.13` profile. To build these bundles on Scala 2.13, use the following command:

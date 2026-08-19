@@ -156,6 +156,43 @@ public class TestHoodieWriteConfig {
   }
 
   @Test
+  public void testDefaultParquetCompressionCodecAccordingToEngine() {
+    assertEquals("zstd", HoodieWriteConfig.getDefaultParquetCompressionCodec(EngineType.FLINK));
+    assertEquals("gzip", HoodieWriteConfig.getDefaultParquetCompressionCodec(EngineType.JAVA));
+    assertEquals("gzip", HoodieWriteConfig.getDefaultParquetCompressionCodec(EngineType.SPARK));
+
+    HoodieWriteConfig flinkConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.FLINK)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build())
+        .build();
+    assertEquals("zstd", flinkConfig.getParquetCompressionCodec());
+
+    HoodieWriteConfig javaConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.JAVA)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().build())
+        .build();
+    assertEquals("gzip", javaConfig.getParquetCompressionCodec());
+
+    javaConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.JAVA)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetCompressionCodec("zstd").build())
+        .build();
+    assertEquals("zstd", javaConfig.getParquetCompressionCodec());
+
+    Properties explicitCodec = new Properties();
+    explicitCodec.setProperty(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME.key(), "gzip");
+    flinkConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.FLINK)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().fromProperties(explicitCodec).build())
+        .build();
+    assertEquals("gzip", flinkConfig.getParquetCompressionCodec());
+  }
+
+  @Test
   public void testDefaultClusteringPlanStrategyClassAccordingToEngineType() {
     testEngineSpecificConfig(HoodieWriteConfig::getClusteringPlanStrategyClass,
         constructConfigMap(
