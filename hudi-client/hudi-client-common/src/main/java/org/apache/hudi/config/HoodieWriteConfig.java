@@ -294,6 +294,20 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "The user can turn this validation off by setting the config to false, after "
           + "evaluating the table and situation and doing table repair if needed.");
 
+  public static final ConfigProperty<Boolean> COMPLEX_KEYGEN_AUTO_DEDUCE_ENCODING = ConfigProperty
+      .key("hoodie.write.complex.keygen.auto.deduce.encoding")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.1")
+      .withDocumentation("This config only takes effect for a complex key generator with a single "
+          + "record key field. If set to true, the writer automatically deduces the encoding format "
+          + "for the complex key generator by reading existing data files from the latest completed "
+          + "commit and caches the result in `.hoodie/.aux/complex_key_encoding`. This avoids the "
+          + "need for users to manually configure `hoodie.write.complex.keygen.new.encoding` during "
+          + "upgrades. For a brand-new table with no data to deduce from, the new encoding "
+          + "(field_value) is used. If set to false, the writer falls back to the validation "
+          + "behavior controlled by `hoodie.write.complex.keygen.validation.enable`.");
+
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
       .key("hoodie.rollback.using.markers")
       .defaultValue("true")
@@ -1619,6 +1633,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean enableComplexKeygenValidation() {
     return getBoolean(ENABLE_COMPLEX_KEYGEN_VALIDATION);
+  }
+
+  public boolean autoDeduceComplexKeygenEncoding() {
+    return getBoolean(COMPLEX_KEYGEN_AUTO_DEDUCE_ENCODING);
   }
 
   public boolean shouldFailOnDuplicateDataFileDetection() {

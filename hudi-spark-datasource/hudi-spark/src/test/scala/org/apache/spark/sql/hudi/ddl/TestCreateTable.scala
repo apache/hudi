@@ -30,7 +30,6 @@ import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-import org.apache.hudi.testutils.Assertions
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.{SaveMode, SparkSession}
@@ -2027,16 +2026,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
                                               dmlToWrite: String,
                                               query: String)(
                                                expectedRowsBefore: Seq[Any]*)(expectedRowsAfter: Seq[Any]*): Unit = {
-    if (tableVersion < 9) {
-      // By default, the complex key generator validation is enabled and should throw exception on DML
-      Assertions.assertComplexKeyGeneratorValidationThrows(() => spark.sql(dmlToWrite), "ingestion")
-      // Query should still succeed
-      checkAnswer(query)(expectedRowsBefore: _*)
-      // Disabling the complex key generator validation should let write succeed
-      HoodieSparkSqlTestBase.disableComplexKeygenValidation(spark, tableName)
-    }
+    // With auto-deduction enabled by default, single-field ComplexKeyGenerator writes are
+    // self-healing across all table versions: the DML succeeds without manual encoding config.
+    checkAnswer(query)(expectedRowsBefore: _*)
     spark.sql(dmlToWrite)
-    HoodieSparkSqlTestBase.enableComplexKeygenValidation(spark, tableName)
     checkAnswer(query)(expectedRowsAfter: _*)
   }
 
