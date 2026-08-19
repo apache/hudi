@@ -41,6 +41,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -160,6 +161,18 @@ public class TestUnstructuredFilePathSelector {
 
     assertEquals(1, files.size());
     assertTrue(files.get(0).path.endsWith("new.txt"));
+  }
+
+  /**
+   * A non-positive cap selects nothing and leaves the checkpoint untouched, so every later sync
+   * would stall silently rather than fail. Reject it where the message can still name the config.
+   */
+  @Test
+  void testNonPositiveFileCapIsRejected() {
+    IllegalArgumentException thrown =
+        assertThrows(IllegalArgumentException.class, () -> selector(0));
+    assertTrue(thrown.getMessage().contains(UnstructuredFileSourceConfig.MAX_FILES_PER_BATCH.key()),
+        "the error must name the offending config key, got: " + thrown.getMessage());
   }
 
   /** The byte budget still applies, but a single oversized file must not stall the sync forever. */

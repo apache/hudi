@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.sources.helpers.unstructured;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -79,6 +80,10 @@ public class UnstructuredFilePathSelector implements Serializable {
   public UnstructuredFilePathSelector(TypedProperties props, Configuration hadoopConf) {
     this.rootPath = getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH);
     this.maxFilesPerBatch = getIntWithAltKeys(props, MAX_FILES_PER_BATCH);
+    // a non-positive cap would select nothing, leave the checkpoint untouched, and stall every
+    // subsequent sync without ever failing
+    ValidationUtils.checkArgument(maxFilesPerBatch > 0,
+        MAX_FILES_PER_BATCH.key() + " must be positive, got " + maxFilesPerBatch);
     this.hadoopConf = hadoopConf;
   }
 
