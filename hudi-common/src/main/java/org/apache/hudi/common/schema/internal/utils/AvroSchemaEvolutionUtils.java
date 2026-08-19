@@ -302,17 +302,18 @@ public class AvroSchemaEvolutionUtils {
    * {@code target} one. Source is considered to be new incoming schema, while target could refer to prev table schema.
    * For example,
    * if colA in source is non-nullable, but is nullable in target, output schema will have colA as nullable.
-   * if "hoodie.datasource.write.new.columns.nullable" is set to true and if colB is not present in source, but
-   * is present in target, output schema will have colB as nullable.
+   * if null backfill is enabled and colB is present in source, but not in target, output schema will have colB as nullable.
    * if colC has different data type in source schema compared to target schema and if its promotable, (say source is int,
    * and target is long and since int can be promoted to long), colC will be long data type in output schema.
    *
    *
    * @param sourceSchema source schema that needs reconciliation
    * @param targetSchema target schema that source schema will be reconciled against
+   * @param makeNewColumnsNullable whether fields newly introduced by the source schema should be made nullable
    * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
    */
-  public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema, HoodieSchema targetSchema, boolean shouldReorderColumns) {
+  public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema, HoodieSchema targetSchema,
+                                                          boolean shouldReorderColumns, boolean makeNewColumnsNullable) {
     if (targetSchema.isSchemaNull() || targetSchema.getFields().isEmpty()) {
       return sourceSchema;
     }
@@ -332,7 +333,8 @@ public class AvroSchemaEvolutionUtils {
     List<String> typeUpdateColsInSource = new ArrayList<>();
     colNamesSourceSchema.forEach(field -> {
       // handle columns that needs to be made nullable
-      if (colNamesTargetSchema.contains(field) && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
+      if ((makeNewColumnsNullable && !colNamesTargetSchema.contains(field))
+          || (colNamesTargetSchema.contains(field) && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional())) {
         nullableUpdateColsInSource.add(field);
       }
       // handle columns that needs type to be updated
@@ -363,5 +365,9 @@ public class AvroSchemaEvolutionUtils {
 
     return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName());
   }
-}
 
+  public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema, HoodieSchema targetSchema,
+                                                          boolean shouldReorderColumns) {
+    return reconcileSchemaRequirements(sourceSchema, targetSchema, shouldReorderColumns, false);
+  }
+}

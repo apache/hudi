@@ -22,7 +22,10 @@ package org.apache.hudi;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibilityChecker.SchemaIncompatibilityType;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
@@ -31,6 +34,7 @@ import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.EnumMap;
@@ -338,6 +342,60 @@ public class TestHoodieSchemaUtils {
         createPrimitiveField("field1", HoodieSchemaType.INT),
         createNullablePrimitiveField("field2", HoodieSchemaType.BOOLEAN));
     assertEquals(expected, deduceWriterSchema(incoming, table, setNullForMissingColumns));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "false,false,hoodie.write.set.null.for.missing.columns",
+      "true,false,hoodie.write.set.null.for.missing.columns",
+      "true,true,hoodie.write.set.null.for.missing.columns",
+      "true,false,hoodie.datasource.write.new.columns.nullable"
+  })
+  void testNullBackfillMakesNewColumnsNullable(boolean reconcileSchema, boolean useInternalSchema,
+                                               String nullBackfillConfigKey) {
+    HoodieSchema table = createRecord("newColumns",
+        createPrimitiveField("id", HoodieSchemaType.INT),
+        HoodieSchemaField.of("address", createRecord("address",
+            createPrimitiveField("city", HoodieSchemaType.STRING)), null, null));
+    HoodieSchema incoming = createRecord("newColumns",
+        createPrimitiveField("id", HoodieSchemaType.INT),
+        HoodieSchemaField.of("address", createRecord("address",
+            createPrimitiveField("city", HoodieSchemaType.STRING),
+            createPrimitiveField("country", HoodieSchemaType.STRING)), null, null),
+        createPrimitiveField("phone", HoodieSchemaType.STRING));
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieCommonConfig.RECONCILE_SCHEMA.key(), Boolean.toString(reconcileSchema));
+    properties.setProperty(nullBackfillConfigKey, "true");
+
+    HoodieSchema actual = HoodieSchemaUtils.deduceWriterSchema(
+        incoming,
+        Option.of(table),
+        useInternalSchema ? Option.of(InternalSchemaConverter.convert(table)) : Option.empty(),
+        properties);
+
+    assertFalse(actual.getNestedField("address.city").get().getRight().isNullable());
+    assertNewFieldIsNullableWithNullDefault(actual.getNestedField("address.country").get().getRight());
+    assertNewFieldIsNullableWithNullDefault(actual.getField("phone").get());
+  }
+
+  @Test
+  void testNewColumnsRemainRequiredWithoutNullBackfill() {
+    HoodieSchema table = createRecord("newColumns",
+        createPrimitiveField("id", HoodieSchemaType.INT));
+    HoodieSchema incoming = createRecord("newColumns",
+        createPrimitiveField("id", HoodieSchemaType.INT),
+        createPrimitiveField("phone", HoodieSchemaType.STRING));
+
+    Throwable throwable = assertThrows(SchemaBackwardsCompatibilityException.class,
+        () -> deduceWriterSchema(incoming, table, false));
+    assertTrue(throwable.getMessage().contains(
+        SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE.name()));
+  }
+
+  private static void assertNewFieldIsNullableWithNullDefault(HoodieSchemaField field) {
+    assertTrue(field.isNullable());
+    assertTrue(field.hasDefaultValue());
+    assertEquals(HoodieSchema.NULL_VALUE, field.defaultVal().get());
   }
 
   private static HoodieSchema deduceWriterSchema(HoodieSchema incomingSchema, HoodieSchema latestTableSchema) {
