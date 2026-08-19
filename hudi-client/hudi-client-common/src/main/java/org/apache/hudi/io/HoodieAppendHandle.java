@@ -423,6 +423,18 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
         metadataValues.setCommitTime(instantTime);
         metadataValues.setCommitSeqno(seqId);
       }
+    } else {
+      // Selective meta-field modes: populate only the opted-in columns. The other meta columns
+      // stay null in the log block. Under log compaction we skip commit time — same rationale as
+      // the ALL branch above (compaction preserves the commit time from the base record).
+      if (config.isCommitTimePopulated() && !this.isLogCompaction) {
+        metadataValues.setCommitTime(instantTime);
+      }
+      if (config.isFileNamePopulated()) {
+        // Match ALL-mode's convention here: log-record fileName is the fileId, not the physical
+        // log-file name. Base-file readers merging with log records rely on this.
+        metadataValues.setFileName(fileId);
+      }
     }
     if (config.allowOperationMetadataField()) {
       metadataValues.setOperation(hoodieRecord.getOperation().getName());

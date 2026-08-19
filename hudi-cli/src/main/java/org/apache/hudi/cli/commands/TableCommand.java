@@ -25,6 +25,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -53,6 +54,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -250,6 +252,82 @@ public class TableCommand {
 
     Set<String> deleteConfigs = Arrays.stream(csConfigs.split(",")).collect(Collectors.toSet());
     HoodieTableConfig.delete(client.getStorage(), client.getMetaPath(), deleteConfigs);
+
+    HoodieCLI.refreshTableMetadata();
+    Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
+    return renderOldNewProps(newProps, oldProps);
+  }
+
+  @ShellMethod(key = "table set-meta-fields-mode",
+      value = "Set hoodie.meta.fields.mode on an existing table. Refuses to change the mode on a "
+          + "table that already has commits unless --force is passed — the property is a "
+          + "physical-storage decision baked into files at write time, so mixing modes across "
+          + "commits produces mixed-mode files whose incremental / file-pruning semantics differ "
+          + "between old and new data. Use only on a table with zero commits, or with --force if "
+          + "you accept the data-correctness consequences.")
+  public String setMetaFieldsMode(
+      @ShellOption(value = {"--target-mode"},
+          help = "One of ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME")
+      final String targetModeStr,
+      @ShellOption(value = {"--force"}, defaultValue = "false",
+          help = "Override the safety check that prevents changing the mode on a table with commits. "
+              + "Existing files are not rewritten — new commits use the new mode, old commits keep "
+              + "the old mode. Incremental queries and file-name-based lookups will silently drop "
+              + "rows from commits written under the incompatible mode.")
+      final boolean force) throws IOException {
+    MetaFieldsMode targetMode;
+    try {
+      targetMode = MetaFieldsMode.valueOf(targetModeStr.trim());
+    } catch (IllegalArgumentException e) {
+      throw new HoodieException(String.format(
+          "Unsupported --target-mode '%s'. Allowed values: ALL, NONE, COMMIT_TIME_ONLY, "
+              + "FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME.", targetModeStr));
+    }
+
+    HoodieCLI.refreshTableMetadata();
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    Map<String, String> oldProps = client.getTableConfig().propsMap();
+    MetaFieldsMode currentMode = client.getTableConfig().getMetaFieldsMode();
+
+    if (currentMode == targetMode) {
+      return String.format("Table is already in %s mode; nothing to change.", targetMode);
+    }
+
+    // Safety check: refuse to change the mode on a table with commits unless --force.
+    int commitCount = client.getActiveTimeline().getCommitsTimeline().countInstants();
+    if (commitCount > 0 && !force) {
+      throw new HoodieException(String.format(
+          "Refusing to change hoodie.meta.fields.mode on a table that already has %d commit(s). "
+              + "Existing files were written under %s and will not be rewritten by this command; "
+              + "new commits would be written under %s, producing mixed-mode files whose "
+              + "incremental / file-pruning semantics differ between old and new data. "
+              + "Pass --force if you accept the consequences, or recreate the table to change "
+              + "the mode cleanly.",
+          commitCount, currentMode, targetMode));
+    }
+    if (commitCount > 0) {
+      log.warn("--force passed: changing hoodie.meta.fields.mode from {} to {} on a table with "
+              + "{} commit(s). Existing files retain the old layout; new commits use the new "
+              + "layout. Incremental queries and file-name lookups may silently drop rows written "
+              + "under the incompatible mode.",
+          currentMode, targetMode, commitCount);
+    }
+
+    // Persist. ALL and NONE are implicit (derived from populate.meta.fields); selective modes are
+    // written explicitly. We also toggle populate.meta.fields to keep both properties in sync so
+    // older readers that only understand the legacy boolean still degrade correctly.
+    Properties toUpdate = new Properties();
+    toUpdate.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+        String.valueOf(targetMode == MetaFieldsMode.ALL));
+    if (targetMode == MetaFieldsMode.ALL || targetMode == MetaFieldsMode.NONE) {
+      // Selective mode is being cleared; delete the property rather than write empty string.
+      HoodieTableConfig.delete(client.getStorage(), client.getMetaPath(),
+          Collections.singleton(HoodieTableConfig.META_FIELDS_MODE.key()));
+      HoodieTableConfig.update(client.getStorage(), client.getMetaPath(), toUpdate);
+    } else {
+      toUpdate.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), targetMode.name());
+      HoodieTableConfig.update(client.getStorage(), client.getMetaPath(), toUpdate);
+    }
 
     HoodieCLI.refreshTableMetadata();
     Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
