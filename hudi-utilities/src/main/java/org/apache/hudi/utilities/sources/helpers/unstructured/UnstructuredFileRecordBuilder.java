@@ -97,7 +97,13 @@ public class UnstructuredFileRecordBuilder implements Serializable {
       inlineBytes = readFully(fs, path, (int) size);
       blob = RowFactory.create(HoodieSchema.Blob.INLINE, inlineBytes, null);
     } else {
-      Row reference = RowFactory.create(pathStr, null, null, false);
+      // length records what was ingested, so a reference that no longer matches the file can be
+      // detected from metadata alone. A replaced file is normally re-ingested because its
+      // modification time moves, but a copy that preserves mtime would otherwise diverge silently,
+      // and a historical row's reference always resolves to the file's current bytes.
+      // Valid as an integrity signal only because the blob is the whole file; a future sub-range
+      // reference (offset + length) would need the check to account for that.
+      Row reference = RowFactory.create(pathStr, null, size, false);
       blob = RowFactory.create(HoodieSchema.Blob.OUT_OF_LINE, null, reference);
     }
 
