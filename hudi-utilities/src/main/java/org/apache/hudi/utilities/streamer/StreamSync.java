@@ -468,7 +468,7 @@ public class StreamSync implements Serializable, Closeable {
             HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.defaultValue()));
     return tableBuilder.setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
-        .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
+        .setArchiveLogFolder(props.getString(TIMELINE_HISTORY_PATH.key(), null))
         .setPayloadClassName(payloadClass)
         .setRecordMergeStrategyId(mergeStrategyId)
         .setRecordMergeMode(mergeMode)

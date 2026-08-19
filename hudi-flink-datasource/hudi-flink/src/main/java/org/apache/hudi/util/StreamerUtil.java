@@ -349,7 +349,7 @@ public class StreamerUtil {
           .setDatabaseName(conf.get(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD.key(), null))
           .setOrderingFields(OptionsResolver.getOrderingFieldsStr(conf))
-          .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
+          .setArchiveLogFolder(conf.getString(TIMELINE_HISTORY_PATH.key(), null))
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD.key(), null))
           .setKeyGeneratorClassProp(
               conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).orElse(SimpleAvroKeyGenerator.class.getName()))

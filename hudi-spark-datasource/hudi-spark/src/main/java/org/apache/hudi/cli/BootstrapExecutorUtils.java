@@ -238,8 +238,7 @@ public class BootstrapExecutorUtils implements Serializable {
         .setOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(props))
         .setPopulateMetaFields(props.getBoolean(
             POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue()))
-        .setArchiveLogFolder(props.getString(
-            TIMELINE_HISTORY_PATH.key(), TIMELINE_HISTORY_PATH.defaultValue()))
+        .setArchiveLogFolder(props.getString(TIMELINE_HISTORY_PATH.key(), null))
         .setPayloadClassName(cfg.payloadClass)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setTableFormat(props.getString(HoodieTableConfig.TABLE_FORMAT.key(),
