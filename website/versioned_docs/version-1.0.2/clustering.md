@@ -156,6 +156,34 @@ The available strategies are as follows:
    consistent bucket index and only applicable to the Spark engine. Set `hoodie.clustering.execution.strategy.class`
    to `org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy`.
 
+#### Row writer
+
+On Spark, the execution strategies above can rewrite the data either through the row writer, which operates on
+a `Dataset<Row>` and avoids converting records to Avro, or through the older RDD path. Which one runs is decided
+by a single config:
+
+| Config Name | Default | Description |
+|-------------|---------|-------------|
+| hoodie.datasource.write.row.writer.enable | true | When enabled, clustering rewrites file groups through the Spark row writer instead of the RDD path. |
+
+Two things about that default are worth knowing, because they are not the same statement:
+
+* The config itself defaults to `true`, and Spark datasource writes set it explicitly, so clustering triggered
+  from a datasource write takes the row-writer path unless you turn it off.
+* Clustering also applies its own fallback when the config is **absent** from the write config entirely — which
+  is what a standalone or async clustering job sees. That fallback has not been stable across releases: it was
+  `false` in 0.14.0, 0.15.0 and 0.15.1, and `true` in 0.14.1 and from 1.0.0 onwards. On this release it is
+  `true`, so a standalone clustering job also uses the row writer by default.
+
+To force the RDD path, set `hoodie.datasource.write.row.writer.enable=false` in the same properties the
+clustering job reads.
+
+On 1.0.x there is one further condition: even with the config enabled, Hudi falls back to the RDD path when the
+schema cannot be written through the row writer — specifically when `parquet.avro.write-old-list-structure` is
+`false` **and** the schema contains both a small-precision decimal field and a list or map field. It logs
+`Cannot use row writer due to presence of list or map with a small precision decimal field` when that happens.
+That check was removed in later releases.
+
 ### Update Strategy
 
 Currently, clustering can only be scheduled for tables/partitions not receiving any concurrent updates. By default,
