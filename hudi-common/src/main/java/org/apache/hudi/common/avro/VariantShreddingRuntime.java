@@ -41,9 +41,12 @@ public final class VariantShreddingRuntime {
 
   /**
    * Inferrer candidates, one per Spark version module that ships one (inference exists only in
-   * Spark 4.1+, SPARK-53659). A new Spark version module adds its implementation here.
+   * Spark 4.1+, SPARK-53659), most recent first. Each spark4.x profile builds only its own
+   * version module, so every version that should infer needs its own entry here: a runtime whose
+   * module is missing from this list silently writes unshredded.
    */
   private static final String[] INFERRER_CANDIDATES = {
+      "org.apache.hudi.variant.Spark42VariantShreddingSchemaInferrer",
       "org.apache.hudi.variant.Spark41VariantShreddingSchemaInferrer"
   };
 
@@ -71,13 +74,25 @@ public final class VariantShreddingRuntime {
     return INFERRER;
   }
 
+  /**
+   * Both probes run from this class's static initializer, so nothing here may let an error
+   * escape: an escaping {@link LinkageError} would fail {@code <clinit>} and every later use
+   * (including {@link #getProviderClass()} on the main Avro write path) would see a bare
+   * "Could not initialize class" with the original cause lost. Candidates are therefore loaded
+   * WITHOUT initialization (no static initializer of theirs runs here), and every
+   * {@link LinkageError} degrades to "absent".
+   */
   private static Option<String> probe(String[] candidates) {
     for (String candidate : candidates) {
       try {
-        Class.forName(candidate);
+        Class.forName(candidate, false, VariantShreddingRuntime.class.getClassLoader());
         return Option.of(candidate);
       } catch (ClassNotFoundException | NoClassDefFoundError e) {
         // Not on the classpath (or its engine dependencies are absent); try the next candidate.
+      } catch (LinkageError e) {
+        // Present but unloadable (e.g. class version mismatch): treat as absent rather than fail.
+        log.warn("Variant shredding provider {} found on the classpath but failed to load; "
+            + "treating it as absent.", candidate, e);
       }
     }
     return Option.empty();
@@ -86,14 +101,14 @@ public final class VariantShreddingRuntime {
   private static Option<VariantShreddingSchemaInferrer> loadInferrer() {
     for (String candidate : INFERRER_CANDIDATES) {
       try {
-        Class<?> clazz = Class.forName(candidate);
+        Class<?> clazz = Class.forName(candidate, false, VariantShreddingRuntime.class.getClassLoader());
         return Option.of((VariantShreddingSchemaInferrer) clazz.getDeclaredConstructor().newInstance());
       } catch (ClassNotFoundException | NoClassDefFoundError e) {
-        // Not on the classpath; try the next candidate.
-      } catch (Throwable t) {
+        // Not on the classpath (or its engine dependencies are absent); try the next candidate.
+      } catch (Exception | LinkageError e) {
         // Present but unusable (e.g. linkage failure against an older Spark): degrade to absent.
         log.warn("Variant shredding schema inferrer {} found on the classpath but failed to load; "
-            + "shredding schema inference is disabled.", candidate, t);
+            + "shredding schema inference is disabled.", candidate, e);
       }
     }
     return Option.empty();
