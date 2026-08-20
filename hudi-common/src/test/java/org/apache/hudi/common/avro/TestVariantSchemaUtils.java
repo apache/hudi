@@ -158,7 +158,9 @@ public class TestVariantSchemaUtils {
     HoodieSchema.Variant v1Variant = (HoodieSchema.Variant) v1.getNonNullType();
     assertTrue(v1Variant.isShredded());
     assertTrue(v1Variant.getTypedValueField().isPresent());
-    assertTrue(v1Variant.getTypedValueField().get().isNullable());
+    // The field is nullable on the wire; the accessor unwraps it to the value type.
+    assertTrue(v1Variant.getField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD).get().schema().isNullable());
+    assertEquals(HoodieSchemaType.RECORD, v1Variant.getTypedValueField().get().getType());
 
     // v2: untouched (declined)
     HoodieSchema v2 = spliced.getField("v2").get().schema();
