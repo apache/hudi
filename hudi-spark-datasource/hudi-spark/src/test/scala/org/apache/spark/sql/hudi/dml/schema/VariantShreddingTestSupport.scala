@@ -425,6 +425,26 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   protected def inferredOr(standIn: WriteLayout): WriteLayout =
     if (inferrerPresent) Inferred else standIn
 
+  /**
+   * Asserts that EXECUTING the query fails with a cause whose message contains `expected`.
+   * checkNestedExceptionContains only runs `spark.sql` (lazy), so it never sees execution-time
+   * failures like a per-file read guard; this collects.
+   */
+  protected def assertQueryFailsWith(sqlText: String, expected: String, leg: String): Unit = {
+    val failure = intercept[Throwable] {
+      spark.sql(sqlText).collect()
+    }
+    var cause: Throwable = failure
+    var found = false
+    while (cause != null && !found) {
+      if (cause.getMessage != null && cause.getMessage.contains(expected)) {
+        found = true
+      }
+      cause = cause.getCause
+    }
+    assert(found, s"[$leg] expected a failure containing '$expected', got: $failure")
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Table-service idioms
   // ---------------------------------------------------------------------------------------------
