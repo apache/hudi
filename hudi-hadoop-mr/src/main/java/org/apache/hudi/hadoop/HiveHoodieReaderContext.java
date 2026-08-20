@@ -67,6 +67,7 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.parquet.avro.AvroSchemaConverter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -156,20 +157,18 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // group carries typed_value would come back with silent nulls (the typed rows keep their
     // payload in typed_value, which the projection drops). Detection is shape-based on the
     // footer schema and anchored on the requested column being a variant, so plain user structs
-    // of the same shape are left alone. Top-level columns only, matching the writers' shredding
-    // scope. Columns not requested (e.g. count(*)) stay readable.
+    // of the same shape are left alone. toShreddedReadSchema recurses through structs, array
+    // elements and map values, matching the row writer, which shreds nested variants too.
+    // Columns not requested (e.g. count(*)) stay readable.
     if (isParquetOrOrc && requiredSchema.getType() == HoodieSchemaType.RECORD) {
-      for (HoodieSchemaField requestedField : requiredSchema.getFields()) {
-        fileSchema.getField(requestedField.name()).ifPresent(fileField -> {
-          if (VariantSchemaUtils.isShreddedVariantTarget(fileField.schema(), requestedField.schema())) {
-            throw new HoodieException(String.format(
-                "Column '%s' of %s is a shredded variant (typed_value present); the Hive reader "
-                    + "cannot reconstruct shredded variants. Read the table with Spark 4.1+, or "
-                    + "rewrite it unshredded (e.g. cluster with "
-                    + "hoodie.parquet.variant.write.shredding.enabled=false).",
-                requestedField.name(), filePath));
-          }
-        });
+      HoodieSchema shreddedReadSchema = VariantSchemaUtils.toShreddedReadSchema(requiredSchema, fileSchema);
+      if (shreddedReadSchema != requiredSchema) {
+        throw new HoodieException(String.format(
+            "Column(s) '%s' of %s hold a shredded variant (typed_value present); the Hive reader "
+                + "cannot reconstruct shredded variants. Read the table with Spark 4.1+, or "
+                + "rewrite it unshredded (e.g. cluster with "
+                + "hoodie.parquet.variant.write.shredding.enabled=false).",
+            shreddedVariantColumns(requiredSchema, shreddedReadSchema), filePath));
       }
     }
 
@@ -213,6 +212,23 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // Parquet reader compacted nested-column projection.
     return new CloseableMappingIterator<>(recordIterator,
         record -> HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(record, modifiedDataSchema, requiredSchema, Collections.emptyMap(), physicalMask));
+  }
+
+  /**
+   * Names the top-level columns whose subtree {@code toShreddedReadSchema} swapped, i.e. the
+   * requested columns that hold a shredded variant somewhere below them. Untouched columns keep
+   * their schema instance across the swap, so identity comparison is exact.
+   */
+  private static String shreddedVariantColumns(HoodieSchema requestedSchema, HoodieSchema shreddedReadSchema) {
+    List<HoodieSchemaField> before = requestedSchema.getFields();
+    List<HoodieSchemaField> after = shreddedReadSchema.getFields();
+    List<String> columns = new ArrayList<>();
+    for (int i = 0; i < before.size(); i++) {
+      if (before.get(i).schema() != after.get(i).schema()) {
+        columns.add(before.get(i).name());
+      }
+    }
+    return String.join(", ", columns);
   }
 
   @Override

@@ -167,16 +167,18 @@ public class ITTestVariantCrossEngineCompatibility {
       TableResult result = tableEnv.executeSql("SELECT id, v, ts FROM shredded_variant_table ORDER BY id");
       CollectionUtil.iteratorToList(result.collect());
     });
-    boolean mentionsVariant = false;
+    // Assert the guard's own message (ParquetSplitReaderUtil.isShreddedVariant), not just any
+    // failure mentioning "variant": an unrelated error naming the column must not green this pin.
+    boolean guardFired = false;
     for (Throwable t = failure; t != null; t = t.getCause()) {
-      String message = t.getMessage() == null ? "" : t.getMessage().toLowerCase();
-      if (message.contains("variant") || message.contains("typed_value")) {
-        mentionsVariant = true;
+      String message = t.getMessage() == null ? "" : t.getMessage();
+      if (message.contains("Shredded Variant is not supported in Flink")) {
+        guardFired = true;
         break;
       }
     }
-    assertTrue(mentionsVariant,
-        "Reading a shredded variant file must fail with an error naming the variant column, got: " + failure);
+    assertTrue(guardFired,
+        "Reading a shredded variant file must fail through the shredded-variant guard, got: " + failure);
 
     tableEnv.executeSql("DROP TABLE shredded_variant_table");
   }

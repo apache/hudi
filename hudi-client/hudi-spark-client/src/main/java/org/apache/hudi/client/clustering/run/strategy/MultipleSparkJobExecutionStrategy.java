@@ -35,8 +35,6 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
@@ -46,13 +44,13 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SortUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.LazyConcatenatingIterator;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.CloseableIteratorListener;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory;
@@ -202,7 +200,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             .map(listStr -> listStr.split(","));
 
     return orderByColumnsOpt.map(orderByColumns -> {
-      validateSortColumns(orderByColumns, schema);
+      // The custom-columns partitioners re-validate in their constructors; this earlier check
+      // additionally covers the spatial-curve (ZORDER/HILBERT) partitioners below.
+      SortUtils.validateSortableColumns(orderByColumns, schema);
       HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = getWriteConfig().getLayoutOptimizationStrategy();
       switch (layoutOptStrategy) {
         case ZORDER:
@@ -223,28 +223,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             getHoodieTable().getMetaClient().getTableConfig(), getWriteConfig(),
             getHoodieTable().isPartitioned(), true)
         : BulkInsertInternalPartitionerFactory.get(getHoodieTable(), getWriteConfig(), true));
-  }
-
-  /**
-   * Rejects sort columns whose type has no ordering. Sorting such a column used to fail deep in
-   * the Spark job (an AnalysisException from the row partitioner, a ClassCastException from the
-   * RDD one); failing here names the column instead.
-   *
-   * @param sortColumns the configured clustering sort columns
-   * @param schema      schema of the data, without metadata fields
-   */
-  private static void validateSortColumns(String[] sortColumns, HoodieSchema schema) {
-    for (String sortColumn : sortColumns) {
-      Option<HoodieSchemaField> field = schema.getField(sortColumn.trim());
-      if (field.isPresent()) {
-        HoodieSchemaType type = field.get().schema().getNonNullType().getType();
-        if (type == HoodieSchemaType.VARIANT || type == HoodieSchemaType.BLOB || type == HoodieSchemaType.VECTOR) {
-          throw new HoodieClusteringException(String.format(
-              "Clustering cannot sort by column '%s' of type %s: the type has no ordering. "
-                  + "Remove it from the clustering sort columns.", sortColumn.trim(), type));
-        }
-      }
-    }
   }
 
   /**

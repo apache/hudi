@@ -18,17 +18,24 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -49,8 +56,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -151,7 +161,11 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     // ParquetInputFormat.setFilterPredicate(job, predicate);
     // clearOutExistingPredicate(job);
     // }
+    // From here on the split is read by Hive's plain parquet reader, which the file-group-reader
+    // guard in HiveHoodieReaderContext never sees; repeat the shredded-variant fail-fast for it.
+    validateNoShreddedVariantRead(split, job);
     if (split instanceof BootstrapBaseFileSplit) {
+      validateNoShreddedVariantRead(((BootstrapBaseFileSplit) split).getBootstrapFileSplit(), job);
       return createBootstrappingRecordReader(split, job, reporter);
     }
 
@@ -231,6 +245,71 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
           getRecordReaderInternal(rightSplit, jobConfCopy, reporter),
           colNamesWithTypesForExternal.size(),
           true);
+    }
+  }
+
+  /**
+   * The file-group-reader path fails fast on shredded variant reads inside
+   * HiveHoodieReaderContext, but a split can bypass it three ways (see
+   * HoodieInputFormatUtils.shouldUseFilegroupReader): the file group reader disabled,
+   * schema-on-read enabled, and bootstrap splits. Those land on Hive's plain parquet reader at
+   * the synced {metadata, value} projection, which silently nulls typed_value - so repeat the
+   * fail-fast for them. Only reads that request a column holding a shredded variant fail;
+   * count(*) and projections that skip the variant keep working. The footer read is gated on a
+   * requested column whose synced Hive type embeds the variant {metadata, value} shape, so
+   * non-variant tables never pay it; when it does run it mirrors the per-file readSchema the
+   * file-group-reader path already performs.
+   */
+  private static void validateNoShreddedVariantRead(InputSplit split, JobConf job) {
+    if (!(split instanceof FileSplit)) {
+      return;
+    }
+    Path filePath = ((FileSplit) split).getPath();
+    if (!filePath.getName().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+      return;
+    }
+    Set<String> requestedColumns = Arrays.stream(HoodieColumnProjectionUtils.getReadColumnNames(job))
+        .map(name -> name.toLowerCase(Locale.ROOT))
+        .collect(Collectors.toSet());
+    if (requestedColumns.isEmpty()) {
+      // count(*)-style read: no column data is materialized
+      return;
+    }
+    boolean requestsVariantShapedColumn = HoodieColumnProjectionUtils.getIOColumnNameAndTypes(job).stream()
+        .filter(nameAndType -> requestedColumns.contains(nameAndType.getKey().toLowerCase(Locale.ROOT)))
+        .map(nameAndType -> nameAndType.getValue().toLowerCase(Locale.ROOT))
+        .anyMatch(type -> type.contains("metadata:binary") && type.contains("value:binary"));
+    if (!requestsVariantShapedColumn) {
+      return;
+    }
+    StoragePath storagePath = convertToStoragePath(filePath);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(storagePath, HadoopFSUtils.getStorageConf(job));
+    HoodieSchema fileSchema = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(storagePath).readSchema(storage, storagePath);
+    if (fileSchema.getType() != HoodieSchemaType.RECORD) {
+      return;
+    }
+    HoodieSchema strippedSchema = VariantSchemaUtils.stripVariantShredding(fileSchema);
+    if (strippedSchema == fileSchema) {
+      return;
+    }
+    // Untouched columns keep their schema instance across the strip, so identity comparison
+    // names exactly the columns holding a shredded variant (at any depth).
+    List<String> offendingColumns = new ArrayList<>();
+    List<HoodieSchemaField> before = fileSchema.getFields();
+    List<HoodieSchemaField> after = strippedSchema.getFields();
+    for (int i = 0; i < before.size(); i++) {
+      if (before.get(i).schema() != after.get(i).schema()
+          && requestedColumns.contains(before.get(i).name().toLowerCase(Locale.ROOT))) {
+        offendingColumns.add(before.get(i).name());
+      }
+    }
+    if (!offendingColumns.isEmpty()) {
+      throw new HoodieException(String.format(
+          "Column(s) '%s' of %s hold a shredded variant (typed_value present); the Hive reader "
+              + "cannot reconstruct shredded variants. Read the table with Spark 4.1+, or "
+              + "rewrite it unshredded (e.g. cluster with "
+              + "hoodie.parquet.variant.write.shredding.enabled=false).",
+          String.join(", ", offendingColumns), filePath));
     }
   }
 }

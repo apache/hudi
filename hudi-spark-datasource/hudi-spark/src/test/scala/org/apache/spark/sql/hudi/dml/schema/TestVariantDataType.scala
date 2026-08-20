@@ -140,26 +140,13 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
       // reconstruction (#18931, HoodieVariantReconstruction), which Spark compaction never reaches.
       // That path is covered directly by TestSpark4VariantShreddingProvider and
       // TestHoodieVariantReconstruction.
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  v variant,
-           |  ts long
-           |) using hudi
-           | location '$tablePath'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  type = 'mor',
-           |  preCombineField = 'ts',
-           |  hoodie.parquet.variant.write.shredding.enabled = 'true',
-           |  hoodie.parquet.variant.force.shredding.schema.for.test = 'key string',
-           |  hoodie.index.type = 'INMEMORY',
-           |  hoodie.compact.inline = 'true',
-           |  hoodie.compact.inline.max.delta.commits = '5',
-           |  hoodie.clean.commits.retained = '1'
-           | )
-       """.stripMargin)
+      createVariantTable(tableName, tablePath, "mor", props = Seq(
+        "hoodie.parquet.variant.write.shredding.enabled = 'true'",
+        "hoodie.parquet.variant.force.shredding.schema.for.test = 'key string'",
+        "hoodie.index.type = 'INMEMORY'",
+        "hoodie.compact.inline = 'true'",
+        "hoodie.compact.inline.max.delta.commits = '5'",
+        "hoodie.clean.commits.retained = '1'"))
 
       spark.sql(
         s"insert into $tableName values " +
@@ -306,6 +293,10 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
     // Same Spark 4.1 gate as the compaction test above: clustering reads the shredded
     // base files back through the native reader, which rejects the 3-field shredded
     // layout before SPARK-54410 (Spark 4.1+).
+    //
+    // This test pins the INLINE clustering trigger; the run_clustering procedure over
+    // heterogeneous inputs (including the unshredded output cell that used to have a twin
+    // test here) is covered by TestVariantShreddingMixedLayouts.
     assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
 
     withRecordType()(withTempDir { tmp =>
@@ -317,26 +308,13 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
       // lost bytes in #19232. Nothing pinned its VARIANT behavior: this is the first
       // clustering coverage for the type. Shredding is forced so the rewrite reads and
       // rewrites the shredded layout, the default in production.
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  v variant,
-           |  ts long
-           |) using hudi
-           | location '$tablePath'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  type = 'cow',
-           |  preCombineField = 'ts',
-           |  hoodie.parquet.variant.write.shredding.enabled = 'true',
-           |  hoodie.parquet.variant.force.shredding.schema.for.test = 'key string',
-           |  hoodie.index.type = 'INMEMORY',
-           |  hoodie.parquet.small.file.limit = '0',
-           |  hoodie.clustering.inline = 'true',
-           |  hoodie.clustering.inline.max.commits = '2'
-           | )
-       """.stripMargin)
+      createVariantTable(tableName, tablePath, "cow", props = Seq(
+        "hoodie.parquet.variant.write.shredding.enabled = 'true'",
+        "hoodie.parquet.variant.force.shredding.schema.for.test = 'key string'",
+        "hoodie.index.type = 'INMEMORY'",
+        "hoodie.parquet.small.file.limit = '0'",
+        "hoodie.clustering.inline = 'true'",
+        "hoodie.clustering.inline.max.commits = '2'"))
 
       // small.file.limit = 0 keeps the second insert in its own file group. Otherwise the
       // second commit bin-packs into the first file group and rewrites it through the CoW
@@ -385,69 +363,6 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
     })
   }
 
-  test("Test COW clustering preserves unshredded VARIANT values") {
-    // Companion to the shredded clustering test above, with shredding disabled. If this
-    // passes while the shredded one fails, the loss is specific to reading the shredded
-    // layout inside the clustering rewrite, not to variant clustering in general.
-    assume(HoodieSparkUtils.gteqSpark4_1, "Variant clustering read-back requires Spark 4.1 or higher")
-
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  v variant,
-           |  ts long
-           |) using hudi
-           | location '$tablePath'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  type = 'cow',
-           |  preCombineField = 'ts',
-           |  hoodie.parquet.variant.write.shredding.enabled = 'false',
-           |  hoodie.index.type = 'INMEMORY',
-           |  hoodie.parquet.small.file.limit = '0',
-           |  hoodie.clustering.inline = 'true',
-           |  hoodie.clustering.inline.max.commits = '2'
-           | )
-       """.stripMargin)
-
-      spark.sql(s"insert into $tableName values " +
-        "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
-        "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
-
-      // Pin the layout: these files must NOT carry typed_value, or this twin silently
-      // becomes a copy of the shredded test above and the unshredded leg of the rewrite
-      // goes uncovered.
-      val preClusteringFiles = listDataParquetFiles(tablePath)
-      assert(preClusteringFiles.nonEmpty, "Should have at least one data parquet file before clustering")
-      preClusteringFiles.foreach { filePath =>
-        val parquetSchema = readParquetSchema(filePath)
-        val variantGroup = getFieldAsGroup(parquetSchema, "v")
-        assert(!variantGroup.containsField("typed_value"),
-          s"Unshredded base file must not carry typed_value. Schema:\n$variantGroup")
-      }
-
-      spark.sql(s"insert into $tableName values " +
-        "(3, parse_json('{\"key\":\"value3\"}'), 1000), " +
-        "(4, parse_json('{\"key\":\"value4\"}'), 1000)")
-
-      val metaClient = createMetaClient(spark, tablePath)
-      val lastClustering = metaClient.getActiveTimeline.getLastClusteringInstant
-      assert(lastClustering.isPresent && lastClustering.get.isCompleted,
-        "A COMPLETED clustering (replacecommit) instant must exist after inline clustering")
-
-      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
-        Seq(1, "{\"key\":\"value1\"}", 1000),
-        Seq(2, "{\"key\":\"value2\"}", 1000),
-        Seq(3, "{\"key\":\"value3\"}", 1000),
-        Seq(4, "{\"key\":\"value4\"}", 1000)
-      )
-    })
-  }
-
   test("Test CDC captures VARIANT values from shredded and unshredded base files") {
     // #19578: CDC is the only default-config query path that builds the internal reader
     // context without a catalyst schema, and its BASE_FILE_INSERT case additionally reads
@@ -474,27 +389,14 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
           val tablePath = tmp.getCanonicalPath
           // The forced shredding schema belongs to the shredded leg only; the unshredded leg
           // must reach the writer with shredding off and no forced schema.
-          val forceShreddingProp =
-            if (shredded) "hoodie.parquet.variant.force.shredding.schema.for.test = 'key string'," else ""
-          spark.sql(
-            s"""
-               |create table $tableName (
-               |  id int,
-               |  v variant,
-               |  ts long
-               |) using hudi
-               | location '$tablePath'
-               | tblproperties (
-               |  primaryKey = 'id',
-               |  type = 'cow',
-               |  preCombineField = 'ts',
-               |  'hoodie.table.cdc.enabled' = 'true',
-               |  'hoodie.table.cdc.supplemental.logging.mode' = '$loggingMode',
-               |  hoodie.parquet.variant.write.shredding.enabled = '$shredded',
-               |  $forceShreddingProp
-               |  hoodie.index.type = 'INMEMORY'
-               | )
-           """.stripMargin)
+          val forceShreddingProps =
+            if (shredded) Seq("hoodie.parquet.variant.force.shredding.schema.for.test = 'key string'") else Seq.empty
+          createVariantTable(tableName, tablePath, "cow", props = Seq(
+            "'hoodie.table.cdc.enabled' = 'true'",
+            s"'hoodie.table.cdc.supplemental.logging.mode' = '$loggingMode'",
+            s"hoodie.parquet.variant.write.shredding.enabled = '$shredded'") ++
+            forceShreddingProps :+
+            "hoodie.index.type = 'INMEMORY'")
 
           spark.sql(s"""insert into $tableName values (1, parse_json('{"key":"value1"}'), 1000)""")
 
@@ -503,6 +405,16 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
           assertVariantLayout(tablePath, shredded, leg)
 
           spark.sql(s"""update $tableName set v = parse_json('{"key":"value2"}'), ts = 1001 where id = 1""")
+
+          // Second update under the FLIPPED layout (session confs override tblproperties):
+          // the updated file's layout now differs from the write layout, the mixed-layout
+          // CDC case (images must survive whichever physical slot serves them).
+          withSQLConf(
+            "hoodie.parquet.variant.write.shredding.enabled" -> (!shredded).toString,
+            "hoodie.parquet.variant.force.shredding.schema.for.test" ->
+              (if (shredded) "" else "key string")) {
+            spark.sql(s"""update $tableName set v = parse_json('{"key":"value3"}'), ts = 1002 where id = 1""")
+          }
 
           val cdc = spark.read.format("hudi")
             .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
@@ -524,12 +436,13 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
             .selectExpr(
               "get_json_object(before, '$.v.key') as before_key",
               "get_json_object(after, '$.v.key') as after_key")
+            .orderBy("after_key")
             .collect()
-          assert(updateRows.length == 1, s"[$leg] expected exactly one update cdc row")
-          assert(updateRows(0).getString(0) == "value1",
-            s"[$leg] update before-image lost the variant payload: ${updateRows(0)}")
-          assert(updateRows(0).getString(1) == "value2",
-            s"[$leg] update after-image lost the variant payload: ${updateRows(0)}")
+          assert(updateRows.length == 2, s"[$leg] expected two update cdc rows")
+          assert(updateRows(0).getString(0) == "value1" && updateRows(0).getString(1) == "value2",
+            s"[$leg] first update images lost the variant payload: ${updateRows(0)}")
+          assert(updateRows(1).getString(0) == "value2" && updateRows(1).getString(1) == "value3",
+            s"[$leg] second (layout-flipped) update images lost the variant payload: ${updateRows(1)}")
         })
       }
     }
@@ -566,25 +479,12 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
           val tablePath = tmp.getCanonicalPath
           // The forced shredding schema belongs to the shredded leg only; the unshredded leg must
           // reach the writer with shredding off and no forced schema.
-          val forceShreddingProp =
-            if (shredded) "hoodie.parquet.variant.force.shredding.schema.for.test = 'key string'," else ""
-          spark.sql(
-            s"""
-               |create table $tableName (
-               |  id int,
-               |  v variant,
-               |  ts long
-               |) using hudi
-               | location '$tablePath'
-               | tblproperties (
-               |  primaryKey = 'id',
-               |  type = 'cow',
-               |  preCombineField = 'ts',
-               |  hoodie.parquet.variant.write.shredding.enabled = '$shredded',
-               |  $forceShreddingProp
-               |  hoodie.index.type = 'INMEMORY'
-               | )
-           """.stripMargin)
+          val forceShreddingProps =
+            if (shredded) Seq("hoodie.parquet.variant.force.shredding.schema.for.test = 'key string'") else Seq.empty
+          createVariantTable(tableName, tablePath, "cow", props = Seq(
+            s"hoodie.parquet.variant.write.shredding.enabled = '$shredded'") ++
+            forceShreddingProps :+
+            "hoodie.index.type = 'INMEMORY'")
 
           spark.sql(s"insert into $tableName values " +
             "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
@@ -628,23 +528,10 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
     withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  v variant,
-           |  ts long
-           |) using hudi
-           | location '$tablePath'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  type = 'cow',
-           |  preCombineField = 'ts',
-           |  hoodie.parquet.variant.write.shredding.enabled = 'true',
-           |  hoodie.parquet.variant.force.shredding.schema.for.test = 'key string',
-           |  hoodie.index.type = 'INMEMORY'
-           | )
-       """.stripMargin)
+      createVariantTable(tableName, tablePath, "cow", props = Seq(
+        "hoodie.parquet.variant.write.shredding.enabled = 'true'",
+        "hoodie.parquet.variant.force.shredding.schema.for.test = 'key string'",
+        "hoodie.index.type = 'INMEMORY'"))
 
       spark.sql(s"insert into $tableName values " +
         "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
@@ -1098,8 +985,13 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
         // returning a partial payload. Depending on the path that is Spark's own
         // INVALID_VARIANT_FROM_PARQUET.WRONG_NUM_FIELDS (schema conversion rejects the 3-field
         // group) or Hudi's read-support guard naming the shredded column; both name the variant.
-        assertQueryFailsWith(s"select id, name, cast(v as string), ts from $tableName order by id",
-          "ariant", "spark 4.0 shredded read")
+        val failure = intercept[Throwable] {
+          spark.sql(s"select id, name, cast(v as string), ts from $tableName order by id").collect()
+        }
+        val messages = Iterator.iterate(failure)(_.getCause).takeWhile(_ != null)
+          .map(t => Option(t.getMessage).getOrElse("")).mkString("\n")
+        assert(messages.toLowerCase.contains("variant"),
+          s"spark 4.0 shredded read: expected a variant-naming failure, got:\n$messages")
       }
 
       // Verify parquet schema has shredded structure with typed_value

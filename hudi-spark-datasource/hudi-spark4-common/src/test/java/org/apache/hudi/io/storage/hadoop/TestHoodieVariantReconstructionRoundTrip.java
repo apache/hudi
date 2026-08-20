@@ -194,6 +194,12 @@ class TestHoodieVariantReconstructionRoundTrip {
     // never engaged and the later rewrite to the writer schema silently dropped typed_value.
     // The overload now requests the caller's schema (minus meta fields), which anchors
     // HoodieVariantReconstruction just like the two-argument form.
+    //
+    // AVRO bootstrap reader only, deliberately: the changed line lives on the shared base
+    // class, but the SPARK twin reads through HoodieSparkParquetReader (whose getSchema returns
+    // a nullable union, not a record) and would need a Spark session plus InternalRow
+    // assertions that do not fit this unit test. The non-variant SPARK bootstrap path is
+    // covered end-to-end by TestBootstrap.
     Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
     shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.STRING));
     shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.LONG));

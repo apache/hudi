@@ -20,7 +20,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.schema.internal.InternalSchema
+import org.apache.hudi.common.schema.internal.{InternalSchema, Type => InternalType}
 import org.apache.hudi.common.schema.internal.Types
 import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger
 import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils
@@ -36,6 +36,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
+import org.apache.parquet.schema.{Type => ParquetType}
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
@@ -134,41 +135,16 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   protected var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = null
 
-  /**
-   * Fails fast when schema-on-read meets a shredded variant file. The internal schema models a
-   * variant as a two-field {metadata, value} record (with sentinel negative field ids, see
-   * InternalSchemaConverter), so the merged request clips the file's typed_value away and the
-   * typed rows would read back with a null value residual - silent data loss. Reconstruction
-   * under schema-on-read is tracked by #18285; until then the read must fail loudly. The check
-   * anchors on the sentinel ids, which no real user field can carry, so plain user structs of
-   * the same shape are left alone.
-   */
-  private def validateNoShreddedVariants(footerFileMetaData: FileMetaData): Unit = {
-    val fileParquetSchema = footerFileMetaData.getSchema
-    querySchemaOption.get().getRecord.fields().foreach { field =>
-      field.`type`() match {
-        case record: Types.RecordType
-          if record.fields().size() == 2 && record.fields().forall(_.fieldId() < 0)
-            && fileParquetSchema.containsField(field.name()) =>
-          val fileField = fileParquetSchema.getType(fileParquetSchema.getFieldIndex(field.name()))
-          if (!fileField.isPrimitive && fileField.asGroupType().containsField("typed_value")) {
-            throw new HoodieException(String.format(
-              "Column '%s' is a shredded variant (typed_value present) and the table is read "
-                + "with schema-on-read (hoodie.schema.on.read.enable), which cannot reconstruct "
-                + "shredded variants (see issue #18285). Read without schema-on-read, or rewrite "
-                + "the table unshredded (e.g. cluster with "
-                + "hoodie.parquet.variant.write.shredding.enabled=false).", field.name()))
-          }
-        case _ =>
-      }
-    }
-  }
-
   def getHadoopConfClone(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
     // Clone new conf
     val hadoopAttemptConf = new Configuration(sharedConf)
     typeChangeInfos = if (shouldUseInternalSchema) {
-      validateNoShreddedVariants(footerFileMetaData)
+      // Empty projections (count(*), select 1) read no column data, so there is nothing to
+      // reconstruct - and querySchemaOption is the UNPRUNED table schema in that case (see
+      // pruneInternalSchema), so running the guard would fail queries that work fine.
+      if (requiredSchema.nonEmpty) {
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariants(querySchemaOption.get(), footerFileMetaData)
+      }
       val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
       val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 
@@ -234,6 +210,95 @@ object ParquetSchemaEvolutionUtils {
       util.Option.of(SparkInternalSchemaConverter.convertAndPruneStructTypeToInternalSchema(requiredSchema, internalSchemaOpt.get()))
     } else {
       internalSchemaOpt
+    }
+  }
+
+  /**
+   * Fails fast when schema-on-read meets a shredded variant file. The internal schema models a
+   * variant as a two-field {metadata, value} record (with sentinel negative field ids, see
+   * InternalSchemaConverter), so the merged request clips the file's typed_value away and the
+   * typed rows would read back with a null value residual - silent data loss. Reconstruction
+   * under schema-on-read is tracked by #18285; until then the read must fail loudly. The check
+   * anchors on the sentinel ids, which no real user field can carry, so plain user structs of
+   * the same shape are left alone. The walk recurses through structs, arrays and maps because
+   * the row writer shreds nested variants too (see VariantSchemaUtils).
+   *
+   * Shared by [[ParquetSchemaEvolutionUtils.getHadoopConfClone]] and the per-version legacy
+   * file formats, which carry a copy of the same schema-merge block. Callers gate on a
+   * non-empty projection: empty-projection queries (count(*), select 1) read no column data
+   * and must keep working, and the query schema is unpruned in that case.
+   */
+  def validateNoShreddedVariants(querySchema: InternalSchema, footerFileMetaData: FileMetaData): Unit = {
+    val fileParquetSchema = footerFileMetaData.getSchema
+    querySchema.getRecord.fields().foreach { field =>
+      if (fileParquetSchema.containsField(field.name())) {
+        validateNoShreddedVariant(
+          field.`type`(), fileParquetSchema.getType(fileParquetSchema.getFieldIndex(field.name())), field.name())
+      }
+    }
+  }
+
+  private def validateNoShreddedVariant(internalType: InternalType, parquetType: ParquetType, path: String): Unit = {
+    internalType match {
+      // A variant: two fields, both carrying the sentinel negative ids (BLOB's sentinel record
+      // has three). The parquet side decides shredded-ness.
+      case record: Types.RecordType if record.fields().size() == 2 && record.fields().forall(_.fieldId() < 0) =>
+        if (!parquetType.isPrimitive && parquetType.asGroupType().containsField("typed_value")) {
+          throw new HoodieException(String.format(
+            "Column '%s' is a shredded variant (typed_value present) and the table is read "
+              + "with schema-on-read (hoodie.schema.on.read.enable), which cannot reconstruct "
+              + "shredded variants (see issue #18285). Read without schema-on-read, or rewrite "
+              + "the table unshredded (e.g. cluster with "
+              + "hoodie.parquet.variant.write.shredding.enabled=false).", path))
+        }
+      case record: Types.RecordType if !parquetType.isPrimitive =>
+        val group = parquetType.asGroupType()
+        record.fields().foreach { field =>
+          if (group.containsField(field.name())) {
+            validateNoShreddedVariant(field.`type`(), group.getType(field.name()), path + "." + field.name())
+          }
+        }
+      case array: Types.ArrayType =>
+        parquetListElement(parquetType).foreach(validateNoShreddedVariant(array.elementType(), _, path + ".element"))
+      case map: Types.MapType =>
+        parquetMapValue(parquetType).foreach(validateNoShreddedVariant(map.valueType(), _, path + ".value"))
+      case _ =>
+    }
+  }
+
+  /**
+   * Resolves the element type of a parquet LIST group, covering both the 3-level layout the
+   * Spark writer produces (group -> repeated "list" -> element) and the 2-level layout
+   * parquet-avro produces (group -> repeated element). The 3-level test mirrors Spark's
+   * ParquetSchemaConverter.isElementType. An unrecognized shape returns None, which stops the
+   * walk without failing the read.
+   */
+  private def parquetListElement(parquetType: ParquetType): Option[ParquetType] = {
+    if (parquetType.isPrimitive || parquetType.asGroupType().getFieldCount != 1) {
+      None
+    } else {
+      val repeated = parquetType.asGroupType().getType(0)
+      if (!repeated.isRepetition(ParquetType.Repetition.REPEATED)) {
+        None
+      } else if (!repeated.isPrimitive && repeated.asGroupType().getFieldCount == 1
+        && repeated.getName != "array" && !repeated.getName.endsWith("_tuple")) {
+        Some(repeated.asGroupType().getType(0))
+      } else {
+        Some(repeated)
+      }
+    }
+  }
+
+  private def parquetMapValue(parquetType: ParquetType): Option[ParquetType] = {
+    if (parquetType.isPrimitive || parquetType.asGroupType().getFieldCount != 1) {
+      None
+    } else {
+      val keyValue = parquetType.asGroupType().getType(0)
+      if (keyValue.isPrimitive || !keyValue.asGroupType().containsField("value")) {
+        None
+      } else {
+        Some(keyValue.asGroupType().getType("value"))
+      }
     }
   }
 }

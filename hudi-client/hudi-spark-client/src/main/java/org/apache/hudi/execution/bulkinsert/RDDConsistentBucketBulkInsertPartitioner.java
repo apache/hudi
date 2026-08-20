@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SortUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
@@ -74,6 +75,9 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
     super(table,
         strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null),
         preserveHoodieMetadata);
+    // This strategy sorts within buckets itself rather than through the custom-columns
+    // partitioners, so it validates the sort columns itself too.
+    SortUtils.validateSortableColumns(strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null), table.getConfig().getSchema());
     ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
         "Consistent hash bucket index doesn't support CoW table");
     if (hashingChildrenNodes != null) {

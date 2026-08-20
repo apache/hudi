@@ -182,20 +182,9 @@ class TestHiveHoodieReaderContext {
     // {metadata, value} projection; a shredded file would come back with silent nulls (the
     // payload of typed rows lives in typed_value, which the projection drops). The footer is
     // already read for schema pruning, so the shredded shape must fail fast instead.
-    HoodieSchema.Variant shreddedVariant = HoodieSchema.createVariantShreddedObject(
-        Collections.singletonMap("key", HoodieSchema.create(HoodieSchemaType.STRING)));
-    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
-        HoodieSchemaField.of("v", shreddedVariant)));
-    StoragePath filePath = writeShreddedVariantFile(tempDir, writeSchema, shreddedVariant);
-
-    HoodieSchema tableSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
-        HoodieSchemaField.of("v", HoodieSchema.createVariant())));
-    when(tableConfig.populateMetaFields()).thenReturn(true);
-    HiveHoodieReaderContext readerContext =
-        new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
-    readerContext.setNeedsBootstrapMerge(false);
+    StoragePath filePath = writeVariantFile(tempDir, "shredded.parquet", true);
+    HoodieSchema tableSchema = tableSchemaWithVariant();
+    HiveHoodieReaderContext readerContext = newReaderContext();
     HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
 
     HoodieException failure = assertThrows(HoodieException.class, () ->
@@ -216,30 +205,9 @@ class TestHiveHoodieReaderContext {
   void getFileRecordIteratorAcceptsUnshreddedVariantColumn(@TempDir java.nio.file.Path tempDir) throws Exception {
     // The unshredded twin: a plain {metadata, value} variant group must keep reading through
     // the ordinary path; the guard is anchored on typed_value being present in the file.
-    HoodieSchema.Variant unshredded = HoodieSchema.createVariant();
-    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
-        HoodieSchemaField.of("v", unshredded)));
-    java.nio.file.Path file = tempDir.resolve("unshredded.parquet");
-    try (AvroParquetWriter<GenericRecord> writer =
-             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
-      GenericRecord variant = new GenericData.Record(unshredded.toAvroSchema());
-      variant.put("metadata", ByteBuffer.wrap(new byte[] {1}));
-      variant.put("value", ByteBuffer.wrap(new byte[] {0}));
-      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
-      record.put("id", 1);
-      record.put("v", variant);
-      writer.write(record);
-    }
-    StoragePath filePath = new StoragePath(file.toUri().toString());
-
-    HoodieSchema tableSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
-        HoodieSchemaField.of("v", HoodieSchema.createVariant())));
-    when(tableConfig.populateMetaFields()).thenReturn(true);
-    HiveHoodieReaderContext readerContext =
-        new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
-    readerContext.setNeedsBootstrapMerge(false);
+    StoragePath filePath = writeVariantFile(tempDir, "unshredded.parquet", false);
+    HoodieSchema tableSchema = tableSchemaWithVariant();
+    HiveHoodieReaderContext readerContext = newReaderContext();
     HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
     when(readerCreator.getRecordReader(any(), any(), any()))
         .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
@@ -247,26 +215,94 @@ class TestHiveHoodieReaderContext {
         readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
   }
 
-  private StoragePath writeShreddedVariantFile(java.nio.file.Path tempDir, HoodieSchema writeSchema,
-                                               HoodieSchema.Variant shreddedVariant) throws Exception {
-    java.nio.file.Path file = tempDir.resolve("shredded.parquet");
+  @Test
+  void getFileRecordIteratorFailsFastOnNestedShreddedVariant(@TempDir java.nio.file.Path tempDir) throws Exception {
+    // The row writer shreds nested variants too (HoodieRowParquetWriteSupport recurses into
+    // structs, array elements and map values), so the guard must look below the top level: a
+    // struct<inner: variant> whose inner group carries typed_value fails naming the struct column.
+    HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
+    HoodieSchema structWithShredded = HoodieSchema.createRecord("s_t", null, null,
+        Collections.singletonList(HoodieSchemaField.of("inner", shreddedVariant)));
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("s", structWithShredded)));
+    java.nio.file.Path file = tempDir.resolve("nested_shredded.parquet");
     try (AvroParquetWriter<GenericRecord> writer =
              new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
-      org.apache.avro.Schema typedValueSchema =
-          shreddedVariant.getTypedValueField().get().toAvroSchema();
+      GenericRecord struct = new GenericData.Record(structWithShredded.toAvroSchema());
+      struct.put("inner", variantValue(shreddedVariant, true));
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("s", struct);
+      writer.write(record);
+    }
+    StoragePath filePath = new StoragePath(file.toUri().toString());
+
+    HoodieSchema structWithVariant = HoodieSchema.createRecord("s_t", null, null,
+        Collections.singletonList(HoodieSchemaField.of("inner", HoodieSchema.createVariant())));
+    HoodieSchema tableSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("s", structWithVariant)));
+    HiveHoodieReaderContext readerContext = newReaderContext();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+
+    HoodieException failure = assertThrows(HoodieException.class, () ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    assertTrue(failure.getMessage().contains("shredded variant") && failure.getMessage().contains("'s'"),
+        "The error must name the column holding the nested shredded variant, got: " + failure.getMessage());
+  }
+
+  private static HoodieSchema.Variant shreddedVariantSchema() {
+    return HoodieSchema.createVariantShreddedObject(
+        Collections.singletonMap("key", HoodieSchema.create(HoodieSchemaType.STRING)));
+  }
+
+  private static HoodieSchema tableSchemaWithVariant() {
+    return HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("v", HoodieSchema.createVariant())));
+  }
+
+  private HiveHoodieReaderContext newReaderContext() {
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    HiveHoodieReaderContext readerContext =
+        new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
+    readerContext.setNeedsBootstrapMerge(false);
+    return readerContext;
+  }
+
+  /** Writes a one-row parquet file with an {@code id} column and a {@code v} variant column, shredded or not. */
+  private StoragePath writeVariantFile(java.nio.file.Path tempDir, String fileName, boolean shredded) throws Exception {
+    HoodieSchema.Variant variantSchema = shredded ? shreddedVariantSchema() : HoodieSchema.createVariant();
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("v", variantSchema)));
+    java.nio.file.Path file = tempDir.resolve(fileName);
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("v", variantValue(variantSchema, shredded));
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  private static GenericRecord variantValue(HoodieSchema.Variant variantSchema, boolean populateTypedValue) {
+    GenericRecord variant = new GenericData.Record(variantSchema.toAvroSchema());
+    variant.put("metadata", ByteBuffer.wrap(new byte[] {1}));
+    if (populateTypedValue) {
+      org.apache.avro.Schema typedValueSchema = org.apache.hudi.common.avro.HoodieAvroUtils.unwrapNullable(
+          variantSchema.getTypedValueField().get().toAvroSchema());
       GenericRecord keyWrapper = new GenericData.Record(
           org.apache.hudi.common.avro.HoodieAvroUtils.unwrapNullable(typedValueSchema.getField("key").schema()));
       keyWrapper.put("typed_value", "k1");
       GenericRecord typedValue = new GenericData.Record(typedValueSchema);
       typedValue.put("key", keyWrapper);
-      GenericRecord variant = new GenericData.Record(shreddedVariant.toAvroSchema());
-      variant.put("metadata", ByteBuffer.wrap(new byte[] {1}));
       variant.put("typed_value", typedValue);
-      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
-      record.put("id", 1);
-      record.put("v", variant);
-      writer.write(record);
+    } else {
+      variant.put("value", ByteBuffer.wrap(new byte[] {0}));
     }
-    return new StoragePath(file.toUri().toString());
+    return variant;
   }
 }
