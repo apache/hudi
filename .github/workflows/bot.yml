@@ -1266,6 +1266,26 @@ jobs:
             sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
             mvn package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
           fi
+      - name: Validate Presto Bundle Contents
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+        run: |
+          # hudi-presto-bundle shades classes it reaches through other modules, and shade does not fail when
+          # an artifactSet include matches nothing - see HUDI #19433, where the bundle silently shipped 0
+          # instead of 109 org/apache/hudi/hadoop/** entries. Build it WITHOUT -am so its bundle
+          # dependencies resolve from the repository: with -am the ReactorReader serves the effective model
+          # rather than the published dependency-reduced POM, and the path that broke is never exercised.
+          mvn install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS \
+            -pl packaging/hudi-hadoop-mr-bundle -am
+          mvn package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS \
+            -pl packaging/hudi-presto-bundle
+          # Name the jar exactly rather than globbing: this job builds sources and javadoc jars too, and
+          # "-" sorts before "." so a glob picks up hudi-presto-bundle-<version>-javadoc.jar first.
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          ./packaging/bundle-validation/validate_presto_bundle.sh \
+            "packaging/hudi-presto-bundle/target/hudi-presto-bundle-${HUDI_VERSION}.jar"
       - name: IT - Bundle Validation - OpenJDK 11
         if: needs.changes.outputs.relevant == 'true'
         env:
