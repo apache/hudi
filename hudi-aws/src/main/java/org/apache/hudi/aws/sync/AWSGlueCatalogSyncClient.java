@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -474,11 +475,31 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
-  private void setComments(List<Column> columns, Map<String, Option<String>> commentsMap) {
-    columns.forEach(column -> {
-      String comment = commentsMap.getOrDefault(column.name(), Option.empty()).orElse(null);
-      Column.builder().comment(comment).build();
-    });
+  /**
+   * Returns {@code columns} with the comment of every column the storage schema knows about replaced by the
+   * one the schema carries, clearing it when the schema has none.
+   *
+   * <p>Columns the schema says nothing about are left untouched rather than cleared. The pre-SDK-v2 code
+   * cleared them, but only nominally: it built a {@code Column} and discarded it, so no comment was ever
+   * applied and nothing can depend on that behaviour. Clearing is also the more dangerous reading - the
+   * storage field names keep the Avro schema's case while a catalog may hold them lowercased, and a name
+   * that fails to match would silently wipe a comment. This matches
+   * {@code HMSDDLExecutor.applyFieldComments} on the Hive side, which only touches known columns.
+   *
+   * <p>SDK v2 model classes are immutable and their getters return unmodifiable lists, so the columns cannot
+   * be edited in place; a new list of rebuilt columns is returned instead.
+   */
+  @VisibleForTesting
+  static List<Column> withComments(List<Column> columns, Map<String, Option<String>> commentsMap) {
+    return columns.stream()
+        .map(column -> {
+          if (!commentsMap.containsKey(column.name())) {
+            return column;
+          }
+          String comment = commentsMap.get(column.name()).orElse(null);
+          return Objects.equals(comment, column.comment()) ? column : column.toBuilder().comment(comment).build();
+        })
+        .collect(Collectors.toList());
   }
 
   private String getTableDoc() {
@@ -509,16 +530,21 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     Map<String, Option<String>> commentsMap = fromStorage.stream().collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getComment));
 
     StorageDescriptor storageDescriptor = table.storageDescriptor();
-    List<Column> columns = storageDescriptor.columns();
-    setComments(columns, commentsMap);
-
-    List<Column> partitionKeys = table.partitionKeys();
-    setComments(partitionKeys, commentsMap);
+    List<Column> partitionKeys = withComments(table.partitionKeys(), commentsMap);
+    List<Column> updatedColumns = withComments(storageDescriptor.columns(), commentsMap);
+    // Only rebuild the descriptor when a column actually changed. Rebuilding unconditionally is not
+    // equality-preserving: when columns was never set, storageDescriptor.columns() is an SDK
+    // auto-construct list and hasColumns() is false, so toBuilder().columns(<empty list>) flips it to
+    // true and the descriptor compares unequal to itself. That would report a change on every sync of a
+    // table with no columns and send an updateTable that changes nothing.
+    StorageDescriptor updatedStorageDescriptor = updatedColumns.equals(storageDescriptor.columns())
+        ? storageDescriptor
+        : storageDescriptor.toBuilder().columns(updatedColumns).build();
 
     String tableDescription = getTableDoc();
 
-    if (getTable(awsGlue, databaseName, tableName).storageDescriptor().equals(storageDescriptor)
-        && getTable(awsGlue, databaseName, tableName).partitionKeys().equals(partitionKeys)) {
+    // Compare against the table already fetched above rather than fetching it twice more.
+    if (storageDescriptor.equals(updatedStorageDescriptor) && table.partitionKeys().equals(partitionKeys)) {
       // no comments have been modified / added
       return false;
     } else {
@@ -529,7 +555,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .tableType(table.tableType())
           .parameters(table.parameters())
           .partitionKeys(partitionKeys)
-          .storageDescriptor(storageDescriptor)
+          .storageDescriptor(updatedStorageDescriptor)
           .lastAccessTime(now)
           .lastAnalyzedTime(now)
           .build();
