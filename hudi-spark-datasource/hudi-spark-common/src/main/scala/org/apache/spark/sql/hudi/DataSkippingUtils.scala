@@ -161,7 +161,7 @@ object DataSkippingUtils extends Logging {
         })
 
       // Filter "colA <=> null"
-      // Translates to "colA_nullCount = null or colA_nullCount > 0" for index lookup
+      // Translates to "colA_nullCount IS NULL OR colA_nullCount > 0" for index lookup
       // (this is equivalent to "colA is null")
       case EqualNullSafe(attrRef: AttributeReference, Literal(null, _)) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
@@ -251,8 +251,8 @@ object DataSkippingUtils extends Logging {
         })
 
       // Filter "colA is null"
-      // Translates to "colA_nullCount = null or colA_nullCount > 0" for index lookup
-      // "colA_nullCount = null" means we are not certain whether the column holds nulls or not,
+      // Translates to "colA_nullCount IS NULL OR colA_nullCount > 0" for index lookup
+      // "colA_nullCount IS NULL" means we are not certain whether the column holds nulls or not,
       // hence we keep the file to ensure this does not affect the query.
       case IsNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexedCols)
@@ -262,8 +262,8 @@ object DataSkippingUtils extends Logging {
           })
 
       // Filter "colA is not null"
-      // Translates to "colA_nullCount = null or colA_valueCount = null or colA_nullCount < colA_valueCount" for index lookup
-      // "colA_nullCount = null or colA_valueCount = null" means we are not certain whether the column is null or not,
+      // Translates to "colA_nullCount IS NULL OR colA_valueCount IS NULL OR colA_nullCount < colA_valueCount" for index lookup
+      // "colA_nullCount IS NULL OR colA_valueCount IS NULL" means we are not certain whether the column is null or not,
       // hence we return True to ensure this does not affect the query.
       case IsNotNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexedCols)
@@ -435,18 +435,18 @@ object DataSkippingUtils extends Logging {
       case expr if !expr.resolved => false
 
       // Filter "colA <=> null"
-      // Translates to "colA_nullCount = null or colA_nullCount > 0" for index lookup
+      // Translates to "colA_nullCount IS NULL OR colA_nullCount > 0" for index lookup
       case EqualNullSafe(attrRef: AttributeReference, litNull@Literal(null, _)) =>
         getTargetIndexedColumnName(attrRef, indexedCols).isDefined
 
       // Filter "colA is null"
-      // Translates to "colA_nullCount = null or colA_nullCount > 0" for index lookup
+      // Translates to "colA_nullCount IS NULL OR colA_nullCount > 0" for index lookup
       case IsNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexedCols).isDefined
 
       // Filter "colA is not null"
-      // Translates to "colA_nullCount = null or colA_valueCount = null or colA_nullCount < colA_valueCount" for index lookup
-      // "colA_nullCount = null or colA_valueCount = null" means we are not certain whether the column is null or not,
+      // Translates to "colA_nullCount IS NULL OR colA_valueCount IS NULL OR colA_nullCount < colA_valueCount" for index lookup
+      // "colA_nullCount IS NULL OR colA_valueCount IS NULL" means we are not certain whether the column is null or not,
       // hence we return True to ensure this does not affect the query.
       case IsNotNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexedCols).isDefined
