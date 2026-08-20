@@ -132,7 +132,7 @@ class TestHoodieAvroWriteSupportShredding {
         "expected a shredded typed_value group: " + variantGroup);
 
     LogicalTypeAnnotation annotation = variantGroup.getLogicalTypeAnnotation();
-    if (AvroSchemaConverterWithTimestampNTZ.isVariantLogicalTypeSupported()) {
+    if (variantLogicalTypeSupported()) {
       assertNotNull(annotation,
           "shredded variant group should carry the VARIANT logical type: " + variantGroup);
       assertTrue(annotation.toString().contains("VARIANT"),
@@ -157,4 +157,13 @@ class TestHoodieAvroWriteSupportShredding {
     return props;
   }
 
+  private static boolean variantLogicalTypeSupported() {
+    // Probes parquet directly, not the converter's own probe: the expectation must be an independent oracle.
+    try {
+      LogicalTypeAnnotation.class.getMethod("variantType", byte.class);
+      return true;
+    } catch (NoSuchMethodException e) {
+      return false;
+    }
+  }
 }

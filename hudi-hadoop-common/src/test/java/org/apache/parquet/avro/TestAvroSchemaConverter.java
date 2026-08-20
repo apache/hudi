@@ -127,7 +127,13 @@ public class TestAvroSchemaConverter {
    * {@code toString()} directly rather than through {@link #testAvroToParquetConversion}.
    */
   private static String variantAnnotation() {
-    return AvroSchemaConverterWithTimestampNTZ.isVariantLogicalTypeSupported() ? " (VARIANT(1))" : "";
+    // Probes parquet directly, not the converter's own probe: the expectation must be an independent oracle.
+    try {
+      LogicalTypeAnnotation.class.getMethod("variantType", byte.class);
+      return " (VARIANT(1))";
+    } catch (NoSuchMethodException e) {
+      return "";
+    }
   }
 
   private void testVariantAvroToParquetConversion(HoodieSchema schema, String expectedMessageType) {
