@@ -73,7 +73,13 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
 
   public ClosableIterator<HoodieRecord<T>> getRecordIterator(HoodieSchema schema) throws IOException {
     ClosableIterator<HoodieRecord<T>> skeletonIterator = skeletonFileReader.getRecordIterator(schema);
-    ClosableIterator<HoodieRecord<T>> dataFileIterator = dataFileReader.getRecordIterator(dataFileReader.getSchema());
+    // Request the caller's schema (minus meta fields) rather than the data file's own footer
+    // schema, mirroring the two-argument overload: the footer schema of a shredded variant
+    // column is a plain {metadata, value, typed_value} record with the logical type lost, so a
+    // footer-schema read leaves reconstruction disengaged and the later rewrite to the writer
+    // schema silently drops typed_value.
+    ClosableIterator<HoodieRecord<T>> dataFileIterator =
+        dataFileReader.getRecordIterator(HoodieSchemaUtils.removeMetadataFields(schema));
     return new HoodieBootstrapRecordIterator<T>(skeletonIterator, dataFileIterator, schema, partitionFields, partitionValues) {
       @Override
       protected void setPartitionPathField(int position, Object fieldValue, T row) {
