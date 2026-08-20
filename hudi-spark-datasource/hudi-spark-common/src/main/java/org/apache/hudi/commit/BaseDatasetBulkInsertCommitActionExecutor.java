@@ -155,7 +155,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
         }
         return userDefinedPartitioner.orElseGet(
             () -> BulkInsertInternalPartitionerWithRowsFactory.get(
-                table, writeConfig, isTablePartitioned));
+                table.getMetaClient().getTableConfig(), writeConfig, isTablePartitioned));
       }
     } else {
       if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {

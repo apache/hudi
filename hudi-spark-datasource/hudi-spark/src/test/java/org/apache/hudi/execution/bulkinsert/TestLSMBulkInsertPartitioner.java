@@ -120,7 +120,7 @@ public class TestLSMBulkInsertPartitioner extends HoodieSparkClientTestHarness {
         jsc.parallelize(createRows(), 3), schema);
     BulkInsertPartitioner<Dataset<Row>> partitioner =
         BulkInsertInternalPartitionerWithRowsFactory.get(
-            lsmTable, createWriteConfig(sortMode, true), true);
+            lsmTable.getMetaClient().getTableConfig(), createWriteConfig(sortMode, true), true);
 
     Dataset<Row> actual = partitioner.repartitionRecords(input, 4);
 
@@ -140,7 +140,8 @@ public class TestLSMBulkInsertPartitioner extends HoodieSparkClientTestHarness {
     BulkInsertPartitioner<JavaRDD<HoodieRecord<Object>>> recordPartitioner =
         BulkInsertInternalPartitionerFactory.get(lsmTable, config);
     BulkInsertPartitioner<Dataset<Row>> rowPartitioner =
-        BulkInsertInternalPartitionerWithRowsFactory.get(lsmTable, config, true);
+        BulkInsertInternalPartitionerWithRowsFactory.get(
+            lsmTable.getMetaClient().getTableConfig(), config, true);
 
     HoodieException recordException = assertThrows(HoodieException.class,
         () -> recordPartitioner.repartitionRecords(jsc.emptyRDD(), 1));
@@ -184,7 +185,8 @@ public class TestLSMBulkInsertPartitioner extends HoodieSparkClientTestHarness {
     HoodieException recordException = assertThrows(HoodieException.class,
         () -> BulkInsertInternalPartitionerFactory.get(lsmTable, config));
     HoodieException rowException = assertThrows(HoodieException.class,
-        () -> BulkInsertInternalPartitionerWithRowsFactory.get(lsmTable, config, true));
+        () -> BulkInsertInternalPartitionerWithRowsFactory.get(
+            lsmTable.getMetaClient().getTableConfig(), config, true));
 
     assertEquals(expectedMessage, recordException.getMessage());
     assertEquals(expectedMessage, rowException.getMessage());
@@ -192,16 +194,18 @@ public class TestLSMBulkInsertPartitioner extends HoodieSparkClientTestHarness {
 
   private BulkInsertPartitioner<Dataset<Row>> getRowPartitioner(BulkInsertSortMode sortMode) {
     return BulkInsertInternalPartitionerWithRowsFactory.get(
-        lsmTable, createWriteConfig(sortMode, true), true);
+        lsmTable.getMetaClient().getTableConfig(), createWriteConfig(sortMode, true), true);
   }
 
   private void assertRowPartitionerSelection(BulkInsertSortMode sortMode,
                                              Class<?> expectedPartitionerClass) {
     HoodieWriteConfig config = createWriteConfig(sortMode, true);
     assertEquals(expectedPartitionerClass,
-        BulkInsertInternalPartitionerWithRowsFactory.get(lsmTable, config, true).getClass());
+        BulkInsertInternalPartitionerWithRowsFactory.get(
+            lsmTable.getMetaClient().getTableConfig(), config, true).getClass());
     assertEquals(expectedPartitionerClass,
-        BulkInsertInternalPartitionerWithRowsFactory.get(lsmTable, config, true, true).getClass());
+        BulkInsertInternalPartitionerWithRowsFactory.get(
+            lsmTable.getMetaClient().getTableConfig(), config, true, true).getClass());
   }
 
   private BulkInsertPartitioner<JavaRDD<HoodieRecord<Object>>> getHoodieRecordPartitioner(

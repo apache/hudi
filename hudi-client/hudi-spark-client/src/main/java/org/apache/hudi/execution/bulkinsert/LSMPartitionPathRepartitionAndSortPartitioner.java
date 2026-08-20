@@ -35,6 +35,21 @@ import static org.apache.hudi.execution.bulkinsert.LSMBulkInsertRecordSorter.sor
 /**
  * LSM RDD bulk-insert partitioner for
  * {@link BulkInsertSortMode#PARTITION_PATH_REPARTITION_AND_SORT}.
+ *
+ * <p>Unlike {@link PartitionPathRepartitionAndSortPartitioner}, which orders partitioned input
+ * only by partition path and leaves non-partitioned input unsorted, this implementation orders
+ * every output Spark partition by {@code (partition path, record key)} using UTF-8 byte ordering.
+ * This stronger ordering is required for records written to LSM base files.
+ *
+ * <p>For a physically partitioned table, {@link PartitionPathRDDPartitioner} distributes records
+ * using only the partition-path component, keeping all records for the same table partition
+ * together. {@code repartitionAndSortWithinPartitions} then sorts the composite key with the LSM
+ * comparator, so records within each table partition are ordered by record key as well.
+ *
+ * <p>For a physically non-partitioned table, the input is coalesced to the requested parallelism
+ * and each resulting Spark partition is sorted locally with the same LSM comparator. Therefore,
+ * both branches produce sorted output and {@link #arePartitionRecordsSorted()} always returns
+ * {@code true}.
  */
 public class LSMPartitionPathRepartitionAndSortPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {

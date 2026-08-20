@@ -29,7 +29,16 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.GLOBAL_SOR
 import static org.apache.hudi.execution.bulkinsert.LSMBulkInsertRecordSorter.KEY_COMPARATOR;
 import static org.apache.hudi.execution.bulkinsert.LSMBulkInsertRecordSorter.keyByPartitionAndRecordKey;
 
-/** LSM RDD bulk-insert partitioner for {@link BulkInsertSortMode#GLOBAL_SORT}. */
+/**
+ * LSM RDD bulk-insert partitioner for {@link BulkInsertSortMode#GLOBAL_SORT}.
+ *
+ * <p>Like {@link GlobalSortPartitioner}, this partitioner globally sorts the input and range
+ * partitions it across the requested number of Spark partitions. The sort key and comparator are
+ * intentionally different: {@code GlobalSortPartitioner} concatenates the partition path and
+ * record key and relies on the natural Java String ordering, while this implementation keeps the
+ * two key components separate and compares each component by its UTF-8 bytes. This preserves key
+ * boundaries and produces the physical ordering required by LSM base files.
+ */
 public class LSMGlobalSortPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 

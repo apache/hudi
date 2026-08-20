@@ -18,10 +18,10 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -32,17 +32,17 @@ import org.apache.spark.sql.Row;
  */
 public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieTable table,
+  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieTableConfig tableConfig,
                                                         HoodieWriteConfig config,
                                                         boolean isTablePartitioned) {
-    return get(table, config, isTablePartitioned, false);
+    return get(tableConfig, config, isTablePartitioned, false);
   }
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieTable table,
+  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieTableConfig tableConfig,
                                                         HoodieWriteConfig config,
                                                         boolean isTablePartitioned,
                                                         boolean enforceNumOutputPartitions) {
-    if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+    if (tableConfig.isLSMTreeStorageLayout()) {
       switch (config.getBulkInsertSortMode()) {
         case GLOBAL_SORT:
           return new GlobalSortPartitionerWithRows(config);

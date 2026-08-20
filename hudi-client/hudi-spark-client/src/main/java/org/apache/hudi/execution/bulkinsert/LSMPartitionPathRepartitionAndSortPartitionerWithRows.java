@@ -21,6 +21,7 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -29,19 +30,32 @@ import org.apache.spark.sql.functions;
 import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_PATH_REPARTITION_AND_SORT;
 
 /**
- * LSM row partitioner for {@link BulkInsertSortMode#PARTITION_PATH_REPARTITION_AND_SORT}.
+ * LSM Dataset Row bulk-insert partitioner for
+ * {@link BulkInsertSortMode#PARTITION_PATH_REPARTITION_AND_SORT}.
  *
- * <p>The LSM ordering is stronger than the default mode's partition-path-only ordering, so this
- * implementation reuses partition-path distribution and applies the LSM sort once afterward.
+ * <p>Unlike {@link PartitionPathRepartitionAndSortPartitionerWithRows}, which orders partitioned
+ * input only by partition path and leaves non-partitioned input unsorted, this implementation
+ * orders every output Spark partition by the {@link HoodieRecord#PARTITION_PATH_METADATA_FIELD}
+ * and {@link HoodieRecord#RECORD_KEY_METADATA_FIELD} columns. Spark SQL stores these columns as
+ * UTF-8 strings, giving LSM base files their required UTF-8 physical ordering without adding
+ * temporary sort columns or changing the input schema.
+ *
+ * <p>For a physically partitioned table, rows are first repartitioned by the partition-path
+ * metadata column so that one table partition is not split by the distribution key, and then
+ * sorted within each resulting Spark partition by partition path and record key. For a physically
+ * non-partitioned table, rows are coalesced before applying the same local sort. Both branches
+ * require populated meta fields and produce sorted output, so
+ * {@link #arePartitionRecordsSorted()} always returns {@code true}.
  */
 public class LSMPartitionPathRepartitionAndSortPartitionerWithRows
-    extends PartitionPathRepartitionPartitionerWithRows {
+    implements BulkInsertPartitioner<Dataset<Row>> {
 
+  private final boolean isTablePartitioned;
   private final boolean shouldPopulateMetaFields;
 
   public LSMPartitionPathRepartitionAndSortPartitionerWithRows(boolean isTablePartitioned,
                                                                HoodieWriteConfig config) {
-    super(isTablePartitioned, config);
+    this.isTablePartitioned = isTablePartitioned;
     this.shouldPopulateMetaFields = config.populateMetaFields();
   }
 
@@ -51,8 +65,14 @@ public class LSMPartitionPathRepartitionAndSortPartitionerWithRows
       throw new HoodieException(
           PARTITION_PATH_REPARTITION_AND_SORT.name() + " mode requires meta-fields to be enabled");
     }
-    return super.repartitionRecords(rows, outputSparkPartitions)
-        .sortWithinPartitions(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+
+    Dataset<Row> repartitionedRows = isTablePartitioned
+        ? rows.repartition(
+            outputSparkPartitions, functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
+        : rows.coalesce(outputSparkPartitions);
+    return repartitionedRows.sortWithinPartitions(
+        functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+        functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD));
   }
 
   @Override

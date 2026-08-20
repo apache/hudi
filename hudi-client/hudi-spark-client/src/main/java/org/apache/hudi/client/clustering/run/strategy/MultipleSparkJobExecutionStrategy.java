@@ -216,7 +216,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       }
     }).orElseGet(() -> isRowPartitioner
         ? BulkInsertInternalPartitionerWithRowsFactory.get(
-            getHoodieTable(), getWriteConfig(), getHoodieTable().isPartitioned(), true)
+            getHoodieTable().getMetaClient().getTableConfig(), getWriteConfig(),
+            getHoodieTable().isPartitioned(), true)
         : BulkInsertInternalPartitionerFactory.get(getHoodieTable(), getWriteConfig(), true));
   }
 
