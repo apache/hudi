@@ -246,6 +246,23 @@
             <classifier>tests</classifier>
             <scope>test</scope>
         </dependency>
+        <!-- HoodieTestTable, to write a commit the version-8+ timeline can actually read, plus the
+             FileCreateUtils it delegates to. Same declarations as the sibling hudi-gcp and hudi-azure
+             modules. -->
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-hadoop-common</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+            <type>test-jar</type>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-common</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+            <type>test-jar</type>
+        </dependency>
         <dependency>
             <groupId>com.esotericsoftware</groupId>
             <artifactId>kryo-shaded</artifactId>
