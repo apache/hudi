@@ -76,7 +76,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 
 import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
 
@@ -154,6 +153,12 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   private transient NormalizedKeyComputer recordKeyComputer;
   private transient RecordComparator recordKeyComparator;
+
+  private enum BufferWriteResult {
+    SUCCESS,
+    BUFFER_CREATION_FAILED,
+    BUFFER_DIVERGED
+  }
 
   /**
    * Constructs a StreamingSinkFunction.
@@ -314,20 +319,25 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    * <p>1. Data Bucket do not exist and there is no enough memory pages to create a new binary buffer.
    * <p>2. Data Bucket exists, but fails to request new memory pages from memory pool.
    */
-  private boolean doBufferRecord(String bucketID, HoodieFlinkInternalRow record) throws IOException {
-    try {
-      RowDataBucket bucket = this.buckets.computeIfAbsent(bucketID,
-          k -> new RowDataBucket(
-              bucketID,
-              createDataBuffer(),
-              getBucketInfo(record),
-              this.config.get(FlinkOptions.WRITE_BATCH_SIZE)));
-
-      return bucket.writeRow(record.getRowData());
-    } catch (MemoryPagesExhaustedException e) {
-      log.info("There is no enough free pages in memory pool to create buffer, need flushing first.", e);
-      return false;
+  private BufferWriteResult doBufferRecord(String bucketID, HoodieFlinkInternalRow record) throws IOException {
+    RowDataBucket bucket = this.buckets.get(bucketID);
+    if (bucket == null) {
+      try {
+        bucket = new RowDataBucket(
+            bucketID,
+            createDataBuffer(),
+            getBucketInfo(record),
+            this.config.get(FlinkOptions.WRITE_BATCH_SIZE));
+        this.buckets.put(bucketID, bucket);
+      } catch (MemoryPagesExhaustedException e) {
+        log.info("There are not enough free pages in the memory pool to create a buffer; flushing is required first.");
+        return BufferWriteResult.BUFFER_CREATION_FAILED;
+      }
     }
+
+    return bucket.writeRow(record.getRowData())
+        ? BufferWriteResult.SUCCESS
+        : BufferWriteResult.BUFFER_DIVERGED;
   }
 
   /**
@@ -346,33 +356,20 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     final String bucketID = getBucketID(record.getPartitionPath(), record.getFileId());
 
     // 1. try buffer the record into the memory pool
-    boolean success = doBufferRecord(bucketID, record);
-    if (!success) {
-      // 2. flushes the bucket if the memory pool is full
-      RowDataBucket bucketToFlush = this.buckets.values().stream()
-          .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
-          .orElseThrow(NoSuchElementException::new);
-      if (flushBucket(bucketToFlush)) {
-        // 2.1 flushes the data bucket with maximum size
-        this.tracer.countDown(bucketToFlush.getBufferSize());
-        disposeBucket(bucketToFlush);
-      } else {
-        log.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
-      }
-      // 2.2 try to write row again
-      success = doBufferRecord(bucketID, record);
-      if (!success) {
-        throw new RuntimeException("Buffer is too small to hold a single record.");
-      }
+    BufferWriteResult result = doBufferRecord(bucketID, record);
+    if (result != BufferWriteResult.SUCCESS) {
+      // 2. reclaim pages. A buffer whose write returned false must never be reused because
+      // BinaryInMemorySortBuffer may already have changed its variable-length storage state.
+      reclaimMemoryAfterFailedWrite(bucketID, result);
+
+      // 2.1 retry once with a newly-created buffer
+      retryBufferRecord(bucketID, record);
     }
     RowDataBucket bucket = this.buckets.get(bucketID);
     this.tracer.trace(bucket.getLastRecordSize());
     // 3. flushes the bucket if it is full
     if (bucket.isFull()) {
-      if (flushBucket(bucket)) {
-        this.tracer.countDown(bucket.getBufferSize());
-        disposeBucket(bucket);
-      }
+      flushAndDisposeBucket(bucket);
     }
     // update buffer metrics after tracing buffer size
     writeMetrics.setWriteBufferedSize(this.tracer.bufferSize);
@@ -382,8 +379,79 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    * RowData data bucket can not be used after disposing.
    */
   private void disposeBucket(RowDataBucket rowDataBucket) {
-    rowDataBucket.dispose();
-    this.buckets.remove(rowDataBucket.getBucketId());
+    try {
+      rowDataBucket.dispose();
+    } finally {
+      this.buckets.remove(rowDataBucket.getBucketId());
+    }
+  }
+
+  private void reclaimMemoryAfterFailedWrite(String bucketID, BufferWriteResult result) {
+    if (result == BufferWriteResult.BUFFER_DIVERGED) {
+      RowDataBucket divergedBucket = this.buckets.get(bucketID);
+      ValidationUtils.checkState(
+          divergedBucket != null && divergedBucket.isDiverged(),
+          "The failed RowData bucket is missing or has not diverged");
+      flushAndDisposeBucket(divergedBucket);
+      return;
+    }
+
+    ValidationUtils.checkState(
+        result == BufferWriteResult.BUFFER_CREATION_FAILED,
+        "Unexpected successful buffer write result during memory reclamation");
+    RowDataBucket bucketToFlush = this.buckets.values().stream()
+        .filter(bucket -> !bucket.isEmpty())
+        .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
+        .orElseThrow(() -> new HoodieException(
+            "Not enough memory pages to create a RowData buffer and no non-empty bucket can be flushed"));
+    flushAndDisposeBucket(bucketToFlush);
+  }
+
+  private void retryBufferRecord(
+      String bucketID, HoodieFlinkInternalRow record) throws IOException {
+    final BufferWriteResult result;
+    try {
+      result = doBufferRecord(bucketID, record);
+    } catch (IOException | RuntimeException e) {
+      disposeFailedRetryBucket(bucketID, e);
+      throw e;
+    }
+
+    if (result != BufferWriteResult.SUCCESS) {
+      HoodieException exception = new HoodieException(
+          result == BufferWriteResult.BUFFER_CREATION_FAILED
+              ? "Not enough memory pages to create a RowData buffer after flushing"
+              : "The write buffer is too small to hold a single record");
+      disposeFailedRetryBucket(bucketID, exception);
+      throw exception;
+    }
+  }
+
+  private void disposeFailedRetryBucket(String bucketID, Throwable failure) {
+    RowDataBucket bucket = this.buckets.get(bucketID);
+    if (bucket == null) {
+      return;
+    }
+    try {
+      disposeBucket(bucket);
+    } catch (RuntimeException cleanupFailure) {
+      failure.addSuppressed(cleanupFailure);
+    }
+  }
+
+  private void flushAndDisposeBucket(RowDataBucket bucket) {
+    long bufferSize = bucket.getBufferSize();
+    try {
+      if (!bucket.isEmpty()) {
+        flushBucket(bucket);
+      }
+    } finally {
+      try {
+        this.tracer.countDown(bufferSize);
+      } finally {
+        disposeBucket(bucket);
+      }
+    }
   }
 
   private static BucketInfo getBucketInfo(HoodieFlinkInternalRow internalRow) {
@@ -406,7 +474,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         && this.buckets.values().stream().anyMatch(bucket -> !bucket.isEmpty());
   }
 
-  private boolean flushBucket(RowDataBucket bucket) {
+  private void flushBucket(RowDataBucket bucket) {
     String instant = instantToWrite(true);
 
     ValidationUtils.checkState(!bucket.isEmpty(), "Data bucket to flush has no buffering records");
@@ -422,7 +490,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
     this.eventGateway.sendEventToCoordinator(event);
     writeStatuses.addAll(writeStatus);
-    return true;
   }
 
   public void flushRemaining(boolean endInput) {
@@ -431,15 +498,14 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     final List<WriteStatus> writeStatus;
     if (!buckets.isEmpty()) {
       writeStatus = new ArrayList<>();
-      this.buckets.values()
-          // The records are partitioned by the bucket ID and each batch sent to
-          // the writer belongs to one bucket.
-          .forEach(bucket -> {
-            if (!bucket.isEmpty()) {
-              writeStatus.addAll(writeRecords(currentInstant, bucket));
-              bucket.dispose();
-            }
-          });
+      // The records are partitioned by the bucket ID and each batch sent to
+      // the writer belongs to one bucket.
+      for (RowDataBucket bucket : new ArrayList<>(this.buckets.values())) {
+        if (!bucket.isEmpty()) {
+          writeStatus.addAll(writeRecords(currentInstant, bucket));
+        }
+        disposeBucket(bucket);
+      }
     } else {
       log.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
       writeStatus = Collections.emptyList();
@@ -530,13 +596,40 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   @Override
   public void close() throws Exception {
+    Exception closeFailure = null;
+    if (this.buckets != null) {
+      for (RowDataBucket bucket : new ArrayList<>(this.buckets.values())) {
+        try {
+          disposeBucket(bucket);
+        } catch (RuntimeException e) {
+          closeFailure = addCloseFailure(closeFailure, e);
+        }
+      }
+    }
+
     try {
       if (this.memorySegmentPool instanceof Closeable) {
         ((Closeable) this.memorySegmentPool).close();
       }
-    } finally {
-      super.close();
+    } catch (Exception e) {
+      closeFailure = addCloseFailure(closeFailure, e);
     }
+    try {
+      super.close();
+    } catch (Exception e) {
+      closeFailure = addCloseFailure(closeFailure, e);
+    }
+    if (closeFailure != null) {
+      throw closeFailure;
+    }
+  }
+
+  private static Exception addCloseFailure(Exception failure, Exception nextFailure) {
+    if (failure == null) {
+      return nextFailure;
+    }
+    failure.addSuppressed(nextFailure);
+    return failure;
   }
 
   // -------------------------------------------------------------------------
