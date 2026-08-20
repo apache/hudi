@@ -21,6 +21,7 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.schema.internal.InternalSchema
+import org.apache.hudi.common.schema.internal.Types
 import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger
 import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils
 import org.apache.hudi.common.table.timeline.TimelineLayout
@@ -29,6 +30,7 @@ import org.apache.hudi.common.util
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.common.util.InternalSchemaCache
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.hadoop.conf.Configuration
@@ -132,10 +134,41 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   protected var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = null
 
+  /**
+   * Fails fast when schema-on-read meets a shredded variant file. The internal schema models a
+   * variant as a two-field {metadata, value} record (with sentinel negative field ids, see
+   * InternalSchemaConverter), so the merged request clips the file's typed_value away and the
+   * typed rows would read back with a null value residual - silent data loss. Reconstruction
+   * under schema-on-read is tracked by #18285; until then the read must fail loudly. The check
+   * anchors on the sentinel ids, which no real user field can carry, so plain user structs of
+   * the same shape are left alone.
+   */
+  private def validateNoShreddedVariants(footerFileMetaData: FileMetaData): Unit = {
+    val fileParquetSchema = footerFileMetaData.getSchema
+    querySchemaOption.get().getRecord.fields().foreach { field =>
+      field.`type`() match {
+        case record: Types.RecordType
+          if record.fields().size() == 2 && record.fields().forall(_.fieldId() < 0)
+            && fileParquetSchema.containsField(field.name()) =>
+          val fileField = fileParquetSchema.getType(fileParquetSchema.getFieldIndex(field.name()))
+          if (!fileField.isPrimitive && fileField.asGroupType().containsField("typed_value")) {
+            throw new HoodieException(String.format(
+              "Column '%s' is a shredded variant (typed_value present) and the table is read "
+                + "with schema-on-read (hoodie.schema.on.read.enable), which cannot reconstruct "
+                + "shredded variants (see issue #18285). Read without schema-on-read, or rewrite "
+                + "the table unshredded (e.g. cluster with "
+                + "hoodie.parquet.variant.write.shredding.enabled=false).", field.name()))
+          }
+        case _ =>
+      }
+    }
+  }
+
   def getHadoopConfClone(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
     // Clone new conf
     val hadoopAttemptConf = new Configuration(sharedConf)
     typeChangeInfos = if (shouldUseInternalSchema) {
+      validateNoShreddedVariants(footerFileMetaData)
       val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
       val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 
