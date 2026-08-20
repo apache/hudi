@@ -1277,10 +1277,12 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
             Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
           )
         } else {
-          // Spark 4.0 cannot reconstruct shredded variants; the read support fails fast with an
-          // error naming the column instead of returning a partial payload.
+          // Spark 4.0 cannot reconstruct shredded variants; the read must fail loudly instead of
+          // returning a partial payload. Depending on the path that is Spark's own
+          // INVALID_VARIANT_FROM_PARQUET.WRONG_NUM_FIELDS (schema conversion rejects the 3-field
+          // group) or Hudi's read-support guard naming the shredded column; both name the variant.
           assertQueryFailsWith(s"select id, name, cast(v as string), ts from $tableName order by id",
-            "shredded variant", "spark 4.0 shredded read")
+            "ariant", "spark 4.0 shredded read")
         }
 
         // Verify parquet schema has shredded structure with typed_value
