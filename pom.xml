@@ -128,9 +128,13 @@
     <hadoop.version>2.10.2</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.10</hive.version>
-    <!-- The libthrift the Hive client jars above are compiled against (Hive 2.3.10 bumped
-         it for CVE-2020-13949); keep in lockstep with hive.version. See #19680. -->
+    <!-- The thrift artifacts the Hive client jars above are compiled against (Hive 2.3.10
+         bumped libthrift for CVE-2020-13949); keep in lockstep with hive.version. The spark4
+         profiles override hive.libthrift.version to the libthrift Spark 4.x itself ships with
+         the same Hive 2.3.10 client, so the pin never downgrades the Spark-selected version.
+         See #19680. -->
     <hive.libthrift.version>0.14.1</hive.libthrift.version>
+    <hive.libfb303.version>0.9.3</hive.libfb303.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
@@ -2889,6 +2893,9 @@
         <hadoop.version>3.4.0</hadoop.version>
         <kafka.version>3.8.0</kafka.version>
         <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- Spark 4.x ships libthrift 0.16.0 alongside the same Hive 2.3.10 client;
+             keep the Spark-selected version instead of the Spark 3 minimum. See #19680. -->
+        <hive.libthrift.version>0.16.0</hive.libthrift.version>
         <!-- Lance: Use Spark 4.0-specific artifact (Scala 2.13 only) -->
         <lance.spark.artifact>lance-spark-4.0_2.13</lance.spark.artifact>
         <lance.skip.tests>false</lance.skip.tests>
@@ -2956,6 +2963,9 @@
         <hadoop.version>3.4.2</hadoop.version>
         <kafka.version>3.9.1</kafka.version>
         <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- Spark 4.x ships libthrift 0.16.0 alongside the same Hive 2.3.10 client;
+             keep the Spark-selected version instead of the Spark 3 minimum. See #19680. -->
+        <hive.libthrift.version>0.16.0</hive.libthrift.version>
         <lance.spark.artifact>lance-spark-4.1_2.13</lance.spark.artifact>
         <lance.skip.tests>false</lance.skip.tests>
         <!-- Vortex: Use Spark 4.1 artifact (Scala 2.13 only) -->
@@ -3023,6 +3033,9 @@
         <hadoop.version>3.5.0</hadoop.version>
         <kafka.version>3.9.2</kafka.version>
         <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- Spark 4.x ships libthrift 0.16.0 alongside the same Hive 2.3.10 client;
+             keep the Spark-selected version instead of the Spark 3 minimum. See #19680. -->
+        <hive.libthrift.version>0.16.0</hive.libthrift.version>
         <!-- TODO: Enable lance tests on Spark 4.2 -->
         <lance.spark.artifact>lance-spark-4.0_2.13</lance.spark.artifact>
         <lance.skip.tests>true</lance.skip.tests>
