@@ -61,6 +61,8 @@ Alternatively, add the required configs in your core-site.xml from where Hudi ca
   </property>
 ```
 
+Because Hudi reads and writes through the Hadoop S3A connector, these same `fs.s3a.*` settings target Amazon S3 as well as other S3-compatible object stores such as Backblaze B2, Cloudflare R2, and MinIO. For a non-AWS provider, set `fs.s3a.endpoint` to that provider's endpoint (for example `https://your-s3-endpoint.example.com`) and keep `fs.s3a.path.style.access` set to `true` when the provider requires path-style addressing.
+
 
 Utilities such as hudi-cli or Hudi Streamer tool, can pick up s3 creds via environmental variable prefixed with `HOODIE_ENV_`. For e.g below is a bash snippet to setup
 such variables and then have cli be able to work on datasets stored in s3
