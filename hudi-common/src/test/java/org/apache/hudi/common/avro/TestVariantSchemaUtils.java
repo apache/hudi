@@ -241,6 +241,8 @@ public class TestVariantSchemaUtils {
         v.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
     assertTrue(v.getField("value").get().schema().isNullable());
     assertEquals(HoodieSchemaType.BYTES, v.getField("value").get().schema().getNonNullType().getType());
+    // The synthesized field must carry a null default like every other footer-derived optional field.
+    assertEquals(HoodieSchema.NULL_VALUE, v.getField("value").get().defaultVal().get());
   }
 
   @Test

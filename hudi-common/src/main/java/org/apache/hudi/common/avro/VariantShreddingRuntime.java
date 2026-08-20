@@ -78,9 +78,12 @@ public final class VariantShreddingRuntime {
    * Both probes run from this class's static initializer, so nothing here may let an error
    * escape: an escaping {@link LinkageError} would fail {@code <clinit>} and every later use
    * (including {@link #getProviderClass()} on the main Avro write path) would see a bare
-   * "Could not initialize class" with the original cause lost. Candidates are therefore loaded
-   * WITHOUT initialization (no static initializer of theirs runs here), and every
-   * {@link LinkageError} degrades to "absent".
+   * "Could not initialize class" with the original cause lost. This probe therefore loads its
+   * candidates WITHOUT initialization (no static initializer of theirs runs here), and every
+   * {@link LinkageError} degrades to "absent". {@link #loadInferrer()} does initialize the
+   * candidate it picks, since it instantiates it, but every failure there - including the
+   * {@link ExceptionInInitializerError} a candidate's static initializer can raise, itself a
+   * {@link LinkageError} - is caught and latched to absent the same way.
    */
   private static Option<String> probe(String[] candidates) {
     for (String candidate : candidates) {

@@ -156,8 +156,10 @@ public class VariantSchemaUtils {
    * plain user struct that happens to have exactly this shape is stripped too (a documented,
    * accepted false positive: {@code metadata} plus {@code typed_value} is the variant spec's
    * vocabulary). Top-level fields only, matching the scope of
-   * {@link #getInferableVariantColumns}: inference never shreds a nested variant, and the
-   * forced-shredding hooks of both write supports are top-level too.
+   * {@link #getInferableVariantColumns}: inference never shreds a nested variant, and
+   * {@code HoodieAvroWriteSupport.applyForcedShreddingSchema} walks top-level fields only. The row
+   * writer can force-shred at depth (see {@link #swapShreddedVariantFields}), a test-only
+   * forced-DDL case this footer fallback does not cover.
    *
    * <p>The shape check also admits the spec's two-field {@code {metadata, typed_value}} form (a
    * writer may omit {@code value} when every row is typed). Stripping that would leave a
@@ -185,8 +187,13 @@ public class VariantSchemaUtils {
           }
         }
         if (!unwrapped.getField(HoodieSchema.Variant.VARIANT_VALUE_FIELD).isPresent()) {
+          // Null default, like every other optional field on this path (the footer converter
+          // attaches one, and kept members carry theirs over): HoodieSchemaField#equals compares
+          // defaults, so omitting it would make the stripped schema differ from the one a
+          // three-field file yields for the same column.
           strippedFields.add(HoodieSchemaField.of(
-              HoodieSchema.Variant.VARIANT_VALUE_FIELD, HoodieSchema.createNullable(HoodieSchemaType.BYTES)));
+              HoodieSchema.Variant.VARIANT_VALUE_FIELD, HoodieSchema.createNullable(HoodieSchemaType.BYTES),
+              null, HoodieSchema.NULL_VALUE));
         }
         HoodieSchema stripped = HoodieSchema.createRecord(
             unwrapped.getAvroSchema().getName(),
