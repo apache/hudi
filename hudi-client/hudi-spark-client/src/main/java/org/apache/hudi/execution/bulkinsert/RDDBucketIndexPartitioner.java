@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.table.BucketIndexBulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -121,7 +122,10 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
       LOG.warn("Bucket index does not support global sort mode, the sort will only be done within each data partition");
     }
 
-    Comparator<HoodieKey> comparator = (Comparator<HoodieKey> & Serializable) (t1, t2) -> t1.getRecordKey().compareTo(t2.getRecordKey());
+    boolean lsmTable = table.getMetaClient().getTableConfig().isLSMTreeStorageLayout();
+    Comparator<HoodieKey> comparator = (Comparator<HoodieKey> & Serializable) (t1, t2) -> lsmTable
+        ? StringUtils.compareUtf8Bytes(t1.getRecordKey(), t2.getRecordKey())
+        : t1.getRecordKey().compareTo(t2.getRecordKey());
 
     return records.mapToPair(record -> new Tuple2<>(record.getKey(), record))
         .repartitionAndSortWithinPartitions(partitioner, comparator)

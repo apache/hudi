@@ -44,6 +44,7 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRow
 import org.apache.hudi.execution.bulkinsert.ConsistentBucketIndexBulkInsertPartitionerWithRows;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.BucketSortBulkInsertPartitioner;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -140,8 +141,11 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
   protected BulkInsertPartitioner<Dataset<Row>> getPartitioner(boolean populateMetaFields, boolean isTablePartitioned) {
     if (populateMetaFields) {
       if (writeConfig.getIndexType() == HoodieIndex.IndexType.BUCKET) {
+        BucketSortBulkInsertPartitioner.validateCustomSortColumns(table, null);
         if (writeConfig.getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.SIMPLE) {
-          return new BucketIndexBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault(), table.getConfig());
+          return new BucketIndexBulkInsertPartitionerWithRows(
+              writeConfig.getBucketIndexHashFieldWithDefault(), table.getConfig(),
+              table.getMetaClient().getTableConfig().isLSMTreeStorageLayout());
         } else {
           return new ConsistentBucketIndexBulkInsertPartitionerWithRows(table, Collections.emptyMap(), true);
         }

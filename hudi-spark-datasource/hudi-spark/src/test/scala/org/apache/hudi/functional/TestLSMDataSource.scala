@@ -25,9 +25,10 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.{BulkInsertSortMode, RowCustomColumnsSortPartitioner}
+import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.testutils.{HoodieClientTestUtils, SparkClientFunctionalTestHarness}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
@@ -176,6 +177,57 @@ class TestLSMDataSource extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
+  @MethodSource(Array("bucketBulkInsertParams"))
+  def testBucketIndexBulkInsert(
+      tableType: HoodieTableType,
+      bucketEngineType: HoodieIndex.BucketIndexEngineType,
+      enableRowWriter: Boolean): Unit = {
+    val tablePath = s"${basePath}_${tableType.name.toLowerCase}_${bucketEngineType.name.toLowerCase}_$enableRowWriter"
+    val options = baseOptions(tableType) ++ Map(
+      DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> enableRowWriter.toString,
+      HoodieWriteConfig.BULK_INSERT_SORT_MODE.key -> BulkInsertSortMode.NONE.name,
+      HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.BUCKET.name,
+      HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key -> bucketEngineType.name,
+      HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key -> "id",
+      HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> "1")
+    val inserts = rows(Seq(
+      ("😀-bucket-p1", "v1", 1L, FirstPartition),
+      ("Ａ-bucket-p1", "v1", 1L, FirstPartition),
+      ("middle-bucket-p1", "v1", 1L, FirstPartition),
+      ("😀-bucket-p2", "v1", 1L, SecondPartition),
+      ("Ａ-bucket-p2", "v1", 1L, SecondPartition)))
+
+    write(inserts, tablePath, options, WriteOperationType.BULK_INSERT, SaveMode.Overwrite)
+
+    assertLatestBaseFilesSorted(tablePath, WriteOperationType.BULK_INSERT)
+    val initialFileIds = latestBaseFiles(tablePath).map(_.getFileId).toSet
+    assertEquals(2, initialFileIds.size)
+    assertSnapshot(tablePath, Map(
+      "😀-bucket-p1" -> "v1",
+      "Ａ-bucket-p1" -> "v1",
+      "middle-bucket-p1" -> "v1",
+      "😀-bucket-p2" -> "v1",
+      "Ａ-bucket-p2" -> "v1"))
+
+    val upserts = rows(Seq(
+      ("😀-bucket-p1", "v2", 2L, FirstPartition),
+      ("Ａ-bucket-p1", "v2", 2L, FirstPartition),
+      ("middle-bucket-p1", "v2", 2L, FirstPartition),
+      ("ascii-new-p1", "new", 2L, FirstPartition)))
+    write(upserts, tablePath, options, WriteOperationType.UPSERT)
+
+    assertChangedFilesSorted(tablePath, tableType, WriteOperationType.UPSERT, "log")
+    assertEquals(initialFileIds, latestBaseFiles(tablePath).map(_.getFileId).toSet)
+    assertSnapshot(tablePath, Map(
+      "😀-bucket-p1" -> "v2",
+      "Ａ-bucket-p1" -> "v2",
+      "middle-bucket-p1" -> "v2",
+      "ascii-new-p1" -> "new",
+      "😀-bucket-p2" -> "v1",
+      "Ａ-bucket-p2" -> "v1"))
+  }
+
+  @ParameterizedTest
   @EnumSource(value = classOf[BulkInsertSortMode], names = Array(
     "NONE", "PARTITION_PATH_REPARTITION"))
   def testBulkInsertRejectsNonSortingModes(sortMode: BulkInsertSortMode): Unit = {
@@ -241,6 +293,29 @@ class TestLSMDataSource extends SparkClientFunctionalTestHarness {
     val instants = createMetaClient(tablePath).reloadActiveTimeline().getInstants.asScala
     assertEquals(1, instants.size)
     assertEquals(org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED, instants.head.getState)
+  }
+
+  @Test
+  def testLsmBucketRejectsCustomSortColumnsBeforeInflight(): Unit = {
+    Seq(false, true).foreach { enableRowWriter =>
+      val tablePath = s"${basePath}_cow_lsm_bucket_custom_sort_$enableRowWriter"
+      val options = baseOptions(HoodieTableType.COPY_ON_WRITE) ++ Map(
+        DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> enableRowWriter.toString,
+        HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.BUCKET.name,
+        HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key -> HoodieIndex.BucketIndexEngineType.SIMPLE.name,
+        HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key -> "id",
+        HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> "1",
+        HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS.key -> "value")
+      val inserts = rows(Seq(("key-1", "v1", 1L, FirstPartition)))
+
+      val exception = assertThrows(classOf[HoodieException], () =>
+        write(inserts, tablePath, options, WriteOperationType.BULK_INSERT, SaveMode.Overwrite))
+      assertExceptionChainContains(exception, "Custom sort columns are not supported for bucket index on LSM tables")
+
+      val instants = createMetaClient(tablePath).reloadActiveTimeline().getInstants.asScala
+      assertEquals(1, instants.size)
+      assertEquals(org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED, instants.head.getState)
+    }
   }
 
   @Test
@@ -429,6 +504,15 @@ class TestLSMDataSource extends SparkClientFunctionalTestHarness {
 }
 
 object TestLSMDataSource {
+
+  def bucketBulkInsertParams(): java.util.stream.Stream[Arguments] =
+    java.util.stream.Stream.of(
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieIndex.BucketIndexEngineType.SIMPLE, Boolean.box(false)),
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieIndex.BucketIndexEngineType.SIMPLE, Boolean.box(true)),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieIndex.BucketIndexEngineType.SIMPLE, Boolean.box(false)),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieIndex.BucketIndexEngineType.SIMPLE, Boolean.box(true)),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING, Boolean.box(false)),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING, Boolean.box(true)))
 
   def bulkInsertWithHoodieRecordPathParams(): java.util.stream.Stream[Arguments] =
     java.util.stream.Stream.of(

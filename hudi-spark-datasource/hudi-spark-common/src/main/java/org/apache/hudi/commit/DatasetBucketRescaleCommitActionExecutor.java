@@ -57,7 +57,9 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
    */
   @Override
   protected BulkInsertPartitioner<Dataset<Row>> getPartitioner(boolean populateMetaFields, boolean isTablePartitioned) {
-    return new BucketIndexBulkInsertPartitionerWithRows(writeClient.getConfig(), expression, rule, bucketNumber);
+    return new BucketIndexBulkInsertPartitionerWithRows(
+        writeClient.getConfig(), expression, rule, bucketNumber,
+        table.getMetaClient().getTableConfig().isLSMTreeStorageLayout());
   }
 
   /**
