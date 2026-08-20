@@ -1490,7 +1490,13 @@ public class TestHoodieSchema {
     // Value field should be nullable for shredded
     assertTrue(fields.get(1).schema().isNullable());
 
-    // Verify typed_value schema
+    // The shredding spec makes typed_value OPTIONAL: a row whose value does not match the
+    // shredding schema (a scalar under an object schema, a JSON null) leaves typed_value null
+    // and carries everything in the value residual. A required typed_value makes such rows
+    // unwritable on the Avro path (parquet-avro: "Null-value for required field: typed_value").
+    assertTrue(fields.get(2).schema().isNullable());
+
+    // Verify typed_value schema: the accessor unwraps the nullable union to the value type.
     HoodieSchema retrievedTypedValueSchema = variantSchema.getTypedValueField().get();
     assertEquals(HoodieSchemaType.RECORD, retrievedTypedValueSchema.getType());
   }
