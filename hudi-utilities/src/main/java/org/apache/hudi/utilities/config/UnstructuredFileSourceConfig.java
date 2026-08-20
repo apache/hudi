@@ -122,6 +122,17 @@ public class UnstructuredFileSourceConfig extends HoodieConfig {
       .sinceVersion("1.2.0")
       .withDocumentation("Number of characters consecutive chunks overlap by.");
 
+  public static final ConfigProperty<Long> WORK_BYTES_PER_PARTITION = ConfigProperty
+      .key(PREFIX + "work.bytes.per.partition")
+      .defaultValue(16L * 1024 * 1024)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Target bytes of parseable content per Spark partition when files arrive "
+          + "through cloud notifications. Only files small enough to be parsed count toward it, "
+          + "since a file above " + PARSE_MAX_BYTES.key() + " is referenced without being read. "
+          + "Far below a columnar target on purpose: text extraction runs orders of magnitude "
+          + "slower per byte than a columnar scan.");
+
   public static final ConfigProperty<Integer> LISTING_PARALLELISM = ConfigProperty
       .key(PREFIX + "listing.parallelism")
       .defaultValue(0)
