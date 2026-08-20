@@ -22,6 +22,7 @@ import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer;
 import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer.VariantSample;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter;
 
@@ -70,6 +71,7 @@ public class VariantShreddingInferenceInternalRowFileWriter implements HoodieInt
   private final List<VariantSample[]> samples = new ArrayList<>();
   private long bufferedBytes = 0;
   private long estimatedRowSize = 0;
+  private long estimatedRowCount = 0;
   private HoodieInternalRowFileWriter delegate;
   private IOException fatalFailure;
   private boolean closed = false;
@@ -145,11 +147,8 @@ public class VariantShreddingInferenceInternalRowFileWriter implements HoodieInt
       delegate.close();
     } catch (IOException | RuntimeException e) {
       if (delegate != null && !delegateClosed) {
-        try {
-          delegate.close();
-        } catch (Exception suppressed) {
-          // Best-effort cleanup; surface the original failure.
-        }
+        // HoodieInternalRowFileWriter is not an AutoCloseable, hence the method reference.
+        CloseableUtils.closeSuppressing(delegate::close, e);
       }
       throw e;
     }
@@ -160,7 +159,7 @@ public class VariantShreddingInferenceInternalRowFileWriter implements HoodieInt
     InternalRow copied = row.copy();
     samples.add(extractSamples(copied));
     buffer.add(new BufferedRow(key, withKey, copied));
-    bufferedBytes += estimateSize(copied);
+    chargeSize(copied);
     if (buffer.size() >= VariantShreddingInferenceFileWriter.MAX_BUFFERED_RECORDS || bufferedBytes >= maxBufferedBytes) {
       materialize();
     }
@@ -176,18 +175,25 @@ public class VariantShreddingInferenceInternalRowFileWriter implements HoodieInt
     return out;
   }
 
-  private long estimateSize(InternalRow row) {
+  /** Charges {@code row} against the byte cap: an exact size for an UnsafeRow, an estimate otherwise. */
+  private void chargeSize(InternalRow row) {
     if (row instanceof UnsafeRow) {
-      return ((UnsafeRow) row).getSizeInBytes();
+      bufferedBytes += ((UnsafeRow) row).getSizeInBytes();
+      return;
     }
     // Re-estimate periodically so a small first row cannot defeat the byte cap
     // (same moving-average idiom as ExternalSpillableMap).
-    if (estimatedRowSize == 0 || buffer.size() % SIZE_ESTIMATE_INTERVAL == 0) {
+    estimatedRowCount++;
+    if (estimatedRowSize == 0 || estimatedRowCount % SIZE_ESTIMATE_INTERVAL == 0) {
+      long previous = estimatedRowSize;
       long sampled = Math.max(1, sizeEstimator.sizeEstimate(row));
       estimatedRowSize = estimatedRowSize == 0
           ? sampled : (long) (estimatedRowSize * 0.9 + sampled * 0.1);
+      // Rescale the rows already charged at the old estimate, or the cap would trip late once the
+      // estimate grew. Only the estimated ones: the UnsafeRow branch above charges exact sizes.
+      bufferedBytes += (estimatedRowCount - 1) * (estimatedRowSize - previous);
     }
-    return estimatedRowSize;
+    bufferedBytes += estimatedRowSize;
   }
 
   private void materialize() throws IOException {
@@ -208,7 +214,9 @@ public class VariantShreddingInferenceInternalRowFileWriter implements HoodieInt
     } catch (IOException e) {
       fatalFailure = e;
       throw e;
-    } catch (RuntimeException e) {
+    } catch (RuntimeException | Error e) {
+      // Error latches too: inferTypedValues() already treats a LinkageError as reachable, and an
+      // unlatched failure would let close() finish the file without the un-replayed rows.
       fatalFailure = new IOException("Deferred parquet row writer materialization failed", e);
       throw e;
     }

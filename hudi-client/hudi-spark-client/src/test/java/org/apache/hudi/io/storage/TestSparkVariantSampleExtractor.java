@@ -21,13 +21,16 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer.VariantSample;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.util.ObjectSizeCalculator;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
@@ -38,14 +41,15 @@ import java.util.Properties;
 
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
  * The branches of {@link SparkVariantSampleExtractor} that need no Spark adapter: ordinal
- * resolution, the absent-column and non-row (delete payload) legs, and the shared-size estimate.
- * Extraction of a present column goes through {@code SparkAdapter.extractVariantBinary} and is
- * covered by the functional inference tests.
+ * resolution, the absent-column and non-row (delete payload) legs, the shared-size estimate and
+ * the detaching prepare(). Extraction of a present column goes through
+ * {@code SparkAdapter.extractVariantBinary} and is covered by the functional inference tests.
  */
 public class TestSparkVariantSampleExtractor {
 
@@ -85,7 +89,34 @@ public class TestSparkVariantSampleExtractor {
     // Every Spark record of the file references the (cached) StructType; the decorator subtracts
     // it from each record's size estimate so the byte cap is not consumed by the schema.
     SparkVariantSampleExtractor extractor = new SparkVariantSampleExtractor(singletonList("v"), STRUCT_TYPE);
-    assertTrue(extractor.sharedSizeEstimate(SCHEMA) > 0);
-    assertEquals(extractor.sharedSizeEstimate(SCHEMA), extractor.sharedSizeEstimate(SCHEMA));
+    assertEquals(ObjectSizeCalculator.getObjectSize(STRUCT_TYPE), extractor.sharedSizeEstimate(SCHEMA));
+  }
+
+  @Test
+  public void testPrepareDetachesTheBufferedRecord() {
+    // copy() deep-copies the row but hands back the caller's own wrapper, which the merge handle
+    // deflates as soon as the write call returns; the buffer must hold a wrapper of its own.
+    SparkVariantSampleExtractor extractor = new SparkVariantSampleExtractor(singletonList("v"), STRUCT_TYPE);
+    GenericInternalRow row = new GenericInternalRow(new Object[] {1L, null});
+    HoodieSparkRecord record = new HoodieSparkRecord(KEY, row, STRUCT_TYPE, false);
+
+    HoodieRecord prepared = extractor.prepare(record, SCHEMA, PROPS);
+    assertNotSame(record, prepared);
+    // The row itself is not re-copied: the decorator already copied it before calling prepare().
+    assertSame(row, prepared.getData());
+    assertEquals(KEY, prepared.getKey());
+
+    record.deflate();
+    assertEquals(1L, ((InternalRow) prepared.getData()).getLong(0));
+  }
+
+  @Test
+  public void testPrepareLeavesNonRowRecordsAlone() {
+    // A delete payload has no row to detach from the caller.
+    SparkVariantSampleExtractor extractor = new SparkVariantSampleExtractor(singletonList("v"), STRUCT_TYPE);
+    GenericRecord avroData = new GenericData.Record(SCHEMA.toAvroSchema());
+    avroData.put("id", 1L);
+    HoodieAvroIndexedRecord record = new HoodieAvroIndexedRecord(KEY, avroData);
+    assertSame(record, extractor.prepare(record, SCHEMA, PROPS));
   }
 }

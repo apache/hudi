@@ -84,7 +84,9 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
     private final List<String> calls = new ArrayList<>();
     private final List<InternalRow> rows = new ArrayList<>();
     private int closeCount = 0;
-    private IOException failWriteWith;
+    /** An IOException or an Error; anything else is a misuse of the stub. */
+    private Throwable failWriteWith;
+    private IOException failCloseWith;
 
     @Override
     public boolean canWrite() {
@@ -93,26 +95,29 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
 
     @Override
     public void writeRow(UTF8String key, InternalRow row) throws IOException {
-      failIfConfigured();
+      failIfConfigured(failWriteWith);
       calls.add("keyed:" + key);
       rows.add(row);
     }
 
     @Override
     public void writeRow(InternalRow row) throws IOException {
-      failIfConfigured();
+      failIfConfigured(failWriteWith);
       calls.add("plain:" + row.getLong(0));
       rows.add(row);
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
       closeCount++;
+      failIfConfigured(failCloseWith);
     }
 
-    private void failIfConfigured() throws IOException {
-      if (failWriteWith != null) {
-        throw failWriteWith;
+    private static void failIfConfigured(Throwable failure) throws IOException {
+      if (failure instanceof Error) {
+        throw (Error) failure;
+      } else if (failure != null) {
+        throw (IOException) failure;
       }
     }
   }
@@ -216,16 +221,17 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
   @Test
   public void testByteCapAccumulatesThroughTheEstimator() throws IOException {
     // Non-UnsafeRow rows of one shape estimate the same size, so a cap of 150 rows' worth
-    // materializes on exactly the 150th write, after the periodic re-estimation at row 100. The
-    // slack absorbs the moving average's long truncation (at most one byte per row after row
-    // 100), which is why the rows are about a kilobyte: the slack must stay well under one row.
+    // materializes on exactly the 150th write, after the periodic re-estimation at row 100. That
+    // re-estimation rescales the rows already charged, so the moving average's long truncation
+    // (at most a byte) is charged to all 150 rows at once; the slack covers that while staying
+    // well under one row, which is why the rows are about a kilobyte.
     long perRow = new DefaultSizeEstimator<InternalRow>().sizeEstimate(wideRow(0));
     assertTrue(perRow > 1000, "expected a kilobyte-sized row, got " + perRow);
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
     VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN, map -> {
       factoryCalls.add(map);
       return new RecordingRowWriter();
-    }, 150 * perRow - 100);
+    }, 150 * perRow - 500);
 
     for (int i = 0; i < 149; i++) {
       writer.writeRow(wideRow(i));
@@ -352,6 +358,34 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
     // Created but never closed by the try path, so the catch path closes it exactly once.
     assertEquals(1, delegate.closeCount);
     assertSame(boom, assertThrows(IOException.class, () -> writer.writeRow(row(2))));
+  }
+
+  @Test
+  public void testReplayErrorIsLatchedTooAndCloseDoesNotFinishTheFile() throws IOException {
+    // An Error mid-replay latches like an exception does: inference already treats a LinkageError
+    // as reachable (a writer linked against another Spark than the runtime's), and an unlatched
+    // one would let close() finish the file without the rows left in the buffer.
+    RecordingRowWriter delegate = new RecordingRowWriter();
+    NoClassDefFoundError boom = new NoClassDefFoundError("replay failed");
+    delegate.failWriteWith = boom;
+    // A 1-byte cap materializes on the first row, so the Error surfaces from writeRow(), not close().
+    VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN, map -> delegate, 1L);
+
+    assertSame(boom, assertThrows(NoClassDefFoundError.class, () -> writer.writeRow(row(1))));
+    assertSame(boom, assertThrows(IOException.class, writer::close).getCause());
+    assertEquals(1, delegate.closeCount);
+  }
+
+  @Test
+  public void testThrowingDelegateCloseSurfacesAndIsNotRetried() throws IOException {
+    RecordingRowWriter delegate = new RecordingRowWriter();
+    IOException boom = new IOException("close failed");
+    delegate.failCloseWith = boom;
+    VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN, map -> delegate, Long.MAX_VALUE);
+
+    writer.writeRow(row(1));
+    assertSame(boom, assertThrows(IOException.class, writer::close));
+    assertEquals(1, delegate.closeCount, "a throwing delegate.close() must surface, not be retried");
   }
 
   @Test

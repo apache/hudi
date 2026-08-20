@@ -24,6 +24,7 @@ import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer.VariantSample;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieIOException;
@@ -51,12 +52,15 @@ import java.util.Properties;
  * {@code ParquetOutputWriterWithVariantShredding} (4096 rows / 64MB).
  *
  * <p>Buffered records are {@link HoodieRecord#copy() copied} because Spark iterators reuse row
- * instances, then handed to {@link VariantSampleExtractor#prepare} so an extractor that has to
- * materialize the record to sample it (the Avro one deserializes payload-backed records) can
- * return the materialized form for buffering and the replay does not repeat that work. For
- * record types where copy() is identity (Avro), replay additionally relies on writer-level
- * records being freshly allocated per record, which holds today; variant samples are extracted
- * eagerly into immutable byte arrays so inference itself never depends on it.
+ * instances, then handed to {@link VariantSampleExtractor#prepare}, which serves two purposes:
+ * an extractor that has to materialize the record to sample it (the Avro one deserializes
+ * payload-backed records) returns the materialized form for buffering so the replay does not
+ * repeat that work, and (since copy() returns the caller's own wrapper for every record type
+ * today) both shipped extractors return a wrapper the caller does not hold, so a handle that
+ * deflates its record right after the write call cannot blank a buffered one. Records with
+ * nothing to materialize (delete payloads) are buffered as they are, so replay still relies on
+ * writer-level records being freshly allocated per record, which holds today; variant samples
+ * are extracted eagerly into immutable byte arrays so inference itself never depends on it.
  *
  * <p>Inference failures never fail the write: the file falls back to unshredded variants. This
  * deliberately diverges from Spark (which propagates inference failures) because a throwing
@@ -210,11 +214,7 @@ public class VariantShreddingInferenceFileWriter<T> implements HoodieFileWriter<
       delegate.close();
     } catch (IOException | RuntimeException e) {
       if (delegate != null && !delegateClosed) {
-        try {
-          delegate.close();
-        } catch (Exception suppressed) {
-          // Best-effort cleanup; surface the original failure.
-        }
+        CloseableUtils.closeSuppressing(delegate, e);
       }
       throw e;
     }
@@ -245,6 +245,9 @@ public class VariantShreddingInferenceFileWriter<T> implements HoodieFileWriter<
       long sampled = Math.max(1, sizeEstimator.sizeEstimate(buffered) - extractor.sharedSizeEstimate(schema));
       estimatedRecordSize = estimatedRecordSize == 0
           ? sampled : (long) (estimatedRecordSize * 0.9 + sampled * 0.1);
+      // Rescale what is already buffered: leaving the earlier records charged at the old estimate
+      // would trip the cap late once the estimate grew (this record is charged just below).
+      bufferedBytes = (buffer.size() - 1) * estimatedRecordSize;
     }
     bufferedBytes += estimatedRecordSize;
     if (buffer.size() >= MAX_BUFFERED_RECORDS || bufferedBytes >= maxBufferedBytes) {
@@ -274,7 +277,9 @@ public class VariantShreddingInferenceFileWriter<T> implements HoodieFileWriter<
     } catch (IOException e) {
       fatalFailure = e;
       throw e;
-    } catch (RuntimeException e) {
+    } catch (RuntimeException | Error e) {
+      // Error latches too: inferTypedValues() already treats a LinkageError as reachable, and an
+      // unlatched failure would let close() finish the file without the un-replayed records.
       fatalFailure = new IOException("Deferred parquet writer materialization failed", e);
       throw e;
     }

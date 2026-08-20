@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer.VariantSample;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter.VariantSampleExtractor;
@@ -40,10 +41,12 @@ import java.util.Properties;
 public class SparkVariantSampleExtractor implements VariantSampleExtractor {
 
   private final int[] ordinals;
+  private final StructType structType;
   private final long structTypeBytes;
 
   public SparkVariantSampleExtractor(List<String> columnNames, StructType structType) {
     this.ordinals = VariantShreddingInferenceInternalRowFileWriter.resolveOrdinals(structType, columnNames);
+    this.structType = structType;
     // Every HoodieSparkRecord of the file references this (cached, shared) StructType.
     this.structTypeBytes = ObjectSizeCalculator.getObjectSize(structType);
   }
@@ -51,6 +54,23 @@ public class SparkVariantSampleExtractor implements VariantSampleExtractor {
   @Override
   public long sharedSizeEstimate(HoodieSchema schema) {
     return structTypeBytes;
+  }
+
+  /**
+   * Re-wraps the row in a record of the decorator's own: {@link HoodieSparkRecord#copy()} deep-copies
+   * the {@link InternalRow} but returns the caller's instance, which a merge handle deflates as soon
+   * as the write call returns -- blanking a record still waiting in the buffer. The row handed in
+   * here is already that fresh copy, so wrapping it again is all the detachment needed. Records
+   * whose data is not a row (delete payloads) have nothing to detach.
+   */
+  @Override
+  public HoodieRecord prepare(HoodieRecord record, HoodieSchema schema, Properties props) {
+    Object data = record.getData();
+    if (!(data instanceof InternalRow)) {
+      return record;
+    }
+    return new HoodieSparkRecord(record.getKey(), (InternalRow) data, structType, record.getOperation(),
+        record.getCurrentLocation(), record.getNewLocation(), true);
   }
 
   @Override

@@ -82,7 +82,8 @@ public class TestVariantShreddingInferenceFileWriter {
     private final Map<String, String> footerMetadata = new LinkedHashMap<>();
     private final Object fileFormatMetadata = new Object();
     private int closeCount = 0;
-    private IOException failWriteWith;
+    /** An IOException or an Error; anything else is a misuse of the stub. */
+    private Throwable failWriteWith;
     private IOException failCloseWith;
 
     @Override
@@ -125,9 +126,11 @@ public class TestVariantShreddingInferenceFileWriter {
       failIfConfigured(failCloseWith);
     }
 
-    private static void failIfConfigured(IOException failure) throws IOException {
-      if (failure != null) {
-        throw failure;
+    private static void failIfConfigured(Throwable failure) throws IOException {
+      if (failure instanceof Error) {
+        throw (Error) failure;
+      } else if (failure != null) {
+        throw (IOException) failure;
       }
     }
   }
@@ -404,6 +407,24 @@ public class TestVariantShreddingInferenceFileWriter {
   }
 
   @Test
+  public void testReplayErrorIsLatchedTooAndCloseDoesNotFinishTheFile() throws IOException {
+    // An Error mid-replay latches like an exception does: inference already treats a LinkageError
+    // as reachable (a writer linked against another Spark than the runtime's), and an unlatched
+    // one would let close() finish the file without the records left in the buffer.
+    RecordingWriter delegate = new RecordingWriter();
+    NoClassDefFoundError boom = new NoClassDefFoundError("replay failed");
+    delegate.failWriteWith = boom;
+    // A 1-byte cap materializes on the first write, so the Error surfaces from write(), not close().
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
+        map -> delegate, 1L);
+
+    assertSame(boom, assertThrows(NoClassDefFoundError.class,
+        () -> writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS)));
+    assertSame(boom, assertThrows(IOException.class, writer::close).getCause());
+    assertEquals(1, delegate.closeCount);
+  }
+
+  @Test
   public void testThrowingDelegateCloseSurfacesAndIsNotRetried() throws IOException {
     RecordingWriter delegate = new RecordingWriter();
     IOException boom = new IOException("close failed");
@@ -451,10 +472,10 @@ public class TestVariantShreddingInferenceFileWriter {
   @Test
   public void testByteCapAccumulatesThroughTheEstimator() throws IOException {
     // Same-shaped records estimate the same size, so a cap of 150 records' worth materializes on
-    // exactly the 150th write, after passing through the periodic re-estimation at record 100
-    // (the small slack absorbs the moving average's floating-point rounding).
-    // Kilobyte-sized records keep the slack well under one record (the average truncates at most
-    // a byte per record after the re-estimation).
+    // exactly the 150th write, after passing through the periodic re-estimation at record 100.
+    // That re-estimation rescales the whole buffer, so the moving average's long truncation (at
+    // most a byte) is charged to all 150 records at once; the slack covers that while staying
+    // well under one record, which is why the records are kilobyte-sized.
     String padding = new String(new char[1024]).replace('\0', 'x');
     long perRecord = new DefaultSizeEstimator<HoodieRecord>().sizeEstimate(newRecord("r000" + padding));
     assertTrue(perRecord > 1000, "expected a kilobyte-sized record, got " + perRecord);
@@ -463,7 +484,7 @@ public class TestVariantShreddingInferenceFileWriter {
         map -> {
           factoryCalls.add(map);
           return new RecordingWriter();
-        }, 150 * perRecord - 100);
+        }, 150 * perRecord - 500);
 
     for (int i = 0; i < 149; i++) {
       writer.write("r" + i, newRecord(String.format("r%03d", i) + padding), RECORD_SCHEMA, PROPS);
