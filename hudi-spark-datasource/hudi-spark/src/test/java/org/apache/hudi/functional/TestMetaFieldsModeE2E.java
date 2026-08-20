@@ -44,7 +44,9 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -54,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -283,30 +286,41 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
         "ALL must persist populate.meta.fields=true for pre-1.3.0 readers");
   }
 
+  private static Stream<Arguments> tableVersionsAndMetaFieldsModes() {
+    return Stream.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, HoodieTableVersion.TEN)
+        .flatMap(version -> Arrays.stream(MetaFieldsMode.values())
+            .map(mode -> Arguments.of(version, mode)));
+  }
+
   /**
-   * Writing a table at table version 6 must record the mode and the derived legacy boolean as raw
-   * properties, and populate the meta columns per the mode. The boolean is asserted on the raw
-   * persisted key rather than through {@code populateMetaFields()} (which resolves through the mode
-   * and answers the same either way) because an unpatched pre-1.3.0 reader sees only the raw key.
+   * A write at any supported table version must record the mode verbatim, and below version 10 also
+   * the derived legacy boolean as a raw property; from version 10 the mode alone is recorded. The
+   * boolean is asserted on the raw persisted key rather than through {@code populateMetaFields()}
+   * (which resolves through the mode and answers the same either way) because an unpatched
+   * pre-1.3.0 reader sees only the raw key. Meta-column population is verified for every case.
    */
   @ParameterizedTest
-  @EnumSource(MetaFieldsMode.class)
-  void tableVersionSixWritePersistsModeAndDerivedLegacyBoolean(MetaFieldsMode mode) {
+  @MethodSource("tableVersionsAndMetaFieldsModes")
+  void writePersistsModeAndLegacyBooleanPerTableVersion(HoodieTableVersion version, MetaFieldsMode mode) {
     Map<String, String> options = baseOptions();
-    options.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(),
-        String.valueOf(HoodieTableVersion.SIX.versionCode()));
+    options.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(version.versionCode()));
     options.put(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
     options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
 
     HoodieTableConfig tc = writeSampleAndGetTableConfig(options, basePath());
 
-    assertEquals(HoodieTableVersion.SIX, tc.getTableVersion());
+    assertEquals(version, tc.getTableVersion());
     assertEquals(mode, tc.getMetaFieldsMode());
     assertEquals(mode.name(), tc.getString(HoodieTableConfig.META_FIELDS_MODE),
-        "the mode must be persisted verbatim on a v6 table");
-    assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
-        tc.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
-        "a table below v10 must persist the derived legacy boolean for unpatched readers");
+        "the mode must be persisted at table version " + version.versionCode());
+    if (version.lesserThan(HoodieTableVersion.TEN)) {
+      assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
+          tc.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+          "a table below v10 must persist the derived legacy boolean for unpatched readers");
+    } else {
+      assertFalse(tc.getProps().containsKey(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+          "a table at v10 must record the mode alone");
+    }
     assertMetaColumnPopulation(basePath(), mode);
   }
 

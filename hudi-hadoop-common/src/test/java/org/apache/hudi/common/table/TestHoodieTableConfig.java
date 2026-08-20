@@ -423,28 +423,39 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
         "the mode must survive on a v6 table -- Uber-style deployments set it there via hudi-cli");
   }
 
+  private static Stream<Arguments> tableVersionsAndMetaFieldsModes() {
+    return Stream.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, HoodieTableVersion.TEN)
+        .flatMap(version -> Arrays.stream(MetaFieldsMode.values())
+            .map(mode -> arguments(version, mode)));
+  }
+
   /**
    * {@link HoodieTableConfig#create} must derive and persist the legacy populate boolean below
    * table version 10 on its own: callers such as the repair-overwrite-props procedure invoke it
    * directly with user-supplied properties, without going through the table builder that also
-   * derives the boolean.
+   * derives the boolean. From version 10 the mode alone is recorded.
    */
   @ParameterizedTest
-  @EnumSource(MetaFieldsMode.class)
-  void testCreateDerivesLegacyBooleanBelowTableVersionTen(MetaFieldsMode mode) throws IOException {
-    StoragePath v6MetaPath = new StoragePath(basePath,
-        "v6-" + mode.name() + "/" + HoodieTableMetaClient.METAFOLDER_NAME);
+  @MethodSource("tableVersionsAndMetaFieldsModes")
+  void testCreatePersistsLegacyBooleanPerTableVersion(HoodieTableVersion version, MetaFieldsMode mode)
+      throws IOException {
+    StoragePath versionedMetaPath = new StoragePath(basePath,
+        "v" + version.versionCode() + "-" + mode.name() + "/" + HoodieTableMetaClient.METAFOLDER_NAME);
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
-    props.setProperty(HoodieTableConfig.VERSION.key(),
-        String.valueOf(HoodieTableVersion.SIX.versionCode()));
+    props.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(version.versionCode()));
     props.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
-    HoodieTableConfig.create(storage, v6MetaPath, props);
+    HoodieTableConfig.create(storage, versionedMetaPath, props);
 
-    assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
-        new HoodieTableConfig(storage, v6MetaPath).getProps()
-            .getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
-        "create() must persist the derived boolean below v10 for unpatched readers, " + mode);
+    HoodieTableConfig persisted = new HoodieTableConfig(storage, versionedMetaPath);
+    if (version.lesserThan(HoodieTableVersion.TEN)) {
+      assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
+          persisted.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+          "create() must persist the derived boolean below v10 for unpatched readers, " + mode);
+    } else {
+      assertFalse(persisted.getProps().containsKey(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+          "create() must record the mode alone from v10, " + mode);
+    }
   }
 
   @Test
