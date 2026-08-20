@@ -77,14 +77,11 @@ public class HoodieCommonConfig extends HoodieConfig {
   public static final ConfigProperty<String> SET_NULL_FOR_MISSING_COLUMNS = ConfigProperty
       .key("hoodie.write.set.null.for.missing.columns")
       .defaultValue("false")
-      .withAlternatives("hoodie.datasource.write.new.columns.nullable")
       .markAdvanced()
       .sinceVersion("0.14.1")
-      .withDocumentation("Controls whether schema reconciliation may use null to backfill fields that are absent on "
-          + "one side of schema evolution. When enabled, existing nullable fields missing from an incoming batch are "
-          + "filled with null, and newly added fields are made nullable with a null default so existing records can "
-          + "be read with the evolved schema. The legacy key hoodie.datasource.write.new.columns.nullable is "
-          + "supported as an alternative.");
+      .withDocumentation("When a nullable column is missing from incoming batch during a write operation, the write "
+          + " operation will fail schema compatibility check. Set this option to true will make the missing "
+          + " column be filled with null values to successfully complete the write operation.");
 
   public static final ConfigProperty<String> TIMESTAMP_LOGICAL_TYPE_OVERRIDES = ConfigProperty
       .key("hoodie.write.timestamp.logical.type.overrides")

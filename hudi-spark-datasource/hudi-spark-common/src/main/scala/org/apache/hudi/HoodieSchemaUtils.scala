@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
-import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.sql.types.StructType
@@ -138,7 +137,7 @@ object HoodieSchemaUtils {
         val shouldReconcileSchema = opts.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(),
           DataSourceWriteOptions.RECONCILE_SCHEMA.defaultValue().toString).toBoolean
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
-          canonicalizeSchema(sourceSchema, latestTableSchema, opts, !shouldReconcileSchema)
+          canonicalizeSchema(sourceSchema, latestTableSchema, !shouldReconcileSchema)
         } else {
           InternalSchemaConverter.fixNullOrdering(sourceSchema)
         }
@@ -186,7 +185,8 @@ object HoodieSchemaUtils {
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
     val allowAutoEvolutionColumnDrop = opts.getOrElse(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key,
       HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.defaultValue).toBoolean
-    val setNullForMissingColumns = shouldSetNullForMissingColumns(opts)
+    val setNullForMissingColumns = opts.getOrElse(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.key(),
+      DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.defaultValue).toBoolean
 
     if (!mergeIntoWrites && !shouldValidateSchemasCompatibility && !allowAutoEvolutionColumnDrop) {
       // Default behaviour
@@ -223,7 +223,8 @@ object HoodieSchemaUtils {
     internalSchemaOpt match {
       case Some(internalSchema) =>
         // Apply schema evolution, by auto-merging write schema and read schema
-        val setNullForMissingColumns = shouldSetNullForMissingColumns(opts)
+        val setNullForMissingColumns = opts.getOrElse(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
+          HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.defaultValue()).toBoolean
         val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema,
           setNullForMissingColumns, timestampLogicalTypeOverrides)
         val evolvedSchema = InternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
@@ -275,16 +276,10 @@ object HoodieSchemaUtils {
    *
    * TODO support casing reconciliation
    */
-  private def canonicalizeSchema(sourceSchema: HoodieSchema, latestTableSchema: HoodieSchema, opts : Map[String, String],
+  private def canonicalizeSchema(sourceSchema: HoodieSchema, latestTableSchema: HoodieSchema,
                                  shouldReorderColumns: Boolean): HoodieSchema = {
-    reconcileSchemaRequirements(sourceSchema, latestTableSchema, shouldReorderColumns,
-      shouldSetNullForMissingColumns(opts))
+    reconcileSchemaRequirements(sourceSchema, latestTableSchema, shouldReorderColumns)
   }
-
-  private def shouldSetNullForMissingColumns(opts: Map[String, String]): Boolean = {
-    SparkConfigUtils.getStringWithAltKeys(opts, HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS).toBoolean
-  }
-
 
   private def reconcileSchemasLegacy(tableSchema: HoodieSchema, newSchema: HoodieSchema): (HoodieSchema, Boolean) = {
     // Legacy reconciliation implements following semantic

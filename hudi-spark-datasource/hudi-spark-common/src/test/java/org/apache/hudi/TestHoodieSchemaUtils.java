@@ -21,11 +21,12 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaCompatibilityChecker.SchemaIncompatibilityType;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
@@ -346,13 +347,11 @@ public class TestHoodieSchemaUtils {
 
   @ParameterizedTest
   @CsvSource({
-      "false,false,hoodie.write.set.null.for.missing.columns",
-      "true,false,hoodie.write.set.null.for.missing.columns",
-      "true,true,hoodie.write.set.null.for.missing.columns",
-      "true,false,hoodie.datasource.write.new.columns.nullable"
+      "false,false",
+      "true,false",
+      "true,true"
   })
-  void testNullBackfillMakesNewColumnsNullable(boolean reconcileSchema, boolean useInternalSchema,
-                                               String nullBackfillConfigKey) {
+  void testNewColumnsAreNullableAcrossReconciliationPaths(boolean reconcileSchema, boolean useInternalSchema) {
     HoodieSchema table = createRecord("newColumns",
         createPrimitiveField("id", HoodieSchemaType.INT),
         HoodieSchemaField.of("address", createRecord("address",
@@ -362,10 +361,13 @@ public class TestHoodieSchemaUtils {
         HoodieSchemaField.of("address", createRecord("address",
             createPrimitiveField("city", HoodieSchemaType.STRING),
             createPrimitiveField("country", HoodieSchemaType.STRING)), null, null),
-        createPrimitiveField("phone", HoodieSchemaType.STRING));
+        createPrimitiveField("phone", HoodieSchemaType.STRING),
+        HoodieSchemaField.of("profile", createRecord("profile",
+            createPrimitiveField("name", HoodieSchemaType.STRING)), null, null),
+        createArrayField("items", createRecord("item",
+            createPrimitiveField("sku", HoodieSchemaType.STRING))));
     TypedProperties properties = new TypedProperties();
     properties.setProperty(HoodieCommonConfig.RECONCILE_SCHEMA.key(), Boolean.toString(reconcileSchema));
-    properties.setProperty(nullBackfillConfigKey, "true");
 
     HoodieSchema actual = HoodieSchemaUtils.deduceWriterSchema(
         incoming,
@@ -376,20 +378,26 @@ public class TestHoodieSchemaUtils {
     assertFalse(actual.getNestedField("address.city").get().getRight().isNullable());
     assertNewFieldIsNullableWithNullDefault(actual.getNestedField("address.country").get().getRight());
     assertNewFieldIsNullableWithNullDefault(actual.getField("phone").get());
+    HoodieSchemaField profile = actual.getField("profile").get();
+    assertNewFieldIsNullableWithNullDefault(profile);
+    assertFalse(profile.schema().getNonNullType().getField("name").get().isNullable());
+    HoodieSchemaField items = actual.getField("items").get();
+    assertNewFieldIsNullableWithNullDefault(items);
+    HoodieSchema itemElement = items.schema().getNonNullType().getElementType();
+    assertFalse(itemElement.isNullable());
+    assertFalse(itemElement.getField("sku").get().isNullable());
   }
 
   @Test
-  void testNewColumnsRemainRequiredWithoutNullBackfill() {
-    HoodieSchema table = createRecord("newColumns",
-        createPrimitiveField("id", HoodieSchemaType.INT));
-    HoodieSchema incoming = createRecord("newColumns",
+  void testMetadataFieldsAreExcludedFromNewColumnNullability() {
+    HoodieSchema table = createRecord("metadata", createPrimitiveField("id", HoodieSchemaType.INT));
+    HoodieSchema incoming = createRecord("metadata",
         createPrimitiveField("id", HoodieSchemaType.INT),
-        createPrimitiveField("phone", HoodieSchemaType.STRING));
+        createPrimitiveField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieSchemaType.STRING));
 
-    Throwable throwable = assertThrows(SchemaBackwardsCompatibilityException.class,
-        () -> deduceWriterSchema(incoming, table, false));
-    assertTrue(throwable.getMessage().contains(
-        SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE.name()));
+    HoodieSchema actual = AvroSchemaEvolutionUtils.reconcileSchemaRequirements(incoming, table, false);
+
+    assertFalse(actual.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD).get().isNullable());
   }
 
   private static void assertNewFieldIsNullableWithNullDefault(HoodieSchemaField field) {

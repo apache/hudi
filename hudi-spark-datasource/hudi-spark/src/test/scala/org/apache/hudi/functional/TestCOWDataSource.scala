@@ -1937,7 +1937,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       (3, "3", "2021-01-05"))
     val rdd = spark.sparkContext.parallelize(data)
     val df = spark.createDataFrame(rdd).toDF(columns: _*)
-    var hudiOptions = Map[String, String](
+    val hudiOptions = Map[String, String](
       HoodieWriteConfig.TBL_NAME.key() -> "tbl",
       DataSourceWriteOptions.OPERATION.key() -> "insert",
       DataSourceWriteOptions.TABLE_TYPE.key() -> "COPY_ON_WRITE",
@@ -1967,11 +1967,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array(
-    "false,hoodie.write.set.null.for.missing.columns",
-    "true,hoodie.write.set.null.for.missing.columns",
-    "false,hoodie.datasource.write.new.columns.nullable"))
-  def testSchemaEvolutionWithNewColumns(schemaOnRead: Boolean, nullBackfillConfigKey: String): Unit = {
+  @ValueSource(booleans = Array(false, true))
+  def testSchemaEvolutionWithNewColumns(schemaOnRead: Boolean): Unit = {
     val df1 = spark.sql(
       "select '1' as event_id, '2' as ts, '3' as version, named_struct('city', 'Paris') as address")
     var hudiOptions = Map[String, String](
@@ -1993,7 +1990,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       "select '2' as event_id, '2' as ts, '3' as version, "
         + "named_struct('city', 'Berlin', 'country', 'DE') as address, '123' as phone")
 
-    hudiOptions = hudiOptions + (nullBackfillConfigKey -> "true")
     df2.write.format("hudi").options(hudiOptions).mode("append").save(basePath)
 
     val metaClient = createMetaClient(basePath)
