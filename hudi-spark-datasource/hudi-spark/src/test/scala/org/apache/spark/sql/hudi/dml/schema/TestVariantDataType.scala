@@ -20,7 +20,6 @@
 package org.apache.spark.sql.hudi.dml.schema
 
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.HoodieSchemaException
@@ -29,10 +28,7 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
-import org.apache.hadoop.fs.{FileSystem, Path => HadoopPath}
-import org.apache.parquet.hadoop.ParquetFileReader
-import org.apache.parquet.hadoop.util.HadoopInputFile
-import org.apache.parquet.schema.{GroupType, MessageType, Type}
+import org.apache.parquet.schema.Type
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType}
@@ -41,7 +37,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, LongType, MapType, MetadataBuilder, StringType, StructField, StructType}
 
 
-class TestVariantDataType extends HoodieSparkSqlTestBase {
+class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTestSupport {
 
   test(s"Test Table with Variant Data Type") {
     // Variant type is only supported in Spark 4.0+
@@ -1172,72 +1168,4 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     })
   }
 
-  /**
-   * Pins the on-disk layout of the `v` column across every base file. Without it a leg meant to
-   * exercise the shredded path can silently degenerate into the unshredded one, or the reverse,
-   * and the branch it was written for goes uncovered.
-   */
-  private def assertVariantLayout(tablePath: String, shredded: Boolean, leg: String): Unit = {
-    val files = listDataParquetFiles(tablePath)
-    assert(files.nonEmpty, s"[$leg] should have at least one data parquet file")
-    files.foreach { filePath =>
-      val variantGroup = getFieldAsGroup(readParquetSchema(filePath), "v")
-      if (shredded) {
-        assert(variantGroup.containsField("typed_value"),
-          s"[$leg] base file should carry typed_value. Schema:\n$variantGroup")
-      } else {
-        assert(!variantGroup.containsField("typed_value"),
-          s"[$leg] base file must not carry typed_value. Schema:\n$variantGroup")
-      }
-    }
-  }
-
-  /** Pins that a write bin-packed into the existing file group rather than creating a new one. */
-  private def assertSingleFileGroup(tablePath: String, leg: String): Unit = {
-    val fileGroupIds = listDataParquetFiles(tablePath)
-      .map(f => FSUtils.getFileId(new HadoopPath(f).getName)).distinct
-    assert(fileGroupIds.size == 1,
-      s"[$leg] insert should bin-pack into the first file group via the small-file merge, got: $fileGroupIds")
-  }
-
-  /**
-   * Lists data parquet files in the table directory, excluding Hudi metadata files.
-   */
-  private def listDataParquetFiles(tablePath: String): Seq[String] = {
-    val conf = spark.sparkContext.hadoopConfiguration
-    val fs = FileSystem.get(new HadoopPath(tablePath).toUri, conf)
-    val iter = fs.listFiles(new HadoopPath(tablePath), true)
-    val files = scala.collection.mutable.ArrayBuffer[String]()
-    while (iter.hasNext) {
-      val file = iter.next()
-      val path = file.getPath.toString
-      if (path.endsWith(".parquet") && !path.contains(".hoodie")) {
-        files += path
-      }
-    }
-    files.toSeq
-  }
-
-  /**
-   * Reads the Parquet schema (MessageType) from a parquet file.
-   */
-  private def readParquetSchema(filePath: String): MessageType = {
-    val conf = spark.sparkContext.hadoopConfiguration
-    val inputFile = HadoopInputFile.fromPath(new HadoopPath(filePath), conf)
-    val reader = ParquetFileReader.open(inputFile)
-    try {
-      reader.getFooter.getFileMetaData.getSchema
-    } finally {
-      reader.close()
-    }
-  }
-
-  /**
-   * Gets a named field from a GroupType (MessageType) and returns it as a GroupType.
-   * Uses getFieldIndex(String) + getType(int) to avoid Scala overload resolution issues.
-   */
-  private def getFieldAsGroup(parent: GroupType, fieldName: String): GroupType = {
-    val idx: Int = parent.getFieldIndex(fieldName)
-    parent.getType(idx).asGroupType()
-  }
 }
