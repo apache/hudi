@@ -86,8 +86,6 @@ workload comes out ahead.
 A scan projecting no data columns (`ReadSchema: struct<>`, for example an aggregate over only the
 partition column) is not bridged at all, and that branch stays on Spark.
 
-Making the Hudi scan itself native is separate work and is not attempted here.
-
 ## Usage
 
 Comet is not enabled by the bundle being on the classpath. These settings turn it on:

@@ -145,6 +145,24 @@ off-heap memory when reading ZSTD files ([PARQUET-2160](https://issues.apache.or
 Upgrade to Spark 3.5 or newer before using ZSTD. Keeping GZIP as the write default does not remove the
 risk when an older Spark runtime reads ZSTD files produced by another engine.
 
+### Native Spark bundle
+
+`hudi-native-spark-bundle` is `hudi-spark-bundle` plus [Apache DataFusion Comet](https://datafusion.apache.org/comet/)
+for native vectorized execution. It is built alongside the Spark bundle for the Spark versions Comet
+publishes artifacts for, and produces nothing for the others.
+
+| Maven build options       | Expected native bundle jar name | Notes                                          |
+|:--------------------------|:--------------------------------|:-----------------------------------------------|
+| `-Dspark3.4`              | hudi-native-spark3.4-bundle_2.12 | For Spark 3.4.x and Scala 2.12                 |
+| `-Dspark3.5 -Dscala-2.12` | hudi-native-spark3.5-bundle_2.12 | For Spark 3.5.x and Scala 2.12                 |
+| `-Dspark3.5 -Dscala-2.13` | hudi-native-spark3.5-bundle_2.13 | For Spark 3.5.x and Scala 2.13                 |
+| `-Dspark4.0`              | hudi-native-spark4.0-bundle_2.13 | For Spark 4.0 and Scala 2.13                   |
+| `-Dspark4.1`              | hudi-native-spark4.1-bundle_2.13 | For Spark 4.1 and Scala 2.13                   |
+| `-Dspark3.3`, `-Dspark4.2` | none                            | Comet publishes no artifact for these versions |
+
+The bundle can be built on Java 11, but requires Java 17 at runtime, and Comet ships Linux native
+libraries only. See `packaging/hudi-native-spark-bundle/README.md`.
+
 Please note that only Spark-related bundles, i.e., `hudi-spark-bundle`, `hudi-utilities-bundle`,
 `hudi-utilities-slim-bundle`, can be built using `scala-2.13` profile. Hudi Flink bundle cannot be built
 using `scala-2.13` profile. To build these bundles on Scala 2.13, use the following command:

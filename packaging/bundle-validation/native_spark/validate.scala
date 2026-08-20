@@ -17,8 +17,6 @@
  * under the License.
  */
 
-import org.apache.hudi.QuickstartUtils._
-import scala.collection.JavaConverters._
 import org.apache.spark.sql.SaveMode._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig._
@@ -28,11 +26,16 @@ val outputDir = "/tmp/native-spark-bundle"
 // Force a real join rather than a broadcast, so the plan exercises Comet's join, shuffle and sort.
 spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "-1")
 
-def writeTable(name: String, numRecords: Int): String = {
+// Deterministic input, so the query result can be asserted exactly. 300 rows spread evenly over
+// three partitions, fare equal to the row id.
+def writeTable(name: String): String = {
   val path = "file:///tmp/hudi-bundles/tests/" + name
-  val inserts = convertToStringList(new DataGenerator().generateInserts(numRecords)).asScala.toSeq
-  spark.read.json(spark.sparkContext.parallelize(inserts, 2)).write.format("hudi").
-    options(getQuickstartWriteConfigs).
+  spark.range(0, 300).selectExpr(
+      "concat('id-', cast(id as string)) as uuid",
+      "cast(id % 3 as string) as partitionpath",
+      "cast(id as double) as fare",
+      "id as ts")
+    .write.format("hudi").
     option(PRECOMBINE_FIELD_OPT_KEY, "ts").
     option(RECORDKEY_FIELD_OPT_KEY, "uuid").
     option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
@@ -42,14 +45,19 @@ def writeTable(name: String, numRecords: Int): String = {
   path
 }
 
-spark.read.format("hudi").load(writeTable("trips_native_1", 200)).createOrReplaceTempView("t1")
-spark.read.format("hudi").load(writeTable("trips_native_2", 200)).createOrReplaceTempView("t2")
+spark.read.format("hudi").load(writeTable("trips_native_1")).createOrReplaceTempView("t1")
+spark.read.format("hudi").load(writeTable("trips_native_2")).createOrReplaceTempView("t2")
 
-// Aggregate a data column, not just the partition column: a scan projecting no data columns
-// reads as ReadSchema struct<> and Comet declines to bridge it into Arrow.
+// Each partition holds 100 rows per side, so the join emits 100 * 100 rows per partition and each
+// t1 fare is summed 100 times. Aggregate a data column, not just the partition column: a scan
+// projecting no data columns reads as ReadSchema struct<> and Comet declines to bridge it.
 val query = spark.sql(
   "select t1.partitionpath, count(*) as c, sum(t1.fare) as s from t1 " +
-  "join t2 on t1.partitionpath = t2.partitionpath group by t1.partitionpath")
+  "join t2 on t1.partitionpath = t2.partitionpath group by t1.partitionpath order by t1.partitionpath")
+
+val rows = query.collect().map(r => s"${r.get(0)},${r.get(1)},${r.get(2)}")
+rows.foreach(r => println("::warning::native bundle row " + r))
+sc.parallelize(rows, 1).saveAsTextFile(outputDir + "/rows")
 
 // Comet does not recognize Hudi's file format and leaves the scan to Spark, but with
 // spark.comet.convert.parquet.enabled it bridges Hudi's columnar output into Arrow and runs
@@ -58,6 +66,5 @@ val query = spark.sql(
 val plan = query.queryExecution.executedPlan.toString
 println("::warning::native bundle executed plan\n" + plan)
 sc.parallelize(Seq(plan), 1).saveAsTextFile(outputDir + "/plan")
-sc.parallelize(Seq(query.collect().length.toString), 1).saveAsTextFile(outputDir + "/count")
 
 System.exit(0)
