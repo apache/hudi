@@ -61,6 +61,11 @@ public class StringPartitionPathFormatter extends PartitionPathFormatterBase<Str
     return partitionPathPart.replace('-', '/');
   }
 
+  @Override
+  protected boolean startsWithDash(String partitionPathPart) {
+    return !partitionPathPart.isEmpty() && partitionPathPart.charAt(0) == '-';
+  }
+
   public static class JavaStringBuilder implements PartitionPathFormatterBase.StringBuilder<String> {
     private final java.lang.StringBuilder sb = new java.lang.StringBuilder();
 

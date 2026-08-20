@@ -67,6 +67,11 @@ public class UTF8StringPartitionPathFormatter extends PartitionPathFormatterBase
     return partitionPathPart.replace(DASH_UTF8, SLASH_UTF8);
   }
 
+  @Override
+  protected boolean startsWithDash(UTF8String partitionPathPart) {
+    return partitionPathPart.startsWith(DASH_UTF8);
+  }
+
   public static class UTF8StringBuilder implements StringBuilder<UTF8String> {
     private final org.apache.hudi.unsafe.UTF8StringBuilder sb = new org.apache.hudi.unsafe.UTF8StringBuilder();
 

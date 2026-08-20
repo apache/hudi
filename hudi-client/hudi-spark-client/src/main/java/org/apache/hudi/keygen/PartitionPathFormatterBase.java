@@ -71,8 +71,19 @@ public abstract class PartitionPathFormatterBase<S> {
       //       [[CustomKeyGenerator]] is not an exception to this: it builds one single-field
       //       sub-key-generator per partition field, so every field takes this branch and a
       //       multi-field table does get each of its values slash-separated -- on the Avro,
-      //       [[org.apache.spark.sql.Row]] and [[org.apache.spark.sql.catalyst.InternalRow]] paths alike
-      return slashSeparatedDatePartitioning ? replaceDashesWithSlashes(partitionPathPart) : partitionPathPart;
+      //       [[org.apache.spark.sql.Row]] and [[org.apache.spark.sql.catalyst.InternalRow]] paths alike.
+      //       All three agreeing does not make that layout usable, though: the extra fragments leave
+      //       [[HoodieSparkUtils#doParsePartitionColumnValues]] unable to line the path up with the
+      //       partition columns, so reading such a table back fails. Tracked in HUDI issue #19666
+      // NOTE: A value with a leading dash is left alone: substituting would make the partition path
+      //       start with "/", and an absolute relative-partition-path is resolved inconsistently --
+      //       [[FSUtils#constructAbsolutePath(String, String)]] chops the leading "/" while the
+      //       [[StoragePath]] overload used by [[AbstractTableFileSystemView]] lets it URI-resolve
+      //       away the table base path ("-5" lands the writer in "<base>/5" but the file-system view
+      //       in "/5"). Such a value is not a date to begin with, so nothing is lost by not slashing it
+      return slashSeparatedDatePartitioning && !startsWithDash(partitionPathPart)
+          ? replaceDashesWithSlashes(partitionPathPart)
+          : partitionPathPart;
     }
 
     StringBuilder<S> sb = stringBuilderFactory.get();
@@ -112,6 +123,15 @@ public abstract class PartitionPathFormatterBase<S> {
    * performed on the concrete string representation {@code S} the formatter operates on.
    */
   protected abstract S replaceDashesWithSlashes(S partitionPathPart);
+
+  /**
+   * Whether {@code partitionPathPart} starts with a dash, in which case
+   * {@link #replaceDashesWithSlashes(Object)} must not be applied to it.
+   *
+   * <p>NOTE: This has to be implemented by every sub-class, since the check has to be performed on
+   * the concrete string representation {@code S} the formatter operates on.
+   */
+  protected abstract boolean startsWithDash(S partitionPathPart);
 
   /**
    * This is a generic interface closing the gap and unifying the {@link java.lang.StringBuilder} with

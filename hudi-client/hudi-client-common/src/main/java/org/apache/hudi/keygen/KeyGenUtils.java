@@ -257,8 +257,9 @@ public class KeyGenUtils {
         if (hiveStylePartitioning) {
           fieldVal = partitionPathField + "=" + fieldVal;
         }
+        // NOTE: See [[slashSeparateDateValue]] on why a leading dash suppresses the substitution
         if (partitionPathFields.size() == 1 && slashSeparatedDatePartitioning) {
-          fieldVal = fieldVal.replace('-', '/');
+          fieldVal = slashSeparateDateValue(fieldVal);
         }
         partitionPath.append(fieldVal);
       }
@@ -291,10 +292,28 @@ public class KeyGenUtils {
     if (hiveStylePartitioning) {
       partitionPath = partitionPathField + "=" + partitionPath;
     }
+    // NOTE: See [[slashSeparateDateValue]] on why a leading dash suppresses the substitution
     if (slashSeparatedDatePartitioning) {
-      partitionPath = partitionPath.replace('-', '/');
+      partitionPath = slashSeparateDateValue(partitionPath);
     }
     return partitionPath;
+  }
+
+  /**
+   * Turns a {@code yyyy-MM-dd} formatted date value into the {@code yyyy/MM/dd} directory structure
+   * requested by {@code hoodie.datasource.write.slash.separated.date.partitioning}.
+   *
+   * <p>A value with a leading dash is returned as-is: substituting would make the partition path
+   * start with {@code "/"}, and an absolute relative-partition-path is resolved inconsistently --
+   * {@link org.apache.hudi.common.fs.FSUtils#constructAbsolutePath(String, String)} chops the
+   * leading {@code "/"} while the {@link org.apache.hudi.storage.StoragePath} overload used by
+   * {@code AbstractTableFileSystemView} lets it URI-resolve away the table base path (a value of
+   * {@code "-5"} lands the writer in {@code "<base>/5"} but the file-system view in {@code "/5"},
+   * and {@code "-"} resolves to the base path itself). Such a value is not a date to begin with,
+   * so nothing is lost by not slashing it.
+   */
+  private static String slashSeparateDateValue(String partitionPath) {
+    return partitionPath.startsWith("-") ? partitionPath : partitionPath.replace('-', '/');
   }
 
   /**

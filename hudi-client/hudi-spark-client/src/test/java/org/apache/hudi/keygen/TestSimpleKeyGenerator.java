@@ -216,6 +216,26 @@ class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
+  void testSlashSeparatedDatePartitioningLeavesLeadingDashesAlone() {
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropsWithSlashSeparatedDatePartitioning());
+
+    // NOTE: Substituting here would yield a partition path starting with "/", which
+    //       [[FSUtils#constructAbsolutePath(String, String)]] and the [[StoragePath]] overload used
+    //       by [[AbstractTableFileSystemView]] resolve differently -- the former chops the leading
+    //       "/", the latter URI-resolves the table base path away -- so the writer and the
+    //       file-system view would disagree on where the partition lives
+    GenericRecord avroRecord = new GenericData.Record(HoodieSchema.parse(KeyGeneratorTestUtilities.EXAMPLE_SCHEMA).getAvroSchema());
+    avroRecord.put("timestamp", "-5");
+    avroRecord.put("_row_key", "key1");
+    avroRecord.put("ts_ms", "-5");
+    avroRecord.put("pii_col", "val1");
+
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    Assertions.assertEquals("key1", key.getRecordKey());
+    Assertions.assertEquals("-5", key.getPartitionPath());
+  }
+
+  @Test
   void testSlashSeparatedDatePartitioningOnRowWritingPaths() {
     TypedProperties properties = getPropsWithSlashSeparatedDatePartitioning();
     // NOTE: "ts_ms" is the string-typed field of the example schema, "timestamp" is a long

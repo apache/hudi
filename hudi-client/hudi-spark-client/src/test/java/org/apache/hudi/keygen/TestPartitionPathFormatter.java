@@ -76,6 +76,22 @@ class TestPartitionPathFormatter {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
+  void testSlashSeparatedDatePartitioningLeavesLeadingDashesAlone(boolean useRowWriterPath) {
+    // NOTE: Substituting here would yield a partition path starting with "/", which
+    //       [[FSUtils#constructAbsolutePath(String, String)]] and the [[StoragePath]] overload used
+    //       by [[AbstractTableFileSystemView]] resolve differently -- the former chops the leading
+    //       "/", the latter URI-resolves the table base path away -- so the writer and the
+    //       file-system view would disagree on where the partition lives
+    assertEquals("-5", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "-5"));
+    assertEquals("-", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "-"));
+    assertEquals("--5", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "--5"));
+    // A dash anywhere else is still a separator: only a leading one produces an absolute path
+    assertEquals("5/", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "5-"));
+    assertEquals("2026/01/05", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "2026-01-05"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
   void testSlashSeparatedDatePartitioningEncodesValues(boolean useRowWriterPath) {
     // '?' has to be escaped, while the date separators are turned into directory separators
     assertEquals("2026/01/05", combine(useRowWriterPath, false, true, true, SINGLE_FIELD, "2026-01-05"));
