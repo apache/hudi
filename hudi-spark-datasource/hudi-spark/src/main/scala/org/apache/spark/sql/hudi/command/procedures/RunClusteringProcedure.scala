@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.{HoodieCLIUtils, HoodieFileIndex, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.common.schema.HoodieSchemaType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption}
@@ -233,11 +234,22 @@ class RunClusteringProcedure extends BaseProcedure
     }
 
     val tableSchemaResolver = new TableSchemaResolver(metaClient)
-    val fields = tableSchemaResolver.getTableSchema(false)
-      .getFields.asScala.map(_.name().toLowerCase)
+    val fieldsByName = tableSchemaResolver.getTableSchema(false)
+      .getFields.asScala.map(field => field.name().toLowerCase -> field).toMap
     orderColumns.split(",").foreach(col => {
-      if (!fields.contains(col.toLowerCase)) {
-        throw new HoodieClusteringException("Order column not exist:" + col)
+      fieldsByName.get(col.toLowerCase) match {
+        case None =>
+          throw new HoodieClusteringException("Order column not exist:" + col)
+        case Some(field) =>
+          // Types without an ordering used to fail deep in the clustering job (an
+          // AnalysisException from the row partitioner, a ClassCastException from the RDD one);
+          // reject them here and name the column instead.
+          val fieldType = field.schema().getNonNullType.getType
+          if (fieldType == HoodieSchemaType.VARIANT || fieldType == HoodieSchemaType.BLOB
+            || fieldType == HoodieSchemaType.VECTOR) {
+            throw new HoodieClusteringException(
+              s"Order column '$col' has type $fieldType, which has no ordering and cannot be clustered by")
+          }
       }
     })
   }
