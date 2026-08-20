@@ -24,9 +24,11 @@ import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer
 import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer.VariantSample
 import org.apache.hudi.common.schema.HoodieSchema
 
+import org.apache.spark.SparkEnv
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.execution.datasources.parquet.InferVariantShreddingSchema
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ArrayType, DataType, StructField, StructType, VariantType}
 import org.apache.spark.unsafe.types.VariantVal
 
@@ -47,6 +49,10 @@ class Spark41VariantShreddingSchemaInferrer extends VariantShreddingSchemaInferr
   private val typedValueField = HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD
   // Avro identifier shape; the Hudi schema the result splices into is Avro-backed.
   private val avroNamePattern = "[A-Za-z_][A-Za-z0-9_]*".r.pattern
+  // Addressed by key because the SQLConf entries behind them are spark-private.
+  private val shreddingCapKeys = Seq(
+    "spark.sql.variant.shredding.maxSchemaWidth", // SQLConf.VARIANT_SHREDDING_MAX_SCHEMA_WIDTH
+    "spark.sql.variant.shredding.maxSchemaDepth") // SQLConf.VARIANT_SHREDDING_MAX_SCHEMA_DEPTH
 
   override def inferTypedValueSchemas(columnNames: ju.List[String],
                                       rowSamples: ju.List[Array[VariantSample]]): ju.Map[String, HoodieSchema] = {
@@ -65,8 +71,13 @@ class Spark41VariantShreddingSchemaInferrer extends VariantShreddingSchemaInferr
     }.toSeq
 
     // One call covers all variant columns of the file: Spark's max-width budget is global
-    // across the schema, and per-column calls would skew it.
-    val inferred = new InferVariantShreddingSchema(inputSchema).inferSchema(rows)
+    // across the schema, and per-column calls would skew it. Resolve the caps before pinning
+    // them: inside the block `SQLConf.get` is `capConf` itself.
+    val capConf = new SQLConf()
+    shreddingCapKeys.foreach(key => resolveShreddingCap(key).foreach(capConf.setConfString(key, _)))
+    val inferred = SQLConf.withExistingConf(capConf) {
+      new InferVariantShreddingSchema(inputSchema).inferSchema(rows)
+    }
 
     val result = new ju.HashMap[String, HoodieSchema]()
     names.zipWithIndex.foreach { case (name, i) =>
@@ -83,6 +94,19 @@ class Spark41VariantShreddingSchemaInferrer extends VariantShreddingSchemaInferr
       }
     }
     result
+  }
+
+  /**
+   * Resolves a shredding cap override for the [[InferVariantShreddingSchema]] constructor, which
+   * reads it off `SQLConf.get`: an offline compaction task runs outside any SQL execution scope, so
+   * no session conf reached it and the cap silently falls back to Spark's default. The SparkConf
+   * fallback mirrors `HoodieRowParquetWriteSupport#resolveSessionLocalTimeZone`; a missing or
+   * non-int value leaves the key unset, which restores Spark's own default.
+   */
+  private def resolveShreddingCap(key: String): Option[String] = {
+    Option(SQLConf.get.getConfString(key, null))
+      .orElse(Option(SparkEnv.get).flatMap(env => Option(env.conf.get(key, null))))
+      .filter(_.trim.toIntOption.isDefined)
   }
 
   /**
