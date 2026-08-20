@@ -40,10 +40,40 @@ import scala.collection.mutable
  * Shared helpers for variant-shredding tests: parquet-footer layout inspection, a row-level
  * typed-vs-residual inspector, a shape-drift data generator, and a write-layout toggle. Mixed
  * into [[TestVariantDataType]] and [[TestVariantShreddingMixedLayouts]].
+ *
+ * Until #18961 lands, [[inferredOr]] always resolves to its forced stand-in, and the forced DDLs
+ * are struct-shaped: only OBJECT-shaped typed_value is ever written by these suites.
  */
 trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
 
   import VariantShreddingTestSupport._
+
+  /** The `(id int, v variant, ts long)` table both suites use, with the knobs they vary. */
+  protected def createVariantTable(tableName: String,
+                                   tablePath: String,
+                                   tableType: String,
+                                   props: Seq[String] = Seq.empty,
+                                   extraCols: String = "",
+                                   preCombine: Boolean = true): Unit = {
+    val extraColsDdl = if (extraCols.isEmpty) "" else s"$extraCols,"
+    val preCombineProp = if (preCombine) "preCombineField = 'ts'," else ""
+    val extraProps = if (props.isEmpty) "" else props.mkString(",\n  ", ",\n  ", "")
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  v variant,
+         |  $extraColsDdl
+         |  ts long
+         |) using hudi
+         | location '$tablePath'
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  $preCombineProp
+         |  type = '$tableType'$extraProps
+         | )
+       """.stripMargin)
+  }
 
   // ---------------------------------------------------------------------------------------------
   // Parquet footer helpers
@@ -317,24 +347,20 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * A SQL source of `(id int, <variant cols>, ts long)` rows over the union id span of all
-   * segments, one input partition (`range(lo, hi, 1, 1)`) so a single-bucket write preserves
-   * row order. Ids not covered by any segment of a column get a SQL NULL variant.
+   * A SQL source of `(id int, v variant, ts long)` rows over the union id span of all segments,
+   * one input partition (`range(lo, hi, 1, 1)`) so a single-bucket write preserves row order.
+   * Ids not covered by any segment get a SQL NULL variant.
    */
   protected def variantSourceSql(segments: Seq[(Range, VariantShape)],
-                                 extraVariantCols: Seq[(String, Seq[(Range, VariantShape)])] = Seq.empty,
                                  ts: String = "1000L"): String = {
-    val allSegments = segments ++ extraVariantCols.flatMap(_._2)
-    require(allSegments.nonEmpty, "at least one segment is required")
-    val lo = allSegments.map(_._1.start).min
-    val hi = allSegments.map(_._1.end).max
-    val variantCols = (("v", segments) +: extraVariantCols).map { case (name, segs) =>
-      val branches = segs
-        .map { case (r, shape) => s"when id >= ${r.start} and id < ${r.end} then ${shape.jsonExpr}" }
-        .mkString(" ")
-      s"parse_json(case $branches else cast(null as string) end) as $name"
-    }.mkString(", ")
-    s"select cast(id as int) as id, $variantCols, $ts as ts from range($lo, $hi, 1, 1)"
+    require(segments.nonEmpty, "at least one segment is required")
+    val lo = segments.map(_._1.start).min
+    val hi = segments.map(_._1.end).max
+    val branches = segments
+      .map { case (r, shape) => s"when id >= ${r.start} and id < ${r.end} then ${shape.jsonExpr}" }
+      .mkString(" ")
+    val variantCol = s"parse_json(case $branches else cast(null as string) end) as v"
+    s"select cast(id as int) as id, $variantCol, $ts as ts from range($lo, $hi, 1, 1)"
   }
 
   /** The expected `cast(col as string)` value per id for a segment list; null when uncovered. */
@@ -394,9 +420,6 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   protected def withWriteLayout[T](layout: WriteLayout)(f: => T): T =
     withSQLConf(layoutConfs(layout): _*)(f)
 
-  /** The same layout confs as options for DataFrame writes (session hoodie.* confs do not apply). */
-  protected def layoutOptions(layout: WriteLayout): Map[String, String] = layoutConfs(layout).toMap
-
   /**
    * Whether a shredding-schema inferrer is on the classpath (#18961's VariantShreddingRuntime,
    * Spark 4.1+ modules only). Resolved reflectively so this trait compiles before #18961 lands;
@@ -413,37 +436,12 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
     case _: NoSuchMethodException => false
   }
 
-  protected def assumeInferrer(): Unit = {
-    assume(inferrerPresent,
-      "Variant shredding schema inference requires a VariantShreddingSchemaInferrer on the classpath")
-  }
-
   /**
    * The `Inferred` layout when an inferrer is on the classpath, otherwise the forced stand-in.
    * Lets heterogeneity tests keep their mixed-layout shape on classpaths without #18961.
    */
   protected def inferredOr(standIn: WriteLayout): WriteLayout =
     if (inferrerPresent) Inferred else standIn
-
-  /**
-   * Asserts that EXECUTING the query fails with a cause whose message contains `expected`.
-   * checkNestedExceptionContains only runs `spark.sql` (lazy), so it never sees execution-time
-   * failures like a per-file read guard; this collects.
-   */
-  protected def assertQueryFailsWith(sqlText: String, expected: String, leg: String): Unit = {
-    val failure = intercept[Throwable] {
-      spark.sql(sqlText).collect()
-    }
-    var cause: Throwable = failure
-    var found = false
-    while (cause != null && !found) {
-      if (cause.getMessage != null && cause.getMessage.contains(expected)) {
-        found = true
-      }
-      cause = cause.getCause
-    }
-    assert(found, s"[$leg] expected a failure containing '$expected', got: $failure")
-  }
 
   // ---------------------------------------------------------------------------------------------
   // Table-service idioms
@@ -512,19 +510,9 @@ object VariantShreddingTestSupport {
       override def expected(id: Int): String = s"""{"a":"s$id","b":"b$id"}"""
     }
 
-    /** ObjA plus a field meant to stay under inference's 10 percent cardinality bar. */
-    case object ObjARare extends VariantShape("""concat('{"a":', id, ',"b":"b', id, '","rare":1}')""") {
-      override def expected(id: Int): String = s"""{"a":$id,"b":"b$id","rare":1}"""
-    }
-
     /** Root-level scalar. */
     case object RootScalar extends VariantShape("cast(id as string)") {
       override def expected(id: Int): String = s"$id"
-    }
-
-    /** Root-level array. */
-    case object RootArray extends VariantShape("""concat('[', id, ',', id + 1, ']')""") {
-      override def expected(id: Int): String = s"[$id,${id + 1}]"
     }
 
     /**
@@ -542,8 +530,6 @@ object VariantShreddingTestSupport {
     }
   }
 
-  // tblproperties fragments for file-count control.
+  // tblproperties fragment for file-count control.
   val NEW_FILE_GROUP_PER_COMMIT = "hoodie.parquet.small.file.limit = '0'"
-  val PROCEDURE_COMPACTION =
-    "hoodie.compact.inline = 'false', hoodie.compact.inline.max.delta.commits = '1'"
 }

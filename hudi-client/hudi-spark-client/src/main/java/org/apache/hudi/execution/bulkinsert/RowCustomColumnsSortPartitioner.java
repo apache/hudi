@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.SortUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -50,6 +51,9 @@ public class RowCustomColumnsSortPartitioner implements BulkInsertPartitioner<Da
   }
 
   public RowCustomColumnsSortPartitioner(String[] columnNames, HoodieWriteConfig config) {
+    // Validate the caller's columns only: the prepended partition-path/record-key columns are
+    // meta strings and may be absent from the write schema.
+    SortUtils.validateSortableColumns(columnNames, config.getSchema());
     this.sortColumnNames = tryPrependPartitionPathAndSuffixRecordKeyColumns(columnNames, config);
   }
 

@@ -240,6 +240,12 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       // Clone new conf
       val hadoopAttemptConf = new Configuration(broadcastedHadoopConf.value.value)
       val typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = if (shouldUseInternalSchema) {
+        // Same guard as ParquetSchemaEvolutionUtils.getHadoopConfClone: schema-on-read cannot
+        // reconstruct shredded variants, so fail loudly instead of silently dropping typed_value.
+        // Empty projections (count(*)) read no column data and keep working.
+        if (requiredSchema.nonEmpty) {
+          ParquetSchemaEvolutionUtils.validateNoShreddedVariants(querySchemaOption.get(), footerFileMetaData)
+        }
         val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
         val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 
