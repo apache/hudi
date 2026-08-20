@@ -27,7 +27,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.function.VoidFunction2;
@@ -279,6 +281,33 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
     assertEquals(MetaFieldsMode.ALL, tc.getMetaFieldsMode());
     assertTrue(tc.populateMetaFields(),
         "ALL must persist populate.meta.fields=true for pre-1.3.0 readers");
+  }
+
+  /**
+   * Writing a table at table version 6 must record the mode and the derived legacy boolean as raw
+   * properties, and populate the meta columns per the mode. The boolean is asserted on the raw
+   * persisted key rather than through {@code populateMetaFields()} (which resolves through the mode
+   * and answers the same either way) because an unpatched pre-1.3.0 reader sees only the raw key.
+   */
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void tableVersionSixWritePersistsModeAndDerivedLegacyBoolean(MetaFieldsMode mode) {
+    Map<String, String> options = baseOptions();
+    options.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(),
+        String.valueOf(HoodieTableVersion.SIX.versionCode()));
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+
+    HoodieTableConfig tc = writeSampleAndGetTableConfig(options, basePath());
+
+    assertEquals(HoodieTableVersion.SIX, tc.getTableVersion());
+    assertEquals(mode, tc.getMetaFieldsMode());
+    assertEquals(mode.name(), tc.getString(HoodieTableConfig.META_FIELDS_MODE),
+        "the mode must be persisted verbatim on a v6 table");
+    assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
+        tc.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+        "a table below v10 must persist the derived legacy boolean for unpatched readers");
+    assertMetaColumnPopulation(basePath(), mode);
   }
 
   @Test

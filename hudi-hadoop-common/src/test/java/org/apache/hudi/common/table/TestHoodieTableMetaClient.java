@@ -238,8 +238,12 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
           .initTable(this.metaClient.getStorageConf(), oldPath)
           .getTableConfig();
       assertEquals(mode, oldTable.getMetaFieldsMode());
-      assertEquals(mode.toLegacyPopulateMetaFields(), oldTable.populateMetaFields(),
-          "a table below v10 must still carry the derived boolean for unpatched readers, " + mode);
+      // Assert the raw property, not populateMetaFields(): the accessor resolves through the mode,
+      // so it answers the same whether or not the boolean was persisted. An unpatched reader sees
+      // only the raw key.
+      assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
+          oldTable.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+          "a table below v10 must persist the derived boolean for unpatched readers, " + mode);
     }
   }
 

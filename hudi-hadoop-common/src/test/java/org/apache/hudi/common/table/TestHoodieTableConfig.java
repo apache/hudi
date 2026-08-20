@@ -423,6 +423,30 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
         "the mode must survive on a v6 table -- Uber-style deployments set it there via hudi-cli");
   }
 
+  /**
+   * {@link HoodieTableConfig#create} must derive and persist the legacy populate boolean below
+   * table version 10 on its own: callers such as the repair-overwrite-props procedure invoke it
+   * directly with user-supplied properties, without going through the table builder that also
+   * derives the boolean.
+   */
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void testCreateDerivesLegacyBooleanBelowTableVersionTen(MetaFieldsMode mode) throws IOException {
+    StoragePath v6MetaPath = new StoragePath(basePath,
+        "v6-" + mode.name() + "/" + HoodieTableMetaClient.METAFOLDER_NAME);
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
+    props.setProperty(HoodieTableConfig.VERSION.key(),
+        String.valueOf(HoodieTableVersion.SIX.versionCode()));
+    props.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    HoodieTableConfig.create(storage, v6MetaPath, props);
+
+    assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
+        new HoodieTableConfig(storage, v6MetaPath).getProps()
+            .getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+        "create() must persist the derived boolean below v10 for unpatched readers, " + mode);
+  }
+
   @Test
   void testDropInvalidConfigs() {
     // test invalid configs are dropped
