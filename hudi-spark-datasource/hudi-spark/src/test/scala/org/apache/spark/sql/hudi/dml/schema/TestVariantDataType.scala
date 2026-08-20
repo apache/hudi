@@ -977,6 +977,61 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Spark 3.x schema-on-read reads of a variant table with a committed internal schema") {
+    // #18021: hoodie.schema.on.read.enable resolves the schema through the InternalSchema round
+    // trip, whose sentinel detection restores the VARIANT logical type - the exact input
+    // HoodieSparkSchemaConverters rejects on Spark 3.x. Verified 2026-08-20: every leg fails
+    // LOUDLY with the same actionable error as the plain auto-resolve path; there is no silent
+    // wrong data and no obscure secondary failure. Notably that includes the documented
+    // struct-DDL compat mode, which works WITHOUT schema-on-read (see the backward-compat test
+    // below) but breaks once the table carries an internal schema and the conf is on, because
+    // internal-schema resolution overrides the user's DDL. Real support is #18285; until then
+    // Spark 3.x compat-mode readers must keep hoodie.schema.on.read.enable off.
+    assume(HoodieSparkUtils.isSpark3, "This test verifies Spark 3.x behavior with schema-on-read")
+
+    withTempDir { tmpDir =>
+      HoodieTestUtils.extractZipToDirectory("variant_backward_compat/variant_schema_on_read_cow.zip", tmpDir.toPath, getClass)
+      val tablePath = tmpDir.toPath.resolve("variant_schema_on_read_cow").toString
+
+      def assertVariantRejected(leg: String)(f: => Unit): Unit = {
+        val ex = intercept[HoodieSchemaException](f)
+        assert(ex.getCause.getMessage.contains("VARIANT type is only supported in Spark 4.0+"),
+          s"[$leg] expected the actionable variant rejection, got: ${ex.getCause}")
+      }
+
+      assertVariantRejected("auto-resolve, plain") {
+        spark.read.format("hudi").load(tablePath).collect()
+      }
+      assertVariantRejected("auto-resolve, schema-on-read") {
+        spark.read.format("hudi").option("hoodie.schema.on.read.enable", "true").load(tablePath).collect()
+      }
+      assertVariantRejected("compat struct DDL, schema-on-read") {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v struct<value: binary, metadata: binary>,
+             |  ts long,
+             |  note string
+             |) using hudi
+             |location '$tablePath'
+             |tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             |)
+           """.stripMargin)
+        try {
+          withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+            spark.sql(s"select id, v, note from $tableName order by id").collect()
+          }
+        } finally {
+          spark.sql(s"drop table $tableName")
+        }
+      }
+    }
+  }
+
   test(s"Test Backward Compatibility: Read Spark 4.0 Variant Table in Spark 3.x") {
     // This test only runs on Spark 3.x to verify backward compatibility
     assume(HoodieSparkUtils.isSpark3, "This test verifies Spark 3.x can read Spark 4.0 Variant tables")
