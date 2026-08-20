@@ -1322,14 +1322,13 @@ jobs:
     steps:
       - if: needs.changes.outputs.relevant == 'true'
         uses: actions/checkout@v5
-      # Runs directly on the runner rather than in the bundle-validation image: that image is
-      # Alpine based, and Comet's libcomet.so is glibc-linked, so it cannot load there. Comet also
-      # ships class file version 61 bytecode, hence JDK 17 rather than 11.
-      - name: Set up JDK 17
+      # The bundle builds on Java 11; Comet ships class file version 61 bytecode, so it is only
+      # run on Java 17, inside the glibc image under packaging/bundle-validation/native_spark.
+      - name: Set up JDK 11
         if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
-          java-version: '17'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
           cache: maven
@@ -1345,11 +1344,7 @@ jobs:
         env:
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
         run: |
-          wget -q https://archive.apache.org/dist/spark/spark-$SPARK_RUNTIME/spark-$SPARK_RUNTIME-bin-hadoop3.tgz -P /tmp
-          tar -xzf /tmp/spark-$SPARK_RUNTIME-bin-hadoop3.tgz -C /tmp
-          export SPARK_HOME=/tmp/spark-$SPARK_RUNTIME-bin-hadoop3
-          export NATIVE_BUNDLE_JAR=$(ls $GITHUB_WORKSPACE/packaging/hudi-native-spark-bundle/target/hudi-native-spark*-bundle_*.jar | grep -vE -- '-(sources|javadoc|tests)\.jar$' | head -1)
-          ./packaging/bundle-validation/native_spark/validate.sh
+          ./packaging/bundle-validation/native_spark/ci_run.sh
 
   validate-bundle-spark4:
     runs-on: ubuntu-latest

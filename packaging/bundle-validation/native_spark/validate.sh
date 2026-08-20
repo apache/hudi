@@ -48,9 +48,16 @@ $SPARK_HOME/bin/spark-shell --jars "$NATIVE_BUNDLE_JAR" \
   --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
   < "$WORKDIR/validate.scala"
 
-numRows=$(cat $outputDir/count/part-*)
-if [ "$numRows" -ne 3 ]; then
-    echo "::error::native spark bundle query returned $numRows rows, expected 3"
+# 300 rows per table over three partitions: 100 * 100 joined rows per partition, and each t1 fare
+# summed 100 times (100 * 14850, 100 * 14950, 100 * 15050).
+expectedRows='0,10000,1485000.0
+1,10000,1495000.0
+2,10000,1505000.0'
+actualRows=$(cat $outputDir/rows/part-*)
+if [ "$actualRows" != "$expectedRows" ]; then
+    echo "::error::native spark bundle query returned unexpected results"
+    echo "expected:"; echo "$expectedRows"
+    echo "actual:";   echo "$actualRows"
     exit 1
 fi
 

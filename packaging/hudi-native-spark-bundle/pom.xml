@@ -381,7 +381,7 @@
         <dependency>
           <groupId>org.apache.datafusion</groupId>
           <artifactId>comet-spark-spark3.4_${scala.binary.version}</artifactId>
-          <version>${comet.version}</version>
+          <version>${datafusion.comet.version}</version>
         </dependency>
       </dependencies>
     </profile>
@@ -401,7 +401,7 @@
         <dependency>
           <groupId>org.apache.datafusion</groupId>
           <artifactId>comet-spark-spark3.5_${scala.binary.version}</artifactId>
-          <version>${comet.version}</version>
+          <version>${datafusion.comet.version}</version>
         </dependency>
       </dependencies>
     </profile>
@@ -421,7 +421,7 @@
         <dependency>
           <groupId>org.apache.datafusion</groupId>
           <artifactId>comet-spark-spark4.0_${scala.binary.version}</artifactId>
-          <version>${comet.version}</version>
+          <version>${datafusion.comet.version}</version>
         </dependency>
       </dependencies>
     </profile>
@@ -441,7 +441,7 @@
         <dependency>
           <groupId>org.apache.datafusion</groupId>
           <artifactId>comet-spark-spark4.1_${scala.binary.version}</artifactId>
-          <version>${comet.version}</version>
+          <version>${datafusion.comet.version}</version>
         </dependency>
       </dependencies>
     </profile>
