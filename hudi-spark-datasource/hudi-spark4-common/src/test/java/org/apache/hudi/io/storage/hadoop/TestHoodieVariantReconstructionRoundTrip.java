@@ -187,7 +187,7 @@ class TestHoodieVariantReconstructionRoundTrip {
   }
 
   @Test
-  void bootstrapReaderReconstructsShreddedDataFileAtTheTableSchema(@TempDir java.nio.file.Path tmp) throws Exception {
+  void bootstrapReaderReconstructsShreddedDataFileUsingTableSchema(@TempDir java.nio.file.Path tmp) throws Exception {
     // HoodieMergeHelper's bootstrap branch uses the one-argument getRecordIterator overload,
     // which used to hand the DATA file its own footer schema: for a shredded variant that is a
     // plain {metadata, value, typed_value} record with the logical type lost, so reconstruction
