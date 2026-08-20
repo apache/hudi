@@ -248,7 +248,8 @@ class RunClusteringProcedure extends BaseProcedure
           if (fieldType == HoodieSchemaType.VARIANT || fieldType == HoodieSchemaType.BLOB
             || fieldType == HoodieSchemaType.VECTOR) {
             throw new HoodieClusteringException(
-              s"Order column '$col' has type $fieldType, which has no ordering and cannot be clustered by")
+              s"Order column '$col' has type $fieldType, which has no ordering and cannot be " +
+                "clustered by. Remove it from the clustering sort columns.")
           }
       }
     })
