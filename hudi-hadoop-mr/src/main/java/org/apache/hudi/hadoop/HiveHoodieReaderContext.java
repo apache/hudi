@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaRepair;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -39,6 +41,7 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.utils.HiveTypeUtils;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableSchemaUtils;
 import org.apache.hudi.storage.HoodieStorage;
@@ -146,6 +149,28 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       fileSchema = HoodieSchemaRepair.repairLogicalTypes(rawFileSchema, dataSchema);
     } else {
       fileSchema = dataSchema;
+    }
+
+    // Fail fast on shredded variant columns: this reader hands the file to a plain
+    // parquet-avro read at the requested {metadata, value} projection, so a file whose variant
+    // group carries typed_value would come back with silent nulls (the typed rows keep their
+    // payload in typed_value, which the projection drops). Detection is shape-based on the
+    // footer schema and anchored on the requested column being a variant, so plain user structs
+    // of the same shape are left alone. Top-level columns only, matching the writers' shredding
+    // scope. Columns not requested (e.g. count(*)) stay readable.
+    if (isParquetOrOrc && requiredSchema.getType() == HoodieSchemaType.RECORD) {
+      for (HoodieSchemaField requestedField : requiredSchema.getFields()) {
+        fileSchema.getField(requestedField.name()).ifPresent(fileField -> {
+          if (VariantSchemaUtils.isShreddedVariantTarget(fileField.schema(), requestedField.schema())) {
+            throw new HoodieException(String.format(
+                "Column '%s' of %s is a shredded variant (typed_value present); the Hive reader "
+                    + "cannot reconstruct shredded variants. Read the table with Spark 4.1+, or "
+                    + "rewrite it unshredded (e.g. cluster with "
+                    + "hoodie.parquet.variant.write.shredding.enabled=false).",
+                requestedField.name(), filePath));
+          }
+        });
+      }
     }
 
     // Prune the required schema based on the file schema
