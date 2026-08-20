@@ -1937,7 +1937,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       (3, "3", "2021-01-05"))
     val rdd = spark.sparkContext.parallelize(data)
     val df = spark.createDataFrame(rdd).toDF(columns: _*)
-    val hudiOptions = Map[String, String](
+    var hudiOptions = Map[String, String](
       HoodieWriteConfig.TBL_NAME.key() -> "tbl",
       DataSourceWriteOptions.OPERATION.key() -> "insert",
       DataSourceWriteOptions.TABLE_TYPE.key() -> "COPY_ON_WRITE",
@@ -1971,7 +1971,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   def testSchemaEvolutionWithNewColumns(schemaOnRead: Boolean): Unit = {
     val df1 = spark.sql(
       "select '1' as event_id, '2' as ts, '3' as version, named_struct('city', 'Paris') as address")
-    var hudiOptions = Map[String, String](
+    val hudiOptions = Map[String, String](
       HoodieWriteConfig.TBL_NAME.key() -> "test_hudi_merger",
       KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> "event_id",
       KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "version",
