@@ -56,6 +56,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -294,6 +295,50 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("avro"));
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(""));
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(null));
+  }
+
+  @Test
+  void objectMetadataDeduplicatesOnKeyAndCarriesTheEventTimestamp() {
+    // the object key and bucket are nested columns, so anything referencing them has to do so
+    // before the projection flattens them to their leaf names
+    Dataset<Row> events = sparkSession.read().json(jsc.parallelize(Arrays.asList(
+        "{\"eventTime\":\"2026-08-12T10:00:00.000Z\",\"s3\":{\"bucket\":{\"name\":\"b\"},"
+            + "\"object\":{\"key\":\"docs/a.txt\",\"size\":10}}}",
+        "{\"eventTime\":\"2026-08-12T11:00:00.000Z\",\"s3\":{\"bucket\":{\"name\":\"b\"},"
+            + "\"object\":{\"key\":\"docs/a.txt\",\"size\":20}}}",
+        "{\"eventTime\":\"2026-08-12T10:30:00.000Z\",\"s3\":{\"bucket\":{\"name\":\"b\"},"
+            + "\"object\":{\"key\":\"docs/c.txt\",\"size\":30}}}"), 1));
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty(S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX.key(), "s3a");
+    List<CloudObjectMetadata> objects = CloudObjectsSelectorCommon.getObjectMetadata(
+        CloudObjectsSelectorCommon.Type.S3, jsc, events, false, props);
+
+    Map<String, CloudObjectMetadata> byPath = objects.stream()
+        .collect(Collectors.toMap(CloudObjectMetadata::getPath, o -> o));
+    assertEquals(2, objects.size(), "an object written twice in one batch must be read once: " + byPath.keySet());
+
+    // the later of the two writes to a.txt wins, so its size and timestamp are the newer pair
+    CloudObjectMetadata rewritten = byPath.get("s3a://b/docs/a.txt");
+    assertEquals(20L, rewritten.getSize());
+    assertEquals(Instant.parse("2026-08-12T11:00:00.000Z").toEpochMilli(), rewritten.getModificationTime());
+
+    CloudObjectMetadata once = byPath.get("s3a://b/docs/c.txt");
+    assertEquals(30L, once.getSize());
+    assertEquals(Instant.parse("2026-08-12T10:30:00.000Z").toEpochMilli(), once.getModificationTime());
+  }
+
+  @Test
+  void objectMetadataFallsBackWhenEventsCarryNoTimestamp() {
+    // a metadata table written before the timestamp column existed must keep working
+    Dataset<Row> events = sparkSession.read().json(jsc.parallelize(Arrays.asList(
+        "{\"s3\":{\"bucket\":{\"name\":\"b\"},\"object\":{\"key\":\"docs/a.txt\",\"size\":10}}}"), 1));
+    TypedProperties props = new TypedProperties();
+    props.setProperty(S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX.key(), "s3a");
+    List<CloudObjectMetadata> objects = CloudObjectsSelectorCommon.getObjectMetadata(
+        CloudObjectsSelectorCommon.Type.S3, jsc, events, false, props);
+    assertEquals(1, objects.size());
+    assertEquals(CloudObjectMetadata.UNKNOWN_MODIFICATION_TIME, objects.get(0).getModificationTime());
   }
 
   @Test

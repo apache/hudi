@@ -431,12 +431,14 @@ public class CloudObjectsSelectorCommon {
       return events.select(bucketCol, keyCol, sizeCol).distinct();
     }
     String rank = "_hoodie_event_rank";
-    return events.select(bucketCol, keyCol, sizeCol, timeCol)
+    // rank before projecting: the columns are nested, so selecting them first renames them to
+    // their leaf names and the window would no longer resolve bucketCol or keyCol
+    return events
         .withColumn(rank, functions.row_number().over(
             Window.partitionBy(functions.col(bucketCol), functions.col(keyCol))
                 .orderBy(functions.col(timeCol).desc_nulls_last())))
         .filter(functions.col(rank).equalTo(1))
-        .drop(rank);
+        .select(bucketCol, keyCol, sizeCol, timeCol);
   }
 
   /**
