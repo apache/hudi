@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.exception.HoodieException
+
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.Types
 import org.junit.jupiter.api.{Assertions, Test}
@@ -55,5 +57,44 @@ class TestSpark40HoodieParquetReadSupport {
 
     val result = Spark40HoodieParquetReadSupport.reorderVariantFields(schema)
     Assertions.assertEquals(schema, result)
+  }
+
+  /**
+   * A shredded variant group (typed_value present) must fail fast: Spark 4.0's unshredded
+   * converter reads only [value, metadata], so reordering the group (which used to drop
+   * typed_value from the requested schema) silently lost the typed rows' payload.
+   */
+  @Test
+  def testReorderVariantFieldsFailsFastOnShreddedGroup(): Unit = {
+    val schema = Types.buildMessage()
+      .addField(Types.requiredGroup()
+        .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
+        .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
+        .addField(Types.optionalGroup()
+          .addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("typed_value"))
+        .named("v"))
+      .named("test")
+
+    val failure = Assertions.assertThrows(classOf[HoodieException],
+      () => Spark40HoodieParquetReadSupport.reorderVariantFields(schema))
+    Assertions.assertTrue(
+      failure.getMessage.contains("shredded variant") && failure.getMessage.contains("'v'"),
+      s"The error must name the shredded variant column, got: ${failure.getMessage}")
+  }
+
+  /** The unshredded twin still reorders to [value, metadata] as before. */
+  @Test
+  def testReorderVariantFieldsReordersUnshreddedGroup(): Unit = {
+    val schema = Types.buildMessage()
+      .addField(Types.requiredGroup()
+        .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
+        .addField(Types.required(PrimitiveTypeName.BINARY).named("value"))
+        .named("v"))
+      .named("test")
+
+    val result = Spark40HoodieParquetReadSupport.reorderVariantFields(schema)
+    val group = result.getType(result.getFieldIndex("v")).asGroupType()
+    Assertions.assertEquals("value", group.getFields.get(0).getName)
+    Assertions.assertEquals("metadata", group.getFields.get(1).getName)
   }
 }
