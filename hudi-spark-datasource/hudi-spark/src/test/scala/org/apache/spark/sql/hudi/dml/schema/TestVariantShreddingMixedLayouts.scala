@@ -547,6 +547,31 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     }
   }
 
+  test("Clustering sort on a variant column is rejected with a clear error") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      createVariantTable(tableName, tablePath, "cow")
+      withWriteLayout(Forced("a bigint")) {
+        spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1}'), 1000)""")
+      }
+
+      // The procedure's order parameter is validated up front...
+      checkNestedExceptionContains(
+        s"call run_clustering(table => '$tableName', order => 'v')")(
+        "has no ordering")
+      // ...and the config-driven sort columns are validated by the execution strategy, so the
+      // inline/async paths get the same error instead of an AnalysisException (row partitioner)
+      // or ClassCastException (RDD partitioner) deep in the job.
+      checkNestedExceptionContains(
+        s"call run_clustering(table => '$tableName', " +
+          "options => 'hoodie.clustering.plan.strategy.sort.columns=v')")(
+        "has no ordering")
+    })
+  }
+
   test("MOR clustering folds log files of another layout into the rewritten base") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
@@ -741,6 +766,46 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           s"[$leg] second update images: ${updateRows(1)}")
       })
     }
+  }
+
+  test("Schema-on-read reads of shredded variant files fail fast") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"schema-on-read, $tableName"
+      createVariantTable(tableName, tablePath, "cow")
+      withWriteLayout(Forced("a bigint")) {
+        spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1}'), 1000)""")
+      }
+
+      withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+        // Committing a schema-on-read DDL stores the internal schema; reads under
+        // hoodie.schema.on.read.enable then request the internal-schema form of the variant
+        // ({metadata, value}), which clips typed_value away. With PushVariantIntoScan disabled,
+        // that would return silent nulls for the typed rows - the guard must fire instead
+        // (#18285 tracks real reconstruction under schema-on-read).
+        spark.sql(s"alter table $tableName add columns (note string)")
+        withSQLConf("spark.sql.variant.pushVariantIntoScan" -> "false") {
+          assertQueryFailsWith(s"select id, cast(v as string), note from $tableName",
+            "shredded variant", leg)
+        }
+        // Under the default PushVariantIntoScan rewrite the read fails as well, but with
+        // engine-internal errors (internal-schema pruning of the synthetic projection children,
+        // or a codegen NPE on the clipped value, depending on plan state). Pin only that it
+        // never silently returns rows; the real fix for both legs is #18285.
+        intercept[Throwable] {
+          spark.sql(s"select id, cast(v as string), note from $tableName").collect()
+        }
+      }
+
+      // Known #18285 residue, documented rather than pinned: the schema-on-read DDL also
+      // rewrites the CATALOG schema through the internal-schema converter, which has no VARIANT
+      // arm, so the catalog column degrades to a plain struct<metadata,value> (the resolved
+      // avro table schema keeps its variant logical type). Plain reads of the table after the
+      // DDL request that struct and fail in Spark before any Hudi hook.
+    })
   }
 
   // -----------------------------------------------------------------------------------------------
