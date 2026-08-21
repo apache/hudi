@@ -212,7 +212,9 @@ public class VariantShreddingInferenceFileWriter<T> implements HoodieFileWriter<
       // Mark before close() so a throwing delegate.close() surfaces, not retried in the catch.
       delegateClosed = true;
       delegate.close();
-    } catch (IOException | RuntimeException e) {
+    } catch (IOException | RuntimeException | Error e) {
+      // Error included: materialize() rethrows the Error it latches, and the delegate it
+      // created must still be closed.
       if (delegate != null && !delegateClosed) {
         CloseableUtils.closeSuppressing(delegate, e);
       }

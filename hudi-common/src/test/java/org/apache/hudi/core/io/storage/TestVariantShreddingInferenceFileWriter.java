@@ -425,6 +425,21 @@ public class TestVariantShreddingInferenceFileWriter {
   }
 
   @Test
+  public void testMaterializeErrorInsideCloseStillClosesTheDelegate() throws IOException {
+    // With the caps never tripped, the first materialization happens inside close(): the Error
+    // must still close the delegate created just above, or the file handle leaks.
+    RecordingWriter delegate = new RecordingWriter();
+    NoClassDefFoundError boom = new NoClassDefFoundError("replay failed");
+    delegate.failWriteWith = boom;
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
+        map -> delegate, Long.MAX_VALUE);
+
+    writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS);
+    assertSame(boom, assertThrows(NoClassDefFoundError.class, writer::close));
+    assertEquals(1, delegate.closeCount);
+  }
+
+  @Test
   public void testThrowingDelegateCloseSurfacesAndIsNotRetried() throws IOException {
     RecordingWriter delegate = new RecordingWriter();
     IOException boom = new IOException("close failed");
