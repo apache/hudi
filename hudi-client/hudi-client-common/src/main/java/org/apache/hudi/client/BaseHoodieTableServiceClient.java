@@ -581,6 +581,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       replaceCommitMetadata.addWriteStat(writeStat.getPartitionPath(), writeStat);
     }
     HoodieClusteringPlan clusteringPlan = ClusteringUtils.getPendingClusteringPlan(table.getMetaClient(), clusteringCommitTime);
+    if (clusteringPlan.getExtraMetadata() != null) {
+      clusteringPlan.getExtraMetadata().forEach(replaceCommitMetadata::addMetadata);
+    }
     Map<String, List<String>> partitionToReplaceFileIds = CommonClientUtils.getPartitionToReplacedFileIds(clusteringPlan, clusteringWriteMetadata, config);
     clusteringWriteMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
     replaceCommitMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
@@ -729,7 +732,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     if (tableServiceType == TableServiceType.CLEAN) {
       // Cleaning is a frequent operation that does not conflict with other operations and is idempotent,
       // so it is handled differently to avoid locking for planning.
-      return scheduleCleaning(createTable(config, storageConf), providedInstantTime);
+      return scheduleCleaning(createTable(config, storageConf), providedInstantTime, updateExtraMetadata(extraMetadata));
     }
     // Only enrich metadata after early-return checks, when we're actually going to use it
     extraMetadata = updateExtraMetadata(extraMetadata);
@@ -883,7 +886,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       log.info("Cleaner started for table {}", config.getBasePath());
       // proceed only if multiple clean schedules are enabled or if there are no pending cleans.
       if (scheduleInline) {
-        cleanInstantTime = scheduleCleaning(table, suppliedCleanInstant);
+        cleanInstantTime = scheduleCleaning(table, suppliedCleanInstant, updateExtraMetadata(Option.empty()));
       }
 
       if (shouldDelegateToTableServiceManager(config, ActionType.clean)) {
@@ -918,8 +921,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @param suppliedCleanInstant Optional supplied clean instant time that overrides the generated time. This can only be used for testing.
    * @return the requested instant time if the service was scheduled
    */
-  private Option<String> scheduleCleaning(HoodieTable<?, ?, ?, ?> table, Option<String> suppliedCleanInstant) {
-    Option<HoodieCleanerPlan> cleanerPlan = table.createCleanerPlan(context, Option.empty());
+  private Option<String> scheduleCleaning(HoodieTable<?, ?, ?, ?> table, Option<String> suppliedCleanInstant,
+                                          Option<Map<String, String>> extraMetadata) {
+    Option<HoodieCleanerPlan> cleanerPlan = table.createCleanerPlan(context, extraMetadata);
     if (cleanerPlan.isPresent()) {
       txnManager.beginStateChange(Option.empty(), Option.empty());
       try {
@@ -1383,8 +1387,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       String newRollbackInstantTime = suppliedRollbackInstantTime.orElseGet(() -> createNewInstantTime(false));
       HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, newRollbackInstantTime,
           table.getMetaClient().getTimelineLayout().getInstantComparator().requestedTimeOrderedComparator());
+      Option<Map<String, String>> rollbackExtraMetadata = updateExtraMetadata(Option.empty());
       Option<HoodieRollbackPlan> rollbackPlan = table.scheduleRollback(context, newRollbackInstantTime, commitInstantOpt.get(),
-          false, config.shouldRollbackUsingMarkers(), false);
+          false, config.shouldRollbackUsingMarkers(), false, rollbackExtraMetadata);
       return Option.of(Pair.of(rollbackInstant, rollbackPlan));
     } finally {
       if (!skipLocking) {

@@ -18,8 +18,17 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.avro.model.HoodieInstantInfo;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
@@ -153,6 +162,120 @@ class TestCommitMetadataProperties {
     assertEquals("caller.value1", result.get("caller.key1"));
     assertEquals("caller.value2", result.get("caller.key2"));
     assertNotNull(result.get(HUDI_VERSION_KEY));
+  }
+
+  // ---- Tests for extraMetadata in all instant types ----
+
+  @Test
+  void rollbackPlan_extraMetadataFieldPresent() {
+    Map<String, String> extraMetadata = new HashMap<>();
+    extraMetadata.put(HUDI_VERSION_KEY, "1.2.0");
+    extraMetadata.put(ENGINE_KEY, "SPARK");
+
+    HoodieRollbackPlan plan = new HoodieRollbackPlan(
+        new HoodieInstantInfo("001", "commit"),
+        Collections.emptyList(), 1, extraMetadata);
+
+    assertEquals("1.2.0", plan.getExtraMetadata().get(HUDI_VERSION_KEY));
+    assertEquals("SPARK", plan.getExtraMetadata().get(ENGINE_KEY));
+  }
+
+  @Test
+  void rollbackPlan_extraMetadataNullByDefault() {
+    HoodieRollbackPlan plan = new HoodieRollbackPlan(
+        new HoodieInstantInfo("001", "commit"),
+        Collections.emptyList(), 1, null);
+
+    assertEquals(null, plan.getExtraMetadata());
+  }
+
+  @Test
+  void rollbackMetadata_extraMetadataViaConvertMethod() {
+    Map<String, String> extraMetadata = new HashMap<>();
+    extraMetadata.put(HUDI_VERSION_KEY, "1.2.0");
+    extraMetadata.put(ENGINE_KEY, "SPARK");
+    extraMetadata.put("spark.application.id", "app-123");
+
+    HoodieInstant instant = new HoodieInstant(HoodieInstant.State.INFLIGHT, "commit", "001",
+        HoodieTestUtils.INSTANT_COMPARATOR.requestedTimeOrderedComparator());
+    HoodieRollbackMetadata metadata = TimelineMetadataUtils.convertRollbackMetadata(
+        "002", Option.of(100L), Collections.singletonList(instant), Collections.emptyList(), extraMetadata);
+
+    assertNotNull(metadata.getExtraMetadata());
+    assertEquals("1.2.0", metadata.getExtraMetadata().get(HUDI_VERSION_KEY));
+    assertEquals("SPARK", metadata.getExtraMetadata().get(ENGINE_KEY));
+    assertEquals("app-123", metadata.getExtraMetadata().get("spark.application.id"));
+  }
+
+  @Test
+  void rollbackMetadata_noExtraMetadataByDefault() {
+    HoodieInstant instant = new HoodieInstant(HoodieInstant.State.INFLIGHT, "commit", "001",
+        HoodieTestUtils.INSTANT_COMPARATOR.requestedTimeOrderedComparator());
+    HoodieRollbackMetadata metadata = TimelineMetadataUtils.convertRollbackMetadata(
+        "002", Option.of(100L), Collections.singletonList(instant), Collections.emptyList());
+
+    assertEquals(null, metadata.getExtraMetadata());
+  }
+
+  @Test
+  void savepointMetadata_extraMetadataViaConvertMethod() {
+    Map<String, String> extraMetadata = new HashMap<>();
+    extraMetadata.put(HUDI_VERSION_KEY, "1.2.0");
+    extraMetadata.put(ENGINE_KEY, "JAVA");
+
+    HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(
+        "user", "test comment", Collections.emptyMap(), extraMetadata);
+
+    assertNotNull(metadata.getExtraMetadata());
+    assertEquals("1.2.0", metadata.getExtraMetadata().get(HUDI_VERSION_KEY));
+    assertEquals("JAVA", metadata.getExtraMetadata().get(ENGINE_KEY));
+  }
+
+  @Test
+  void savepointMetadata_noExtraMetadataByDefault() {
+    HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(
+        "user", "test comment", Collections.emptyMap());
+
+    assertEquals(null, metadata.getExtraMetadata());
+  }
+
+  @Test
+  void restorePlan_extraMetadataFieldPresent() {
+    Map<String, String> extraMetadata = new HashMap<>();
+    extraMetadata.put(HUDI_VERSION_KEY, "1.2.0");
+    extraMetadata.put(ENGINE_KEY, "FLINK");
+
+    HoodieRestorePlan plan = new HoodieRestorePlan(
+        Collections.emptyList(), 2, "savepoint-001", extraMetadata);
+
+    assertEquals("1.2.0", plan.getExtraMetadata().get(HUDI_VERSION_KEY));
+    assertEquals("FLINK", plan.getExtraMetadata().get(ENGINE_KEY));
+  }
+
+  @Test
+  void restoreMetadata_extraMetadataViaConvertMethod() {
+    Map<String, String> extraMetadata = new HashMap<>();
+    extraMetadata.put(HUDI_VERSION_KEY, "1.2.0");
+    extraMetadata.put(ENGINE_KEY, "SPARK");
+
+    HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "001",
+        HoodieTestUtils.INSTANT_COMPARATOR.requestedTimeOrderedComparator());
+    HoodieRestoreMetadata metadata = TimelineMetadataUtils.convertRestoreMetadata(
+        "002", 100L, Collections.singletonList(instant), Collections.emptyMap(), extraMetadata);
+
+    assertNotNull(metadata.getExtraMetadata());
+    assertEquals("1.2.0", metadata.getExtraMetadata().get(HUDI_VERSION_KEY));
+    assertEquals("SPARK", metadata.getExtraMetadata().get(ENGINE_KEY));
+  }
+
+  @Test
+  void restoreMetadata_noExtraMetadataByDefault() {
+    HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "001",
+        HoodieTestUtils.INSTANT_COMPARATOR.requestedTimeOrderedComparator());
+    HoodieRestoreMetadata metadata = TimelineMetadataUtils.convertRestoreMetadata(
+        "002", 100L, Collections.singletonList(instant), Collections.emptyMap());
+
+    assertEquals(null, metadata.getExtraMetadata());
   }
 
   private static HoodieWriteConfig newConfig(Properties overrides) {

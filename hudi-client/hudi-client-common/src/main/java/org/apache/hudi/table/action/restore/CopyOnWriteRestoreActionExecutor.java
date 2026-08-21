@@ -53,7 +53,7 @@ public class CopyOnWriteRestoreActionExecutor<T, I, K, O>
       transactionManager.beginStateChange(Option.empty(), Option.empty());
       try {
         newInstantTime = table.getMetaClient().createNewInstantTime(false);
-        table.scheduleRollback(context, newInstantTime, instantToRollback, false, false, true);
+        table.scheduleRollback(context, newInstantTime, instantToRollback, false, false, true, Option.empty());
       } finally {
         transactionManager.endStateChange(Option.empty());
       }
