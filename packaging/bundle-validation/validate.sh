@@ -41,6 +41,12 @@ if [[ "$SCALA_PROFILE" != 'scala-2.13' ]]; then
   ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
 fi
 ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
+# Only present for the Spark versions Apache DataFusion Comet releases for.
+for nativeBundle in $JARS_DIR/hudi-native-spark*.jar; do
+  if [ -f "$nativeBundle" ]; then
+    ln -sf "$nativeBundle" $JARS_DIR/native-spark.jar
+  fi
+done
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
@@ -67,6 +73,75 @@ change_java_runtime_version () {
 use_default_java_runtime () {
   echo "::warning:: Use default java runtime under ${DEFAULT_JAVA_HOME}"
   export JAVA_HOME=${DEFAULT_JAVA_HOME}
+}
+
+##
+# Function to test the native spark bundle, which carries Apache DataFusion Comet.
+#
+# Comet ships class file version 61 bytecode and a glibc linked libcomet.so, so this only runs on
+# the Java 17 pass.
+#
+# env vars (defined in container):
+#   SPARK_HOME: path to the spark directory
+##
+test_native_spark_bundle () {
+    local outputDir=/tmp/native-spark-bundle
+    rm -rf $outputDir
+    change_java_runtime_version
+    echo "::warning::validate.sh Writing and querying Hudi tables with Comet enabled"
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/native-spark.jar \
+      --conf 'spark.plugins=org.apache.spark.CometPlugin' \
+      --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension,org.apache.comet.CometSparkSessionExtensions' \
+      --conf 'spark.shuffle.manager=org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager' \
+      --conf 'spark.comet.enabled=true' \
+      --conf 'spark.comet.exec.enabled=true' \
+      --conf 'spark.comet.convert.parquet.enabled=true' \
+      --conf 'spark.comet.explain.fallback.enabled=true' \
+      --conf 'spark.comet.metrics.enabled=true' \
+      --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+      --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar' \
+      --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' < $WORKDIR/native_spark/validate.scala
+
+    # 300 rows per table over three partitions: 100 * 100 joined rows per partition, and each cow
+    # fare summed 100 times (100 * 14850, 100 * 14950, 100 * 15050).
+    local expectedRows='0,10000,1485000.0
+1,10000,1495000.0
+2,10000,1505000.0'
+    local actualRows
+    actualRows=$(cat $outputDir/cow_rows/part-*)
+    if [ "$actualRows" != "$expectedRows" ]; then
+        echo "::error::validate.sh native spark bundle copy-on-write query returned unexpected results"
+        echo "expected:"; echo "$expectedRows"
+        echo "actual:";   echo "$actualRows"
+        exit 1
+    fi
+
+    # Merge-on-read with log files reads row by row, so the same query must still be correct.
+    local actualMorRows
+    actualMorRows=$(cat $outputDir/mor_rows/part-*)
+    if [ "$actualMorRows" != "$expectedRows" ]; then
+        echo "::error::validate.sh native spark bundle merge-on-read query returned unexpected results"
+        echo "expected:"; echo "$expectedRows"
+        echo "actual:";   echo "$actualMorRows"
+        exit 1
+    fi
+
+    # Comet declines what it cannot accelerate and hands it back to Spark, so correct results on
+    # their own would still pass with a mis-relocated Comet or a libcomet.so that failed to load.
+    # Copy-on-write keeps the vectorized read and bridges columnar to columnar; merge-on-read reads
+    # row by row because file group merging is row level, and bridges through a row conversion.
+    if ! grep -q 'CometSortMergeJoin' $outputDir/cow_plan/part-*; then
+        echo "::error::validate.sh join over copy-on-write Hudi tables was not executed natively by Comet"
+        cat $outputDir/cow_plan/part-*
+        exit 1
+    fi
+    if ! grep -q 'CometSparkRowToColumnar' $outputDir/mor_plan/part-*; then
+        echo "::error::validate.sh merge-on-read scan was not bridged into Comet"
+        cat $outputDir/mor_plan/part-*
+        exit 1
+    fi
+    echo "::warning::validate.sh native spark bundle validation was successful"
+    use_default_java_runtime
 }
 
 ##
@@ -376,6 +451,17 @@ if [ "$?" -ne 0 ]; then
     exit 1
 fi
 echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
+
+if [ -e $JARS_DIR/native-spark.jar ] && [[ ${JAVA_RUNTIME_VERSION} == 'openjdk17' ]]; then
+  echo "::warning::validate.sh validating native spark bundle"
+  test_native_spark_bundle
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done validating native spark bundle"
+else
+  echo "::warning::validate.sh skip validating native spark bundle, needs openjdk17 and a Spark version Comet releases for"
+fi
 
 if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* || $SPARK_HOME == *"spark-4.1"* ]]
 then
