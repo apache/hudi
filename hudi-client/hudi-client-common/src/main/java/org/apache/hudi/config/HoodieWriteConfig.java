@@ -2576,6 +2576,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metricsConfig.isLockingMetricsEnabled();
   }
 
+  public boolean isRecordIndexLookupMetricsEnabled() {
+    return metricsConfig.isRecordIndexLookupMetricsEnabled();
+  }
+
   public MetricsReporterType getMetricsReporterType() {
     return metricsConfig.getMetricsReporterType();
   }
