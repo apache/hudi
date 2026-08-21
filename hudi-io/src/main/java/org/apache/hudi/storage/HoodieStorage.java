@@ -126,6 +126,8 @@ public abstract class HoodieStorage implements Closeable {
    *
    * @param path the file to open.
    * @return the InputStream to read from.
+   * @throws java.io.FileNotFoundException when the path does not exist; callers rely on this
+   *                                       subtype to tell a missing file from an IO failure.
    * @throws IOException IO error.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -25,13 +26,24 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Properties;
@@ -43,6 +55,7 @@ import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PA
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -114,6 +127,7 @@ public class TestFileSystemBasedLockProvider {
     // Everything below has to sit inside the try: if an assertion fails before release.countDown() runs,
     // the daemon thread parks on release.await() forever holding the JVM-wide monitor, and surefire's
     // reuseForks would carry that into every later test in the fork.
+    boolean closed = false;
     try {
       unrelated.start();
       assertTrue(holding.await(10, TimeUnit.SECONDS), "the unrelated thread should hold the interned monitor");
@@ -136,38 +150,15 @@ public class TestFileSystemBasedLockProvider {
           "unlock/close never returned - they are blocked on the monitor held by the unrelated thread, "
               + "which means unlock()/close() are synchronizing on the interned \"lock\" literal again "
               + "rather than on a private monitor");
+      closed = true;
     } finally {
       release.countDown();
-      provider.unlock();
-      provider.close();
-    }
-  }
-
-  /**
-   * {@code reloadCurrentOwnerLockInfo} opened the lock file in the try-with-resources header, before its own
-   * existence check, so a vanished lock file threw {@link java.io.FileNotFoundException} instead of clearing
-   * the field. The caller swallows that, so the previous owner's payload was then reported as the current
-   * one. Reading it back after the file is gone must yield the empty string, not the stale payload.
-   */
-  @Test
-  public void testReloadCurrentOwnerLockInfoClearsWhenLockFileIsGone() {
-    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
-    FileSystemBasedLockProvider provider =
-        new FileSystemBasedLockProvider(lockConfiguration(lockDir("reload"), 0), storageConf);
-    try {
-      assertTrue(provider.tryLock(1, TimeUnit.SECONDS));
-      provider.reloadCurrentOwnerLockInfo();
-      assertFalse(provider.getCurrentOwnerLockInfo().isEmpty(),
-          "the holder's payload should have been read back while the lock file exists");
-
-      provider.unlock();
-      assertDoesNotThrow(provider::reloadCurrentOwnerLockInfo,
-          "a missing lock file must not throw out of the reload");
-      assertEquals("", provider.getCurrentOwnerLockInfo(),
-          "a missing lock file must clear the owner info rather than leave the previous owner's payload");
-    } finally {
-      provider.unlock();
-      provider.close();
+      // Clean up only if the in-try unlock/close did not run: closing twice is safe today solely
+      // because HoodieHadoopStorage.close() is a no-op, which other backends need not honor.
+      if (!closed) {
+        provider.unlock();
+        provider.close();
+      }
     }
   }
 
@@ -184,11 +175,119 @@ public class TestFileSystemBasedLockProvider {
       // The contender is able to read the current owner's lock info.
       assertTrue(contender.getCurrentOwnerLockInfo() != null && !contender.getCurrentOwnerLockInfo().isEmpty());
       holder.unlock();
+      // Regression: the reload used to evaluate storage.open in its try-with-resources header, so a
+      // vanished lock file threw FileNotFoundException out of the reload instead of clearing the field,
+      // and the previous owner's payload kept being reported as the current one.
+      assertDoesNotThrow(contender::reloadCurrentOwnerLockInfo,
+          "a missing lock file must not throw out of the reload");
+      assertEquals("", contender.getCurrentOwnerLockInfo(),
+          "a missing lock file must clear the owner info rather than leave the previous owner's payload");
       assertTrue(contender.tryLock(1, TimeUnit.SECONDS), "contender acquires after holder releases");
     } finally {
       holder.unlock();
       contender.unlock();
       holder.close();
+    }
+  }
+
+  /**
+   * {@code storage.create(path, false)} in {@code acquireLock} is the provider's entire cross-process
+   * mutual exclusion; the in-JVM monitor cannot serialize two processes, and {@code tryLock} returns
+   * early on an existing file, so no public-API test can reach the already-exists arm. Pin the create
+   * semantics directly: a second create must fail and must leave the winner's payload untouched.
+   */
+  @Test
+  public void testAcquireLockRefusesToOverwriteAnExistingLockFile() {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    LockConfiguration config = lockConfiguration(lockDir("atomiccreate"), 0);
+    FileSystemBasedLockProvider winner = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider loser = new FileSystemBasedLockProvider(config, storageConf);
+    try {
+      winner.acquireLock();
+      winner.reloadCurrentOwnerLockInfo();
+      String winnerPayload = winner.getCurrentOwnerLockInfo();
+      assertFalse(winnerPayload.isEmpty(), "the winner's payload should be on storage");
+
+      HoodieIOException thrown = assertThrows(HoodieIOException.class, loser::acquireLock,
+          "a second create on an existing lock file must fail, not overwrite");
+      assertInstanceOf(FileAlreadyExistsException.class, thrown.getCause(),
+          "the loser must fail on the atomic create itself");
+
+      loser.reloadCurrentOwnerLockInfo();
+      assertEquals(winnerPayload, loser.getCurrentOwnerLockInfo(),
+          "the losing attempt must leave the winner's payload untouched");
+    } finally {
+      winner.unlock();
+      winner.close();
+      loser.close();
+    }
+  }
+
+  /**
+   * The class declares {@link java.io.Serializable} but could never actually serialize once it had
+   * locked: the lockInfo field held a non-serializable {@code LockInfo} (since HUDI-5377), so every
+   * attempt threw {@code NotSerializableException}. The mutable helpers are transient now; a round
+   * trip of a lock-holding provider must work. Serializing while the lock is held is the pin -- before
+   * the first acquisition the field is still null, and null serializes regardless of the modifier.
+   * The copy's storage handles are transient and stay null, as they were before this change.
+   */
+  @Test
+  public void testJavaSerializationRoundTrip() throws Exception {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    FileSystemBasedLockProvider provider =
+        new FileSystemBasedLockProvider(lockConfiguration(lockDir("serde"), 0), storageConf);
+    try {
+      assertTrue(provider.tryLock(1, TimeUnit.SECONDS), "the provider must hold the lock so lockInfo is populated");
+      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+      try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
+        out.writeObject(provider);
+      }
+      try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+        FileSystemBasedLockProvider copy = assertInstanceOf(FileSystemBasedLockProvider.class, in.readObject());
+        assertDoesNotThrow(copy::initLockInfo, "the transient helpers must rebuild on the deserialized copy");
+      }
+    } finally {
+      provider.unlock();
+      provider.close();
+    }
+  }
+
+  /**
+   * Pins the delete-after-check window in {@code reloadCurrentOwnerLockInfo}: a storage whose
+   * {@code exists()} says true while {@code open()} reports the file missing reproduces a lock file
+   * vanishing between an existence check and the open. With the earlier exists-precheck shape the
+   * {@code FileNotFoundException} escaped as {@code HoodieIOException} and the previous owner's
+   * payload survived; the catch must clear the field instead.
+   */
+  @Test
+  public void testReloadClearsOwnerWhenLockFileVanishesAfterExistsCheck() {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    storageConf.set(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key(), VanishingLockFileStorage.class.getName());
+    FileSystemBasedLockProvider provider =
+        new FileSystemBasedLockProvider(lockConfiguration(lockDir("vanish"), 0), storageConf);
+    assertDoesNotThrow(provider::reloadCurrentOwnerLockInfo,
+        "a lock file that vanishes between an existence check and the open must not throw");
+    assertEquals("", provider.getCurrentOwnerLockInfo(),
+        "a vanished lock file must clear the owner info rather than leave the previous owner's payload");
+  }
+
+  /**
+   * The catch in {@code tryLock} is the cross-process loser outcome: a failing create must surface as
+   * a clean false, not as an exception. Pointing the lock directory at an existing regular file makes
+   * {@code exists()} on {@code <file>/lock} false and the create fail deterministically.
+   */
+  @Test
+  public void testTryLockReturnsFalseWhenTheCreateFails() throws Exception {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    Path plainFile = tempDir.resolve("plainfile");
+    Files.write(plainFile, new byte[] {1});
+    FileSystemBasedLockProvider provider =
+        new FileSystemBasedLockProvider(lockConfiguration(plainFile.toString(), 0), storageConf);
+    try {
+      assertFalse(provider.tryLock(1, TimeUnit.SECONDS),
+          "a failing create must surface as tryLock returning false, not as an exception");
+    } finally {
+      provider.close();
     }
   }
 
@@ -313,6 +412,28 @@ public class TestFileSystemBasedLockProvider {
     } finally {
       provider.unlock();
       provider.close();
+    }
+  }
+
+  /**
+   * Storage whose {@code exists()} always says true while {@code open()} reports the file missing,
+   * simulating a lock file deleted between the two calls. Loaded reflectively via
+   * {@code hoodie.storage.class}, hence public static with the {@code (StoragePath,
+   * StorageConfiguration)} constructor.
+   */
+  public static class VanishingLockFileStorage extends HoodieHadoopStorage {
+    public VanishingLockFileStorage(StoragePath path, StorageConfiguration<?> conf) {
+      super(path, conf);
+    }
+
+    @Override
+    public boolean exists(StoragePath path) {
+      return true;
+    }
+
+    @Override
+    public InputStream open(StoragePath path) throws IOException {
+      throw new FileNotFoundException("vanished: " + path);
     }
   }
 }
