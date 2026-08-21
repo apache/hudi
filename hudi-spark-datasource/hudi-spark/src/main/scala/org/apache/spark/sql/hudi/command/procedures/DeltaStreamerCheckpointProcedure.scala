@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.checkpoint.{Checkpoint, CheckpointUtils, StreamerCheckpointV1, StreamerCheckpointV2}
 import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.sql.Row
@@ -33,8 +33,10 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
 
-class GetDeltastreamerCheckpointProcedure extends BaseProcedure with ProcedureBuilder {
-  import DeltastreamerCheckpointProcedureUtils._
+import scala.util.control.NonFatal
+
+class GetDeltaStreamerCheckpointProcedure extends BaseProcedure with ProcedureBuilder {
+  import DeltaStreamerCheckpointProcedureUtils._
 
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
@@ -58,11 +60,16 @@ class GetDeltastreamerCheckpointProcedure extends BaseProcedure with ProcedureBu
     }
   }
 
-  override def build: Procedure = new GetDeltastreamerCheckpointProcedure
+  override def build: Procedure = new GetDeltaStreamerCheckpointProcedure
 }
 
-class SetDeltastreamerCheckpointProcedure extends BaseProcedure with ProcedureBuilder {
-  import DeltastreamerCheckpointProcedureUtils._
+/**
+ * Publishes a DeltaStreamer checkpoint through an empty commit. Callers should pause active
+ * ingestion unless the table is configured for multi-writer concurrency control and locking.
+ * A later ingestion commit can legitimately advance the checkpoint again.
+ */
+class SetDeltaStreamerCheckpointProcedure extends BaseProcedure with ProcedureBuilder {
+  import DeltaStreamerCheckpointProcedureUtils._
 
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
@@ -79,6 +86,9 @@ class SetDeltastreamerCheckpointProcedure extends BaseProcedure with ProcedureBu
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val checkpointValue = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
+    if (checkpointValue.trim.isEmpty) {
+      throw new IllegalArgumentException("DeltaStreamer checkpoint must not be empty")
+    }
     val tablePath = getArgValueOrDefault(args, PARAMETERS(2))
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
@@ -90,21 +100,21 @@ class SetDeltastreamerCheckpointProcedure extends BaseProcedure with ProcedureBu
       checkpoint.getCheckpointResetKey, checkpoint.getCheckpointIgnoreKey)
 
     val writeOptions = Map(
-      // This procedure only publishes checkpoint metadata. It must not run table services as a
-      // side effect or clean up pending writes belonging to another writer.
-      HoodieCleanConfig.AUTO_CLEAN.key -> "false",
+      // This procedure only publishes checkpoint metadata. It must not run or schedule table
+      // services as a side effect or clean up pending writes belonging to another writer.
+      HoodieWriteConfig.TABLE_SERVICES_ENABLED.key -> "false",
       HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.NEVER.name,
-      HoodieArchivalConfig.AUTO_ARCHIVE.key -> "false",
-      HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
-      HoodieClusteringConfig.INLINE_CLUSTERING.key -> "false",
-      HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key -> "false",
       HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key -> "true",
+      // Never upgrade or downgrade the table as a side effect of setting its checkpoint.
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> metaClient.getTableConfig.getTableVersion.versionCode().toString,
+      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false",
       // A minimally configured writer must never remove metadata partitions that are already
       // present on disk. Available partitions are still updated based on hoodie.properties.
       HoodieMetadataConfig.AUTO_DELETE_PARTITIONS.key -> "false"
     )
 
     var client: SparkRDDWriteClient[AnyRef] = null
+    var instantTime: String = null
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(
         sparkSession,
@@ -113,13 +123,31 @@ class SetDeltastreamerCheckpointProcedure extends BaseProcedure with ProcedureBu
         tableName.map(_.asInstanceOf[String]))
         .asInstanceOf[SparkRDDWriteClient[AnyRef]]
 
-      val instantTime = client.startCommit(metaClient.getCommitActionType)
+      instantTime = client.startCommit(metaClient.getCommitActionType)
       val writeStatuses = client.upsert(jsc.emptyRDD[HoodieRecord[AnyRef]], instantTime)
       val committed = client.commit(instantTime, writeStatuses, HOption.of(checkpointMetadata))
       if (!committed) {
-        throw new HoodieException(s"Failed to set deltastreamer checkpoint for table at $basePath")
+        throw new HoodieException(s"Failed to set DeltaStreamer checkpoint for table at $basePath")
       }
       Seq(Row(checkpointValue))
+    } catch {
+      case NonFatal(failure) =>
+        // Roll back only if our instant is still pending. A commit can throw after completing;
+        // rolling back that completed instant would discard a successfully published checkpoint.
+        if (client != null && instantTime != null) {
+          try {
+            val stillPending = metaClient.reloadActiveTimeline()
+              .filterInflightsAndRequested()
+              .containsInstant(instantTime)
+            if (stillPending && !client.rollback(instantTime)) {
+              failure.addSuppressed(new HoodieException(
+                s"Failed to rollback DeltaStreamer checkpoint instant $instantTime"))
+            }
+          } catch {
+            case NonFatal(rollbackFailure) => failure.addSuppressed(rollbackFailure)
+          }
+        }
+        throw failure
     } finally {
       if (client != null) {
         client.close()
@@ -127,10 +155,10 @@ class SetDeltastreamerCheckpointProcedure extends BaseProcedure with ProcedureBu
     }
   }
 
-  override def build: Procedure = new SetDeltastreamerCheckpointProcedure
+  override def build: Procedure = new SetDeltaStreamerCheckpointProcedure
 }
 
-private object DeltastreamerCheckpointProcedureUtils {
+private object DeltaStreamerCheckpointProcedureUtils {
   private val CHECKPOINT_KEYS = Array(
     StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1,
     StreamerCheckpointV1.STREAMER_CHECKPOINT_RESET_KEY_V1,
@@ -164,14 +192,14 @@ private object DeltastreamerCheckpointProcedureUtils {
   }
 }
 
-object GetDeltastreamerCheckpointProcedure {
+object GetDeltaStreamerCheckpointProcedure {
   val NAME = "get_deltastreamer_checkpoint"
 
-  def builder: Supplier[ProcedureBuilder] = () => new GetDeltastreamerCheckpointProcedure
+  def builder: Supplier[ProcedureBuilder] = () => new GetDeltaStreamerCheckpointProcedure
 }
 
-object SetDeltastreamerCheckpointProcedure {
+object SetDeltaStreamerCheckpointProcedure {
   val NAME = "set_deltastreamer_checkpoint"
 
-  def builder: Supplier[ProcedureBuilder] = () => new SetDeltastreamerCheckpointProcedure
+  def builder: Supplier[ProcedureBuilder] = () => new SetDeltaStreamerCheckpointProcedure
 }
