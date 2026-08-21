@@ -66,12 +66,21 @@ public interface Registry extends Serializable {
   }
 
   /**
-   * Get (or create) the registry with the provided name.
-   * This function creates a {@code LocalRegistry}. Only one instance of a registry with a given name will be created.
+   * Resolves against the running task first, then the process-wide map. Inside a task an unbound name
+   * yields a {@link NoOpRegistry}, since a {@code LocalRegistry} there collects counters nothing merges
+   * home. Off a task the behaviour is unchanged.
    *
    * @param registryName Name of the registry
    */
   static Registry getRegistry(String registryName) {
+    if (ExecutorMetricsContext.isBound()) {
+      Registry bound = ExecutorMetricsContext.lookup(registryName);
+      if (bound != null) {
+        return bound;
+      }
+      LOG.debug("No registry named {} is bound to this task; metrics emitted here are discarded", registryName);
+      return NoOpRegistry.INSTANCE;
+    }
     return getRegistryOfClass("", registryName, LocalRegistry.class.getName());
   }
 
@@ -189,6 +198,28 @@ public interface Registry extends Serializable {
    * @param value The value to set for the metrics.
    */
   void set(String name, long value);
+
+  /**
+   * Subtract a set of counts previously read out of this registry, clamping every counter at zero.
+   *
+   * Used to hand a batch of counters over to a consumer that owns them from then on -- the commit-boundary
+   * drain for the record index lookup counters -- without discarding whatever arrived after they were read.
+   *
+   * Clamping is what distinguishes this from {@code add(name, -value)}. The registry can be emptied
+   * underneath a caller by an unrelated destructive scrape ({@link #getAllMetrics(boolean, boolean)} with
+   * {@code flush=true} clears every registry in the process), and an unbounded subtraction would then leave
+   * negative counters behind for good.
+   *
+   * The default is a best-effort read-modify-write. Implementations able to do this atomically should
+   * override it, and should drop counters that reach zero rather than leaving them at zero, so a registry
+   * nobody is writing to reads as empty.
+   *
+   * @param counts the counts to release, as returned by {@link #getAllCounts(boolean)}.
+   */
+  default void release(Map<String, Long> counts) {
+    Map<String, Long> current = getAllCounts(false);
+    counts.forEach((name, released) -> set(name, Math.max(0L, current.getOrDefault(name, 0L) - released)));
+  }
 
   /**
    * Get all Counter type metrics.

@@ -109,6 +109,17 @@ public class HoodieMetricsConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("Enable metrics for locking infra. Useful when operating in multiwriter mode");
 
+  public static final ConfigProperty<Boolean> RLI_LOOKUP_METRICS_ENABLE = ConfigProperty
+      .key(METRIC_PREFIX + ".rli.lookup.enable")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Collect counters for the record level index lookup phase (records looked up, "
+          + "hits, misses and shards read) and publish them at each commit. The counters are written to "
+          + "the commit's extra metadata, which is retained in the timeline permanently including "
+          + "archives, so disable this on tables that commit very frequently and do not need the "
+          + "visibility.");
+
   public static final ConfigProperty<String> METRICS_REPORTER_FILE_BASED_CONFIGS_PATH = ConfigProperty
       .key(METRIC_PREFIX + ".configs.properties")
       .defaultValue("")
@@ -200,6 +211,10 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
   public boolean isLockingMetricsEnabled() {
     return getBoolean(HoodieMetricsConfig.LOCK_METRICS_ENABLE);
+  }
+
+  public boolean isRecordIndexLookupMetricsEnabled() {
+    return getBoolean(HoodieMetricsConfig.RLI_LOOKUP_METRICS_ENABLE);
   }
 
   public MetricsReporterType getMetricsReporterType() {

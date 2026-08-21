@@ -58,6 +58,20 @@ public class LocalRegistry implements Registry {
     getCounter(name).set(value);
   }
 
+  /** Evicts on reaching zero. The default can only release through {@link #set}, leaving a zero behind. */
+  @Override
+  public void release(Map<String, Long> counts) {
+    counts.forEach((name, released) -> counters.compute(name, (key, current) -> {
+      long remaining = (current == null ? 0L : current.getValue()) - released;
+      if (remaining <= 0L) {
+        return null;
+      }
+      Counter reduced = new Counter();
+      reduced.set(remaining);
+      return reduced;
+    }));
+  }
+
   /**
    * Get all Counter type metrics.
    */

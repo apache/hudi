@@ -24,10 +24,13 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
+import org.apache.hudi.common.metrics.ExecutorMetricsContext;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.HoodieDataUtils;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -49,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
@@ -128,9 +132,11 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
     // keyToLocationPairRDD and records RDD.
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
 
-    // Lookup the keys in the record index
-
-    return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(new RecordIndexFileGroupLookupFunction(hoodieTable)));
+    // Registry bundle and caller are resolved on the driver so the closure carries them to executors.
+    Map<String, Registry> metricsBundle = RecordIndexLookupMetrics.resolveBundle(context, hoodieTable.getConfig());
+    String caller = RecordIndexLookupMetrics.currentCaller();
+    return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(
+        new RecordIndexFileGroupLookupFunction(hoodieTable, metricsBundle, caller)));
   }
 
   protected Either<Integer, Map<String, Integer>> fetchFileGroupSize(HoodieTable hoodieTable) {
@@ -181,26 +187,40 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
    */
   private static class RecordIndexFileGroupLookupFunction implements PairFlatMapFunction<Iterator<String>, String, HoodieRecordGlobalLocation> {
     private final HoodieTable hoodieTable;
+    // Empty when no counters should be collected; see RecordIndexLookupMetrics#resolveBundle.
+    private final Map<String, Registry> metricsBundle;
+    private final String caller;
 
-    public RecordIndexFileGroupLookupFunction(HoodieTable hoodieTable) {
+    public RecordIndexFileGroupLookupFunction(HoodieTable hoodieTable, Map<String, Registry> metricsBundle, String caller) {
       this.hoodieTable = hoodieTable;
+      this.metricsBundle = metricsBundle;
+      this.caller = caller;
     }
 
     @Override
     public Iterator<Tuple2<String, HoodieRecordGlobalLocation>> call(Iterator<String> recordKeyIterator) {
-      List<String> keysToLookup = new ArrayList<>();
-      recordKeyIterator.forEachRemaining(keysToLookup::add);
-
-      // recordIndexInfo object only contains records that are present in record_index.
-      HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
-          hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
+      // Bound for the whole task so a metric raised deeper in the lookup resolves here too.
+      Map<String, Registry> previousBinding = ExecutorMetricsContext.bind(metricsBundle);
       try {
-        List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
-        return recordIndexInfo.stream()
-            .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
+        List<String> keysToLookup = new ArrayList<>();
+        recordKeyIterator.forEachRemaining(keysToLookup::add);
+
+        HoodieTimer shardTimer = HoodieTimer.start();
+        // recordIndexInfo object only contains records that are present in record_index.
+        HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
+            hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
+        try {
+          List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
+          RecordIndexLookupMetrics.recordShardLookup(caller, keysToLookup,
+              recordIndexInfo.stream().map(Pair::getKey).collect(Collectors.toSet()), shardTimer.endTimer());
+          return recordIndexInfo.stream()
+              .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
+        } finally {
+          // Clean up the RDD to avoid memory leaks
+          recordIndexData.unpersistWithDependencies();
+        }
       } finally {
-        // Clean up the RDD to avoid memory leaks
-        recordIndexData.unpersistWithDependencies();
+        ExecutorMetricsContext.unbind(previousBinding);
       }
     }
   }
