@@ -20,8 +20,11 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.io.WriteHandleFactory;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.io.Serializable;
 
@@ -70,5 +73,23 @@ public interface BulkInsertPartitioner<I> extends Serializable {
    */
   default Option<WriteHandleFactory> getWriteHandleFactory(int partitionId) {
     return Option.empty();
+  }
+
+  /**
+   * Whether the records being written carry a partition path, derived from the write config alone.
+   * <p>
+   * A partitioner named through
+   * {@code HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME} is instantiated by
+   * reflection with only the write config, so an implementation that otherwise takes the flag from
+   * the {@link HoodieTable} has nothing else to derive it from. The write side partition path field
+   * governs whether records end up with a non-empty partition path, which is what those
+   * implementations branch on.
+   *
+   * @param config Write config.
+   * @return {@code true} if a partition path field is configured; {@code false} otherwise.
+   */
+  static boolean isTablePartitioned(HoodieWriteConfig config) {
+    return !StringUtils.isNullOrEmpty(
+        config.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 }
