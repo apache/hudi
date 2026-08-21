@@ -126,7 +126,9 @@ public class HoodieColumnProjectionUtils {
   public static List<Pair<String,String>> getIOColumnNameAndTypes(Configuration conf) {
     List<String> names = getIOColumns(conf);
     List<String> types = getIOColumnTypes(conf);
-    ValidationUtils.checkArgument(names.size() == types.size());
+    ValidationUtils.checkArgument(names.size() == types.size(),
+        String.format("Inconsistent Hive IO conf: %s has %d entries but %s has %d",
+            IOConstants.COLUMNS, names.size(), IOConstants.COLUMNS_TYPES, types.size()));
     return IntStream.range(0, names.size()).mapToObj(idx -> Pair.of(names.get(idx), types.get(idx)))
         .collect(Collectors.toList());
   }
