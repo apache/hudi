@@ -77,9 +77,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
    * <p>Kept static so that, within a classloader, the mutual-exclusion scope is unchanged by this fix.
    * The interned literal was additionally shared across classloaders. Losing that wider scope matters
    * only for what the exclusive create does not protect: the expiry-reclaim sequence in
-   * {@code tryLock} (exists, checkIfExpired, delete, create) everywhere, plus the exists-then-create
-   * window on a store whose create is not atomic. Both are already unsafe across processes, the
-   * normal multi-writer deployment; the monitor never made them safe. Cross-process mutual exclusion rests
+   * {@code tryLock} (exists, checkIfExpired, delete, create), the release path ({@code unlock}'s
+   * exists-then-delete and {@code close}'s unconditional delete), plus the exists-then-create window
+   * on a store whose create is not atomic. All are already unsafe across processes, the normal
+   * multi-writer deployment; the monitor never made them safe. Cross-process mutual exclusion rests
    * entirely on the exclusive-mode {@code storage.create(path, false)} in {@code acquireLock} being
    * atomic on the underlying store, which HDFS guarantees and local FS does not (its create is a
    * check-then-act); this monitor is defense in depth for in-JVM callers, not the correctness
@@ -91,10 +92,12 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   private final transient StoragePath lockFile;
   protected LockConfiguration lockConfiguration;
   // Transient because LockInfo is not Serializable and the constructor used to build it eagerly, so
-  // every instance failed Spark closure capture with NotSerializableException (the HUDI-7782 bug
-  // class); no serialized form predating the pinned serialVersionUID can therefore exist. Null-guarded
-  // in initLockInfo() for the deserialized copy; such a copy still cannot lock, since storage and
-  // lockFile are transient with no readObject to rebuild them, as before this change.
+  // every instance since 0.13.0 (HUDI-5377) failed Spark closure capture with
+  // NotSerializableException, the HUDI-7782 bug class. Pinning serialVersionUID is compat-safe:
+  // 0.12.x, the only line that ever serialized this class, computed a UID no 0.13.0+ build could
+  // read anyway, and no Hudi code persists a provider outside intra-job closure capture.
+  // Null-guarded in initLockInfo() for the deserialized copy; such a copy still cannot lock, since
+  // storage and lockFile are transient with no readObject to rebuild them, as before this change.
   private transient SimpleDateFormat sdf;
   private transient LockInfo lockInfo;
   /**
@@ -191,6 +194,11 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     return this.lockFile.toString();
   }
 
+  /**
+   * A stat failure degrades to "not expired", failing safe toward the current holder rather than
+   * reclaiming a lock whose age is unknown. {@code StorageBasedLockProvider} makes the same choice
+   * for transient errors via {@code LockGetResult.UNKNOWN_ERROR}.
+   */
   private boolean checkIfExpired() {
     if (lockTimeoutMinutes == 0) {
       return false;
@@ -201,7 +209,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         return true;
       }
     } catch (IOException | HoodieIOException e) {
-      log.error("{} failed to get lockFile's modification time", generateLogStatement(LockState.ALREADY_RELEASED), e);
+      log.error("{} failed to get lockFile's modification time", generateLogStatement(LockState.ACQUIRING), e);
     }
     return false;
   }
@@ -223,9 +231,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   public void initLockInfo() {
-    // Guarded: sdf and lockInfo are lazily built and SimpleDateFormat is not thread safe; the monitor
-    // also safely publishes them to any off-monitor caller of this public method, a guarantee the
-    // fields' former final modifier used to give for free.
+    // Guarded: sdf and lockInfo are lazily built, SimpleDateFormat is not thread safe, and the
+    // fields lost the final modifier's free safe publication when they became lazy.
     synchronized (LOCK_FILE_MONITOR) {
       if (lockInfo == null) {
         lockInfo = new LockInfo();

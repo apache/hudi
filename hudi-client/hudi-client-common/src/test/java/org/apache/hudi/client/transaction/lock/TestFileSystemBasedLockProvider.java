@@ -46,6 +46,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -53,6 +54,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -262,10 +264,9 @@ public class TestFileSystemBasedLockProvider {
    */
   @Test
   public void testReloadClearsOwnerWhenLockFileVanishesAfterExistsCheck() {
-    // Deliberately a per-test conf: the hoodie.storage.class mutation must never be shared with other
-    // tests, and the FS cache is disabled so the fork-wide FileSystem cache cannot retain the conf.
+    // Stub injection via hoodie.storage.class, per TestRequestHandler's precedent; the conf is
+    // fresh per test, so the mutation cannot leak into other tests.
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
-    storageConf.set("fs.file.impl.disable.cache", "true");
     storageConf.set(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key(), VanishingLockFileStorage.class.getName());
     FileSystemBasedLockProvider provider =
         new FileSystemBasedLockProvider(lockConfiguration(lockDir("vanish"), 0), storageConf);
@@ -277,18 +278,33 @@ public class TestFileSystemBasedLockProvider {
 
   /**
    * A real IO failure must not be mistaken for a missing lock file: only {@code FileNotFoundException}
-   * clears the owner info, anything else escapes as {@code HoodieIOException} so the caller keeps the
-   * last known owner. Widening the reload's catch to plain {@code IOException} must fail this.
+   * clears the owner info, anything else escapes as {@code HoodieIOException} and the caller keeps the
+   * last known owner. Widening the reload's catch to plain {@code IOException} must fail this, and so
+   * must clearing the field on the rethrow path.
    */
   @Test
   public void testReloadPropagatesNonMissingFileFailures() {
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
-    storageConf.set("fs.file.impl.disable.cache", "true");
     storageConf.set(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key(), FailingOpenStorage.class.getName());
     FileSystemBasedLockProvider provider =
         new FileSystemBasedLockProvider(lockConfiguration(lockDir("ioerror"), 0), storageConf);
-    assertThrows(HoodieIOException.class, provider::reloadCurrentOwnerLockInfo,
-        "an IO failure that is not a missing file must escape, not silently clear the owner info");
+    try {
+      FailingOpenStorage.failing = false;
+      assertTrue(provider.tryLock(1, TimeUnit.SECONDS));
+      provider.reloadCurrentOwnerLockInfo();
+      String lastKnownOwner = provider.getCurrentOwnerLockInfo();
+      assertFalse(lastKnownOwner.isEmpty(), "the seed reload should have read the holder's payload");
+
+      FailingOpenStorage.failing = true;
+      assertThrows(HoodieIOException.class, provider::reloadCurrentOwnerLockInfo,
+          "an IO failure that is not a missing file must escape, not silently clear the owner info");
+      assertEquals(lastKnownOwner, provider.getCurrentOwnerLockInfo(),
+          "an IO failure must keep the last known owner, not clear it");
+    } finally {
+      FailingOpenStorage.failing = false;
+      provider.unlock();
+      provider.close();
+    }
   }
 
   /**
@@ -302,16 +318,17 @@ public class TestFileSystemBasedLockProvider {
     FileSystemBasedLockProvider holder =
         new FileSystemBasedLockProvider(lockConfiguration(path, 1), HoodieTestUtils.getDefaultStorageConf());
     StorageConfiguration<?> stubConf = HoodieTestUtils.getDefaultStorageConf();
-    stubConf.set("fs.file.impl.disable.cache", "true");
     stubConf.set(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key(), FailingGetPathInfoStorage.class.getName());
     FileSystemBasedLockProvider contender =
         new FileSystemBasedLockProvider(lockConfiguration(path, 1), stubConf);
     try {
       assertTrue(holder.tryLock(1, TimeUnit.SECONDS));
+      Path lockPath = Paths.get(holder.getLock());
+      byte[] holderPayload = Files.readAllBytes(lockPath);
       assertFalse(contender.tryLock(1, TimeUnit.SECONDS),
           "a stat failure must not let the contender treat a live lock as expired");
-      assertTrue(Files.exists(tempDir.resolve("statfail").resolve("lock")),
-          "the holder's lock file must survive the contender's failed expiry check");
+      assertArrayEquals(holderPayload, Files.readAllBytes(lockPath),
+          "the holder's lock file must survive the contender's failed expiry check untouched");
       assertFalse(contender.getCurrentOwnerLockInfo().isEmpty(),
           "the loser must still report the current owner");
     } finally {
@@ -336,6 +353,8 @@ public class TestFileSystemBasedLockProvider {
     try {
       assertFalse(provider.tryLock(1, TimeUnit.SECONDS),
           "a failing create must surface as tryLock returning false, not as an exception");
+      assertEquals("", provider.getCurrentOwnerLockInfo(),
+          "a failure before any reload must report an empty owner, not null");
     } finally {
       provider.close();
     }
@@ -488,15 +507,23 @@ public class TestFileSystemBasedLockProvider {
     }
   }
 
-  /** Storage whose {@code open()} fails with a plain IO error, never a missing-file signal. */
+  /**
+   * Storage whose {@code open()} fails with a plain IO error, never a missing-file signal, once the
+   * flag is raised; real until then, so a test can seed state through it first.
+   */
   public static class FailingOpenStorage extends HoodieHadoopStorage {
+    static volatile boolean failing = false;
+
     public FailingOpenStorage(StoragePath path, StorageConfiguration<?> conf) {
       super(path, conf);
     }
 
     @Override
     public InputStream open(StoragePath path) throws IOException {
-      throw new IOException("simulated IO failure: " + path);
+      if (failing) {
+        throw new IOException("simulated IO failure: " + path);
+      }
+      return super.open(path);
     }
   }
 
