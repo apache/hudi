@@ -84,11 +84,27 @@ class TestBucketStreamWriteMemoryExhaustion {
     pipeline.openFunction();
     int initialFreePages = pipeline.freePages();
     try {
+      boolean reclaimedOtherBucketBeforeDivergedBucket = false;
       for (RowData row : rows) {
+        int flushCountBeforeInvoke = pipeline.writeBatchCount();
         pipeline.invoke(row);
+        List<FlushedBucket> invocationFlushes = pipeline.flushesFrom(flushCountBeforeInvoke);
+        for (int i = 1; i < invocationFlushes.size(); i++) {
+          FlushedBucket previous = invocationFlushes.get(i - 1);
+          FlushedBucket current = invocationFlushes.get(i);
+          if (current.diverged && !previous.diverged) {
+            assertTrue(
+                !current.bucketId.equals(previous.bucketId),
+                "memory reclamation should flush another bucket before the diverged bucket");
+            reclaimedOtherBucketBeforeDivergedBucket = true;
+          }
+        }
       }
       int recoveryFlushCount = pipeline.writeBatchCount();
       assertTrue(recoveryFlushCount > 0, "the tight pool should trigger at least one recovery flush");
+      assertTrue(
+          reclaimedOtherBucketBeforeDivergedBucket,
+          "a write failure should reclaim another bucket before disposing the diverged bucket");
       pipeline.checkpointFunction(1);
 
       assertEquals(
@@ -179,11 +195,17 @@ class TestBucketStreamWriteMemoryExhaustion {
           (TrackingBucketStreamWriteFunction) writeFunction;
       return function.writeBatchCount();
     }
+
+    List<FlushedBucket> flushesFrom(int startIndex) {
+      TrackingBucketStreamWriteFunction function =
+          (TrackingBucketStreamWriteFunction) writeFunction;
+      return function.flushesFrom(startIndex);
+    }
   }
 
   private static class TrackingBucketStreamWriteFunction extends BucketStreamWriteFunction {
 
-    private int writeBatchCount;
+    private final List<FlushedBucket> flushedBuckets = new ArrayList<>();
 
     TrackingBucketStreamWriteFunction(Configuration conf, RowType rowType) {
       super(conf, rowType);
@@ -194,14 +216,28 @@ class TestBucketStreamWriteMemoryExhaustion {
     }
 
     int writeBatchCount() {
-      return writeBatchCount;
+      return flushedBuckets.size();
+    }
+
+    List<FlushedBucket> flushesFrom(int startIndex) {
+      return new ArrayList<>(flushedBuckets.subList(startIndex, flushedBuckets.size()));
     }
 
     @Override
     protected List<WriteStatus> writeRecords(String instant, RowDataBucket rowDataBucket) {
       List<WriteStatus> writeStatuses = super.writeRecords(instant, rowDataBucket);
-      writeBatchCount++;
+      flushedBuckets.add(new FlushedBucket(rowDataBucket.getBucketId(), rowDataBucket.isDiverged()));
       return writeStatuses;
+    }
+  }
+
+  private static class FlushedBucket {
+    private final String bucketId;
+    private final boolean diverged;
+
+    private FlushedBucket(String bucketId, boolean diverged) {
+      this.bucketId = bucketId;
+      this.diverged = diverged;
     }
   }
 }
