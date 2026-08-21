@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 
+import com.google.protobuf.CodedOutputStream;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.core.SdkBytes;
@@ -30,6 +31,11 @@ import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -360,5 +366,71 @@ class TestShardRecordIterator {
     verify(client, times(2)).getRecords(captor.capture());
     assertEquals(200, captor.getAllValues().get(0).limit());
     assertEquals(100, captor.getAllValues().get(1).limit());
+  }
+
+  // -------------------------------------------------------------------------
+  // KPL de-aggregation
+  // -------------------------------------------------------------------------
+
+  private static final byte[] KPL_MAGIC = new byte[] {(byte) 0xF3, (byte) 0x89, (byte) 0x9A, (byte) 0xC2};
+
+  /**
+   * Encodes a KPL aggregated record: magic prefix, the AggregatedRecord protobuf payload carrying
+   * one sub-record per payload string, and the trailing MD5 digest of that payload.
+   */
+  private static byte[] kplAggregate(List<String> partitionKeys, List<String> payloads) throws Exception {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    CodedOutputStream stream = CodedOutputStream.newInstance(out);
+    for (String partitionKey : partitionKeys) {
+      stream.writeString(1, partitionKey);
+    }
+    for (int i = 0; i < payloads.size(); i++) {
+      stream.writeByteArray(3, kplSubRecord(i, payloads.get(i)));
+    }
+    stream.flush();
+    byte[] payload = out.toByteArray();
+    byte[] digest = MessageDigest.getInstance("MD5").digest(payload);
+    return ByteBuffer.allocate(KPL_MAGIC.length + payload.length + digest.length)
+        .put(KPL_MAGIC).put(payload).put(digest).array();
+  }
+
+  private static byte[] kplSubRecord(long partitionKeyIndex, String payload) throws IOException {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    CodedOutputStream stream = CodedOutputStream.newInstance(out);
+    stream.writeUInt64(1, partitionKeyIndex);
+    stream.writeByteArray(3, payload.getBytes(StandardCharsets.UTF_8));
+    stream.flush();
+    return out.toByteArray();
+  }
+
+  @Test
+  void deaggregationEnabledFlattensKplAggregate() throws Exception {
+    KinesisClient client = mock(KinesisClient.class);
+    Record aggregated = Record.builder()
+        .data(SdkBytes.fromByteArray(kplAggregate(
+            Arrays.asList("pk-a", "pk-b"), Arrays.asList("{\"id\":1}", "{\"id\":2}"))))
+        .sequenceNumber("seq-agg")
+        .partitionKey("parent-pk")
+        .approximateArrivalTimestamp(Instant.now())
+        .build();
+    when(client.getRecords(isA(GetRecordsRequest.class)))
+        .thenReturn(response(Collections.singletonList(aggregated), null, 0L));
+
+    KinesisSource.ShardRecordIterator it = new KinesisSource.ShardRecordIterator(INITIAL_ITER, client,
+        SHARD_ID, 100, INTERVAL_MS, 1000, /* enableDeaggregation */ true,
+        RETRY_INITIAL_MS, RETRY_MAX_MS, THROTTLE_TIMEOUT_LARGE);
+
+    List<Record> collected = new ArrayList<>();
+    while (it.hasNext()) {
+      collected.add(it.next());
+    }
+
+    assertEquals(2, collected.size());
+    assertEquals("pk-a", collected.get(0).partitionKey());
+    assertEquals("{\"id\":1}", collected.get(0).data().asUtf8String());
+    assertEquals("pk-b", collected.get(1).partitionKey());
+    assertEquals("{\"id\":2}", collected.get(1).data().asUtf8String());
+    // Checkpoint must track the raw aggregated record's sequence number, not a sub-record's.
+    assertEquals("seq-agg", it.getLastSequenceNumber().get());
   }
 }
