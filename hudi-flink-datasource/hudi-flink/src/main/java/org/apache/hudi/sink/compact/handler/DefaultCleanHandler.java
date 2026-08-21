@@ -111,6 +111,6 @@ public class DefaultCleanHandler implements CleanHandler {
         throw new HoodieException("Failed to close executor of clean handler.", e);
       }
     }
-    this.writeClient.clean();
+    this.writeClient.close();
   }
 }

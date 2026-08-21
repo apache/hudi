@@ -86,7 +86,7 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
       LOG.error("earliest commit to cluster is not specified");
       return Option.empty();
     }
-    LOG.info("Earliest commit to cluster (exclusive): " + earliestCommit);
+    LOG.info("Earliest commit to cluster (exclusive): {}", earliestCommit);
 
     HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().findInstantsAfter(earliestCommit).filterCompletedInstants();
     // For each completed commit, invoke getFileSlicesEligibleForCommitBasedClustering
@@ -247,7 +247,7 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
       try {
         commitMetadata = TimelineUtils.getCommitMetadata(instant, metaClient.getActiveTimeline());
       } catch (IOException e) {
-        LOG.error("Failed to read commit metadata for instant: " + instant, e);
+        LOG.error("Failed to read commit metadata for instant: {}", instant, e);
         throw new HoodieException("Failed to read commit metadata for instant: " + instant, e);
       }
     } else {
@@ -285,7 +285,7 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
         try {
           pathInfo = storage.getPathInfo(path);
         } catch (Exception e) {
-          LOG.error("Could not get PathInfo for file path: " + path, e);
+          LOG.error("Could not get PathInfo for file path: {}", path, e);
           throw new HoodieException("Could not get PathInfo for file path: " + path, e);
         }
 

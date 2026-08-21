@@ -118,15 +118,18 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
             String.format("Failed to read %s from class loader", DEFAULT_PROPERTIES_FILE), ioe);
       }
     }
-    // Try loading the external config file from local file system
+    // Try loading the external config file from local file system. Both DEFAULT_PATH and
+    // HUDI_CONF_DIR are optional global config locations — use the tolerant overload so a
+    // missing file does not propagate as an exception (preserves prior silent-ignore behavior
+    // for optional global-defaults paths).
     try {
-      conf.addPropsFromFile(DEFAULT_PATH);
+      conf.addPropsFromFile(DEFAULT_PATH, true);
     } catch (Exception e) {
       log.warn("Cannot load default config file: {}", DEFAULT_PATH, e);
     }
     Option<StoragePath> defaultConfPath = getConfPathFromEnv();
     if (defaultConfPath.isPresent() && !defaultConfPath.get().equals(DEFAULT_PATH)) {
-      conf.addPropsFromFile(defaultConfPath.get());
+      conf.addPropsFromFile(defaultConfPath.get(), true);
     }
     return conf.getProps();
   }
@@ -141,11 +144,31 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   }
 
   /**
-   * Add properties from external configuration files.
+   * Add properties from an external configuration file. A missing file is tolerated only when the
+   * caller's path equals {@link #DEFAULT_PATH} (the optional global {@code hudi-defaults.conf}); any
+   * other missing file fails fast with {@link HoodieIOException}, so a typo in an explicit
+   * user-supplied path (e.g. {@code --props /path/...}) is surfaced rather than silently loading
+   * empty properties.
+   *
+   * <p>For include-resolved paths use {@link #addPropsFromFile(StoragePath, boolean)} with
+   * {@code tolerateMissing=true}.
    *
    * @param filePath file path for configuration file.
    */
   public void addPropsFromFile(StoragePath filePath) {
+    addPropsFromFile(filePath, filePath.equals(DEFAULT_PATH));
+  }
+
+  /**
+   * Add properties from an external configuration file.
+   *
+   * @param filePath         file path for configuration file.
+   * @param tolerateMissing  when {@code true}, a missing file is logged at {@code debug} and
+   *                         ignored (used for optional global-defaults paths and {@code include=}
+   *                         recursion). When {@code false}, missing files raise
+   *                         {@link HoodieIOException} so explicit user-supplied paths fail fast.
+   */
+  void addPropsFromFile(StoragePath filePath, boolean tolerateMissing) {
     if (visitedFilePaths.contains(filePath.toString())) {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
@@ -156,9 +179,12 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
     );
 
     try {
-      if (filePath.equals(DEFAULT_PATH) && !storage.exists(filePath)) {
-        log.debug("Properties file {} not found. Ignoring to load props file", filePath);
-        return;
+      if (!storage.exists(filePath)) {
+        if (tolerateMissing) {
+          log.debug("Properties file {} not found. Ignoring to load props file", filePath);
+          return;
+        }
+        throw new HoodieIOException("Properties file does not exist: " + filePath);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Cannot check if the properties file exist: " + filePath, ioe);
@@ -168,7 +194,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       visitedFilePaths.add(filePath.toString());
       addPropsFromStream(reader, filePath);
     } catch (IOException ioe) {
-      log.error("Error reading in properties from dfs from file " + filePath);
+      log.error("Error reading in properties from dfs from file {}", filePath);
       throw new HoodieIOException("Cannot read properties from dfs from file " + filePath, ioe);
     }
   }
@@ -195,7 +221,9 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
               && cfgFilePath != null) {
             providedPath = new StoragePath(cfgFilePath.getParent(), split[1]);
           }
-          addPropsFromFile(providedPath);
+          // include= references may legitimately point to optional files (e.g. environment-
+          // specific overrides); skip silently when missing rather than failing the whole load.
+          addPropsFromFile(providedPath, true);
         } else {
           hoodieConfig.setValue(split[0], split[1]);
         }
@@ -251,7 +279,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   private static Option<StoragePath> getConfPathFromEnv() {
     String confDir = System.getenv(CONF_FILE_DIR_ENV_NAME);
     if (confDir == null) {
-      log.debug("Environment variable " + CONF_FILE_DIR_ENV_NAME + ", not set. If desired, set it to the folder containing: " + DEFAULT_PROPERTIES_FILE);
+      log.debug("Environment variable {}, not set. If desired, set it to the folder containing: {}", CONF_FILE_DIR_ENV_NAME, DEFAULT_PROPERTIES_FILE);
       return Option.empty();
     }
     if (StringUtils.isNullOrEmpty(URI.create(confDir).getScheme())) {

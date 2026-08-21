@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -46,12 +47,17 @@ import org.apache.hudi.table.TestBaseHoodieTable;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -61,6 +67,7 @@ import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.incTimest
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -93,9 +100,25 @@ public class TestSimpleSchemaConflictResolutionStrategy {
   private static final String NULL_SCHEMA = "{\"type\":\"null\"}";
 
   private void setupInstants(String tableSchemaAtTxnStart, String tableSchemaAtTxnValidation,
-                             String writerSchemaOfTxn, Boolean enableResolution, boolean setupLegacyClustering) throws Exception {
-    metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(), "")
-        .setTableCreateSchema(SCHEMA1)
+                             String writerSchemaOfTxn, boolean enableResolution, boolean setupLegacyClustering) throws Exception {
+    setupInstants(SCHEMA1, tableSchemaAtTxnStart, tableSchemaAtTxnValidation, writerSchemaOfTxn,
+        enableResolution, setupLegacyClustering, HoodieTableVersion.current().versionCode());
+  }
+
+  private void setupInstants(String tableSchemaAtTxnStart, String tableSchemaAtTxnValidation,
+                             String writerSchemaOfTxn, boolean enableResolution, boolean setupLegacyClustering,
+                             int writeTableVersion) throws Exception {
+    setupInstants(SCHEMA1, tableSchemaAtTxnStart, tableSchemaAtTxnValidation, writerSchemaOfTxn,
+        enableResolution, setupLegacyClustering, writeTableVersion);
+  }
+
+  private void setupInstants(String tableCreateSchema, String tableSchemaAtTxnStart, String tableSchemaAtTxnValidation,
+                             String writerSchemaOfTxn, boolean enableResolution, boolean setupLegacyClustering,
+                             int writeTableVersion) throws Exception {
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(WRITE_TABLE_VERSION.key(), String.valueOf(writeTableVersion));
+    metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, tableProperties, "")
+        .setTableCreateSchema(tableCreateSchema)
         .initTable(getDefaultStorageConf(), basePath.toString());
     dummyInstantGenerator = HoodieTestTable.of(metaClient);
 
@@ -134,71 +157,119 @@ public class TestSimpleSchemaConflictResolutionStrategy {
     strategy = new SimpleSchemaConflictResolutionStrategy();
   }
 
-  @Test
-  void testNoConflictFirstCommit() throws Exception {
-    setupInstants(null, null, SCHEMA1, true, false);
+  // The schema evolution timeline ordering follows the table version (requested time for table
+  // version 6, completion time for 8 and above), so the RFC-82 resolution cases run on both. The
+  // fixture's requested and completion orders agree, so the outcomes are the same on both versions.
+  @ParameterizedTest
+  @ValueSource(ints = {6, 8})
+  void testNoConflictFirstCommit(int writeTableVersion) throws Exception {
+    setupInstants(null, null, SCHEMA1, true, false, writeTableVersion);
     HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, Option.empty(), nonTableCompactionInstant).get();
     assertEquals(HoodieSchema.parse(SCHEMA1), result);
   }
 
-  @Test
-  void testNullWriterSchema() throws Exception {
-    setupInstants(SCHEMA1, SCHEMA1, "", true, false);
+  @ParameterizedTest
+  @ValueSource(ints = {6, 8})
+  void testNullWriterSchema(int writeTableVersion) throws Exception {
+    setupInstants(SCHEMA1, SCHEMA1, "", true, false, writeTableVersion);
     assertFalse(strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).isPresent());
   }
 
-  @Test
-  void testNullTypeWriterSchema() throws Exception {
-    setupInstants(SCHEMA1, SCHEMA1, NULL_SCHEMA, true, false);
+  @ParameterizedTest
+  @ValueSource(ints = {6, 8})
+  void testNullTypeWriterSchema(int writeTableVersion) throws Exception {
+    setupInstants(SCHEMA1, SCHEMA1, NULL_SCHEMA, true, false, writeTableVersion);
     HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
     assertEquals(HoodieSchema.parse(SCHEMA1), result);
   }
 
   @Test
-  void testConflictSecondCommitDifferentSchema() throws Exception {
-    setupInstants(null, SCHEMA1, SCHEMA2, true, false);
+  void testNullTypeWriterSchemaCurrTxnInstantWithoutCompletionTime() throws Exception {
+    setupInstants(SCHEMA1, SCHEMA2, NULL_SCHEMA, true, false, 8);
+    // At pre-commit time the curr txn owner instant is inflight and has no completion time;
+    // on table version 8 and above the resolution falls back to the latest table schema.
+    Option<HoodieInstant> currTxnOwnerInstant = Option.of(
+        metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMMIT_ACTION, "0040"));
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, currTxnOwnerInstant).get();
+    assertEquals(HoodieSchema.parse(SCHEMA2), result);
+  }
+
+  @ParameterizedTest
+  @MethodSource("tableVersionSixNullSchemaCases")
+  void testNullTypeWriterSchemaTableVersionSix(String currTxnInstantTime, String expectedSchema) throws Exception {
+    // Table version 6 orders the schema evolution timeline by requested time, so the curr txn owner
+    // instant's requested time bounds the null-writer-schema lookup. A create schema (SCHEMA3)
+    // distinct from the commit schemas makes the before-all-commits fallback observable.
+    setupInstants(SCHEMA3, SCHEMA1, SCHEMA2, NULL_SCHEMA, true, false, 6);
+    Option<HoodieInstant> currTxnOwnerInstant = Option.of(
+        metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMMIT_ACTION, currTxnInstantTime));
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, currTxnOwnerInstant).get();
+    assertEquals(HoodieSchema.parse(expectedSchema), result);
+  }
+
+  private static Stream<Arguments> tableVersionSixNullSchemaCases() {
+    return Stream.of(
+        // curr txn requested between the two commits: adopt the earlier commit's schema
+        Arguments.of("0015", SCHEMA1),
+        // curr txn requested after all commits: adopt the latest commit's schema
+        Arguments.of("0040", SCHEMA2),
+        // curr txn requested before all commits: fall back to the table create schema
+        Arguments.of("0005", SCHEMA3));
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {6, 8})
+  void testConflictSecondCommitDifferentSchema(int writeTableVersion) throws Exception {
+    setupInstants(null, SCHEMA1, SCHEMA2, true, false, writeTableVersion);
     assertThrows(HoodieSchemaEvolutionConflictException.class,
         () -> strategy.resolveConcurrentSchemaEvolution(table, config, Option.empty(), nonTableCompactionInstant));
   }
 
-  @Test
-  void testConflictSecondCommitSameSchema() throws Exception {
-    setupInstants(null, SCHEMA1, SCHEMA1, true, false);
+  @ParameterizedTest
+  @ValueSource(ints = {6, 8})
+  void testConflictSecondCommitSameSchema(int writeTableVersion) throws Exception {
+    setupInstants(null, SCHEMA1, SCHEMA1, true, false, writeTableVersion);
     HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, Option.empty(), nonTableCompactionInstant).get();
     assertEquals(HoodieSchema.parse(SCHEMA1), result);
   }
 
-  @Test
-  void testNoConflictSameSchema() throws Exception {
-    setupInstants(SCHEMA1, SCHEMA1, SCHEMA1, true, false);
+  @ParameterizedTest
+  @ValueSource(ints = {6, 8})
+  void testNoConflictSameSchema(int writeTableVersion) throws Exception {
+    setupInstants(SCHEMA1, SCHEMA1, SCHEMA1, true, false, writeTableVersion);
     HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
     assertEquals(HoodieSchema.parse(SCHEMA1), result);
   }
 
-  @Test
-  void testNoConflictBackwardsCompatible1() throws Exception {
-    setupInstants(SCHEMA1, SCHEMA2, SCHEMA1, true, false);
+  @ParameterizedTest
+  @ValueSource(ints = {6, 8})
+  void testNoConflictBackwardsCompatible1(int writeTableVersion) throws Exception {
+    setupInstants(SCHEMA1, SCHEMA2, SCHEMA1, true, false, writeTableVersion);
     HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
     assertEquals(HoodieSchema.parse(SCHEMA2), result);
   }
 
-  @Test
-  void testNoConflictBackwardsCompatible2() throws Exception {
-    setupInstants(SCHEMA1, SCHEMA1, SCHEMA2, true, false);
+  @ParameterizedTest
+  @ValueSource(ints = {6, 8})
+  void testNoConflictBackwardsCompatible2(int writeTableVersion) throws Exception {
+    setupInstants(SCHEMA1, SCHEMA1, SCHEMA2, true, false, writeTableVersion);
     HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
     assertEquals(HoodieSchema.parse(SCHEMA2), result);
   }
 
-  @Test
-  void testNoConflictConcurrentEvolutionSameSchema() throws Exception {
-    setupInstants(SCHEMA1, SCHEMA2, SCHEMA2, true, false);
+  @ParameterizedTest
+  @ValueSource(ints = {6, 8})
+  void testNoConflictConcurrentEvolutionSameSchema(int writeTableVersion) throws Exception {
+    setupInstants(SCHEMA1, SCHEMA2, SCHEMA2, true, false, writeTableVersion);
     HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
     assertEquals(HoodieSchema.parse(SCHEMA2), result);

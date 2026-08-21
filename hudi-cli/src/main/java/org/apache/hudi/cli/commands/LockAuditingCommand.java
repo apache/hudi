@@ -20,6 +20,7 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
@@ -278,7 +279,7 @@ public class LockAuditingCommand {
       // Read and parse the configuration
       String configContent;
       try (InputStream inputStream = HoodieCLI.storage.open(configPath)) {
-        configContent = new String(FileIOUtils.readAsByteArray(inputStream));
+        configContent = StringUtils.fromUTF8Bytes(FileIOUtils.readAsByteArray(inputStream));
       } catch (FileNotFoundException e) {
         return String.format("Lock Audit Status: DISABLED\n"
             + "Table: %s\n"
@@ -503,7 +504,7 @@ public class LockAuditingCommand {
             deletedCount++;
           } catch (Exception e) {
             failedCount++;
-            log.warn("Failed to delete audit file: " + pathInfo.getPath(), e);
+            log.warn("Failed to delete audit file: {}", pathInfo.getPath(), e);
           }
         }
         
@@ -543,7 +544,7 @@ public class LockAuditingCommand {
             AuditRecord entry = OBJECT_MAPPER.readValue(line, AuditRecord.class);
             entries.add(entry);
           } catch (Exception e) {
-            log.warn("Failed to parse JSON line in file " + filename + ": " + line, e);
+            log.warn("Failed to parse JSON line in file {}: {}", filename, line, e);
           }
         }
       }
@@ -592,7 +593,7 @@ public class LockAuditingCommand {
           filename
       ));
     } catch (Exception e) {
-      log.warn("Failed to parse audit file: " + filename, e);
+      log.warn("Failed to parse audit file: {}", filename, e);
       return Option.empty();
     }
   }

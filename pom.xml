@@ -59,7 +59,6 @@
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-utilities-slim-bundle</module>
     <module>packaging/hudi-timeline-server-bundle</module>
-    <module>packaging/hudi-trino-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink-datasource</module>
     <module>hudi-kafka-connect</module>
@@ -120,22 +119,36 @@
     <junit.vintage.version>5.14.1</junit.vintage.version>
     <junit.platform.version>1.14.1</junit.platform.version>
     <mockito.jupiter.version>5.21.0</mockito.jupiter.version>
-    <log4j2.version>2.25.4</log4j2.version>
-    <slf4j.version>1.7.36</slf4j.version>
+    <log4j2.version>2.25.5</log4j2.version>
+    <slf4j.version>2.0.7</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.2</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.10</hive.version>
+    <!-- The thrift artifacts the Hive client jars above are compiled against (Hive 2.3.10
+         bumped libthrift for CVE-2020-13949); keep in lockstep with hive.version. The spark4
+         profiles override hive.libthrift.version to the libthrift Spark 4.x itself ships with
+         the same Hive 2.3.10 client, so the pin never downgrades the Spark-selected version.
+         See #19680. -->
+    <hive.libthrift.version>0.14.1</hive.libthrift.version>
+    <hive.libfb303.version>0.9.3</hive.libfb303.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
-    <trino.version>390</trino.version>
+    <!-- trino.sha is the exact trinodb/trino commit hudi-trino builds against; its project
+         version must equal trino.version and the two advance only together. trino.e2e.version is
+         the latest released Trino (e2e server image, trino-jdbc for the integ tests); the nightly
+         pin-advance job refreshes all three, humans merge its bot/trino-pin branch. Keep each
+         property on one line: the workflows and scripts/trino/bootstrap_trino.sh read them with sed. -->
+    <trino.version>484-SNAPSHOT</trino.version>
+    <trino.sha>5b82ec9e7116ec1ed3a83f4cc2f8cf9aaa87b12f</trino.sha>
+    <trino.e2e.version>483</trino.e2e.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.spark.version>1.6.0</orc.spark.version>
     <orc.flink.version>1.5.6</orc.flink.version>
     <roaringbitmap.version>0.9.47</roaringbitmap.version>
-    <airlift.version>0.27</airlift.version>
+    <airlift.version>2.0.3</airlift.version>
     <tally.version>0.13.0</tally.version>
     <prometheus.version>0.16.0</prometheus.version>
     <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
@@ -153,14 +166,14 @@
     <flink1.19.version>1.19.2</flink1.19.version>
     <flink1.18.version>1.18.1</flink1.18.version>
     <flink1.17.version>1.17.1</flink1.17.version>
-    <flink.version>${flink1.20.version}</flink.version>
-    <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
-    <flink.bundle.version>1.20</flink.bundle.version>
+    <flink.version>${flink2.1.version}</flink.version>
+    <hudi.flink.module>hudi-flink2.1.x</hudi.flink.module>
+    <flink.bundle.version>2.1</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
     <flink.avro.version>1.11.4</flink.avro.version>
-    <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+    <flink.format.parquet.version>1.15.2</flink.format.parquet.version>
     <!-- check kafka version -->
-    <flink.connector.kafka.version>3.3.0-1.20</flink.connector.kafka.version>
+    <flink.connector.kafka.version>4.0.1-2.0</flink.connector.kafka.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
     <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>
@@ -170,7 +183,7 @@
     <flink.streaming.java.artifactId>flink-streaming-java</flink.streaming.java.artifactId>
     <flink.clients.artifactId>flink-clients</flink.clients.artifactId>
     <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
-    <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
+    <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
     <rocksdbjni.version>7.5.3</rocksdbjni.version>
     <spark33.version>3.3.4</spark33.version>
     <spark34.version>3.4.3</spark34.version>
@@ -479,6 +492,9 @@
               <!-- afterburner module for jackson performance -->
               <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>
               <include>com.fasterxml.jackson.module:jackson-module-scala_${scala.binary.version}</include>
+              <!-- Parquet 1.16.0+ (Spark 4.1+) splits VariantConverters into parquet-variant,
+                   which parquet-avro needs at runtime. No-op for older Spark. See apache/hudi#19234. -->
+              <include>org.apache.parquet:parquet-variant</include>
             </includes>
           </artifactSet>
           <relocations>
@@ -683,7 +699,6 @@
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
               <exclude>.mvn/**</exclude>
-              <exclude>hudi-trino-plugin/**</exclude>
             </excludes>
           </configuration>
           <executions>
@@ -830,7 +845,7 @@
       </dependency>
       <dependency>
         <groupId>org.apache.logging.log4j</groupId>
-        <artifactId>log4j-slf4j-impl</artifactId>
+        <artifactId>log4j-slf4j2-impl</artifactId>
         <version>${log4j2.version}</version>
         <scope>provided</scope>
       </dependency>
@@ -1023,6 +1038,11 @@
             <groupId>org.slf4j</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <!-- Spark 3.3 pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+          </exclusion>
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
@@ -1070,6 +1090,11 @@
           <exclusion>
             <groupId>org.slf4j</groupId>
             <artifactId>*</artifactId>
+          </exclusion>
+          <!-- Spark 3.3 pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
           </exclusion>
           <exclusion>
             <groupId>log4j</groupId>
@@ -1464,6 +1489,11 @@
             <groupId>org.pentaho</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <!-- Hive pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1484,6 +1514,11 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
           </exclusion>
+          <!-- Hive pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+          </exclusion>
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
@@ -1499,6 +1534,11 @@
           <exclusion>
             <groupId>javax.mail</groupId>
             <artifactId>mail</artifactId>
+          </exclusion>
+          <!-- Hive pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1527,6 +1567,11 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <!-- Hive pulls in the slf4j 1.x binding, which collides with log4j-slf4j2-impl -->
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.apache.hbase</groupId>
@@ -1685,7 +1730,7 @@
       <dependency>
         <groupId>io.trino</groupId>
         <artifactId>trino-jdbc</artifactId>
-        <version>${trino.version}</version>
+        <version>${trino.e2e.version}</version>
       </dependency>
 
       <!-- Zookeeper -->
@@ -1978,6 +2023,16 @@
       </snapshots>
     </repository>
     <repository>
+      <id>confluent</id>
+      <url>https://packages.confluent.io/maven/</url>
+    </repository>
+    <repository>
+      <!-- Required for com.github.everit-org.json-schema:org.everit.json.schema:1.12.1,
+           a transitive dep of io.confluent:kafka-json-schema-{serializer,provider} (not on Maven Central). -->
+      <id>jitpack.io</id>
+      <url>https://jitpack.io</url>
+    </repository>
+    <repository>
       <id>cloudera-repo-releases</id>
       <url>https://repository.cloudera.com/artifactory/public/</url>
       <releases>
@@ -1986,10 +2041,6 @@
       <snapshots>
         <enabled>false</enabled>
       </snapshots>
-    </repository>
-    <repository>
-      <id>confluent</id>
-      <url>https://packages.confluent.io/maven/</url>
     </repository>
   </repositories>
 
@@ -2273,6 +2324,13 @@
       </modules>
     </profile>
     <profile>
+      <!-- RFC-105: non-shaded Trino connector. JDK 25 + Trino SPI; off by default. -->
+      <id>hudi-trino</id>
+      <modules>
+        <module>hudi-trino</module>
+      </modules>
+    </profile>
+    <profile>
       <id>integration-tests</id>
       <activation>
         <property>
@@ -2328,6 +2386,25 @@
                 <goals>
                   <goal>verify</goal>
                 </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <!-- Attach the JaCoCo agent so integration-tests profile runs, including Flink
+               datasource jobs, emit coverage from both integration-test (failsafe) and
+               integ-test unit (surefire) executions. The agent argument is appended to the
+               argLine property, which both plugins pick up. destFile matches the jacoco-agent
+               path that scripts/jacoco/generate_merged_coverage_report.sh globs for. -->
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+                <configuration>
+                  <destFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</destFile>
+                </configuration>
               </execution>
             </executions>
           </plugin>
@@ -2508,14 +2585,11 @@
                         <exclude>*:*_2.12</exclude>
                       </excludes>
                       <!--
-                        Flink decoupled from Scala starting 1.15; the `_2.12` suffix on
-                        flink-table-planner and its transitives (scala-xml, chill) is a
-                        legacy naming artifact, not a real Scala 2.12 binary dependency.
-                        Flink publishes no `_2.13` variant of flink-table-planner, so
-                        building with `-Dscala-2.13` together with any Flink profile
-                        (e.g. `-Dflink1.20`) would otherwise trip the blanket `*:*_2.12`
-                        ban above. Whitelist only the Flink-side transitives that
-                        actually surface here.
+                        Some Flink artifacts still carry a `_2.12` suffix even though
+                        newer Flink modules are decoupled from Scala. Building with
+                        `-Dscala-2.13` together with a Flink profile would otherwise
+                        trip the blanket `*:*_2.12` ban above. Whitelist only the
+                        Flink-side transitives that actually surface here.
                       -->
                       <includes>
                         <include>org.apache.flink:*_2.12</include>
@@ -2770,6 +2844,9 @@
         <hadoop.version>3.4.0</hadoop.version>
         <kafka.version>3.8.0</kafka.version>
         <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- Spark 4.x ships libthrift 0.16.0 alongside the same Hive 2.3.10 client;
+             keep the Spark-selected version instead of the Spark 3 minimum. See #19680. -->
+        <hive.libthrift.version>0.16.0</hive.libthrift.version>
         <!-- Lance: Use Spark 4.0-specific artifact (Scala 2.13 only) -->
         <lance.spark.artifact>lance-spark-4.0_2.13</lance.spark.artifact>
         <lance.skip.tests>false</lance.skip.tests>
@@ -2834,6 +2911,9 @@
         <hadoop.version>3.4.2</hadoop.version>
         <kafka.version>3.9.1</kafka.version>
         <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- Spark 4.x ships libthrift 0.16.0 alongside the same Hive 2.3.10 client;
+             keep the Spark-selected version instead of the Spark 3 minimum. See #19680. -->
+        <hive.libthrift.version>0.16.0</hive.libthrift.version>
         <lance.spark.artifact>lance-spark-4.1_2.13</lance.spark.artifact>
         <lance.skip.tests>false</lance.skip.tests>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
@@ -2899,6 +2979,7 @@
         <module>hudi-flink-datasource/hudi-flink2.1.x</module>
       </modules>
       <activation>
+        <activeByDefault>true</activeByDefault>
         <property>
           <name>flink2.1</name>
         </property>
@@ -2942,7 +3023,6 @@
         <module>hudi-flink-datasource/hudi-flink1.20.x</module>
       </modules>
       <activation>
-        <activeByDefault>true</activeByDefault>
         <property>
           <name>flink1.20</name>
         </property>

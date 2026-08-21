@@ -19,24 +19,17 @@
 package org.apache.hudi.client.model
 
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.unsafe.types.{UTF8String, VariantVal}
+import org.apache.spark.unsafe.types.UTF8String
 
 class Spark40HoodieInternalRow(
-                                metaFields: Array[UTF8String],
-                                sourceRow: InternalRow,
-                                sourceContainsMetaFields: Boolean)
-  extends HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields) {
+    metaFields: Array[UTF8String],
+    sourceRow: InternalRow,
+    sourceContainsMetaFields: Boolean)
+  extends Spark4HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields) {
 
-  override def getVariant(ordinal: Int): VariantVal = {
-    ruleOutMetaFieldsAccess(ordinal, classOf[VariantVal])
-    sourceRow.getVariant(rebaseOrdinal(ordinal))
-  }
-
-  override def copy(): InternalRow = {
-    val copyMetaFields = metaFields.map(f => if (f != null) f.copy() else null)
-    new Spark40HoodieInternalRow(
-      copyMetaFields,
-      if (sourceRow == null) null else sourceRow.copy(),
-      sourceContainsMetaFields)
+  override protected def newInternalRow(metaFields: Array[UTF8String],
+                                        sourceRow: InternalRow,
+                                        sourceContainsMetaFields: Boolean): Spark4HoodieInternalRow = {
+    new Spark40HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
   }
 }

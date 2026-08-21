@@ -74,8 +74,11 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -100,6 +103,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigs
 import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForV9TableCreation;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -118,10 +122,12 @@ import static org.apache.hudi.metadata.HoodieIndexVersion.isValidIndexDefinition
  * @see HoodieTimeline
  * @since 0.3.0
  */
+@NoArgsConstructor
+@Getter
+@Slf4j
 public class HoodieTableMetaClient implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableMetaClient.class);
   public static final String METADATA_STR = "metadata";
   public static final String METAFOLDER_NAME = ".hoodie";
   public static final String TIMELINEFOLDER_NAME = "timeline";
@@ -163,20 +169,27 @@ public class HoodieTableMetaClient implements Serializable {
   protected StoragePath basePath;
   protected StoragePath metaPath;
 
+  @Getter(AccessLevel.NONE)
+  @Setter
   private transient HoodieStorage storage;
+  @Getter(AccessLevel.NONE)
   private boolean loadActiveTimelineOnLoad;
   protected StorageConfiguration<?> storageConf;
   private HoodieTableType tableType;
   private TimelineLayoutVersion timelineLayoutVersion;
   private TimelineLayout timelineLayout;
   private StoragePath timelinePath;
+  @Getter(AccessLevel.NONE)
   private StoragePath timelineHistoryPath;
   protected HoodieTableConfig tableConfig;
+  @Getter(AccessLevel.NONE)
   protected HoodieActiveTimeline activeTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
+  @Getter(AccessLevel.NONE)
   protected HoodieMetaserverConfig metaserverConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
+  @Getter(AccessLevel.NONE)
   private Option<HoodieIndexMetadata> indexMetadataOpt;
   private HoodieTableFormat tableFormat;
 
@@ -187,7 +200,7 @@ public class HoodieTableMetaClient implements Serializable {
   protected HoodieTableMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
                                   ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
                                   HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig) {
-    LOG.debug("Loading HoodieTableMetaClient from " + basePath);
+    log.debug("Loading HoodieTableMetaClient from {}", basePath);
     this.timeGeneratorConfig = timeGeneratorConfig;
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.fileSystemRetryConfig = fileSystemRetryConfig;
@@ -213,19 +226,11 @@ public class HoodieTableMetaClient implements Serializable {
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, this.basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, this.basePath);
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
-    LOG.debug("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
+    log.debug("Finished Loading Table of type {}(version={}) from {}", tableType, timelineLayoutVersion, basePath);
     if (loadActiveTimelineOnLoad) {
-      LOG.info("Loading Active commit timeline for " + basePath);
+      log.info("Loading Active commit timeline for {}", basePath);
       getActiveTimeline();
     }
-  }
-
-  /**
-   * For serializing and de-serializing.
-   *
-   * @deprecated
-   */
-  public HoodieTableMetaClient() {
   }
 
   public String getIndexDefinitionPath() {
@@ -250,7 +255,7 @@ public class HoodieTableMetaClient implements Serializable {
       Option<HoodieIndexDefinition> existingIndexOpt = indexMetadataOpt.get().getIndex(indexName);
       if (existingIndexOpt.isPresent()) {
         if (!existingIndexOpt.get().getSourceFields().equals(indexDefinition.getSourceFields())) {
-          LOG.info("List of columns to index is changing. Old value {}. New value {}", existingIndexOpt.get().getSourceFields(),
+          log.info("List of columns to index is changing. Old value {}. New value {}", existingIndexOpt.get().getSourceFields(),
               indexDefinition.getSourceFields());
           indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
         } else {
@@ -351,7 +356,7 @@ public class HoodieTableMetaClient implements Serializable {
     try {
       Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
       if (bytesOpt.isPresent()) {
-        return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
+        return Option.of(HoodieIndexMetadata.fromJson(fromUTF8Bytes(bytesOpt.get())));
       } else {
         return Option.of(new HoodieIndexMetadata());
       }
@@ -384,35 +389,6 @@ public class HoodieTableMetaClient implements Serializable {
 
   private void writeObject(java.io.ObjectOutputStream out) throws IOException {
     out.defaultWriteObject();
-  }
-
-  /**
-   * Returns base path of the table
-   */
-  public StoragePath getBasePath() {
-    return basePath; // this invocation is cached
-  }
-
-  /**
-   * @return Hoodie Table Type
-   */
-  public HoodieTableType getTableType() {
-    return tableType;
-  }
-
-  /**
-   * @return Meta path
-   */
-  public StoragePath getMetaPath() {
-    return metaPath;
-  }
-
-  public StoragePath getTimelinePath() {
-    return timelinePath;
-  }
-
-  public HoodieTableFormat getTableFormat() {
-    return tableFormat;
   }
 
   /**
@@ -492,21 +468,6 @@ public class HoodieTableMetaClient implements Serializable {
     return timelineHistoryPath;
   }
 
-  /**
-   * @return Table Config
-   */
-  public HoodieTableConfig getTableConfig() {
-    return tableConfig;
-  }
-
-  public TimelineLayoutVersion getTimelineLayoutVersion() {
-    return timelineLayoutVersion;
-  }
-
-  public TimelineLayout getTimelineLayout() {
-    return timelineLayout;
-  }
-
   public boolean isMetadataTable() {
     return HoodieTableMetadata.isMetadataTable(getBasePath());
   }
@@ -540,16 +501,8 @@ public class HoodieTableMetaClient implements Serializable {
         consistencyGuard);
   }
 
-  public void setStorage(HoodieStorage storage) {
-    this.storage = storage;
-  }
-
   public HoodieStorage getRawStorage() {
     return getStorage().getRawStorage();
-  }
-
-  public StorageConfiguration<?> getStorageConf() {
-    return storageConf;
   }
 
   /**
@@ -621,18 +574,6 @@ public class HoodieTableMetaClient implements Serializable {
     return TimelineUtils.generateInstantTime(shouldLock, timeGenerator);
   }
 
-  public HoodieTimeGeneratorConfig getTimeGeneratorConfig() {
-    return timeGeneratorConfig;
-  }
-
-  public ConsistencyGuardConfig getConsistencyGuardConfig() {
-    return consistencyGuardConfig;
-  }
-
-  public FileSystemRetryConfig getFileSystemRetryConfig() {
-    return fileSystemRetryConfig;
-  }
-
   /**
    * Get the archived commits as a timeline. This is costly operation, as all data from the archived files are read.
    * This should not be used, unless for historical debugging purposes.
@@ -696,7 +637,7 @@ public class HoodieTableMetaClient implements Serializable {
                                                 Properties props,
                                                 Integer timelineLayout,
                                                 boolean shouldCreateTableConfig) throws IOException {
-    LOG.info("Initializing {} as hoodie table", basePath);
+    log.info("Initializing {} as hoodie table", basePath);
     final HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, storageConf);
     if (!storage.exists(basePath)) {
       storage.createDirectory(basePath);
@@ -871,31 +812,6 @@ public class HoodieTableMetaClient implements Serializable {
     return instantStream.sorted().collect(Collectors.toList());
   }
 
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    HoodieTableMetaClient that = (HoodieTableMetaClient) o;
-    return Objects.equals(basePath, that.basePath) && tableType == that.tableType;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(basePath, tableType);
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieTableMetaClient{" + "basePath='" + basePath + '\''
-        + ", metaPath='" + metaPath + '\''
-        + ", tableType=" + tableType
-        + '}';
-  }
-
   public void initializeBootstrapDirsIfNotExists() throws IOException {
     initializeBootstrapDirsIfNotExists(basePath, getStorage());
   }
@@ -1037,6 +953,34 @@ public class HoodieTableMetaClient implements Serializable {
     return getTimelineLayout().getCommitMetadataSerDe();
   }
 
+  // Not using Lombok @EqualsAndHashCode/@ToString here: this class is subclassed (e.g. HoodieTableMetaserverClient),
+  // and we rely on the runtime subtype - exact-class matching in equals() and the declaring-class behavior below.
+  // Lombok would switch equals() to instanceof, making a base instance compare equal to a subtype instance.
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    HoodieTableMetaClient that = (HoodieTableMetaClient) o;
+    return Objects.equals(basePath, that.basePath) && tableType == that.tableType;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(basePath, tableType);
+  }
+
+  @Override
+  public String toString() {
+    return "HoodieTableMetaClient{" + "basePath='" + basePath + '\''
+        + ", metaPath='" + metaPath + '\''
+        + ", tableType=" + tableType
+        + '}';
+  }
+
   public static TableBuilder newTableBuilder() {
     return new TableBuilder();
   }
@@ -1044,6 +988,7 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Builder for {@link Properties}.
    */
+  @NoArgsConstructor(access = AccessLevel.PACKAGE)
   public static class TableBuilder {
 
     private HoodieTableType tableType;
@@ -1092,9 +1037,6 @@ public class HoodieTableMetaClient implements Serializable {
      * Like KeyGenerator's configs.
      */
     private final Properties others = new Properties();
-
-    TableBuilder() {
-    }
 
     public TableBuilder setTableType(HoodieTableType tableType) {
       this.tableType = tableType;
@@ -1667,7 +1609,7 @@ public class HoodieTableMetaClient implements Serializable {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(basePath)
           .setMetaserverConfig(props)
           .build();
-      LOG.info("Finished initializing Table of type {} from {}", metaClient.getTableConfig().getTableType(), basePath);
+      log.info("Finished initializing Table of type {} from {}", metaClient.getTableConfig().getTableType(), basePath);
       return metaClient;
     }
   }

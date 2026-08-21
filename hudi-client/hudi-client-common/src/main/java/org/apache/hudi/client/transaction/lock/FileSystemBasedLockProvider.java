@@ -169,17 +169,15 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         return true;
       }
     } catch (IOException | HoodieIOException e) {
-      log.error(generateLogStatement(LockState.ALREADY_RELEASED) + " failed to get lockFile's modification time", e);
+      log.error("{} failed to get lockFile's modification time", generateLogStatement(LockState.ALREADY_RELEASED), e);
     }
     return false;
   }
 
   private void acquireLock() {
     try (OutputStream os = storage.create(this.lockFile, false)) {
-      if (!storage.exists(this.lockFile)) {
-        initLockInfo();
-        os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
-      }
+      initLockInfo();
+      os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
     }

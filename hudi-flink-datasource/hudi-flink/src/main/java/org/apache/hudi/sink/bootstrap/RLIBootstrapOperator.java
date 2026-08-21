@@ -24,6 +24,7 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
@@ -52,7 +53,7 @@ import java.util.stream.Collectors;
 public class RLIBootstrapOperator
     extends AbstractBootstrapOperator {
 
-  private transient HoodieBackedTableMetadata metadataTable;
+  private transient HoodieBackedTableMetadata tableMetadata;
   private transient long loadedCnt;
 
   public RLIBootstrapOperator(Configuration conf) {
@@ -63,13 +64,13 @@ public class RLIBootstrapOperator
   public void initializeState(StateInitializationContext context) throws Exception {
     loadedCnt = 0;
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-    this.metadataTable = (HoodieBackedTableMetadata) metaClient.getTableFormat().getMetadataFactory().create(
+    this.tableMetadata = new HoodieBackedTableMetadata(
         HoodieFlinkEngineContext.DEFAULT,
         metaClient.getStorage(),
         StreamerUtil.metadataConfig(conf),
         conf.get(FlinkOptions.PATH));
     // Load RLI records
-    preLoadRLIRecords();
+    preLoadRLIRecords(metaClient.getTableConfig());
   }
 
   @Override
@@ -82,9 +83,19 @@ public class RLIBootstrapOperator
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void preLoadRLIRecords() {
+  private void preLoadRLIRecords(HoodieTableConfig tableConfig) {
     int taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
     int parallelism = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
+
+    if (!tableMetadata.enabled()) {
+      if (tableConfig.isMetadataTableAvailable()) {
+        throw new RuntimeException("Can not initialize the table metadata");
+      }
+      log.info("Skip loading RLI records because table metadata is not initialized, taskId = {}", taskID);
+      waitForBootstrapReady(taskID);
+      closeMetadataTable();
+      return;
+    }
 
     log.info("Start loading RLI records from metadata table, taskId = {}, parallelism = {}", taskID, parallelism);
 
@@ -102,7 +113,7 @@ public class RLIBootstrapOperator
 
     // Each subtask loads buckets assigned to it
     long startTime = System.currentTimeMillis();
-    HoodiePairData<String, HoodieRecordGlobalLocation> rliData = metadataTable.readRecordIndexLocations(fileSlicesFilter);
+    HoodiePairData<String, HoodieRecordGlobalLocation> rliData = tableMetadata.readRecordIndexLocations(fileSlicesFilter);
     rliData.forEach(locationPair -> emitIndexRecord(locationPair.getLeft(), locationPair.getRight()));
     long costMs = System.currentTimeMillis() - startTime;
     log.info("Finish loading RLI records, total records: {}, cost: {} ms, taskId = {}", loadedCnt, costMs, taskID);
@@ -133,13 +144,13 @@ public class RLIBootstrapOperator
   }
 
   private void closeMetadataTable() {
-    if (metadataTable != null) {
+    if (tableMetadata != null) {
       try {
-        metadataTable.close();
+        tableMetadata.close();
       } catch (Exception e) {
         log.warn("Failed to close metadata table", e);
       }
-      metadataTable = null;
+      tableMetadata = null;
     }
   }
 }

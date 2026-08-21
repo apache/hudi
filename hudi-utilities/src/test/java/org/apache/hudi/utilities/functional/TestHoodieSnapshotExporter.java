@@ -112,7 +112,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
     List<StoragePathInfo> pathInfoList = storage.listFiles(new StoragePath(sourcePath));
     for (StoragePathInfo pathInfo : pathInfoList) {
-      LOG.info(">>> Prepared test file: " + pathInfo.getPath());
+      LOG.info(">>> Prepared test file: {}", pathInfo.getPath());
     }
   }
 

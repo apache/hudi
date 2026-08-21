@@ -35,12 +35,15 @@ import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -82,10 +85,15 @@ public class TestHoodieLogBlock {
 
   @Test
   public void testHeaderMetadata() throws IOException {
+    // SCHEMA carries a non-ASCII field name and a non-ASCII default. Both are written as UTF-8, so
+    // decoding with the platform default charset corrupts them: loudly for the name, which Avro
+    // then rejects, and silently for the default.
+    String schema = "{\"type\":\"record\",\"name\":\"r\",\"fields\":["
+        + "{\"name\":\"名字\",\"type\":\"string\",\"default\":\"李明\"}]}";
     Map<HoodieLogBlock.HeaderMetadataType, String> a = new HashMap<>();
     a.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     a.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "1");
-    a.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, "{}");
+    a.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema);
     a.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE, "rollback");
     a.put(HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES, "1");
     a.put(HoodieLogBlock.HeaderMetadataType.RECORD_POSITIONS, "");
@@ -96,12 +104,29 @@ public class TestHoodieLogBlock {
     Map<HoodieLogBlock.HeaderMetadataType, String> b = HoodieLogBlock.getHeaderMetadata(new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(bytes)));
     Assertions.assertEquals("100", b.get(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME));
     Assertions.assertEquals("1", b.get(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME));
-    Assertions.assertEquals("{}", b.get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
+    Assertions.assertEquals(schema, b.get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
     Assertions.assertEquals("rollback", b.get(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE));
     Assertions.assertEquals("1", b.get(HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES));
     Assertions.assertEquals("", b.get(HoodieLogBlock.HeaderMetadataType.RECORD_POSITIONS));
     Assertions.assertEquals("1", b.get(HoodieLogBlock.HeaderMetadataType.BLOCK_IDENTIFIER));
     Assertions.assertEquals("true", b.get(HoodieLogBlock.HeaderMetadataType.IS_PARTIAL));
+  }
+
+  @Test
+  public void testHeaderMetadataIsWrittenAsUtf8() throws IOException {
+    // The read side decodes with StringUtils.fromUTF8Bytes, which is only correct because the write
+    // side encodes with StringUtils.getUTF8Bytes. Assert that contract against the bytes on the
+    // wire: unlike the round-trip in testHeaderMetadata, this holds whatever the JVM default
+    // charset happens to be, so it still fails if the write side regresses to String.getBytes().
+    String value = "名字";
+    Map<HoodieLogBlock.HeaderMetadataType, String> a = new HashMap<>();
+    a.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, value);
+    byte[] bytes = HoodieLogBlock.getHeaderMetadataBytes(a);
+
+    // Layout for a single entry: int entryCount, int ordinal, int valueLength, then the value bytes.
+    byte[] expected = getUTF8Bytes(value);
+    Assertions.assertEquals(expected.length, ByteBuffer.wrap(bytes).getInt(8));
+    assertArrayEquals(expected, Arrays.copyOfRange(bytes, 12, bytes.length));
   }
 
   private SeekableDataInputStream prepareMockedLogInputStream(int contentSize,

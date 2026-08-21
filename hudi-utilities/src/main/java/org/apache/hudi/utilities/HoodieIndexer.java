@@ -35,10 +35,9 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -87,9 +86,9 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
  * hoodie.write.concurrency.mode=optimistic_concurrency_control
  * hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
  */
+@Slf4j
 public class HoodieIndexer {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexer.class);
   static final String DROP_INDEX = "dropindex";
 
   private final HoodieIndexer.Config cfg;
@@ -165,21 +164,21 @@ public class HoodieIndexer {
     if (result != 0) {
       throw new HoodieException(resultMsg + " failed");
     }
-    LOG.info(resultMsg + " success");
+    log.info("{} success", resultMsg);
     jsc.stop();
   }
 
   public int start(int retry) {
     // indexing should be done only if metadata is enabled
     if (!props.getBoolean(HoodieMetadataConfig.ENABLE.key())) {
-      LOG.error(String.format("Metadata is not enabled. Please set %s to true.", HoodieMetadataConfig.ENABLE.key()));
+      log.error("Metadata is not enabled. Please set {} to true.", HoodieMetadataConfig.ENABLE.key());
       return -1;
     }
 
     // all inflight or completed metadata partitions have already been initialized
     // so enable corresponding indexes in the props so that they're not deleted
     Set<String> initializedMetadataPartitions = getInflightAndCompletedMetadataPartitions(metaClient.getTableConfig());
-    LOG.info("Setting props for: " + initializedMetadataPartitions);
+    log.info("Setting props for: {}", initializedMetadataPartitions);
     initializedMetadataPartitions.forEach(p -> {
       if (PARTITION_NAME_COLUMN_STATS.equals(p)) {
         props.setProperty(ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
@@ -195,28 +194,28 @@ public class HoodieIndexer {
     return UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
         case SCHEDULE: {
-          LOG.info("Running Mode: [" + SCHEDULE + "]; Do schedule");
+          log.info("Running Mode: [{}]; Do schedule", SCHEDULE);
           Option<String> instantTime = scheduleIndexing(jsc);
           int result = instantTime.isPresent() ? 0 : -1;
           if (result == 0) {
-            LOG.info("The schedule instant time is " + instantTime.get());
+            log.info("The schedule instant time is {}", instantTime.get());
           }
           return result;
         }
         case SCHEDULE_AND_EXECUTE: {
-          LOG.info("Running Mode: [" + SCHEDULE_AND_EXECUTE + "]");
+          log.info("Running Mode: [{}]", SCHEDULE_AND_EXECUTE);
           return scheduleAndRunIndexing(jsc);
         }
         case EXECUTE: {
-          LOG.info("Running Mode: [" + EXECUTE + "];");
+          log.info("Running Mode: [{}];", EXECUTE);
           return runIndexing(jsc);
         }
         case DROP_INDEX: {
-          LOG.info("Running Mode: [" + DROP_INDEX + "];");
+          log.info("Running Mode: [{}];", DROP_INDEX);
           return dropIndex(jsc);
         }
         default: {
-          LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+          log.info("Unsupported running mode [{}], quit the job directly", cfg.runningMode);
           return -1;
         }
       }
@@ -248,7 +247,7 @@ public class HoodieIndexer {
 
     Option<String> indexingInstant = client.scheduleIndexing(partitionTypes, Collections.emptyList());
     if (!indexingInstant.isPresent()) {
-      LOG.error("Scheduling of index action did not return any instant.");
+      log.error("Scheduling of index action did not return any instant.");
     }
     return indexingInstant;
   }
@@ -264,7 +263,7 @@ public class HoodieIndexer {
     Set<String> requestedIndexPartitionPaths = partitionTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedIndexPartitionPaths.retainAll(indexedMetadataPartitions);
     if (!requestedIndexPartitionPaths.isEmpty()) {
-      LOG.error("Following indexes already built: " + requestedIndexPartitionPaths);
+      log.error("Following indexes already built: {}", requestedIndexPartitionPaths);
       return true;
     }
     return false;
@@ -286,8 +285,7 @@ public class HoodieIndexer {
             .firstInstant();
         if (earliestPendingIndexInstant.isPresent()) {
           cfg.indexInstantTime = earliestPendingIndexInstant.get().requestedTime();
-          LOG.info("Found the earliest scheduled indexing instant which will be executed: "
-              + cfg.indexInstantTime);
+          log.info("Found the earliest scheduled indexing instant which will be executed: {}", cfg.indexInstantTime);
         } else {
           throw new HoodieIndexException("There is no scheduled indexing in the table.");
         }
@@ -316,18 +314,18 @@ public class HoodieIndexer {
       client.dropIndex(partitionTypes);
       return 0;
     } catch (Exception e) {
-      LOG.error("Failed to drop index. ", e);
+      log.error("Failed to drop index. ", e);
       return -1;
     }
   }
 
   private boolean handleResponse(Option<HoodieIndexCommitMetadata> commitMetadata) {
     if (!commitMetadata.isPresent()) {
-      LOG.error("Indexing failed as no commit metadata present.");
+      log.error("Indexing failed as no commit metadata present.");
       return false;
     }
     List<HoodieIndexPartitionInfo> indexPartitionInfos = commitMetadata.get().getIndexPartitionInfos();
-    LOG.info("Indexing complete for partitions: {}", indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList()));
+    log.info("Indexing complete for partitions: {}", indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList()));
     return isIndexBuiltForAllRequestedTypes(indexPartitionInfos);
   }
 

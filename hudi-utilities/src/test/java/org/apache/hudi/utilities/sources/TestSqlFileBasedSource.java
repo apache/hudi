@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -45,6 +46,7 @@ import java.io.IOException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 /**
  * Test against {@link SqlSource}.
@@ -60,6 +62,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
   private TypedProperties props;
   private SqlFileBasedSource sqlFileSource;
   private SourceFormatAdapter sourceFormatAdapter;
+  private final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -114,7 +117,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
         UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
 
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
-    sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
+    sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
 
     // Test fetching Avro format
@@ -141,7 +144,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
         UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
 
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
-    sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
+    sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
 
     // Test fetching Row format
@@ -163,7 +166,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
         UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
 
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
-    sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
+    sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
 
     InputBatch<Dataset<Row>> fetch1AsRows =
@@ -184,7 +187,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
         UtilitiesTestBase.basePath + "/sql-file-based-source-invalid-table.sql");
 
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source-invalid-table.sql");
-    sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
+    sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
 
     assertThrows(
@@ -201,7 +204,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
     props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
     props.setProperty(sqlFileSourceConfigEmitChkPointConf, "true");
 
-    sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
+    sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider, metrics);
     Pair<Option<Dataset<Row>>, Checkpoint> nextBatch = sqlFileSource.fetchNextBatch(Option.empty(), Long.MAX_VALUE);
 
     assertEquals(10000, nextBatch.getLeft().get().count());

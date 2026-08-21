@@ -97,6 +97,7 @@ public class TestRecordIndexPartitioner {
   private RecordIndexPartitioner newPartitioner() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
     conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), String.valueOf(FILE_GROUP_COUNT));
     StreamerUtil.initTableIfNotExists(conf);
     return new RecordIndexPartitioner(conf);

@@ -25,7 +25,7 @@ docker demo environment.
 ### Configs for assembling docker images - `/hoodie`
 
 The `/hoodie` folder contains all the configs for assembling necessary docker images. The name and repository of each
-docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-trinobase_368`, is defined in the maven configuration file `pom.xml`.
+docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-prestobase_0.232`, is defined in the maven configuration file `pom.xml`.
 
 ### Base images by Java version
 
@@ -39,9 +39,9 @@ docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-trinobase_368`, is defined in 
 The legacy Java 8 `base` module under `/hoodie/hadoop/base` is retained for historical reference only; Spark 2.x is no
 longer supported and `build_docker_images.sh` never selects it.
 
-Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `prestobase`, `trinobase`) pick the base
-via the `BASE_IMAGE_TAG` build arg (default `java11`). `build_docker_images.sh` sets it automatically; bare `docker
-build` invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=java17`.
+Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `prestobase`) pick the base via the
+`BASE_IMAGE_TAG` build arg (default `java11`). `build_docker_images.sh` sets it automatically; bare `docker build`
+invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=java17`.
 
 ### Docker compose config for the Demo - `/compose`
 
@@ -59,12 +59,43 @@ To build all docker images locally, you can run the script:
 ./build_local_docker_images.sh
 ```
 
+To build the Docker demo images with `docker` directly, rather than through the Maven build like
+`build_local_docker_images.sh` above, run the script from under `<HUDI_REPO_DIR>/docker`:
+
+```shell
+# With no flags, builds Hadoop 2.8.4 / Spark 3.5.3 / Hive 2.3.10, matching
+# docker-compose_hadoop284_hive2310_spark353_{amd64,arm64}.yml
+./build_docker_images.sh
+```
+
+You can override the Hadoop, Spark, and Hive versions from the command line. If you plan to use `setup_demo.sh`,
+build the image set matching the default compose files first. For other flows, use one of the supported version
+combinations under `docker/compose`.
+
+```shell
+# Matches setup_demo.sh and
+# docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml
+./build_docker_images.sh --hadoop-version 3.3.4 --spark-version 3.5.3 --hive-version 3.1.3
+
+# Another supported combination is
+# docker-compose_hadoop340_hive313_spark401_{amd64,arm64}.yml
+./build_docker_images.sh --hadoop-version 3.4.0 --spark-version 4.0.1 --hive-version 3.1.3
+```
+
+`setup_demo.sh` currently defaults to `docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml`. If you build a
+different image set for the demo flow, update `COMPOSE_FILE_NAME` in `setup_demo.sh` to point to the matching compose
+file before running the script. Run `./setup_demo.sh dev` to use your locally built images; a plain run pulls the
+Docker Hub images over them.
+
+By default, the script builds images for the current machine architecture and derives the version tag from the root
+`pom.xml`. Use `--version-tag` to set an explicit tag if needed.
+
 To build a single image target, you can run
 
 ```shell
 mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -pl :<image_target> -am
-# For example, to build hudi-hadoop-trinobase-docker
-mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -pl :hudi-hadoop-trinobase-docker -am
+# For example, to build hudi-hadoop-prestobase-docker
+mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -pl :hudi-hadoop-prestobase-docker -am
 ```
 
 Alternatively, you can use `docker` cli directly under `hoodie/hadoop` to build images in a faster way. If you use this
@@ -84,8 +115,8 @@ steps in the next section).
 ```shell
 # Run under hoodie/hadoop, the <tag> is optional, "latest" by default
 docker build <image_folder_name> -t <hub-user>/<repo-name>[:<tag>]
-# For example, to build trinobase
-docker build trinobase -t apachehudi/hudi-hadoop_2.8.4-trinobase_368
+# For example, to build prestobase
+docker build prestobase -t apachehudi/hudi-hadoop_2.8.4-prestobase_0.232
 ```
 
 After new images are built, you can run the following script to bring up docker demo with your local images:
@@ -102,7 +133,7 @@ Hud registry designated by its name or tag:
 ```shell
 docker push <hub-user>/<repo-name>:<tag>
 # For example
-docker push apachehudi/hudi-hadoop_2.8.4-trinobase_368
+docker push apachehudi/hudi-hadoop_2.8.4-prestobase_0.232
 ```
 
 You can also easily push the image to the Docker Hub using Docker Desktop app: go to `Images`, search for the image by
@@ -120,15 +151,10 @@ Please refer to the [Docker Demo Docs page](https://hudi.apache.org/docs/docker_
 
 ## Building Multi-Arch Images
 
-NOTE: The steps below require some code changes. Support for multi-arch builds in a fully automated manner is being
-tracked by [HUDI-3601](https://issues.apache.org/jira/browse/HUDI-3601).
+The `build_docker_images.sh` script supports multi-arch image builds through Docker `buildx`. First ensure a `buildx`
+builder is set up locally:
 
-By default, the docker images are built for x86_64 (amd64) architecture. Docker `buildx` allows you to build multi-arch
-images, link them together with a manifest file, and push them all to a registry – with a single command. Let's say we
-want to build for arm64 architecture. First we need to ensure that `buildx` setup is done locally. Please follow the
-below steps (referred from https://www.docker.com/blog/multi-arch-images):
-
-```
+```shell
 # List builders 
 ~ ❯❯❯ docker buildx ls
 NAME/NODE DRIVER/ENDPOINT STATUS  PLATFORMS
@@ -155,63 +181,48 @@ Status:    running
 Platforms: linux/amd64, linux/arm64, linux/arm/v7, linux/arm/v6
 ```
 
-Now goto `<HUDI_REPO_DIR>/docker/hoodie/hadoop` and change the `Dockerfile` to pull dependent images corresponding to
-arm64. For example, in [base/Dockerfile](./hoodie/hadoop/base/Dockerfile) (which pulls jdk11 image), change the
-line `FROM openjdk:11-jdk-slim-bullseye` to `FROM arm64v8/openjdk:11-jdk-slim-bullseye`.
+Then run the script from under `<HUDI_REPO_DIR>/docker`:
 
-Then, from under `<HUDI_REPO_DIR>/docker/hoodie/hadoop` directory, execute the following command to build as well as
-push the image to the dockerhub repo:
+```shell
+./build_docker_images.sh --multi-arch
 
-```
-# Run under hoodie/hadoop, the <tag> is optional, "latest" by default
-docker buildx build <image_folder_name> --platform <comma-separated,platforms> -t <hub-user>/<repo-name>[:<tag>] --push
-
-# For example, to build the Java 11 base image
-docker buildx build base_java11 --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-base-java11:linux-arm64-0.10.1 --push
+# Example with explicit component versions
+./build_docker_images.sh --hadoop-version 3.4.0 --spark-version 4.0.1 --hive-version 3.1.3 --multi-arch
 ```
 
-Note: the base image is now tagged per Java variant (`-base-java11` / `-base-java17`). Downstream Dockerfiles
-select the variant via the `BASE_IMAGE_TAG` build arg (default `java11`). If you also need the Java 17 base for
-arm64, repeat the build against `base_java17` and tag it as `...-base-java17:<tag>`.
+When `--multi-arch` is enabled, the script builds and pushes the amd64 and arm64 variants in one pass. Use
+`--version-tag <tag>` to override the image tag used for the push.
 
-Once the base image is pushed then you could do something similar for other images.
-Change [hive](./hoodie/hadoop/hive_base/Dockerfile) dockerfile to pull the base image with tag corresponding to
-linux/arm64 platform.
+Note that `--multi-arch` uses `docker buildx build --push` and the image names in the script are hardcoded to the
+`apachehudi/...` Docker Hub repositories, so this flow requires push access to those repositories. No Dockerfile
+changes are needed for the current amd64 plus arm64 image set in this repository.
 
-```
-# Change below line in the Dockerfile
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-${BASE_IMAGE_TAG}:latest
-# as shown below (pin to the same Java variant you built above, e.g. java11)
-FROM --platform=linux/arm64 apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-java11:linux-arm64-0.10.1
+## Trino E2E image - `/trino`
 
-# and then build & push from under hoodie/hadoop dir
-docker buildx build hive_base --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:linux-arm64-0.10.1 --push
-```
+The Trino E2E stack does not use the `hoodie/hadoop` image tree. `docker/trino/` builds
+`apachehudi/hudi-trino-e2e` directly on top of the official `trinodb/trino` image at the
+root pom's `trino.e2e.version`, baking in a locally-assembled native `trino-hudi` plugin
+directory and the E2E catalog config (`connector.name=hudi`, metastore at
+`thrift://hivemetastore:9083`).
 
-Similarly, for images that are dependent on hive (e.g. [base spark](./hoodie/hadoop/spark_base/Dockerfile)
-, [sparkmaster](./hoodie/hadoop/sparkmaster/Dockerfile), [sparkworker](./hoodie/hadoop/sparkworker/Dockerfile)
-and [sparkadhoc](./hoodie/hadoop/sparkadhoc/Dockerfile)), change the corresponding Dockerfile to pull the base hive
-image with tag corresponding to arm64. Then build and push using `docker buildx` command.
-
-For the sake of completeness, here is a [patch](https://gist.github.com/xushiyan/cec16585e884cf0693250631a1d10ec2) which
-shows what changes to make in Dockerfiles (assuming tag is named `linux-arm64-0.10.1`), and below is the list
-of `docker buildx` commands.
+This image is built locally on demand (also by the `hudi_trino_e2e.yml` CI workflow) and
+is NOT published to Docker Hub. The plugin directory comes from the in-repo shim project
+at `docker/trino/shim/` (see `hudi-trino/README.md` for the full build-and-run flow):
 
 ```
-docker buildx build base_java11 --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-base-java11:linux-arm64-0.10.1 --push
-docker buildx build datanode --platform linux/arm64 --build-arg BASE_IMAGE_TAG=java11 -t apachehudi/hudi-hadoop_2.8.4-datanode:linux-arm64-0.10.1 --push
-docker buildx build historyserver --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-history:linux-arm64-0.10.1 --push
-docker buildx build hive_base --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:linux-arm64-0.10.1 --push
-docker buildx build namenode --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-namenode:linux-arm64-0.10.1 --push
-docker buildx build prestobase --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-prestobase_0.217:linux-arm64-0.10.1 --push
-docker buildx build spark_base --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkbase_2.4.4:linux-arm64-0.10.1 --push
-docker buildx build sparkadhoc --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:linux-arm64-0.10.1 --push
-docker buildx build sparkmaster --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_2.4.4:linux-arm64-0.10.1 --push
-docker buildx build sparkworker --platform linux/arm64 -t apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkworker_2.4.4:linux-arm64-0.10.1 --push
+# JDK 25; hudi-trino must already be installed into the local m2
+# dep.hudi.version comes from the reactor pom -- the shim is outside the reactor, so
+# cut_release_branch.sh cannot bump the literal default in its own pom.
+HUDI_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
+mvn -f docker/trino/shim/pom.xml clean package -DskipTests -Ddep.hudi.version="$HUDI_VERSION"
+TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+unzip -o -q "docker/trino/shim/target/trino-hudi-$TRINO_VERSION.zip" -d docker/trino/shim/target  # trino-maven-plugin 24 emits only the zip
+docker/trino/build_image.sh --plugin-dir "docker/trino/shim/target/trino-hudi-$TRINO_VERSION"
 ```
 
-Once all the required images are pushed to the dockerhub repos, then we need to do one additional change
-in [docker compose](./compose/docker-compose_hadoop284_hive233_spark244.yml) file.
-Apply [this patch](https://gist.github.com/codope/3dd986de5e54f0650dd74b6032e4456c) to the docker compose file so
-that [setup_demo](./setup_demo.sh) pulls images with the correct tag for arm64. And now we should be ready to run the
-setup script and follow the docker demo.
+The `trinocoordinator` compose service exists only in the
+`docker-compose_hadoop340_hive2310_spark402_{amd64,arm64}.yml` pair, behind the `trino`
+compose profile, so the default hive-sync flows never start it. For fast plugin
+iteration the container supports a bind-mounted overlay: point `TRINO_PLUGIN_DIR` (or
+the `-Dtrino.plugin.dir` test property) at a freshly built plugin dir and restart the
+container instead of rebuilding the image.

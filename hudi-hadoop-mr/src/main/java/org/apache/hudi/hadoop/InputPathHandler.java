@@ -114,7 +114,7 @@ public class InputPathHandler {
           tagAsIncrementalOrSnapshot(inputPath, metaClient, incrementalTables);
         } catch (TableNotFoundException | InvalidTableException e) {
           // This is a non Hoodie inputPath
-          LOG.info("Handling a non-hoodie path " + inputPath);
+          LOG.info("Handling a non-hoodie path {}", inputPath);
           nonHoodieInputPaths.add(inputPath);
         }
       }

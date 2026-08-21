@@ -1,0 +1,108 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{Row, SaveMode}
+
+// BLOB is a struct with fields: type (string), data (binary, nullable), reference (struct, nullable)
+val blobMetadata = new MetadataBuilder().putString("hudi_type", "BLOB").build()
+
+val referenceType = StructType(Seq(
+  StructField("external_path", StringType, nullable = false),
+  StructField("offset", LongType, nullable = true),
+  StructField("length", LongType, nullable = true),
+  StructField("managed", BooleanType, nullable = false)
+))
+
+val blobType = StructType(Seq(
+  StructField("type", StringType, nullable = false),
+  StructField("data", BinaryType, nullable = true),
+  StructField("reference", referenceType, nullable = true)
+))
+
+val schema = StructType(Seq(
+  StructField("id", LongType, nullable = false),
+  StructField("name", StringType),
+  StructField("blob_data", blobType, nullable = false, metadata = blobMetadata),
+  StructField("dt", StringType)
+))
+
+// Shared Hive-sync + write options factored out so the upsert and delete writes
+// reuse the exact same sync configuration as the initial Overwrite.
+// Body is wrapped in { } so the spark-shell REPL keeps the chained .option(...)
+// calls attached to the def. Without braces, writer.format("hudi") on the first
+// body line parses as a complete expression, the REPL closes the def there, and
+// the remaining .option(...) lines get dot-applied to `sc` (SparkContext).
+def applyWriteOpts(writer: org.apache.spark.sql.DataFrameWriter[Row]): org.apache.spark.sql.DataFrameWriter[Row] = {
+  writer.format("hudi")
+    .option("hoodie.table.name", "blob_test_df")
+    .option("hoodie.datasource.write.recordkey.field", "id")
+    .option("hoodie.datasource.write.precombine.field", "name")
+    .option("hoodie.datasource.write.partitionpath.field", "dt")
+    .option("hoodie.datasource.hive_sync.enable", "true")
+    .option("hoodie.datasource.hive_sync.database", "default")
+    .option("hoodie.datasource.hive_sync.table", "blob_test_df")
+    .option("hoodie.datasource.hive_sync.jdbcurl", "jdbc:hive2://hiveserver:10000/")
+    .option("hoodie.datasource.hive_sync.mode", "jdbc")
+    .option("hoodie.datasource.hive_sync.partition_fields", "dt")
+    .option("hoodie.datasource.hive_sync.partition_extractor_class",
+      "org.apache.hudi.hive.MultiPartKeysValueExtractor")
+    .option("hoodie.datasource.hive_sync.username", "hive")
+    .option("hoodie.datasource.hive_sync.password", "hive")
+}
+
+// Seed two rows in dt='2024-01-01' via Overwrite.
+val seed = Seq(
+  Row(1L, "file1", Row("INLINE", "hello world".getBytes, null), "2024-01-01"),
+  Row(2L, "file2", Row("INLINE", "test data".getBytes, null), "2024-01-01")
+)
+val seedDf = spark.createDataFrame(spark.sparkContext.parallelize(seed), schema)
+applyWriteOpts(seedDf.write).mode(SaveMode.Overwrite).save("/user/hive/warehouse/blob_test_df")
+spark.sql("select id, name, blob_data.type, dt from blob_test_df order by id").show(10, false)
+println("BLOB_DF_INSERT_SUCCESS")
+
+// Append-upsert: id=2 value changes, id=3 new in a new partition dt='2024-01-02'.
+// precombine=name must strictly increase for the matched row so Hudi keeps the
+// new value (alphabetical 'file2-updated' > 'file2').
+val upsertRows = Seq(
+  Row(2L, "file2-updated", Row("INLINE", "updated payload".getBytes, null), "2024-01-01"),
+  Row(3L, "file3", Row("INLINE", "brand new".getBytes, null), "2024-01-02")
+)
+val upsertDf = spark.createDataFrame(spark.sparkContext.parallelize(upsertRows), schema)
+applyWriteOpts(upsertDf.write)
+  .option("hoodie.datasource.write.operation", "upsert")
+  .mode(SaveMode.Append)
+  .save("/user/hive/warehouse/blob_test_df")
+spark.sql("select id, name, blob_data.type, dt from blob_test_df order by id").show(10, false)
+println("BLOB_DF_UPSERT_SUCCESS")
+
+// Delete id=3 via operation=delete. The DF still needs a schema-compatible BLOB
+// column (Hudi uses only the record key/partition for delete, the payload is
+// ignored but must deserialize).
+val deleteRows = Seq(
+  Row(3L, "file3", Row("INLINE", "ignored".getBytes, null), "2024-01-02")
+)
+val deleteDf = spark.createDataFrame(spark.sparkContext.parallelize(deleteRows), schema)
+applyWriteOpts(deleteDf.write)
+  .option("hoodie.datasource.write.operation", "delete")
+  .mode(SaveMode.Append)
+  .save("/user/hive/warehouse/blob_test_df")
+spark.sql("select id, name, blob_data.type, dt from blob_test_df order by id").show(10, false)
+println("BLOB_DF_DELETE_SUCCESS")
+
+println("BLOB_DF_TEST_SUCCESS")

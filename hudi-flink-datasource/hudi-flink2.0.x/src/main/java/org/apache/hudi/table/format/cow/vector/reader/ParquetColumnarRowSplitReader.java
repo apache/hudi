@@ -18,7 +18,9 @@
 
 package org.apache.hudi.table.format.cow.vector.reader;
 
+import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
 import org.apache.hudi.table.format.cow.vector.ParquetDecimalVector;
+import org.apache.hudi.table.format.cow.vector.type.ParquetField;
 
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.table.data.RowData;
@@ -28,6 +30,7 @@ import org.apache.flink.table.data.columnar.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -39,6 +42,8 @@ import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.io.ColumnIOFactory;
+import org.apache.parquet.io.MessageColumnIO;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
@@ -46,6 +51,7 @@ import org.apache.parquet.schema.Types;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -53,7 +59,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.table.format.cow.ParquetSplitReaderUtil.createColumnReader;
 import static org.apache.hudi.table.format.cow.ParquetSplitReaderUtil.createWritableColumnVector;
 import static org.apache.parquet.filter2.compat.FilterCompat.get;
 import static org.apache.parquet.filter2.compat.RowGroupFilter.filterRowGroups;
@@ -76,6 +81,14 @@ public class ParquetColumnarRowSplitReader implements Closeable {
   private final LogicalType[] requestedTypes;
 
   private final MessageType requestedSchema;
+
+  /**
+   * {@link ParquetField} tree per top-level requested column, used by
+   * {@link ParquetSplitReaderUtil#createColumnReader(boolean, LogicalType, Type, List,
+   * PageReadStore, ParquetField)} to drive the Dremel-style {@link NestedColumnReader} for
+   * nested types. Entries are {@code null} for primitive top-level fields. Built once per split.
+   */
+  private final List<ParquetField> requestedFields;
 
   /**
    * The total number of rows this RecordReader will eventually read. The sum of the rows of all
@@ -157,6 +170,20 @@ public class ParquetColumnarRowSplitReader implements Closeable {
     this.rowsReturned = 0;
 
     checkSchema();
+
+    // Build the ParquetField tree once per split (the Dremel-style nested reader reuses it across
+    // row groups). Only columns with nested logical type get a non-null entry — primitive columns
+    // still use Hudi's specialized ColumnReaders.
+    MessageColumnIO messageColumnIO = new ColumnIOFactory().getColumnIO(requestedSchema);
+    List<RowType.RowField> requestedRowFields = new ArrayList<>(requestedTypes.length);
+    List<String> requestedFieldNames = new ArrayList<>(requestedTypes.length);
+    for (int i = 0; i < requestedTypes.length; i++) {
+      String name = requestedSchema.getFieldName(i);
+      requestedRowFields.add(new RowType.RowField(name, requestedTypes[i]));
+      requestedFieldNames.add(name);
+    }
+    this.requestedFields = ParquetSplitReaderUtil.buildFieldsList(
+        requestedRowFields, requestedFieldNames, messageColumnIO);
 
     this.writableVectors = createWritableVectors();
     ColumnVector[] columnVectors = patchedVector(selectedFieldNames.length, createReadableVectors(), requestedIndices);
@@ -340,12 +367,13 @@ public class ParquetColumnarRowSplitReader implements Closeable {
     List<ColumnDescriptor> columns = requestedSchema.getColumns();
     columnReaders = new ColumnReader[types.size()];
     for (int i = 0; i < types.size(); ++i) {
-      columnReaders[i] = createColumnReader(
+      columnReaders[i] = ParquetSplitReaderUtil.createColumnReader(
           utcTimestamp,
           requestedTypes[i],
           types.get(i),
           columns,
-          pages);
+          pages,
+          requestedFields.get(i));
     }
     totalCountLoadedSoFar += pages.getRowCount();
   }

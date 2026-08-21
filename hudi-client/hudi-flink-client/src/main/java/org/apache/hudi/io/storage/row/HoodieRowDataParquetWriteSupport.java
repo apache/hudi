@@ -20,11 +20,10 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.WriteSupport;
 
@@ -38,8 +37,8 @@ public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport
 
   private final Option<HoodieBloomFilterWriteSupport<String>> bloomFilterWriteSupportOpt;
 
-  public HoodieRowDataParquetWriteSupport(Configuration conf, RowType rowType, BloomFilter bloomFilter) {
-    super(rowType, conf);
+  public HoodieRowDataParquetWriteSupport(Configuration conf, HoodieSchema schema, BloomFilter bloomFilter) {
+    super(schema, conf);
     this.bloomFilterWriteSupportOpt = Option.ofNullable(bloomFilter)
         .map(HoodieBloomFilterRowDataWriteSupport::new);
   }
@@ -60,16 +59,5 @@ public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport
   public void add(String recordKey) {
     this.bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
         bloomFilterWriteSupport.addKey(recordKey));
-  }
-
-  private static class HoodieBloomFilterRowDataWriteSupport extends HoodieBloomFilterWriteSupport<String> {
-    public HoodieBloomFilterRowDataWriteSupport(BloomFilter bloomFilter) {
-      super(bloomFilter);
-    }
-
-    @Override
-    protected byte[] getUTF8Bytes(String key) {
-      return StringUtils.getUTF8Bytes(key);
-    }
   }
 }

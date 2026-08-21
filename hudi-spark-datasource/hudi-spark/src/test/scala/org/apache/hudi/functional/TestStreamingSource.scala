@@ -20,6 +20,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.DataSourceReadOptions.{START_OFFSET, STREAMING_READ_TABLE_VERSION}
 import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD}
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
@@ -294,6 +295,66 @@ class TestStreamingSource extends StreamTest {
     })
   }
 
+  /**
+   * Exercises the legacy incremental streaming path in [[HoodieStreamSourceV1]], which is taken
+   * when the streaming read table version is below EIGHT and the file group reader is disabled.
+   * This drives the [[IncrementalRelationV1]] (COW) / [[MergeOnReadIncrementalRelationV1]] (MOR)
+   * branches of `getBatch` rather than the newer HadoopFsRelation factory path.
+   */
+  private def testLegacyIncrementalStreamSource(tableType: HoodieTableType): Unit = {
+    withTempDir { inputDir =>
+      val tablePath = s"${inputDir.getCanonicalPath}/test_${tableType.name}_legacy_stream"
+      HoodieTableMetaClient.newTableBuilder()
+        .setTableType(tableType)
+        .setTableName(getTableName(tablePath))
+        .setTableVersion(HoodieTableVersion.SIX)
+        .setRecordKeyFields("id")
+        .setOrderingFields("ts")
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+
+      addData(tablePath, Seq(("1", "a1", "10", "000")), tableVersion = HoodieTableVersion.SIX)
+      val df = spark.readStream
+        .format("org.apache.hudi")
+        .option(WRITE_TABLE_VERSION.key, HoodieTableVersion.SIX.versionCode().toString)
+        .option(STREAMING_READ_TABLE_VERSION.key, HoodieTableVersion.SIX.versionCode().toString)
+        // force the legacy (non file-group-reader) incremental relation path
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key, "false")
+        .load(tablePath)
+        .select("id", "name", "price", "ts")
+
+      testStream(df)(
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        CheckAnswerRows(Seq(Row("1", "a1", "10", "000")), lastOnly = true, isSorted = false),
+        StopStream,
+
+        addDataToQuery(tablePath,
+          Seq(("2", "a2", "12", "000"),
+            ("3", "a3", "12", "000")),
+          tableVersion = HoodieTableVersion.SIX),
+        StartStream(),
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        CheckAnswerRows(
+          Seq(Row("2", "a2", "12", "000"),
+            Row("3", "a3", "12", "000")),
+          lastOnly = true, isSorted = false),
+        StopStream,
+
+        addDataToQuery(tablePath, Seq(("4", "a4", "13", "000")), tableVersion = HoodieTableVersion.SIX),
+        StartStream(),
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        CheckAnswerRows(Seq(Row("4", "a4", "13", "000")), lastOnly = true, isSorted = false)
+      )
+    }
+  }
+
+  test("test cow stream source with legacy file group reader disabled") {
+    testLegacyIncrementalStreamSource(COPY_ON_WRITE)
+  }
+
+  test("test mor stream source with legacy file group reader disabled") {
+    testLegacyIncrementalStreamSource(MERGE_ON_READ)
+  }
+
   private def testCheckpointTranslation(tableName: String,
                                         tableType: HoodieTableType,
                                         writeTableVersion: HoodieTableVersion,
@@ -413,9 +474,10 @@ class TestStreamingSource extends StreamTest {
   }
 
   private def addDataToQuery(inputPath: String,
-                             rows: Seq[(String, String, String, String)]): AssertOnQuery = {
+                             rows: Seq[(String, String, String, String)],
+                             tableVersion: HoodieTableVersion = HoodieTableVersion.current): AssertOnQuery = {
     AssertOnQuery { _=>
-      addData(inputPath, rows)
+      addData(inputPath, rows, tableVersion = tableVersion)
       true
     }
   }

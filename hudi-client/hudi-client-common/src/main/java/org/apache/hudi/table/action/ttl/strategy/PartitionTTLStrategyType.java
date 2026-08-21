@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.ttl.strategy;
 
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import lombok.Getter;
 
@@ -67,7 +66,7 @@ public enum PartitionTTLStrategyType {
     if (config.contains(PARTITION_TTL_STRATEGY_CLASS_NAME)) {
       return config.getString(PARTITION_TTL_STRATEGY_CLASS_NAME);
     } else if (config.contains(PARTITION_TTL_STRATEGY_TYPE)) {
-      return KeyGeneratorType.valueOf(config.getString(PARTITION_TTL_STRATEGY_TYPE)).getClassName();
+      return PartitionTTLStrategyType.valueOf(config.getString(PARTITION_TTL_STRATEGY_TYPE)).getClassName();
     }
     return null;
   }
