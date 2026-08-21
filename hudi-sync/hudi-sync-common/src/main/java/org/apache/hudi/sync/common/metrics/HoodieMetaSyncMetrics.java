@@ -35,8 +35,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class HoodieMetaSyncMetrics {
 
-  private static final String TIMER_METRIC_EXTENSION = ".timer";
-  private static final String COUNTER_METRIC_EXTENSION = ".counter";
+  private static final String TIMER_ACTION = "timer";
+  private static final String COUNTER_ACTION = "counter";
   private static final String META_SYNC_RECREATE_TABLE_METRIC = "meta_sync.recreate_table";
   private static final String META_SYNC_RECREATE_TABLE_FAILURE_METRIC = "meta_sync.recreate_table.failure";
   private static final String META_SYNC_ACTION = "meta_sync";
@@ -61,8 +61,9 @@ public class HoodieMetaSyncMetrics {
     if (metricsConfig.isMetricsOn()) {
       this.storage = HoodieStorageUtils.getStorage(config.getBasePath(), HadoopFSUtils.getStorageConf(config.getHadoopConf()));
       metrics = Metrics.getInstance(metricsConfig, storage);
-      recreateAndSyncTimerName = getMetricsName(META_SYNC_ACTION, META_SYNC_RECREATE_TABLE_METRIC + TIMER_METRIC_EXTENSION);
-      recreateAndSyncFailureCounterName = getMetricsName(META_SYNC_ACTION, META_SYNC_RECREATE_TABLE_FAILURE_METRIC + COUNTER_METRIC_EXTENSION);
+      // Keep the names of metrics that predate #12543 stable for dashboard and alert compatibility.
+      recreateAndSyncTimerName = getMetricsName(TIMER_ACTION, META_SYNC_RECREATE_TABLE_METRIC);
+      recreateAndSyncFailureCounterName = getMetricsName(COUNTER_ACTION, META_SYNC_RECREATE_TABLE_FAILURE_METRIC);
     }
   }
 
