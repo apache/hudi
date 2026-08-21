@@ -43,6 +43,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, LongType, MapType, MetadataBuilder, StringType, StructField, StructType}
 
+import scala.collection.JavaConverters._
 
 class TestVariantDataType extends HoodieSparkSqlTestBase {
 
@@ -1389,8 +1390,9 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   /**
    * Pins an INFERRED shredding layout of `column` in the given parquet files: the variant group is
    * shredded, carries the VARIANT logical type (the inferrer only exists on Spark 4.1+, whose
-   * parquet ships the annotation) and its typed_value has every `present` member and none of
-   * the `absent` ones (e.g. an avro-illegal key the inferrer dropped).
+   * parquet ships the annotation), its typed_value has every `present` member and none of
+   * the `absent` ones (e.g. an avro-illegal key the inferrer dropped), and typed_value holds
+   * non-null values per the block column statistics.
    */
   private def assertInferredTypedValueIn(files: Seq[String], column: String, leg: String,
                                          present: Seq[String], absent: Seq[String] = Seq.empty): Unit = {
@@ -1406,6 +1408,10 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         s"[$leg] inferred typed_value should contain $member. Schema:\n$typedValue"))
       absent.foreach(member => assert(!typedValue.containsField(member),
         s"[$leg] inferred typed_value must not contain $member. Schema:\n$typedValue"))
+      // The footer schema alone cannot tell real shredding from a file where every row fell
+      // back to the residual value with typed_value all-null.
+      assert(typedValueNonNullCount(filePath, column) > 0,
+        s"[$leg] inferred typed_value of $column should hold non-null values. File: $filePath")
     }
   }
 
@@ -1444,6 +1450,32 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     val reader = ParquetFileReader.open(inputFile)
     try {
       reader.getFooter.getFileMetaData.getSchema
+    } finally {
+      reader.close()
+    }
+  }
+
+  /**
+   * Sums the non-null value counts of the leaf columns under `column`.typed_value across all
+   * blocks of the file, from the block column statistics.
+   */
+  private def typedValueNonNullCount(filePath: String, column: String): Long = {
+    val conf = spark.sparkContext.hadoopConfiguration
+    val inputFile = HadoopInputFile.fromPath(new HadoopPath(filePath), conf)
+    val reader = ParquetFileReader.open(inputFile)
+    try {
+      val prefix = s"$column.typed_value"
+      reader.getFooter.getBlocks.asScala.flatMap(_.getColumns.asScala)
+        .filter { c =>
+          val dot = c.getPath.toDotString
+          dot == prefix || dot.startsWith(prefix + ".")
+        }
+        .map { c =>
+          val stats = c.getStatistics
+          // A chunk without a written null count must not pass as holding non-null values
+          if (stats == null || stats.getNumNulls < 0) 0L else c.getValueCount - stats.getNumNulls
+        }
+        .sum
     } finally {
       reader.close()
     }
