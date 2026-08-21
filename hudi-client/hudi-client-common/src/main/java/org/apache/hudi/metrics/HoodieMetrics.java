@@ -433,6 +433,23 @@ public class HoodieMetrics {
     }
   }
 
+  /**
+   * Publishes record index lookup counts gathered during tag location.
+   *
+   * <p>Guarded by {@code hoodie.metrics.on} like every other emitter here: the underlying
+   * {@link Metrics} instance is only created when metrics are enabled, so reaching past this guard
+   * would dereference null. Names go through {@link #getMetricsName} so they carry the configured
+   * reporter prefix and do not collide across tables sharing a metrics backend.
+   *
+   * @param lookupMetrics metric name to value, all values {@code Long} for reporter compatibility.
+   */
+  public void updateRecordIndexLookupMetrics(final Map<String, Long> lookupMetrics) {
+    if (config.isMetricsOn()) {
+      lookupMetrics.forEach((name, value) ->
+          metrics.registerGauge(getMetricsName(INDEX_ACTION, name), value));
+    }
+  }
+
   public void updateSourceReadAndIndexMetrics(final String action, final long durationInMs) {
     if (config.isMetricsOn()) {
       log.debug("Sending {} metrics ({}.duration, {})", SOURCE_READ_AND_INDEX_ACTION, action, durationInMs);

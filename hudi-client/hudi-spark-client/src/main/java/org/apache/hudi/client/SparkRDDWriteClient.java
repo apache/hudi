@@ -41,10 +41,13 @@ import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.RecordIndexLookupStats;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.metadata.StreamingMetadataWriteHandler;
 import org.apache.hudi.metrics.DistributedRegistryUtil;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.metrics.RecordIndexLookupStatsAccumulator;
+import org.apache.hudi.metrics.RecordIndexLookupStatsReporter;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -71,6 +74,11 @@ import java.util.stream.Collectors;
 public class SparkRDDWriteClient<T> extends
     BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
   private final StreamingMetadataWriteHandler streamingMetadataWriteHandler = new SparkStreamingMetadataWriteHandler();
+  /**
+   * Collects record index lookup stats across this client's lifetime. Created lazily, and only when
+   * the feature is enabled, so the disabled path allocates and registers nothing.
+   */
+  private RecordIndexLookupStatsAccumulator recordIndexLookupStatsAccumulator;
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
@@ -171,12 +179,83 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config) {
-    return createTableAndValidate(config, HoodieSparkTable::create);
+    return attachLookupStatsCollector(createTableAndValidate(config, HoodieSparkTable::create));
   }
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    return createTableAndValidate(config, metaClient, HoodieSparkTable::create);
+    return attachLookupStatsCollector(createTableAndValidate(config, metaClient, HoodieSparkTable::create));
+  }
+
+  /**
+   * Points the table's record index lookup instrumentation at this client's accumulator.
+   * <p>
+   * The accumulator belongs to the write client rather than the table or the index because both of
+   * those are rebuilt per operation — {@link HoodieTable#getIndex()} is backed by a transient field
+   * — so an accumulator held there would be a different object by the time the commit path drains
+   * it. Being an instance field rather than a static also means two tables in one JVM cannot see
+   * each other's counts.
+   */
+  private HoodieTable attachLookupStatsCollector(HoodieTable table) {
+    if (config.getMetadataConfig().isRecordIndexLookupStatsEnabled()) {
+      table.setRecordIndexLookupStatsCollector(getOrCreateRecordIndexLookupStatsAccumulator());
+    }
+    return table;
+  }
+
+  private RecordIndexLookupStatsAccumulator getOrCreateRecordIndexLookupStatsAccumulator() {
+    if (recordIndexLookupStatsAccumulator == null) {
+      recordIndexLookupStatsAccumulator = new RecordIndexLookupStatsAccumulator();
+      recordIndexLookupStatsAccumulator.register(HoodieSparkEngineContext.getSparkContext(context));
+    }
+    return recordIndexLookupStatsAccumulator;
+  }
+
+  @Override
+  String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
+    // Stats are drained at preCommit, which a commit that aborts earlier never reaches. Clearing at
+    // the start of each data table commit means counts from an abandoned attempt cannot be attributed
+    // to the next one, without having to catch every abort path. Metadata table commits are skipped:
+    // they are nested inside a data table commit whose counts are still accumulating.
+    if (!metaClient.isMetadataTable() && recordIndexLookupStatsAccumulator != null) {
+      recordIndexLookupStatsAccumulator.reset();
+    }
+    return super.startCommit(providedInstantTime, actionType, metaClient);
+  }
+
+  @Override
+  protected void preCommit(HoodieCommitMetadata metadata) {
+    super.preCommit(metadata);
+    reportRecordIndexLookupStats(metadata);
+  }
+
+  /**
+   * Drains the lookup accumulator into commit metadata and the metrics reporters.
+   * <p>
+   * Hooked into {@code preCommit} because that is the only point which satisfies both constraints:
+   * the write action has run, so the accumulator is populated, and the commit file has not been
+   * written yet, so {@link HoodieCommitMetadata#addMetadata} still reaches the timeline.
+   * <p>
+   * Never throws. Instrumentation must not be able to fail a write.
+   */
+  private void reportRecordIndexLookupStats(HoodieCommitMetadata metadata) {
+    if (recordIndexLookupStatsAccumulator == null) {
+      return;
+    }
+    try {
+      // Drain unconditionally, before the emptiness check, so a commit that performed no lookup
+      // still resets the accumulator instead of leaking counts into the next commit.
+      RecordIndexLookupStats stats = recordIndexLookupStatsAccumulator.drain();
+      Map<String, Long> reportable = RecordIndexLookupStatsReporter.toMetrics(stats);
+      if (reportable.isEmpty()) {
+        return;
+      }
+      metadata.addMetadata(RecordIndexLookupStatsReporter.COMMIT_METADATA_KEY,
+          RecordIndexLookupStatsReporter.toJson(reportable));
+      metrics.updateRecordIndexLookupMetrics(reportable);
+    } catch (Exception e) {
+      log.warn("Failed to publish record index lookup stats; the write is unaffected", e);
+    }
   }
 
   @Override

@@ -258,6 +258,31 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .filter(r -> !r.getData().isDeleted());
   }
 
+  /**
+   * Wraps a shard lookup result so one {@link RecordIndexShardLookupStats} is reported when the
+   * iterator is exhausted or closed. Returns the iterator untouched when nothing is collecting, so
+   * the disabled path allocates nothing and behaves exactly as it did before. The check asks the
+   * collector rather than comparing identity against NOOP, which would not survive being
+   * serialized to an executor.
+   *
+   * <p>The file slice is in scope here, so log file count and shard footprint are captured at the
+   * point of read rather than reconstructed later — they then describe the slice that was actually
+   * read, not whatever the slice looks like by commit time.
+   */
+  private static <T> ClosableIterator<T> collectLookupStats(ClosableIterator<T> lookupResult,
+                                                            RecordIndexLookupStatsCollector collector,
+                                                            int shardIndex,
+                                                            FileSlice fileSlice,
+                                                            long keysSubmitted,
+                                                            long startMillis) {
+    if (collector.collectsNothing()) {
+      return lookupResult;
+    }
+    return new RecordIndexLookupStatsCollectingIterator<>(lookupResult, collector, shardIndex,
+        fileSlice.getFileId(), keysSubmitted, fileSlice.getLogFiles().count(),
+        fileSlice.getTotalFileSize(), startMillis);
+  }
+
   private static TreeSet<String> getDistinctSortedKeysForSingleSlice(HoodieData<String> keys) {
     List<String> keysList = keys.collectAsList();
     // Order by UTF-8 bytes to match the HFile order used for point lookups.
@@ -275,6 +300,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   private HoodieData<HoodieRecord<HoodieMetadataPayload>> lookupIndexRecords(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
                                                                              Option<String> dataTablePartition) {
+    return lookupIndexRecords(keys, partitionName, fileSlices, dataTablePartition, RecordIndexLookupStatsCollector.NOOP);
+  }
+
+  private HoodieData<HoodieRecord<HoodieMetadataPayload>> lookupIndexRecords(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
+                                                                             Option<String> dataTablePartition,
+                                                                             RecordIndexLookupStatsCollector collector) {
     if (dataTablePartition.isPresent()) {
       // assume is partitioned rli if a data table partition name is provided
       // filter to only the files in the partition
@@ -284,7 +315,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       // all keys will be from the same shard index so just calculate the first key and reduce partitionFileSlices to 1
       TreeSet<String> distinctSortedKeys = getDistinctSortedKeysForSingleSlice(keys);
       int fileGroupIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(distinctSortedKeys.stream().findFirst().get(), fileSlicesForDataPartition.size());
-      return readSliceAndFilterByKeysIntoList(partitionName, distinctSortedKeys, fileSlicesForDataPartition.get(fileGroupIndex), true);
+      FileSlice fileSlice = fileSlicesForDataPartition.get(fileGroupIndex);
+      long startMillis = System.currentTimeMillis();
+      return HoodieListData.lazy(collectLookupStats(
+          lookupRecordsItr(partitionName, distinctSortedKeys, fileSlice, true),
+          collector, fileGroupIndex, fileSlice, distinctSortedKeys.size(), startMillis));
     } else if (partitionName.equals(RECORD_INDEX.getPartitionPath()) && !fileSlices.isEmpty() && HoodieTableMetadataUtil.verifyRLIFile(fileSlices.get(0).getFileId(), true)) {
       if (keys.isEmpty()) {
         return HoodieListData.lazy(Collections.emptyList());
@@ -294,7 +329,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     boolean isSecondaryIndex = MetadataPartitionType.fromPartitionPath(partitionName).equals(MetadataPartitionType.SECONDARY_INDEX);
     final int numFileSlices = fileSlices.size();
     if (numFileSlices == 1) {
-      return readSliceAndFilterByKeysIntoList(partitionName, getDistinctSortedKeysForSingleSlice(keys), fileSlices.get(0), !isSecondaryIndex);
+      TreeSet<String> distinctSortedKeys = getDistinctSortedKeysForSingleSlice(keys);
+      long startMillis = System.currentTimeMillis();
+      return HoodieListData.lazy(collectLookupStats(
+          lookupRecordsItr(partitionName, distinctSortedKeys, fileSlices.get(0), !isSecondaryIndex),
+          collector, 0, fileSlices.get(0), distinctSortedKeys.size(), startMillis));
     }
 
     // For SI v2, there are 2 cases require different implementation:
@@ -324,8 +363,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           // The shuffle above repartitions/sorts by String (UTF-16) order, but the HFile reader below
           // does a forward-only seek in UTF-8 byte order. Re-sort so the two agree.
           keysList.sort(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
-          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
-          return lookupRecordsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
+          int shardIndex = mappingFunction.apply(keysList.get(0), numFileSlices);
+          FileSlice fileSlice = fileSlices.get(shardIndex);
+          long startMillis = System.currentTimeMillis();
+          return collectLookupStats(lookupRecordsItr(partitionName, keysList, fileSlice, !isSecondaryIndex),
+              collector, shardIndex, fileSlice, keysList.size(), startMillis);
         };
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     return getEngineContext().mapGroupsByKey(persistedInitialPairData, processFunction, keySpace, true);
@@ -345,6 +387,26 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys, Option<String> dataTablePartition) {
+    return lookupRecordIndexLocations(recordKeys, dataTablePartition, RecordIndexLookupStatsCollector.NOOP);
+  }
+
+  @Override
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(
+      HoodieData<String> recordKeys, Option<String> dataTablePartition,
+      RecordIndexLookupStatsCollector collector) {
+    return lookupRecordIndexLocations(recordKeys, dataTablePartition, collector);
+  }
+
+  /**
+   * The single implementation both public overloads route to.
+   *
+   * <p>Neither overload calls the other on purpose. The interface's {@code default} delegates
+   * 3-arg to 2-arg; if this class delegated 2-arg to 3-arg, an implementation that copied that
+   * pattern without also overriding the 3-arg method would recurse until it blew the stack.
+   */
+  private HoodiePairData<String, HoodieRecordGlobalLocation> lookupRecordIndexLocations(
+      HoodieData<String> recordKeys, Option<String> dataTablePartition,
+      RecordIndexLookupStatsCollector collector) {
     // If record index is not initialized yet, we cannot return an empty result here unlike the code for reading from other
     // indexes. This is because results from this function are used for upserts and returning an empty result here would lead
     // to existing records being inserted again causing duplicates.
@@ -353,9 +415,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         "Record index is not initialized in MDT");
 
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
-      // TODO [HUDI-9544]: Metric does not work for rdd based API due to lazy evaluation.
       HoodieData<RecordIndexRawKey> rawKeys = recordKeys.map(RecordIndexRawKey::new);
-      return readIndexRecordsWithKeys(rawKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), dataTablePartition)
+      return readIndexRecordsWithKeys(rawKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), dataTablePartition, collector)
           .mapToPair((Pair<String, HoodieMetadataPayload> p) -> Pair.of(p.getLeft(), p.getRight().getRecordGlobalLocation()));
     });
   }
@@ -501,7 +562,18 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   public HoodiePairData<String, HoodieMetadataPayload> readIndexRecordsWithKeys(
       HoodieData<? extends RawKey> rawKeys, String partitionName, Option<String> dataTablePartition) {
-    return readIndexRecords(rawKeys, partitionName, dataTablePartition)
+    return readIndexRecordsWithKeys(rawKeys, partitionName, dataTablePartition, RecordIndexLookupStatsCollector.NOOP);
+  }
+
+  /**
+   * Same as {@link #readIndexRecordsWithKeys(HoodieData, String, Option)}, reporting per-shard
+   * lookup stats to the given collector. Not on {@link HoodieTableMetadata}: only the record index
+   * read path collects stats today, so widening the interface further is not warranted.
+   */
+  public HoodiePairData<String, HoodieMetadataPayload> readIndexRecordsWithKeys(
+      HoodieData<? extends RawKey> rawKeys, String partitionName, Option<String> dataTablePartition,
+      RecordIndexLookupStatsCollector collector) {
+    return readIndexRecords(rawKeys, partitionName, dataTablePartition, collector)
         .mapToPair(record -> Pair.of(record.getRecordKey(), record.getData()));
   }
 
@@ -534,13 +606,20 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   protected HoodieData<HoodieRecord<HoodieMetadataPayload>> readIndexRecords(HoodieData<? extends RawKey> rawKeys,
                                                                              String partitionName,
                                                                              Option<String> dataTablePartition) {
+    return readIndexRecords(rawKeys, partitionName, dataTablePartition, RecordIndexLookupStatsCollector.NOOP);
+  }
+
+  protected HoodieData<HoodieRecord<HoodieMetadataPayload>> readIndexRecords(HoodieData<? extends RawKey> rawKeys,
+                                                                             String partitionName,
+                                                                             Option<String> dataTablePartition,
+                                                                             RecordIndexLookupStatsCollector collector) {
     List<FileSlice> fileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     checkState(!fileSlices.isEmpty(), "No file slices found for partition: " + partitionName);
 
     // Convert RawKey to String using encode()
     HoodieData<String> keys = rawKeys.map(key -> key.encode());
-    return lookupIndexRecords(keys, partitionName, fileSlices, dataTablePartition);
+    return lookupIndexRecords(keys, partitionName, fileSlices, dataTablePartition, collector);
   }
 
   // When testing we noticed that the parallelism can be very low which hurts the performance. so we should start with a reasonable
@@ -659,13 +738,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     readerContext.setShouldMergeUseRecordPosition(false);
     readerContext.setLatestCommitTime(latestMetadataInstantTime);
     return FileGroupRecordBufferLoader.createReusable(readerContext);
-  }
-
-  private HoodieData<HoodieRecord<HoodieMetadataPayload>> readSliceAndFilterByKeysIntoList(String partitionName,
-                                                                                           Collection<String> sortedKeys,
-                                                                                           FileSlice fileSlice,
-                                                                                           boolean isFullKey) {
-    return HoodieListData.lazy(lookupRecordsItr(partitionName, sortedKeys, fileSlice, isFullKey));
   }
 
   private ClosableIterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>> readSliceAndFilterByKeys(String partitionName,

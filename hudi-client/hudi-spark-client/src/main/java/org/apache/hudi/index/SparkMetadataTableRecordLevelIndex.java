@@ -78,7 +78,9 @@ public class SparkMetadataTableRecordLevelIndex extends SparkMetadataTableGlobal
         .map(t -> t._2);
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
     // Lookup the keys in the record index
-    return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(new PartitionedRecordIndexFileGroupLookupFunction(hoodieTable.getTableMetadata())));
+    return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(
+        new PartitionedRecordIndexFileGroupLookupFunction(
+            hoodieTable.getTableMetadata(), hoodieTable.getRecordIndexLookupStatsCollector())));
   }
 
   @Override
