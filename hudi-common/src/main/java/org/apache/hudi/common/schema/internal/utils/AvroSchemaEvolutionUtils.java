@@ -302,17 +302,19 @@ public class AvroSchemaEvolutionUtils {
    * {@code target} one. Source is considered to be new incoming schema, while target could refer to prev table schema.
    * For example,
    * if colA in source is non-nullable, but is nullable in target, output schema will have colA as nullable.
-   * if "hoodie.datasource.write.new.columns.nullable" is set to true and if colB is not present in source, but
-   * is present in target, output schema will have colB as nullable.
+   * if colB is present in source, but not in target, output schema will have colB as nullable. If colB is a complex
+   * type, its existing descendants retain their nullability constraints.
    * if colC has different data type in source schema compared to target schema and if its promotable, (say source is int,
    * and target is long and since int can be promoted to long), colC will be long data type in output schema.
    *
    *
    * @param sourceSchema source schema that needs reconciliation
    * @param targetSchema target schema that source schema will be reconciled against
+   * @param shouldReorderColumns whether fields should be reordered to match the target schema
    * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
    */
-  public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema, HoodieSchema targetSchema, boolean shouldReorderColumns) {
+  public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema, HoodieSchema targetSchema,
+                                                          boolean shouldReorderColumns) {
     if (targetSchema.isSchemaNull() || targetSchema.getFields().isEmpty()) {
       return sourceSchema;
     }
@@ -327,12 +329,30 @@ public class AvroSchemaEvolutionUtils {
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
+    List<String> userColNamesSourceSchema = colNamesSourceSchema.stream()
+        .filter(field -> !META_FIELD_NAMES.contains(field))
+        .collect(Collectors.toList());
 
     List<String> nullableUpdateColsInSource = new ArrayList<>();
     List<String> typeUpdateColsInSource = new ArrayList<>();
-    colNamesSourceSchema.forEach(field -> {
-      // handle columns that needs to be made nullable
-      if (colNamesTargetSchema.contains(field) && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
+
+    // Only relax the topmost field in a wholly new subtree. Relaxing every descendant would alter the
+    // element/field constraints supplied by the writer instead of only making the evolved field backfillable.
+    Set<String> visitedNewColumns = new HashSet<>();
+    userColNamesSourceSchema.stream()
+        .filter(field -> !colNamesTargetSchema.contains(field))
+        .sorted()
+        .forEach(field -> {
+          String parent = TableChangesHelper.getParentName(field);
+          if (!visitedNewColumns.contains(parent)) {
+            nullableUpdateColsInSource.add(field);
+          }
+          visitedNewColumns.add(field);
+        });
+
+    userColNamesSourceSchema.forEach(field -> {
+      if (colNamesTargetSchema.contains(field)
+          && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
         nullableUpdateColsInSource.add(field);
       }
       // handle columns that needs type to be updated
@@ -364,4 +384,3 @@ public class AvroSchemaEvolutionUtils {
     return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName());
   }
 }
-
