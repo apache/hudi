@@ -1149,15 +1149,27 @@ public final class VectorIndexMdtSearchUtils {
       HoodieTableMetadata metadataTable,
       HoodieData<ScoredPostingMatch> finalists,
       Option<String> dataTablePartition) {
-    HoodiePairData<String, ScoredPostingMatch> byRecordKey =
-        finalists.mapToPair(candidate -> Pair.of(candidate.getRecordKey(), candidate));
-    HoodiePairData<String, HoodieRecordGlobalLocation> locations =
-        metadataTable.readRecordIndexLocationsWithKeys(
-            byRecordKey.keys().distinct(), dataTablePartition);
-
-    return byRecordKey.leftOuterJoin(locations)
-        .values()
-        .map(joined -> arbitrateCandidate(joined.getLeft(), joined.getRight().orElse(null)));
+    // Resolve current RLI locations for the finalist keys into a bounded driver-side map, then
+    // attach per candidate via map(...). The finalist set is a bounded candidate pool and
+    // {@code finalists} is already persisted upstream, so the two passes are cache hits.
+    //
+    // This deliberately avoids leftOuterJoin: HoodiePairData.leftOuterJoin requires both operands to
+    // share the same backing flavor, but readRecordIndexLocationsWithKeys returns list-backed pair
+    // data for a single-slice RLI (the common 1-file-group case) and RDD-backed for multi-slice.
+    // Joining an RDD-backed finalist set against list-backed locations throws ClassCastException.
+    // Attaching via map(...) preserves the finalists' backing (RDD stays RDD, list stays list).
+    List<String> distinctKeys = finalists.map(ScoredPostingMatch::getRecordKey)
+        .distinct()
+        .collectAsList();
+    Map<String, HoodieRecordGlobalLocation> currentLocations = new HashMap<>();
+    if (!distinctKeys.isEmpty()) {
+      metadataTable.readRecordIndexLocationsWithKeys(
+              HoodieListData.eager(distinctKeys), dataTablePartition)
+          .collectAsList()
+          .forEach(pair -> currentLocations.put(pair.getKey(), pair.getValue()));
+    }
+    return finalists.map(candidate ->
+        arbitrateCandidate(candidate, currentLocations.get(candidate.getRecordKey())));
   }
 
   private static ScoredPostingMatch arbitrateCandidate(
