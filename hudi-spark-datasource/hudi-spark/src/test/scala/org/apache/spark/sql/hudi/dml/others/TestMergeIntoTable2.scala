@@ -1235,9 +1235,20 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                 "MERGE INTO field resolution error: No matching assignment found for target table ordering field `ts`"
               )
             } else {
-              spark.sql(
-                updateStatement)
-              // For COMMIT_TIME_ORDERING, ts should be updated to 1003
+              // The partition column `value` is supplied by neither the source projection, the ON
+              // condition, nor the assignments, so the incoming record's partition path cannot be
+              // determined and the statement is now rejected.
+              //
+              // This previously "passed": the record was resolved to the default partition, index
+              // tagging therefore matched nothing, and with no NOT MATCHED clause the record was
+              // dropped as HoodieRecord.SENTINEL - an empty commit. The assertion below only
+              // checked that the row was unchanged, which is exactly what dropping it produces, so
+              // the case passed vacuously whether or not the merge did any work. (Note the merge
+              // assigns `h0.id = s0.id` only, so a correctly-applied merge would leave an
+              // identical row - the old assertion could not distinguish the two outcomes.)
+              checkExceptionContain(updateStatement)(
+                "Failed to resolve partition fields"
+              )
               checkAnswer(s"select id, name, value, ts from $tableName")(
                 Seq(1, "a1", 10, 1000)
               )
