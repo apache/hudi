@@ -17,6 +17,8 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieKeyException;
+
 import java.util.BitSet;
 import java.util.function.Function;
 
@@ -140,5 +142,63 @@ public class PartitionPathEncodeUtils {
     } else {
       return escapePathName(value);
     }
+  }
+
+  /**
+   * Validates that the given (relative) partition path does not contain a directory-traversal
+   * segment, throwing {@link HoodieKeyException} if it does. This is enforced regardless of the
+   * {@code hoodie.datasource.write.partitionpath.urlencode} setting, since url-encoding is opt-in
+   * (disabled by default) and does not escape {@code '.'}, so it never neutralizes {@code ".."}.
+   *
+   * @param partitionPath the relative partition path (or a single partition field value).
+   * @return the same {@code partitionPath} if it is safe.
+   * @throws HoodieKeyException if the partition path contains a {@code ".."} traversal segment.
+   */
+  public static String validateNoPathTraversal(String partitionPath) {
+    if (hasPathTraversal(partitionPath)) {
+      throw new HoodieKeyException("Invalid partition path \"" + partitionPath + "\": partition paths "
+          + "must not contain \"..\" path-traversal segments, which could let a record write Hudi files "
+          + "outside the table base path. This is most often caused by an unsanitized data field being "
+          + "used as the partition path; sanitize or remap the offending value in the upstream source "
+          + "or via a transformer before ingesting it.");
+    }
+    return partitionPath;
+  }
+
+  /**
+   * Returns {@code true} if the given (relative) partition path contains a directory-traversal
+   * segment (a path segment equal to {@code ".."}). Such a partition path, once resolved against
+   * the table base path, can escape the base path and write Hudi-managed files into arbitrary
+   * directories reachable by the writer's credentials.
+   *
+   * <p>The check is intentionally value-content only: it tolerates {@code '.'} inside a segment
+   * (e.g. date partitions like {@code 2024.01.01}) and only rejects the standalone {@code ".."}
+   * segment. Both forward slash {@code '/'} and the platform-independent literal are treated as
+   * separators, since a partition path is always stored using forward slashes.
+   *
+   * @param partitionPath the relative partition path (or a single partition field value).
+   * @return {@code true} if a {@code ".."} traversal segment is present, {@code false} otherwise.
+   */
+  public static boolean hasPathTraversal(String partitionPath) {
+    if (partitionPath == null || partitionPath.isEmpty()) {
+      return false;
+    }
+    // Normalize backslashes to forward slashes so a "..\.." style value cannot slip through on
+    // any platform. Partition paths are always persisted using forward slashes.
+    String normalized = partitionPath.replace('\\', '/');
+    int start = 0;
+    int len = normalized.length();
+    while (start <= len) {
+      int end = normalized.indexOf('/', start);
+      if (end < 0) {
+        end = len;
+      }
+      // A segment of exactly ".." is a traversal segment.
+      if (end - start == 2 && normalized.charAt(start) == '.' && normalized.charAt(start + 1) == '.') {
+        return true;
+      }
+      start = end + 1;
+    }
+    return false;
   }
 }
