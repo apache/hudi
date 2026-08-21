@@ -328,8 +328,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     if (table.requireSortedRecords()) {
       // Partition and sort within each partition as a single step. This is faster than partitioning first and then
       // applying a sort.
-      // requireSortedRecords() is true only for HFile base files, which order keys by UTF-8 bytes,
-      // not String (UTF-16) order, so sort with the matching comparator.
+      // HFile base files and LSM tables order keys by UTF-8 bytes, not String (UTF-16) order,
+      // so sort with the matching comparator.
       Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> comparator = (Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> & Serializable) (t1, t2) -> {
         HoodieKey key1 = t1._1;
         HoodieKey key2 = t2._1;

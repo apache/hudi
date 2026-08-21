@@ -141,8 +141,8 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
     Iterator<String> keyIterator;
     if (hoodieTable.requireSortedRecords()) {
       // Sorting the keys limits the amount of extra memory required for writing sorted records.
-      // requireSortedRecords() is true only for HFile base files, which order keys by UTF-8 bytes,
-      // not String (UTF-16) order, so sort with the matching comparator.
+      // HFile base files and LSM tables order keys by UTF-8 bytes, not String (UTF-16) order,
+      // so sort with the matching comparator.
       keyIterator = recordMap.keySet().stream().sorted(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR).iterator();
     } else {
       keyIterator = recordMap.keySet().stream().iterator();
