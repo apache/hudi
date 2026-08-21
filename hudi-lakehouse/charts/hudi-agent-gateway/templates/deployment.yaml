@@ -69,6 +69,22 @@ spec:
             - name: GATEWAY_SYSTEM_PROMPT_EXTRA
               value: {{ . | quote }}
             {{- end }}
+            - name: GATEWAY_ENGINE
+              value: {{ .Values.engine | default "trino" | quote }}
+            {{- if eq (.Values.engine | default "trino") "spark" }}
+            - name: GATEWAY_SPARK_HOST
+              value: {{ required "spark.host is required when engine=spark" .Values.spark.host | quote }}
+            - name: GATEWAY_SPARK_PORT
+              value: {{ .Values.spark.port | quote }}
+            - name: GATEWAY_SPARK_DATABASE
+              value: {{ .Values.spark.database | quote }}
+            - name: GATEWAY_SPARK_USER
+              value: {{ .Values.spark.user | quote }}
+            - name: GATEWAY_SPARK_AUTH
+              value: {{ .Values.spark.auth | quote }}
+            - name: GATEWAY_SPARK_MAX_CONNECTIONS
+              value: {{ .Values.spark.maxConnections | quote }}
+            {{- end }}
             - name: GATEWAY_TRINO_HOST
               value: {{ .Values.trino.host | quote }}
             - name: GATEWAY_TRINO_PORT
@@ -79,6 +95,8 @@ spec:
               value: {{ .Values.trino.schema | quote }}
             - name: GATEWAY_TRINO_USER
               value: {{ .Values.trino.user | quote }}
+            - name: GATEWAY_SCHEMA_HINTS
+              value: {{ .Values.schemaHints | default "both" | quote }}
             - name: GATEWAY_SQL_ROW_CAP
               value: {{ .Values.guardrails.rowCap | quote }}
             - name: GATEWAY_SQL_TIMEOUT_SECONDS

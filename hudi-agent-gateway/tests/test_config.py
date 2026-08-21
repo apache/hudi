@@ -74,3 +74,48 @@ def test_prefixed_api_key_alias(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GATEWAY_OPENAI_API_KEY", "sk-test2")
     s = GatewaySettings(llm_provider="openai")
     assert s.openai_api_key == "sk-test2"
+
+
+def test_engine_defaults_to_trino() -> None:
+    assert GatewaySettings().engine == "trino"
+
+
+def test_spark_engine_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_ENGINE", "spark")
+    monkeypatch.setenv("GATEWAY_SPARK_HOST", "sts.example")
+    monkeypatch.setenv("GATEWAY_SPARK_PORT", "10001")
+    monkeypatch.setenv("GATEWAY_SPARK_DATABASE", "lake")
+    s = GatewaySettings()
+    assert s.engine == "spark"
+    assert s.spark_host == "sts.example"
+    assert s.spark_port == 10001
+    assert s.spark_database == "lake"
+    assert s.spark_auth == "none"  # HiveServer2 default
+
+
+def test_spark_defaults() -> None:
+    s = GatewaySettings(engine="spark")
+    assert s.spark_host == "localhost"
+    assert s.spark_port == 10000
+    assert s.spark_database == "default"
+    assert s.spark_user == "hudi-agent-gateway"
+
+
+def test_invalid_engine_rejected() -> None:
+    with pytest.raises(ValidationError):
+        GatewaySettings(engine="duckdb")  # type: ignore[arg-type]
+
+
+def test_spark_ldap_requires_password() -> None:
+    with pytest.raises(ValidationError, match="GATEWAY_SPARK_PASSWORD"):
+        GatewaySettings(engine="spark", spark_auth="ldap")
+
+
+def test_spark_ldap_with_password_ok() -> None:
+    s = GatewaySettings(engine="spark", spark_auth="ldap", spark_password="secret")
+    assert s.spark_auth == "ldap"
+
+
+def test_invalid_spark_auth_rejected() -> None:
+    with pytest.raises(ValidationError):
+        GatewaySettings(engine="spark", spark_auth="kerberos")  # type: ignore[arg-type]
