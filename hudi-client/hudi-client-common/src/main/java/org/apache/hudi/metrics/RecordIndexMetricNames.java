@@ -34,13 +34,13 @@ public class RecordIndexMetricNames {
   public static final String CALLER_TAG_LOCATION = "tag";
   public static final String CALLER_DEDUPE = "dedupe";
 
-  public static final String RECORDS_LOOKED_UP = "records_looked_up";
-  public static final String HITS = "hits";
-  public static final String MISSES = "misses";
-  public static final String SHARDS_READ = "shards_read";
+  public static final String KEY_COUNT = "lookup_record_index_key_count";
+  public static final String KEY_HIT_COUNT = "lookup_record_index_key_hit_count";
+  public static final String KEY_MISS_COUNT = "lookup_record_index_key_miss_count";
+  public static final String SHARDS_READ = "lookup_record_index_shards_read";
   /** Wall-clock spent in the shard read, summed across shards. Revives the third dead upstream constant,
    * {@code HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_TIME_STR}. */
-  public static final String TIME_MS = "time_ms";
+  public static final String LOOKUP_TIME = "lookup_record_index_time";
 
   private RecordIndexMetricNames() {
   }

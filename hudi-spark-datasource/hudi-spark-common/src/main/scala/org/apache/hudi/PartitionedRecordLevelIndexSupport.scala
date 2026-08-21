@@ -103,6 +103,7 @@ class PartitionedRecordLevelIndexSupport(spark: SparkSession,
         .map(_._2)
         .toJavaRDD()
       ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions <= numFileGroups)
+      // Read path: no write-side registry to report into, so lookups here are not instrumented.
       val fileIdToPartitionMap = partitionedKeyRDD.mapPartitionsToPair(new PartitionedRecordIndexFileGroupLookupFunction(metadataTable))
         .collect()
         .asScala

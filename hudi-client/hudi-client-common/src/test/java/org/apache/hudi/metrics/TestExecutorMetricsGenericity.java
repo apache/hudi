@@ -110,10 +110,11 @@ public class TestExecutorMetricsGenericity {
     ExecutorMetrics.DrainedCounters drained = ExecutorMetrics.snapshotIntoCommitMetadata(
         commitMetadata, cfg, Collections.singletonList(STORAGE_CALLS));
 
-    assertEquals("7", commitMetadata.get("hoodie.storage.calls.open"),
+    assertEquals("7", commitMetadata.get(STORAGE_CALLS.commitMetadataPrefix() + "open"),
         "a group the enum never declared must still be drained under its own prefix");
-    assertEquals("1", commitMetadata.get("hoodie.storage.calls.list"));
-    assertTrue(commitMetadata.keySet().stream().allMatch(k -> k.startsWith("hoodie.storage.calls.")),
+    assertEquals("1", commitMetadata.get(STORAGE_CALLS.commitMetadataPrefix() + "list"));
+    assertTrue(commitMetadata.keySet().stream()
+            .allMatch(k -> k.startsWith(STORAGE_CALLS.commitMetadataPrefix())),
         "no other group's counters leak in; got " + commitMetadata.keySet());
 
     // And the same release semantics apply, so the next commit reports only its own work.
@@ -146,7 +147,7 @@ public class TestExecutorMetricsGenericity {
       Registry.getRegistry("HoodieStorageCalls").add("open", 3L);
       Registry.getRegistry(ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.registryName())
           .add(RecordIndexMetricNames.key(RecordIndexMetricNames.CALLER_TAG_LOCATION,
-              RecordIndexMetricNames.RECORDS_LOOKED_UP), 11L);
+              RecordIndexMetricNames.KEY_COUNT), 11L);
     } finally {
       ExecutorMetricsContext.unbind(previous);
     }
@@ -155,9 +156,15 @@ public class TestExecutorMetricsGenericity {
     ExecutorMetrics.snapshotIntoCommitMetadata(commitMetadata, cfg,
         java.util.Arrays.asList(STORAGE_CALLS, ExecutorMetricRegistry.RECORD_INDEX_LOOKUP));
 
-    assertEquals("3", commitMetadata.get("hoodie.storage.calls.open"));
-    assertEquals("11", commitMetadata.get("hoodie.rli.lookup.tag.records_looked_up"));
-    assertNull(commitMetadata.get("hoodie.storage.calls.tag.records_looked_up"),
+    // Derived from the constants, not spelled out: a hardcoded key here silently rots on a rename.
+    String rliKey = ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.commitMetadataPrefix()
+        + RecordIndexMetricNames.key(RecordIndexMetricNames.CALLER_TAG_LOCATION,
+            RecordIndexMetricNames.KEY_COUNT);
+    assertEquals("3", commitMetadata.get(STORAGE_CALLS.commitMetadataPrefix() + "open"));
+    assertEquals("11", commitMetadata.get(rliKey));
+    assertNull(commitMetadata.get(STORAGE_CALLS.commitMetadataPrefix()
+            + RecordIndexMetricNames.key(RecordIndexMetricNames.CALLER_TAG_LOCATION,
+                RecordIndexMetricNames.KEY_COUNT)),
         "the record index counter must not appear under the storage prefix");
   }
 }

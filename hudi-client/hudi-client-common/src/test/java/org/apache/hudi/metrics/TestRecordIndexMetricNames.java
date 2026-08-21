@@ -31,9 +31,9 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.metrics.RecordIndexMetricNames.CALLER_TAG_LOCATION;
-import static org.apache.hudi.metrics.RecordIndexMetricNames.HITS;
-import static org.apache.hudi.metrics.RecordIndexMetricNames.MISSES;
-import static org.apache.hudi.metrics.RecordIndexMetricNames.RECORDS_LOOKED_UP;
+import static org.apache.hudi.metrics.RecordIndexMetricNames.KEY_COUNT;
+import static org.apache.hudi.metrics.RecordIndexMetricNames.KEY_HIT_COUNT;
+import static org.apache.hudi.metrics.RecordIndexMetricNames.KEY_MISS_COUNT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -46,7 +46,7 @@ class TestRecordIndexMetricNames {
   private static final String BASE_PATH = "file:/tmp/drain_test_table";
   private static final String OTHER_BASE_PATH = "file:/tmp/somewhere_else";
 
-  private static final String LOOKED_UP_KEY = RecordIndexMetricNames.key(CALLER_TAG_LOCATION, RECORDS_LOOKED_UP);
+  private static final String LOOKED_UP_KEY = RecordIndexMetricNames.key(CALLER_TAG_LOCATION, KEY_COUNT);
 
   /** The registry map is a process-wide static, so a leaked entry would leak into the next test. */
   @AfterEach
@@ -72,8 +72,8 @@ class TestRecordIndexMetricNames {
   private static Registry seedRegistry(HoodieWriteConfig config, long lookedUp, long hits, long misses) {
     Registry registry = new LocalRegistry(RecordIndexMetricNames.registryName(config.getBasePath()));
     registry.add(LOOKED_UP_KEY, lookedUp);
-    registry.add(RecordIndexMetricNames.key(CALLER_TAG_LOCATION, HITS), hits);
-    registry.add(RecordIndexMetricNames.key(CALLER_TAG_LOCATION, MISSES), misses);
+    registry.add(RecordIndexMetricNames.key(CALLER_TAG_LOCATION, KEY_HIT_COUNT), hits);
+    registry.add(RecordIndexMetricNames.key(CALLER_TAG_LOCATION, KEY_MISS_COUNT), misses);
     Registry.REGISTRY_MAP.put(registryKey(config), registry);
     return registry;
   }
@@ -93,9 +93,9 @@ class TestRecordIndexMetricNames {
         ExecutorMetrics.snapshotIntoCommitMetadata(commitMetadata, config);
 
     assertFalse(snapshot.isEmpty());
-    assertEquals("10", commitMetadata.get(metadataKey(RECORDS_LOOKED_UP)));
-    assertEquals("7", commitMetadata.get(metadataKey(HITS)));
-    assertEquals("3", commitMetadata.get(metadataKey(MISSES)));
+    assertEquals("10", commitMetadata.get(metadataKey(KEY_COUNT)));
+    assertEquals("7", commitMetadata.get(metadataKey(KEY_HIT_COUNT)));
+    assertEquals("3", commitMetadata.get(metadataKey(KEY_MISS_COUNT)));
   }
 
   /**
@@ -115,7 +115,7 @@ class TestRecordIndexMetricNames {
     Map<String, String> retried = new HashMap<>();
     ExecutorMetrics.snapshotIntoCommitMetadata(retried, config);
 
-    assertEquals("15", retried.get(metadataKey(RECORDS_LOOKED_UP)),
+    assertEquals("15", retried.get(metadataKey(KEY_COUNT)),
         "a failed commit must not consume the counters it snapshotted");
   }
 
@@ -172,7 +172,7 @@ class TestRecordIndexMetricNames {
 
     Map<String, String> nextCommit = new HashMap<>();
     ExecutorMetrics.snapshotIntoCommitMetadata(nextCommit, config);
-    assertEquals("4", nextCommit.get(metadataKey(RECORDS_LOOKED_UP)),
+    assertEquals("4", nextCommit.get(metadataKey(KEY_COUNT)),
         "a release subtracts what it published; it does not clear the registry");
   }
 
