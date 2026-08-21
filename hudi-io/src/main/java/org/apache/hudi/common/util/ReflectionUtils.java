@@ -26,15 +26,19 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.JarURLConnection;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.ArrayList;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Enumeration;
-import java.util.List;
+import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -44,6 +48,7 @@ import java.util.stream.Stream;
 public class ReflectionUtils {
 
   private static final Map<String, Class<?>> CLAZZ_CACHE = new ConcurrentHashMap<>();
+  private static final String CLASS_FILE_SUFFIX = ".class";
 
   public static Class<?> getClass(String clazzName) {
     return CLAZZ_CACHE.computeIfAbsent(clazzName, c -> {
@@ -129,52 +134,85 @@ public class ReflectionUtils {
    * @return Stream of Class names in package
    */
   public static Stream<String> getTopLevelClassesInClasspath(Class<?> clazz) {
+    // Arrays and primitives have no package, and Class#getPackage is also null when the class was
+    // loaded by a loader that defines no package for it.
+    Package pkg = clazz.getPackage();
+    if (pkg == null) {
+      return Stream.empty();
+    }
+    String packageName = pkg.getName();
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    String packageName = clazz.getPackage().getName();
-    String path = packageName.replace('.', '/');
-    Enumeration<URL> resources = null;
     try {
-      resources = classLoader.getResources(path);
+      return Collections.list(classLoader.getResources(packageName.replace('.', '/'))).stream()
+          .flatMap(resource -> classNamesIn(resource, packageName));
     } catch (IOException e) {
       log.error("Unable to fetch Resources in package {}", packageName, e);
+      return Stream.empty();
     }
-    List<File> directories = new ArrayList<>();
-    while (Objects.requireNonNull(resources).hasMoreElements()) {
-      URL resource = resources.nextElement();
-      try {
-        directories.add(new File(resource.toURI()));
-      } catch (URISyntaxException e) {
-        log.error("Unable to get URI for {}", resource, e);
-      }
-    }
-    List<String> classes = new ArrayList<>();
-    for (File directory : directories) {
-      classes.addAll(findClasses(directory, packageName));
-    }
-    return classes.stream();
   }
 
   /**
-   * Recursive method used to find all classes in a given directory and subdirs.
-   *
-   * @param directory   The base directory
-   * @param packageName The package name for classes found inside the base directory
-   * @return classes in the package
+   * Class names under a single classpath entry for the package, whether that entry is an exploded
+   * directory or a jar.
    */
-  private static List<String> findClasses(File directory, String packageName) {
-    List<String> classes = new ArrayList<>();
-    if (!directory.exists()) {
-      return classes;
+  private static Stream<String> classNamesIn(URL resource, String packageName) {
+    String protocol = resource.getProtocol();
+    if ("file".equals(protocol)) {
+      return classNamesInDirectory(resource, packageName);
+    } else if ("jar".equals(protocol)) {
+      return classNamesInJar(resource, packageName);
     }
-    File[] files = directory.listFiles();
-    for (File file : Objects.requireNonNull(files)) {
-      if (file.isDirectory()) {
-        classes.addAll(findClasses(file, packageName + "." + file.getName()));
-      } else if (file.getName().endsWith(".class")) {
-        classes.add(packageName + '.' + file.getName().substring(0, file.getName().length() - 6));
+    log.warn("Skipping classpath entry {}, protocol {} is not supported", resource, protocol);
+    return Stream.empty();
+  }
+
+  private static Stream<String> classNamesInDirectory(URL resource, String packageName) {
+    Path directory;
+    try {
+      directory = Paths.get(resource.toURI());
+    } catch (URISyntaxException e) {
+      log.error("Unable to get URI for {}", resource, e);
+      return Stream.empty();
+    }
+    if (!Files.isDirectory(directory)) {
+      return Stream.empty();
+    }
+    try (Stream<Path> entries = Files.walk(directory)) {
+      // Collected before the walk is closed, since the returned stream outlives this method.
+      return entries
+          .filter(entry -> entry.toString().endsWith(CLASS_FILE_SUFFIX))
+          .map(entry -> toClassName(directory.relativize(entry).toString(), File.separatorChar, packageName + '.'))
+          .collect(Collectors.toList())
+          .stream();
+    } catch (IOException e) {
+      log.error("Unable to walk directory {}", directory, e);
+      return Stream.empty();
+    }
+  }
+
+  private static Stream<String> classNamesInJar(URL resource, String packageName) {
+    // Entry names are already fully qualified paths from the jar root, so no prefix is prepended.
+    String entryPrefix = packageName.replace('.', '/') + '/';
+    try {
+      JarURLConnection connection = (JarURLConnection) resource.openConnection();
+      // Without this the jar is cached and shared, and closing it below would break other readers.
+      connection.setUseCaches(false);
+      try (JarFile jar = connection.getJarFile()) {
+        return jar.stream()
+            .map(JarEntry::getName)
+            .filter(name -> name.startsWith(entryPrefix) && name.endsWith(CLASS_FILE_SUFFIX))
+            .map(name -> toClassName(name, '/', ""))
+            .collect(Collectors.toList())
+            .stream();
       }
+    } catch (IOException e) {
+      log.error("Unable to read jar for {}", resource, e);
+      return Stream.empty();
     }
-    return classes;
+  }
+
+  private static String toClassName(String entry, char separator, String prefix) {
+    return prefix + entry.substring(0, entry.length() - CLASS_FILE_SUFFIX.length()).replace(separator, '.');
   }
 
   /**
