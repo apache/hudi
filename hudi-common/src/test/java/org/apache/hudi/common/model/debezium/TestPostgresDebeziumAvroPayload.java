@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
@@ -32,6 +33,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import javax.annotation.Nullable;
 
@@ -159,8 +162,17 @@ public class TestPostgresDebeziumAvroPayload {
         "should have thrown because LSN value of the incoming record is null");
   }
 
-  @Test
-  public void testMergeWithToastedValues() throws IOException {
+  /**
+   * The toasted-value merge must work regardless of the concrete {@link IndexedRecord} implementation backing
+   * either side of the merge. Since lazy Avro deserialization landed, {@code BaseAvroPayload#getRecord} hands
+   * back a {@link SerializableIndexedRecord} whenever the payload record does not already carry the exact
+   * {@link Schema} instance being merged with (the common case in production, and after any Kryo round trip).
+   * That implements {@link GenericRecord} but not {@link GenericData.Record}, so casting to the concrete class
+   * threw {@code ClassCastException} on any non-null BYTES column.
+   */
+  @ParameterizedTest
+  @CsvSource({"false,false", "true,false", "false,true", "true,true"})
+  void testMergeWithToastedValues(boolean lazyIncomingRecord, boolean lazyCurrentRecord) throws IOException {
     Schema avroSchema = SchemaBuilder.builder()
         .record("test_schema")
         .namespace("test_namespace")
@@ -173,6 +185,9 @@ public class TestPostgresDebeziumAvroPayload {
         .name("string_null_col_2").type().nullable().stringType().noDefault()
         .name("byte_null_col_2").type().nullable().bytesType().noDefault()
         .endRecord();
+    // An equal but distinct Schema instance is what forces the payload to re-deserialize into a
+    // SerializableIndexedRecord instead of returning the GenericData.Record it was constructed with.
+    Schema incomingSchema = lazyIncomingRecord ? new Schema.Parser().parse(avroSchema.toString()) : avroSchema;
 
     GenericRecord oldVal = new GenericData.Record(avroSchema);
     oldVal.put(DebeziumConstants.FLATTENED_LSN_COL_NAME, 100L);
@@ -183,7 +198,7 @@ public class TestPostgresDebeziumAvroPayload {
     oldVal.put("string_null_col_2", null);
     oldVal.put("byte_null_col_2", null);
 
-    GenericRecord newVal = new GenericData.Record(avroSchema);
+    GenericRecord newVal = new GenericData.Record(incomingSchema);
     newVal.put(DebeziumConstants.FLATTENED_LSN_COL_NAME, 105L);
     newVal.put("string_col", PostgresDebeziumAvroPayload.DEBEZIUM_TOASTED_VALUE);
     newVal.put("byte_col", ByteBuffer.wrap(getUTF8Bytes(PostgresDebeziumAvroPayload.DEBEZIUM_TOASTED_VALUE)));
@@ -193,11 +208,14 @@ public class TestPostgresDebeziumAvroPayload {
     newVal.put("byte_null_col_2", ByteBuffer.wrap(getUTF8Bytes("valid byte value")));
 
     PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(Option.of(newVal));
+    IndexedRecord currentValue = lazyCurrentRecord ? SerializableIndexedRecord.createInstance(oldVal) : oldVal;
 
     GenericRecord outputRecord = (GenericRecord) payload
-        .combineAndGetUpdateValue(oldVal, avroSchema).get();
+        .combineAndGetUpdateValue(currentValue, avroSchema).get();
 
-    assertEquals("valid string value", outputRecord.get("string_col"));
+    // Pin that the parameterization really exercises the lazily deserialized implementation.
+    assertEquals(lazyIncomingRecord, outputRecord instanceof SerializableIndexedRecord);
+    assertEquals("valid string value", outputRecord.get("string_col").toString());
     assertEquals("valid byte value", fromUTF8Bytes(((ByteBuffer) outputRecord.get("byte_col")).array()));
     assertNull(outputRecord.get("string_null_col_1"));
     assertNull(outputRecord.get("byte_null_col_1"));

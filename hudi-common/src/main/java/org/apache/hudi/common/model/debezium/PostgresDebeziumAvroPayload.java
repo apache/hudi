@@ -23,7 +23,6 @@ import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -109,7 +108,7 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
       // NON-NULLABLE STRING, NULLABLE STRING, NON-NULLABLE BYTES, NULLABLE BYTES
       if (((GenericRecord) incomingRecord).get(field.name()) != null
           && (containsStringToastedValues(incomingRecord, field) || containsBytesToastedValues(incomingRecord, field))) {
-        ((GenericRecord) incomingRecord).put(field.name(), ((GenericData.Record) currentRecord).get(field.name()));
+        ((GenericRecord) incomingRecord).put(field.name(), ((GenericRecord) currentRecord).get(field.name()));
       }
     });
   }
@@ -140,8 +139,8 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     return ((field.schema().getType() == Schema.Type.BYTES
         || (field.schema().getType() == Schema.Type.UNION && field.schema().getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.BYTES)))
         // Check length first as an optimization
-        && ((ByteBuffer) ((GenericData.Record) incomingRecord).get(field.name())).array().length == DEBEZIUM_TOASTED_VALUE.length()
-        && DEBEZIUM_TOASTED_VALUE.equals(fromUTF8Bytes(((ByteBuffer) ((GenericData.Record) incomingRecord).get(field.name())).array())));
+        && ((ByteBuffer) ((GenericRecord) incomingRecord).get(field.name())).array().length == DEBEZIUM_TOASTED_VALUE.length()
+        && DEBEZIUM_TOASTED_VALUE.equals(fromUTF8Bytes(((ByteBuffer) ((GenericRecord) incomingRecord).get(field.name())).array())));
   }
 }
 
