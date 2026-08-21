@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.sources.helpers.unstructured;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -81,7 +82,23 @@ public class UnstructuredFileRecordBuilder implements Serializable {
   public Row buildRow(FileSystem fs, String pathStr) throws IOException {
     Path path = new Path(pathStr);
     FileStatus status = fs.getFileStatus(path);
-    long size = status.getLen();
+    return buildRow(fs, pathStr, status.getLen(), status.getModificationTime());
+  }
+
+  /**
+   * Builds the row for an object whose size and modification time are already known, which cloud
+   * notifications carry. Avoids a metadata request per object; falls back to interrogating the
+   * object when the events had no usable timestamp.
+   */
+  public Row buildRow(FileSystem fs, CloudObjectMetadata object) throws IOException {
+    if (object.getModificationTime() == CloudObjectMetadata.UNKNOWN_MODIFICATION_TIME) {
+      return buildRow(fs, object.getPath());
+    }
+    return buildRow(fs, object.getPath(), object.getSize(), object.getModificationTime());
+  }
+
+  private Row buildRow(FileSystem fs, String pathStr, long size, long modificationTime) throws IOException {
+    Path path = new Path(pathStr);
     String fileName = path.getName();
 
     byte[] inlineBytes = null;
@@ -104,7 +121,7 @@ public class UnstructuredFileRecordBuilder implements Serializable {
         fileName,
         extensionOf(fileName),
         size,
-        status.getModificationTime(),
+        modificationTime,
         blob,
         parseResult.getText(),
         // Spark's Row encoder requires a scala Map as the external type for MapType
