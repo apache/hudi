@@ -329,6 +329,9 @@ public class AvroSchemaEvolutionUtils {
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
+    List<String> userColNamesSourceSchema = colNamesSourceSchema.stream()
+        .filter(field -> !META_FIELD_NAMES.contains(field))
+        .collect(Collectors.toList());
 
     List<String> nullableUpdateColsInSource = new ArrayList<>();
     List<String> typeUpdateColsInSource = new ArrayList<>();
@@ -336,9 +339,8 @@ public class AvroSchemaEvolutionUtils {
     // Only relax the topmost field in a wholly new subtree. Relaxing every descendant would alter the
     // element/field constraints supplied by the writer instead of only making the evolved field backfillable.
     Set<String> visitedNewColumns = new HashSet<>();
-    colNamesSourceSchema.stream()
+    userColNamesSourceSchema.stream()
         .filter(field -> !colNamesTargetSchema.contains(field))
-        .filter(field -> !META_FIELD_NAMES.contains(field))
         .sorted()
         .forEach(field -> {
           String parent = TableChangesHelper.getParentName(field);
@@ -348,11 +350,8 @@ public class AvroSchemaEvolutionUtils {
           visitedNewColumns.add(field);
         });
 
-    colNamesSourceSchema.forEach(field -> {
-      // Reconcile nullability only for existing user columns. Metadata fields may be present in the source even
-      // though the target schema used for canonicalization has intentionally stripped them.
+    userColNamesSourceSchema.forEach(field -> {
       if (colNamesTargetSchema.contains(field)
-          && !META_FIELD_NAMES.contains(field)
           && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
         nullableUpdateColsInSource.add(field);
       }

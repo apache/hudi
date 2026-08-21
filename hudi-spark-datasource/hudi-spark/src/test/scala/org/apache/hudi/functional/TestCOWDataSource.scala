@@ -1967,8 +1967,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(false, true))
-  def testSchemaEvolutionWithNewColumns(schemaOnRead: Boolean): Unit = {
+  @CsvSource(value = Array("false,false", "false,true", "true,false", "true,true"))
+  def testSchemaEvolutionWithNewColumns(schemaOnRead: Boolean, reconcileSchema: Boolean): Unit = {
     val df1 = spark.sql(
       "select '1' as event_id, '2' as ts, '3' as version, named_struct('city', 'Paris') as address")
     val hudiOptions = Map[String, String](
@@ -1981,7 +1981,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key() -> "true",
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key() -> "false",
       HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key() -> "org.apache.hudi.DefaultSparkRecordMerger",
-      HoodieCommonConfig.RECONCILE_SCHEMA.key() -> "true",
+      HoodieCommonConfig.RECONCILE_SCHEMA.key() -> reconcileSchema.toString,
       HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaOnRead.toString
     )
     df1.write.format("hudi").options(hudiOptions).mode(SaveMode.Append).save(basePath)
