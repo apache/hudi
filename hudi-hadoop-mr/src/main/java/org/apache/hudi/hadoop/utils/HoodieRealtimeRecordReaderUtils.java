@@ -273,15 +273,25 @@ public class HoodieRealtimeRecordReaderUtils {
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L188}
     // Field Names -> {@link https://github.com/apache/hive/blob/f37c5de6c32b9395d1b34fa3c02ed06d1bfbf6eb/serde/src/java
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L229}
-    String[] fieldOrdersWithDups = fieldOrderCsv.isEmpty() ? new String[0] : fieldOrderCsv.split(",");
+    // Defence in depth. HoodieRealtimeInputFormatUtils#cleanProjectionColumnIds now drops blank ids from the
+    // JobConf before any reader runs, which is what HIVE-22438 produces for SELECT COUNT(*) on Hive before
+    // 3.0.0, so blanks should no longer arrive here. Callers that assemble the csv without going through that
+    // conf still can, and a blank token would otherwise reach Integer.parseInt below and fail with a bare
+    // NumberFormatException carrying neither projection list. Trim before filtering so a padded id parses and
+    // de-duplicates as the same entry rather than as a distinct one.
+    String[] fieldOrdersWithDups = Arrays.stream(fieldOrderCsv.split(","))
+        .map(String::trim).filter(id -> !id.isEmpty()).toArray(String[]::new);
     Set<String> fieldOrdersSet = new LinkedHashSet<>(Arrays.asList(fieldOrdersWithDups));
     String[] fieldOrders = fieldOrdersSet.toArray(new String[0]);
     List<String> fieldNames = fieldNameCsv.isEmpty() ? new ArrayList<>() : Arrays.stream(fieldNameCsv.split(",")).collect(Collectors.toList());
     Set<String> fieldNamesSet = new LinkedHashSet<>(fieldNames);
     if (fieldNamesSet.size() != fieldOrders.length) {
+      // Report the de-duplicated counts, since those are what was compared: the raw name count can print
+      // two equal numbers for a real mismatch.
       throw new HoodieException(String
-          .format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
-              fieldNames.size(), fieldOrders.length));
+          .format("Error ordering fields for storage read. #distinctFieldNames: %d, #distinctFieldPositions: %d, "
+                  + "read column names: [%s], read column ids: [%s]",
+              fieldNamesSet.size(), fieldOrders.length, fieldNameCsv, fieldOrderCsv));
     }
     TreeMap<Integer, String> orderedFieldMap = new TreeMap<>();
     String[] fieldNamesArray = fieldNamesSet.toArray(new String[0]);
