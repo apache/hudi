@@ -44,6 +44,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -229,17 +230,22 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
       assertFalse(newTable.getProps().containsKey(HoodieTableConfig.POPULATE_META_FIELDS.key()),
           "a table created at v10 records the mode alone for " + mode);
 
-      final String oldPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-v6-" + mode.name();
-      HoodieTableConfig oldTable = HoodieTableMetaClient.newTableBuilder()
-          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
-          .setTableName("mfm-v6-" + mode.name())
-          .setTableVersion(HoodieTableVersion.SIX.versionCode())
-          .setMetaFieldsMode(mode)
-          .initTable(this.metaClient.getStorageConf(), oldPath)
-          .getTableConfig();
-      assertEquals(mode, oldTable.getMetaFieldsMode());
-      assertEquals(mode.toLegacyPopulateMetaFields(), oldTable.populateMetaFields(),
-          "a table below v10 must still carry the derived boolean for unpatched readers, " + mode);
+      for (HoodieTableVersion oldVersion : Arrays.asList(HoodieTableVersion.SIX, HoodieTableVersion.NINE)) {
+        final String oldPath = tempDir.toAbsolutePath() + Path.SEPARATOR
+            + "mfm-v" + oldVersion.versionCode() + "-" + mode.name();
+        HoodieTableConfig oldTable = HoodieTableMetaClient.newTableBuilder()
+            .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+            .setTableName("mfm-v" + oldVersion.versionCode() + "-" + mode.name())
+            .setTableVersion(oldVersion.versionCode())
+            .setMetaFieldsMode(mode)
+            .initTable(this.metaClient.getStorageConf(), oldPath)
+            .getTableConfig();
+        assertEquals(mode, oldTable.getMetaFieldsMode());
+        assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
+            oldTable.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+            "a table at version " + oldVersion.versionCode()
+                + " must persist the derived boolean for unpatched readers, " + mode);
+      }
     }
   }
 
