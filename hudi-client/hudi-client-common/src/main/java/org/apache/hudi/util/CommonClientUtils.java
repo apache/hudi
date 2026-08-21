@@ -57,6 +57,19 @@ public class CommonClientUtils {
       throw new HoodieNotSupportedException("Partial updates are not supported for table versions < 8. "
           + "Please unset " + HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key());
     }
+    // A table configured with a value-level partial-update merge mode (IGNORE_DEFAULTS / FILL_UNAVAILABLE /
+    // FILL_UNCHANGED) expects FULL-SCHEMA records whose unchanged columns carry a default/sentinel/placeholder
+    // that the read-side merge resolves. A schema-partial write (WRITE_PARTIAL_UPDATE_SCHEMA, e.g. a Spark
+    // MERGE INTO with a partial UPDATE SET) writes an IS_PARTIAL log block, which flips the reader to the
+    // KEEP_VALUES partial merger and silently drops the configured mode for the whole file group -- letting the
+    // placeholder/sentinel/default win over the prior value (silent corruption). Reject the combination up front.
+    if (writeConfig.shouldWritePartialUpdates() && tableConfig.getPartialUpdateMode().isPresent()) {
+      throw new HoodieNotSupportedException(String.format(
+          "Partial-update writes (%s) are incompatible with a table configured for value-level partial-update "
+              + "merge (mode=%s); such tables require full-schema writes. Unset %s or use a full-schema writer.",
+          HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key(), tableConfig.getPartialUpdateMode().get(),
+          HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key()));
+    }
 
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT) && writeConfig.isNonBlockingConcurrencyControl()) {
       throw new HoodieNotSupportedException("Non-blocking concurrency control is not supported for table versions < 8.");

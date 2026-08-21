@@ -48,6 +48,10 @@ public class DebeziumConstants {
   public static final String INCOMING_SOURCE_LSN_FIELD = "source.lsn";
   public static final String INCOMING_SOURCE_XMIN_FIELD = "source.xmin";
 
+  // INPUT COLUMNS SPECIFIC TO ORACLE
+  public static final String INCOMING_SOURCE_SCN_FIELD = "source.scn";
+  public static final String INCOMING_SOURCE_COMMIT_SCN_FIELD = "source.commit_scn";
+
   // OUTPUT COLUMNS
   public static final String FLATTENED_OP_COL_NAME = "_change_operation_type";
   public static final String UPSTREAM_PROCESSING_TS_COL_NAME = "_upstream_event_processed_ts_ms";
@@ -66,8 +70,23 @@ public class DebeziumConstants {
   public static final String FLATTENED_LSN_COL_NAME = "_event_lsn";
   public static final String FLATTENED_XMIN_COL_NAME = "_event_xmin";
 
+  // OUTPUT COLUMNS SPECIFIC TO ORACLE
+  public static final String FLATTENED_SCN_COL_NAME = "_event_scn";
+  public static final String FLATTENED_COMMIT_SCN_COL_NAME = "_event_commit_scn";
+  // Composite event-time ordering column for Oracle: zero-padded "commit_scn.scn", materialized at
+  // the root level by the transformer (so it is not nested even when metadata nesting is enabled).
+  public static final String FLATTENED_ORDERING_COL_NAME = "_event_ordering";
+  // Comma-separated list of data columns that changed in an Oracle CDC update event.
+  public static final String CHANGED_COLUMNS_FIELD = "_changed_columns";
+
   // Other Constants
   public static final String DELETE_OP = "d";
+  // Snapshot ("read") operation emitted by Debezium for rows captured during an initial or
+  // incremental snapshot rather than from the transaction log.
+  public static final String SNAPSHOT_OP = "r";
+
+  // Struct column under which the Debezium metadata columns are grouped when nested fields are enabled.
+  public static final String DEBEZIUM_METADATA_FIELD = "_debezium_metadata";
 
   // List of meta data columns
   public static List<String> META_COLUMNS = Collections.unmodifiableList(Arrays.asList(
@@ -79,5 +98,37 @@ public class DebeziumConstants {
       FLATTENED_XMIN_COL_NAME,
       FLATTENED_SHARD_NAME
   ));
+
+  /**
+   * Resolves the canonical ordering field(s) for a Debezium payload, or {@code null} for any other
+   * payload (in which case the caller keeps its own ordering field). This is the single source of
+   * truth for the ordering field that the {@code *DebeziumAvroPayload} merge relies on, shared by
+   * every write path that creates a Debezium table (Hudi Streamer, Spark, Flink).
+   *
+   * <p>The Postgres LSN and the operation-type column stay at the root level even when the
+   * transformer groups the CDC metadata under the {@link #DEBEZIUM_METADATA_FIELD} struct, so the
+   * Postgres ordering field is always {@code _event_lsn}. The MySQL binlog coordinates move into that
+   * struct when nesting is enabled, so the MySQL ordering field is resolved against the nested path.
+   *
+   * @param payloadClassName fully-qualified payload class name (may be {@code null}).
+   * @param nestedMetadataEnabled whether the Debezium transformer nests the CDC metadata columns
+   *                              under the {@link #DEBEZIUM_METADATA_FIELD} struct.
+   * @return the ordering field(s) for a Debezium payload, or {@code null} for any other payload.
+   */
+  public static String resolveOrderingFields(String payloadClassName, boolean nestedMetadataEnabled) {
+    if (PostgresDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
+      return FLATTENED_LSN_COL_NAME;
+    }
+    if (MySqlDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
+      String prefix = nestedMetadataEnabled ? DEBEZIUM_METADATA_FIELD + "." : "";
+      return prefix + FLATTENED_FILE_COL_NAME + "," + prefix + FLATTENED_POS_COL_NAME;
+    }
+    if (OracleDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
+      // The Oracle composite ordering column is materialized at the root level regardless of metadata
+      // nesting, so it needs no _debezium_metadata prefix.
+      return FLATTENED_ORDERING_COL_NAME;
+    }
+    return null;
+  }
 }
 

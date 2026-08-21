@@ -22,6 +22,8 @@ package org.apache.hudi.utils;
 
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.util.CommonClientUtils;
@@ -52,6 +54,50 @@ class TestCommonClientUtils {
 
     // when-then:
     assertThrows(HoodieNotSupportedException.class, () -> CommonClientUtils.validateTableVersion(tConfig, wConfig));
+  }
+
+  @Test
+  void testDisallowPartialUpdateWriteOnValueLevelPartialUpdateMode() {
+    // A schema-partial write (WRITE_PARTIAL_UPDATE_SCHEMA) on a table configured with ANY value-level
+    // partial-update mode must be rejected (it would flip the reader to KEEP_VALUES and silently drop the
+    // mode). Uses FILL_UNAVAILABLE to prove the guard covers all such modes, not just FILL_UNCHANGED.
+    HoodieWriteConfig wConfig = mock(HoodieWriteConfig.class);
+    HoodieTableConfig tConfig = mock(HoodieTableConfig.class);
+    when(wConfig.getWriteVersion()).thenReturn(HoodieTableVersion.NINE);
+    when(tConfig.getTableVersion()).thenReturn(HoodieTableVersion.NINE);
+    when(wConfig.shouldWritePartialUpdates()).thenReturn(true);
+    when(tConfig.getPartialUpdateMode()).thenReturn(Option.of(PartialUpdateMode.FILL_UNAVAILABLE));
+
+    assertThrows(HoodieNotSupportedException.class, () -> CommonClientUtils.validateTableVersion(tConfig, wConfig));
+  }
+
+  @Test
+  void testAllowPartialUpdateWriteWhenNoPartialUpdateMode() {
+    // Partial-update writes are fine when the table has no value-level partial-update mode configured.
+    HoodieWriteConfig wConfig = mock(HoodieWriteConfig.class);
+    HoodieTableConfig tConfig = mock(HoodieTableConfig.class);
+    when(wConfig.getWriteVersion()).thenReturn(HoodieTableVersion.NINE);
+    when(tConfig.getTableVersion()).thenReturn(HoodieTableVersion.NINE);
+    when(wConfig.shouldWritePartialUpdates()).thenReturn(true);
+    when(tConfig.getPartialUpdateMode()).thenReturn(Option.empty());
+
+    // Should not throw.
+    CommonClientUtils.validateTableVersion(tConfig, wConfig);
+  }
+
+  @Test
+  void testAllowFullSchemaWriteOnValueLevelPartialUpdateMode() {
+    // A full-schema write (no WRITE_PARTIAL_UPDATE_SCHEMA) on a value-level partial-update table is the
+    // normal CDC ingestion path and must be allowed.
+    HoodieWriteConfig wConfig = mock(HoodieWriteConfig.class);
+    HoodieTableConfig tConfig = mock(HoodieTableConfig.class);
+    when(wConfig.getWriteVersion()).thenReturn(HoodieTableVersion.NINE);
+    when(tConfig.getTableVersion()).thenReturn(HoodieTableVersion.NINE);
+    when(wConfig.shouldWritePartialUpdates()).thenReturn(false);
+    when(tConfig.getPartialUpdateMode()).thenReturn(Option.of(PartialUpdateMode.FILL_UNCHANGED));
+
+    // Should not throw.
+    CommonClientUtils.validateTableVersion(tConfig, wConfig);
   }
 
   @Test
