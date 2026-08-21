@@ -742,6 +742,12 @@
                         <exclude>org/apache/parquet/**</exclude>
                         <exclude>com/google/protobuf/**</exclude>
                         <exclude>io/airlift/compress/**</exclude>
+                        <!-- hive-exec embeds joda-time 2.8.1 together with its (older) tz
+                             database index, so shade would otherwise drop the declared
+                             ${joda.version} classes. TimestampBasedAvroKeyGenerator resolves
+                             zone ids through that index. -->
+                        <exclude>org/joda/time/**</exclude>
+                        <exclude>META-INF/maven/joda-time/**</exclude>
                       </excludes>
                     </filter>
                   </filters>
