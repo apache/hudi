@@ -247,7 +247,7 @@ class Spark42LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
           // reconstruct shredded variants, so fail loudly instead of silently dropping typed_value.
           // Empty projections (count(*)) read no column data and keep working.
           if (requiredSchema.nonEmpty) {
-            ParquetSchemaEvolutionUtils.validateNoShreddedVariants(querySchemaOption.get(), footerFileMetaData)
+            ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchemaOption.get(), footerFileMetaData)
           }
           val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
           val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)

@@ -42,7 +42,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProj
 import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
 import org.apache.spark.sql.execution.datasources.parquet.ParquetSchemaEvolutionUtils.pruneInternalSchema
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types.{AtomicType, DataType, StructType}
+import org.apache.spark.sql.types.{ArrayType, AtomicType, DataType, MapType, StructType}
 
 import java.time.ZoneId
 
@@ -143,7 +143,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
       // reconstruct - and querySchemaOption is the UNPRUNED table schema in that case (see
       // pruneInternalSchema), so running the guard would fail queries that work fine.
       if (requiredSchema.nonEmpty) {
-        ParquetSchemaEvolutionUtils.validateNoShreddedVariants(querySchemaOption.get(), footerFileMetaData)
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchemaOption.get(), footerFileMetaData)
       }
       val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
       val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
@@ -223,12 +223,25 @@ object ParquetSchemaEvolutionUtils {
    * the same shape are left alone. The walk recurses through structs, arrays and maps because
    * the row writer shreds nested variants too (see VariantSchemaUtils).
    *
+   * A scan rewritten by Spark's PushVariantIntoScan (4.x) fails fast regardless of the file's
+   * layout: the merged internal-schema request materializes the variant as {metadata, value}
+   * while downstream codegen expects the rewrite's ordinal-named extraction struct, so the
+   * read cannot be served either way (pruning treats the rewritten struct as the variant
+   * column itself, see SparkInternalSchemaConverter.isVariantRewriteStruct).
+   *
    * Shared by [[ParquetSchemaEvolutionUtils.getHadoopConfClone]] and the per-version legacy
    * file formats, which carry a copy of the same schema-merge block. Callers gate on a
    * non-empty projection: empty-projection queries (count(*), select 1) read no column data
    * and must keep working, and the query schema is unpruned in that case.
    */
-  def validateNoShreddedVariants(querySchema: InternalSchema, footerFileMetaData: FileMetaData): Unit = {
+  def validateNoShreddedVariants(requiredSchema: StructType, querySchema: InternalSchema, footerFileMetaData: FileMetaData): Unit = {
+    findVariantRewritePath(requiredSchema).foreach { path =>
+      throw new HoodieException(String.format(
+        "Column '%s' is a variant projected through Spark's variant rewrite "
+          + "(spark.sql.variant.pushVariantIntoScan) and the table is read with schema-on-read "
+          + "(hoodie.schema.on.read.enable), which cannot reconstruct variants (see issue "
+          + "#18285). Read without schema-on-read.", path))
+    }
     val fileParquetSchema = footerFileMetaData.getSchema
     querySchema.getRecord.fields().foreach { field =>
       if (fileParquetSchema.containsField(field.name())) {
@@ -237,6 +250,30 @@ object ParquetSchemaEvolutionUtils {
       }
     }
   }
+
+  /**
+   * Mirrors Spark's VariantMetadata.METADATA_KEY (Spark 4.x PushVariantIntoScan), referenced
+   * by literal because the class does not exist on Spark 3 classpaths. A rewritten variant is
+   * a non-empty struct whose every member carries the marker.
+   */
+  private val SPARK_VARIANT_METADATA_KEY = "__VARIANT_METADATA_KEY"
+
+  /** The dotted path of the first PushVariantIntoScan rewrite struct in the schema, if any. */
+  private def findVariantRewritePath(dataType: DataType, path: String = ""): Option[String] = dataType match {
+    case struct: StructType if struct.fields.nonEmpty
+      && struct.fields.forall(_.metadata.contains(SPARK_VARIANT_METADATA_KEY)) =>
+      Some(path)
+    case struct: StructType =>
+      struct.fields.foldLeft(Option.empty[String]) { (found, field) =>
+        found.orElse(findVariantRewritePath(field.dataType, concatPath(path, field.name)))
+      }
+    case array: ArrayType => findVariantRewritePath(array.elementType, concatPath(path, "element"))
+    case map: MapType => findVariantRewritePath(map.valueType, concatPath(path, "value"))
+    case _ => None
+  }
+
+  private def concatPath(path: String, name: String): String =
+    if (path.isEmpty) name else path + "." + name
 
   private def validateNoShreddedVariant(internalType: InternalType, parquetType: ParquetType, path: String): Unit = {
     internalType match {

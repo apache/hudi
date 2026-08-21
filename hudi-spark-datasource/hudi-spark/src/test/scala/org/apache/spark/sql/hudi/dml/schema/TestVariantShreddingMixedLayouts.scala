@@ -701,19 +701,14 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
             () => spark.sql(s"select id, cast(v as string), note from $tableName").collect())(
             "shredded variant")
         }
-        // Under the default PushVariantIntoScan rewrite the read fails as well - through the
-        // guard when internal-schema pruning survives the synthetic projection, otherwise with
-        // an engine-internal error before it (a pruning failure or a codegen NPE on the clipped
-        // value). Pin that it never silently returns rows AND that the failure is
-        // variant-related, so an unrelated analysis error cannot green this leg; the real fix
-        // for both legs is #18285.
-        val failure = intercept[Throwable] {
-          spark.sql(s"select id, cast(v as string), note from $tableName").collect()
-        }
-        val chain = Iterator.iterate(failure)(_.getCause).takeWhile(_ != null)
-          .map(t => s"${t.getClass.getName}: ${Option(t.getMessage).getOrElse("")}").mkString("\n")
-        assert(chain.toLowerCase.contains("variant") || chain.contains("NullPointerException"),
-          s"[$leg] expected a variant-related failure, got:\n$chain")
+        // Under the default PushVariantIntoScan rewrite the read fails through the guard as
+        // well: pruning treats the rewritten ordinal-named struct as the variant column itself
+        // (SparkInternalSchemaConverter.isVariantRewriteStruct), so the guard sees the request
+        // and rejects it up front instead of an engine-internal pruning error or codegen NPE.
+        // Both legs' messages share "cannot reconstruct"; the real fix is #18285.
+        checkNestedExceptionContains(
+          () => spark.sql(s"select id, cast(v as string), note from $tableName").collect())(
+          "cannot reconstruct")
       }
 
       // Known #18285 residue, documented rather than pinned: the schema-on-read DDL also
