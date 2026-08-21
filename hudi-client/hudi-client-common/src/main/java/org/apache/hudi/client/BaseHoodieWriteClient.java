@@ -669,7 +669,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-      metrics.updateTableServiceInstantMetrics(table.getActiveTimeline());
+      metrics.updateTableServiceInstantMetrics(table.getActiveTimeline(), table.getMetaClient().getInstantGenerator());
       // Fire write commit callback if a callback class is registered. postCommit() is reached
       // by both auto-commit and explicit-commit paths; compaction and clustering have their own
       // explicit fireCommitCallbackIfNecessary call sites in BaseHoodieTableServiceClient.
@@ -698,7 +698,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-      metrics.updateTableServiceInstantMetrics(table.getActiveTimeline());
+      metrics.updateTableServiceInstantMetrics(table.getActiveTimeline(), table.getMetaClient().getInstantGenerator());
     } finally {
       this.heartbeatClient.stop(instantTime);
     }

@@ -18,8 +18,11 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -40,6 +43,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -261,7 +265,7 @@ public class TestHoodieMetrics {
     HoodieInstant instant0017 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "10017");
 
     HoodieActiveTimeline activeTimeline1 = new MockHoodieActiveTimeline(instant004, instant007, instant009, instant0010, instant0013, instant0015, instant0016, instant0017);
-    hoodieMetrics.updateTableServiceInstantMetrics(activeTimeline1);
+    hoodieMetrics.updateTableServiceInstantMetrics(activeTimeline1, INSTANT_GENERATOR);
 
     metricName = hoodieMetrics.getMetricsName(HoodieTimeline.CLEAN_ACTION, HoodieMetrics.EARLIEST_PENDING_CLEAN_INSTANT_STR);
     assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), Long.valueOf("1004"));
@@ -285,7 +289,7 @@ public class TestHoodieMetrics {
     HoodieInstant instant0018 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, "10018");
 
     HoodieActiveTimeline activeTimeline2 = new MockHoodieActiveTimeline(instant001, instant005, instant0011, instant0018);
-    hoodieMetrics.updateTableServiceInstantMetrics(activeTimeline2);
+    hoodieMetrics.updateTableServiceInstantMetrics(activeTimeline2, INSTANT_GENERATOR);
 
     metricName = hoodieMetrics.getMetricsName(HoodieTimeline.CLUSTERING_ACTION, HoodieMetrics.EARLIEST_PENDING_CLUSTERING_INSTANT_STR);
     assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), Long.valueOf("10018"));
@@ -308,7 +312,7 @@ public class TestHoodieMetrics {
     HoodieActiveTimeline activeTimeline3 = new MockHoodieActiveTimeline(instant002, instant003, instant006, instant008, instant0012, instant0014, longInstant);
     // verify longer instant times can also be updated in the metrics. These are required for table version six
     // where suffix is added at the end of older instants for compaction in the metadata timeline
-    hoodieMetrics.updateTableServiceInstantMetrics(activeTimeline3);
+    hoodieMetrics.updateTableServiceInstantMetrics(activeTimeline3, INSTANT_GENERATOR);
 
     metricName = hoodieMetrics.getMetricsName(HoodieTimeline.COMPACTION_ACTION, HoodieMetrics.EARLIEST_PENDING_COMPACTION_INSTANT_STR);
     assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), Long.valueOf("1002"));
@@ -320,10 +324,58 @@ public class TestHoodieMetrics {
     assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), 6L);
   }
 
+  @Test
+  void testPendingClusteringInstantMetricsOnTableVersionSix() {
+    // Table version six schedules clustering as REPLACE_COMMIT_ACTION, which insert_overwrite shares.
+    HoodieInstant pendingInsertOverwrite =
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "1001");
+    HoodieInstant pendingClustering =
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "1002");
+    Map<String, String> operationTypes = new HashMap<>();
+    operationTypes.put("1001", WriteOperationType.INSERT_OVERWRITE.name());
+    operationTypes.put("1002", WriteOperationType.CLUSTER.name());
+
+    hoodieMetrics.updateTableServiceInstantMetrics(
+        new MockClusteringPlanTimeline(operationTypes, pendingInsertOverwrite, pendingClustering), INSTANT_GENERATOR);
+
+    // Only the instant carrying a clustering plan counts. insert_overwrite is the earlier of the two, so
+    // both assertions fail if the action name alone is used to select it.
+    String countMetric = hoodieMetrics.getMetricsName(HoodieTimeline.CLUSTERING_ACTION, HoodieMetrics.PENDING_CLUSTERING_INSTANT_COUNT_STR);
+    assertEquals(1L, (long) metrics.getRegistry().getGauges().get(countMetric).getValue());
+    String earliestMetric = hoodieMetrics.getMetricsName(HoodieTimeline.CLUSTERING_ACTION, HoodieMetrics.EARLIEST_PENDING_CLUSTERING_INSTANT_STR);
+    assertEquals(1002L, (long) metrics.getRegistry().getGauges().get(earliestMetric).getValue());
+  }
+
   private static class MockHoodieActiveTimeline extends ActiveTimelineV2 {
     public MockHoodieActiveTimeline(HoodieInstant... instants) {
       super();
       this.setInstants(Arrays.asList(instants));
+    }
+  }
+
+  /**
+   * Serves a requested replace metadata per instant time so pending replacecommits can be told apart
+   * by their write operation type without a backing timeline on storage.
+   */
+  private static class MockClusteringPlanTimeline extends MockHoodieActiveTimeline {
+    private final Map<String, String> operationTypes;
+
+    MockClusteringPlanTimeline(Map<String, String> operationTypes, HoodieInstant... instants) {
+      super(instants);
+      this.operationTypes = operationTypes;
+    }
+
+    @Override
+    public HoodieRequestedReplaceMetadata readRequestedReplaceMetadata(HoodieInstant instant) {
+      return HoodieRequestedReplaceMetadata.newBuilder()
+          .setOperationType(operationTypes.get(instant.requestedTime()))
+          .setExtraMetadata(Collections.emptyMap())
+          .setClusteringPlan(HoodieClusteringPlan.newBuilder()
+              .setInputGroups(Collections.emptyList())
+              .setExtraMetadata(Collections.emptyMap())
+              .setVersion(1)
+              .build())
+          .build();
     }
   }
 
