@@ -55,6 +55,7 @@
     <module>packaging/hudi-gcp-bundle</module>
     <module>packaging/hudi-azure-bundle</module>
     <module>packaging/hudi-spark-bundle</module>
+    <module>packaging/hudi-native-spark-bundle</module>
     <module>packaging/hudi-presto-bundle</module>
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-utilities-slim-bundle</module>
@@ -193,6 +194,7 @@
     <spark40.version>4.0.2</spark40.version>
     <spark41.version>4.1.1</spark41.version>
     <spark42.version>4.2.0</spark42.version>
+    <datafusion.comet.version>1.0.0</datafusion.comet.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>1.11.4</avro.version>
