@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.HoodieSchemaException
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.testutils.DataSourceTestUtils
@@ -983,15 +984,23 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     // HoodieSparkSchemaConverters rejects on Spark 3.x. Verified 2026-08-20: every leg fails
     // LOUDLY with the same actionable error as the plain auto-resolve path; there is no silent
     // wrong data and no obscure secondary failure. Notably that includes the documented
-    // struct-DDL compat mode, which works WITHOUT schema-on-read (see the backward-compat test
-    // below) but breaks once the table carries an internal schema and the conf is on, because
-    // internal-schema resolution overrides the user's DDL. Real support is #18285; until then
-    // Spark 3.x compat-mode readers must keep hoodie.schema.on.read.enable off.
+    // struct-DDL compat mode, which works on this same table with the conf off (pinned below)
+    // but breaks once it is on, because internal-schema resolution overrides the user's DDL.
+    // Real support is #18285; until then Spark 3.x compat-mode readers must keep
+    // hoodie.schema.on.read.enable off.
     assume(HoodieSparkUtils.isSpark3, "This test verifies Spark 3.x behavior with schema-on-read")
 
     withTempDir { tmpDir =>
       HoodieTestUtils.extractZipToDirectory("variant_backward_compat/variant_schema_on_read_cow.zip", tmpDir.toPath, getClass)
       val tablePath = tmpDir.toPath.resolve("variant_schema_on_read_cow").toString
+
+      // The schema-on-read legs assert the same exception as the plain leg, so they would also
+      // pass if the internal schema silently failed to load and HoodieBaseRelation fell back to
+      // the commit-metadata schema. Pin that the fixture carries a loadable internal schema, so
+      // those legs cannot pass without exercising the InternalSchema path.
+      val schemaResolver = new TableSchemaResolver(createMetaClient(spark, tablePath))
+      assert(schemaResolver.getTableInternalSchemaFromCommitMetadata.isPresent,
+        "fixture must carry a committed internal schema; regenerate it per the README")
 
       def assertVariantRejected(leg: String)(f: => Unit): Unit = {
         val ex = intercept[HoodieSchemaException](f)
@@ -1005,29 +1014,38 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       assertVariantRejected("auto-resolve, schema-on-read") {
         spark.read.format("hudi").option("hoodie.schema.on.read.enable", "true").load(tablePath).collect()
       }
-      assertVariantRejected("compat struct DDL, schema-on-read") {
-        val tableName = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  v struct<value: binary, metadata: binary>,
-             |  ts long,
-             |  note string
-             |) using hudi
-             |location '$tablePath'
-             |tblproperties (
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             |)
-           """.stripMargin)
-        try {
+
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v struct<value: binary, metadata: binary>,
+           |  ts long,
+           |  note string
+           |) using hudi
+           |location '$tablePath'
+           |tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           |)
+         """.stripMargin)
+      try {
+        // With the conf off the compat struct DDL works even though the table carries an
+        // internal schema - pinning that the conf, not the committed internal schema itself,
+        // is what breaks compat mode.
+        val rows = spark.sql(s"select id, v, note from $tableName order by id").collect()
+        assert(rows.map(r => (r.getInt(0), r.isNullAt(1), r.getString(2))).toSeq
+          == Seq((1, false, null), (2, false, "n2")),
+          "[compat struct DDL, conf off] expected both rows readable through the struct DDL")
+
+        assertVariantRejected("compat struct DDL, schema-on-read") {
           withSQLConf("hoodie.schema.on.read.enable" -> "true") {
             spark.sql(s"select id, v, note from $tableName order by id").collect()
           }
-        } finally {
-          spark.sql(s"drop table $tableName")
         }
+      } finally {
+        spark.sql(s"drop table $tableName")
       }
     }
   }
