@@ -96,10 +96,15 @@ public class TextChunker implements Serializable {
   private int findBreak(String text, int start, int windowEnd) {
     int minBreak = start + Math.max(overlapChars + 1, chunkSizeChars / 2);
     for (String boundary : BOUNDARIES) {
-      int idx = text.lastIndexOf(boundary, windowEnd - boundary.length());
-      int breakEnd = idx + boundary.length();
-      if (idx >= 0 && breakEnd > minBreak && breakEnd <= windowEnd) {
-        return breakEnd;
+      int length = boundary.length();
+      // Only a break landing in (minBreak, windowEnd] is acceptable, so scan just that
+      // window. lastIndexOf would instead run back to index 0 whenever the boundary is
+      // absent, making chunking quadratic in document length.
+      int lowestIdx = Math.max(0, minBreak - length + 1);
+      for (int idx = windowEnd - length; idx >= lowestIdx; idx--) {
+        if (text.startsWith(boundary, idx)) {
+          return idx + length;
+        }
       }
     }
     return windowEnd;

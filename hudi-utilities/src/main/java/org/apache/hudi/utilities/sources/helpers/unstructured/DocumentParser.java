@@ -26,14 +26,19 @@ import java.io.Serializable;
 
 /**
  * Extracts text and metadata from a single file's content stream. Implementations run
- * inside Spark executors, must be embedded JVM libraries (no external service calls),
- * and must NEVER throw from {@link #parse}: any failure is reported via
- * {@link ParseResult#failed}.
+ * inside Spark executors and must be embedded JVM libraries (no external service calls).
+ *
+ * <p>{@link #parse} must not throw an {@link Exception}: a file it cannot handle is
+ * reported via {@link ParseResult#failed} so one bad file never fails the ingestion job.
+ * An {@link Error} is a different matter and must be allowed to propagate, so the task
+ * fails and Spark retries it rather than continuing on an undefined JVM state.
  */
 public interface DocumentParser extends Serializable {
 
   /**
-   * Called once per executor instance before the first {@link #parse}.
+   * Called once per Spark task, on the instance that task will use, before its first
+   * {@link #parse}. Implementations are deserialized per task, not per executor, so
+   * anything expensive set up here is paid once per partition.
    */
   default void init(TypedProperties props) {
   }

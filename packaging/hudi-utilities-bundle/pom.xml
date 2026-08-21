@@ -97,6 +97,45 @@
                   <include>org.apache.hudi:hudi-spark-client</include>
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
                   <include>org.apache.tika:tika-core</include>
+                  <!-- Apache Tika document parsers, for UnstructuredFileDFSSource -->
+                  <include>com.adobe.xmp:*</include>
+                  <include>com.drewnoakes:*</include>
+                  <include>com.epam:*</include>
+                  <include>com.github.albfernandez:*</include>
+                  <include>com.github.jai-imageio:*</include>
+                  <include>com.github.junrar:*</include>
+                  <include>com.github.virtuald:*</include>
+                  <include>com.googlecode.plist:*</include>
+                  <include>com.healthmarketscience.jackcess:*</include>
+                  <include>com.pff:*</include>
+                  <include>com.rometools:*</include>
+                  <include>com.sun.istack:*</include>
+                  <include>com.zaxxer:*</include>
+                  <include>info.picocli:*</include>
+                  <include>jakarta.activation:*</include>
+                  <include>jakarta.xml.bind:*</include>
+                  <include>org.apache.james:*</include>
+                  <include>org.apache.pdfbox:*</include>
+                  <include>org.apache.poi:*</include>
+                  <include>org.apache.tika:*</include>
+                  <include>org.apache.xmlbeans:*</include>
+                  <include>org.bouncycastle:*</include>
+                  <include>org.brotli:*</include>
+                  <include>org.codelibs:*</include>
+                  <include>org.eclipse.angus:*</include>
+                  <include>org.gagravarr:*</include>
+                  <include>org.glassfish.jaxb:*</include>
+                  <include>org.jdom:*</include>
+                  <include>org.jsoup:*</include>
+                  <include>org.netpreserve:*</include>
+                  <include>org.ow2.asm:*</include>
+                  <include>org.tallison:*</include>
+                  <include>org.tukaani:*</include>
+                  <include>org.apache.commons:commons-compress</include>
+                  <include>org.apache.commons:commons-collections4</include>
+                  <include>org.apache.commons:commons-csv</include>
+                  <include>org.apache.commons:commons-exec</include>
+                  <include>org.apache.commons:commons-math3</include>
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:${hudi.spark.module}_${scala.binary.version}</include>
@@ -188,6 +227,13 @@
                   <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hive.jdbc.</shadedPattern>
                 </relocation>
                 <relocation>
+                  <!-- Tika's POI needs commons-compress 1.24+, but Spark ships an older copy that
+                       would win on the classpath. Relocating rewrites Tika's own references here,
+                       so the version it gets no longer depends on the runtime's. -->
+                  <pattern>org.apache.commons.compress.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.compress.</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>org.apache.commons.io.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
                 </relocation>
@@ -242,6 +288,14 @@
               </relocations>
               <filters>
                 <filter>
+                  <!-- bouncycastle ships multi-release classes built for newer JDKs than the
+                       shade plugin can parse; the base classes are the ones we run on anyway -->
+                  <artifact>org.bouncycastle:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/versions/**</exclude>
+                  </excludes>
+                </filter>
+                <filter>
                   <artifact>*:*</artifact>
                   <excludes>
                     <exclude>META-INF/*.SF</exclude>
@@ -266,6 +320,14 @@
   </build>
 
   <dependencies>
+    <!-- Pinned ahead of the 1.9 that wins transitively: Tika's zip container detection calls
+         ArchiveStreamFactory.detect(InputStream), added in 1.14. This is the copy that gets
+         relocated into the bundle, so it must be the version Tika expects. -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-compress</artifactId>
+      <version>1.27.1</version>
+    </dependency>
     <!-- Hoodie - Spark -->
 
     <dependency>

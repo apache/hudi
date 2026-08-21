@@ -115,7 +115,6 @@
       <groupId>org.apache.tika</groupId>
       <artifactId>tika-parsers-standard-package</artifactId>
       <version>${tika.version}</version>
-      <scope>test</scope>
     </dependency>
     <!-- POI (Office formats via tika-parsers) needs commons-compress >= 1.24; the
          hadoop/spark-provided 1.23 would otherwise shadow it on the test classpath.
