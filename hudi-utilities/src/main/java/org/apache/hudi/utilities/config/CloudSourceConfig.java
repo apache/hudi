@@ -131,9 +131,11 @@ public class CloudSourceConfig extends HoodieConfig {
       .noDefaultValue()
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.select.file.extension")
       .markAdvanced()
-      .withDocumentation("Only match files with this extension. Accepts a comma separated list, "
-          + "in which case a file matching any one of the extensions is selected, e.g. \"json,jsonl\". "
-          + "By default, this is the same as hoodie.streamer.source.hoodieincr.file.format");
+      .withDocumentation("Only select objects whose key ends with this extension. Accepts a comma "
+          + "separated list, e.g. \"json,jsonl\", where an object matching any one of them is selected. "
+          + "With no usable extension configured, falls back to "
+          + "hoodie.streamer.source.cloud.data.datafile.format, then to "
+          + "hoodie.streamer.source.hoodieincr.file.format (parquet).");
 
   public static final ConfigProperty<String> DATAFILE_FORMAT = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.datafile.format")
