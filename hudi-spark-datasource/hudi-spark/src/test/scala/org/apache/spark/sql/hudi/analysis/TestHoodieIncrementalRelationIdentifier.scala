@@ -98,7 +98,7 @@ class TestHoodieIncrementalRelationIdentifier extends HoodieClientTestBase with 
   }
 
   @Test
-  def testCatalogRegisteredIncrementalReadIsNotMutated(): Unit = {
+  def testCatalogRegisteredReadIsNotMutated(): Unit = {
     spark.sql(
       s"""
          |CREATE TABLE $tableName (
