@@ -62,8 +62,8 @@ public class StringPartitionPathFormatter extends PartitionPathFormatterBase<Str
   }
 
   @Override
-  protected boolean startsWithDash(String partitionPathPart) {
-    return !partitionPathPart.isEmpty() && partitionPathPart.charAt(0) == '-';
+  protected boolean hasPathBreakingDash(String partitionPathPart) {
+    return KeyGenUtils.hasPathBreakingDash(partitionPathPart);
   }
 
   public static class JavaStringBuilder implements PartitionPathFormatterBase.StringBuilder<String> {

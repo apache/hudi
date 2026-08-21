@@ -63,25 +63,9 @@ public abstract class PartitionPathFormatterBase<S> {
     // and Hive-style of partitioning is not required
     if (!useHiveStylePartitioning && partitionPathParts.length == 1) {
       S partitionPathPart = tryEncode(handleEmpty(toString(partitionPathParts[0])));
-      // NOTE: For [[SimpleKeyGenerator]]/[[ComplexKeyGenerator]] slash-separated date partitioning
-      //       only kicks in for a table partitioned by a single (date) column, mirroring
-      //       [[KeyGenUtils#getPartitionPath]] (single field) and [[KeyGenUtils#getRecordPartitionPath]]
-      //       (which guards on a single field as well) driving the Avro write-path: both write-paths
-      //       have to derive the very same partition path for a record.
-      //       [[CustomKeyGenerator]] is not an exception to this: it builds one single-field
-      //       sub-key-generator per partition field, so every field takes this branch and a
-      //       multi-field table does get each of its values slash-separated -- on the Avro,
-      //       [[org.apache.spark.sql.Row]] and [[org.apache.spark.sql.catalyst.InternalRow]] paths alike.
-      //       All three agreeing does not make that layout usable, though: the extra fragments leave
-      //       [[HoodieSparkUtils#doParsePartitionColumnValues]] unable to line the path up with the
-      //       partition columns, so reading such a table back fails. Tracked in HUDI issue #19666
-      // NOTE: A value with a leading dash is left alone: substituting would make the partition path
-      //       start with "/", and an absolute relative-partition-path is resolved inconsistently --
-      //       [[FSUtils#constructAbsolutePath(String, String)]] chops the leading "/" while the
-      //       [[StoragePath]] overload used by [[AbstractTableFileSystemView]] lets it URI-resolve
-      //       away the table base path ("-5" lands the writer in "<base>/5" but the file-system view
-      //       in "/5"). Such a value is not a date to begin with, so nothing is lost by not slashing it
-      return slashSeparatedDatePartitioning && !startsWithDash(partitionPathPart)
+      // NOTE: See [[replaceDashesWithSlashes]] on how this lines up with the Avro write path, and
+      //       [[hasPathBreakingDash]] on which dashes suppress the substitution
+      return slashSeparatedDatePartitioning && !hasPathBreakingDash(partitionPathPart)
           ? replaceDashesWithSlashes(partitionPathPart)
           : partitionPathPart;
     }
@@ -92,10 +76,19 @@ public abstract class PartitionPathFormatterBase<S> {
 
       if (useHiveStylePartitioning) {
         sb.appendJava(partitionPathFields.get(i))
-            .appendJava("=");
+            .appendJava("=")
+            .append(partitionPathPartStr);
+      } else if (slashSeparatedDatePartitioning && !hasPathBreakingDash(partitionPathPartStr)) {
+        // NOTE: Every part is substituted here, preserving the behaviour this branch had before the
+        //       [[ClassCastException]] fix. [[CustomKeyGenerator]] builds one single-field sub-keygen
+        //       per field, so its write path slashes each field individually, and
+        //       [[SparkHoodieTableFileIndex#composeRelativePartitionPath]] has to land on the same
+        //       directory when it composes the prefix in one [[combine]] call over all N columns.
+        //       Whether a multi-field table should be slash-separated at all is HUDI issue #19666
+        sb.append(replaceDashesWithSlashes(partitionPathPartStr));
+      } else {
+        sb.append(partitionPathPartStr);
       }
-
-      sb.append(partitionPathPartStr);
 
       if (i < partitionPathParts.length - 1) {
         sb.appendJava(DEFAULT_PARTITION_PATH_SEPARATOR);
@@ -121,17 +114,46 @@ public abstract class PartitionPathFormatterBase<S> {
    *
    * <p>NOTE: This has to be implemented by every sub-class, since the substitution has to be
    * performed on the concrete string representation {@code S} the formatter operates on.
+   *
+   * <p>NOTE: For {@code SimpleKeyGenerator}/{@code ComplexKeyGenerator} the single-part branch of
+   * {@link #combine} routes only a table partitioned by a single (date) column here, mirroring
+   * {@code KeyGenUtils#getPartitionPath} (single field) and {@code KeyGenUtils#getRecordPartitionPath}
+   * (which guards on a single field as well) driving the Avro write-path: both write-paths have to
+   * derive the very same partition path for a record.
+   *
+   * <p>NOTE: The multi-part branch substitutes every part, which {@code CustomKeyGenerator} depends
+   * on: it builds one single-field sub-key-generator per partition field, so its own write path
+   * slashes each field individually, and {@code SparkHoodieTableFileIndex#composeRelativePartitionPath}
+   * -- which calls {@link #combine} once over all N columns to compose a listing prefix -- has to
+   * name the very same directory, or the prefix misses and the query silently returns no rows. For
+   * {@code ComplexKeyGenerator} this leaves the row-writer path slashing where the Avro path does
+   * not, and neither layout reads back: the extra fragments leave
+   * {@code HoodieSparkUtils#doParsePartitionColumnValues} unable to line the path up with the
+   * partition columns. Both are tracked in HUDI issue #19666.
    */
   protected abstract S replaceDashesWithSlashes(S partitionPathPart);
 
   /**
-   * Whether {@code partitionPathPart} starts with a dash, in which case
-   * {@link #replaceDashesWithSlashes(Object)} must not be applied to it.
+   * Whether substituting the dashes in {@code partitionPathPart} would yield a leading, trailing or
+   * doubled path separator, in which case {@link #replaceDashesWithSlashes(Object)} must not be
+   * applied to it. Kept in step with {@code KeyGenUtils#hasPathBreakingDash}, which guards the Avro
+   * write path.
    *
    * <p>NOTE: This has to be implemented by every sub-class, since the check has to be performed on
    * the concrete string representation {@code S} the formatter operates on.
+   *
+   * <p>NOTE: None of the three shapes survives the round trip back from storage. A leading dash
+   * makes the path absolute, and that is resolved inconsistently --
+   * {@code FSUtils#constructAbsolutePath(String, String)} chops the leading "/" while the
+   * {@code StoragePath} overload used by {@code AbstractTableFileSystemView} lets it URI-resolve away
+   * the table base path ({@code "-5"} lands the writer in {@code <base>/5} but the file-system view
+   * in {@code /5}). A trailing dash gives {@code "5/"}, which {@code StoragePath} normalizes back to
+   * {@code "5"}, and a doubled dash gives {@code "a//b"}, which {@code URI.normalize()} collapses to
+   * {@code "a/b"} -- in both cases the writer records a partition string longer than the directory
+   * it resolves to, so {@code FSUtils#getFileName} slices the file name at the wrong offset. None of
+   * these values is a date to begin with, so nothing is lost by not slashing them.
    */
-  protected abstract boolean startsWithDash(S partitionPathPart);
+  protected abstract boolean hasPathBreakingDash(S partitionPathPart);
 
   /**
    * This is a generic interface closing the gap and unifying the {@link java.lang.StringBuilder} with

@@ -59,10 +59,17 @@ class TestPartitionPathFormatter {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testSlashSeparatedDatePartitioningOnlyAppliesToSingleFieldPartitioning(boolean useRowWriterPath) {
-    // NOTE: This mirrors [[KeyGenUtils#getRecordPartitionPath]] driving the Avro write-path
-    assertEquals("2026-01-05/san-francisco",
+  void testSlashSeparatedDatePartitioningAppliesToEveryField(boolean useRowWriterPath) {
+    // NOTE: Every part is substituted, which is what [[CustomKeyGenerator]] writes (one single-field
+    //       sub-keygen per field) and what [[SparkHoodieTableFileIndex#composeRelativePartitionPath]]
+    //       has to reproduce when it composes a listing prefix over all N columns in one call.
+    //       [[KeyGenUtils#getRecordPartitionPath]] guards on a single field instead, so for
+    //       [[ComplexKeyGenerator]] the Avro path diverges from this one -- HUDI issue #19666
+    assertEquals("2026/01/05/san/francisco",
         combine(useRowWriterPath, false, false, true, TWO_FIELDS, "2026-01-05", "san-francisco"));
+    // The guard applies per part, not just to the first one
+    assertEquals("2026/01/05/-5",
+        combine(useRowWriterPath, false, false, true, TWO_FIELDS, "2026-01-05", "-5"));
   }
 
   @ParameterizedTest
@@ -77,16 +84,19 @@ class TestPartitionPathFormatter {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testSlashSeparatedDatePartitioningLeavesLeadingDashesAlone(boolean useRowWriterPath) {
-    // NOTE: Substituting here would yield a partition path starting with "/", which
+    // NOTE: Substituting in any of these would yield a partition path that does not survive the
+    //       round trip back from storage. A leading "/" is resolved differently by
     //       [[FSUtils#constructAbsolutePath(String, String)]] and the [[StoragePath]] overload used
-    //       by [[AbstractTableFileSystemView]] resolve differently -- the former chops the leading
-    //       "/", the latter URI-resolves the table base path away -- so the writer and the
-    //       file-system view would disagree on where the partition lives
+    //       by [[AbstractTableFileSystemView]] -- the former chops it, the latter URI-resolves the
+    //       table base path away. A trailing "/" is normalized off by [[StoragePath#normalize]] and
+    //       a doubled "//" is collapsed by [[java.net.URI#normalize]], leaving the writer recording
+    //       a partition string longer than the directory it actually resolves to
     assertEquals("-5", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "-5"));
     assertEquals("-", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "-"));
     assertEquals("--5", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "--5"));
-    // A dash anywhere else is still a separator: only a leading one produces an absolute path
-    assertEquals("5/", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "5-"));
+    assertEquals("5-", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "5-"));
+    assertEquals("a--b", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "a--b"));
+    // A single interior dash is still a separator
     assertEquals("2026/01/05", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "2026-01-05"));
   }
 

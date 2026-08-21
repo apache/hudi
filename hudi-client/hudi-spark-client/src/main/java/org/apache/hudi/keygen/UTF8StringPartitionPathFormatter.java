@@ -35,6 +35,7 @@ public class UTF8StringPartitionPathFormatter extends PartitionPathFormatterBase
 
   private static final UTF8String DASH_UTF8 = UTF8String.fromString("-");
   private static final UTF8String SLASH_UTF8 = UTF8String.fromString("/");
+  private static final UTF8String DOUBLE_DASH_UTF8 = UTF8String.fromString("--");
 
   public UTF8StringPartitionPathFormatter(Supplier<StringBuilder<UTF8String>> stringBuilderFactory,
                                           boolean useHiveStylePartitioning,
@@ -68,8 +69,10 @@ public class UTF8StringPartitionPathFormatter extends PartitionPathFormatterBase
   }
 
   @Override
-  protected boolean startsWithDash(UTF8String partitionPathPart) {
-    return partitionPathPart.startsWith(DASH_UTF8);
+  protected boolean hasPathBreakingDash(UTF8String partitionPathPart) {
+    return partitionPathPart.startsWith(DASH_UTF8)
+        || partitionPathPart.endsWith(DASH_UTF8)
+        || partitionPathPart.contains(DOUBLE_DASH_UTF8);
   }
 
   public static class UTF8StringBuilder implements StringBuilder<UTF8String> {
