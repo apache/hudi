@@ -18,82 +18,57 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import com.google.protobuf.CodedOutputStream;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
+
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.utilities.sources.helpers.KplTestUtils.encodeAggregatedRecord;
+import static org.apache.hudi.utilities.sources.helpers.KplTestUtils.encodeSubRecord;
+import static org.apache.hudi.utilities.sources.helpers.KplTestUtils.frame;
+import static org.apache.hudi.utilities.sources.helpers.KplTestUtils.hexToBytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Unit tests for {@link KinesisDeaggregator}, covering KPL aggregate decoding and the pass-through
- * paths taken by non-aggregated, corrupt or invalid records.
+ * Unit tests for {@link KinesisDeaggregator}: KPL aggregate decoding (including frozen fixtures
+ * from AWS's own producer-side aggregation library), the pass-through paths taken by
+ * non-aggregated records, and the failure paths taken by corrupt aggregates.
  */
 class TestKinesisDeaggregator {
 
-  private static final byte[] MAGIC = new byte[] {(byte) 0xF3, (byte) 0x89, (byte) 0x9A, (byte) 0xC2};
   private static final String PARENT_SEQ = "49590";
   private static final Instant PARENT_ARRIVAL = Instant.ofEpochMilli(1700000000000L);
 
-  // -------------------------------------------------------------------------
-  // Encoding helpers - independent of the decoder under test
-  // -------------------------------------------------------------------------
+  // Golden fixtures produced by AWS's producer-side aggregation library
+  // (com.amazonaws:amazon-kinesis-aggregator:1.0.3, the Java implementation of the KPL wire
+  // format) and reference-decoded with the KCL deaggregator (amazon-kinesis-client:1.8.8) before
+  // being frozen here; both ASL-licensed libraries were used at fixture-generation time only.
+  // The aggregator derives an explicit hash key for every record, so these frames also populate
+  // the explicit hash key table and per-record indexes.
 
-  private static byte[] encodeSubRecord(long pkIndex, Long ehkIndex, byte[] data, String tagKeyOrNull)
-      throws IOException {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    CodedOutputStream stream = CodedOutputStream.newInstance(out);
-    stream.writeUInt64(1, pkIndex);
-    if (ehkIndex != null) {
-      stream.writeUInt64(2, ehkIndex);
-    }
-    stream.writeByteArray(3, data);
-    if (tagKeyOrNull != null) {
-      ByteArrayOutputStream tagOut = new ByteArrayOutputStream();
-      CodedOutputStream tagStream = CodedOutputStream.newInstance(tagOut);
-      tagStream.writeString(1, tagKeyOrNull);
-      tagStream.flush();
-      stream.writeByteArray(4, tagOut.toByteArray());
-    }
-    stream.flush();
-    return out.toByteArray();
-  }
+  // Three sub-records: ("pk-a", {"id":1}), ("pk-b" with explicit hash key
+  // 170141183460469231731687303715884105727, {"id":2}), ("pk-a", {"id":3}).
+  private static final String KPL_PRODUCER_FRAME = "f3899ac20a04706b2d610a04706b2d62122633373733343435363334393532"
+      + "3538323733303632313239303034393331353131373531353612273137303134313138333436303436393233313733313638373330"
+      + "333731353838343130353732371a0e080010001a087b226964223a317d1a0e080110011a087b226964223a327d1a0e080010001a08"
+      + "7b226964223a337d7d3f7b7fcad94b07edeb92fc05a4862d";
 
-  private static byte[] encodeAggregatedRecord(List<String> pkTable, List<String> ehkTable,
-      List<byte[]> subRecords) throws IOException {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    CodedOutputStream stream = CodedOutputStream.newInstance(out);
-    for (String pk : pkTable) {
-      stream.writeString(1, pk);
-    }
-    for (String ehk : ehkTable) {
-      stream.writeString(2, ehk);
-    }
-    for (byte[] subRecord : subRecords) {
-      stream.writeByteArray(3, subRecord);
-    }
-    stream.flush();
-    return out.toByteArray();
-  }
-
-  private static byte[] frame(byte[] payload) throws NoSuchAlgorithmException {
-    byte[] digest = MessageDigest.getInstance("MD5").digest(payload);
-    return ByteBuffer.allocate(MAGIC.length + payload.length + digest.length)
-        .put(MAGIC).put(payload).put(digest).array();
-  }
+  // Two sub-records exercising multi-byte UTF-8 (accented Latin and CJK) in both the partition
+  // keys and the payloads; expected values are spelled with unicode escapes in the test below.
+  private static final String KPL_PRODUCER_FRAME_UTF8 = "f3899ac20a09706b2dc3bcc3b1c3ae0a08706b2d706c61696e122732"
+      + "3333393233303635323234313430363231363337363735303732353237373832373039393731122635303738313230393835353930"
+      + "383337363232303036343339313438313630383232393637391a18080010001a127b2263697479223a227ac3bc72696368227d1a1d"
+      + "080110011a177b2263697479223a22746f6b796f20e69db1e4baac227dafed575c3266872e207cedb9cc6f3780";
 
   private static Record kinesisRecord(byte[] data) {
     return Record.builder()
@@ -137,6 +112,38 @@ class TestKinesisDeaggregator {
   }
 
   @Test
+  void deaggregatesRealProducerLibraryFrame() {
+    Record aggregate = kinesisRecord(hexToBytes(KPL_PRODUCER_FRAME));
+
+    List<Record> result = KinesisDeaggregator.deaggregate(Collections.singletonList(aggregate));
+
+    assertEquals(3, result.size());
+    assertEquals("{\"id\":1}", result.get(0).data().asUtf8String());
+    assertEquals("{\"id\":2}", result.get(1).data().asUtf8String());
+    assertEquals("{\"id\":3}", result.get(2).data().asUtf8String());
+    assertEquals("pk-a", result.get(0).partitionKey());
+    assertEquals("pk-b", result.get(1).partitionKey());
+    assertEquals("pk-a", result.get(2).partitionKey());
+    for (Record record : result) {
+      assertEquals(PARENT_SEQ, record.sequenceNumber());
+      assertEquals(PARENT_ARRIVAL, record.approximateArrivalTimestamp());
+    }
+  }
+
+  @Test
+  void deaggregatesRealProducerLibraryFrameWithMultiByteUtf8() {
+    Record aggregate = kinesisRecord(hexToBytes(KPL_PRODUCER_FRAME_UTF8));
+
+    List<Record> result = KinesisDeaggregator.deaggregate(Collections.singletonList(aggregate));
+
+    assertEquals(2, result.size());
+    assertEquals("pk-\u00fc\u00f1\u00ee", result.get(0).partitionKey()); // accented Latin partition key
+    assertEquals("{\"city\":\"z\u00fcrich\"}", result.get(0).data().asUtf8String()); // accented Latin payload
+    assertEquals("pk-plain", result.get(1).partitionKey());
+    assertEquals("{\"city\":\"tokyo \u6771\u4eac\"}", result.get(1).data().asUtf8String()); // CJK payload
+  }
+
+  @Test
   void passesThroughNonAggregatedRecordUnchanged() {
     Record plain = kinesisRecord(utf8("{\"id\":1,\"name\":\"plain\"}"));
 
@@ -148,6 +155,8 @@ class TestKinesisDeaggregator {
 
   @Test
   void passesThroughOnDigestMismatch() throws Exception {
+    // The magic prefix alone does not make an aggregate: an ordinary user record could start with
+    // those four bytes, so a frame whose trailing digest does not verify passes through, as in KCL.
     byte[] framed = frame(encodeAggregatedRecord(
         Collections.singletonList("pk-a"), Collections.emptyList(),
         Collections.singletonList(encodeSubRecord(0, null, utf8("{\"id\":1}"), null))));
@@ -161,38 +170,33 @@ class TestKinesisDeaggregator {
   }
 
   @Test
-  void passesThroughOnCorruptPayload() throws Exception {
+  void failsOnCorruptPayloadWithValidDigest() throws Exception {
     // Field 1, wire type 2, declared length 127 but only two bytes follow: valid digest, bad protobuf.
     Record corrupted = kinesisRecord(frame(new byte[] {0x0A, (byte) 0x7F, 0x01, 0x02}));
 
-    List<Record> result = KinesisDeaggregator.deaggregate(Collections.singletonList(corrupted));
-
-    assertEquals(1, result.size());
-    assertSame(corrupted, result.get(0));
+    HoodieReadFromSourceException e = assertThrows(HoodieReadFromSourceException.class,
+        () -> KinesisDeaggregator.deaggregate(Collections.singletonList(corrupted)));
+    assertTrue(e.getMessage().contains(PARENT_SEQ));
   }
 
   @Test
-  void passesThroughOnPartitionKeyIndexOutOfRange() throws Exception {
+  void failsOnPartitionKeyIndexOutOfRange() throws Exception {
     Record aggregate = kinesisRecord(frame(encodeAggregatedRecord(
         Collections.singletonList("pk-a"), Collections.emptyList(),
         Collections.singletonList(encodeSubRecord(5, null, utf8("{\"id\":1}"), null)))));
 
-    List<Record> result = KinesisDeaggregator.deaggregate(Collections.singletonList(aggregate));
-
-    assertEquals(1, result.size());
-    assertSame(aggregate, result.get(0));
+    assertThrows(HoodieReadFromSourceException.class,
+        () -> KinesisDeaggregator.deaggregate(Collections.singletonList(aggregate)));
   }
 
   @Test
-  void passesThroughOnExplicitHashKeyIndexOutOfRange() throws Exception {
+  void failsOnExplicitHashKeyIndexOutOfRange() throws Exception {
     Record aggregate = kinesisRecord(frame(encodeAggregatedRecord(
         Collections.singletonList("pk-a"), Collections.emptyList(),
         Collections.singletonList(encodeSubRecord(0, 3L, utf8("{\"id\":1}"), null)))));
 
-    List<Record> result = KinesisDeaggregator.deaggregate(Collections.singletonList(aggregate));
-
-    assertEquals(1, result.size());
-    assertSame(aggregate, result.get(0));
+    assertThrows(HoodieReadFromSourceException.class,
+        () -> KinesisDeaggregator.deaggregate(Collections.singletonList(aggregate)));
   }
 
   @Test
@@ -210,8 +214,9 @@ class TestKinesisDeaggregator {
   }
 
   @Test
-  void partialCorruptAggregatePassesThroughWhole() throws Exception {
-    // Second sub-record is out of range: KCL would emit the first and silently drop the rest.
+  void partiallyCorruptAggregateFailsWholeRead() throws Exception {
+    // Second sub-record is out of range: KCL would emit the first and silently drop the rest,
+    // while this decoder fails the read so no part of a corrupt aggregate is silently lost.
     Record aggregate = kinesisRecord(frame(encodeAggregatedRecord(
         Collections.singletonList("pk-a"), Collections.emptyList(),
         Arrays.asList(
@@ -219,10 +224,8 @@ class TestKinesisDeaggregator {
             encodeSubRecord(5, null, utf8("{\"id\":2}"), null),
             encodeSubRecord(0, null, utf8("{\"id\":3}"), null)))));
 
-    List<Record> result = KinesisDeaggregator.deaggregate(Collections.singletonList(aggregate));
-
-    assertEquals(1, result.size());
-    assertSame(aggregate, result.get(0));
+    assertThrows(HoodieReadFromSourceException.class,
+        () -> KinesisDeaggregator.deaggregate(Collections.singletonList(aggregate)));
   }
 
   @Test
@@ -237,7 +240,7 @@ class TestKinesisDeaggregator {
 
   @Test
   void tooShortDataPassesThrough() {
-    Record magicOnly = kinesisRecord(MAGIC);
+    Record magicOnly = kinesisRecord(KplTestUtils.KPL_MAGIC);
     Record tooShort = kinesisRecord(new byte[] {(byte) 0xF3, (byte) 0x89});
 
     List<Record> result = KinesisDeaggregator.deaggregate(Arrays.asList(magicOnly, tooShort));

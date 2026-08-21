@@ -18,8 +18,10 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.utilities.config.KinesisSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
+
 import com.google.protobuf.CodedInputStream;
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
@@ -38,11 +40,13 @@ import java.util.List;
  * runtime dependency on the KCL de-aggregation library, which is published under the Amazon
  * Software License and therefore cannot be a required dependency of an Apache project.
  *
- * <p>Semantics match the KCL deaggregator except that where KCL silently drops records of a corrupt
- * aggregate (valid digest, out-of-range key index), this implementation passes the whole raw record
- * through unchanged so corruption fails loudly downstream instead of losing data.
+ * <p>Semantics match the KCL deaggregator except for corrupt aggregates (valid digest but an
+ * undecodable payload or an out-of-range key index): KCL keeps the sub-records before the bad one
+ * and silently drops the rest, while this implementation fails the read, since a frame whose
+ * trailing digest verifies cannot be an ordinary user record and ingesting it raw (or partially)
+ * would silently lose data. A frame that merely starts with the magic bytes but whose digest does
+ * not verify is an ordinary user record and passes through unchanged, as with KCL.
  */
-@Slf4j
 public final class KinesisDeaggregator {
 
   private static final byte[] MAGIC = new byte[] {(byte) 0xF3, (byte) 0x89, (byte) 0x9A, (byte) 0xC2};
@@ -54,6 +58,9 @@ public final class KinesisDeaggregator {
   /**
    * De-aggregate SDK v2 Kinesis records. Aggregated records (from KPL) are split into user records.
    * Non-aggregated records pass through unchanged.
+   *
+   * @throws HoodieReadFromSourceException if a record carries a valid KPL aggregation digest but
+   *     its payload cannot be decoded (corruption or an incompatible aggregate format)
    */
   public static List<Record> deaggregate(List<Record> records) {
     if (records == null || records.isEmpty()) {
@@ -61,7 +68,9 @@ public final class KinesisDeaggregator {
     }
     List<Record> result = new ArrayList<>(records.size());
     for (Record record : records) {
-      byte[] data = record.data() == null ? null : record.data().asByteArray();
+      // Unsafe accessor skips SdkBytes' defensive copy; the array is only read here, and
+      // sub-record payloads are copied out by readByteArray() before records are built.
+      byte[] data = record.data() == null ? null : record.data().asByteArrayUnsafe();
       if (!isAggregated(data)) {
         result.add(record);
         continue;
@@ -70,9 +79,10 @@ public final class KinesisDeaggregator {
       try {
         result.addAll(expand(record, data, MAGIC.length, payloadLength));
       } catch (IOException e) {
-        log.warn("Kinesis record with sequence number {} has a matching KPL aggregation digest but could not be "
-            + "decoded, passing it through as-is", record.sequenceNumber(), e);
-        result.add(record);
+        throw new HoodieReadFromSourceException("Kinesis record with sequence number " + record.sequenceNumber()
+            + " carries a valid KPL aggregation digest but could not be decoded; this indicates corruption or an"
+            + " incompatible aggregate format, so the read is failed rather than ingesting the raw frame. Set "
+            + KinesisSourceConfig.KINESIS_ENABLE_DEAGGREGATION.key() + "=false to pass raw records through.", e);
       }
     }
     return result;
@@ -107,6 +117,7 @@ public final class KinesisDeaggregator {
   /**
    * Parses the {@code AggregatedRecord} message: repeated string partition_key_table (field 1),
    * repeated string explicit_hash_key_table (field 2) and repeated Record records (field 3).
+   * Case labels are protobuf tags: (field number &lt;&lt; 3) | wire type.
    */
   private static List<Record> expand(Record parent, byte[] data, int offset, int length) throws IOException {
     CodedInputStream input = CodedInputStream.newInstance(data, offset, length);
@@ -116,13 +127,13 @@ public final class KinesisDeaggregator {
     while (!input.isAtEnd()) {
       int tag = input.readTag();
       switch (tag) {
-        case 10:
+        case 10: // field 1, length-delimited
           partitionKeyTable.add(input.readStringRequireUtf8());
           break;
-        case 18:
+        case 18: // field 2, length-delimited
           explicitHashKeyTable.add(input.readStringRequireUtf8());
           break;
-        case 26:
+        case 26: // field 3, length-delimited
           subMessages.add(input.readByteArray());
           break;
         default:
@@ -141,6 +152,7 @@ public final class KinesisDeaggregator {
    * Parses one nested {@code Record} message: required uint64 partition_key_index (field 1),
    * optional uint64 explicit_hash_key_index (field 2), required bytes data (field 3) and repeated
    * Tag tags (field 4, skipped). Explicit hash keys and tags are validated but not propagated.
+   * Case labels are protobuf tags: (field number &lt;&lt; 3) | wire type.
    */
   private static Record toRecord(Record parent, byte[] subMessage, List<String> partitionKeyTable,
                                  List<String> explicitHashKeyTable) throws IOException {
@@ -153,15 +165,15 @@ public final class KinesisDeaggregator {
     while (!input.isAtEnd()) {
       int tag = input.readTag();
       switch (tag) {
-        case 8:
+        case 8: // field 1, varint
           partitionKeyIndex = input.readUInt64();
           hasPartitionKeyIndex = true;
           break;
-        case 16:
+        case 16: // field 2, varint
           explicitHashKeyIndex = input.readUInt64();
           hasExplicitHashKeyIndex = true;
           break;
-        case 26:
+        case 26: // field 3, length-delimited
           payload = input.readByteArray();
           break;
         default:

@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
+import org.apache.hudi.utilities.sources.helpers.KplTestUtils;
 
-import com.google.protobuf.CodedOutputStream;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.core.SdkBytes;
@@ -31,11 +31,7 @@ import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -127,7 +123,7 @@ class TestShardRecordIterator {
   @Test
   void testMillisBehindLatestZeroStopsAfterCurrentPage() {
     KinesisClient client = mock(KinesisClient.class);
-    // Page 1: millisBehindLatest=0 → no second page should be fetched.
+    // Page 1: millisBehindLatest=0 -> no second page should be fetched.
     when(client.getRecords(isA(GetRecordsRequest.class)))
         .thenReturn(response(Arrays.asList(record("seq1"), record("seq2")), NEXT_ITER, 0L));
 
@@ -205,7 +201,7 @@ class TestShardRecordIterator {
   // -------------------------------------------------------------------------
 
   /**
-   * lastSequenceNumber must not advance until a page is fully consumed — it commits only when
+   * lastSequenceNumber must not advance until a page is fully consumed -- it commits only when
    * hasNext() observes the current page is exhausted.
    */
   @Test
@@ -219,14 +215,14 @@ class TestShardRecordIterator {
     // Before any consumption no checkpoint yet.
     assertFalse(it.getLastSequenceNumber().isPresent());
 
-    it.next(); // seq1 — mid-page
+    it.next(); // seq1 -- mid-page
     assertFalse(it.getLastSequenceNumber().isPresent());
 
     it.next(); // seq2
-    it.next(); // seq3 — page iterator is exhausted but commit hasn't fired yet
+    it.next(); // seq3 -- page iterator is exhausted but commit hasn't fired yet
     assertFalse(it.getLastSequenceNumber().isPresent());
 
-    // hasNext() sees currentPage.hasNext() == false → commits pendingPageLastSeq.
+    // hasNext() sees currentPage.hasNext() == false -> commits pendingPageLastSeq.
     assertFalse(it.hasNext());
     assertEquals("seq3", it.getLastSequenceNumber().get());
   }
@@ -246,7 +242,7 @@ class TestShardRecordIterator {
     KinesisSource.ShardRecordIterator it = iterator(client, 100, 1000, THROTTLE_TIMEOUT_LARGE);
 
     it.next(); // seq1
-    it.next(); // seq2 — exhausted page 1
+    it.next(); // seq2 -- exhausted page 1
     // Page 1 not committed yet (hasNext() for seq3 commits it).
     assertFalse(it.getLastSequenceNumber().isPresent());
 
@@ -283,10 +279,10 @@ class TestShardRecordIterator {
   void testMultipleThrottlesHalveToFloorOfOne() {
     KinesisClient client = mock(KinesisClient.class);
     when(client.getRecords(isA(GetRecordsRequest.class)))
-        .thenThrow(throttleEx())   // 8 → 4
-        .thenThrow(throttleEx())   // 4 → 2
-        .thenThrow(throttleEx())   // 2 → 1
-        .thenThrow(throttleEx())   // 1 → 1  (floor)
+        .thenThrow(throttleEx())   // 8 -> 4
+        .thenThrow(throttleEx())   // 4 -> 2
+        .thenThrow(throttleEx())   // 2 -> 1
+        .thenThrow(throttleEx())   // 1 -> 1  (floor)
         .thenReturn(response(Collections.singletonList(record("seq1")), null, 0L));
 
     KinesisSource.ShardRecordIterator it = iterator(client, 8, 1000, THROTTLE_TIMEOUT_LARGE);
@@ -321,7 +317,7 @@ class TestShardRecordIterator {
   void testHalveAndHoldLimitForSubsequentPages() {
     KinesisClient client = mock(KinesisClient.class);
     when(client.getRecords(isA(GetRecordsRequest.class)))
-        .thenThrow(throttleEx())                                                         // call 1: throttled → halve 100→50
+        .thenThrow(throttleEx())                                                         // call 1: throttled -> halve 100->50
         .thenReturn(response(Collections.singletonList(record("seq1")), NEXT_ITER, 5000L)) // call 2: success at 50
         .thenReturn(response(Collections.singletonList(record("seq2")), null,     0L));    // call 3: next page, still at 50
 
@@ -335,7 +331,7 @@ class TestShardRecordIterator {
     List<GetRecordsRequest> reqs = captor.getAllValues();
     assertEquals(100, reqs.get(0).limit()); // initial attempt before throttle
     assertEquals(50,  reqs.get(1).limit()); // halved, succeeded
-    assertEquals(50,  reqs.get(2).limit()); // held — no recovery to 100
+    assertEquals(50,  reqs.get(2).limit()); // held -- no recovery to 100
   }
 
   /**
@@ -372,35 +368,18 @@ class TestShardRecordIterator {
   // KPL de-aggregation
   // -------------------------------------------------------------------------
 
-  private static final byte[] KPL_MAGIC = new byte[] {(byte) 0xF3, (byte) 0x89, (byte) 0x9A, (byte) 0xC2};
-
   /**
-   * Encodes a KPL aggregated record: magic prefix, the AggregatedRecord protobuf payload carrying
-   * one sub-record per payload string, and the trailing MD5 digest of that payload.
+   * Encodes a KPL aggregated record carrying one sub-record per payload string, where payload i
+   * uses partition key index i. Frame building is shared with {@link KplTestUtils}.
    */
   private static byte[] kplAggregate(List<String> partitionKeys, List<String> payloads) throws Exception {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    CodedOutputStream stream = CodedOutputStream.newInstance(out);
-    for (String partitionKey : partitionKeys) {
-      stream.writeString(1, partitionKey);
-    }
+    List<byte[]> subRecords = new ArrayList<>(payloads.size());
     for (int i = 0; i < payloads.size(); i++) {
-      stream.writeByteArray(3, kplSubRecord(i, payloads.get(i)));
+      subRecords.add(KplTestUtils.encodeSubRecord(
+          i, null, payloads.get(i).getBytes(StandardCharsets.UTF_8), null));
     }
-    stream.flush();
-    byte[] payload = out.toByteArray();
-    byte[] digest = MessageDigest.getInstance("MD5").digest(payload);
-    return ByteBuffer.allocate(KPL_MAGIC.length + payload.length + digest.length)
-        .put(KPL_MAGIC).put(payload).put(digest).array();
-  }
-
-  private static byte[] kplSubRecord(long partitionKeyIndex, String payload) throws IOException {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    CodedOutputStream stream = CodedOutputStream.newInstance(out);
-    stream.writeUInt64(1, partitionKeyIndex);
-    stream.writeByteArray(3, payload.getBytes(StandardCharsets.UTF_8));
-    stream.flush();
-    return out.toByteArray();
+    return KplTestUtils.frame(KplTestUtils.encodeAggregatedRecord(
+        partitionKeys, Collections.emptyList(), subRecords));
   }
 
   @Test

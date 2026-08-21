@@ -466,6 +466,10 @@
                     <exclude>org.apache.hbase:hbase-server:*:*:compile</exclude>
                     <!--To upgrade snappy because pre 1.1.8.2 does not work on m1 mac-->
                     <exclude>org.xerial.snappy:snappy-java:*</exclude>
+                    <!-- NOTE: Amazon Software License artifacts (ASF Category X) must not come back, even
+                         transitively; KCL 2.x moved to software.amazon.kinesis and stays allowed -->
+                    <exclude>com.amazonaws:amazon-kinesis-client</exclude>
+                    <exclude>com.amazonaws:amazon-kinesis-deaggregator</exclude>
                   </excludes>
                   <includes>
                     <include>org.slf4j:slf4j-simple:*:*:test</include>
