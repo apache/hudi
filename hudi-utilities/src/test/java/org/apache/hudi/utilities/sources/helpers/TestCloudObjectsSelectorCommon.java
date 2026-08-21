@@ -28,6 +28,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
+import org.apache.hudi.utilities.config.UnstructuredFileSourceConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 
@@ -295,6 +296,38 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("avro"));
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(""));
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(null));
+  }
+
+  @Test
+  void unstructuredMaterializerDeniesDataFileExtensionsByDefault() {
+    TypedProperties props = new TypedProperties();
+    // the same materializer serves both stores, so only the object key column differs
+    assertEquals("s3.object.size > 0 and s3.object.key not like '%avro' and s3.object.key not like '%hfile'"
+            + " and s3.object.key not like '%orc' and s3.object.key not like '%parquet'",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.S3, props,
+            new UnstructuredFileMaterializer(props, jsc)));
+    assertEquals("size > 0 and name not like '%avro' and name not like '%hfile'"
+            + " and name not like '%orc' and name not like '%parquet'",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.GCS, props,
+            new UnstructuredFileMaterializer(props, jsc)));
+  }
+
+  @Test
+  void unstructuredMaterializerAllowlistOverridesTheDenylist() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(UnstructuredFileSourceConfig.FILE_EXTENSIONS.key(), "pdf,docx");
+    assertEquals("size > 0 and (name like '%docx' or name like '%pdf')",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.GCS, props,
+            new UnstructuredFileMaterializer(props, jsc)));
+  }
+
+  @Test
+  void unstructuredMaterializerAddsNoPredicateWhenNothingIsFiltered() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(UnstructuredFileSourceConfig.FILE_EXTENSIONS_IGNORE.key(), "");
+    assertEquals("size > 0",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.GCS, props,
+            new UnstructuredFileMaterializer(props, jsc)));
   }
 
   @Test

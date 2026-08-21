@@ -30,6 +30,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -77,14 +78,14 @@ public class UnstructuredFileMaterializer implements CloudObjectMaterializer {
   @Override
   public String objectKeyPredicate(String objectKey, TypedProperties props) {
     if (!allowedExtensions.isEmpty()) {
-      return CloudObjectsSelectorCommon.extensionPredicate(objectKey, String.join(",", allowedExtensions));
+      return CloudObjectsSelectorCommon.extensionPredicate(objectKey, String.join(",", sorted(allowedExtensions)));
     }
     if (ignoredExtensions.isEmpty()) {
       return "";
     }
     // no allowlist, so select everything except the denied extensions
     List<String> denials = new ArrayList<>();
-    for (String extension : ignoredExtensions) {
+    for (String extension : sorted(ignoredExtensions)) {
       denials.add(String.format("%s not like '%%%s'", objectKey, extension));
     }
     return " and " + String.join(" and ", denials);
@@ -121,6 +122,13 @@ public class UnstructuredFileMaterializer implements CloudObjectMaterializer {
     }
     JavaSparkContext jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
     return Option.of(UnstructuredFileRows.toDataset(spark, jsc, selected, recordBuilder, numPartitions));
+  }
+
+  /** Sorted so the rendered predicate is stable across runs, for logs, plans and tests. */
+  private static List<String> sorted(Set<String> extensions) {
+    List<String> ordered = new ArrayList<>(extensions);
+    Collections.sort(ordered);
+    return ordered;
   }
 
   private static String fileNameOf(String path) {
