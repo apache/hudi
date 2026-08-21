@@ -59,4 +59,36 @@
   	<name>hive.server2.logging.operation.enabled</name>
   	<value>true</value>
     </property>
+    <property>
+       <name>metastore.thrift.uris</name>
+       <value>thrift://hivemetastore:9083</value>
+    </property>
+    <property>
+       <name>metastore.task.threads.always</name>
+       <value>org.apache.hadoop.hive.metastore.events.EventCleanerTask</value>
+    </property>
+    <property>
+       <name>metastore.expression.proxy</name>
+       <value>org.apache.hadoop.hive.metastore.DefaultPartitionExpressionProxy</value>
+    </property>
+    <property>
+       <name>fs.s3a.impl</name>
+       <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+    </property>
+    <property>
+       <name>fs.s3a.access.key</name>
+       <value>minio</value>
+    </property>
+    <property>
+       <name>fs.s3a.secret.key</name>
+       <value>minio123</value>
+    </property>
+    <property>
+       <name>fs.s3a.endpoint</name>
+       <value>http://minio:9090</value>
+    </property>
+    <property>
+       <name>fs.s3a.path.style.access</name>
+       <value>true</value>
+    </property>
 </configuration>
