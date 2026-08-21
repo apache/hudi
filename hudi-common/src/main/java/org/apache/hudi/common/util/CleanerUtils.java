@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -151,8 +152,10 @@ public class CleanerUtils {
     } else if (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
       ZonedDateTime latestDateTime = ZonedDateTime.ofInstant(latestInstant, timeZone.getZoneId());
       String earliestTimeToRetain = TimelineUtils.formatDate(Date.from(latestDateTime.minusHours(hoursRetained).toInstant()));
-      earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream().filter(i -> compareTimestamps(i.requestedTime(),
-          GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
+      earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream()
+          .filter(i -> compareTimestamps(i.getCompletionTime(), GREATER_THAN_OR_EQUALS, earliestTimeToRetain))
+          // ECTR remains a requested-time boundary, so choose the earliest requested instant still in the completion-time window.
+          .min(Comparator.comparing(HoodieInstant::requestedTime)));
     }
 
     // Apply maxCommitsToClean cap if configured and applicable

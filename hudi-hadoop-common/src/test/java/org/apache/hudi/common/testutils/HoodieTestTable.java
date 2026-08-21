@@ -635,11 +635,15 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addDeletePartitionCommit(String instantTime, String partition, List<String> fileIds) throws Exception {
+    return addDeletePartitionCommit(instantTime, Option.empty(), partition, fileIds);
+  }
+
+  public HoodieTestTable addDeletePartitionCommit(String instantTime, Option<String> completeTime, String partition, List<String> fileIds) throws Exception {
     forReplaceCommit(instantTime);
     WriteOperationType operationType = WriteOperationType.DELETE_PARTITION;
     Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> metas =
         generateReplaceCommitMetadata(instantTime, partition, fileIds, Option.empty(), operationType);
-    return addReplaceCommit(instantTime, Option.of(metas.getLeft()), Option.empty(), metas.getRight());
+    return addReplaceCommit(instantTime, completeTime, Option.of(metas.getLeft()), Option.empty(), metas.getRight());
   }
 
   private Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> generateReplaceCommitMetadata(
