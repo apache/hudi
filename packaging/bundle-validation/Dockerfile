@@ -16,7 +16,8 @@
 #
 
 ARG IMAGE_TAG=spark313hive313
-FROM apachehudi/hudi-ci-bundle-validation-base:$IMAGE_TAG
+ARG BASE_IMAGE_REPOSITORY=apachehudi/hudi-ci-bundle-validation-base
+FROM ${BASE_IMAGE_REPOSITORY}:$IMAGE_TAG
 
 # configure the stack
 ADD . .
