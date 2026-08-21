@@ -732,12 +732,144 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     }
   }
 
+  // A partial update names only the columns being changed, so the record key is normally absent
+  // from the assignments. On MOR the global-index tagging stage merges the incoming record with its
+  // existing version and then asks the key generator for the merged record's partition path - and
+  // that merged record is materialised against WRITE_PARTIAL_UPDATE_SCHEMA, which carries only the
+  // assigned columns. Resolving the partition path must therefore not also require the record key.
+  //
+  // The index types split on whether that tagging stage runs at all: GLOBAL_BLOOM and GLOBAL_SIMPLE
+  // set mayContainDuplicateLookup on MOR and so reach it, while the record-index spellings pass
+  // false and short-circuit. Both cells are covered, so the fix is pinned where it applies and the
+  // already-working path is guarded against regression. The source projects the partition column in
+  // every case, to keep this independent of partition-column resolution (ENG-46864).
+  Seq(
+    ("GLOBAL_BLOOM re-keying", Map(
+      "hoodie.index.type" -> "GLOBAL_BLOOM",
+      "hoodie.bloom.index.update.partition.path" -> "false")),
+    ("GLOBAL_SIMPLE re-keying", Map(
+      "hoodie.index.type" -> "GLOBAL_SIMPLE",
+      "hoodie.simple.index.update.partition.path" -> "false")),
+    ("RECORD_INDEX", Map(
+      "hoodie.index.type" -> "RECORD_INDEX",
+      "hoodie.record.index.update.partition.path" -> "false",
+      "hoodie.metadata.enable" -> "true",
+      "hoodie.metadata.record.index.enable" -> "true")),
+    ("GLOBAL_RECORD_LEVEL_INDEX", Map(
+      "hoodie.index.type" -> "GLOBAL_RECORD_LEVEL_INDEX",
+      "hoodie.record.index.update.partition.path" -> "false",
+      "hoodie.metadata.enable" -> "true",
+      "hoodie.metadata.record.index.enable" -> "true"))
+  ).foreach { case (label, indexConfs) =>
+    test(s"Test MOR partial update on a global index without assigning the record key ($label)") {
+      withTempDir { tmp =>
+        withSQLConf(indexConfs.toSeq: _*) {
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |   id bigint,
+               |   name string,
+               |   amount double,
+               |   ts bigint,
+               |   dt string
+               | ) using hudi
+               | partitioned by (dt)
+               | location '$basePath'
+               | tblproperties (
+               |   type = 'mor',
+               |   primaryKey = 'id',
+               |   preCombineField = 'ts')
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'a', 10.0, 1, '2026-08-11')")
+
+          // `id` is deliberately absent from the assignments - that is what makes it partial.
+          spark.sql(
+            s"""
+               | merge into $tableName as t
+               | using (
+               |   select 1L as id, 15.0 as amount, 200L as ts, '2026-08-11' as dt
+               | ) as s
+               | on t.id = s.id
+               | when matched then update set t.amount = s.amount, t.ts = s.ts
+             """.stripMargin)
+
+          // The assigned columns change, the unassigned ones keep their existing values, and the
+          // record stays in its own partition - asserted rather than merely checking row count,
+          // since a dropped record leaves a table that also "looks unchanged".
+          checkAnswer(s"select id, name, amount, ts, dt, _hoodie_partition_path from $tableName")(
+            Seq(1L, "a", 15.0, 200L, "2026-08-11", "dt=2026-08-11")
+          )
+
+          // The rows alone cannot distinguish a correct partial log block from a full-schema one, and
+          // this fix is precisely about which schema the block's meta fields are laid out against. So
+          // assert the block: IS_PARTIAL set, and the schema equal to the meta fields prepended onto
+          // the assigned columns only. Without the fix the meta count is inferred as
+          // targetSchema.size - record.size and the values land in the wrong slots.
+          validateLogBlock(basePath, 1, Seq(Seq("amount", "ts")), isPartial = true, "dt=2026-08-11")
+        }
+      }
+    }
+  }
+
+
+  // update.partition.path enabled is deliberately NOT in the matrix above: for GLOBAL_BLOOM and
+  // GLOBAL_SIMPLE it makes useGlobalIndex true, which disables MOR partial updates altogether
+  // (isPartialUpdateActionForMOR requires !useGlobalIndex), and MOR then requires the record key to be
+  // assigned. So the statement is rejected at analysis time rather than reaching the writer. Pinned
+  // here so the boundary is explicit and nobody mistakes this rejection for the partial-update defect.
+  //
+  // NOTE the exemption is not universal: isGlobalIndexEnabled maps only GLOBAL_SIMPLE, GLOBAL_BLOOM
+  // and RECORD_INDEX, so GLOBAL_RECORD_LEVEL_INDEX returns false there regardless of its
+  // update.partition.path value, while SparkMetadataTableGlobalRecordLevelIndex still honours that
+  // config. That combination therefore reaches the writer WITH partial updates enabled. The
+  // partition-resolution guard in HoodieIndexUtils covers it, and the missing enum mapping is being
+  // added separately, so this test asserts the rejection only for the spellings that actually reject.
+  test("Test MOR merge without assigning the record key is rejected when the global index updates the partition path") {
+    withTempDir { tmp =>
+      withSQLConf(
+        "hoodie.index.type" -> "GLOBAL_BLOOM",
+        "hoodie.bloom.index.update.partition.path" -> "true") {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |   id bigint,
+             |   name string,
+             |   amount double,
+             |   ts bigint,
+             |   dt string
+             | ) using hudi
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |   type = 'mor',
+             |   primaryKey = 'id',
+             |   preCombineField = 'ts')
+           """.stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a', 10.0, 1, '2026-08-11')")
+
+        checkExceptionContain(
+          s"""
+             | merge into $tableName as t
+             | using (
+             |   select 1L as id, 15.0 as amount, 200L as ts, '2026-08-11' as dt
+             | ) as s
+             | on t.id = s.id
+             | when matched then update set t.amount = s.amount, t.ts = s.ts
+           """.stripMargin)("No matching assignment found for target table record key field")
+      }
+    }
+  }
+
   def validateLogBlock(basePath: String,
                        expectedNumLogFile: Int,
                        changedFields: Seq[Seq[String]],
-                       isPartial: Boolean): Unit = {
+                       isPartial: Boolean,
+                       partitionPath: String = ""): Unit = {
     val (metaClient, fsView) = getMetaClientAndFileSystemView(basePath)
-    val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("")
+    val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices(partitionPath)
       .filter((fileSlice: FileSlice) => {
         HoodieTestUtils.getLogFileListFromFileSlice(fileSlice).size() == expectedNumLogFile
       })
