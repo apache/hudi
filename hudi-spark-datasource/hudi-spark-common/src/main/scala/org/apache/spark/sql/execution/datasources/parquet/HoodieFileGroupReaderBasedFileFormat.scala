@@ -57,7 +57,7 @@ import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapCol
 import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
@@ -516,19 +516,73 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     iter.map(mapper.apply(_))
   }
 
+  /**
+   * Columns referenced by `filters` that are present in the table but missing from `schema`.
+   *
+   * A pushed-down filter is evaluated by the Parquet reader against the schema it was asked to
+   * read. If the filter references a column that schema does not contain, the predicate cannot be
+   * satisfied and every row is dropped -- silently, with no error. That is reachable whenever a
+   * caller supplies required filters independently of the projection: an incremental query always
+   * filters on _hoodie_commit_time, but a `count()` projects no columns at all and a
+   * `select(subset)` projects only what the user asked for.
+   *
+   * Candidates come from the full table schema rather than the requested one: on the failing path
+   * the requested schema is itself empty, so it cannot supply the column the filter needs.
+   * Partition columns are excluded by the caller, which appends them separately.
+   */
+  private def filterColumnsMissingFrom(target: StructType,
+                                       candidates: StructType,
+                                       partitionSchema: StructType,
+                                       filters: Seq[Filter]): Seq[StructField] = {
+    if (filters.isEmpty) {
+      Seq.empty
+    } else {
+      val present = target.fieldNames.toSet
+      // Partition columns are appended by the caller from the partition values, not read from the
+      // file. Adding one here would duplicate the field and shift every ordinal after it.
+      val partitionFields = partitionSchema.fieldNames.toSet
+      val available = candidates.fields.map(f => f.name -> f).toMap
+      filters.flatMap(_.references).distinct
+        .filterNot(present.contains)
+        .filterNot(partitionFields.contains)
+        .flatMap(available.get)
+    }
+  }
+
   // executor
   private def readBaseFile(file: PartitionedFile, parquetFileReader: SparkColumnarFileReader, requestedSchema: StructType,
-                           remainingPartitionSchema: StructType, fixedPartitionIndexes: Set[Int], requiredSchema: StructType,
+                           remainingPartitionSchema: StructType, fixedPartitionIndexes: Set[Int], requiredSchemaIn: StructType,
                            partitionSchema: StructType, outputSchema: StructType, filters: Seq[Filter],
                            storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
+    // Read any column a pushed filter references but the projection omits, then project it back out
+    // below. Without this the reader evaluates the predicate against a schema lacking the column and
+    // returns nothing -- the failure mode described on filterColumnsMissingFrom.
+    //
+    // A strict no-op for every non-incremental read: snapshot, CDC and bootstrap relations all
+    // supply `Seq.empty` for required filters, so there is nothing to reference and nothing to add.
+    val filterOnlyFields =
+      filterColumnsMissingFrom(requiredSchemaIn, tableSchema.structTypeSchema, partitionSchema, filters)
+    val requiredSchema =
+      if (filterOnlyFields.isEmpty) requiredSchemaIn
+      else StructType(requiredSchemaIn.fields ++ filterOnlyFields)
+
     // Detect vector columns and create modified schemas with BinaryType.
     // Each schema is detected independently because ordinals are relative to the schema being
     // modified — outputSchema and requestedSchema may have vector columns at different positions
     // than requiredSchema (e.g. when partition columns are interleaved).
+    // The other two branches read through the output / requested schemas rather than the required
+    // one, so the filter-only columns have to be appended there too or those paths keep hitting the
+    // same missing-column predicate. Appended at the end in the same order, so the trailing
+    // projection back to the caller's schema is a plain prefix drop in every branch.
+    val outputSchemaForRead =
+      if (filterOnlyFields.isEmpty) outputSchema else StructType(outputSchema.fields ++ filterOnlyFields)
+    val requestedSchemaForRead =
+      if (filterOnlyFields.isEmpty) requestedSchema else StructType(requestedSchema.fields ++ filterOnlyFields)
+
     val (modifiedRequiredSchema, vectorCols) = withVectorRewrite(requiredSchema)
     val hasVectors = vectorCols.nonEmpty
-    val (modifiedOutputSchema, outputVectorCols) = if (hasVectors) withVectorRewrite(outputSchema) else (outputSchema, Map.empty[Int, HoodieSchema.Vector])
-    val (modifiedRequestedSchema, _) = if (hasVectors) withVectorRewrite(requestedSchema) else (requestedSchema, Map.empty[Int, HoodieSchema.Vector])
+    val (modifiedOutputSchema, outputVectorCols) = if (hasVectors) withVectorRewrite(outputSchemaForRead) else (outputSchemaForRead, Map.empty[Int, HoodieSchema.Vector])
+    val (modifiedRequestedSchema, _) = if (hasVectors) withVectorRewrite(requestedSchemaForRead) else (requestedSchemaForRead, Map.empty[Int, HoodieSchema.Vector])
 
     val rawIter = if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
       //none of partition fields are read from the file, so the reader will do the appending for us
@@ -551,16 +605,29 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       projectIter(iter, StructType(modifiedRequestedSchema.fields ++ remainingPartitionSchema.fields), modifiedOutputSchema)
     }
 
+    // Schema the reader actually produced, filter-only columns included.
+    val producedSchema = if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
+      StructType(modifiedRequiredSchema.fields ++ partitionSchema.fields)
+    } else {
+      modifiedOutputSchema
+    }
+
+    // Drop the filter-only columns before handing rows back: they were read so the predicate could
+    // be evaluated, not because the caller asked for them, and the caller's schema must be exact.
+    // Skipped entirely when nothing was added, so every non-incremental read is untouched.
+    val (projectedIter, projectedSchema) =
+      if (filterOnlyFields.isEmpty) {
+        (rawIter, producedSchema)
+      } else {
+        val target = if (hasVectors) withVectorRewrite(outputSchema)._1 else outputSchema
+        (projectIter(rawIter, producedSchema, target), target)
+      }
+
     if (hasVectors) {
       // The raw iterator has BinaryType for vector columns; convert back to ArrayType
-      val readSchema = if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
-        StructType(modifiedRequiredSchema.fields ++ partitionSchema.fields)
-      } else {
-        modifiedOutputSchema
-      }
-      wrapWithVectorConversion(rawIter, readSchema, outputSchema, outputVectorCols)
+      wrapWithVectorConversion(projectedIter, projectedSchema, outputSchema, outputVectorCols)
     } else {
-      rawIter
+      projectedIter
     }
   }
 
