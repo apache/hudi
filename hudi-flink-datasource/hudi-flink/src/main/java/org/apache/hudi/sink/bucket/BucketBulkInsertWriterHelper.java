@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
@@ -46,23 +47,30 @@ import java.util.Map;
 @Slf4j
 public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
   public static final String FILE_GROUP_META_FIELD = "_fg";
+  public static final String PARTITION_PATH_META_FIELD = "_partition_path";
 
   protected final int recordArity;
+  protected final boolean isNonBlockingConcurrencyControl;
 
   private String lastFileId; // for efficient code path
+  private String lastPartitionPath; // only used by NBCC where file IDs repeat across partitions
 
   public BucketBulkInsertWriterHelper(Configuration conf, HoodieTable<?, ?, ?, ?> hoodieTable, HoodieWriteConfig writeConfig,
                                       String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType) {
     super(conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType);
     this.recordArity = rowType.getFieldCount();
+    this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(conf);
   }
 
   public void write(RowData tuple) throws IOException {
     try {
-      RowData record = tuple.getRow(1, this.recordArity);
+      int fieldOffset = isNonBlockingConcurrencyControl ? 1 : 0;
+      RowData record = tuple.getRow(fieldOffset + 1, this.recordArity);
       String recordKey = keyGen.getRecordKey(record);
-      String partitionPath = keyGen.getPartitionPath(record);
-      String fileId = tuple.getString(0).toString();
+      String partitionPath = isNonBlockingConcurrencyControl
+          ? tuple.getString(0).toString()
+          : keyGen.getPartitionPath(record);
+      String fileId = tuple.getString(fieldOffset).toString();
       writeRecord(recordKey, partitionPath, fileId, record);
     } catch (Throwable throwable) {
       IOException ioException = new IOException("Exception happened when bulk insert.", throwable);
@@ -76,29 +84,38 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
       String partitionPath,
       String fileId,
       RowData record) throws IOException {
-    if ((lastFileId == null) || !lastFileId.equals(fileId)) {
+    if ((lastFileId == null)
+        || !lastFileId.equals(fileId)
+        || (isNonBlockingConcurrencyControl && !partitionPath.equals(lastPartitionPath))) {
       log.info("Creating new file for partition path {}", partitionPath);
       handle = getRowCreateHandle(partitionPath, fileId);
       lastFileId = fileId;
+      lastPartitionPath = partitionPath;
     }
     handle.write(recordKey, partitionPath, record);
   }
 
   private HoodieRowDataCreateHandle getRowCreateHandle(String partitionPath, String fileId) throws IOException {
-    if (!handles.containsKey(fileId)) { // if there is no handle corresponding to the fileId
+    String handleKey = isNonBlockingConcurrencyControl
+        ? partitionPath + "/" + fileId
+        : fileId;
+    if (!handles.containsKey(handleKey)) { // if there is no handle corresponding to the file group
       if (this.isInputSorted) {
         // if records are sorted, we can close all existing handles
         close();
       }
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, fileId,
           instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, writerSchema, preserveHoodieMetadata, isAppendMode && !populateMetaFields);
-      handles.put(fileId, rowCreateHandle);
+      handles.put(handleKey, rowCreateHandle);
     }
-    return handles.get(fileId);
+    return handles.get(handleKey);
   }
 
-  public static SortOperatorGen getFileIdSorterGen(RowType rowType) {
-    return new SortOperatorGen(rowType, new String[] {FILE_GROUP_META_FIELD});
+  public static SortOperatorGen getFileIdSorterGen(
+      RowType rowType, boolean isNonBlockingConcurrencyControl) {
+    return new SortOperatorGen(rowType, isNonBlockingConcurrencyControl
+        ? new String[] {PARTITION_PATH_META_FIELD, FILE_GROUP_META_FIELD}
+        : new String[] {FILE_GROUP_META_FIELD});
   }
 
   static String getFileId(
@@ -125,12 +142,24 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
         indexKeyFields,
         numBucketsFunction,
         needFixedFileIdSuffix);
-    return GenericRowData.of(StringData.fromString(fileId), record);
+    return needFixedFileIdSuffix
+        ? GenericRowData.of(
+            StringData.fromString(partitionPath), StringData.fromString(fileId), record)
+        : GenericRowData.of(StringData.fromString(fileId), record);
   }
 
-  public static RowType rowTypeWithFileId(RowType rowType) {
-    LogicalType[] types = new LogicalType[] {DataTypes.STRING().getLogicalType(), rowType};
-    String[] names = new String[] {FILE_GROUP_META_FIELD, "record"};
+  public static RowType rowTypeWithFileId(
+      RowType rowType, boolean isNonBlockingConcurrencyControl) {
+    LogicalType[] types;
+    String[] names;
+    if (isNonBlockingConcurrencyControl) {
+      types = new LogicalType[] {
+          DataTypes.STRING().getLogicalType(), DataTypes.STRING().getLogicalType(), rowType};
+      names = new String[] {PARTITION_PATH_META_FIELD, FILE_GROUP_META_FIELD, "record"};
+    } else {
+      types = new LogicalType[] {DataTypes.STRING().getLogicalType(), rowType};
+      names = new String[] {FILE_GROUP_META_FIELD, "record"};
+    }
     return RowType.of(types, names);
   }
 }

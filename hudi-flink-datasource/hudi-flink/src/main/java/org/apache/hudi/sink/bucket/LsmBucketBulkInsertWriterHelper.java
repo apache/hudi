@@ -39,7 +39,8 @@ import java.util.Map;
 /**
  * Bucket-index bulk-insert writer helper for LSM input rows.
  *
- * <p>The input row contains file ID, encoded record key, and the original table row.
+ * <p>The input row contains file ID, encoded record key, and the original table row. In NBCC mode,
+ * the partition path is prepended because fixed bucket file IDs can repeat across partitions.
  */
 public class LsmBucketBulkInsertWriterHelper extends BucketBulkInsertWriterHelper {
 
@@ -60,10 +61,13 @@ public class LsmBucketBulkInsertWriterHelper extends BucketBulkInsertWriterHelpe
 
   @Override
   public void write(RowData sortRow) throws IOException {
-    String fileId = sortRow.getString(0).toString();
-    String recordKey = sortRow.getString(1).toString();
-    RowData record = sortRow.getRow(2, recordArity);
-    String partitionPath = keyGen.getPartitionPath(record);
+    int fieldOffset = isNonBlockingConcurrencyControl ? 1 : 0;
+    String fileId = sortRow.getString(fieldOffset).toString();
+    String recordKey = sortRow.getString(fieldOffset + 1).toString();
+    RowData record = sortRow.getRow(fieldOffset + 2, recordArity);
+    String partitionPath = isNonBlockingConcurrencyControl
+        ? sortRow.getString(0).toString()
+        : keyGen.getPartitionPath(record);
     writeRecord(recordKey, partitionPath, fileId, record);
   }
 
@@ -83,37 +87,60 @@ public class LsmBucketBulkInsertWriterHelper extends BucketBulkInsertWriterHelpe
         indexKeyFields,
         numBucketsFunction,
         needFixedFileIdSuffix);
-    return GenericRowData.of(
-        StringData.fromString(fileId),
-        StringData.fromString(recordKey),
-        record);
+    return needFixedFileIdSuffix
+        ? GenericRowData.of(
+            StringData.fromString(partitionPath),
+            StringData.fromString(fileId),
+            StringData.fromString(recordKey),
+            record)
+        : GenericRowData.of(
+            StringData.fromString(fileId),
+            StringData.fromString(recordKey),
+            record);
   }
 
   /**
    * Returns the internal row type used to sort LSM bucket bulk-insert records by file ID and
    * record key.
    *
-   * <p>The fields are ordered as file ID, encoded record key, and original table row.
+   * <p>The fields are ordered as file ID, encoded record key, and original table row. In NBCC mode,
+   * the partition path is prepended.
    */
-  public static RowType rowTypeWithFileIdAndKey(RowType rowType) {
-    LogicalType[] types = new LogicalType[] {
-        DataTypes.STRING().getLogicalType(),
-        DataTypes.STRING().getLogicalType(),
-        rowType
-    };
-    String[] names =
-        new String[] {FILE_GROUP_META_FIELD, RECORD_KEY_FIELD, RECORD_FIELD};
+  public static RowType rowTypeWithFileIdAndKey(
+      RowType rowType, boolean isNonBlockingConcurrencyControl) {
+    LogicalType[] types;
+    String[] names;
+    if (isNonBlockingConcurrencyControl) {
+      types = new LogicalType[] {
+          DataTypes.STRING().getLogicalType(),
+          DataTypes.STRING().getLogicalType(),
+          DataTypes.STRING().getLogicalType(),
+          rowType
+      };
+      names = new String[] {
+          PARTITION_PATH_META_FIELD, FILE_GROUP_META_FIELD, RECORD_KEY_FIELD, RECORD_FIELD};
+    } else {
+      types = new LogicalType[] {
+          DataTypes.STRING().getLogicalType(),
+          DataTypes.STRING().getLogicalType(),
+          rowType
+      };
+      names = new String[] {FILE_GROUP_META_FIELD, RECORD_KEY_FIELD, RECORD_FIELD};
+    }
     return RowType.of(types, names);
   }
 
   /**
-   * Creates an external sorter ordered by file ID and encoded record key.
+   * Creates an external sorter ordered by file ID and encoded record key, with partition path as
+   * the leading sort field in NBCC mode.
    *
    * <p>The nested payload is deliberately excluded from the sort keys, so duplicate record keys
    * are retained without comparing or aggregating their payloads.
    */
-  public static SortOperatorGen getFileIdAndKeySorterGen(RowType rowType) {
-    return new SortOperatorGen(
-        rowType, new String[] {FILE_GROUP_META_FIELD, RECORD_KEY_FIELD});
+  public static SortOperatorGen getFileIdAndKeySorterGen(
+      RowType rowType, boolean isNonBlockingConcurrencyControl) {
+    return new SortOperatorGen(rowType, isNonBlockingConcurrencyControl
+        ? new String[] {PARTITION_PATH_META_FIELD, FILE_GROUP_META_FIELD, RECORD_KEY_FIELD}
+        : new String[] {FILE_GROUP_META_FIELD, RECORD_KEY_FIELD});
   }
 }
