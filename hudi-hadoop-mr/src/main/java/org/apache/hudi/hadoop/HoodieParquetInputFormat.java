@@ -275,10 +275,23 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       // count(*)-style read: no column data is materialized
       return;
     }
-    boolean requestsVariantShapedColumn = HoodieColumnProjectionUtils.getIOColumnNameAndTypes(job).stream()
-        .filter(nameAndType -> requestedColumns.contains(nameAndType.getKey().toLowerCase(Locale.ROOT)))
-        .map(nameAndType -> nameAndType.getValue().toLowerCase(Locale.ROOT))
-        .anyMatch(type -> type.contains("metadata:binary") && type.contains("value:binary"));
+    List<String> ioColumns = HoodieColumnProjectionUtils.getIOColumns(job);
+    List<String> ioColumnTypes = HoodieColumnProjectionUtils.getIOColumnTypes(job);
+    if (ioColumns.size() != ioColumnTypes.size()) {
+      // The guard is best-effort: a malformed columns/columns.types pairing must not fail
+      // reads the plain parquet reader would otherwise serve.
+      return;
+    }
+    boolean requestsVariantShapedColumn = false;
+    for (int i = 0; i < ioColumns.size(); i++) {
+      if (requestedColumns.contains(ioColumns.get(i).toLowerCase(Locale.ROOT))) {
+        String type = ioColumnTypes.get(i).toLowerCase(Locale.ROOT);
+        if (type.contains("metadata:binary") && type.contains("value:binary")) {
+          requestsVariantShapedColumn = true;
+          break;
+        }
+      }
+    }
     if (!requestsVariantShapedColumn) {
       return;
     }
