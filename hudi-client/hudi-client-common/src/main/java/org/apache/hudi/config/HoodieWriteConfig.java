@@ -136,6 +136,10 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
 public class HoodieWriteConfig extends HoodieConfig {
   private static final long serialVersionUID = 0L;
 
+  private static final String GZIP_COMPRESSION_CODEC = "gzip";
+  private static final String ZSTD_COMPRESSION_CODEC = "zstd";
+  private static final String MIN_SPARK_VERSION_WITH_ZSTD_DEFAULT = "3.5.0";
+
   // This is a constant as is should never be changed via config (will invalidate previous commits)
   // It is here so that both the client and Hudi Streamer use the same reference
   public static final String STREAMER_CHECKPOINT_KEY = STREAMER_CHECKPOINT_KEY_V1;
@@ -3802,6 +3806,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
+      writeConfig.setDefaultValue(
+          HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME, getDefaultParquetCompressionCodec(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
       // Make sure the props is propagated
@@ -4026,6 +4032,32 @@ public class HoodieWriteConfig extends HoodieConfig {
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
+    }
+  }
+
+  @VisibleForTesting
+  static String getDefaultParquetCompressionCodec(EngineType engineType) {
+    switch (engineType) {
+      case FLINK:
+        return ZSTD_COMPRESSION_CODEC;
+      case SPARK:
+        Option<String> sparkVersion = getSparkRuntimeVersion();
+        return sparkVersion.isPresent()
+            && StringUtils.compareVersions(sparkVersion.get(), MIN_SPARK_VERSION_WITH_ZSTD_DEFAULT) >= 0
+            ? ZSTD_COMPRESSION_CODEC : GZIP_COMPRESSION_CODEC;
+      default:
+        return GZIP_COMPRESSION_CODEC;
+    }
+  }
+
+  private static Option<String> getSparkRuntimeVersion() {
+    try {
+      Class<?> sparkPackageClass = Class.forName("org.apache.spark.package$");
+      Object sparkPackage = sparkPackageClass.getField("MODULE$").get(null);
+      return Option.of((String) sparkPackageClass.getMethod("SPARK_VERSION").invoke(sparkPackage));
+    } catch (ReflectiveOperationException | LinkageError e) {
+      log.debug("Unable to resolve the Spark runtime version; using the legacy Parquet compression codec default: {}", e.toString());
+      return Option.empty();
     }
   }
 

@@ -30,6 +30,7 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_FPP
 import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_TYPE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -76,6 +77,18 @@ public class TestHoodieStorageConfig {
     assertEquals(BLOOM_FILTER_NUM_ENTRIES_VALUE.defaultValue(), storageConfig.getString(BLOOM_FILTER_NUM_ENTRIES_VALUE));
     assertEquals(BLOOM_FILTER_FPP_VALUE.defaultValue(), storageConfig.getString(BLOOM_FILTER_FPP_VALUE));
     assertEquals(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.defaultValue(), storageConfig.getString(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES));
+  }
+
+  @Test
+  void testParquetCompressionCodecIsResolvedByWriteConfig() {
+    HoodieStorageConfig defaultStorageConfig = HoodieStorageConfig.newBuilder().build();
+    assertFalse(defaultStorageConfig.contains(PARQUET_COMPRESSION_CODEC_NAME));
+    assertEquals("zstd", defaultStorageConfig.getStringOrDefault(PARQUET_COMPRESSION_CODEC_NAME));
+
+    HoodieStorageConfig explicitStorageConfig = HoodieStorageConfig.newBuilder()
+        .parquetCompressionCodec("gzip")
+        .build();
+    assertEquals("gzip", explicitStorageConfig.getString(PARQUET_COMPRESSION_CODEC_NAME));
   }
 
   @Test
