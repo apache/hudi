@@ -229,6 +229,35 @@ object TestDataSkippingUtils {
           IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null)
         ),
         Seq("file_1", "file_2")
+      ),
+      // NOTE: file_1 holds no stats for B (for ex, B was added by schema evolution after it was written),
+      //       hence it could hold nulls for B and could NOT be pruned
+      arguments(
+        "B is null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 0),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 1)
+        ),
+        Seq("file_1", "file_3")
+      ),
+      arguments(
+        "B <=> null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 0),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 1)
+        ),
+        Seq("file_1", "file_3")
+      ),
+      arguments(
+        "A = 1 and B is null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_3", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 0)
+        ),
+        Seq("file_1")
       )
     )
   }
