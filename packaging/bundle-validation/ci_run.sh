@@ -174,6 +174,13 @@ if [ -z "$STAGING_REPO_NUM" ] && [ -z "$MAVEN_BASE_URL" ]; then
   cp ${GITHUB_WORKSPACE}/packaging/hudi-cli-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
   cp ${GITHUB_WORKSPACE}/packaging/hudi-hadoop-mr-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
   cp ${GITHUB_WORKSPACE}/packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+  # Only built for the Spark versions Apache DataFusion Comet releases for. Stage it only if
+  # it really carries Comet, so a build where the bundle was skipped is never validated.
+  for nativeBundle in ${GITHUB_WORKSPACE}/packaging/hudi-native-spark-bundle/target/hudi-native-*-$HUDI_VERSION.jar; do
+    if [ -f "$nativeBundle" ] && unzip -l "$nativeBundle" | grep -q 'libcomet'; then
+      cp "$nativeBundle" $TMP_JARS_DIR/
+    fi
+  done
   cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
   cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-slim-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
   echo 'Validating jars below:'
@@ -181,6 +188,8 @@ else
   echo 'Adding environment variables for bundles in the release candidate or artifact'
 
   HUDI_HADOOP_MR_BUNDLE_NAME=hudi-hadoop-mr-bundle
+  # Empty for Spark versions Apache DataFusion Comet has no release for.
+  HUDI_NATIVE_SPARK_BUNDLE_NAME=
   HUDI_KAFKA_CONNECT_BUNDLE_NAME=hudi-kafka-connect-bundle
   HUDI_METASERVER_SERVER_BUNDLE_NAME=hudi-metaserver-server-bundle
 
@@ -192,26 +201,31 @@ else
   elif [[ ${SPARK_PROFILE} == 'spark3.4' ]]; then
     HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.4-bundle_2.12
+    HUDI_NATIVE_SPARK_BUNDLE_NAME=hudi-native-spark3.4-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   elif [[ ${SPARK_PROFILE} == 'spark3.5' && ${SCALA_PROFILE} == 'scala-2.12' ]]; then
     HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.5-bundle_2.12
+    HUDI_NATIVE_SPARK_BUNDLE_NAME=hudi-native-spark3.5-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   elif [[ ${SPARK_PROFILE} == 'spark3.5' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
     HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.13
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.5-bundle_2.13
+    HUDI_NATIVE_SPARK_BUNDLE_NAME=hudi-native-spark3.5-bundle_2.13
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13
   elif [[ ${SPARK_PROFILE} == 'spark4.0' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
     HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.13
     HUDI_SPARK_BUNDLE_NAME=hudi-spark4.0-bundle_2.13
+    HUDI_NATIVE_SPARK_BUNDLE_NAME=hudi-native-spark4.0-bundle_2.13
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13
   elif [[ ${SPARK_PROFILE} == 'spark4.1' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
     HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.13
     HUDI_SPARK_BUNDLE_NAME=hudi-spark4.1-bundle_2.13
+    HUDI_NATIVE_SPARK_BUNDLE_NAME=hudi-native-spark4.1-bundle_2.13
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13
   elif [[ ${SPARK_PROFILE} == 'spark4.2' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
@@ -244,6 +258,9 @@ else
   wget -q $REPO_BASE_URL/$HUDI_HADOOP_MR_BUNDLE_NAME/$HUDI_VERSION/$HUDI_HADOOP_MR_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
   wget -q $REPO_BASE_URL/$HUDI_KAFKA_CONNECT_BUNDLE_NAME/$HUDI_VERSION/$HUDI_KAFKA_CONNECT_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
   wget -q $REPO_BASE_URL/$HUDI_SPARK_BUNDLE_NAME/$HUDI_VERSION/$HUDI_SPARK_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+  if [[ -n "$HUDI_NATIVE_SPARK_BUNDLE_NAME" ]]; then
+    wget -q $REPO_BASE_URL/$HUDI_NATIVE_SPARK_BUNDLE_NAME/$HUDI_VERSION/$HUDI_NATIVE_SPARK_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
+  fi
   wget -q $REPO_BASE_URL/$HUDI_UTILITIES_BUNDLE_NAME/$HUDI_VERSION/$HUDI_UTILITIES_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
   wget -q $REPO_BASE_URL/$HUDI_UTILITIES_SLIM_BUNDLE_NAME/$HUDI_VERSION/$HUDI_UTILITIES_SLIM_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
   wget -q $REPO_BASE_URL/$HUDI_METASERVER_SERVER_BUNDLE_NAME/$HUDI_VERSION/$HUDI_METASERVER_SERVER_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/

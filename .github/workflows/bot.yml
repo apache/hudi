@@ -1310,25 +1310,32 @@ jobs:
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
-  validate-native-bundle:
+  # Every published native bundle coordinate is shaded here. Only the Spark 3.5 lane above runs
+  # it, because Comet's libcomet.so needs a glibc image; this catches shade and dependency breakage
+  # on the other coordinates rather than discovering it on release day.
+  build-native-bundle:
     runs-on: ubuntu-latest
     needs: changes
     strategy:
       matrix:
         include:
           - scalaProfile: 'scala-2.12'
-            sparkProfile: 'spark3.5'
-            sparkRuntime: '3.5.5'
+            sparkProfile: 'spark3.4'
+            javaVersion: '11'
+          - scalaProfile: 'scala-2.13'
+            sparkProfile: 'spark4.0'
+            javaVersion: '17'
+          - scalaProfile: 'scala-2.13'
+            sparkProfile: 'spark4.1'
+            javaVersion: '17'
     steps:
       - if: needs.changes.outputs.relevant == 'true'
         uses: actions/checkout@v5
-      # The bundle builds on Java 11; Comet ships class file version 61 bytecode, so it is only
-      # run on Java 17, inside the glibc image under packaging/bundle-validation/native_spark.
-      - name: Set up JDK 11
+      - name: Set up JDK ${{ matrix.javaVersion }}
         if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
-          java-version: '11'
+          java-version: ${{ matrix.javaVersion }}
           distribution: 'temurin'
           architecture: x64
           cache: maven
@@ -1339,12 +1346,6 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
           mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true -Dmaven.javadoc.skip=true $MVN_ARGS -pl packaging/hudi-native-spark-bundle -am
-      - name: IT - Native Bundle Validation
-        if: needs.changes.outputs.relevant == 'true'
-        env:
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-        run: |
-          ./packaging/bundle-validation/native_spark/ci_run.sh
 
   validate-bundle-spark4:
     runs-on: ubuntu-latest
@@ -1390,7 +1391,7 @@ jobs:
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run: |
-          mvn clean package -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true -Dmaven.javadoc.skip=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-native-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
+          mvn clean package -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true -Dmaven.javadoc.skip=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
       - name: IT - Spark4 Bundle Validation - OpenJDK 17
         if: needs.changes.outputs.relevant == 'true'
         env:

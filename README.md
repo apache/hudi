@@ -153,6 +153,7 @@ publishes artifacts for, and produces nothing for the others.
 | `-Dspark4.0`              | hudi-native-spark4.0-bundle_2.13 | For Spark 4.0 and Scala 2.13                   |
 | `-Dspark4.1`              | hudi-native-spark4.1-bundle_2.13 | For Spark 4.1 and Scala 2.13                   |
 | `-Dspark3.3`, `-Dspark4.2` | none                            | Comet publishes no artifact for these versions |
+| `-Dspark3`                | none                            | Legacy alias; does not activate the Comet profile for 3.5 |
 
 The bundle can be built on Java 11, but requires Java 17 at runtime, and Comet ships Linux native
 libraries only. See `packaging/hudi-native-spark-bundle/README.md`.

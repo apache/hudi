@@ -20,6 +20,11 @@
 Everything in `hudi-spark-bundle`, plus [Apache DataFusion Comet](https://datafusion.apache.org/comet/)
 for native vectorized execution. Use it in place of `hudi-spark-bundle`, not alongside it.
 
+Remove any Comet jar from `--jars` / `spark.jars` and from the cluster's `jars/` directory before
+using this bundle. Comet cannot be relocated, so a second copy at a different version resolves
+per class on a first-jar-wins basis, while `libcomet.so` is picked up as a classpath resource
+independently of which classes won, ending in `UnsatisfiedLinkError` or `NoSuchMethodError`.
+
 ## Supported Spark versions
 
 Comet releases one artifact per Spark minor version, and does not cover everything Hudi builds
@@ -108,6 +113,13 @@ results do not imply native execution. To check what it actually accelerated, lo
 operators in `df.queryExecution.executedPlan`, and set
 `--conf spark.comet.explain.fallback.enabled=true` to log the reason for every operator it
 declined.
+
+## Metrics
+
+Unlike `hudi-spark-bundle`, this bundle neither packages nor relocates the dropwizard metrics
+classes, so Hudi's metrics bind to the copy Spark ships. Relocating them would rewrite Comet's
+`org.apache.spark.CometSource` without rewriting the Spark interface it implements, leaving
+`metricRegistry()` no longer overriding `org.apache.spark.metrics.source.Source`.
 
 ## Shading
 
