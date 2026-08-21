@@ -22,13 +22,16 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -182,6 +185,131 @@ public class TestDistributedRegistry {
     Map<String, Long> metricCounts = registry.getAllCounts();
     Assertions.assertEquals(1, metricCounts.size());
     Assertions.assertEquals(finalExpectedSum, metricCounts.get(METRIC_1));
+  }
+
+  @Test
+  public void testSetThrowsOnExecutor() {
+    // Given: a registry registered to the spark context
+    String registryName = REGISTRY_NAME + "_testSetOnExecutor";
+    Registry registry = engineContext.getMetricRegistry("", registryName);
+
+    List<Integer> data = new ArrayList<>();
+    data.add(1);
+
+    // When/Then: set() invoked on an executor must fail - it is non-commutative under accumulator merges.
+    // The UnsupportedOperationException thrown on the executor surfaces wrapped in a SparkException.
+    assertFailsOnExecutorWith("DistributedRegistry.set() must not be called from a Spark executor", () ->
+        engineContext.map(data, value -> {
+          registry.set(METRIC_1, value);
+          return null;
+        }, 1));
+  }
+
+  @Test
+  public void testReleaseThrowsOnExecutor() {
+    // Given: a registry registered to the spark context
+    String registryName = REGISTRY_NAME + "_testReleaseOnExecutor";
+    Registry registry = engineContext.getMetricRegistry("", registryName);
+
+    List<Integer> data = new ArrayList<>();
+    data.add(1);
+
+    // When/Then: release() invoked on an executor must fail - clamping and eviction are order-dependent
+    // under accumulator merges. The UnsupportedOperationException surfaces wrapped in a SparkException.
+    assertFailsOnExecutorWith("DistributedRegistry.release() must not be called from a Spark executor", () ->
+        engineContext.map(data, value -> {
+          registry.release(Collections.singletonMap(METRIC_1, (long) value));
+          return null;
+        }, 1));
+  }
+
+  /**
+   * Asserts the job failed because the executor-side guard fired, not for some unrelated reason such as a serialization error.
+   */
+  private static void assertFailsOnExecutorWith(String expectedMessage, Executable executable) {
+    SparkException thrown = Assertions.assertThrows(SparkException.class, executable);
+    StringBuilder chain = new StringBuilder();
+    for (Throwable t = thrown; t != null; t = t.getCause()) {
+      chain.append(t).append('\n');
+      if (t.getCause() == t) {
+        break;
+      }
+    }
+    Assertions.assertTrue(chain.toString().contains(expectedMessage),
+        "expected the executor-side guard to fail the job, got: " + chain);
+  }
+
+  @Test
+  public void testSetOnDriverSucceeds() {
+    // set() on the driver (no TaskContext) remains supported.
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testSetOnDriver");
+    registry.set(METRIC_1, 42);
+    Assertions.assertEquals(42, registry.getAllCounts().get(METRIC_1));
+  }
+
+  @Test
+  public void testGetMetricRegistryReplacesNonDistributedRegistry() {
+    // Given: a LocalRegistry already occupies the shared map under this key, as happens when a write
+    // client ran earlier in the same JVM with executor metrics disabled.
+    String registryName = REGISTRY_NAME + "_testLocalRegistryTakeover";
+    Registry local = Registry.getRegistry(registryName);
+    Assertions.assertSame(local, Registry.REGISTRY_MAP.get(Registry.makeKey("", registryName)));
+
+    // When: the same name is resolved as a distributed registry
+    Registry resolved = engineContext.getMetricRegistry("", registryName);
+
+    // Then: the incompatible entry is replaced rather than cast-failing on the way out
+    assertThat(resolved, instanceOf(DistributedRegistry.class));
+    Assertions.assertSame(resolved, Registry.REGISTRY_MAP.get(Registry.makeKey("", registryName)));
+  }
+
+  @Test
+  public void testReleaseEvictsCountersThatReachZero() {
+    // Given: a registry drained of exactly what it holds, as the commit-boundary drain does
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testRelease");
+    registry.add(METRIC_1, 10);
+    registry.add(METRIC_2, 20);
+
+    // When: the full contents are released
+    registry.release(registry.getAllCounts(false));
+
+    // Then: the counters are gone, not left sitting at zero. A zero-valued entry survives
+    // ConcurrentHashMap.merge() and would be republished by every later drain.
+    Assertions.assertTrue(registry.getAllCounts().isEmpty(),
+        "released counters must be evicted, found " + registry.getAllCounts());
+    Assertions.assertTrue(registry.isZero());
+  }
+
+  @Test
+  public void testReleaseKeepsWhatArrivedAfterTheDrain() {
+    // Given: a snapshot taken, and a straggler update folded in before the release lands
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testReleaseStraggler");
+    registry.add(METRIC_1, 10);
+    Map<String, Long> drained = registry.getAllCounts(false);
+    registry.add(METRIC_1, 4);
+
+    // When: the drained counts are released
+    registry.release(drained);
+
+    // Then: only the drained amount is subtracted - the straggler belongs to the next drain
+    Assertions.assertEquals(4L, registry.getAllCounts().get(METRIC_1));
+  }
+
+  @Test
+  public void testReleaseClampsAtZero() {
+    // Given: a registry emptied between the drain and the release. Metrics.shutdown() scrapes every
+    // registry in the process with flush=true, so an unrelated table's write finishing does exactly this.
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testReleaseClamp");
+    registry.add(METRIC_1, 10);
+    Map<String, Long> drained = registry.getAllCounts(false);
+    registry.clear();
+
+    // When: the release lands on a registry that no longer holds those counts
+    registry.release(drained);
+
+    // Then: nothing negative is left behind - a negative counter would be stamped into commit metadata
+    Assertions.assertTrue(registry.getAllCounts().isEmpty(),
+        "an unbounded subtraction would have left " + METRIC_1 + " negative, got " + registry.getAllCounts());
   }
 
   @Test
