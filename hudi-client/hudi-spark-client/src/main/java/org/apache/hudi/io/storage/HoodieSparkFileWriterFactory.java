@@ -66,8 +66,8 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     // hoodie.avro.schema), not the schema argument, so inferable columns are detected on that
     // config schema (the one the splice below targets) intersected with the schema argument's
     // (the shape of the rows being written, which the samples come from). The argument is
-    // checked first because it is already parsed: native log, delete and CDC writers share this
-    // factory with schemas that have no top-level variant, and they must not pay a config-schema
+    // checked first because it is already parsed: delete and CDC writers share this factory
+    // with schemas that have no top-level variant, and they must not pay a config-schema
     // parse per file. The schema argument itself stays original: it flows through the global
     // schema cache (getCachedSchema), which must never see per-file spliced schemas, and its
     // StructType is identical either way (the variant column remains VariantType).

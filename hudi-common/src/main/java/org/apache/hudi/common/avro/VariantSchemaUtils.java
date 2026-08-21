@@ -158,8 +158,8 @@ public class VariantSchemaUtils {
    * vocabulary). Top-level fields only, matching the scope of
    * {@link #getInferableVariantColumns}: inference never shreds a nested variant, and
    * {@code HoodieAvroWriteSupport.applyForcedShreddingSchema} walks top-level fields only. The row
-   * writer can force-shred at depth (see {@link #swapShreddedVariantFields}), a test-only
-   * forced-DDL case this footer fallback does not cover.
+   * writer shreds at any depth its write schema asks it to, forced DDL or not (see
+   * {@link #swapShreddedVariantFields}); those nested layouts are not covered by this fallback.
    *
    * <p>The shape check also admits the spec's two-field {@code {metadata, typed_value}} form (a
    * writer may omit {@code value} when every row is typed). Stripping that would leave a

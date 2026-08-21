@@ -116,9 +116,10 @@ public class TableSchemaResolver {
   }
 
   private Option<HoodieSchema> getTableSchemaFromDataFileInternal() {
-    // typed_value is a per-file physical layout (possibly inferred per file); it must never
-    // surface in the resolved table schema. Footer-derived schemas lose the variant logical
-    // type, so variant columns are also stripped by shape.
+    // typed_value is a per-file physical layout (possibly inferred per file) and is stripped
+    // from the resolved table schema. Footer-derived schemas lose the variant logical type, so
+    // variant columns are also stripped by shape; that fallback walks top-level fields only, so
+    // a nested variant the row writer shredded at depth can still surface here.
     return getTableParquetSchemaFromDataFile()
         .map(VariantSchemaUtils::stripVariantShredding)
         .map(VariantSchemaUtils::stripVariantShreddingByShape);
