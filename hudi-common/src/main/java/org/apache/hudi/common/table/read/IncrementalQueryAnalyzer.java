@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -42,6 +43,7 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -49,6 +51,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * Analyzer for incremental queries on the timeline, to filter instants based on specified ranges
@@ -167,49 +172,143 @@ public class IncrementalQueryAnalyzer {
         return QueryContext.EMPTY;
       }
       HoodieTimeline filteredTimeline = getFilteredTimeline(this.metaClient);
-      List<String> instantTimeList = completionTimeQueryView.getInstantTimes(filteredTimeline, startCompletionTime, endCompletionTime, rangeType);
-      if (instantTimeList.isEmpty()) {
-        // no instants completed within the give time range, returns early.
-        return QueryContext.EMPTY;
+      if (TimelineLayoutVersion.LAYOUT_VERSION_1.equals(metaClient.getTimelineLayoutVersion())) {
+        return analyzeForV1Timeline(filteredTimeline, completionTimeQueryView);
       }
-      // get hoodie instants
-      Pair<List<String>, List<String>> splitInstantTime = splitInstantByActiveness(instantTimeList, completionTimeQueryView);
-      Set<String> instantTimeSet = new HashSet<>(instantTimeList);
-      List<String> archivedInstantTimes = splitInstantTime.getLeft();
-      List<String> activeInstantTimes = splitInstantTime.getRight();
-      List<HoodieInstant> archivedInstants = new ArrayList<>();
-      List<HoodieInstant> activeInstants = new ArrayList<>();
-      HoodieTimeline archivedReadTimeline = null;
-      if (!activeInstantTimes.isEmpty()) {
-        activeInstants = filteredTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.requestedTime())).collect(Collectors.toList());
-        if (limit > 0 && limit < activeInstants.size()) {
-          // streaming read speed limit, limits the maximum number of commits allowed to read for each run
-          activeInstants = activeInstants.subList(0, limit);
-        }
-      }
-      if (!archivedInstantTimes.isEmpty()) {
-        archivedReadTimeline = getArchivedReadTimeline(metaClient, archivedInstantTimes.get(0));
-        archivedInstants = archivedReadTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.requestedTime())).collect(Collectors.toList());
-      }
-      List<String> instants = Stream.concat(archivedInstants.stream(), activeInstants.stream()).map(HoodieInstant::requestedTime).collect(Collectors.toList());
-      if (instants.isEmpty()) {
-        // no instants completed within the give time range, returns early.
-        return QueryContext.EMPTY;
-      }
-      if (startCompletionTime.isEmpty() && endCompletionTime.isPresent()) {
-        instants = Collections.singletonList(instants.get(instants.size() - 1));
-      }
-      String lastInstant = instants.get(instants.size() - 1);
-      // null => if starting from earliest, if no startCompletionTime is specified, start from the latest instant like usual streaming read semantics.
-      // if startCompletionTime is neither, then use the earliest instant as the start instant.
-      String startInstant = START_COMMIT_EARLIEST.equalsIgnoreCase(startCompletionTime.orElse(null)) ? null :
-          startCompletionTime.isEmpty() ? lastInstant : instants.get(0);
-      String endInstant = endCompletionTime.isEmpty() ? null : lastInstant;
-      return QueryContext.create(startInstant, endInstant, instants, archivedInstants, activeInstants, filteredTimeline, archivedReadTimeline);
+      return analyzeForV2Timeline(filteredTimeline, completionTimeQueryView);
     } catch (Exception ex) {
       log.error("Got exception when generating incremental query info", ex);
       throw new HoodieException(ex);
     }
+  }
+
+  private QueryContext analyzeForV1Timeline(
+      HoodieTimeline filteredTimeline,
+      CompletionTimeQueryView completionTimeQueryView) {
+    final boolean startFromEarliest = START_COMMIT_EARLIEST.equalsIgnoreCase(startCompletionTime.orElse(null));
+    final Option<String> effectiveStart = startFromEarliest ? Option.empty() : startCompletionTime;
+    final HoodieTimeline completedTimeline = filteredTimeline.filterCompletedInstants();
+
+    if (effectiveStart.isEmpty() && endCompletionTime.isEmpty()) {
+      // (_, _) reads the latest completed instant while [earliest, +INF] is a snapshot read.
+      List<HoodieInstant> activeInstants = completedTimeline.lastInstant()
+          .map(Collections::singletonList)
+          .orElse(Collections.emptyList());
+      return createQueryContext(Collections.emptyList(), activeInstants, filteredTimeline, null);
+    }
+
+    List<HoodieInstant> archivedInstants = Collections.emptyList();
+    List<HoodieInstant> activeInstants;
+    HoodieTimeline archivedReadTimeline = null;
+
+    if (startCompletionTime.isEmpty() && endCompletionTime.isPresent()) {
+      // (_, end] returns the last eligible instant at or before end. Check the filtered active
+      // timeline first and only load the archive when there is no active match.
+      activeInstants = getLastInstantAtOrBefore(completedTimeline, endCompletionTime.get());
+      if (activeInstants.isEmpty()) {
+        archivedReadTimeline = getArchivedReadTimeline(metaClient, "");
+        archivedInstants = getLastInstantAtOrBefore(archivedReadTimeline, endCompletionTime.get());
+      }
+    } else {
+      InstantRange instantRange = InstantRange.builder()
+          .rangeType(rangeType)
+          .startInstant(effectiveStart.orElse(null))
+          .endInstant(endCompletionTime.orElse(null))
+          .nullableBoundary(true)
+          .build();
+      activeInstants = getInstantsInRange(completedTimeline, instantRange);
+
+      boolean needsArchivedInstants = startFromEarliest
+          || (effectiveStart.isPresent() && completionTimeQueryView.isArchived(effectiveStart.get()));
+      if (needsArchivedInstants) {
+        archivedReadTimeline = getArchivedReadTimeline(metaClient, effectiveStart.orElse(""));
+        archivedInstants = getInstantsInRange(archivedReadTimeline, instantRange);
+      }
+    }
+
+    return createQueryContext(
+        archivedInstants, activeInstants, filteredTimeline, archivedReadTimeline);
+  }
+
+  private QueryContext analyzeForV2Timeline(
+      HoodieTimeline filteredTimeline,
+      CompletionTimeQueryView completionTimeQueryView) {
+    List<String> instantTimeList = completionTimeQueryView.getInstantTimes(
+        filteredTimeline, startCompletionTime, endCompletionTime, rangeType);
+    if (instantTimeList.isEmpty()) {
+      // no instants completed within the given time range, returns early.
+      return QueryContext.EMPTY;
+    }
+
+    Pair<List<String>, List<String>> splitInstantTime = splitInstantByActiveness(
+        instantTimeList, completionTimeQueryView);
+    Set<String> instantTimeSet = new HashSet<>(instantTimeList);
+    List<String> archivedInstantTimes = splitInstantTime.getLeft();
+    List<String> activeInstantTimes = splitInstantTime.getRight();
+    List<HoodieInstant> archivedInstants = new ArrayList<>();
+    List<HoodieInstant> activeInstants = new ArrayList<>();
+    HoodieTimeline archivedReadTimeline = null;
+    if (!activeInstantTimes.isEmpty()) {
+      activeInstants = filteredTimeline.getInstantsAsStream()
+          .filter(instant -> instantTimeSet.contains(instant.requestedTime()))
+          .collect(Collectors.toList());
+    }
+    if (!archivedInstantTimes.isEmpty()) {
+      archivedReadTimeline = getArchivedReadTimeline(metaClient, archivedInstantTimes.get(0));
+      archivedInstants = archivedReadTimeline.getInstantsAsStream()
+          .filter(instant -> instantTimeSet.contains(instant.requestedTime()))
+          .collect(Collectors.toList());
+    }
+    return createQueryContext(
+        archivedInstants, activeInstants, filteredTimeline, archivedReadTimeline);
+  }
+
+  private QueryContext createQueryContext(
+      List<HoodieInstant> archivedInstants,
+      List<HoodieInstant> activeInstants,
+      HoodieTimeline filteredTimeline,
+      @Nullable HoodieTimeline archivedReadTimeline) {
+    if (limit > 0 && limit < activeInstants.size()) {
+      // streaming read speed limit, limits the maximum number of active commits allowed per run
+      activeInstants = activeInstants.subList(0, limit);
+    }
+    List<String> instants = Stream.concat(archivedInstants.stream(), activeInstants.stream())
+        .map(HoodieInstant::requestedTime)
+        .collect(Collectors.toList());
+    if (instants.isEmpty()) {
+      // no instants completed within the given time range, returns early.
+      return QueryContext.EMPTY;
+    }
+    if (startCompletionTime.isEmpty() && endCompletionTime.isPresent()) {
+      instants = Collections.singletonList(instants.get(instants.size() - 1));
+    }
+    String lastInstant = instants.get(instants.size() - 1);
+    // null => if starting from earliest. If no startCompletionTime is specified, start from the
+    // latest instant like usual streaming read semantics. Otherwise use the earliest selected instant.
+    String startInstant = START_COMMIT_EARLIEST.equalsIgnoreCase(startCompletionTime.orElse(null)) ? null :
+        startCompletionTime.isEmpty() ? lastInstant : instants.get(0);
+    String endInstant = endCompletionTime.isEmpty() ? null : lastInstant;
+    return QueryContext.create(
+        startInstant, endInstant, instants, archivedInstants, activeInstants,
+        filteredTimeline, archivedReadTimeline);
+  }
+
+  private static List<HoodieInstant> getInstantsInRange(
+      HoodieTimeline timeline, InstantRange instantRange) {
+    return timeline.getInstantsAsStream()
+        .filter(instant -> instantRange.isInRange(instant.requestedTime()))
+        .sorted(Comparator.comparing(HoodieInstant::requestedTime))
+        .collect(Collectors.toList());
+  }
+
+  private static List<HoodieInstant> getLastInstantAtOrBefore(
+      HoodieTimeline timeline, String endInstant) {
+    return timeline.getInstantsAsStream()
+        .filter(instant -> compareTimestamps(
+            instant.requestedTime(), LESSER_THAN_OR_EQUALS, endInstant))
+        .max(Comparator.comparing(HoodieInstant::requestedTime))
+        .map(Collections::singletonList)
+        .orElse(Collections.emptyList());
   }
 
   /**
