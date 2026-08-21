@@ -26,6 +26,10 @@ package org.apache.hudi.util
  *
  * NOTE: [[hasNext]] and [[next]] are purposefully marked as final, requiring iteration
  *       semantic to be implemented t/h overriding of a single [[doHasNext]] method
+ *
+ * TODO: this Scala trait has no production users -- the reader path uses the Java
+ *       [[org.apache.hudi.common.util.collection.CachingIterator]] instead. Candidate for
+ *       removal in a follow-up cleanup.
  */
 trait CachingIterator[T >: Null] extends Iterator[T] {
 
