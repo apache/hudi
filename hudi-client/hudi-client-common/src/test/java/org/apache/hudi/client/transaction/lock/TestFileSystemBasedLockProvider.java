@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.fs.FileAlreadyExistsException;
@@ -106,7 +107,7 @@ public class TestFileSystemBasedLockProvider {
    * {@code synchronized ("lock")} anywhere in the JVM.
    */
   @Test
-  public void testAcquisitionIsNotBlockedByTheInternedLockLiteral() throws Exception {
+  public void testAcquisitionIsNotBlockedByInternedLockLiteral() throws Exception {
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
     FileSystemBasedLockProvider provider =
         new FileSystemBasedLockProvider(lockConfiguration(lockDir("interned"), 0), storageConf);
@@ -197,7 +198,7 @@ public class TestFileSystemBasedLockProvider {
    * semantics directly: a second create must fail and must leave the winner's payload untouched.
    */
   @Test
-  public void testAcquireLockRefusesToOverwriteAnExistingLockFile() {
+  public void testAcquireLockRefusesToOverwriteExistingLockFile() {
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
     LockConfiguration config = lockConfiguration(lockDir("atomiccreate"), 0);
     FileSystemBasedLockProvider winner = new FileSystemBasedLockProvider(config, storageConf);
@@ -224,12 +225,12 @@ public class TestFileSystemBasedLockProvider {
   }
 
   /**
-   * The class declares {@link java.io.Serializable} but could never actually serialize once it had
-   * locked: the lockInfo field held a non-serializable {@code LockInfo} (since HUDI-5377), so every
-   * attempt threw {@code NotSerializableException}. The mutable helpers are transient now; a round
-   * trip of a lock-holding provider must work. Serializing while the lock is held is the pin -- before
-   * the first acquisition the field is still null, and null serializes regardless of the modifier.
-   * The copy's storage handles are transient and stay null, as they were before this change.
+   * The class declares {@link java.io.Serializable} but could never actually serialize: the
+   * constructor built a non-serializable {@code LockInfo} eagerly (since HUDI-5377), so every
+   * instance threw {@code NotSerializableException}. The mutable helpers are transient and lazy now;
+   * a round trip of a lock-holding provider must work. Serializing while the lock is held is the
+   * pin -- post-fix the field is null until first acquisition, and null serializes regardless of the
+   * modifier. The copy's storage handles are transient and stay null, as they were before this change.
    */
   @Test
   public void testJavaSerializationRoundTrip() throws Exception {
@@ -261,7 +262,10 @@ public class TestFileSystemBasedLockProvider {
    */
   @Test
   public void testReloadClearsOwnerWhenLockFileVanishesAfterExistsCheck() {
+    // Deliberately a per-test conf: the hoodie.storage.class mutation must never be shared with other
+    // tests, and the FS cache is disabled so the fork-wide FileSystem cache cannot retain the conf.
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    storageConf.set("fs.file.impl.disable.cache", "true");
     storageConf.set(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key(), VanishingLockFileStorage.class.getName());
     FileSystemBasedLockProvider provider =
         new FileSystemBasedLockProvider(lockConfiguration(lockDir("vanish"), 0), storageConf);
@@ -272,15 +276,61 @@ public class TestFileSystemBasedLockProvider {
   }
 
   /**
+   * A real IO failure must not be mistaken for a missing lock file: only {@code FileNotFoundException}
+   * clears the owner info, anything else escapes as {@code HoodieIOException} so the caller keeps the
+   * last known owner. Widening the reload's catch to plain {@code IOException} must fail this.
+   */
+  @Test
+  public void testReloadPropagatesNonMissingFileFailures() {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    storageConf.set("fs.file.impl.disable.cache", "true");
+    storageConf.set(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key(), FailingOpenStorage.class.getName());
+    FileSystemBasedLockProvider provider =
+        new FileSystemBasedLockProvider(lockConfiguration(lockDir("ioerror"), 0), storageConf);
+    assertThrows(HoodieIOException.class, provider::reloadCurrentOwnerLockInfo,
+        "an IO failure that is not a missing file must escape, not silently clear the owner info");
+  }
+
+  /**
+   * A failing stat on the lock file must degrade to "not expired": the holder keeps the lock and the
+   * contender loses cleanly while still reporting who holds it. Treating the failure as expired would
+   * steal a live lock; rethrowing would skip the owner-info reload.
+   */
+  @Test
+  public void testStatFailureDuringExpiryCheckDoesNotStealLock() throws Exception {
+    String path = lockDir("statfail");
+    FileSystemBasedLockProvider holder =
+        new FileSystemBasedLockProvider(lockConfiguration(path, 1), HoodieTestUtils.getDefaultStorageConf());
+    StorageConfiguration<?> stubConf = HoodieTestUtils.getDefaultStorageConf();
+    stubConf.set("fs.file.impl.disable.cache", "true");
+    stubConf.set(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key(), FailingGetPathInfoStorage.class.getName());
+    FileSystemBasedLockProvider contender =
+        new FileSystemBasedLockProvider(lockConfiguration(path, 1), stubConf);
+    try {
+      assertTrue(holder.tryLock(1, TimeUnit.SECONDS));
+      assertFalse(contender.tryLock(1, TimeUnit.SECONDS),
+          "a stat failure must not let the contender treat a live lock as expired");
+      assertTrue(Files.exists(tempDir.resolve("statfail").resolve("lock")),
+          "the holder's lock file must survive the contender's failed expiry check");
+      assertFalse(contender.getCurrentOwnerLockInfo().isEmpty(),
+          "the loser must still report the current owner");
+    } finally {
+      holder.unlock();
+      holder.close();
+      contender.close();
+    }
+  }
+
+  /**
    * The catch in {@code tryLock} is the cross-process loser outcome: a failing create must surface as
    * a clean false, not as an exception. Pointing the lock directory at an existing regular file makes
    * {@code exists()} on {@code <file>/lock} false and the create fail deterministically.
    */
   @Test
-  public void testTryLockReturnsFalseWhenTheCreateFails() throws Exception {
+  public void testTryLockReturnsFalseWhenCreateFails() throws Exception {
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
     Path plainFile = tempDir.resolve("plainfile");
-    Files.write(plainFile, new byte[] {1});
+    Files.createFile(plainFile);
     FileSystemBasedLockProvider provider =
         new FileSystemBasedLockProvider(lockConfiguration(plainFile.toString(), 0), storageConf);
     try {
@@ -417,9 +467,10 @@ public class TestFileSystemBasedLockProvider {
 
   /**
    * Storage whose {@code exists()} always says true while {@code open()} reports the file missing,
-   * simulating a lock file deleted between the two calls. Loaded reflectively via
-   * {@code hoodie.storage.class}, hence public static with the {@code (StoragePath,
-   * StorageConfiguration)} constructor.
+   * simulating a lock file deleted between the two calls. The {@code exists()} override only matters
+   * to regressed reload shapes that re-add an existence precheck; the fixed reload never calls it.
+   * Loaded reflectively via {@code hoodie.storage.class}, hence public static with the
+   * {@code (StoragePath, StorageConfiguration)} constructor.
    */
   public static class VanishingLockFileStorage extends HoodieHadoopStorage {
     public VanishingLockFileStorage(StoragePath path, StorageConfiguration<?> conf) {
@@ -434,6 +485,30 @@ public class TestFileSystemBasedLockProvider {
     @Override
     public InputStream open(StoragePath path) throws IOException {
       throw new FileNotFoundException("vanished: " + path);
+    }
+  }
+
+  /** Storage whose {@code open()} fails with a plain IO error, never a missing-file signal. */
+  public static class FailingOpenStorage extends HoodieHadoopStorage {
+    public FailingOpenStorage(StoragePath path, StorageConfiguration<?> conf) {
+      super(path, conf);
+    }
+
+    @Override
+    public InputStream open(StoragePath path) throws IOException {
+      throw new IOException("simulated IO failure: " + path);
+    }
+  }
+
+  /** Storage whose {@code getPathInfo()} always fails, simulating a stat error during expiry checks. */
+  public static class FailingGetPathInfoStorage extends HoodieHadoopStorage {
+    public FailingGetPathInfoStorage(StoragePath path, StorageConfiguration<?> conf) {
+      super(path, conf);
+    }
+
+    @Override
+    public StoragePathInfo getPathInfo(StoragePath path) throws IOException {
+      throw new IOException("simulated stat failure: " + path);
     }
   }
 }

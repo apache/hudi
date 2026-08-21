@@ -75,10 +75,11 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
    * object cannot be aliased that way.
    *
    * <p>Kept static so that, within a classloader, the mutual-exclusion scope is unchanged by this fix.
-   * The interned literal was additionally shared across classloaders. Losing that wider scope only
-   * affects the expiry-reclaim sequence in {@code tryLock} (exists, checkIfExpired, delete, create),
-   * which the atomic create does not protect and which is already unsafe across processes, the normal
-   * multi-writer deployment; the monitor never made it safe. Cross-process mutual exclusion rests
+   * The interned literal was additionally shared across classloaders. Losing that wider scope matters
+   * only for what the exclusive create does not protect: the expiry-reclaim sequence in
+   * {@code tryLock} (exists, checkIfExpired, delete, create) everywhere, plus the exists-then-create
+   * window on a store whose create is not atomic. Both are already unsafe across processes, the
+   * normal multi-writer deployment; the monitor never made them safe. Cross-process mutual exclusion rests
    * entirely on the exclusive-mode {@code storage.create(path, false)} in {@code acquireLock} being
    * atomic on the underlying store, which HDFS guarantees and local FS does not (its create is a
    * check-then-act); this monitor is defense in depth for in-JVM callers, not the correctness
@@ -89,9 +90,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   private final transient HoodieStorage storage;
   private final transient StoragePath lockFile;
   protected LockConfiguration lockConfiguration;
-  // Transient because LockInfo is not Serializable, which made any lock-holding provider throw
-  // NotSerializableException on Spark closure capture (the HUDI-7782 bug class). Null-guarded in
-  // initLockInfo() for the deserialized copy; such a copy still cannot lock, since storage and
+  // Transient because LockInfo is not Serializable and the constructor used to build it eagerly, so
+  // every instance failed Spark closure capture with NotSerializableException (the HUDI-7782 bug
+  // class); no serialized form predating the pinned serialVersionUID can therefore exist. Null-guarded
+  // in initLockInfo() for the deserialized copy; such a copy still cannot lock, since storage and
   // lockFile are transient with no readObject to rebuild them, as before this change.
   private transient SimpleDateFormat sdf;
   private transient LockInfo lockInfo;
@@ -103,7 +105,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
    * plugged-in caller may read it from another thread, which is what the modifier is for.
    */
   @Getter
-  private volatile String currentOwnerLockInfo;
+  private volatile String currentOwnerLockInfo = "";
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
     checkRequiredProps(lockConfiguration);
@@ -221,15 +223,20 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   public void initLockInfo() {
-    if (lockInfo == null) {
-      lockInfo = new LockInfo();
+    // Guarded: sdf and lockInfo are lazily built and SimpleDateFormat is not thread safe; the monitor
+    // also safely publishes them to any off-monitor caller of this public method, a guarantee the
+    // fields' former final modifier used to give for free.
+    synchronized (LOCK_FILE_MONITOR) {
+      if (lockInfo == null) {
+        lockInfo = new LockInfo();
+      }
+      if (sdf == null) {
+        sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+      }
+      lockInfo.setLockCreateTime(sdf.format(System.currentTimeMillis()));
+      lockInfo.setLockThreadName(Thread.currentThread().getName());
+      lockInfo.setLockStacksInfo(Thread.currentThread().getStackTrace());
     }
-    if (sdf == null) {
-      sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-    }
-    lockInfo.setLockCreateTime(sdf.format(System.currentTimeMillis()));
-    lockInfo.setLockThreadName(Thread.currentThread().getName());
-    lockInfo.setLockStacksInfo(Thread.currentThread().getStackTrace());
   }
 
   /**
