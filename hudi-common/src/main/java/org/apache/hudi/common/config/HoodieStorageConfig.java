@@ -312,8 +312,9 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "stay unshredded and shred at compaction. Up to 4096 records or 64MB are buffered per "
           + "open file writer before the writer is created, on top of parquet's own row-group "
           + "buffer, so size executor memory for concurrently open handles accordingly. Ignored when "
-          + "hoodie.parquet.variant.force.shredding.schema.for.test is set or when write shredding "
-          + "is disabled.");
+          + "hoodie.parquet.variant.force.shredding.schema.for.test is set, when write shredding "
+          + "is disabled, or when the table has a schema-on-read internal schema "
+          + "(hoodie.internal.schema).");
 
   public static final ConfigProperty<Boolean> WRITE_UTC_TIMEZONE = ConfigProperty
       .key("hoodie.parquet.write.utc-timezone.enabled")
