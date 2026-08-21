@@ -33,8 +33,9 @@
     <javax.servlet.version>3.1.0</javax.servlet.version>
     <!-- Apache DataFusion Comet releases one artifact per Spark minor version, and does not
          cover every Spark version Hudi builds against. Default to producing nothing, so that a
-         build for an uncovered Spark version yields no bundle at all rather than one named
-         "native" that carries no native code. The comet-spark<version> profiles below opt in. -->
+         build for an uncovered Spark version yields no bundle rather than one named "native" that
+         carries no native code. A sources jar is still produced, but nothing is installed or
+         deployed. The comet-spark<version> profiles below opt in. -->
     <hudi.native.bundle.skip>true</hudi.native.bundle.skip>
     <hudi.native.bundle.jar.phase>none</hudi.native.bundle.jar.phase>
     <maven.install.skip>${hudi.native.bundle.skip}</maven.install.skip>
@@ -130,9 +131,14 @@
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>com.twitter:chill-protobuf</include>
 
-                  <include>io.dropwizard.metrics:metrics-core</include>
-                  <include>io.dropwizard.metrics:metrics-graphite</include>
-                  <include>io.dropwizard.metrics:metrics-jmx</include>
+                  <!-- NOTE: unlike hudi-spark-bundle, dropwizard metrics are neither bundled nor
+                             relocated here, and Hudi's metrics resolve against the copy Spark ships.
+                             Comet's org.apache.spark.CometSource implements Spark's
+                             org.apache.spark.metrics.source.Source, whose metricRegistry() returns
+                             com.codahale.metrics.MetricRegistry. Relocating that package rewrites
+                             Comet's implementation but not the interface it implements, so the
+                             override is lost and Spark throws AbstractMethodError when registering
+                             the source under spark.comet.metrics.enabled. -->
                   <include>io.prometheus:simpleclient</include>
                   <include>io.prometheus:simpleclient_httpserver</include>
                   <include>io.prometheus:simpleclient_dropwizard</include>
@@ -205,10 +211,6 @@
                   <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hadoop.hive.service.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>com.codahale.metrics.</pattern>
-                  <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.commons.codec.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
                 </relocation>
@@ -226,6 +228,16 @@
                 </relocation>
               </relocations>
               <filters>
+                <filter>
+                  <!-- Comet ships Arrow and Guava relocated under org.apache.comet.shaded but keeps
+                       their original META-INF/maven descriptors, which misreports the bundled
+                       versions to anything that probes them. -->
+                  <artifact>org.apache.datafusion:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/maven/org.apache.arrow/**</exclude>
+                    <exclude>META-INF/maven/com.google.guava/**</exclude>
+                  </excludes>
+                </filter>
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>
