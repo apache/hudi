@@ -82,6 +82,9 @@ public class SparkInternalSchemaConverter {
   public static final String HOODIE_QUERY_SCHEMA = "hoodie.schema.internal.querySchema";
   public static final String HOODIE_TABLE_PATH = "hoodie.tablePath";
   public static final String HOODIE_VALID_COMMITS_LIST = "hoodie.valid.commits.list";
+  // Mirrors Spark's VariantMetadata.METADATA_KEY (Spark 4.x only), referenced by literal
+  // because the class does not exist on Spark 3 classpaths.
+  private static final String SPARK_VARIANT_METADATA_KEY = "__VARIANT_METADATA_KEY";
 
   public static Type buildTypeFromStructType(DataType sparkType, Boolean firstVisitRoot, AtomicInteger nextId) {
     if (sparkType instanceof StructType) {
@@ -175,6 +178,12 @@ public class SparkInternalSchemaConverter {
 
   private static void collectColNamesFromStructType(DataType sparkType, Deque<String> fieldNames, List<String> resultSet) {
     if (sparkType instanceof StructType) {
+      if (isVariantRewriteStruct(sparkType)) {
+        // Spark's PushVariantIntoScan (4.x) replaced a variant column with a struct of
+        // ordinal-named extraction fields that exist nowhere in the internal schema, which
+        // models the variant atomically; addFullName prunes at the column itself.
+        return;
+      }
       StructField[] fields = ((StructType) sparkType).fields();
       for (StructField f : fields) {
         fieldNames.push(f.name());
@@ -211,9 +220,30 @@ public class SparkInternalSchemaConverter {
   }
 
   private static void addFullName(DataType sparkType, String name, Deque<String> fieldNames, List<String> resultSet) {
-    if (!(sparkType instanceof StructType) && !(sparkType instanceof ArrayType) && !(sparkType instanceof MapType)) {
+    boolean isLeaf = !(sparkType instanceof StructType) && !(sparkType instanceof ArrayType) && !(sparkType instanceof MapType);
+    if (isLeaf || isVariantRewriteStruct(sparkType)) {
       resultSet.add(InternalSchemaUtils.createFullName(name, fieldNames));
     }
+  }
+
+  /**
+   * Whether Spark's PushVariantIntoScan rewrote a variant column into this struct of requested
+   * extraction fields; every member carries the marker metadata.
+   */
+  private static boolean isVariantRewriteStruct(DataType sparkType) {
+    if (!(sparkType instanceof StructType)) {
+      return false;
+    }
+    StructField[] fields = ((StructType) sparkType).fields();
+    if (fields.length == 0) {
+      return false;
+    }
+    for (StructField field : fields) {
+      if (!field.metadata().contains(SPARK_VARIANT_METADATA_KEY)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   public static StructType mergeSchema(InternalSchema fileSchema, InternalSchema querySchema) {
