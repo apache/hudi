@@ -249,12 +249,29 @@ mvn test -Dscala-2.13 -Dspark4.2 -pl hudi-spark-datasource/hudi-spark4.2.x
 ```
 
 Then confirm the versions you did not touch still build, since shared-code changes made for the new
-version are the usual way older ones break:
+version are the usual way older ones break. Rebuild every version that shares a module you changed,
+not a sample of them:
+
+| module you changed | versions to rebuild |
+| --- | --- |
+| `hudi-spark-common` | all six |
+| `hudi-spark3-common` | 3.3, 3.4, 3.5 |
+| `hudi-spark4-common` | 4.0, 4.1, 4.2 |
 
 ```shell
-mvn clean install -Dspark3.5 -DskipTests
-mvn clean install -Dscala-2.13 -Dspark4.0 -DskipTests
+# Spark 3.x builds against Scala 2.12
+for p in spark3.3 spark3.4 spark3.5; do
+  mvn clean install -D$p -DskipTests || { echo "FAILED: $p"; break; }
+done
+
+# Spark 4.x pins Scala 2.13
+for p in spark4.0 spark4.1 spark4.2; do
+  mvn clean install -Dscala-2.13 -D$p -DskipTests || { echo "FAILED: $p"; break; }
+done
 ```
+
+Each pass is a full build, so this is slow. It is still cheaper than a shared-module break reaching
+a release, which is the failure this step exists to catch.
 
 Finally build the bundle the profile is meant to produce and check its name:
 
