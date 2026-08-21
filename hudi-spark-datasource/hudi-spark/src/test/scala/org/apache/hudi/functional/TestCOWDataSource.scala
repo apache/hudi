@@ -26,9 +26,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecord, HoodieReplaceCommitMetadata, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieReplaceCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.schema.HoodieSchemaCompatibilityChecker.SchemaIncompatibilityType
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
@@ -37,7 +37,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_FILE_NAME_GENER
 import org.apache.hudi.common.util.{ClusteringUtils, Option}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
-import org.apache.hudi.exception.{HoodieException, SchemaBackwardsCompatibilityException}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
@@ -1966,11 +1966,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(0, result.filter(result("id") === 1).count())
   }
 
-  /** Test case to verify MAKE_NEW_COLUMNS_NULLABLE config parameter. */
-  @Test
-  def testSchemaEvolutionWithNewColumn(): Unit = {
-    val df1 = spark.sql("select '1' as event_id, '2' as ts, '3' as version, 'foo' as event_date")
-    var hudiOptions = Map[String, String](
+  @ParameterizedTest
+  @CsvSource(value = Array("false,false", "false,true", "true,false", "true,true"))
+  def testSchemaEvolutionWithNewColumns(schemaOnRead: Boolean, reconcileSchema: Boolean): Unit = {
+    val df1 = spark.sql(
+      "select '1' as event_id, '2' as ts, '3' as version, named_struct('city', 'Paris') as address")
+    val hudiOptions = Map[String, String](
       HoodieWriteConfig.TBL_NAME.key() -> "test_hudi_merger",
       KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> "event_id",
       KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> "version",
@@ -1979,35 +1980,40 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() -> "org.apache.hudi.keygen.ComplexKeyGenerator",
       KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key() -> "true",
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key() -> "false",
-      HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key() -> "org.apache.hudi.DefaultSparkRecordMerger"
+      HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key() -> "org.apache.hudi.DefaultSparkRecordMerger",
+      HoodieCommonConfig.RECONCILE_SCHEMA.key() -> reconcileSchema.toString,
+      HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaOnRead.toString
     )
     df1.write.format("hudi").options(hudiOptions).mode(SaveMode.Append).save(basePath)
 
-    // Try adding a string column. This operation is expected to throw 'schema not compatible' exception since
-    // 'MAKE_NEW_COLUMNS_NULLABLE' parameter is 'false' by default.
-    val df2 = spark.sql("select '2' as event_id, '2' as ts, '3' as version, 'foo' as event_date, 'bar' as add_col")
-    try {
-      (df2.write.format("hudi").options(hudiOptions).mode("append").save(basePath))
-      fail("Option succeeded, but was expected to fail.")
-    } catch {
-      case ex: SchemaBackwardsCompatibilityException => {
-        assertTrue(ex.getMessage.contains(SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE.name()))
-      }
-      case ex: Exception => {
-        fail(ex)
-      }
+    val df2 = spark.sql(
+      "select '2' as event_id, '2' as ts, '3' as version, "
+        + "named_struct('city', 'Berlin', 'country', 'DE') as address, '123' as phone")
+
+    df2.write.format("hudi").options(hudiOptions).mode("append").save(basePath)
+
+    val metaClient = createMetaClient(basePath)
+    val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
+    val commitMetadata = timeline.readCommitMetadata(timeline.lastInstant().get())
+    val committedSchema = HoodieSchema.parse(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
+    val phoneField = committedSchema.getField("phone").get()
+    val countryField = committedSchema.getField("address").get().schema()
+      .getNonNullType.getField("country").get()
+    Seq(phoneField, countryField).foreach { field =>
+      assertTrue(field.isNullable)
+      assertTrue(field.hasDefaultValue)
+      assertEquals(HoodieSchema.NULL_VALUE, field.defaultVal().get())
     }
 
-    // Try adding the string column again. This operation is expected to succeed since 'MAKE_NEW_COLUMNS_NULLABLE'
-    // parameter has been set to 'true'.
-    hudiOptions = hudiOptions + (HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key() -> "true")
-    try {
-      (df2.write.format("hudi").options(hudiOptions).mode("append").save(basePath))
-    } catch {
-      case ex: Exception => {
-        fail(ex)
-      }
-    }
+    val rows = spark.read.format("hudi").load(basePath)
+      .select("event_id", "phone", "address")
+      .orderBy("event_id")
+      .collect()
+    assertEquals(2, rows.length)
+    assertEquals(null, rows(0).getAs[String]("phone"))
+    assertEquals(null, rows(0).getAs[Row]("address").getAs[String]("country"))
+    assertEquals("123", rows(1).getAs[String]("phone"))
+    assertEquals("DE", rows(1).getAs[Row]("address").getAs[String]("country"))
   }
 
   def assertLastCommitIsUpsert(): Boolean = {
