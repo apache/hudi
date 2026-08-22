@@ -127,9 +127,9 @@
     <hive.version>2.3.10</hive.version>
     <!-- The thrift artifacts the Hive client jars above are compiled against (Hive 2.3.10
          bumped libthrift for CVE-2020-13949); keep in lockstep with hive.version. The spark4
-         profiles override hive.libthrift.version to the libthrift Spark 4.x itself ships with
-         the same Hive 2.3.10 client, so the pin never downgrades the Spark-selected version.
-         See #19680. -->
+         profiles override this to the libthrift version Spark 4.x ships (0.16.0), which pairs
+         with the same Hive 2.3.10 client, so the pin never downgrades the Spark-selected
+         version. See #19680. -->
     <hive.libthrift.version>0.14.1</hive.libthrift.version>
     <hive.libfb303.version>0.9.3</hive.libfb303.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
