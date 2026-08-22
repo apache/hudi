@@ -254,11 +254,14 @@ public class KeyGenUtils {
         if (encodePartitionPath) {
           fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
         }
+        // NOTE: See [[slashSeparateDateValue]] on which dashes suppress the substitution. It runs
+        //       before the hive-style prefix so that the guard inspects the bare value, matching
+        //       [[PartitionPathFormatterBase#combine]] -- on "dt=-5" no guard could ever fire
+        if (partitionPathFields.size() == 1 && slashSeparatedDatePartitioning) {
+          fieldVal = slashSeparateDateValue(fieldVal);
+        }
         if (hiveStylePartitioning) {
           fieldVal = partitionPathField + "=" + fieldVal;
-        }
-        if (partitionPathFields.size() == 1 && slashSeparatedDatePartitioning) {
-          fieldVal = fieldVal.replace('-', '/');
         }
         partitionPath.append(fieldVal);
       }
@@ -288,13 +291,54 @@ public class KeyGenUtils {
     if (encodePartitionPath) {
       partitionPath = PartitionPathEncodeUtils.escapePathName(partitionPath);
     }
+    // NOTE: See [[slashSeparateDateValue]] on which dashes suppress the substitution. It runs
+    //       before the hive-style prefix so that the guard inspects the bare value, matching
+    //       [[PartitionPathFormatterBase#combine]] -- on "dt=-5" no guard could ever fire
+    if (slashSeparatedDatePartitioning) {
+      partitionPath = slashSeparateDateValue(partitionPath);
+    }
     if (hiveStylePartitioning) {
       partitionPath = partitionPathField + "=" + partitionPath;
     }
-    if (slashSeparatedDatePartitioning) {
-      partitionPath = partitionPath.replace('-', '/');
-    }
     return partitionPath;
+  }
+
+  /**
+   * Turns a {@code yyyy-MM-dd} formatted date value into the {@code yyyy/MM/dd} directory structure
+   * requested by {@code hoodie.datasource.write.slash.separated.date.partitioning}.
+   *
+   * <p>A value whose dashes would produce a leading, trailing or doubled {@code "/"} is returned
+   * as-is, because the resulting path does not survive the round trip back from storage:
+   *
+   * <ul>
+   *   <li>leading -- {@code "-5"} becomes {@code "/5"}, and an absolute relative-partition-path is
+   *   resolved inconsistently: {@code FSUtils#constructAbsolutePath(String, String)} chops the
+   *   leading {@code "/"} while the {@link org.apache.hudi.storage.StoragePath} overload used by
+   *   {@code AbstractTableFileSystemView} lets it URI-resolve away the table base path (the writer
+   *   lands in {@code "<base>/5"} but the file-system view in {@code "/5"}, and {@code "-"}
+   *   resolves to the base path itself)</li>
+   *   <li>trailing -- {@code "5-"} becomes {@code "5/"}, which {@code StoragePath} normalizes back
+   *   to {@code "5"}, so the writer records a partition string that no longer names its directory
+   *   </li>
+   *   <li>doubled -- {@code "a--b"} becomes {@code "a//b"}, which {@code URI.normalize()} collapses
+   *   to {@code "a/b"}, with the same divergence</li>
+   * </ul>
+   *
+   * <p>In the latter two cases the recorded partition string is longer than the directory it
+   * resolves to, so {@code FSUtils#getFileName} slices the file name at the wrong offset and the
+   * metadata-table FILES partition ends up with a truncated entry. None of these values is a date
+   * to begin with, so nothing is lost by not slashing them.
+   */
+  private static String slashSeparateDateValue(String partitionPath) {
+    return hasPathBreakingDash(partitionPath) ? partitionPath : partitionPath.replace('-', '/');
+  }
+
+  /**
+   * Whether substituting the dashes in {@code partitionPath} would yield a leading, trailing or
+   * doubled path separator. See {@link #slashSeparateDateValue} for why each case is excluded.
+   */
+  public static boolean hasPathBreakingDash(String partitionPath) {
+    return partitionPath.startsWith("-") || partitionPath.endsWith("-") || partitionPath.contains("--");
   }
 
   /**

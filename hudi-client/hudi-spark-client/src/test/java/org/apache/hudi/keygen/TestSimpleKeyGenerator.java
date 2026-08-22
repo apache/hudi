@@ -29,6 +29,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Assertions;
@@ -212,5 +213,64 @@ class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
     HoodieKey key = keyGenerator.getKey(avroRecord);
     Assertions.assertEquals("key1", key.getRecordKey());
     Assertions.assertEquals("2026/01/01", key.getPartitionPath());
+  }
+
+  @Test
+  void testSlashSeparatedDatePartitioningLeavesLeadingDashesAlone() {
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropsWithSlashSeparatedDatePartitioning());
+
+    // NOTE: Substituting here would yield a partition path starting with "/", which
+    //       [[FSUtils#constructAbsolutePath(String, String)]] and the [[StoragePath]] overload used
+    //       by [[AbstractTableFileSystemView]] resolve differently -- the former chops the leading
+    //       "/", the latter URI-resolves the table base path away -- so the writer and the
+    //       file-system view would disagree on where the partition lives
+    GenericRecord avroRecord = new GenericData.Record(HoodieSchema.parse(KeyGeneratorTestUtilities.EXAMPLE_SCHEMA).getAvroSchema());
+    avroRecord.put("timestamp", "-5");
+    avroRecord.put("_row_key", "key1");
+    avroRecord.put("ts_ms", "-5");
+    avroRecord.put("pii_col", "val1");
+
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    Assertions.assertEquals("key1", key.getRecordKey());
+    Assertions.assertEquals("-5", key.getPartitionPath());
+  }
+
+  @Test
+  void testSlashSeparatedDatePartitioningOnRowWritingPaths() {
+    TypedProperties properties = getPropsWithSlashSeparatedDatePartitioning();
+    // NOTE: "ts_ms" is the string-typed field of the example schema, "timestamp" is a long
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "ts_ms");
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(properties);
+
+    GenericRecord avroRecord = getRecord();
+    Assertions.assertEquals("2020/03/21", keyGenerator.getPartitionPath(avroRecord));
+
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    Assertions.assertEquals("2020/03/21", keyGenerator.getPartitionPath(row));
+
+    InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
+    Assertions.assertEquals(UTF8String.fromString("2020/03/21"),
+        keyGenerator.getPartitionPath(internalRow, row.schema()));
+  }
+
+  @Test
+  void testSlashSeparatedDatePartitioningWithNullValue() {
+    TypedProperties properties = getPropsWithSlashSeparatedDatePartitioning();
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "nested_col.prop1");
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(properties);
+
+    GenericRecord avroRecord = getRecord(getNestedColRecord(null, 10L));
+
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    Assertions.assertEquals(HUDI_DEFAULT_PARTITION_PATH, keyGenerator.getPartitionPath(row));
+
+    // NOTE: [[KeyGeneratorTestUtilities#getInternalRow]] builds a flat [[GenericInternalRow]], leaving
+    //       a nested value as a [[Row]], so the conversion has to go through Spark here. "nested_col.prop1"
+    //       is the only nullable field of the example schema, and a null on a non-nullable one is
+    //       rejected by [[org.apache.spark.sql.HoodieUnsafeRowUtils]] before the formatter is reached
+    InternalRow internalRow =
+        (InternalRow) CatalystTypeConverters.createToCatalystConverter(row.schema()).apply(row);
+    Assertions.assertEquals(UTF8String.fromString(HUDI_DEFAULT_PARTITION_PATH),
+        keyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 }
