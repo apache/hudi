@@ -283,7 +283,7 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
       }
       PartitionPathParser partitionPathParser = new PartitionPathParser();
       Object[] partitionValues = partitionPathParser.getPartitionFieldVals(partitionPathFields, inputSplit.getPartitionPath(),
-          readerContext.getSchemaHandler().getTableSchema());
+          readerContext.getSchemaHandler().getTableSchema(), metaClient.getTableConfig().getSlashSeparatedDatePartitioning());
       // filter out the partition values that are not required by the data schema
       List<Pair<String, Object>> partitionPathFieldsAndValues = partitionPathFields.map(partitionFields -> {
         HoodieSchema dataSchema = dataFileIterator.get().getRight();
