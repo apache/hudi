@@ -200,6 +200,17 @@ class TestKinesisDeaggregator {
   }
 
   @Test
+  void failsOnAggregateWithZeroSubRecords() throws Exception {
+    // Digest verifies and the payload parses, but there is no records field: returning an empty
+    // list would make the frame vanish silently instead of failing like the other corruption paths.
+    Record aggregate = kinesisRecord(frame(encodeAggregatedRecord(
+        Arrays.asList("pk-a", "pk-b"), Collections.emptyList(), Collections.emptyList())));
+
+    assertThrows(HoodieReadFromSourceException.class,
+        () -> KinesisDeaggregator.deaggregate(Collections.singletonList(aggregate)));
+  }
+
+  @Test
   void decodesRecordWithExplicitHashKeysAndTags() throws Exception {
     Record aggregate = kinesisRecord(frame(encodeAggregatedRecord(
         Collections.singletonList("pk-a"),

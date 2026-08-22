@@ -41,8 +41,8 @@ import java.util.List;
  * Software License and therefore cannot be a required dependency of an Apache project.
  *
  * <p>Semantics match the KCL deaggregator except for corrupt aggregates (valid digest but an
- * undecodable payload or an out-of-range key index): KCL keeps the sub-records before the bad one
- * and silently drops the rest, while this implementation fails the read, since a frame whose
+ * undecodable payload, an out-of-range key index or zero sub-records): KCL keeps the sub-records
+ * before the bad one and silently drops the rest, while this implementation fails the read, since a frame whose
  * trailing digest verifies cannot be an ordinary user record and ingesting it raw (or partially)
  * would silently lose data. A frame that merely starts with the magic bytes but whose digest does
  * not verify is an ordinary user record and passes through unchanged, as with KCL.
@@ -81,8 +81,9 @@ public final class KinesisDeaggregator {
       } catch (IOException e) {
         throw new HoodieReadFromSourceException("Kinesis record with sequence number " + record.sequenceNumber()
             + " carries a valid KPL aggregation digest but could not be decoded; this indicates corruption or an"
-            + " incompatible aggregate format, so the read is failed rather than ingesting the raw frame. Set "
-            + KinesisSourceConfig.KINESIS_ENABLE_DEAGGREGATION.key() + "=false to pass raw records through.", e);
+            + " incompatible aggregate format, so the read is failed rather than ingesting the raw frame."
+            + " As a last resort, " + KinesisSourceConfig.KINESIS_ENABLE_DEAGGREGATION.key() + "=false unblocks"
+            + " the pipeline but ingests every aggregate frame raw, losing the records inside them.", e);
       }
     }
     return result;
@@ -140,6 +141,11 @@ public final class KinesisDeaggregator {
           input.skipField(tag);
           break;
       }
+    }
+    if (subMessages.isEmpty()) {
+      // Returning an empty list would silently drop the frame; the KPL never emits an aggregate
+      // with zero records, so treat this like the other corruption paths.
+      throw new IOException("KPL aggregate contains no sub-records");
     }
     List<Record> expanded = new ArrayList<>(subMessages.size());
     for (byte[] subMessage : subMessages) {
