@@ -21,14 +21,72 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.exception.HoodieException;
 
+import java.util.Locale;
+import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Utility functions used by BULK_INSERT practitioners while sorting records.
  */
 public class SortUtils {
+
+  /**
+   * Rejects sort columns whose type cannot serve as a sort key. VARIANT and MAP have no total
+   * order (Spark's RowOrdering.isOrderable is false for both), and BLOB and VECTOR are rejected
+   * deliberately: their struct/array encodings would compare by raw bytes or elements, which is
+   * never a meaningful sort key, and the record-based write path fails on them outright. Without
+   * this check the failure surfaces deep in the write job (an AnalysisException from the row
+   * partitioner, a ClassCastException from the record-based one) without naming the column.
+   *
+   * <p>Matching is case-insensitive, mirroring Spark's column resolution. Names absent from the
+   * schema (nested paths, meta columns on a data-only schema) are left for the caller to handle.
+   *
+   * @param sortColumns the configured sort columns, may be null or empty
+   * @param schema      schema of the data, with or without metadata fields
+   */
+  public static void validateSortableColumns(String[] sortColumns, HoodieSchema schema) {
+    if (sortColumns == null || sortColumns.length == 0
+        || schema == null || schema.getType() != HoodieSchemaType.RECORD) {
+      return;
+    }
+    Map<String, HoodieSchemaField> fieldsByLowerName = schema.getFields().stream()
+        .collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT), Function.identity(), (first, second) -> first));
+    for (String sortColumn : sortColumns) {
+      HoodieSchemaField field = fieldsByLowerName.get(sortColumn.trim().toLowerCase(Locale.ROOT));
+      if (field != null) {
+        HoodieSchemaType type = field.schema().getNonNullType().getType();
+        if (type == HoodieSchemaType.VARIANT || type == HoodieSchemaType.MAP
+            || type == HoodieSchemaType.BLOB || type == HoodieSchemaType.VECTOR) {
+          throw new HoodieException(String.format(
+              "Sorting by column '%s' of type %s is not supported. Remove it from the sort columns.",
+              sortColumn.trim(), type));
+        }
+      }
+    }
+  }
+
+  /** Overload for callers holding the write schema as an Avro json string; no-op when either side is absent. */
+  public static void validateSortableColumns(String[] sortColumns, String avroSchema) {
+    if (sortColumns == null || sortColumns.length == 0 || StringUtils.isNullOrEmpty(avroSchema)) {
+      return;
+    }
+    validateSortableColumns(sortColumns, HoodieSchema.parse(avroSchema));
+  }
+
+  /** Overload for callers holding the sort columns as a comma-separated string. */
+  public static void validateSortableColumns(String sortColumnsCsv, String avroSchema) {
+    if (StringUtils.isNullOrEmpty(sortColumnsCsv)) {
+      return;
+    }
+    validateSortableColumns(sortColumnsCsv.split(","), avroSchema);
+  }
+
   static Object[] prependPartitionPath(String partitionPath, Object[] columnValues) {
     Object[] prependColumnValues = new Object[columnValues.length + 1];
     System.arraycopy(columnValues, 0, prependColumnValues, 1, columnValues.length);

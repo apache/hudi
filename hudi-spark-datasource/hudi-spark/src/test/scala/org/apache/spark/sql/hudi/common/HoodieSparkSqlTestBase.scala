@@ -160,6 +160,32 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     assertResult(true)(hasException)
   }
 
+  /**
+   * The runnable twin of [[checkNestedExceptionContains(sql:String)*]], for failures that only
+   * surface at EXECUTION time (e.g. a per-file read guard): `spark.sql` alone is lazy for
+   * queries, so the caller collects inside the runnable. Walks the whole cause chain, unlike
+   * [[checkExceptionContain(runnable:Runnable)*]], which checks only the top and the root cause.
+   */
+  protected def checkNestedExceptionContains(runnable: Runnable)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      runnable.run()
+    } catch {
+      case e: Throwable =>
+        var t = e
+        while (t != null) {
+          if (t.getMessage != null && t.getMessage.trim.contains(errorMsg.trim)) {
+            hasException = true
+          }
+          t = t.getCause
+        }
+        if (!hasException) {
+          e.printStackTrace(System.err)
+        }
+    }
+    assertResult(true)(hasException)
+  }
+
   protected def checkExceptions(sql: String)(errorMsgs: Seq[String]): Unit = {
     var hasException = false
     try {

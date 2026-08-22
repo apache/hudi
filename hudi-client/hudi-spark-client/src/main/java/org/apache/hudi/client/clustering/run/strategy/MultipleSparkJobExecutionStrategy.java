@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SortUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.LazyConcatenatingIterator;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -199,6 +200,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             .map(listStr -> listStr.split(","));
 
     return orderByColumnsOpt.map(orderByColumns -> {
+      // The custom-columns partitioners re-validate in their constructors; this earlier check
+      // additionally covers the spatial-curve (ZORDER/HILBERT) partitioners below.
+      SortUtils.validateSortableColumns(orderByColumns, schema);
       HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = getWriteConfig().getLayoutOptimizationStrategy();
       switch (layoutOptStrategy) {
         case ZORDER:

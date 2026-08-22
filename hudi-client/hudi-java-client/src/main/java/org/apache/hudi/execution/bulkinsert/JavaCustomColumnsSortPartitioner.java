@@ -49,6 +49,7 @@ public class JavaCustomColumnsSortPartitioner<T>
     this.schema = schema;
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
     this.suffixRecordKey = config.getBoolean(BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS);
+    SortUtils.validateSortableColumns(sortColumnNames, schema);
   }
 
   @Override

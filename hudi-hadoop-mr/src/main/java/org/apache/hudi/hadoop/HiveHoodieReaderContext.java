@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaRepair;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -39,6 +41,7 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.utils.HiveTypeUtils;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableSchemaUtils;
 import org.apache.hudi.storage.HoodieStorage;
@@ -64,6 +67,7 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.parquet.avro.AvroSchemaConverter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -148,6 +152,26 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       fileSchema = dataSchema;
     }
 
+    // Fail fast on shredded variant columns: this reader hands the file to a plain
+    // parquet-avro read at the requested {metadata, value} projection, so a file whose variant
+    // group carries typed_value would come back with silent nulls (the typed rows keep their
+    // payload in typed_value, which the projection drops). Detection is shape-based on the
+    // footer schema and anchored on the requested column being a variant, so plain user structs
+    // of the same shape are left alone. toShreddedReadSchema recurses through structs, array
+    // elements and map values, matching the row writer, which shreds nested variants too.
+    // Columns not requested (e.g. count(*)) stay readable.
+    if (isParquetOrOrc && requiredSchema.getType() == HoodieSchemaType.RECORD) {
+      HoodieSchema shreddedReadSchema = VariantSchemaUtils.toShreddedReadSchema(requiredSchema, fileSchema);
+      if (shreddedReadSchema != requiredSchema) {
+        throw new HoodieException(String.format(
+            "Column(s) '%s' of %s hold a shredded variant (typed_value present); the Hive reader "
+                + "cannot reconstruct shredded variants. Read the table with Spark 4.1+, or "
+                + "rewrite it unshredded (e.g. cluster with "
+                + "hoodie.parquet.variant.write.shredding.enabled=false).",
+            shreddedVariantColumns(requiredSchema, shreddedReadSchema), filePath));
+      }
+    }
+
     // Prune the required schema based on the file schema
     HoodieSchema actualRequiredSchema = isParquetOrOrc ? HoodieSchemaUtils.pruneDataSchema(fileSchema, requiredSchema, Collections.emptySet()) : requiredSchema;
 
@@ -188,6 +212,23 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // Parquet reader compacted nested-column projection.
     return new CloseableMappingIterator<>(recordIterator,
         record -> HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(record, modifiedDataSchema, requiredSchema, Collections.emptyMap(), physicalMask));
+  }
+
+  /**
+   * Names the top-level columns whose subtree {@code toShreddedReadSchema} swapped, i.e. the
+   * requested columns that hold a shredded variant somewhere below them. Untouched columns keep
+   * their schema instance across the swap, so identity comparison is exact.
+   */
+  private static String shreddedVariantColumns(HoodieSchema requestedSchema, HoodieSchema shreddedReadSchema) {
+    List<HoodieSchemaField> before = requestedSchema.getFields();
+    List<HoodieSchemaField> after = shreddedReadSchema.getFields();
+    List<String> columns = new ArrayList<>();
+    for (int i = 0; i < before.size(); i++) {
+      if (before.get(i).schema() != after.get(i).schema()) {
+        columns.add(before.get(i).name());
+      }
+    }
+    return String.join(", ", columns);
   }
 
   @Override

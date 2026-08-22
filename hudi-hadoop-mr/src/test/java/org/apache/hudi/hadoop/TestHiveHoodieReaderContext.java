@@ -24,24 +24,39 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.RecordReader;
+import org.apache.parquet.avro.AvroParquetWriter;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -159,5 +174,135 @@ class TestHiveHoodieReaderContext {
 
   private ArrayWritable createBaseRecord(Writable[] values) {
     return new ArrayWritable(Writable.class, values);
+  }
+
+  @Test
+  void getFileRecordIteratorFailsFastOnShreddedVariantColumn(@TempDir java.nio.file.Path tempDir) throws Exception {
+    // The Hive reader hands base files to a plain parquet-avro read at the requested
+    // {metadata, value} projection; a shredded file would come back with silent nulls (the
+    // payload of typed rows lives in typed_value, which the projection drops). The footer is
+    // already read for schema pruning, so the shredded shape must fail fast instead.
+    StoragePath filePath = writeVariantFile(tempDir, "shredded.parquet", true);
+    HoodieSchema tableSchema = tableSchemaWithVariant();
+    HiveHoodieReaderContext readerContext = newReaderContext();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+
+    HoodieException failure = assertThrows(HoodieException.class, () ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    assertTrue(failure.getMessage().contains("shredded variant") && failure.getMessage().contains("'v'"),
+        "The error must name the shredded variant column, got: " + failure.getMessage());
+
+    // Queries that do not project the variant column (e.g. count(*)) stay readable.
+    HoodieSchema withoutVariant = HoodieSchema.createRecord("TestRecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT))));
+    when(readerCreator.getRecordReader(any(), any(), any()))
+        .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
+    assertDoesNotThrow(() ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, withoutVariant, storage));
+  }
+
+  @Test
+  void getFileRecordIteratorAcceptsUnshreddedVariantColumn(@TempDir java.nio.file.Path tempDir) throws Exception {
+    // The unshredded twin: a plain {metadata, value} variant group must keep reading through
+    // the ordinary path; the guard is anchored on typed_value being present in the file.
+    StoragePath filePath = writeVariantFile(tempDir, "unshredded.parquet", false);
+    HoodieSchema tableSchema = tableSchemaWithVariant();
+    HiveHoodieReaderContext readerContext = newReaderContext();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+    when(readerCreator.getRecordReader(any(), any(), any()))
+        .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
+    assertDoesNotThrow(() ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+  }
+
+  @Test
+  void getFileRecordIteratorFailsFastOnNestedShreddedVariant(@TempDir java.nio.file.Path tempDir) throws Exception {
+    // The row writer shreds nested variants too (HoodieRowParquetWriteSupport recurses into
+    // structs, array elements and map values), so the guard must look below the top level: a
+    // struct<inner: variant> whose inner group carries typed_value fails naming the struct column.
+    HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
+    HoodieSchema structWithShredded = HoodieSchema.createRecord("s_t", null, null,
+        Collections.singletonList(HoodieSchemaField.of("inner", shreddedVariant)));
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("s", structWithShredded)));
+    java.nio.file.Path file = tempDir.resolve("nested_shredded.parquet");
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+      GenericRecord struct = new GenericData.Record(structWithShredded.toAvroSchema());
+      struct.put("inner", variantValue(shreddedVariant, true));
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("s", struct);
+      writer.write(record);
+    }
+    StoragePath filePath = new StoragePath(file.toUri().toString());
+
+    HoodieSchema structWithVariant = HoodieSchema.createRecord("s_t", null, null,
+        Collections.singletonList(HoodieSchemaField.of("inner", HoodieSchema.createVariant())));
+    HoodieSchema tableSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("s", structWithVariant)));
+    HiveHoodieReaderContext readerContext = newReaderContext();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+
+    HoodieException failure = assertThrows(HoodieException.class, () ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    assertTrue(failure.getMessage().contains("shredded variant") && failure.getMessage().contains("'s'"),
+        "The error must name the column holding the nested shredded variant, got: " + failure.getMessage());
+  }
+
+  private static HoodieSchema.Variant shreddedVariantSchema() {
+    return HoodieSchema.createVariantShreddedObject(
+        Collections.singletonMap("key", HoodieSchema.create(HoodieSchemaType.STRING)));
+  }
+
+  private static HoodieSchema tableSchemaWithVariant() {
+    return HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("v", HoodieSchema.createVariant())));
+  }
+
+  private HiveHoodieReaderContext newReaderContext() {
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    HiveHoodieReaderContext readerContext =
+        new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
+    readerContext.setNeedsBootstrapMerge(false);
+    return readerContext;
+  }
+
+  /** Writes a one-row parquet file with an {@code id} column and a {@code v} variant column, shredded or not. */
+  private StoragePath writeVariantFile(java.nio.file.Path tempDir, String fileName, boolean shredded) throws Exception {
+    HoodieSchema.Variant variantSchema = shredded ? shreddedVariantSchema() : HoodieSchema.createVariant();
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("v", variantSchema)));
+    java.nio.file.Path file = tempDir.resolve(fileName);
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("v", variantValue(variantSchema, shredded));
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  private static GenericRecord variantValue(HoodieSchema.Variant variantSchema, boolean populateTypedValue) {
+    GenericRecord variant = new GenericData.Record(variantSchema.toAvroSchema());
+    variant.put("metadata", ByteBuffer.wrap(new byte[] {1}));
+    if (populateTypedValue) {
+      org.apache.avro.Schema typedValueSchema = org.apache.hudi.common.avro.HoodieAvroUtils.unwrapNullable(
+          variantSchema.getTypedValueField().get().toAvroSchema());
+      GenericRecord keyWrapper = new GenericData.Record(
+          org.apache.hudi.common.avro.HoodieAvroUtils.unwrapNullable(typedValueSchema.getField("key").schema()));
+      keyWrapper.put("typed_value", "k1");
+      GenericRecord typedValue = new GenericData.Record(typedValueSchema);
+      typedValue.put("key", keyWrapper);
+      variant.put("typed_value", typedValue);
+    } else {
+      variant.put("value", ByteBuffer.wrap(new byte[] {0}));
+    }
+    return variant;
   }
 }

@@ -20,6 +20,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.exception.HoodieException
 
 import org.apache.parquet.hadoop.api.InitContext
 import org.apache.parquet.hadoop.api.ReadSupport.ReadContext
@@ -92,6 +93,17 @@ object Spark40HoodieParquetReadSupport {
   private def reorderVariantType(t: Type): Type = {
     t match {
       case group: GroupType if isVariantGroup(group) =>
+        if (group.containsField("typed_value")) {
+          // A shredded file: Spark 4.0's converter cannot reconstruct typed_value (its
+          // unshredded converter reads only [value, metadata], returning a partial or null
+          // payload), and silently dropping the field here loses the typed rows' data. Fail
+          // loudly instead.
+          throw new HoodieException(String.format(
+            "Column '%s' is a shredded variant (typed_value present); Spark 4.0 cannot read "
+              + "shredded variants. Read the table with Spark 4.1+, or rewrite it unshredded "
+              + "(e.g. cluster with hoodie.parquet.variant.write.shredding.enabled=false).",
+            group.getName))
+        }
         // Rebuild with [value, metadata] order for Spark compatibility
         val valueField = group.getType("value")
         val metadataField = group.getType("metadata")

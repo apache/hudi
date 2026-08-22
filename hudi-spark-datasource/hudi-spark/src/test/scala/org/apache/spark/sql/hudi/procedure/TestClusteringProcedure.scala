@@ -867,6 +867,47 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call run_clustering rejects unsortable order columns") {
+    // Not gated on any Spark version: BLOB, VECTOR and MAP exist on every supported Spark, so
+    // this covers the sort-column validation on the lanes where the variant suite is skipped.
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  content blob,
+           |  embedding vector(4),
+           |  attrs map<string, string>,
+           |  ts long
+           |) using hudi
+           | options (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+           | location '$basePath'
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 'a1', null, null, null, 1000)")
+
+      // The procedure validates the order columns up front, before any plan is scheduled.
+      Seq("content", "embedding", "attrs").foreach { col =>
+        checkNestedExceptionContains(s"call run_clustering(table => '$tableName', order => '$col')")(
+          s"Sorting by column '$col'")
+      }
+      // Case-insensitive, mirroring Spark's column resolution.
+      checkNestedExceptionContains(s"call run_clustering(table => '$tableName', order => 'CONTENT')")(
+        "Sorting by column 'CONTENT'")
+      // The execution-time twin: configured plan-strategy sort columns skip the procedure
+      // check and are rejected by the execution strategy and partitioner constructors instead
+      // (SortUtils.validateSortableColumns).
+      checkNestedExceptionContains(
+        s"call run_clustering(table => '$tableName', options => 'hoodie.clustering.plan.strategy.sort.columns=content')")(
+        "Sorting by column 'content'")
+    }
+  }
+
   def avgRecord(commitTimeline: HoodieTimeline): Long = {
     var totalByteSize = 0L
     var totalRecordsCount = 0L

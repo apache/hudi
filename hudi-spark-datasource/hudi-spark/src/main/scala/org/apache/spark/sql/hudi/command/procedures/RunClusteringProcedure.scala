@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OP
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption}
+import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption, SortUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieLockConfig}
 import org.apache.hudi.exception.HoodieClusteringException
@@ -233,13 +233,16 @@ class RunClusteringProcedure extends BaseProcedure
     }
 
     val tableSchemaResolver = new TableSchemaResolver(metaClient)
-    val fields = tableSchemaResolver.getTableSchema(false)
-      .getFields.asScala.map(_.name().toLowerCase)
+    val tableSchema = tableSchemaResolver.getTableSchema(false)
+    val fields = tableSchema.getFields.asScala.map(_.name().toLowerCase)
     orderColumns.split(",").foreach(col => {
-      if (!fields.contains(col.toLowerCase)) {
+      if (!fields.contains(col.trim.toLowerCase)) {
         throw new HoodieClusteringException("Order column not exist:" + col)
       }
     })
+    // The same validation the partitioners apply at execution time (see
+    // SortUtils.validateSortableColumns), surfaced here before the job is submitted.
+    SortUtils.validateSortableColumns(orderColumns.split(","), tableSchema)
   }
 }
 

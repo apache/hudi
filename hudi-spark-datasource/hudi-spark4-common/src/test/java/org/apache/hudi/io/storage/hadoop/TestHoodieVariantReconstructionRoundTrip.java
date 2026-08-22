@@ -19,16 +19,25 @@
 
 package org.apache.hudi.io.storage.hadoop;
 
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.core.io.storage.HoodieAvroBootstrapFileReader;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.variant.Spark4VariantShreddingProvider;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.spark.types.variant.Variant;
 import org.apache.spark.types.variant.VariantBuilder;
 import org.junit.jupiter.api.Test;
@@ -44,6 +53,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Round-trip coverage for the successful {@code create} -> {@code reconstruct} path of
@@ -174,5 +184,92 @@ class TestHoodieVariantReconstructionRoundTrip {
     byte[] out = new byte[buf.remaining()];
     buf.get(out);
     return out;
+  }
+
+  @Test
+  void bootstrapReaderReconstructsShreddedDataFileUsingTableSchema(@TempDir java.nio.file.Path tmp) throws Exception {
+    // HoodieMergeHelper's bootstrap branch uses the one-argument getRecordIterator overload,
+    // which used to hand the DATA file its own footer schema: for a shredded variant that is a
+    // plain {metadata, value, typed_value} record with the logical type lost, so reconstruction
+    // never engaged and the later rewrite to the writer schema silently dropped typed_value.
+    // The overload now requests the caller's schema (minus meta fields), which anchors
+    // HoodieVariantReconstruction just like the two-argument form.
+    //
+    // AVRO bootstrap reader only, deliberately: the changed line lives on the shared base
+    // class, but the SPARK twin reads through HoodieSparkParquetReader (whose getSchema returns
+    // a nullable union, not a record) and would need a Spark session plus InternalRow
+    // assertions that do not fit this unit test. The non-variant SPARK bootstrap path is
+    // covered end-to-end by TestBootstrap.
+    Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
+    shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.STRING));
+    shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.LONG));
+    HoodieSchema.Variant shreddedVariant = HoodieSchema.createVariantShreddedObject(shreddedFields);
+    HoodieSchema.Variant unshreddedVariant = HoodieSchema.createVariant();
+    // Data fields are nullable with null defaults, as Hudi table schemas declare them; the
+    // skeleton read requests the full schema and fills the data columns with the defaults.
+    HoodieSchema dataFileSchema = HoodieSchema.createRecord("r", "org.apache.hudi.test", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("v", HoodieSchema.createNullable(shreddedVariant), null, HoodieSchema.NULL_VALUE)));
+
+    // The shredded data file, as an external bootstrap source would carry it.
+    Spark4VariantShreddingProvider provider = new Spark4VariantShreddingProvider();
+    Variant original = VariantBuilder.parseJson("{\"a\":\"x\",\"b\":5}", false);
+    GenericRecord unshreddedV = new GenericData.Record(unshreddedVariant.getAvroSchema());
+    unshreddedV.put(HoodieSchema.Variant.VARIANT_METADATA_FIELD, ByteBuffer.wrap(original.getMetadata()));
+    unshreddedV.put(HoodieSchema.Variant.VARIANT_VALUE_FIELD, ByteBuffer.wrap(original.getValue()));
+    GenericRecord shreddedV =
+        provider.shredVariantRecord(unshreddedV, shreddedVariant.getAvroSchema(), shreddedVariant);
+    java.nio.file.Path dataFile = tmp.resolve("data.parquet");
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new org.apache.hadoop.fs.Path(dataFile.toString()), dataFileSchema.getAvroSchema())) {
+      GenericRecord record = new GenericData.Record(dataFileSchema.getAvroSchema());
+      record.put("id", 7L);
+      record.put("v", shreddedV);
+      writer.write(record);
+    }
+
+    // The skeleton file: just the meta columns for the row.
+    HoodieSchema skeletonSchema = HoodieSchemaUtils.addMetadataFields(
+        HoodieSchema.createRecord("r", "org.apache.hudi.test", null, java.util.Collections.emptyList()));
+    java.nio.file.Path skeletonFile = tmp.resolve("skeleton.parquet");
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new org.apache.hadoop.fs.Path(skeletonFile.toString()), skeletonSchema.getAvroSchema())) {
+      GenericRecord meta = new GenericData.Record(skeletonSchema.getAvroSchema());
+      meta.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, "001");
+      meta.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, "001_0_1");
+      meta.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, "key-7");
+      meta.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "");
+      meta.put(HoodieRecord.FILENAME_METADATA_FIELD, "data.parquet");
+      writer.write(meta);
+    }
+
+    HoodieStorage storage = HoodieTestUtils.getStorage(tmp.toString());
+    HoodieAvroFileReaderFactory readerFactory = new HoodieAvroFileReaderFactory(storage);
+    HoodieFileReader skeletonReader =
+        readerFactory.getFileReader(new HoodieConfig(), new StoragePath(skeletonFile.toUri().toString()));
+    HoodieFileReader dataReader =
+        readerFactory.getFileReader(new HoodieConfig(), new StoragePath(dataFile.toUri().toString()));
+    HoodieAvroBootstrapFileReader bootstrapReader = (HoodieAvroBootstrapFileReader)
+        readerFactory.newBootstrapFileReader(skeletonReader, dataReader, Option.empty(), new Object[0]);
+
+    // The merge helper requests the writer schema with meta fields: an UNSHREDDED variant.
+    HoodieSchema tableSchema = HoodieSchemaUtils.addMetadataFields(
+        HoodieSchema.createRecord("r", "org.apache.hudi.test", null, Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("v", HoodieSchema.createNullable(unshreddedVariant), null, HoodieSchema.NULL_VALUE))));
+    try (ClosableIterator<HoodieRecord<IndexedRecord>> iterator =
+             (ClosableIterator) bootstrapReader.getRecordIterator(tableSchema)) {
+      assertTrue(iterator.hasNext(), "the joined bootstrap row must come back");
+      IndexedRecord out = (IndexedRecord) iterator.next().getData();
+      int vPos = tableSchema.getAvroSchema().getField("v").pos();
+      GenericRecord rebuiltV = (GenericRecord) out.get(vPos);
+      assertNotNull(rebuiltV, "the variant column must survive the bootstrap join");
+      Variant rebuilt = new Variant(
+          toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD)),
+          toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD)));
+      assertEquals(original.toJson(ZoneOffset.UTC), rebuilt.toJson(ZoneOffset.UTC),
+          "the shredded payload must be reconstructed, not dropped");
+      assertEquals(7L, out.get(tableSchema.getAvroSchema().getField("id").pos()));
+    }
   }
 }
