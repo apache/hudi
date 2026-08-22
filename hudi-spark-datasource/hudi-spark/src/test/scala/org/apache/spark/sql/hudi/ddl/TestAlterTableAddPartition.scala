@@ -18,6 +18,9 @@
 package org.apache.spark.sql.hudi.ddl
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
+
+import java.io.File
 
 class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
 
@@ -225,6 +228,47 @@ class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
           if (urlEncode) Seq("p_a=url%25a/p_b=key%3Dval") else Seq("p_a=url%a/p_b=key=val")
         )
       }
+    }
+  }
+
+  test("Add partition for a slash separated date partitioned table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // create table
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id bigint,
+           |  name string,
+           |  ts string,
+           |  dt string
+           | )
+           | using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts',
+           |  hoodie.datasource.write.slash.separated.date.partitioning = 'true'
+           | )
+           | partitioned by (dt)
+           | location '$tablePath'
+           |""".stripMargin)
+
+      // The writer lays a partition value out as yyyy/MM/dd, so the DDL command has to name that
+      // very directory rather than the dashed value
+      spark.sql(s"""insert into $tableName values (1, "a1", "v1", "2026-01-05")""")
+
+      spark.sql(s"alter table $tableName add partition (dt='2026-02-06')")
+
+      assertTrue(new File(tablePath, "2026/02/06").exists(),
+        "ADD PARTITION should create the slash separated directory")
+      assertFalse(new File(tablePath, "2026-02-06").exists(),
+        "ADD PARTITION should not leave a dashed directory behind")
+
+      // naming the right directory also lets the existence check see the partition the writer created
+      spark.sql(s"alter table $tableName add if not exists partition (dt='2026-01-05')")
+      checkExceptionContain(s"alter table $tableName add partition (dt='2026-01-05')")(
+        "Partition metadata already exists for path")
     }
   }
 }
