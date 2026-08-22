@@ -119,6 +119,28 @@ public class TestAvroSchemaConverter {
     assertEquals(expectedMT.toString(), messageType.toString());
   }
 
+  /**
+   * The VARIANT logical type annotation the converter stamps on variant groups on parquet 1.16+
+   * (Spark 4.1+ profiles), as {@code GroupType.toString()} renders it; empty on older parquet,
+   * where the annotation type does not exist and groups stay plain. {@code MessageTypeParser}
+   * cannot parse the annotation, so variant expectations are compared against the converter's
+   * {@code toString()} directly rather than through {@link #testAvroToParquetConversion}.
+   */
+  private static String variantAnnotation() {
+    // Probes parquet directly, not the converter's own probe: the expectation must be an independent oracle.
+    try {
+      LogicalTypeAnnotation.class.getMethod("variantType", byte.class);
+      return " (VARIANT(1))";
+    } catch (NoSuchMethodException e) {
+      return "";
+    }
+  }
+
+  private void testVariantAvroToParquetConversion(HoodieSchema schema, String expectedMessageType) {
+    MessageType messageType = getAvroSchemaConverter(new Configuration(false)).convert(schema);
+    assertEquals(expectedMessageType, messageType.toString());
+  }
+
   private void testParquetToAvroConversion(HoodieSchema schema, String schemaString) throws Exception {
     testParquetToAvroConversion(new Configuration(false), schema, schemaString);
   }
@@ -865,10 +887,10 @@ public class TestAvroSchemaConverter {
     HoodieSchema variant = HoodieSchema.createVariant();
     HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("myvariant", variant, null, null)));
-    testAvroToParquetConversion(
+    testVariantAvroToParquetConversion(
         schema,
         "message myrecord {\n"
-            + "  required group myvariant {\n"
+            + "  required group myvariant" + variantAnnotation() + " {\n"
             + "    required binary metadata;\n"
             + "    required binary value;\n"
             + "  }\n"
@@ -880,10 +902,10 @@ public class TestAvroSchemaConverter {
     HoodieSchema variant = HoodieSchema.createVariantShredded(HoodieSchema.create(HoodieSchemaType.INT));
     HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("myvariant", variant, null, null)));
-    testAvroToParquetConversion(
+    testVariantAvroToParquetConversion(
         schema,
         "message myrecord {\n"
-            + "  required group myvariant {\n"
+            + "  required group myvariant" + variantAnnotation() + " {\n"
             + "    required binary metadata;\n"
             + "    optional binary value;\n"
             + "    required int32 typed_value;\n"
@@ -897,10 +919,10 @@ public class TestAvroSchemaConverter {
     HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
         Collections.singletonList(
             HoodieSchemaField.of("myvariant", HoodieSchema.createNullable(variant), null, HoodieSchema.NULL_VALUE)));
-    testAvroToParquetConversion(
+    testVariantAvroToParquetConversion(
         schema,
         "message myrecord {\n"
-            + "  optional group myvariant {\n"
+            + "  optional group myvariant" + variantAnnotation() + " {\n"
             + "    required binary metadata;\n"
             + "    required binary value;\n"
             + "  }\n"
@@ -969,23 +991,6 @@ public class TestAvroSchemaConverter {
         throw e;
       }
     }
-  }
-
-  @Test
-  public void testVariantToParquetConversion() throws Exception {
-    // Create a record with a variant field
-    HoodieSchema variantSchema = HoodieSchema.createRecord("variantRecord", null, null, false,
-        Collections.singletonList(
-            HoodieSchemaField.of("v", HoodieSchema.createVariant(), null, null)));
-
-    String expectedParquet = "message variantRecord {\n"
-        + "  required group v {\n"
-        + "    required binary metadata;\n"
-        + "    required binary value;\n"
-        + "  }\n"
-        + "}\n";
-
-    testAvroToParquetConversion(variantSchema, expectedParquet);
   }
 
   public static Configuration conf(String name, boolean value) {

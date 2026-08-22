@@ -19,13 +19,20 @@
 
 package org.apache.hudi.common.avro;
 
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Shared helpers for converting between shredded and unshredded variant schemas.
@@ -33,6 +40,19 @@ import java.util.List;
  * (variant reconstruction in the parquet reader).
  */
 public class VariantSchemaUtils {
+
+  // Defined in hudi-client's HoodieWriteConfig; referenced literally because hudi-common cannot
+  // depend on it (same precedent as "hoodie.index.type" in HoodieFileWriterFactory).
+  private static final String INTERNAL_SCHEMA_KEY = "hoodie.internal.schema";
+  private static final String WRITE_SCHEMA_OVERRIDE_KEY = "hoodie.write.schema";
+  private static final String AVRO_SCHEMA_KEY = "hoodie.avro.schema";
+
+  /**
+   * Namespace of the shredded record types {@link #applyInferredShredding} generates. Hudi-owned
+   * so the generated names ({@code <column>_variant}) cannot collide with a user-declared record
+   * type of the same simple name in the table schema.
+   */
+  private static final String INFERRED_VARIANT_NAMESPACE = "hoodie.variant.inferred";
 
   private VariantSchemaUtils() {
   }
@@ -121,6 +141,235 @@ public class VariantSchemaUtils {
       return schema;
     }
     return wasNullable ? HoodieSchema.createNullable(replacement) : replacement;
+  }
+
+  /**
+   * Strips {@code typed_value} from top-level fields that have the variant SHAPE but lost the
+   * variant logical type, i.e. plain records of {@code {metadata: bytes, value: [nullable]
+   * bytes, typed_value}} (see {@link #isShreddedVariantShape}). Parquet-footer-derived schemas
+   * come back this way (the converter does not attach the variant logical type), so
+   * {@link #stripVariantShredding} alone cannot see them. Used by the table-schema footer
+   * fallback only; returns {@code schema} as-is when nothing matches.
+   *
+   * <p>Unlike {@link #isShreddedVariantTarget}, the match here has NO requested-side anchor:
+   * the footer fallback runs precisely when no table schema is available to anchor on, so a
+   * plain user struct that happens to have exactly this shape is stripped too (a documented,
+   * accepted false positive: {@code metadata} plus {@code typed_value} is the variant spec's
+   * vocabulary). Top-level fields only, matching the scope of
+   * {@link #getInferableVariantColumns}: inference never shreds a nested variant, and
+   * {@code HoodieAvroWriteSupport.applyForcedShreddingSchema} walks top-level fields only. The row
+   * writer shreds at any depth its write schema asks it to, forced DDL or not (see
+   * {@link #swapShreddedVariantFields}); those nested layouts are not covered by this fallback.
+   *
+   * <p>The shape check also admits the spec's two-field {@code {metadata, typed_value}} form (a
+   * writer may omit {@code value} when every row is typed). Stripping that would leave a
+   * one-field record, so {@code value} is restored as nullable bytes: the result is always the
+   * unshredded {@code {metadata, value}} shape.
+   */
+  public static HoodieSchema stripVariantShreddingByShape(HoodieSchema schema) {
+    if (schema.getType() != HoodieSchemaType.RECORD) {
+      return schema;
+    }
+
+    List<HoodieSchemaField> newFields = new ArrayList<>();
+    boolean changed = false;
+
+    for (HoodieSchemaField field : schema.getFields()) {
+      HoodieSchema fieldSchema = field.schema();
+      boolean wasNullable = fieldSchema.isNullable();
+      HoodieSchema unwrapped = wasNullable ? fieldSchema.getNonNullType() : fieldSchema;
+
+      if (isShreddedVariantShape(unwrapped)) {
+        List<HoodieSchemaField> strippedFields = new ArrayList<>();
+        for (HoodieSchemaField member : unwrapped.getFields()) {
+          if (!HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD.equals(member.name())) {
+            strippedFields.add(HoodieSchemaUtils.createNewSchemaField(member));
+          }
+        }
+        if (!unwrapped.getField(HoodieSchema.Variant.VARIANT_VALUE_FIELD).isPresent()) {
+          // Null default, like every other optional field on this path (the footer converter
+          // attaches one, and kept members carry theirs over): HoodieSchemaField#equals compares
+          // defaults, so omitting it would make the stripped schema differ from the one a
+          // three-field file yields for the same column.
+          strippedFields.add(HoodieSchemaField.of(
+              HoodieSchema.Variant.VARIANT_VALUE_FIELD, HoodieSchema.createNullable(HoodieSchemaType.BYTES),
+              null, HoodieSchema.NULL_VALUE));
+        }
+        HoodieSchema stripped = HoodieSchema.createRecord(
+            unwrapped.getAvroSchema().getName(),
+            unwrapped.getAvroSchema().getNamespace(),
+            unwrapped.getAvroSchema().getDoc(),
+            strippedFields);
+        HoodieSchema replacement = wasNullable ? HoodieSchema.createNullable(stripped) : stripped;
+        newFields.add(HoodieSchemaUtils.createNewSchemaField(field.withSchema(replacement)));
+        changed = true;
+      } else {
+        newFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+      }
+    }
+
+    if (!changed) {
+      return schema;
+    }
+
+    return HoodieSchema.createRecord(
+        schema.getAvroSchema().getName(),
+        schema.getAvroSchema().getNamespace(),
+        schema.getAvroSchema().getDoc(),
+        newFields);
+  }
+
+  /**
+   * The top-level variant columns of {@code schema} that are candidates for shredding-schema
+   * inference under {@code config}, or an empty list when inference does not apply.
+   *
+   * <p>Inference applies only when it is enabled, write shredding is enabled, no forced test
+   * DDL is set (force wins), and no internal schema is set (the Spark write support prefers the
+   * internal schema and would silently ignore an inferred one). Candidate columns are top-level
+   * unshredded variants; columns with an explicit typed_value keep their schema-driven shredding.</p>
+   */
+  public static List<String> getInferableVariantColumns(HoodieConfig config, HoodieSchema schema) {
+    return isShreddingInferenceEnabled(config) ? unshreddedTopLevelVariantColumns(schema) : Collections.emptyList();
+  }
+
+  /** The top-level unshredded variant columns of {@code schema}; empty when it is not a record. */
+  private static List<String> unshreddedTopLevelVariantColumns(HoodieSchema schema) {
+    if (schema.getType() != HoodieSchemaType.RECORD) {
+      return Collections.emptyList();
+    }
+    List<String> columns = new ArrayList<>();
+    for (HoodieSchemaField field : schema.getFields()) {
+      HoodieSchema unwrapped = field.schema().isNullable() ? field.schema().getNonNullType() : field.schema();
+      if (unwrapped.getType() == HoodieSchemaType.VARIANT && !((HoodieSchema.Variant) unwrapped).isShredded()) {
+        columns.add(field.name());
+      }
+    }
+    return columns;
+  }
+
+  /**
+   * {@link #getInferableVariantColumns} over the schema the config carries (see
+   * {@link #getConfigWriteSchema}), for write supports that resolve their schema from the config
+   * rather than a schema argument: detecting on that same schema guarantees the detection and the
+   * {@link #applyInferredShreddingToConfig} splice agree. Empty when inference does not apply or
+   * no schema is set; the schema is only parsed once the cheap config gates pass.
+   */
+  public static List<String> getInferableVariantColumnsFromConfig(HoodieConfig config) {
+    if (!isShreddingInferenceEnabled(config)) {
+      return Collections.emptyList();
+    }
+    return getConfigWriteSchema(config)
+        .map(VariantSchemaUtils::unshreddedTopLevelVariantColumns)
+        .orElse(Collections.emptyList());
+  }
+
+  /**
+   * The write schema carried by the config, {@code hoodie.write.schema} else
+   * {@code hoodie.avro.schema}, in that precedence (the one the Spark row write support resolves
+   * and the one {@link #applyInferredShreddingToConfig} splices into); empty when neither is set.
+   */
+  public static Option<HoodieSchema> getConfigWriteSchema(HoodieConfig config) {
+    String schemaString = config.getString(WRITE_SCHEMA_OVERRIDE_KEY);
+    if (StringUtils.isNullOrEmpty(schemaString)) {
+      schemaString = config.getString(AVRO_SCHEMA_KEY);
+    }
+    return StringUtils.isNullOrEmpty(schemaString) ? Option.empty() : Option.of(HoodieSchema.parse(schemaString));
+  }
+
+  /**
+   * Whether shredding-schema inference applies under {@code config}: enabled, write shredding
+   * enabled, no forced test DDL (force wins), and no internal schema (the Spark write support
+   * prefers the internal schema and would silently ignore an inferred one).
+   */
+  private static boolean isShreddingInferenceEnabled(HoodieConfig config) {
+    return config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED)
+        && config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_VARIANT_WRITE_SHREDDING_ENABLED)
+        && StringUtils.isNullOrEmpty(config.getString(HoodieStorageConfig.PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST))
+        && StringUtils.isNullOrEmpty(config.getString(INTERNAL_SCHEMA_KEY));
+  }
+
+  /**
+   * Returns a copy of {@code config} with the inferred typed_value schemas spliced into its
+   * schema-carrying keys ({@code hoodie.write.schema}, {@code hoodie.avro.schema}), or
+   * {@code config} itself when there is nothing to splice. Used for write supports that resolve
+   * their schema from the config rather than a schema argument (the Spark row write support);
+   * the original config is never mutated.
+   */
+  public static HoodieConfig applyInferredShreddingToConfig(HoodieConfig config, Map<String, HoodieSchema> typedValueByField) {
+    if (typedValueByField.isEmpty()) {
+      return config;
+    }
+    HoodieConfig copy = new HoodieConfig(TypedProperties.copy(config.getProps()));
+    for (String key : new String[] {WRITE_SCHEMA_OVERRIDE_KEY, AVRO_SCHEMA_KEY}) {
+      String schemaString = copy.getString(key);
+      if (!StringUtils.isNullOrEmpty(schemaString)) {
+        HoodieSchema spliced = applyInferredShredding(HoodieSchema.parse(schemaString), typedValueByField);
+        copy.setValue(key, spliced.getAvroSchema().toString());
+      }
+    }
+    return copy;
+  }
+
+  /**
+   * Splices inferred typed_value schemas into the matching top-level variant fields of
+   * {@code schema}; the inverse direction of {@link #stripVariantShredding}. Only unshredded
+   * variant fields with an entry in {@code typedValueByField} are replaced; everything else
+   * passes through unchanged, and {@code schema} is returned as-is when nothing matches.
+   *
+   * @param schema            the writer schema
+   * @param typedValueByField column name to typed_value schema in the nested shredding-spec
+   *                          form, as produced by a {@link VariantShreddingSchemaInferrer}
+   */
+  public static HoodieSchema applyInferredShredding(HoodieSchema schema, Map<String, HoodieSchema> typedValueByField) {
+    if (schema.getType() != HoodieSchemaType.RECORD || typedValueByField.isEmpty()) {
+      return schema;
+    }
+
+    List<HoodieSchemaField> newFields = new ArrayList<>();
+    boolean changed = false;
+
+    for (HoodieSchemaField field : schema.getFields()) {
+      HoodieSchema fieldSchema = field.schema();
+      boolean wasNullable = fieldSchema.isNullable();
+      HoodieSchema unwrapped = wasNullable ? fieldSchema.getNonNullType() : fieldSchema;
+      HoodieSchema typedValue = typedValueByField.get(field.name());
+
+      if (typedValue != null
+          && unwrapped.getType() == HoodieSchemaType.VARIANT
+          && !((HoodieSchema.Variant) unwrapped).isShredded()) {
+        // typed_value must be nullable: rows whose variant value does not match the inferred
+        // schema are written with a null typed_value and the full binary in the value column.
+        HoodieSchema nullableTypedValue = typedValue.isNullable() ? typedValue : HoodieSchema.createNullable(typedValue);
+        // The shredded record needs a name unique to this column: variant columns commonly share
+        // one record type (named "variant"), which Avro serializes as name references after the
+        // first occurrence. Reusing the shared name would alias every other variant column to
+        // this column's shredded definition once the schema is serialized (the config-splice
+        // path), and two inferred columns could not coexist in one schema. The Hudi-owned
+        // namespace keeps the generated name clear of any user-declared type as well.
+        HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(
+            field.name() + "_variant",
+            INFERRED_VARIANT_NAMESPACE,
+            unwrapped.getAvroSchema().getDoc(),
+            nullableTypedValue);
+        HoodieSchema replacement = wasNullable ? HoodieSchema.createNullable(shredded) : shredded;
+        // createNewSchemaField: the existing avro fields are attached to the source schema and
+        // cannot be reused in a new record ("Field already used").
+        newFields.add(HoodieSchemaUtils.createNewSchemaField(field.withSchema(replacement)));
+        changed = true;
+      } else {
+        newFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+      }
+    }
+
+    if (!changed) {
+      return schema;
+    }
+
+    return HoodieSchema.createRecord(
+        schema.getAvroSchema().getName(),
+        schema.getAvroSchema().getNamespace(),
+        schema.getAvroSchema().getDoc(),
+        newFields);
   }
 
   /**
