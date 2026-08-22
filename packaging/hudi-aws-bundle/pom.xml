@@ -112,10 +112,6 @@
                                     <pattern>org.openjdk.jol.</pattern>
                                     <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                                 </relocation>
-                                <relocation>
-                                    <pattern>org.apache.httpcomponents.</pattern>
-                                    <shadedPattern>org.apache.hudi.aws.org.apache.httpcomponents.</shadedPattern>
-                                </relocation>
                             </relocations>
                             <createDependencyReducedPom>true</createDependencyReducedPom>
                             <!-- Keep dependencies that are not absorbed into the shaded jar, so the reduced POM still
