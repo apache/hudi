@@ -987,25 +987,31 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     // struct-DDL compat mode, which works on this same table with the conf off (pinned below)
     // but breaks once it is on, because internal-schema resolution overrides the user's DDL.
     // Real support is #18285; until then Spark 3.x compat-mode readers must keep
-    // hoodie.schema.on.read.enable off.
+    // hoodie.schema.on.read.enable off - necessary, but only sufficient off a Hive catalog:
+    // DefaultSource discards the user schema outright when isUsingHiveCatalog, so under HMS the
+    // struct DDL below is never seen and the read throws with the conf off too. This test runs
+    // on the in-memory catalog, so it pins the non-Hive half only.
     assume(HoodieSparkUtils.isSpark3, "This test verifies Spark 3.x behavior with schema-on-read")
 
     withTempDir { tmpDir =>
       HoodieTestUtils.extractZipToDirectory("variant_backward_compat/variant_schema_on_read_cow.zip", tmpDir.toPath, getClass)
       val tablePath = tmpDir.toPath.resolve("variant_schema_on_read_cow").toString
 
-      // The schema-on-read legs assert the same exception as the plain leg, so they would also
-      // pass if the internal schema silently failed to load and HoodieBaseRelation fell back to
-      // the commit-metadata schema. Pin that the fixture carries a loadable internal schema, so
-      // those legs cannot pass without exercising the InternalSchema path.
+      // HoodieBaseHadoopFsRelationFactory (reached here via
+      // HoodieCopyOnWriteSnapshotHadoopFsRelationFactory, not HoodieBaseRelation) swallows an
+      // internal-schema load failure into None and then falls back to getTableSchema, which
+      // throws the same exception - so neither auto-resolve leg can, on its own, prove the
+      // InternalSchema path ran. This assert only pins that the fixture still carries a loadable
+      // internal schema; the conf-off/conf-on catalog-DDL pair below is what discriminates,
+      // because with a DDL present the None fallback resolves to the user schema and succeeds.
       val schemaResolver = new TableSchemaResolver(createMetaClient(spark, tablePath))
       assert(schemaResolver.getTableInternalSchemaFromCommitMetadata.isPresent,
         "fixture must carry a committed internal schema; regenerate it per the README")
 
-      def assertVariantRejected(leg: String)(f: => Unit): Unit = {
+      def assertVariantRejected(label: String)(f: => Unit): Unit = {
         val ex = intercept[HoodieSchemaException](f)
         assert(ex.getCause.getMessage.contains("VARIANT type is only supported in Spark 4.0+"),
-          s"[$leg] expected the actionable variant rejection, got: ${ex.getCause}")
+          s"[$label] expected the actionable variant rejection, got: ${ex.getCause}")
       }
 
       assertVariantRejected("auto-resolve, plain") {
@@ -1035,9 +1041,32 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         // internal schema - pinning that the conf, not the committed internal schema itself,
         // is what breaks compat mode.
         val rows = spark.sql(s"select id, v, note from $tableName order by id").collect()
-        assert(rows.map(r => (r.getInt(0), r.isNullAt(1), r.getString(2))).toSeq
-          == Seq((1, false, null), (2, false, "n2")),
+        assert(rows.map(r => (r.getInt(0), r.getString(2))).toSeq == Seq((1, null), (2, "n2")),
           "[compat struct DDL, conf off] expected both rows readable through the struct DDL")
+
+        // Pin the variant bytes, not just non-nullness, so a swapped or structurally wrong
+        // value/metadata pair cannot pass as "no silent wrong data". The DDL orders the struct
+        // as (value, metadata); Spark resolves the parquet fields by name.
+        // metadata: v1 header, 1-entry dictionary holding "key" (shared by both rows).
+        val expectedMetadata = Array[Byte](0x01, 0x01, 0x00, 0x03, 0x6B, 0x65, 0x79)
+        // value: 1-field object, field id 0, data offsets 0..3, short-string "v1" / "v2".
+        val expectedValues = Map(
+          1 -> Array[Byte](0x02, 0x01, 0x00, 0x00, 0x03, 0x09, 0x76, 0x31),
+          2 -> Array[Byte](0x02, 0x01, 0x00, 0x00, 0x03, 0x09, 0x76, 0x32))
+        rows.foreach { row =>
+          val id = row.getInt(0)
+          assert(!row.isNullAt(1), s"[compat struct DDL, conf off] variant column null for id=$id")
+          val variant = row.getStruct(1)
+          assert(variant.size == 2, s"[compat struct DDL, conf off] expected (value, metadata) for id=$id")
+          val valueBytes = variant.getAs[Array[Byte]](0)
+          val metadataBytes = variant.getAs[Array[Byte]](1)
+          assert(valueBytes.sameElements(expectedValues(id)),
+            s"[compat struct DDL, conf off] variant value bytes mismatch for id=$id, got: "
+              + valueBytes.map("0x%02X".format(_)).mkString(", "))
+          assert(metadataBytes.sameElements(expectedMetadata),
+            s"[compat struct DDL, conf off] variant metadata bytes mismatch for id=$id, got: "
+              + metadataBytes.map("0x%02X".format(_)).mkString(", "))
+        }
 
         assertVariantRejected("compat struct DDL, schema-on-read") {
           withSQLConf("hoodie.schema.on.read.enable" -> "true") {

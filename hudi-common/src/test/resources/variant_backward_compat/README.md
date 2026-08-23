@@ -72,5 +72,9 @@ cd /path/to/table/parent/
 zip -r variant_schema_on_read_cow.zip variant_schema_on_read_cow
 ```
 
-The rejection test asserts the internal schema is present, so after regenerating, confirm
-`.hoodie/.schema/` in the zip contains completed schemacommit files.
+The rejection test asserts `TableSchemaResolver.getTableInternalSchemaFromCommitMetadata`, which
+reads the `latest_schema` key out of the newest schema-capable commit's extra metadata - NOT out of
+`.hoodie/.schema/`, which is a separate store. So after regenerating, confirm the last commit in
+`.hoodie/timeline/` carries `latest_schema`; the presence of `.hoodie/.schema/` schemacommit files
+does not imply it (the first insert here has those and no `latest_schema`). The commit is Avro, so
+`strings <instant>_<completion>.commit | grep latest_schema` is enough to check.

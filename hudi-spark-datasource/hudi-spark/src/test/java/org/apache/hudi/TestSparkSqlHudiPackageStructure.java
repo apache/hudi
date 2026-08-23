@@ -21,6 +21,8 @@ package org.apache.hudi;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -28,6 +30,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -42,6 +46,11 @@ public class TestSparkSqlHudiPackageStructure {
 
   private static final String BASE_PACKAGE = "org.apache.spark.sql.hudi";
   private static final String PACKAGE_PATH = "org/apache/spark/sql/hudi";
+  private static final String AZURE_PIPELINE_FILE = "azure-pipelines-20230430.yml";
+
+  private static final Pattern WILDCARD_PARAM_NAME = Pattern.compile("^\\s*- name:\\s*(\\S+)\\s*$");
+  private static final Pattern WILDCARD_LIST_ITEM = Pattern.compile("^\\s*- '([^']+)'\\s*$");
+  private static final Pattern WILDCARD_CLI_ARG = Pattern.compile("-DwildcardSuites=\"?([^\" ]+)");
 
   /**
    * Allowed sub-packages under org.apache.spark.sql.hudi for Scala test classes.
@@ -87,6 +96,90 @@ public class TestSparkSqlHudiPackageStructure {
 
     assertFalse(scalaTestClasses.isEmpty(),
         "Expected to find at least one Scala test class in " + BASE_PACKAGE);
+  }
+
+  /**
+   * Every Scala test class under {@link #BASE_PACKAGE} must be named by at least one Azure
+   * wildcardSuites entry, otherwise it silently never runs on Azure.
+   *
+   * <p>The Azure jobs deliberately name leaf packages ({@code dml.others}, {@code dml.insert},
+   * {@code dml.schema}) rather than the recursive {@code dml} parent, because ScalaTest's
+   * {@code -w} is a plain prefix match with no exclusion primitive: pointing one job at
+   * {@code ...hudi.dml} would re-run the whole {@code dml.insert} set that already has its own
+   * job. That split is what makes a newly added {@code dml.*} package start out dark, so this
+   * test is the guard for it - the other, non-recursive {@code testSparkSqlHudi...} check above
+   * lets {@code dml.*} through because it treats {@code dml} as one allowed package.
+   */
+  @Test
+  public void testScalaTestPackagesAreCoveredByAzureWildcardSuites() {
+    Set<String> azurePrefixes = readAzureWildcardSuitePrefixes();
+    assertFalse(azurePrefixes.isEmpty(),
+        "Expected to parse at least one wildcardSuites entry from " + AZURE_PIPELINE_FILE);
+
+    List<String> uncovered = findScalaTestClasses().stream()
+        .filter(className -> azurePrefixes.stream()
+            .noneMatch(prefix -> className.equals(prefix) || className.startsWith(prefix + ".")))
+        .collect(Collectors.toList());
+
+    if (!uncovered.isEmpty()) {
+      StringBuilder message = new StringBuilder();
+      message.append("Found Scala test classes that no Azure wildcardSuites entry covers, ")
+          .append("so they never run on Azure CI.\n\nUncovered classes:\n");
+      uncovered.forEach(cls -> message.append("  - ").append(cls).append("\n"));
+      message.append("\nAdd their package to one of the wildcardSuites sets in ")
+          .append(AZURE_PIPELINE_FILE)
+          .append(" (e.g. 'job6HudiSparkDdlOthersWildcardSuites'), balancing against job runtime.");
+      fail(message.toString());
+    }
+  }
+
+  /**
+   * Collects every package prefix any Azure job passes to {@code -DwildcardSuites}, both the
+   * inline arguments and the entries of the {@code *WildcardSuites} parameter lists they expand.
+   */
+  private Set<String> readAzureWildcardSuitePrefixes() {
+    File projectRoot = findProjectRoot();
+    if (projectRoot == null) {
+      fail("Could not locate project root directory");
+      return new HashSet<>();
+    }
+    File pipeline = new File(projectRoot, AZURE_PIPELINE_FILE);
+    if (!pipeline.exists()) {
+      fail("Could not locate " + AZURE_PIPELINE_FILE + " at " + pipeline.getAbsolutePath());
+      return new HashSet<>();
+    }
+
+    List<String> lines;
+    try {
+      lines = Files.readAllLines(pipeline.toPath(), StandardCharsets.UTF_8);
+    } catch (Exception e) {
+      fail("Could not read " + AZURE_PIPELINE_FILE + ": " + e.getMessage());
+      return new HashSet<>();
+    }
+
+    Set<String> prefixes = new HashSet<>();
+    boolean inWildcardList = false;
+    for (String line : lines) {
+      Matcher paramName = WILDCARD_PARAM_NAME.matcher(line);
+      if (paramName.matches()) {
+        inWildcardList = paramName.group(1).endsWith("WildcardSuites");
+        continue;
+      }
+      Matcher listItem = WILDCARD_LIST_ITEM.matcher(line);
+      if (inWildcardList && listItem.matches()) {
+        prefixes.add(listItem.group(1).trim());
+      }
+      Matcher cliArg = WILDCARD_CLI_ARG.matcher(line);
+      while (cliArg.find()) {
+        for (String suite : cliArg.group(1).split(",")) {
+          // skip the $(VAR) expansions, whose entries are picked up from the parameter lists
+          if (suite.startsWith("org.")) {
+            prefixes.add(suite.trim());
+          }
+        }
+      }
+    }
+    return prefixes;
   }
 
   /**
