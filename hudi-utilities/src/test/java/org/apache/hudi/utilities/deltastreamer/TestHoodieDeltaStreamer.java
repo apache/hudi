@@ -3386,12 +3386,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath2, sqlContext);
   }
 
-  /**
-   * Send {@code count} JSON test records to a specific partition of {@code topic}, bypassing the
-   * default partitioner. Records are shaped to match the JSON kafka source schema used by
-   * {@link #prepareJsonKafkaDFSFiles} so they can be ingested by the same deltastreamer config.
-   */
-
   @Disabled("HUDI-6609")
   public void testDeltaStreamerMultiwriterCheckpoint() throws Exception {
     // prep parquet source
