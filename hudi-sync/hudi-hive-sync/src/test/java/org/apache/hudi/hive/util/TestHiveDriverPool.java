@@ -185,6 +185,31 @@ class TestHiveDriverPool {
         () -> pool.dispatchAll(Arrays.asList("anything")));
   }
 
+  /**
+   * Driver.compile() registers a shutdown hook that Driver.close() does not remove -- only
+   * destroy() does. Closing a pooled Driver without destroying it therefore leaks it, and
+   * everything its last query referenced, into the static ShutdownHookManager for the life
+   * of the JVM. A long-running sync loop builds a pool per sync, so this grows without bound.
+   */
+  @Test
+  void closeDestroysEachPooledDriver() throws Exception {
+    HiveSyncConfig config = configWithEmptyHiveConf();
+    List<Driver> drivers = Collections.synchronizedList(new ArrayList<>());
+    HiveDriverPool.DriverFactory factory = (db) -> {
+      Driver d = mock(Driver.class);
+      drivers.add(d);
+      return d;
+    };
+    HiveDriverPool pool = new HiveDriverPool(config, 3, factory);
+    pool.close();
+
+    assertEquals(3, drivers.size());
+    for (Driver d : drivers) {
+      verify(d, times(1)).close();
+      verify(d, times(1)).destroy();
+    }
+  }
+
   @Test
   void invalidSizeRejected() {
     HiveSyncConfig config = configWithEmptyHiveConf();

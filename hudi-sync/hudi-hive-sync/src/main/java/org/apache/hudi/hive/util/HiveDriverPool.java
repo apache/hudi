@@ -207,6 +207,11 @@ public class HiveDriverPool implements AutoCloseable {
           if (worker.driver != null) {
             try {
               worker.driver.close();
+              // close() releases the current query's resources but leaves the shutdown hook
+              // Driver.compile() registered; only destroy() removes it. Without this the
+              // static ShutdownHookManager keeps every pooled Driver -- and the Table and
+              // FieldSchema objects of its last query -- alive for the life of the JVM.
+              worker.driver.destroy();
             } catch (Exception e) {
               LOG.warn("Error closing pooled Driver", e);
             }

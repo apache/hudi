@@ -93,6 +93,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       }
       if (this.hiveDriver != null) {
         this.hiveDriver.close();
+        this.hiveDriver.destroy();
       }
       // driverPool (if present) was already constructed by the caller before this
       // ctor ran; since we're about to throw, no one else will call close() on it.
@@ -315,6 +316,10 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     }
     if (hiveDriver != null) {
       hiveDriver.close();
+      // A fresh HiveSyncTool, and therefore a fresh Driver, is built per sync. close() leaves
+      // behind the shutdown hook registered by Driver.compile(), so without destroy() every
+      // sync permanently adds a Driver to ShutdownHookManager.
+      hiveDriver.destroy();
     }
   }
 }
