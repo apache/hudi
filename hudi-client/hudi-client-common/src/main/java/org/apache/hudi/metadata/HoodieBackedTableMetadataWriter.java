@@ -124,6 +124,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVers
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
+import static org.apache.hudi.metadata.MetadataPartitionType.EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
@@ -371,6 +372,22 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   private boolean initializeFromFilesystem(String dataTableInstantTime,
                                            Map<MetadataPartitionType, Indexer> indexerMapForPartitionsToInit,
                                            Option<String> inflightInstantTimestamp) throws IOException {
+    return initializeFromFilesystem(dataTableInstantTime, indexerMapForPartitionsToInit, Collections.emptyMap(), inflightInstantTimestamp);
+  }
+
+  /**
+   * Initialize the Metadata Table by listing files and partitions from the file system.
+   *
+   * @param dataTableInstantTime          timestamp to use for the commit
+   * @param indexerMapForPartitionsToInit map of metadata partition type to indexer for partitions to initialize
+   * @param requestedPartitionPaths       for the index types that cover many partitions, the partition path an
+   *                                      indexing action asked for, keyed by type; empty for a regular write
+   * @param inflightInstantTimestamp      current action instant responsible for this initialization
+   */
+  private boolean initializeFromFilesystem(String dataTableInstantTime,
+                                           Map<MetadataPartitionType, Indexer> indexerMapForPartitionsToInit,
+                                           Map<MetadataPartitionType, String> requestedPartitionPaths,
+                                           Option<String> inflightInstantTimestamp) throws IOException {
     Set<String> pendingDataInstants = getPendingDataInstants(dataMetaClient);
     if (!shouldInitializeFromFilesystem(pendingDataInstants, inflightInstantTimestamp)) {
       return false;
@@ -416,13 +433,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // FILES partition should always be initialized first if enabled
     if (!filesPartitionAvailable) {
       initializeMetadataPartition(FILES, indexerMapForPartitionsToInit.get(FILES),
-          dataTableInstantTime, partitionIdToAllFilesMap, lazyMergedFileSlices);
+          dataTableInstantTime, partitionIdToAllFilesMap, lazyMergedFileSlices, Option.empty());
     }
 
     indexerMapForPartitionsToInit.entrySet().stream().filter(e -> e.getKey() != FILES).forEach(
         e -> {
           try {
-            initializeMetadataPartition(e.getKey(), e.getValue(), dataTableInstantTime, partitionIdToAllFilesMap, lazyMergedFileSlices);
+            initializeMetadataPartition(e.getKey(), e.getValue(), dataTableInstantTime, partitionIdToAllFilesMap, lazyMergedFileSlices,
+                Option.ofNullable(requestedPartitionPaths.get(e.getKey())));
           } catch (IOException ex) {
             throw new HoodieMetadataException("Failed to initialize metadata partition: " + e.getKey(), ex);
           }
@@ -435,7 +453,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       Indexer indexer,
       String dataTableInstantTime,
       Map<String, List<FileInfo>> partitionToAllFilesMap,
-      Lazy<List<FileSliceAndPartition>> lazyMergedFileSlices) throws IOException {
+      Lazy<List<FileSliceAndPartition>> lazyMergedFileSlices,
+      Option<String> requestedIndexPartition) throws IOException {
     String instantTimeForPartition = generateUniqueInstantTime(dataTableInstantTime);
     // initialize metadata partitions
     List<IndexInitializationPlan> initializationList;
@@ -445,7 +464,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           instantTimeForPartition,
           partitionToAllFilesMap,
           lazyMergedFileSlices,
-          Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient)));
+          Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient)),
+          requestedIndexPartition);
       initializationList = indexer.buildInitialization(initializationContext);
       if (initializationList.isEmpty()) {
         LOG.info("Skip building {} index in metadata table", partitionType.getPartitionPath());
@@ -820,6 +840,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     String indexUptoInstantTime = indexPartitionInfos.get(0).getIndexUptoInstant();
     List<String> partitionPaths = new ArrayList<>();
     List<MetadataPartitionType> partitionTypes = new ArrayList<>();
+    // The plan names partition paths; for the index types that cover many partitions that is the only thing
+    // that says which of possibly several uninitialized indexes to build, so it is carried through rather than
+    // reduced to the type. One per type: each initialization needs its own instant.
+    Map<MetadataPartitionType, String> requestedPartitionPaths = new HashMap<>();
     indexPartitionInfos.forEach(indexPartitionInfo -> {
       String relativePartitionPath = indexPartitionInfo.getMetadataPartitionPath();
       LOG.info("Creating a new metadata index for partition '{}' under path {} upto instant {}",
@@ -830,15 +854,25 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       if (!enabledIndexerMap.containsKey(partitionType)) {
         throw new HoodieIndexException(String.format("Indexing for metadata partition: %s is not enabled", partitionType));
       }
-      partitionTypes.add(partitionType);
-      partitionPaths.add(relativePartitionPath);
+      if (partitionType == SECONDARY_INDEX || partitionType == EXPRESSION_INDEX) {
+        String previous = requestedPartitionPaths.put(partitionType, relativePartitionPath);
+        ValidationUtils.checkState(previous == null || previous.equals(relativePartitionPath),
+            String.format("An indexing plan may name one %s partition, got %s and %s", partitionType, previous, relativePartitionPath));
+      }
+      if (!partitionTypes.contains(partitionType)) {
+        partitionTypes.add(partitionType);
+      }
+      if (!partitionPaths.contains(relativePartitionPath)) {
+        partitionPaths.add(relativePartitionPath);
+      }
     });
 
     // before initialization set these  partitions as inflight in table config
     dataMetaClient.getTableConfig().setMetadataPartitionsInflight(dataMetaClient, partitionPaths);
 
     // initialize partitions
-    initializeFromFilesystem(instantTime, partitionTypes.stream().collect(Collectors.toMap(Function.identity(), enabledIndexerMap::get)), Option.empty());
+    initializeFromFilesystem(instantTime, partitionTypes.stream().collect(Collectors.toMap(Function.identity(), enabledIndexerMap::get)),
+        requestedPartitionPaths, Option.empty());
   }
 
   public void startCommit(String instantTime) {

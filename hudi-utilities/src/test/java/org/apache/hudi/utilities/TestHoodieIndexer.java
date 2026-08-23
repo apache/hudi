@@ -28,6 +28,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -39,6 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -63,6 +65,8 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.reload;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
@@ -184,6 +188,49 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   /**
    * Test indexer for RLI and secondary index.
    */
+  /**
+   * An indexing action builds the partition it names. With two secondary-index definitions registered and neither
+   * initialized (the shape of a table whose metadata table was rebuilt with its definitions intact), the action for
+   * one of them builds exactly that one, on storage and not only in the table config.
+   */
+  @Test
+  void testIndexerBuildsTheRequestedSecondaryIndexWhenSeveralAreUninitialized() {
+    String tableName = "indexer_test_two_si";
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withAsyncIndex(false).withMetadataIndexColumnStats(false).build();
+    upsertToTable(metadataConfig, tableName);
+    indexMetadataPartitionsAndAssert(RECORD_INDEX.getPartitionPath(), Collections.singletonList(FILES), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-record-index.properties");
+
+    metaClient = reload(metaClient);
+    String requestedIndex = SECONDARY_INDEX.getPartitionPath() + "idx_rider";
+    String otherIndex = SECONDARY_INDEX.getPartitionPath() + "idx_driver";
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(requestedIndex, "rider"));
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(otherIndex, "driver"));
+
+    indexMetadataPartitionsAndAssert(requestedIndex, Arrays.asList(FILES, RECORD_INDEX), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-secondary-index.properties");
+
+    metaClient = reload(metaClient);
+    assertFalse(metaClient.getTableConfig().getMetadataPartitions().contains(otherIndex), "only the requested index may be built");
+    assertFalse(metadataPartitionExists(basePath(), context(), otherIndex), "the other index must be untouched on storage too");
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
+    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(
+        metadataMetaClient, Option.of(getFileSystemViewForMetadataTable(metadataMetaClient)), requestedIndex);
+    assertFalse(fileSlices.isEmpty(), "the requested index must have been built, not merely marked complete");
+  }
+
+  private HoodieIndexDefinition secondaryIndexDefinition(String fullIndexName, String sourceField) {
+    return HoodieIndexDefinition.newBuilder()
+        .withIndexName(fullIndexName)
+        .withIndexType(PARTITION_NAME_SECONDARY_INDEX)
+        .withIndexFunction(IDENTITY_TRANSFORM)
+        .withSourceFields(Collections.singletonList(sourceField))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), SECONDARY_INDEX))
+        .build();
+  }
+
   @Test
   public void testIndexerForSecondaryIndex() {
     String tableName = "indexer_test_rli_si";
