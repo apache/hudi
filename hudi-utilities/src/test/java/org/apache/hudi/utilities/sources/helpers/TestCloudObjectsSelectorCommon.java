@@ -342,6 +342,29 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
   }
 
   @Test
+  void objectMetadataOrdersEventsChronologicallyNotLexicographically() {
+    // Same second, differing fractional precision. '.' sorts before 'Z', so ranking on the raw
+    // string puts 10:00:00Z ahead of the later 10:00:00.500Z and the older write would win.
+    Dataset<Row> events = sparkSession.read().json(jsc.parallelize(Arrays.asList(
+        "{\"eventTime\":\"2026-08-12T10:00:00Z\",\"s3\":{\"bucket\":{\"name\":\"b\"},"
+            + "\"object\":{\"key\":\"docs/a.txt\",\"size\":10}}}",
+        "{\"eventTime\":\"2026-08-12T10:00:00.500Z\",\"s3\":{\"bucket\":{\"name\":\"b\"},"
+            + "\"object\":{\"key\":\"docs/a.txt\",\"size\":20}}}"), 1));
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty(S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX.key(), "s3a");
+    List<CloudObjectMetadata> objects = CloudObjectsSelectorCommon.getObjectMetadata(
+        CloudObjectsSelectorCommon.Type.S3, jsc, events, false, props);
+
+    assertEquals(1, objects.size());
+    CloudObjectMetadata rewritten = objects.get(0);
+    assertEquals(Instant.parse("2026-08-12T10:00:00.500Z").toEpochMilli(), rewritten.getModificationTime(),
+        "the chronologically later event must win, whatever its fractional precision");
+    // size travels with the winning event, and it decides inline vs out-of-line blob placement
+    assertEquals(20L, rewritten.getSize());
+  }
+
+  @Test
   void extensionFilterKeepsASinglePredicateForOneExtension() {
     TypedProperties props = new TypedProperties();
     props.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), "json");

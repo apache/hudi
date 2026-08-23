@@ -432,11 +432,13 @@ public class CloudObjectsSelectorCommon {
     }
     String rank = "_hoodie_event_rank";
     // rank before projecting: the columns are nested, so selecting them first renames them to
-    // their leaf names and the window would no longer resolve bucketCol or keyCol
+    // their leaf names and the window would no longer resolve bucketCol or keyCol.
+    // Order on the parsed instant, not the raw string: '.' sorts before 'Z', so a lexicographic
+    // desc puts 10:00:00Z ahead of the later 10:00:00.500Z whenever precision varies in a second.
     return events
         .withColumn(rank, functions.row_number().over(
             Window.partitionBy(functions.col(bucketCol), functions.col(keyCol))
-                .orderBy(functions.col(timeCol).desc_nulls_last())))
+                .orderBy(functions.to_timestamp(functions.col(timeCol)).desc_nulls_last())))
         .filter(functions.col(rank).equalTo(1))
         .select(bucketCol, keyCol, sizeCol, timeCol);
   }
