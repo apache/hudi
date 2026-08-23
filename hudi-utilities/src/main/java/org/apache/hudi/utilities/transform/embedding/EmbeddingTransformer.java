@@ -24,6 +24,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.LazyIterableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -47,16 +49,19 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.BATCH_SIZE;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.DIMENSION;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.INPUT_MAX_CHARS;
+import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.MAX_CONCURRENT_REQUESTS;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.MAX_INFLIGHT_REQUESTS;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.PROVIDER_CLASS;
 import static org.apache.hudi.utilities.config.EmbeddingTransformerConfig.SOURCE_COLUMN;
@@ -85,6 +90,9 @@ public class EmbeddingTransformer implements Transformer {
     int batchSize = getIntWithAltKeys(properties, BATCH_SIZE);
     int inputMaxChars = getIntWithAltKeys(properties, INPUT_MAX_CHARS);
     int maxInflight = getIntWithAltKeys(properties, MAX_INFLIGHT_REQUESTS);
+    int maxConcurrent = getIntWithAltKeys(properties, MAX_CONCURRENT_REQUESTS);
+    ValidationUtils.checkArgument(maxConcurrent > 0,
+        MAX_CONCURRENT_REQUESTS.key() + " must be positive, got " + maxConcurrent);
     String providerClass = getStringWithAltKeys(properties, PROVIDER_CLASS, true);
 
     StructType inputSchema = rowDataset.schema();
@@ -95,7 +103,7 @@ public class EmbeddingTransformer implements Transformer {
     Dataset<Row> withVectors = rowDataset.mapPartitions(
         (org.apache.spark.api.java.function.MapPartitionsFunction<Row, Row>) partition ->
             new EmbeddingIterator(partition, providerClass, properties, sourceIndex,
-                dimension, batchSize, inputMaxChars, maxInflight),
+                dimension, batchSize, inputMaxChars, maxInflight, maxConcurrent),
         SparkAdapterSupport$.MODULE$.sparkAdapter().getCatalystExpressionUtils().getEncoder(outputSchema));
     // the row encoder drops StructField metadata; re-attach VECTOR(dim) so the
     // writer detects the column (and StreamSync deduces the right target schema)
@@ -121,6 +129,10 @@ public class EmbeddingTransformer implements Transformer {
    */
   private static class EmbeddingIterator extends LazyIterableIterator<Row, Row> {
 
+    // JVM-wide, so the cap holds however many partitions the executor runs at once. Keyed by
+    // permit count, mirroring how OpenAICompatibleEmbeddingProvider shares its HttpClients.
+    private static final ConcurrentHashMap<Integer, Semaphore> PERMITS = new ConcurrentHashMap<>();
+
     private final String providerClass;
     private final TypedProperties props;
     private final int sourceIndex;
@@ -128,6 +140,7 @@ public class EmbeddingTransformer implements Transformer {
     private final int batchSize;
     private final int inputMaxChars;
     private final int maxInflight;
+    private final int maxConcurrent;
 
     private EmbeddingProvider provider;
     private ExecutorService executor;
@@ -138,7 +151,8 @@ public class EmbeddingTransformer implements Transformer {
     private int emitIndex;
 
     EmbeddingIterator(Iterator<Row> input, String providerClass, TypedProperties props,
-        int sourceIndex, int dimension, int batchSize, int inputMaxChars, int maxInflight) {
+        int sourceIndex, int dimension, int batchSize, int inputMaxChars, int maxInflight,
+        int maxConcurrent) {
       super(input);
       this.providerClass = providerClass;
       this.props = props;
@@ -147,6 +161,7 @@ public class EmbeddingTransformer implements Transformer {
       this.batchSize = batchSize;
       this.inputMaxChars = inputMaxChars;
       this.maxInflight = maxInflight;
+      this.maxConcurrent = maxConcurrent;
     }
 
     /**
@@ -286,7 +301,36 @@ public class EmbeddingTransformer implements Transformer {
     }
 
     private List<float[]> embed(List<String> texts) {
-      return providerInstance().embed(texts);
+      Semaphore permits = permits(maxConcurrent);
+      try {
+        permits.acquire();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new HoodieException("Interrupted waiting to call the embeddings API", e);
+      }
+      try {
+        return providerInstance().embed(texts);
+      } finally {
+        permits.release();
+      }
+    }
+
+    /**
+     * Caps embedding requests in flight across the whole JVM. Each partition runs its own worker
+     * pool, so without a shared limit the load offered to one endpoint is
+     * (concurrent tasks x max.inflight.requests) and grows with the cluster: an oversubscribed
+     * endpoint then returns timeouts or 429s, which retry, which adds more load. Queueing here
+     * instead is free, since a waiting thread holds no connection and nothing can time out
+     * while it waits.
+     *
+     * <p>Every task configured alike shares one semaphore, which is what makes the cap hold
+     * across partitions. Executors are long lived and reused, so keying by permit count keeps a
+     * second job with a different setting on its own budget rather than silently inheriting the
+     * first job's.
+     */
+    @VisibleForTesting
+    static Semaphore permits(int maxConcurrent) {
+      return PERMITS.computeIfAbsent(maxConcurrent, permitCount -> new Semaphore(permitCount, true));
     }
 
     // called from the worker pool threads; synchronized so exactly one provider is built
