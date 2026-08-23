@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.sources.helpers.unstructured;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.UnstructuredFileSourceConfig;
 
 import org.junit.jupiter.api.Test;
@@ -138,9 +139,10 @@ public class TestUnstructuredIngestHardening {
   }
 
   /**
-   * The probe is what tells a user their table will have no text at all. hudi-utilities has
+   * The probe is what tells a user their table would have no text at all. hudi-utilities has
    * the Tika parser modules on its test classpath, so here it must report that plain text
-   * extracts; a deployment running the shipped bundle alone gets false and the warning.
+   * extracts; a deployment running hudi-utilities-bundle without hudi-tika-bundle gets false
+   * and the failure raised by {@link TikaDocumentParser#init}.
    */
   @Test
   void testPlainTextProbeDetectsAvailableParserModules() {
@@ -152,6 +154,30 @@ public class TestUnstructuredIngestHardening {
         "probe.txt", 1000);
     assertEquals(ParseResult.ParseStatus.SUCCESS, parsed.getStatus());
     assertTrue(parsed.getText().contains("lakehouse"));
+  }
+
+  /**
+   * init() runs once per Spark task, so a JVM without parser modules has to fail every task.
+   * Memoizing "we already probed" instead of the probe's answer made only the first task fail;
+   * Spark's retry of it then short-circuited, succeeded, and left every row parse_status=EMPTY.
+   */
+  @Test
+  void testMissingParserModulesFailEveryTaskNotOnlyTheFirst() {
+    Boolean actual = TikaDocumentParser.parserModulesPresent;
+    try {
+      TikaDocumentParser.parserModulesPresent = Boolean.FALSE;
+      TikaDocumentParser parser = new TikaDocumentParser();
+
+      for (int task = 1; task <= 3; task++) {
+        HoodieException thrown =
+            assertThrows(HoodieException.class, () -> parser.init(new TypedProperties()),
+                "task " + task + " must fail too, not just the first one");
+        assertTrue(thrown.getMessage().contains("hudi-tika-bundle"),
+            "the error must name the bundle carrying the parser modules, got: " + thrown.getMessage());
+      }
+    } finally {
+      TikaDocumentParser.parserModulesPresent = actual;
+    }
   }
 
   private static InputStream streamThrowing(Throwable failure) {

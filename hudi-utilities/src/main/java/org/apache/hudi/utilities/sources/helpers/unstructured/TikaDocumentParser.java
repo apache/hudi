@@ -36,7 +36,6 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.hudi.utilities.config.UnstructuredFileSourceConfig.PARSE_ENABLED;
 
@@ -52,27 +51,44 @@ public class TikaDocumentParser implements DocumentParser {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(TikaDocumentParser.class);
 
-  // one probe per JVM, not per task
-  private static final AtomicBoolean PROBED = new AtomicBoolean();
   private static final String PROBE_TEXT = "hudi unstructured ingest parser probe.\n";
+
+  // Probe outcome, memoized per JVM. init() runs once per task, so latching on "have we
+  // probed" would let only the first task on an executor fail and every later one - including
+  // Spark's retry of that task - carry on with a parser that cannot extract anything.
+  @VisibleForTesting
+  static volatile Boolean parserModulesPresent;
 
   private transient AutoDetectParser parser;
 
   @Override
   public void init(org.apache.hudi.common.config.TypedProperties props) {
-    // init() only runs when parsing is enabled, so reaching here means the user asked for text
-    // extraction. A deployment that cannot extract any text at all is a misconfiguration, and
-    // failing here is the difference between a clear error and a table that is silently empty:
-    // every row would get parse_status=EMPTY, no extracted_text, no chunks, and a null vector,
-    // with the job exiting successfully. EMPTY is also the normal result for an image, so
-    // nothing downstream can tell the two apart.
-    if (PROBED.compareAndSet(false, true) && !canExtractPlainText()) {
+    // Failing loudly beats the alternative: with no parser modules every row gets
+    // parse_status=EMPTY, no extracted_text, no chunks and a null vector, while the job still
+    // exits successfully. EMPTY is also the normal result for an image, so nothing downstream
+    // can tell an unparseable deployment from a corpus of pictures.
+    if (!hasParserModules()) {
       throw new HoodieException("Apache Tika extracted no text from a plain-text probe, so no Tika "
-          + "parser modules are on the classpath and no file will yield any text. The parsers ship "
-          + "in hudi-utilities-bundle; if you are running the slim bundle or a custom assembly, add "
-          + "org.apache.tika:tika-parsers-standard-package. To ingest blobs without text extraction, "
-          + "set " + PARSE_ENABLED.key() + "=false.");
+          + "parser modules are on the classpath and no file will yield any text. The parser modules "
+          + "ship in hudi-tika-bundle; pass it alongside hudi-utilities-bundle, or add "
+          + "org.apache.tika:tika-parsers-standard-package to a custom assembly. To ingest blobs "
+          + "without text extraction, set " + PARSE_ENABLED.key() + "=false.");
     }
+  }
+
+  /** Probes at most once per JVM, then reuses the outcome for every subsequent task. */
+  private static boolean hasParserModules() {
+    Boolean present = parserModulesPresent;
+    if (present == null) {
+      synchronized (TikaDocumentParser.class) {
+        present = parserModulesPresent;
+        if (present == null) {
+          present = canExtractPlainText();
+          parserModulesPresent = present;
+        }
+      }
+    }
+    return present;
   }
 
   /**
