@@ -495,7 +495,7 @@ public class HoodieIndexUtils {
         return Option.empty();
       }
       String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator,
-          existingRecordContext, mergeResult, true);
+          existingRecordContext, mergeResult, /* partitionResolvableFromRecord */ true);
       if (config.isFileGroupReaderBasedMergeHandle() && HoodieRecordUtils.isPayloadClassDeprecated(ConfigUtils.getPayloadClass(properties))) {
         return Option.of(existingRecordContext.constructHoodieRecord(mergeResult, partitionPath));
       } else {
@@ -552,17 +552,17 @@ public class HoodieIndexUtils {
     // block is written with that schema: HoodieAppendHandle and BaseWriteHelper both take it from this
     // same config. Meta fields therefore have to be prepended onto the partial schema, not the full
     // write schema, or they occupy the wrong positions. Resolves to the write schema otherwise.
-    HoodieSchema mergedRecordSchema = updatedConfig.shouldWritePartialUpdates()
+    HoodieSchema mergedSchema = updatedConfig.shouldWritePartialUpdates()
         ? HoodieSchemaCache.intern(HoodieSchema.parse(updatedConfig.getPartialUpdateSchema()))
         : writerSchema;
-    HoodieSchema mergedRecordSchemaWithMetaFields = updatedConfig.shouldWritePartialUpdates()
+    HoodieSchema mergedSchemaWithMetaFields = updatedConfig.shouldWritePartialUpdates()
         ? HoodieSchemaCache.intern(
-            HoodieSchemaUtils.addMetadataFields(mergedRecordSchema, updatedConfig.allowOperationMetadataField()))
+            HoodieSchemaUtils.addMetadataFields(mergedSchema, updatedConfig.allowOperationMetadataField()))
         : writerSchemaWithMetaFields;
     // Only a partial update can omit a partition field, so the full-schema paths keep resolving the
     // partition through the key generator exactly as before. Hoisted out of the per-record loop.
     boolean partitionResolvableFromRecord = !updatedConfig.shouldWritePartialUpdates()
-        || isPartitionResolvableFromRecord(mergedRecordSchemaWithMetaFields, keyGenerator);
+        || isPartitionResolvableFromRecord(mergedSchemaWithMetaFields, keyGenerator);
     // Read the existing records with the meta fields and current writer schema as the output schema
     HoodieData<HoodieRecord<R>> existingRecords =
         getExistingRecords(globalLocations, keyGeneratorWriteConfigOpt.getLeft(), hoodieTable, readerContextFactoryForExistingRecords, writerSchemaWithMetaFields);
@@ -592,7 +592,7 @@ public class HoodieIndexUtils {
 
           Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(
               incoming, existing, writerSchema, writerSchemaWithMetaFields,
-              mergedRecordSchema, mergedRecordSchemaWithMetaFields, partitionResolvableFromRecord, updatedConfig,
+              mergedSchema, mergedSchemaWithMetaFields, partitionResolvableFromRecord, updatedConfig,
               recordMerger, keyGenerator, incomingRecordContext, existingRecordContext, orderingFieldsArray, properties, isExpressionPayload, deleteContext);
           if (!mergedOpt.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
