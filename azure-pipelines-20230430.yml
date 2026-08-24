@@ -80,6 +80,7 @@ parameters:
       - 'org.apache.spark.sql.hudi.command'
       - 'org.apache.spark.sql.hudi.common'
       - 'org.apache.spark.sql.hudi.ddl'
+      - 'org.apache.spark.sql.hudi.dml.schema'
       - 'org.apache.spark.sql.hudi.procedure'
   - name: jacocoModules
     type: object
