@@ -84,7 +84,7 @@ class TestSqlKeyGenerator {
     // without them the auto-record-key delegate fails on the missing property rather than on the
     // behaviour under test.
     props.put(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, "100")
-    props.put(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, 1)
+    props.put(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, "1")
     partitionSchema.foreach(ps => props.put(SqlKeyGenerator.PARTITION_SCHEMA, ps))
     new SqlKeyGenerator(props)
   }
