@@ -60,6 +60,24 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     assertEquals("randomKey", HoodieWriterUtils.getKeyInTableConfig("randomKey", null));
   }
 
+  @Test
+  void validateTableConfigRejectsMultiFieldSlashPartitioningOnLegacyTable() throws IOException {
+    // A legacy table already holding slash-separated date partitioning with two partition fields:
+    // such a table can no longer be created through SQL or df.write, so the rejection has to fire
+    // off the table config alone, with the write providing no slash or partition configs of its own
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "datestr,city");
+    props.setProperty(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key(), "true");
+    HoodieTableMetaClient tableMetaClient = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, props, "")
+        .initTable(storageConf, tempDir.resolve("legacyMultiFieldSlashTable").toString());
+    HoodieTableConfig tableConfig = tableMetaClient.getTableConfig();
+
+    HoodieException ex = assertThrows(HoodieException.class,
+        () -> HoodieWriterUtils.validateTableConfig(
+            sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(new TypedProperties()), tableConfig));
+    assertTrue(ex.getMessage().contains("requires a single partition field"), ex.getMessage());
+  }
+
   /**
    * The meta-fields-mode guard compares normalized modes, not raw legacy property presence. A table
    * written before {@code hoodie.meta.fields.mode} existed is normalized to ALL or NONE when its
