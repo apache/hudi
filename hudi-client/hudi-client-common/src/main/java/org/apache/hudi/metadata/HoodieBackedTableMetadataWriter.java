@@ -457,10 +457,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       Option<String> requestedIndexPartition) throws IOException {
     // A requested partition initializes under a fresh solo-family instant, never the indexing
     // action's own instant. The action's completion applies its data commit to the metadata table
-    // too, and finding that instant already completed there reads as a partial earlier application:
-    // it is rolled back and re-applied, destroying the initialization records while leaving the
-    // file groups. The solo family is the established shape for metadata-table-only bootstrap
-    // commits and survives that reconciliation.
+    // too, and finding that instant already completed there is treated as a partially applied
+    // earlier commit: it is rolled back and re-applied, destroying the initialization records
+    // while leaving the file groups. The solo family is the established shape for
+    // metadata-table-only bootstrap commits and survives that reconciliation.
     String instantTimeForPartition = requestedIndexPartition.isPresent()
         ? generateUniqueSoloInstantTime() : generateUniqueInstantTime(dataTableInstantTime);
     // initialize metadata partitions
@@ -861,9 +861,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     String indexUptoInstantTime = indexPartitionInfos.get(0).getIndexUptoInstant();
     List<String> partitionPaths = new ArrayList<>();
     List<MetadataPartitionType> partitionTypes = new ArrayList<>();
-    // The plan names partition paths; for the index types that cover many partitions that is the only thing
-    // that says which of possibly several uninitialized indexes to build, so it is carried through rather than
-    // reduced to the type. One per type: each initialization needs its own instant.
+    // For the index types that cover many partitions, the plan's partition path is the only thing that says
+    // which of possibly several uninitialized indexes to build. Carry it through by type rather than reducing
+    // it to the type. One path per type: each initialization needs its own instant.
     Map<MetadataPartitionType, String> requestedPartitionPaths = new HashMap<>();
     indexPartitionInfos.forEach(indexPartitionInfo -> {
       String relativePartitionPath = indexPartitionInfo.getMetadataPartitionPath();
