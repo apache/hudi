@@ -235,14 +235,15 @@ class RunClusteringProcedure extends BaseProcedure
     val tableSchemaResolver = new TableSchemaResolver(metaClient)
     val tableSchema = tableSchemaResolver.getTableSchema(false)
     val fields = tableSchema.getFields.asScala.map(_.name().toLowerCase)
-    orderColumns.split(",").foreach(col => {
+    val columns = orderColumns.split(",")
+    columns.foreach(col => {
       if (!fields.contains(col.trim.toLowerCase)) {
         throw new HoodieClusteringException("Order column not exist:" + col)
       }
     })
     // The same validation the partitioners apply at execution time (see
     // SortUtils.validateSortableColumns), surfaced here before the job is submitted.
-    SortUtils.validateSortableColumns(orderColumns.split(","), tableSchema)
+    SortUtils.validateSortableColumns(columns, tableSchema)
   }
 }
 

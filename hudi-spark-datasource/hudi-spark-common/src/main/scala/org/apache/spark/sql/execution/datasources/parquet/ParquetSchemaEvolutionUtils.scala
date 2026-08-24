@@ -252,16 +252,11 @@ object ParquetSchemaEvolutionUtils {
   }
 
   /**
-   * Mirrors Spark's VariantMetadata.METADATA_KEY (Spark 4.x PushVariantIntoScan), referenced
-   * by literal because the class does not exist on Spark 3 classpaths. A rewritten variant is
-   * a non-empty struct whose every member carries the marker.
+   * The dotted path of the first PushVariantIntoScan rewrite struct in the schema, if any (see
+   * SparkInternalSchemaConverter.isVariantRewriteStruct for the marker).
    */
-  private val SPARK_VARIANT_METADATA_KEY = "__VARIANT_METADATA_KEY"
-
-  /** The dotted path of the first PushVariantIntoScan rewrite struct in the schema, if any. */
   private def findVariantRewritePath(dataType: DataType, path: String = ""): Option[String] = dataType match {
-    case struct: StructType if struct.fields.nonEmpty
-      && struct.fields.forall(_.metadata.contains(SPARK_VARIANT_METADATA_KEY)) =>
+    case struct: StructType if SparkInternalSchemaConverter.isVariantRewriteStruct(struct) =>
       Some(path)
     case struct: StructType =>
       struct.fields.foldLeft(Option.empty[String]) { (found, field) =>

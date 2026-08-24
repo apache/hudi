@@ -228,9 +228,10 @@ public class SparkInternalSchemaConverter {
 
   /**
    * Whether Spark's PushVariantIntoScan rewrote a variant column into this struct of requested
-   * extraction fields; every member carries the marker metadata.
+   * extraction fields; every member carries the marker metadata. Shared with the schema-on-read
+   * guard in ParquetSchemaEvolutionUtils so the marker is read in one place.
    */
-  private static boolean isVariantRewriteStruct(DataType sparkType) {
+  public static boolean isVariantRewriteStruct(DataType sparkType) {
     if (!(sparkType instanceof StructType)) {
       return false;
     }
