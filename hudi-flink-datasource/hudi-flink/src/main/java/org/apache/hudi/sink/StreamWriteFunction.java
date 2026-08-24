@@ -314,22 +314,19 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    * <p>2. Data Bucket exists, but fails to request new memory pages from memory pool.
    */
   private boolean doBufferRecord(String bucketID, HoodieFlinkInternalRow record) throws IOException {
-    RowDataBucket bucket = this.buckets.get(bucketID);
-    if (bucket == null) {
-      try {
-        bucket = new RowDataBucket(
-            bucketID,
-            createDataBuffer(),
-            getBucketInfo(record),
-            this.config.get(FlinkOptions.WRITE_BATCH_SIZE));
-        this.buckets.put(bucketID, bucket);
-      } catch (MemoryPagesExhaustedException e) {
-        log.info("There are not enough free pages in the memory pool to create a buffer; flushing is required first.");
-        return false;
-      }
-    }
+    try {
+      RowDataBucket bucket = this.buckets.computeIfAbsent(bucketID,
+          k -> new RowDataBucket(
+              bucketID,
+              createDataBuffer(),
+              getBucketInfo(record),
+              this.config.get(FlinkOptions.WRITE_BATCH_SIZE)));
 
-    return bucket.writeRow(record.getRowData());
+      return bucket.writeRow(record.getRowData());
+    } catch (MemoryPagesExhaustedException e) {
+      log.info("There are not enough free pages in the memory pool to create a buffer; flushing is required first.");
+      return false;
+    }
   }
 
   /**
@@ -382,23 +379,45 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     // A creation failure leaves no bucket in the map, while a write failure leaves the
     // diverged bucket in the map so that its committed records can be flushed and disposed.
     RowDataBucket failedBucket = this.buckets.get(bucketID);
-    if (failedBucket != null) {
-      ValidationUtils.checkState(
-          failedBucket.isDiverged(), "The failed RowData bucket has not diverged");
-      RowDataBucket largestOtherBucket = this.buckets.values().stream()
-          .filter(bucket -> bucket != failedBucket && !bucket.isEmpty())
-          .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
-          .orElse(null);
-      flushAndDisposeAfterWriteFailure(largestOtherBucket, failedBucket);
+    RowDataBucket bucketToFlush = this.buckets.values().stream()
+        .filter(bucket -> !bucketID.equals(bucket.getBucketId()) && !bucket.isEmpty())
+        .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
+        .orElse(null);
+
+    if (failedBucket == null) {
+      if (bucketToFlush == null) {
+        throw new HoodieException(
+            "Not enough memory pages to create a RowData buffer and no non-empty bucket can be flushed");
+      }
+      flushAndDisposeBucket(bucketToFlush);
       return;
     }
 
-    RowDataBucket bucketToFlush = this.buckets.values().stream()
-        .filter(bucket -> !bucket.isEmpty())
-        .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
-        .orElseThrow(() -> new HoodieException(
-            "Not enough memory pages to create a RowData buffer and no non-empty bucket can be flushed"));
-    flushAndDisposeBucket(bucketToFlush);
+    ValidationUtils.checkState(
+        failedBucket.isDiverged(), "The failed RowData bucket has not diverged");
+
+    RuntimeException failure = null;
+    if (bucketToFlush != null) {
+      try {
+        flushAndDisposeBucket(bucketToFlush);
+      } catch (RuntimeException e) {
+        failure = e;
+      }
+    }
+
+    try {
+      flushAndDisposeBucket(failedBucket);
+    } catch (RuntimeException e) {
+      if (failure == null) {
+        failure = e;
+      } else {
+        failure.addSuppressed(e);
+      }
+    }
+
+    if (failure != null) {
+      throw failure;
+    }
   }
 
   private void retryBufferRecord(
@@ -418,32 +437,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
               : "The write buffer is too small to hold a single record");
       disposeFailedRetryBucket(bucketID, exception);
       throw exception;
-    }
-  }
-
-  private void flushAndDisposeAfterWriteFailure(
-      RowDataBucket largestOtherBucket, RowDataBucket failedBucket) {
-    RuntimeException failure = null;
-    if (largestOtherBucket != null) {
-      try {
-        flushAndDisposeBucket(largestOtherBucket);
-      } catch (RuntimeException e) {
-        failure = e;
-      }
-    }
-
-    try {
-      flushAndDisposeBucket(failedBucket);
-    } catch (RuntimeException e) {
-      if (failure == null) {
-        failure = e;
-      } else {
-        failure.addSuppressed(e);
-      }
-    }
-
-    if (failure != null) {
-      throw failure;
     }
   }
 
