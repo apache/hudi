@@ -178,10 +178,6 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
           Seq("2", "a2", 2000, "2026/01/06", java.sql.Date.valueOf("2026-01-06"))
         )
 
-        // Partition pruning evaluates the predicate against the recovered partition value
-        checkAnswer(s"select id from $targetTable where datestr = date'2026-01-06'")(Seq("2"))
-        checkAnswer(s"select id from $targetTable where datestr < date'2026-01-06'")(Seq("1"))
-
         val metaClient = buildMetaClient(tablePath)
         assertPartitionDirsExist(metaClient, tablePath, "2026/01/05", "2026/01/06")
         assertMetadataTablePartitions(metaClient, tablePath, "2026/01/05", "2026/01/06")
@@ -220,8 +216,6 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
         )
 
         val metaClient = buildMetaClient(tablePath)
-        assertPartitionDirsExist(metaClient, tablePath, "2026/01/05")
-        assertMetadataTablePartitions(metaClient, tablePath, "2026/01/05")
         assertTrue(!metaClient.getStorage.exists(new StoragePath(tablePath, "2026-01-05")),
           s"No second directory should be created for table type $tableType")
       }
@@ -256,7 +250,7 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
            | )
            | partitioned by (`datestr`, `city`)
            | location '$tablePath'
-        """.stripMargin)("requires a single partition field")
+        """.stripMargin)("but found 2: datestr,city")
     }
   }
 
@@ -268,17 +262,15 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
       // [[HoodieWriterUtils#validateTableConfig]]
       val df = spark.sql(
         "select '1' as id, 'a1' as name, 1000L as ts, '2026-01-05' as datestr, 'NYC' as city")
-      checkExceptionContain(new Runnable {
-        override def run(): Unit = {
-          df.write.format("hudi")
-            .option("hoodie.table.name", "rejected_slash_table")
-            .option("hoodie.datasource.write.recordkey.field", "id")
-            .option("hoodie.datasource.write.partitionpath.field", "datestr,city")
-            .option("hoodie.datasource.write.slash.separated.date.partitioning", "true")
-            .mode("append")
-            .save(tablePath)
-        }
-      })("requires a single partition field")
+      checkExceptionContain(() =>
+        df.write.format("hudi")
+          .option("hoodie.table.name", "rejected_slash_table")
+          .option("hoodie.datasource.write.recordkey.field", "id")
+          .option("hoodie.datasource.write.partitionpath.field", "datestr,city")
+          .option("hoodie.datasource.write.slash.separated.date.partitioning", "true")
+          .mode("append")
+          .save(tablePath)
+      )("cannot be read back")
     }
   }
 

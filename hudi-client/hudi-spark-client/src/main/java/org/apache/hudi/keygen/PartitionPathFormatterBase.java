@@ -80,9 +80,9 @@ public abstract class PartitionPathFormatterBase<S> {
             .append(partitionPathPartStr);
       } else if (slashSeparatedDatePartitioning && !hasPathBreakingDash(partitionPathPartStr)) {
         // NOTE: Every part is substituted here, preserving the behaviour this branch had before the
-        //       [[ClassCastException]] fix. Writes reject slash partitioning with more than one
-        //       partition field ([[HoodieWriterUtils#validateTableConfig]]), so this branch only
-        //       serves reads of tables written before that rejection: [[CustomKeyGenerator]] built
+        //       [[ClassCastException]] fix. Spark writes reject slash partitioning with more than
+        //       one partition field ([[HoodieWriterUtils#validateTableConfig]]), so this branch
+        //       mainly serves reads of tables predating that rejection: [[CustomKeyGenerator]] built
         //       one single-field sub-keygen per field, so such tables slashed each field
         //       individually, and [[SparkHoodieTableFileIndex#composeRelativePartitionPath]] has to
         //       land on the same directory when it composes the prefix in one [[combine]] call over
@@ -128,10 +128,11 @@ public abstract class PartitionPathFormatterBase<S> {
    * such tables slashed each field individually, and
    * {@code SparkHoodieTableFileIndex#composeRelativePartitionPath} -- which calls {@link #combine}
    * once over all N columns to compose a listing prefix -- has to name the very same directory, or
-   * the prefix misses and the query silently returns no rows. New writes cannot reach this branch
-   * with slash partitioning enabled: multi-field slash tables produce a layout the extra fragments
-   * leave {@code HoodieSparkUtils#doParsePartitionColumnValues} unable to line up with the
-   * partition columns, so {@code HoodieWriterUtils#validateTableConfig} rejects them at write time.
+   * the prefix misses and the query silently returns no rows. Spark writes cannot reach this
+   * branch with slash partitioning enabled: multi-field slash tables produce a layout the extra
+   * fragments leave {@code HoodieSparkUtils#doParsePartitionColumnValues} unable to line up with
+   * the partition columns, so {@code HoodieWriterUtils#validateTableConfig} rejects them at write
+   * time (a HoodieStreamer first write to a not-yet-existing table bypasses that validation).
    * See HUDI issue #19666.
    */
   protected abstract S replaceDashesWithSlashes(S partitionPathPart);

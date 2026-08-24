@@ -78,6 +78,20 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     assertTrue(ex.getMessage().contains("requires a single partition field"), ex.getMessage());
   }
 
+  @Test
+  void validateTableConfigRejectsMultiFieldSlashPartitioningOnOverwrite() {
+    // SaveMode.Overwrite nulls the table config, so the rejection has to fire off the params
+    // alone, ahead of the isOverWriteMode gate that skips the rest of the validation
+    TypedProperties writeProps = new TypedProperties();
+    writeProps.put(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key(), "true");
+    writeProps.put("hoodie.datasource.write.partitionpath.field", "datestr,city");
+
+    HoodieException ex = assertThrows(HoodieException.class,
+        () -> HoodieWriterUtils.validateTableConfig(
+            sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(writeProps), null, true));
+    assertTrue(ex.getMessage().contains("requires a single partition field"), ex.getMessage());
+  }
+
   /**
    * The meta-fields-mode guard compares normalized modes, not raw legacy property presence. A table
    * written before {@code hoodie.meta.fields.mode} existed is normalized to ALL or NONE when its

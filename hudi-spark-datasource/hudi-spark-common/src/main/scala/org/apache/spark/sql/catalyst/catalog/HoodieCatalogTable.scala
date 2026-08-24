@@ -300,10 +300,12 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         + s"and ${KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key}")
     // Reject slash-separated date partitioning with more than one partition field at table
     // creation: the resulting layout cannot be read back (HUDI issue #19666).
-    // HoodieWriterUtils#validateTableConfig enforces the same invariant at write time; gated on
-    // !tableExists so a pre-existing table can still be registered in the catalog and read.
+    // HoodieWriterUtils#validateTableConfig enforces the same invariant at write time and already
+    // rejects a pre-existing table on the tableExists branch (parseSchemaAndConfigs calls it
+    // before reaching here), so the !tableExists gate only avoids a second, differently-worded
+    // error on that path.
     if (!tableExists
-      && sqlOptions.get(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key).exists(_.toBoolean)) {
+      && sqlOptions.get(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key).exists(_.equalsIgnoreCase("true"))) {
       ValidationUtils.checkArgument(table.partitionColumnNames.size <= 1,
         s"${KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key} requires a single partition"
           + s" field, but found ${table.partitionColumnNames.size}:"

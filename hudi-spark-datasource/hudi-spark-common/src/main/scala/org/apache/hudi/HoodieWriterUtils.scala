@@ -267,8 +267,11 @@ object HoodieWriterUtils {
     // read (HUDI issue #19666), so without this check the write commits cleanly and every
     // subsequent read of the table fails. Checked regardless of save mode, since an Overwrite
     // produces the same layout.
+    // NOTE: equalsIgnoreCase rather than toBoolean, since every other reader of this flag goes
+    //       through Boolean.parseBoolean semantics and treats a value like "1" as false, while
+    //       toBoolean would throw on it
     val slashSeparatedDatePartitioning =
-      params.get(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key).exists(_.toBoolean) ||
+      params.get(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key).exists(_.equalsIgnoreCase("true")) ||
         (null != tableConfig && tableConfig.getSlashSeparatedDatePartitioning)
     if (slashSeparatedDatePartitioning) {
       // The table config is the source of truth for an existing table; for a new one the
