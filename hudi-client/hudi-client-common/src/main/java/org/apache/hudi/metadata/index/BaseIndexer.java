@@ -77,6 +77,14 @@ public abstract class BaseIndexer implements Indexer {
                                                 Set<String> uninitializedPartitions,
                                                 String indexTypeName) {
     Option<String> requested = context.requestedIndexPartition();
+    if (requested.isPresent()
+        && dataTableMetaClient.getTableConfig().getMetadataPartitions().contains(requested.get())) {
+      // Already initialized, typically by the write that committed between scheduling and running the
+      // indexing action. Re-initializing would commit at an instant the metadata table already holds
+      // completed, and the rollback-and-recommit inside that commit destroys the earlier commit's records.
+      log.info("Metadata partition {} is already initialized, skipping", requested.get());
+      return Collections.emptySet();
+    }
     if (requested.isPresent() && dataTableMetaClient.getIndexForMetadataPartition(requested.get()).isPresent()) {
       return Collections.singleton(requested.get());
     }
