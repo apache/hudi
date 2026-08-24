@@ -84,7 +84,7 @@ class TestPartitionPathFormatter {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testSlashSeparatedDatePartitioningLeavesLeadingDashesAlone(boolean useRowWriterPath) {
+  void testSlashSeparatedDatePartitioningLeavesPathBreakingDashesAlone(boolean useRowWriterPath) {
     // NOTE: Substituting in any of these would yield a partition path that does not survive the
     //       round trip back from storage. A leading "/" is resolved differently by
     //       [[FSUtils#constructAbsolutePath(String, String)]] and the [[StoragePath]] overload used
@@ -97,8 +97,14 @@ class TestPartitionPathFormatter {
     assertEquals("--5", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "--5"));
     assertEquals("5-", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "5-"));
     assertEquals("a--b", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "a--b"));
-    // A single interior dash is still a separator
+    // A dash-delimited "." or ".." would become a URI dot segment: "2026/./05" normalizes to
+    // "2026/05", and "../a" resolves outside the table base path entirely
+    assertEquals("2026-.-05", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "2026-.-05"));
+    assertEquals("a-..-b", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "a-..-b"));
+    assertEquals("..-a", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "..-a"));
+    // A single interior dash is still a separator, and dots inside a token are untouched
     assertEquals("2026/01/05", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "2026-01-05"));
+    assertEquals("v1.2/v3.4", combine(useRowWriterPath, false, false, true, SINGLE_FIELD, "v1.2-v3.4"));
   }
 
   @ParameterizedTest

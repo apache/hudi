@@ -137,24 +137,23 @@ public abstract class PartitionPathFormatterBase<S> {
   protected abstract S replaceDashesWithSlashes(S partitionPathPart);
 
   /**
-   * Whether substituting the dashes in {@code partitionPathPart} would yield a leading, trailing or
-   * doubled path separator, in which case {@link #replaceDashesWithSlashes(Object)} must not be
-   * applied to it. Kept in step with {@code KeyGenUtils#hasPathBreakingDash}, which guards the Avro
-   * write path.
+   * Whether substituting the dashes in {@code partitionPathPart} would yield a path-breaking
+   * segment -- any dash-delimited token that is empty (a leading, trailing or doubled dash),
+   * {@code "."} or {@code ".."} -- in which case {@link #replaceDashesWithSlashes(Object)} must not
+   * be applied to it. Kept in step with {@code KeyGenUtils#hasPathBreakingDash}, which guards the
+   * Avro write path and documents each case.
    *
    * <p>NOTE: This has to be implemented by every sub-class, since the check has to be performed on
    * the concrete string representation {@code S} the formatter operates on.
    *
-   * <p>NOTE: None of the three shapes survives the round trip back from storage. A leading dash
-   * makes the path absolute, and that is resolved inconsistently --
-   * {@code FSUtils#constructAbsolutePath(String, String)} chops the leading "/" while the
-   * {@code StoragePath} overload used by {@code AbstractTableFileSystemView} lets it URI-resolve away
-   * the table base path ({@code "-5"} lands the writer in {@code <base>/5} but the file-system view
-   * in {@code /5}). A trailing dash gives {@code "5/"}, which {@code StoragePath} normalizes back to
-   * {@code "5"}, and a doubled dash gives {@code "a//b"}, which {@code URI.normalize()} collapses to
-   * {@code "a/b"} -- in both cases the writer records a partition string longer than the directory
-   * it resolves to, so {@code FSUtils#getFileName} slices the file name at the wrong offset. None of
-   * these values is a date to begin with, so nothing is lost by not slashing them.
+   * <p>NOTE: None of these shapes survives the round trip back from storage. An empty token turns
+   * the path absolute ({@code "-5"} -> {@code "/5"}, resolved inconsistently by the two
+   * {@code FSUtils#constructAbsolutePath} overloads) or leaves the recorded partition string
+   * longer than the directory it normalizes to ({@code "5-"} -> {@code "5/"},
+   * {@code "a--b"} -> {@code "a//b"}), so {@code FSUtils#getFileName} slices the file name at the
+   * wrong offset. A dot segment is resolved away by {@code URI.normalize()} -- {@code "..-a"}
+   * becomes {@code "../a"} and escapes the table base path entirely. None of these values is a
+   * date to begin with, so nothing is lost by not slashing them.
    */
   protected abstract boolean hasPathBreakingDash(S partitionPathPart);
 

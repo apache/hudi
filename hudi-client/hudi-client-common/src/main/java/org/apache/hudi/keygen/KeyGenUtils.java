@@ -307,38 +307,56 @@ public class KeyGenUtils {
    * Turns a {@code yyyy-MM-dd} formatted date value into the {@code yyyy/MM/dd} directory structure
    * requested by {@code hoodie.datasource.write.slash.separated.date.partitioning}.
    *
-   * <p>A value whose dashes would produce a leading, trailing or doubled {@code "/"} is returned
-   * as-is, because the resulting path does not survive the round trip back from storage:
+   * <p>A value whose dash-delimited tokens would produce a path-breaking segment -- an empty
+   * token, {@code "."} or {@code ".."} -- is returned as-is, because the resulting path does not
+   * survive the round trip back from storage:
    *
    * <ul>
-   *   <li>leading -- {@code "-5"} becomes {@code "/5"}, and an absolute relative-partition-path is
-   *   resolved inconsistently: {@code FSUtils#constructAbsolutePath(String, String)} chops the
-   *   leading {@code "/"} while the {@link org.apache.hudi.storage.StoragePath} overload used by
+   *   <li>empty token, leading -- {@code "-5"} becomes {@code "/5"}, and an absolute
+   *   relative-partition-path is resolved inconsistently:
+   *   {@code FSUtils#constructAbsolutePath(String, String)} chops the leading {@code "/"} while the
+   *   {@link org.apache.hudi.storage.StoragePath} overload used by
    *   {@code AbstractTableFileSystemView} lets it URI-resolve away the table base path (the writer
    *   lands in {@code "<base>/5"} but the file-system view in {@code "/5"}, and {@code "-"}
    *   resolves to the base path itself)</li>
-   *   <li>trailing -- {@code "5-"} becomes {@code "5/"}, which {@code StoragePath} normalizes back
-   *   to {@code "5"}, so the writer records a partition string that no longer names its directory
-   *   </li>
-   *   <li>doubled -- {@code "a--b"} becomes {@code "a//b"}, which {@code URI.normalize()} collapses
-   *   to {@code "a/b"}, with the same divergence</li>
+   *   <li>empty token, trailing or interior -- {@code "5-"} becomes {@code "5/"}, which
+   *   {@code StoragePath} normalizes back to {@code "5"}, and {@code "a--b"} becomes
+   *   {@code "a//b"}, which {@code URI.normalize()} collapses to {@code "a/b"} -- either way the
+   *   writer records a partition string that no longer names its directory, so
+   *   {@code FSUtils#getFileName} slices the file name at the wrong offset and the metadata-table
+   *   FILES partition ends up with a truncated entry</li>
+   *   <li>dot segment -- {@code "2026-.-05"} becomes {@code "2026/./05"}, which URI-normalizes to
+   *   {@code "2026/05"}, and {@code "..-a"} becomes {@code "../a"}, which resolves OUTSIDE the
+   *   table base path entirely ({@code PartitionPathEncodeUtils#escapePathName} leaves dots and
+   *   dashes alone, so url-encoding does not neutralize this)</li>
    * </ul>
    *
-   * <p>In the latter two cases the recorded partition string is longer than the directory it
-   * resolves to, so {@code FSUtils#getFileName} slices the file name at the wrong offset and the
-   * metadata-table FILES partition ends up with a truncated entry. None of these values is a date
-   * to begin with, so nothing is lost by not slashing them.
+   * <p>None of these values is a date to begin with, so nothing is lost by not slashing them.
    */
   private static String slashSeparateDateValue(String partitionPath) {
     return hasPathBreakingDash(partitionPath) ? partitionPath : partitionPath.replace('-', '/');
   }
 
   /**
-   * Whether substituting the dashes in {@code partitionPath} would yield a leading, trailing or
-   * doubled path separator. See {@link #slashSeparateDateValue} for why each case is excluded.
+   * Whether substituting the dashes in {@code partitionPath} would yield a path-breaking segment:
+   * any dash-delimited token that is empty (a leading, trailing or doubled dash), {@code "."} or
+   * {@code ".."}. See {@link #slashSeparateDateValue} for why each case is excluded.
    */
   public static boolean hasPathBreakingDash(String partitionPath) {
-    return partitionPath.startsWith("-") || partitionPath.endsWith("-") || partitionPath.contains("--");
+    int tokenStart = 0;
+    int length = partitionPath.length();
+    for (int i = 0; i <= length; i++) {
+      if (i == length || partitionPath.charAt(i) == '-') {
+        int tokenLength = i - tokenStart;
+        if (tokenLength == 0
+            || (tokenLength == 1 && partitionPath.charAt(tokenStart) == '.')
+            || (tokenLength == 2 && partitionPath.charAt(tokenStart) == '.' && partitionPath.charAt(tokenStart + 1) == '.')) {
+          return true;
+        }
+        tokenStart = i + 1;
+      }
+    }
+    return false;
   }
 
   /**

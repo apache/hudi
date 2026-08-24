@@ -283,7 +283,8 @@ object HoodieWriterUtils {
         throw new HoodieException(s"${HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key} requires"
           + s" a single partition field, but found $partitionFieldCount: $partitionFields."
           + " The slash-separated layout of a multi-field partition path cannot be read back."
-          + " Use a single date partition field or disable slash-separated date partitioning.")
+          + " Recreate the table with a single date partition field or without this config --"
+          + " an existing table's config cannot be changed in place.")
       }
     }
     // If Overwrite is set as save mode, we don't need to do table config validation.
