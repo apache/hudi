@@ -79,7 +79,7 @@ public class TestRetryHelper {
         return true;
       }));
 
-      List<LogEvent> warnings = appender.getLog().stream()
+      List<LogEvent> warnings = appender.getCapturedEvents().stream()
           .filter(event -> Level.WARN.equals(event.getLevel())).collect(Collectors.toList());
       assertFalse(warnings.isEmpty(), "the retries should still be reported at warn level");
       for (LogEvent warning : warnings) {

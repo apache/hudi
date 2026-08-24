@@ -147,7 +147,7 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
 
     // the symptom from HUDI-9095: losing the race used to be reported as a warning with a full
     // stack trace, even though the file the caller asked for is right there
-    List<String> problems = appender.getLog().stream()
+    List<String> problems = appender.getCapturedEvents().stream()
         .filter(event -> event.getLevel().isMoreSpecificThan(Level.WARN))
         .map(event -> event.getMessage().getFormattedMessage())
         .collect(Collectors.toList());

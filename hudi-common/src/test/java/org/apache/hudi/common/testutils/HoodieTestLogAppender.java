@@ -44,7 +44,7 @@ import java.util.UUID;
  */
 public class HoodieTestLogAppender extends AbstractAppender {
 
-  private final List<LogEvent> log = new ArrayList<>();
+  private final List<LogEvent> capturedEvents = new ArrayList<>();
   private Logger attachedLogger;
 
   public HoodieTestLogAppender() {
@@ -54,11 +54,11 @@ public class HoodieTestLogAppender extends AbstractAppender {
   @Override
   public void append(LogEvent event) {
     // the event is mutable and gets reused, so keep an immutable copy
-    log.add(event.toImmutable());
+    capturedEvents.add(event.toImmutable());
   }
 
-  public List<LogEvent> getLog() {
-    return new ArrayList<>(log);
+  public List<LogEvent> getCapturedEvents() {
+    return new ArrayList<>(capturedEvents);
   }
 
   /**
