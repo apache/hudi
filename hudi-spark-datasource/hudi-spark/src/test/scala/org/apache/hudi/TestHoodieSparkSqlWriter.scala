@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
@@ -211,6 +211,83 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
 
     //on same path try write with different RECORDKEY_FIELD_NAME and Overwrite SaveMode should be successful.
     assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier2, dataFrame2)._1)
+  }
+
+  /**
+   * A table written before table version 2 has no hoodie.table.recordkey.fields, hoodie.table.partition.fields
+   * or hoodie.table.base.file.format in hoodie.properties, because those table configs only shipped with table
+   * version 2. Validation must tolerate their absence so that the version 1 to 2 upgrade can backfill them from
+   * the same write config; otherwise such a table can never be written to again.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("", "ts"))
+  def testWriteToTableVersionOneMissingUpgradeBackfilledConfigs(partitionField: String): Unit = {
+    val keyGenClass = if (partitionField.isEmpty) classOf[NonpartitionedKeyGenerator] else classOf[SimpleKeyGenerator]
+    val writeParams = Map("path" -> tempBasePath,
+      HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "uuid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> partitionField,
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> keyGenClass.getName)
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, writeParams, newSingleRowDataFrame())
+
+    regressTableConfigToVersionOne()
+
+    assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams, newSingleRowDataFrame())._1)
+
+    val upgradedConfig = loadTableConfig()
+    assertEquals("uuid", upgradedConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS))
+    assertEquals(partitionField, upgradedConfig.getString(HoodieTableConfig.PARTITION_FIELDS))
+    assertEquals("PARQUET", upgradedConfig.getString(HoodieTableConfig.BASE_FILE_FORMAT))
+    assertTrue(upgradedConfig.getTableVersion.versionCode() >= HoodieTableVersion.TWO.versionCode())
+
+    // the backfilled table configs must not conflict with the same write config on the next write
+    assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams, newSingleRowDataFrame())._1)
+  }
+
+  /**
+   * From table version 2 onwards hoodie.table.recordkey.fields is expected to be present, so its absence still
+   * signals a genuine conflict rather than a config the table is too old to carry.
+   */
+  @Test
+  def testWriteToTableVersionTwoMissingRecordKeyStillConflicts(): Unit = {
+    val writeParams = Map("path" -> tempBasePath,
+      HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "uuid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName)
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, writeParams, newSingleRowDataFrame())
+
+    val metaClient = loadMetaClient()
+    HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath,
+      Collections.singleton(HoodieTableConfig.RECORDKEY_FIELDS.key))
+
+    val hoodieException = intercept[HoodieException](
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams, newSingleRowDataFrame()))
+    assert(hoodieException.getMessage.contains("Config conflict"))
+    assert(hoodieException.getMessage.contains("RecordKey:\tuuid\tnull"))
+  }
+
+  private def newSingleRowDataFrame(): DataFrame =
+    spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+
+  private def loadMetaClient(): HoodieTableMetaClient = createMetaClient(spark, tempBasePath)
+
+  private def loadTableConfig(): HoodieTableConfig = loadMetaClient().getTableConfig
+
+  /**
+   * Rewrites hoodie.properties to the shape a table version 1 writer would have left behind: the version pinned
+   * to 1 and every table config introduced at version 2 absent.
+   */
+  private def regressTableConfigToVersionOne(): Unit = {
+    val metaClient = loadMetaClient()
+    val deletedConfigs = new java.util.HashSet[String]()
+    deletedConfigs.add(HoodieTableConfig.RECORDKEY_FIELDS.key)
+    deletedConfigs.add(HoodieTableConfig.PARTITION_FIELDS.key)
+    deletedConfigs.add(HoodieTableConfig.BASE_FILE_FORMAT.key)
+    HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath, deletedConfigs)
+    val versionProp = new java.util.Properties()
+    versionProp.setProperty(HoodieTableConfig.VERSION.key, String.valueOf(HoodieTableVersion.ONE.versionCode()))
+    HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPath, versionProp)
   }
 
   /**

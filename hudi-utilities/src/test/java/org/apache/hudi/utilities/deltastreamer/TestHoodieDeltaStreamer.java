@@ -150,6 +150,7 @@ import java.sql.DriverManager;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -556,6 +557,44 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     syncAndAssertRecordCount(newCfg, 1950, tableBasePath, "00001", 2);
     List<Row> counts2 = countsPerCommit(tableBasePath, sqlContext);
     assertEquals(1950, counts2.stream().mapToLong(entry -> entry.getLong(1)).sum());
+  }
+
+  /**
+   * A table written before table version 2 has no hoodie.table.recordkey.fields in hoodie.properties, because
+   * that table config only shipped with table version 2. The stream must still initialize so that the version 1
+   * to 2 upgrade can backfill it from the same write config; validating it away in the StreamSyncService
+   * constructor kills the stream before that upgrade ever runs.
+   */
+  @Test
+  void testTableVersionOneMissingRecordKeyTableConfig() throws Exception {
+    String tableBasePath = basePath + "/test_table_version_one_configs";
+
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1);
+
+    regressTableConfigToVersionOne(tableBasePath);
+
+    HoodieDeltaStreamer.Config upsertCfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    upsertCfg.sourceLimit = 2000;
+    syncAndAssertRecordCount(upsertCfg, 1950, tableBasePath, "00001", 2);
+
+    HoodieTableConfig tableConfig = HoodieTestUtils.createMetaClient(storage, tableBasePath).getTableConfig();
+    assertEquals("_row_key", tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
+    assertTrue(tableConfig.getTableVersion().versionCode() >= HoodieTableVersion.TWO.versionCode());
+  }
+
+  /**
+   * Rewrites hoodie.properties to the shape a table version 1 writer would have left behind: the version pinned
+   * to 1 and every table config introduced at version 2 absent.
+   */
+  private void regressTableConfigToVersionOne(String tableBasePath) {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, tableBasePath);
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        new HashSet<>(Arrays.asList(HoodieTableConfig.RECORDKEY_FIELDS.key(),
+            HoodieTableConfig.PARTITION_FIELDS.key(), HoodieTableConfig.BASE_FILE_FORMAT.key())));
+    Properties versionProp = new Properties();
+    versionProp.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(HoodieTableVersion.ONE.versionCode()));
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), versionProp);
   }
 
   private void syncAndAssertRecordCount(HoodieDeltaStreamer.Config cfg, Integer expected, String tableBasePath, String metadata, Integer totalCommits) throws Exception {
