@@ -77,13 +77,7 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
 
   override def getRecordKey(record: GenericRecord): String =
     originalKeyGen.map {
-      // Mirror of getPartitionPath below: resolve the record key alone where the generator exposes
-      // it, so neither accessor pays for the other half. Going through getKey would also compute the
-      // partition path and discard it, and would let a partition-side failure surface from a
-      // record-key lookup: TimestampBasedAvroKeyGenerator raises HoodieKeyGeneratorException
-      // independently of the key.
-      case baseKeyGen: BaseKeyGenerator => baseKeyGen.getRecordKey(record)
-      case keyGen => keyGen.getKey(record).getRecordKey
+      _.getKey(record).getRecordKey
     } getOrElse {
       complexKeyGen.getRecordKey(record)
     }

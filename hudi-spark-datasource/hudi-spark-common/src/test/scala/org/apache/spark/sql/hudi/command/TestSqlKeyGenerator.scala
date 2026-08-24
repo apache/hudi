@@ -21,7 +21,7 @@ import org.apache.hudi.common.config.TimestampKeyGeneratorConfig
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieKeyException
-import org.apache.hudi.keygen.{SimpleKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{KeyGenUtils, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 
 import org.apache.avro.Schema
@@ -39,6 +39,12 @@ import scala.collection.JavaConverters._
  * carries only the fields named in `UPDATE SET`. `HoodieIndexUtils#inferPartitionPath` then asks
  * the key generator for that record's partition path, so a record key absent from the assignments
  * is legitimately unset at that point and must not fail partition resolution.
+ *
+ * The fixtures set `hoodie.sql.partition.schema` by default because production always does, at
+ * every construction site (`ProvidesHoodieConfig` and both `MergeIntoHoodieTableCommand` copies).
+ * Leaving it unset makes `convertPartitionPathToSqlType` return its input immediately, which skips
+ * the default-partition guard, the fragment-count early-out and hive-style handling, so the cases
+ * named after those behaviours would never reach them.
  */
 class TestSqlKeyGenerator {
 
@@ -55,6 +61,9 @@ class TestSqlKeyGenerator {
        |}
      """.stripMargin)
 
+  /** 2026-08-11 00:00:00 UTC in microseconds, which is what the GenericRecord path assumes. */
+  private val timestampMicros = String.valueOf(1786406400000000L)
+
   /** The same record shape with only the named fields, as a partial update produces. */
   private def projected(fieldNames: String*): Schema = {
     val fields = schema.getFields.asScala
@@ -63,7 +72,7 @@ class TestSqlKeyGenerator {
     Schema.createRecord("test_record", null, null, false, fields.asJava)
   }
 
-  private def keyGenerator(partitionSchema: Option[String] = None,
+  private def keyGenerator(partitionSchema: Option[String] = Some("dt string"),
                            withRecordKey: Boolean = true): SqlKeyGenerator = {
     val props = new TypedProperties()
     props.put(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, classOf[SimpleKeyGenerator].getName)
@@ -71,14 +80,17 @@ class TestSqlKeyGenerator {
       props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key, "id")
     }
     props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key, "dt")
-    // Spark SQL always sets this (see MergeIntoHoodieTableCommand), and it is what drives
-    // convertPartitionPathToSqlType, so cover it rather than leaving it None.
+    // Production sets both whenever record keys are auto-generated (HoodieCreateRecordUtils), so
+    // without them the auto-record-key delegate fails on the missing property rather than on the
+    // behaviour under test.
+    props.put(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, "100")
+    props.put(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, 1)
     partitionSchema.foreach(ps => props.put(SqlKeyGenerator.PARTITION_SCHEMA, ps))
     new SqlKeyGenerator(props)
   }
 
   /** Delegates to a TimestampBasedKeyGenerator rather than a SimpleKeyGenerator. */
-  private def timestampKeyGenerator(partitionSchema: Option[String] = None): SqlKeyGenerator = {
+  private def timestampKeyGenerator(partitionSchema: Option[String]): SqlKeyGenerator = {
     val props = new TypedProperties()
     props.put(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, classOf[TimestampBasedKeyGenerator].getName)
     props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key, "id")
@@ -96,6 +108,21 @@ class TestSqlKeyGenerator {
     record.put("amount", 15.0d)
     record.put("dt", "2026-08-11")
     record
+  }
+
+  /** A partial-update shape: the partition field is not in the schema at all. */
+  private def recordMissingThePartitionField: GenericData.Record = {
+    val record = new GenericData.Record(projected("id", "amount"))
+    record.put("id", 1L)
+    record.put("amount", 15.0d)
+    record
+  }
+
+  /** Runs `f` with the default timezone pinned, since the timestamp arms format in it. */
+  private def inUtc[T](f: => T): T = {
+    val previousZone = DateTimeZone.getDefault
+    DateTimeZone.setDefault(DateTimeZone.UTC)
+    try f finally DateTimeZone.setDefault(previousZone)
   }
 
   @Test
@@ -121,25 +148,29 @@ class TestSqlKeyGenerator {
   }
 
   /**
-   * Drives convertPartitionPathToSqlType's TimestampType arm, which is the only arm that does any
-   * work: a `dt string` partition schema takes the identity case, so it pins nothing. The value is
-   * microseconds because that is what the GenericRecord path assumes when
-   * hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled is off. Timezone is
-   * pinned because the output is formatted in the default zone.
+   * Drives convertPartitionPathToSqlType's TimestampType arm, the only arm that rewrites the value.
+   * The expected string was captured from a run rather than derived.
    */
   @Test
-  def testGetPartitionPathConvertsATimestampPartitionValue(): Unit = {
-    val previousZone = DateTimeZone.getDefault
-    DateTimeZone.setDefault(DateTimeZone.UTC)
-    try {
-      val record = new GenericData.Record(schema)
-      record.put("id", 1L)
-      // 2026-08-11 00:00:00 UTC expressed in microseconds.
-      record.put("dt", String.valueOf(1786406400000000L))
-      assertEquals("2026-08-11 00%3A00%3A00", keyGenerator(Some("dt timestamp")).getPartitionPath(record))
-    } finally {
-      DateTimeZone.setDefault(previousZone)
-    }
+  def testGetPartitionPathConvertsATimestampPartitionValue(): Unit = inUtc {
+    val record = new GenericData.Record(schema)
+    record.put("id", 1L)
+    record.put("dt", timestampMicros)
+    assertEquals("2026-08-11 00%3A00%3A00",
+      keyGenerator(Some("dt timestamp")).getPartitionPath(record))
+  }
+
+  /**
+   * The one shape that legitimately supplies no partition schema is a non-partitioned table, where
+   * convertPartitionPathToSqlType returns its input untouched. Paired with the case above on the
+   * same value, so the conversion is shown to be skipped rather than merely absent.
+   */
+  @Test
+  def testNonPartitionedTableLeavesThePartitionValueUnconverted(): Unit = inUtc {
+    val record = new GenericData.Record(schema)
+    record.put("id", 1L)
+    record.put("dt", timestampMicros)
+    assertEquals(timestampMicros, keyGenerator(partitionSchema = None).getPartitionPath(record))
   }
 
   /**
@@ -147,36 +178,50 @@ class TestSqlKeyGenerator {
    * absent partition field: it formats the epoch instead, so the HUDI-8315 guard in
    * convertPartitionPathToSqlType never fires for it. Pinned because this change makes the case
    * reachable, where previously the record-key exception pre-empted it.
+   *
+   * All three partition-schema spellings are pinned separately below because they diverge, and the
+   * divergence is the point: a `timestamp` column turns the epoch string into a bare
+   * NumberFormatException, while a `string` column silently accepts the epoch partition.
    */
   @Test
-  def testTimestampDelegateResolvesAnAbsentPartitionFieldToTheEpoch(): Unit = {
-    val previousZone = DateTimeZone.getDefault
-    DateTimeZone.setDefault(DateTimeZone.UTC)
-    try {
-      val record = new GenericData.Record(projected("id", "amount"))
-      record.put("id", 1L)
-      record.put("amount", 15.0d)
-      assertEquals("1970-01-01", timestampKeyGenerator().getPartitionPath(record))
-    } finally {
-      DateTimeZone.setDefault(previousZone)
-    }
+  def testTimestampDelegateResolvesAnAbsentPartitionFieldToTheEpoch(): Unit = inUtc {
+    assertEquals("1970-01-01",
+      timestampKeyGenerator(None).getPartitionPath(recordMissingThePartitionField))
+  }
+
+  @Test
+  def testTimestampDelegateSilentlyAcceptsTheEpochUnderAStringPartitionSchema(): Unit = inUtc {
+    assertEquals("1970-01-01",
+      timestampKeyGenerator(Some("dt string")).getPartitionPath(recordMissingThePartitionField))
+  }
+
+  @Test
+  def testTimestampDelegateThrowsUnderATimestampPartitionSchema(): Unit = inUtc {
+    // The epoch string the delegate produced is not microseconds, so the TimestampType arm cannot
+    // parse it. NumberFormatException rather than a Hudi exception is what the code does today.
+    assertThrows(classOf[NumberFormatException],
+      () => timestampKeyGenerator(Some("dt timestamp")).getPartitionPath(recordMissingThePartitionField))
   }
 
   /**
    * Without a record-key config KeyGenUtils#isAutoGeneratedRecordKeysEnabled is true, so the delegate
    * is wrapped in an AutoRecordGenWrapperKeyGenerator. That wrapper is a BaseKeyGenerator, so it now
    * takes the direct arm and getPartitionPath no longer consumes a generated sequence id as a side
-   * effect of building a HoodieKey. Uniqueness does not depend on the stride, but the change is
-   * pinned here rather than left as an unexercised side effect.
+   * effect of building a HoodieKey.
+   *
+   * The record key is asserted after two partition lookups to pin that stride: the sequence id is
+   * `instantTime_partitionId_rowId`, so it reads 100_1_0 here and 100_1_2 before the change.
+   * Uniqueness never depended on the stride, but it is now a pinned decision.
    */
   @Test
-  def testAutoRecordKeyDelegateStillResolvesThePartitionPath(): Unit = {
+  def testAutoRecordKeyDelegateDoesNotConsumeSequenceIdsOnPartitionLookups(): Unit = {
     val record = new GenericData.Record(schema)
     record.put("amount", 15.0d)
     record.put("dt", "2026-08-11")
     val keyGen = keyGenerator(withRecordKey = false)
     assertEquals("2026-08-11", keyGen.getPartitionPath(record))
     assertEquals("2026-08-11", keyGen.getPartitionPath(record))
+    assertEquals("100_1_0", keyGen.getRecordKey(record))
   }
 
   /**
@@ -192,10 +237,8 @@ class TestSqlKeyGenerator {
    */
   @Test
   def testPartitionFieldMissingFromTheSchemaYieldsTheDefaultPartition(): Unit = {
-    val record = new GenericData.Record(projected("id", "amount"))
-    record.put("id", 1L)
-    record.put("amount", 15.0d)
-    assertEquals(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH, keyGenerator().getPartitionPath(record))
+    assertEquals(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH,
+      keyGenerator().getPartitionPath(recordMissingThePartitionField))
   }
 
   /**
@@ -208,6 +251,7 @@ class TestSqlKeyGenerator {
   def testPartitionAndRecordKeyBothMissingYieldTheDefaultPartition(): Unit = {
     val record = new GenericData.Record(projected("amount"))
     record.put("amount", 15.0d)
-    assertEquals(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH, keyGenerator().getPartitionPath(record))
+    assertEquals(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH,
+      keyGenerator().getPartitionPath(record))
   }
 }
