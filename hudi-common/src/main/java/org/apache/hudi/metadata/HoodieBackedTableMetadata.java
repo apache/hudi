@@ -306,21 +306,23 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private boolean isRouteableVectorMetadataLookup(String partitionName, List<String> sortedKeyPrefixes) {
     return MetadataPartitionType.fromPartitionPath(partitionName).equals(MetadataPartitionType.VECTOR_INDEX)
-        && sortedKeyPrefixes.stream().allMatch(this::isRouteableVectorMetadataKeyPrefix);
+        && sortedKeyPrefixes.stream().allMatch(HoodieBackedTableMetadata::isRouteableVectorMetadataKeyPrefix);
   }
 
-  private boolean isRouteableVectorMetadataKeyPrefix(String keyPrefix) {
+  static boolean isRouteableVectorMetadataKeyPrefix(String keyPrefix) {
     if (keyPrefix == null || keyPrefix.isEmpty()) {
       return false;
     }
     byte[] keyBytes = VectorIndexMetadataKey.decode(keyPrefix);
     switch (Byte.toUnsignedInt(keyBytes[0])) {
+      case VectorIndexMetadataKey.FAMILY_ACTIVE_MANIFEST:
+        return keyBytes.length == 1;
       case VectorIndexMetadataKey.FAMILY_MANIFEST:
         return keyBytes.length >= 5;
       case VectorIndexMetadataKey.FAMILY_QUANTIZER:
         return keyBytes.length >= 7;
       case VectorIndexMetadataKey.FAMILY_CENTROIDS:
-        return keyBytes.length >= 15;
+        return keyBytes.length >= 7;
       case VectorIndexMetadataKey.FAMILY_CLUSTER_STATS:
         return keyBytes.length >= 9;
       case VectorIndexMetadataKey.FAMILY_POSTING:

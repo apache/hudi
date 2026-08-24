@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.index.vector;
 
+import org.apache.hudi.avro.model.HoodieVectorIndexActiveManifest;
 import org.apache.hudi.avro.model.HoodieVectorIndexCentroids;
 import org.apache.hudi.avro.model.HoodieVectorIndexClusterStats;
 import org.apache.hudi.avro.model.HoodieVectorIndexManifest;
@@ -173,19 +174,40 @@ public final class VectorIndexMetadataCache implements Serializable {
                                               HoodieSchema.Vector vectorSchema,
                                               String currentInstant,
                                               boolean shouldLoadClusterManifests) {
-    // Hot-path routing metadata. Scan binary key families and then select the
-    // highest ACTIVE generation before reading generation-scoped records.
+    // Query paths first resolve the singleton active-generation pointer. Its exact key is routed to
+    // one MDT file group, avoiding a family-prefix fanout across every vector-index file group.
+    // Full cache loads retain the legacy family scan because cluster-stat prefixes span file groups.
     List<HoodieRecord<HoodieMetadataPayload>> records;
-    List<RawKey> lookupKeys = new ArrayList<>(Collections.singletonList(
-        familyPrefix(VectorIndexMetadataKey.FAMILY_MANIFEST)));
-    if (shouldLoadClusterManifests) {
-      lookupKeys.add(familyPrefix(VectorIndexMetadataKey.FAMILY_CENTROIDS));
-      lookupKeys.add(familyPrefix(VectorIndexMetadataKey.FAMILY_QUANTIZER));
-      lookupKeys.add(familyPrefix(VectorIndexMetadataKey.FAMILY_CLUSTER_STATS));
+    Integer pointedGeneration = null;
+    if (!shouldLoadClusterManifests) {
+      List<HoodieRecord<HoodieMetadataPayload>> pointerRecords = metadataTable
+          .getRecordsByKeyPrefixes(HoodieListData.eager(Collections.singletonList(
+              rawKey(VectorIndexMetadataKey.activeManifest()))), indexPartition, true)
+          .collectAsList();
+      pointedGeneration = activeGeneration(pointerRecords);
     }
-    records = new ArrayList<>(metadataTable
-        .getRecordsByKeyPrefixes(HoodieListData.eager(lookupKeys), indexPartition, true)
-        .collectAsList());
+
+    if (pointedGeneration != null) {
+      records = new ArrayList<>(metadataTable
+          .getRecordsByKeyPrefixes(HoodieListData.eager(Collections.singletonList(
+              rawKey(VectorIndexMetadataKey.manifest(pointedGeneration)))), indexPartition, true)
+          .collectAsList());
+    } else {
+      if (!shouldLoadClusterManifests) {
+        LOG.warn("Vector index has no active-generation pointer; falling back to a full manifest-family scan: partition={}",
+            indexPartition);
+      }
+      List<RawKey> lookupKeys = new ArrayList<>(Collections.singletonList(
+          familyPrefix(VectorIndexMetadataKey.FAMILY_MANIFEST)));
+      if (shouldLoadClusterManifests) {
+        lookupKeys.add(familyPrefix(VectorIndexMetadataKey.FAMILY_CENTROIDS));
+        lookupKeys.add(familyPrefix(VectorIndexMetadataKey.FAMILY_QUANTIZER));
+        lookupKeys.add(familyPrefix(VectorIndexMetadataKey.FAMILY_CLUSTER_STATS));
+      }
+      records = new ArrayList<>(metadataTable
+          .getRecordsByKeyPrefixes(HoodieListData.eager(lookupKeys), indexPartition, true)
+          .collectAsList());
+    }
 
     Map<Integer, HoodieVectorIndexManifest> activeManifests = new HashMap<>();
     Set<Integer> centroidGenerations = new HashSet<>();
@@ -446,6 +468,19 @@ public final class VectorIndexMetadataCache implements Serializable {
   }
 
   // ---- Private helpers ---------------------------------------------------
+
+  private static Integer activeGeneration(List<HoodieRecord<HoodieMetadataPayload>> records) {
+    for (HoodieRecord<HoodieMetadataPayload> record : records) {
+      Object info = extractVectorInfo(record);
+      if (info instanceof HoodieVectorIndexActiveManifest) {
+        return ((HoodieVectorIndexActiveManifest) info).getActiveGeneration();
+      }
+      if (hasAvroName(info, "HoodieVectorIndexActiveManifest")) {
+        return intField((GenericRecord) info, "activeGeneration");
+      }
+    }
+    return null;
+  }
 
   private static Object extractVectorInfo(HoodieRecord<HoodieMetadataPayload> record) {
     HoodieMetadataPayload payload = record.getData();
