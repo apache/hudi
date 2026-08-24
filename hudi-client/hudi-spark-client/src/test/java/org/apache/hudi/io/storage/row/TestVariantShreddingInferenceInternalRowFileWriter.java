@@ -70,11 +70,21 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
     return new GenericInternalRow(new Object[] {id, UTF8String.fromString(new String(new char[1024]).replace('\0', 'x'))});
   }
 
+  /** A row of a few megabytes, to dwarf {@link #row(long)} in the byte-cap re-estimation test. */
+  private static InternalRow bigRow(long id) {
+    return new GenericInternalRow(new Object[] {id, UTF8String.fromString(new String(new char[1 << 22]).replace('\0', 'x'))});
+  }
+
   /** A 16-byte UnsafeRow (8-byte null bitset + one long), so byte-cap arithmetic is exact. */
   private static UnsafeRow unsafeRow(long id) {
+    return unsafeRow(id, 16);
+  }
+
+  /** An UnsafeRow of exactly {@code sizeInBytes} bytes, holding one long. */
+  private static UnsafeRow unsafeRow(long id, int sizeInBytes) {
     UnsafeRow row = new UnsafeRow(1);
-    byte[] buffer = new byte[16];
-    row.pointTo(buffer, 16);
+    byte[] buffer = new byte[sizeInBytes];
+    row.pointTo(buffer, sizeInBytes);
     row.setLong(0, id);
     return row;
   }
@@ -219,26 +229,57 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
   }
 
   @Test
-  public void testByteCapAccumulatesThroughTheEstimator() throws IOException {
-    // Non-UnsafeRow rows of one shape estimate the same size, so a cap of 150 rows' worth
-    // materializes on exactly the 150th write, after the periodic re-estimation at row 100. That
-    // re-estimation rescales the rows already charged, so the moving average's long truncation
-    // (at most a byte) is charged to all 150 rows at once; the slack covers that while staying
-    // well under one row, which is why the rows are about a kilobyte.
-    long perRow = new DefaultSizeEstimator<InternalRow>().sizeEstimate(wideRow(0));
-    assertTrue(perRow > 1000, "expected a kilobyte-sized row, got " + perRow);
+  public void testByteCapRechargesTheBufferWhenTheEstimateGrows() throws IOException {
+    // 99 small estimated rows, then a big 100th that lands on the periodic re-estimation. The
+    // moving average grows to about 0.9 * small + 0.1 * big, and the re-estimation recharges the
+    // 99 earlier rows at that too, so the buffer (about 90 small + 10 big) meets a cap of one big
+    // row right there. Without the recharge the 99 would stay charged at small, and about 100
+    // small plus a tenth of big would leave the cap untripped: the precondition keeps that gap.
+    DefaultSizeEstimator<InternalRow> estimator = new DefaultSizeEstimator<>();
+    long small = estimator.sizeEstimate(row(0));
+    long big = estimator.sizeEstimate(bigRow(99));
+    assertTrue(big > 200 * small, "expected the big row to dwarf the small ones: " + small + " vs " + big);
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
     VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN, map -> {
       factoryCalls.add(map);
       return new RecordingRowWriter();
-    }, 150 * perRow - 500);
+    }, big);
 
-    for (int i = 0; i < 149; i++) {
+    for (int i = 0; i < 99; i++) {
+      writer.writeRow(row(i));
+    }
+    assertTrue(factoryCalls.isEmpty(), "99 small rows stay under a one-big-row cap");
+    writer.writeRow(bigRow(99));
+    assertEquals(1, factoryCalls.size(), "the re-estimation on the 100th row recharges the buffer past the cap");
+    writer.close();
+  }
+
+  @Test
+  public void testUnsafeRowChargesSurviveReEstimation() throws IOException {
+    // UnsafeRows are charged exactly and other rows through the estimator, in one byte count. The
+    // re-estimation on the 100th estimated row recharges the estimated rows only; assigning the
+    // estimated total instead (what the record writer does, having no exact charges) would drop
+    // the UnsafeRow's bytes. So an UnsafeRow among 100 same-shaped estimated rows meets a cap of
+    // its size plus 100 rows' worth, less a slack that the estimated rows alone cannot cover.
+    long perRow = new DefaultSizeEstimator<InternalRow>().sizeEstimate(wideRow(0));
+    assertTrue(perRow > 1000, "expected a kilobyte-sized row, got " + perRow);
+    int unsafeRowSize = 4096;
+    List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
+    VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN, map -> {
+      factoryCalls.add(map);
+      return new RecordingRowWriter();
+    }, unsafeRowSize + 100 * perRow - 500);
+
+    for (int i = 0; i < 50; i++) {
       writer.writeRow(wideRow(i));
     }
-    assertTrue(factoryCalls.isEmpty(), "149 rows stay under a 150-row cap");
-    writer.writeRow(wideRow(149));
-    assertEquals(1, factoryCalls.size(), "the 150th row meets the cap");
+    writer.writeRow(unsafeRow(50, unsafeRowSize));
+    for (int i = 51; i < 100; i++) {
+      writer.writeRow(wideRow(i));
+    }
+    assertTrue(factoryCalls.isEmpty(), "the UnsafeRow plus 99 estimated rows stay under the cap");
+    writer.writeRow(wideRow(100));
+    assertEquals(1, factoryCalls.size(), "the 100th estimated row's re-estimation keeps the UnsafeRow's bytes and meets the cap");
     writer.close();
   }
 

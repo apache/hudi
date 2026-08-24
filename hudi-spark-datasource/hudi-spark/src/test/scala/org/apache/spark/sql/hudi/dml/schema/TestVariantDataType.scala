@@ -1456,8 +1456,10 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   }
 
   /**
-   * Sums the non-null value counts of the leaf columns under `column`.typed_value across all
-   * blocks of the file, from the block column statistics.
+   * Sums the non-null value counts of the typed leaf columns under `column`.typed_value across
+   * all blocks of the file, from the block column statistics. The residual `value` leaves of
+   * shredded object fields are left out: they hold the rows that fell back, so counting them
+   * would let a file with every field fallen back pass as shredded.
    */
   private def typedValueNonNullCount(filePath: String, column: String): Long = {
     val conf = spark.sparkContext.hadoopConfiguration
@@ -1468,7 +1470,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       reader.getFooter.getBlocks.asScala.flatMap(_.getColumns.asScala)
         .filter { c =>
           val dot = c.getPath.toDotString
-          dot == prefix || dot.startsWith(prefix + ".")
+          (dot == prefix || dot.startsWith(prefix + ".")) && !dot.endsWith(".value")
         }
         .map { c =>
           val stats = c.getStatistics

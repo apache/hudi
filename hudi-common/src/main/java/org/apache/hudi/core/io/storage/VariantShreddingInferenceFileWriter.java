@@ -182,8 +182,9 @@ public class VariantShreddingInferenceFileWriter<T> implements HoodieFileWriter<
   public void writeRow(String recordKey, T record) throws IOException {
     rethrowIfFailed();
     // No HoodieRecord or schema to sample from: materialize with what has been sampled so far and
-    // pass the row through. Today only the native log-format delete writer takes this path, and its
-    // delete schema has no variant column to infer for.
+    // pass the row through. No production caller reaches this today: both writeRow callers (the
+    // native log-format delete writer and the CDC writer) pass schemas without a top-level variant,
+    // so the factories never wrap them.
     materialize();
     delegate.writeRow(recordKey, record);
   }

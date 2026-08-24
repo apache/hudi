@@ -485,28 +485,30 @@ public class TestVariantShreddingInferenceFileWriter {
   }
 
   @Test
-  public void testByteCapAccumulatesThroughTheEstimator() throws IOException {
-    // Same-shaped records estimate the same size, so a cap of 150 records' worth materializes on
-    // exactly the 150th write, after passing through the periodic re-estimation at record 100.
-    // That re-estimation rescales the whole buffer, so the moving average's long truncation (at
-    // most a byte) is charged to all 150 records at once; the slack covers that while staying
-    // well under one record, which is why the records are kilobyte-sized.
-    String padding = new String(new char[1024]).replace('\0', 'x');
-    long perRecord = new DefaultSizeEstimator<HoodieRecord>().sizeEstimate(newRecord("r000" + padding));
-    assertTrue(perRecord > 1000, "expected a kilobyte-sized record, got " + perRecord);
+  public void testByteCapRechargesTheBufferWhenTheEstimateGrows() throws IOException {
+    // 99 small records, then a big 100th that lands on the periodic re-estimation. The moving
+    // average grows to about 0.9 * small + 0.1 * big, and the re-estimation charges the 99 earlier
+    // records at that too, so the buffer (about 90 small + 10 big) meets a cap of one big record
+    // right there. Without the rescale the 99 would stay charged at small, and about 100 small
+    // plus a tenth of big would leave the cap untripped: the precondition below keeps that gap.
+    String padding = new String(new char[1 << 22]).replace('\0', 'x');
+    DefaultSizeEstimator<HoodieRecord> estimator = new DefaultSizeEstimator<>();
+    long small = estimator.sizeEstimate(newRecord("r000"));
+    long big = estimator.sizeEstimate(newRecord("r099" + padding));
+    assertTrue(big > 200 * small, "expected the big record to dwarf the small ones: " + small + " vs " + big);
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
     VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
         map -> {
           factoryCalls.add(map);
           return new RecordingWriter();
-        }, 150 * perRecord - 500);
+        }, big);
 
-    for (int i = 0; i < 149; i++) {
-      writer.write("r" + i, newRecord(String.format("r%03d", i) + padding), RECORD_SCHEMA, PROPS);
+    for (int i = 0; i < 99; i++) {
+      writer.write("r" + i, newRecord(String.format("r%03d", i)), RECORD_SCHEMA, PROPS);
     }
-    assertTrue(factoryCalls.isEmpty(), "149 records stay under a 150-record cap");
-    writer.write("r149", newRecord("r149" + padding), RECORD_SCHEMA, PROPS);
-    assertEquals(1, factoryCalls.size(), "the 150th record meets the cap");
+    assertTrue(factoryCalls.isEmpty(), "99 small records stay under a one-big-record cap");
+    writer.write("r99", newRecord("r099" + padding), RECORD_SCHEMA, PROPS);
+    assertEquals(1, factoryCalls.size(), "the re-estimation on the 100th record recharges the buffer past the cap");
     writer.close();
   }
 

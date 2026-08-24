@@ -3141,15 +3141,22 @@ public class TestHoodieSchema {
         HoodieSchemaField.of("x", HoodieSchema.createNullable(HoodieSchema.createShreddedFieldStruct("x_wrapper", underX)))));
 
     HoodieSchema plain = HoodieSchema.createVariantShredded(topTypedValue).getPlainTypedValueSchema().get();
-    HoodieSchema zLeaf = plain.getField("x_y").get().schema().getNonNullType()
-        .getField("z").get().schema().getNonNullType();
-    HoodieSchema yzLeaf = plain.getField("x").get().schema().getNonNullType()
-        .getField("y_z").get().schema().getNonNullType();
+    HoodieSchema zLeaf = nestedRecord(plain, "x_y", "z");
+    HoodieSchema yzLeaf = nestedRecord(plain, "x", "y_z");
     assertEquals(HoodieSchemaType.RECORD, zLeaf.getType());
     assertEquals(HoodieSchemaType.RECORD, yzLeaf.getType());
     assertNotEquals(zLeaf.getFullName(), yzLeaf.getFullName());
     // Serializing the whole tree (as the config-splice path does) must not alias the two leaves.
-    assertNotNull(plain.getAvroSchema().toString());
+    // Avro writes a repeated fullname as a reference to its first definition rather than
+    // throwing, so the check has to be on the re-parsed serialized form.
+    HoodieSchema reparsed = HoodieSchema.parse(plain.toString());
+    assertNotEquals(nestedRecord(reparsed, "x_y", "z").getFullName(), nestedRecord(reparsed, "x", "y_z").getFullName());
+  }
+
+  /** The non-null schema of {@code record.<outer>.<inner>}, both fields nullable. */
+  private static HoodieSchema nestedRecord(HoodieSchema record, String outer, String inner) {
+    return record.getField(outer).get().schema().getNonNullType()
+        .getField(inner).get().schema().getNonNullType();
   }
 
   @Test
