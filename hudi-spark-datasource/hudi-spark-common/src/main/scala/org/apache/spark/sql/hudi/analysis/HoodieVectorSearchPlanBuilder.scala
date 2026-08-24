@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.index.vector.{VectorDistanceMetric, VectorIndexArbiter, VectorIndexMdtSearchUtils, VectorIndexMetadataCache, VectorIndexOptions, VectorStalePolicy}
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieTimeline, InstantComparison}
 import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -407,9 +407,12 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
       candidate: VectorIndexMdtSearchUtils.ScoredPostingMatch,
       currentBaseInstant: String,
       sliceHasLogs: Boolean): Boolean = {
+    // A negative position is the authoritative log-resident signal: base-file records always carry a
+    // non-negative row position, so a candidate with position < 0 in a slice that still has log files
+    // lives in a log block and cannot be materialized from the base Parquet. The candidate's instant
+    // is NOT a reliable discriminator here -- a log delta can share the slice's base instant time.
     val location = candidate.getLocation
-    sliceHasLogs && location != null && location.getPosition < 0 &&
-      location.getInstantTime != currentBaseInstant
+    sliceHasLogs && location != null && location.getPosition < 0
   }
 
   private[analysis] def approximateArbitratedCandidate(
@@ -854,10 +857,18 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
               s"a file-slice resolution bug or stale vector index.")
         }
         val bFileSliceMap = spark.sparkContext.broadcast(fileSliceMap)
+        // MOR log-resident candidates carry their raw embedding in a log block, not the base Parquet
+        // file, so the positional fetcher cannot read them. Split them out and materialize them via a
+        // merged (base + log) read; base-resident candidates keep the fast positional path.
+        val (logResidentCandidates, baseCandidates) = serveCandidates.partition { candidate =>
+          bFileSliceMap.value.get(candidate.getLocation.getFileId).exists { slice =>
+            isLogResidentCandidate(candidate, slice.getBaseInstantTime, slice.getLogFiles.findAny().isPresent)
+          }
+        }
         val exactFetchParallelism = math.max(
           1,
           math.min(refineK, math.max(1, spark.sparkContext.defaultParallelism * 4)))
-        val groupedCandidates = serveCandidates.groupBy(_.getLocation.getFileId).toSeq.sortBy(_._1)
+        val groupedCandidates = baseCandidates.groupBy(_.getLocation.getFileId).toSeq.sortBy(_._1)
         val targetBatchesPerGroup = math.max(1, exactFetchParallelism / math.max(1, groupedCandidates.size))
         val fetchBatches = groupedCandidates.flatMap { case (fgId, candidates) =>
           val sorted = candidates.sortBy(candidate => candidate.getLocation.getPosition)
@@ -865,7 +876,11 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
           sorted.grouped(batchSize).map(batch => (fgId, batch)).toSeq
         }
         val byFetchBatch: RDD[(String, Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch])] =
-          spark.sparkContext.parallelize(fetchBatches, math.min(exactFetchParallelism, fetchBatches.size))
+          if (fetchBatches.isEmpty) {
+            spark.sparkContext.emptyRDD[(String, Seq[VectorIndexMdtSearchUtils.ScoredPostingMatch])]
+          } else {
+            spark.sparkContext.parallelize(fetchBatches, math.min(exactFetchParallelism, fetchBatches.size))
+          }
         LOG.info(
           s"[vector_search][stage][exact_read_plan] rerankCandidates=${serveCandidates.size} " +
             s"candidateGroups=${groupedCandidates.size} resolvedSlices=${fileSliceMap.size} " +
@@ -1000,8 +1015,32 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
               s"fetchWaitMs=${metrics.fetchWaitMs} decodeMs=${metrics.decodeMs} scoreMs=${metrics.scoreMs} elapsedMs=${elapsedMs(startNs)}")
           rows.iterator
         }
+        val logResidentRows: Seq[InternalRow] =
+          if (logResidentCandidates.isEmpty) {
+            Seq.empty
+          } else {
+            val dataSchema = new TableSchemaResolver(ctx.metaClient).getTableSchema(true)
+            val scorer = new VectorExactScorer(vectorSchema, exactQueryVector, ctx.metric)
+            val logFetcher = new LogResidentVectorFetcher(
+              storageConf, ctx.metaClient, dataSchema, ctx.latestInstantTime,
+              embeddingCol, outputSchema, scorer)
+            val fetched = logResidentCandidates
+              .groupBy(candidate =>
+                (Option(candidate.getLocation.getPartitionPath).getOrElse(""), candidate.getLocation.getFileId))
+              .flatMap { case ((partitionPath, fgId), candidates) =>
+                logFetcher.fetchSlice(partitionPath, fileSliceMap(fgId), candidates.map(_.getRecordKey).toSet)
+              }.toSeq
+            LOG.info(
+              s"[vector_search][exact][log_resident] candidates=${logResidentCandidates.size} " +
+                s"materialized=${fetched.size} " +
+                s"fileGroups=${logResidentCandidates.map(_.getLocation.getFileId).distinct.size}")
+            fetched
+          }
+        val combinedRows: RDD[InternalRow] =
+          if (logResidentRows.isEmpty) exactRows
+          else exactRows.union(spark.sparkContext.parallelize(logResidentRows))
         LOG.info(s"[vector_search][plan] exact candidate DF planned in ${elapsedMs(planStartNs)} ms")
-        sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, exactRows, outputSchema)
+        sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, combinedRows, outputSchema)
       }
     }
   }

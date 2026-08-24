@@ -38,7 +38,6 @@ import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import org.slf4j.LoggerFactory
 
-import java.nio.{ByteBuffer, ByteOrder}
 import java.util.PrimitiveIterator
 import java.util.concurrent.ConcurrentHashMap
 
@@ -68,7 +67,7 @@ private[analysis] final class PositionalParquetFetcher(
   private val recordKeyOrdinal = fieldOrdinal(HoodieRecord.RECORD_KEY_METADATA_FIELD)
   private val partitionPathOrdinal = fieldOrdinal(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
   private val fileGroupIdOrdinal = fieldOrdinal(HoodieVectorSearchPlanBuilder.FILE_GROUP_ID_COL)
-  private val queryNorm = math.sqrt(queryVector.iterator.map(v => v * v).sum)
+  private val scorer = new VectorExactScorer(vectorSchema, queryVector, metric)
   private var scoreMs: Long = 0L
 
   def fetch(
@@ -304,53 +303,7 @@ private[analysis] final class PositionalParquetFetcher(
       case ordinal => Some(ordinal)
     }
 
-  private def scoreVector(bytes: Array[Byte]): Double = {
-    val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-    vectorSchema.getVectorElementType match {
-      case HoodieSchema.Vector.VectorElementType.FLOAT =>
-        score(vectorSchema.getDimension, i => buffer.getFloat(i * java.lang.Float.BYTES).toDouble)
-      case HoodieSchema.Vector.VectorElementType.DOUBLE =>
-        score(vectorSchema.getDimension, i => buffer.getDouble(i * java.lang.Double.BYTES))
-      case HoodieSchema.Vector.VectorElementType.INT8 =>
-        score(vectorSchema.getDimension, i => buffer.get(i).toDouble)
-      case other =>
-        throw new UnsupportedOperationException(s"Unsupported vector element type for positional exact fetch: $other")
-    }
-  }
-
-  private def score(dim: Int, valueAt: Int => Double): Double = {
-    metric match {
-      case DistanceMetric.L2 =>
-        var sum = 0.0d
-        var i = 0
-        while (i < dim) {
-          val diff = valueAt(i) - queryVector(i)
-          sum += diff * diff
-          i += 1
-        }
-        math.sqrt(sum)
-      case DistanceMetric.COSINE =>
-        var dot = 0.0d
-        var norm = 0.0d
-        var i = 0
-        while (i < dim) {
-          val value = valueAt(i)
-          dot += value * queryVector(i)
-          norm += value * value
-          i += 1
-        }
-        val denom = math.sqrt(norm) * queryNorm
-        if (denom == 0.0d) 1.0d else math.min(2.0d, math.max(0.0d, 1.0d - dot / denom))
-      case DistanceMetric.DOT_PRODUCT =>
-        var dot = 0.0d
-        var i = 0
-        while (i < dim) {
-          dot += valueAt(i) * queryVector(i)
-          i += 1
-        }
-        -dot
-    }
-  }
+  private def scoreVector(bytes: Array[Byte]): Double = scorer.scoreBytes(bytes)
 
   private final class InternalRowMaterializer(
       requestedParquetSchema: MessageType,

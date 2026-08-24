@@ -126,12 +126,11 @@ class TestHoodieVectorIndexSearch extends HoodieSparkClientTestBase {
     assertClusterMovePersisted(tablePath, "move-me", oldCluster)
 
     spark.catalog.refreshTable(tableName)
-    if (tableType == "COPY_ON_WRITE") {
-      assertExactMatchesFullCoverageBruteForce(tableName, Array(10.0, 10.0), 6)
-      assertOldClusterProbeSuppressesMovedPosting(tableName)
-    }
-    // MOR intentionally shares the production dispatch/derived-delta fixture now. Its log-resident
-    // skip/refill assertions land with the dedicated continuation extension.
+    // Exact rerank now materializes MOR log-resident candidates (the moved record lives in an
+    // uncompacted log block) via the merged base+log read, so exact == brute-force holds for both
+    // table types, including the log-resident "move-me" row.
+    assertExactMatchesFullCoverageBruteForce(tableName, Array(10.0, 10.0), 6)
+    assertOldClusterProbeSuppressesMovedPosting(tableName)
 
     // Empty source writes are still source instants. The marker proves dispatch was unconditional;
     // no posting delta is needed for this commit.
