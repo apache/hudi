@@ -455,7 +455,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       Map<String, List<FileInfo>> partitionToAllFilesMap,
       Lazy<List<FileSliceAndPartition>> lazyMergedFileSlices,
       Option<String> requestedIndexPartition) throws IOException {
-    String instantTimeForPartition = generateUniqueInstantTime(dataTableInstantTime);
+    // A requested partition initializes under a fresh solo-family instant, never the indexing
+    // action's own instant. The action's completion applies its data commit to the metadata table
+    // too, and finding that instant already completed there reads as a partial earlier application:
+    // it is rolled back and re-applied, destroying the initialization records while leaving the
+    // file groups. The solo family is the established shape for metadata-table-only bootstrap
+    // commits and survives that reconciliation.
+    String instantTimeForPartition = requestedIndexPartition.isPresent()
+        ? generateUniqueSoloInstantTime() : generateUniqueInstantTime(dataTableInstantTime);
     // initialize metadata partitions
     List<IndexInitializationPlan> initializationList;
     try {
@@ -524,6 +531,20 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * @param initializationTime Timestamp from dataset to use for initialization
    * @return a unique timestamp for MDT
    */
+  /**
+   * The next unused instant in the solo-commit family, regardless of whether the initialization
+   * time is an indexing commit — unlike {@link #generateUniqueInstantTime}, which reuses an
+   * indexing instant as-is.
+   */
+  private String generateUniqueSoloInstantTime() {
+    for (int offset = 0; ; ++offset) {
+      final String commitInstantTime = HoodieInstantTimeGenerator.instantTimePlusMillis(SOLO_COMMIT_TIMESTAMP, offset);
+      if (!metadataMetaClient.getCommitsTimeline().containsInstant(commitInstantTime)) {
+        return commitInstantTime;
+      }
+    }
+  }
+
   String generateUniqueInstantTime(String initializationTime) {
     // If it's initialized via Async indexer, we don't need to alter the init time.
     // otherwise yields the timestamp on the fly.
