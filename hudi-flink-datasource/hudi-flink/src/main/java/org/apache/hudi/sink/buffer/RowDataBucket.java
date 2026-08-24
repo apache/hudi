@@ -41,6 +41,7 @@ public class RowDataBucket {
   private final BufferSizeDetector detector;
   @Getter
   private final String bucketId;
+  @Getter
   private boolean diverged;
 
   public RowDataBucket(
@@ -75,10 +76,6 @@ public class RowDataBucket {
       diverged = true;
     }
     return success;
-  }
-
-  public boolean isDiverged() {
-    return diverged;
   }
 
   public long getBufferSize() {
