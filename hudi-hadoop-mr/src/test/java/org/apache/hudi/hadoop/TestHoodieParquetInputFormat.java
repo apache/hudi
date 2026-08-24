@@ -38,15 +38,18 @@ import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.IOConstants;
+import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.io.TimestampWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.LongWritable;
@@ -90,6 +93,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.hadoop.HoodieColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -755,6 +759,49 @@ public class TestHoodieParquetInputFormat {
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
     assertEquals(1, files.length);
+  }
+
+  @Test
+  public void testLegacyReaderFailsFastOnShreddedVariantColumn() throws Exception {
+    // With the file group reader disabled the split lands on Hive's plain parquet reader, which
+    // silently nulls typed_value. The footer-derived file schema carries no variant logical type
+    // (variant groups convert to plain records), so the guard has to fire off the shape.
+    jobConf.setBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), false);
+    jobConf.set(IOConstants.COLUMNS, "id,v");
+    jobConf.set(IOConstants.COLUMNS_TYPES, "int,struct<metadata:binary,value:binary>");
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "0,1");
+    jobConf.set(READ_COLUMN_NAMES_CONF_STR, "id,v");
+    FileSplit shredded = fileSplit(InputFormatTestUtil.writeVariantParquetFile(basePath, "shredded.parquet", true));
+
+    HoodieException failure = assertThrows(HoodieException.class, () -> inputFormat.getRecordReader(shredded, jobConf, null));
+    assertTrue(failure.getMessage().contains("shredded variant") && failure.getMessage().contains("'v'"),
+        "The error must name the shredded variant column, got: " + failure.getMessage());
+
+    // A projection that skips the variant column (e.g. count(*)) keeps reading.
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "0");
+    jobConf.set(READ_COLUMN_NAMES_CONF_STR, "id");
+    assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(shredded, jobConf));
+
+    // The unshredded twin keeps reading at the full projection.
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "0,1");
+    jobConf.set(READ_COLUMN_NAMES_CONF_STR, "id,v");
+    FileSplit unshredded = fileSplit(InputFormatTestUtil.writeVariantParquetFile(basePath, "unshredded.parquet", false));
+    assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(unshredded, jobConf));
+
+    // A shredded variant below the top level (the row writer shreds at depth) fails too, naming
+    // the struct column that holds it.
+    jobConf.set(IOConstants.COLUMNS, "id,s");
+    jobConf.set(IOConstants.COLUMNS_TYPES, "int,struct<inner:struct<metadata:binary,value:binary>>");
+    jobConf.set(READ_COLUMN_NAMES_CONF_STR, "id,s");
+    FileSplit nested = fileSplit(InputFormatTestUtil.writeNestedShreddedVariantParquetFile(basePath, "nested_shredded.parquet"));
+    HoodieException nestedFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(nested, jobConf));
+    assertTrue(nestedFailure.getMessage().contains("'s'"),
+        "The error must name the column holding the nested shredded variant, got: " + nestedFailure.getMessage());
+  }
+
+  private static FileSplit fileSplit(StoragePath path) {
+    return new FileSplit(new Path(path.toUri()), 0, Long.MAX_VALUE, (String[]) null);
   }
 
   private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,

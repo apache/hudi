@@ -59,6 +59,7 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -289,9 +290,12 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
    * count(*) and projections that skip the variant keep working. The footer read is gated on a
    * requested column whose synced Hive type embeds the variant {metadata, value} shape, so
    * non-variant tables never pay it; when it does run it mirrors the per-file readSchema the
-   * file-group-reader path already performs.
+   * file-group-reader path already performs. That footer-derived schema carries no variant
+   * logical type (the converter turns variant groups into plain records), so the file side is
+   * matched by shape, anchored on the Hive type of the requested column.
    */
-  private static void validateNoShreddedVariantRead(InputSplit split, JobConf job) {
+  @VisibleForTesting
+  static void validateNoShreddedVariantRead(InputSplit split, JobConf job) {
     if (!(split instanceof FileSplit)) {
       return;
     }
@@ -313,17 +317,17 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       // reads the plain parquet reader would otherwise serve.
       return;
     }
-    boolean requestsVariantShapedColumn = false;
+    // The requested columns whose synced Hive type embeds the variant {metadata, value} shape:
+    // the anchor for the shape match on the file side below.
+    Set<String> variantColumns = new HashSet<>();
     for (int i = 0; i < ioColumns.size(); i++) {
-      if (requestedColumns.contains(ioColumns.get(i).toLowerCase(Locale.ROOT))) {
-        String type = ioColumnTypes.get(i).toLowerCase(Locale.ROOT);
-        if (type.contains("metadata:binary") && type.contains("value:binary")) {
-          requestsVariantShapedColumn = true;
-          break;
-        }
+      String name = ioColumns.get(i).toLowerCase(Locale.ROOT);
+      String type = ioColumnTypes.get(i).toLowerCase(Locale.ROOT);
+      if (requestedColumns.contains(name) && type.contains("metadata:binary") && type.contains("value:binary")) {
+        variantColumns.add(name);
       }
     }
-    if (!requestsVariantShapedColumn) {
+    if (variantColumns.isEmpty()) {
       return;
     }
     StoragePath storagePath = convertToStoragePath(filePath);
@@ -332,19 +336,11 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     if (fileSchema.getType() != HoodieSchemaType.RECORD) {
       return;
     }
-    HoodieSchema strippedSchema = VariantSchemaUtils.stripVariantShredding(fileSchema);
-    if (strippedSchema == fileSchema) {
-      return;
-    }
-    // Untouched columns keep their schema instance across the strip, so identity comparison
-    // names exactly the columns holding a shredded variant (at any depth).
     List<String> offendingColumns = new ArrayList<>();
-    List<HoodieSchemaField> before = fileSchema.getFields();
-    List<HoodieSchemaField> after = strippedSchema.getFields();
-    for (int i = 0; i < before.size(); i++) {
-      if (before.get(i).schema() != after.get(i).schema()
-          && requestedColumns.contains(before.get(i).name().toLowerCase(Locale.ROOT))) {
-        offendingColumns.add(before.get(i).name());
+    for (HoodieSchemaField field : fileSchema.getFields()) {
+      if (variantColumns.contains(field.name().toLowerCase(Locale.ROOT))
+          && VariantSchemaUtils.containsShreddedVariantShape(field.schema())) {
+        offendingColumns.add(field.name());
       }
     }
     if (!offendingColumns.isEmpty()) {

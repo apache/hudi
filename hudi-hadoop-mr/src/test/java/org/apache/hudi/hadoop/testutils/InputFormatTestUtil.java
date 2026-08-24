@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
@@ -48,6 +49,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -61,6 +63,7 @@ import org.apache.parquet.avro.AvroParquetWriter;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -539,6 +542,70 @@ public class InputFormatTestUtil {
 
       partitionMetadata.trySave();
     }
+  }
+
+  /** A shredded variant schema whose typed_value carries one string field {@code key}. */
+  public static HoodieSchema.Variant shreddedVariantSchema() {
+    return HoodieSchema.createVariantShreddedObject(
+        Collections.singletonMap("key", HoodieSchema.create(HoodieSchemaType.STRING)));
+  }
+
+  /** Writes a one-row parquet file with an {@code id} column and a {@code v} variant column, shredded or not. */
+  public static StoragePath writeVariantParquetFile(java.nio.file.Path dir, String fileName, boolean shredded) throws IOException {
+    HoodieSchema.Variant variantSchema = shredded ? shreddedVariantSchema() : HoodieSchema.createVariant();
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("v", variantSchema)));
+    java.nio.file.Path file = dir.resolve(fileName);
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("v", variantValue(variantSchema, shredded));
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  /**
+   * Writes a one-row parquet file with an {@code id} column and a struct column {@code s} whose
+   * {@code inner} member is a shredded variant: the shape the row writer produces at depth.
+   */
+  public static StoragePath writeNestedShreddedVariantParquetFile(java.nio.file.Path dir, String fileName) throws IOException {
+    HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
+    HoodieSchema structWithShredded = HoodieSchema.createRecord("s_t", null, null,
+        Collections.singletonList(HoodieSchemaField.of("inner", shreddedVariant)));
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("s", structWithShredded)));
+    java.nio.file.Path file = dir.resolve(fileName);
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+      GenericRecord struct = new GenericData.Record(structWithShredded.toAvroSchema());
+      struct.put("inner", variantValue(shreddedVariant, true));
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("s", struct);
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  /** A value of {@code variantSchema}: typed ({@code key = "k1"}) when asked, a residual value otherwise. */
+  public static GenericRecord variantValue(HoodieSchema.Variant variantSchema, boolean populateTypedValue) {
+    GenericRecord variant = new GenericData.Record(variantSchema.toAvroSchema());
+    variant.put("metadata", ByteBuffer.wrap(new byte[] {1}));
+    if (populateTypedValue) {
+      Schema typedValueSchema = HoodieAvroUtils.unwrapNullable(variantSchema.getTypedValueField().get().toAvroSchema());
+      GenericRecord keyWrapper = new GenericData.Record(HoodieAvroUtils.unwrapNullable(typedValueSchema.getField("key").schema()));
+      keyWrapper.put("typed_value", "k1");
+      GenericRecord typedValue = new GenericData.Record(typedValueSchema);
+      typedValue.put("key", keyWrapper);
+      variant.put("typed_value", typedValue);
+    } else {
+      variant.put("value", ByteBuffer.wrap(new byte[] {0}));
+    }
+    return variant;
   }
 
   public static void setInputPath(JobConf jobConf, String inputPath) {
