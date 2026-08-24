@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -34,7 +35,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.EnumSet;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,19 +97,30 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".table.service.manager.enabled")
       .defaultValue(false)
       .markAdvanced()
-      .withDocumentation("If true, delegate specified table service actions on the metadata table to the table service manager "
-          + "instead of executing them inline. This prevents the current writer from executing compaction/logcompaction "
-          + "on the metadata table, allowing a separate async pipeline to handle them.");
+      .withDocumentation("If true, delegate the configured metadata table service scheduling and/or execution actions "
+          + "to a separate table service manager instead of running them inline.");
 
-  public static final Set<ActionType> SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS =
-      EnumSet.of(ActionType.compaction, ActionType.logcompaction);
+  private static final Set<String> SUPPORTED_TABLE_SERVICE_MANAGER_EXECUTION_ACTIONS = CollectionUtils.createImmutableSet(
+      ActionType.compaction.name(), ActionType.logcompaction.name(), ActionType.clean.name(), "archive");
+
+  private static final Set<String> SUPPORTED_TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS = CollectionUtils.createImmutableSet(
+      ActionType.compaction.name(), ActionType.logcompaction.name());
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_ACTIONS = ConfigProperty
       .key(METADATA_PREFIX + ".table.service.manager.actions")
       .defaultValue("")
       .markAdvanced()
       .withDocumentation("Comma-separated list of table service actions on the metadata table "
-          + "that should be delegated to the table service manager. Currently supported actions are: compaction, logcompaction.");
+          + "whose inline execution should be delegated to the table service manager. "
+          + "Supported actions are: compaction, logcompaction, clean, archive.");
+
+  public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS = ConfigProperty
+      .key(METADATA_PREFIX + ".table.service.manager.schedule.actions")
+      .defaultValue("")
+      .markAdvanced()
+      .withDocumentation("Comma-separated list of table service actions on the metadata table "
+          + "whose inline scheduling should be delegated to the table service manager. "
+          + "Supported actions are: compaction, logcompaction.");
 
   public static final ConfigProperty<Integer> STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVISOR = ConfigProperty
       .key(METADATA_PREFIX + ".streaming.write.datatable.write.statuses.coalesce.divisor")
@@ -750,6 +762,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getString(TABLE_SERVICE_MANAGER_ACTIONS);
   }
 
+  public String getTableServiceManagerScheduleActions() {
+    return getString(TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS);
+  }
+
   public int getStreamingWritesCoalesceDivisorForDataTableWrites() {
     return getInt(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVISOR);
   }
@@ -1102,9 +1118,17 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withTableServiceManagerActions(String actions) {
       if (!actions.isEmpty()) {
-        validateTableServiceManagerActions(actions);
+        validateTableServiceManagerActions(actions, SUPPORTED_TABLE_SERVICE_MANAGER_EXECUTION_ACTIONS);
       }
       metadataConfig.setValue(TABLE_SERVICE_MANAGER_ACTIONS, actions);
+      return this;
+    }
+
+    public Builder withTableServiceManagerScheduleActions(String actions) {
+      if (!actions.isEmpty()) {
+        validateTableServiceManagerActions(actions, SUPPORTED_TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS);
+      }
+      metadataConfig.setValue(TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS, actions);
       return this;
     }
 
@@ -1416,14 +1440,17 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
 
       String tsmActions = metadataConfig.getString(TABLE_SERVICE_MANAGER_ACTIONS);
-      if (tsmActions != null && !tsmActions.isEmpty()) {
-        validateTableServiceManagerActions(tsmActions);
-      }
+      Set<String> parsedTsmActions = parseTableServiceActions(tsmActions);
+      validateTableServiceManagerActions(parsedTsmActions, SUPPORTED_TABLE_SERVICE_MANAGER_EXECUTION_ACTIONS);
+      String tsmScheduleActions = metadataConfig.getString(TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS);
+      Set<String> parsedTsmScheduleActions = parseTableServiceActions(tsmScheduleActions);
+      validateTableServiceManagerActions(parsedTsmScheduleActions, SUPPORTED_TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS);
       if (metadataConfig.getBoolean(TABLE_SERVICE_MANAGER_ENABLED)
-          && (tsmActions == null || tsmActions.isEmpty())) {
+          && parsedTsmActions.isEmpty()
+          && parsedTsmScheduleActions.isEmpty()) {
         throw new IllegalArgumentException(TABLE_SERVICE_MANAGER_ENABLED.key() + " is set to true but "
-            + TABLE_SERVICE_MANAGER_ACTIONS.key() + " is empty. Specify at least one action to delegate"
-            + " (supported: " + SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS + ").");
+            + TABLE_SERVICE_MANAGER_ACTIONS.key() + " and " + TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS.key()
+            + " are empty. Specify at least one action to delegate.");
       }
       return metadataConfig;
     }
@@ -1476,22 +1503,28 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       }
     }
 
-    private static void validateTableServiceManagerActions(String actions) {
-      for (String action : actions.split(",")) {
-        String trimmed = action.trim();
-        ActionType actionType;
-        try {
-          actionType = ActionType.valueOf(trimmed);
-        } catch (IllegalArgumentException e) {
-          throw new IllegalArgumentException("Unknown metadata table service manager action: " + trimmed
-              + ". Supported actions are: " + SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS, e);
-        }
-        if (!SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS.contains(actionType)) {
-          throw new IllegalArgumentException("Unsupported metadata table service manager action: " + trimmed
-              + ". Supported actions are: " + SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS);
+    private static void validateTableServiceManagerActions(String actions, Set<String> supportedActions) {
+      validateTableServiceManagerActions(parseTableServiceActions(actions), supportedActions);
+    }
+
+    private static void validateTableServiceManagerActions(Set<String> actions, Set<String> supportedActions) {
+      for (String action : actions) {
+        if (!supportedActions.contains(action)) {
+          throw new IllegalArgumentException("Unsupported metadata table service manager action: " + action
+              + ". Supported actions are: " + supportedActions);
         }
       }
     }
+  }
+
+  private static Set<String> parseTableServiceActions(String actions) {
+    if (StringUtils.isNullOrEmpty(actions)) {
+      return Collections.emptySet();
+    }
+    return Arrays.stream(actions.split(","))
+        .map(String::trim)
+        .filter(action -> !action.isEmpty())
+        .collect(Collectors.toSet());
   }
 
   /**

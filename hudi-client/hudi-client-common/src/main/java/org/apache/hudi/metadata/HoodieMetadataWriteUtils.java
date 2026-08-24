@@ -348,6 +348,8 @@ public class HoodieMetadataWriteUtils {
         String.valueOf(writeConfig.getMetadataConfig().isTableServiceManagerEnabled()));
     properties.put(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(),
         writeConfig.getMetadataConfig().getTableServiceManagerActions());
+    properties.put(HoodieMetadataConfig.TABLE_SERVICE_MANAGER_SCHEDULE_ACTIONS.key(),
+        writeConfig.getMetadataConfig().getTableServiceManagerScheduleActions());
     if (nonEmpty(writeConfig.getMetricReporterMetricsNamePrefix())) {
       properties.put(HoodieMetricsConfig.METRICS_REPORTER_PREFIX.key(),
           writeConfig.getMetricReporterMetricsNamePrefix() + METADATA_TABLE_NAME_SUFFIX);

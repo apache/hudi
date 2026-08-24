@@ -23,9 +23,9 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -153,7 +153,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
    * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
    */
   @Override
-  boolean validateCompactionScheduling(Option<String> inFlightInstantTimestamp, String latestDeltaCommitTimeInMetadataTable) {
+  boolean validateCompactionScheduling(String latestDeltaCommitTimeInMetadataTable) {
     // we need to find if there are any inflights in data table timeline before or equal to the latest delta commit in metadata table.
     // Whenever you want to change this logic, please ensure all below scenarios are considered.
     // a. There could be a chance that latest delta commit in MDT is committed in MDT, but failed in DT. And so findInstantsBeforeOrEquals() should be employed
@@ -289,7 +289,9 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
    * deltacommit.
    */
   @Override
-  void compactIfNecessary(BaseHoodieWriteClient<?,I,?,O> writeClient, Option<String> latestDeltaCommitTimeOpt) {
+  protected void runCompactionServicesIfNecessary(BaseHoodieWriteClient<?, I, ?, O> writeClient,
+                                                  Option<String> latestDeltaCommitTimeOpt,
+                                                  MetadataTableServiceRequest request) {
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
@@ -299,29 +301,63 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
     // let's say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
     // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
     // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
+    boolean scheduledCompaction = false;
     if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)) {
       LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
-    } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
-      LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-      if (shouldDelegateToTableServiceManager(metadataWriteConfig, ActionType.compaction)) {
-        LOG.info("Skipping execution of compaction on MDT as it is delegated to table service manager.");
-      } else {
-        writeClient.compact(compactionInstantTime, true);
-      }
-    } else if (metadataWriteConfig.isLogCompactionEnabled()) {
-      // Schedule and execute log compaction with suffixes based on the same instant time. This ensures that any future
-      // delta commits synced over will not have an instant time lesser than the last completed instant on the
-      // metadata table.
-      final String logCompactionInstantTime = createLogCompactionTimestamp(latestDeltaCommitTimeOpt.get());
-      if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(logCompactionInstantTime)) {
-        LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
-      } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
-        LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
-        if (shouldDelegateToTableServiceManager(metadataWriteConfig, ActionType.logcompaction)) {
-          LOG.info("Skipping execution of log compaction on MDT as it is delegated to table service manager.");
-        } else {
-          writeClient.logCompact(logCompactionInstantTime, true);
+      return;
+    }
+
+    try {
+      if (request.includes(TableServiceType.COMPACT) && request.getMode().includesSchedule()) {
+        if (shouldDelegateScheduling(request, TableServiceType.COMPACT)) {
+          LOG.info("Skipping scheduling of compaction on MDT as it is delegated to table service manager.");
+        } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
+          LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
+          scheduledCompaction = true;
+          if (request.getMode().includesExecute()) {
+            if (shouldDelegateExecution(request, TableServiceType.COMPACT)) {
+              LOG.info("Skipping execution of compaction on MDT as it is delegated to table service manager.");
+            } else {
+              writeClient.compact(compactionInstantTime, true);
+            }
+          }
         }
+      }
+    } catch (Exception e) {
+      metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.COMPACTION_FAILURES, 1));
+      LOG.error("Error running compaction service in metadata table", e);
+      throw e;
+    }
+
+    if (!scheduledCompaction
+        && request.includes(TableServiceType.LOG_COMPACT)
+        && request.getMode().includesSchedule()
+        && metadataWriteConfig.isLogCompactionEnabled()) {
+      try {
+        if (shouldDelegateScheduling(request, TableServiceType.LOG_COMPACT)) {
+          LOG.info("Skipping scheduling of log compaction on MDT as it is delegated to table service manager.");
+        } else {
+          // Schedule and execute log compaction with suffixes based on the same instant time. This ensures that any future
+          // delta commits synced over will not have an instant time lesser than the last completed instant on the
+          // metadata table.
+          final String logCompactionInstantTime = createLogCompactionTimestamp(latestDeltaCommitTimeOpt.get());
+          if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(logCompactionInstantTime)) {
+            LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
+          } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
+            LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
+            if (request.getMode().includesExecute()) {
+              if (shouldDelegateExecution(request, TableServiceType.LOG_COMPACT)) {
+                LOG.info("Skipping execution of log compaction on MDT as it is delegated to table service manager.");
+              } else {
+                writeClient.logCompact(logCompactionInstantTime, true);
+              }
+            }
+          }
+        }
+      } catch (Exception e) {
+        metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.LOG_COMPACTION_FAILURES, 1));
+        LOG.error("Error running log compaction service in metadata table", e);
+        throw e;
       }
     }
   }

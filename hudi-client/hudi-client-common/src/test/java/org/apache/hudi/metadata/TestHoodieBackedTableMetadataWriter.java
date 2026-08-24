@@ -29,6 +29,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -60,6 +61,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -83,6 +85,7 @@ import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -135,13 +138,14 @@ class TestHoodieBackedTableMetadataWriter {
   void runPendingTableServicesOperations(boolean hasPendingCompaction, boolean hasPendingLogCompaction, boolean requiresRefresh, boolean ranService) {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieActiveTimeline initialTimeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
+    HoodieActiveTimeline reloadedTimeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
     BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/").build();
-    when(writeClient.getConfig()).thenReturn(writeConfig);
     if (requiresRefresh) {
-      when(metaClient.reloadActiveTimeline()).thenReturn(initialTimeline);
+      when(metaClient.reloadActiveTimeline()).thenReturn(initialTimeline, reloadedTimeline);
     } else {
       when(metaClient.getActiveTimeline()).thenReturn(initialTimeline);
+      when(metaClient.reloadActiveTimeline()).thenReturn(reloadedTimeline);
     }
     if (hasPendingCompaction) {
       when(initialTimeline.filterPendingCompactionTimeline().countInstants()).thenReturn(1);
@@ -149,16 +153,11 @@ class TestHoodieBackedTableMetadataWriter {
     if (hasPendingLogCompaction) {
       when(initialTimeline.filterPendingLogCompactionTimeline().countInstants()).thenReturn(1);
     }
-    HoodieActiveTimeline expectedResult;
-    if (ranService) {
-      HoodieActiveTimeline timelineReloadedAfterServicesRun = mock(HoodieActiveTimeline.class);
-      when(metaClient.reloadActiveTimeline()).thenReturn(timelineReloadedAfterServicesRun);
-      expectedResult = timelineReloadedAfterServicesRun;
-    } else {
-      expectedResult = initialTimeline;
-    }
-    assertSame(expectedResult, HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
-        metaClient, writeClient, requiresRefresh, Option.empty()));
+    when(initialTimeline.getDeltaCommitTimeline().filterCompletedInstants().lastInstant()).thenReturn(Option.empty());
+    when(reloadedTimeline.getDeltaCommitTimeline().filterCompletedInstants().lastInstant()).thenReturn(Option.empty());
+
+    HoodieBackedTableMetadataWriter writer = createTableServicesWriter(metaClient, writeClient, writeConfig);
+    writer.performTableServices(Option.empty(), requiresRefresh);
 
     verify(writeClient, times(hasPendingCompaction ? 1 : 0)).runAnyPendingCompactions();
     verify(writeClient, times(hasPendingLogCompaction ? 1 : 0)).runAnyPendingLogCompactions();
@@ -176,21 +175,20 @@ class TestHoodieBackedTableMetadataWriter {
     tsmProps.put(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ENABLED.key(), "true");
     tsmProps.put(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), "compaction,logcompaction");
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/").withProperties(tsmProps).build();
-    when(writeClient.getConfig()).thenReturn(writeConfig);
-    when(writeClient.shouldDelegateToTableServiceManager(any(), any())).thenCallRealMethod();
 
     when(metaClient.getActiveTimeline()).thenReturn(initialTimeline);
     when(initialTimeline.filterPendingCompactionTimeline().countInstants()).thenReturn(1);
     when(initialTimeline.filterPendingLogCompactionTimeline().countInstants()).thenReturn(1);
+    when(initialTimeline.getDeltaCommitTimeline().filterCompletedInstants().lastInstant()).thenReturn(Option.empty());
 
-    HoodieActiveTimeline result = HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
-        metaClient, writeClient, false, Option.empty());
+    HoodieBackedTableMetadataWriter writer = createTableServicesWriter(metaClient, writeClient, writeConfig);
+    writer.performTableServices(Option.empty(), false);
 
     // TSM-delegated actions should not be executed
     verify(writeClient, times(0)).runAnyPendingCompactions();
     verify(writeClient, times(0)).runAnyPendingLogCompactions();
     // No services ran, so no timeline reload needed
-    assertSame(initialTimeline, result);
+    verify(metaClient, never()).reloadActiveTimeline();
   }
 
   @Test
@@ -204,23 +202,36 @@ class TestHoodieBackedTableMetadataWriter {
     tsmProps.put(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ENABLED.key(), "true");
     tsmProps.put(HoodieTableServiceManagerConfig.TABLE_SERVICE_MANAGER_ACTIONS.key(), "compaction");
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/").withProperties(tsmProps).build();
-    when(writeClient.getConfig()).thenReturn(writeConfig);
-    when(writeClient.shouldDelegateToTableServiceManager(any(), any())).thenCallRealMethod();
 
     when(metaClient.getActiveTimeline()).thenReturn(initialTimeline);
     when(initialTimeline.filterPendingCompactionTimeline().countInstants()).thenReturn(1);
     when(initialTimeline.filterPendingLogCompactionTimeline().countInstants()).thenReturn(1);
+    when(initialTimeline.getDeltaCommitTimeline().filterCompletedInstants().lastInstant()).thenReturn(Option.empty());
 
-    HoodieActiveTimeline reloadedTimeline = mock(HoodieActiveTimeline.class);
+    HoodieActiveTimeline reloadedTimeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
     when(metaClient.reloadActiveTimeline()).thenReturn(reloadedTimeline);
+    when(reloadedTimeline.getDeltaCommitTimeline().filterCompletedInstants().lastInstant()).thenReturn(Option.empty());
 
-    HoodieActiveTimeline result = HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
-        metaClient, writeClient, false, Option.empty());
+    HoodieBackedTableMetadataWriter writer = createTableServicesWriter(metaClient, writeClient, writeConfig);
+    writer.performTableServices(Option.empty(), false);
 
     // Compaction delegated to TSM → skipped; logcompaction not delegated → executed
     verify(writeClient, times(0)).runAnyPendingCompactions();
     verify(writeClient, times(1)).runAnyPendingLogCompactions();
-    assertSame(reloadedTimeline, result);
+    verify(metaClient, times(1)).reloadActiveTimeline();
+  }
+
+  private HoodieBackedTableMetadataWriter createTableServicesWriter(HoodieTableMetaClient metaClient,
+                                                                     BaseHoodieWriteClient writeClient,
+                                                                     HoodieWriteConfig writeConfig) {
+    HoodieBackedTableMetadataWriter writer = mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    writer.metadataMetaClient = metaClient;
+    writer.metadataWriteConfig = writeConfig;
+    writer.dataWriteConfig = writeConfig;
+    writer.metrics = Option.empty();
+    when(writer.getWriteClient()).thenReturn(writeClient);
+    when(writeClient.getConfig()).thenReturn(writeConfig);
+    return writer;
   }
 
   @Test
@@ -464,11 +475,11 @@ class TestHoodieBackedTableMetadataWriter {
       doThrow(new HoodieException("close failed")).when(writer).close();
       writer.closeInternal();
     });
-    assertFalse(writer.validateCompactionScheduling(Option.empty(), "002"));
+    assertFalse(writer.validateCompactionScheduling("002"));
   }
 
   @Test
-  void compactIfNecessaryHandlesSkipDelegationAndFailures() {
+  void runCompactionServicesHandlesSkipDelegationAndFailures() {
     // Exercise skip, delegation, and failure propagation for both compaction types.
     Properties tableServiceManagerProperties = new Properties();
     tableServiceManagerProperties.put(
@@ -479,6 +490,7 @@ class TestHoodieBackedTableMetadataWriter {
         HoodieTableServiceManagerConfig.newBuilder().fromProperties(tableServiceManagerProperties).build();
     HoodieWriteConfig metadataWriteConfig = mock(HoodieWriteConfig.class);
     when(metadataWriteConfig.getTableServiceManagerConfig()).thenReturn(tableServiceManagerConfig);
+    when(metadataWriteConfig.getMetadataConfig()).thenReturn(HoodieMetadataConfig.newBuilder().build());
     when(metadataWriteConfig.isLogCompactionEnabled()).thenReturn(true);
 
     HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
@@ -509,10 +521,112 @@ class TestHoodieBackedTableMetadataWriter {
         .thenReturn(Option.of("201"))
         .thenThrow(new HoodieException("log compaction failed"));
 
-    writer.compactIfNecessary(writeClient, Option.empty());
-    writer.compactIfNecessary(writeClient, Option.empty());
-    assertThrows(HoodieException.class, () -> writer.compactIfNecessary(writeClient, Option.empty()));
-    assertThrows(HoodieException.class, () -> writer.compactIfNecessary(writeClient, Option.empty()));
+    MetadataTableServiceRequest request = MetadataTableServiceRequest.newBuilder().build();
+    writer.runCompactionServicesIfNecessary(writeClient, Option.empty(), request);
+    writer.runCompactionServicesIfNecessary(writeClient, Option.empty(), request);
+    assertThrows(HoodieException.class, () ->
+        writer.runCompactionServicesIfNecessary(writeClient, Option.empty(), request));
+    assertThrows(HoodieException.class, () ->
+        writer.runCompactionServicesIfNecessary(writeClient, Option.empty(), request));
+  }
+
+  @Test
+  void baseCompactionServicesHonorScheduleAndExecuteModes() {
+    HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    when(dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
+        .filter(any()).firstInstant()).thenReturn(Option.empty());
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    when(metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(any(String.class)))
+        .thenReturn(false);
+
+    HoodieWriteConfig metadataWriteConfig = mock(HoodieWriteConfig.class);
+    when(metadataWriteConfig.isLogCompactionEnabled()).thenReturn(true);
+
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer =
+        mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    writer.dataMetaClient = dataMetaClient;
+    writer.metadataMetaClient = metadataMetaClient;
+    writer.metadataWriteConfig = metadataWriteConfig;
+    writer.metrics = Option.empty();
+
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    when(writeClient.createNewInstantTime(false)).thenReturn("100", "200");
+    when(writeClient.scheduleCompactionAtInstant("100", Option.empty())).thenReturn(true);
+    when(writeClient.scheduleCompactionAtInstant("200", Option.empty())).thenReturn(true);
+    when(writeClient.scheduleLogCompaction(Option.empty()))
+        .thenReturn(Option.of("101"), Option.of("201"));
+
+    MetadataTableServiceRequest scheduleRequest = MetadataTableServiceRequest.newBuilder()
+        .withMode(MetadataTableServiceMode.SCHEDULE)
+        .withServices(EnumSet.of(TableServiceType.COMPACT, TableServiceType.LOG_COMPACT))
+        .disableTableServiceManagerDelegation(true)
+        .build();
+    writer.runCompactionServicesIfNecessary(writeClient, Option.empty(), scheduleRequest);
+
+    verify(writeClient).scheduleCompactionAtInstant("100", Option.empty());
+    verify(writeClient).scheduleLogCompaction(Option.empty());
+    verify(writeClient, never()).compact(any(String.class), eq(true));
+    verify(writeClient, never()).logCompact(any(String.class), eq(true));
+
+    MetadataTableServiceRequest scheduleAndExecuteRequest = scheduleRequest.copy(
+        MetadataTableServiceMode.SCHEDULE_AND_EXECUTE);
+    writer.runCompactionServicesIfNecessary(writeClient, Option.empty(), scheduleAndExecuteRequest);
+
+    verify(writeClient).scheduleCompactionAtInstant("200", Option.empty());
+    verify(writeClient).compact("200", true);
+    verify(writeClient, times(2)).scheduleLogCompaction(Option.empty());
+    verify(writeClient).logCompact("201", true);
+  }
+
+  @Test
+  void schedulingDelegationIsOnlyAppliedToInlineRequests() {
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .withTableServiceManagerEnabled(true)
+        .withTableServiceManagerScheduleActions("compaction")
+        .build();
+    HoodieWriteConfig dataWriteConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/table")
+        .withMetadataConfig(metadataConfig)
+        .build();
+
+    HoodieTableMetaClient dataMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    when(dataMetaClient.getTableConfig().getTableVersion()).thenReturn(HoodieTableVersion.NINE);
+    when(dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
+        .filter(any()).firstInstant()).thenReturn(Option.empty());
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    when(metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(any(String.class)))
+        .thenReturn(false);
+
+    HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<?>> writer =
+        mock(HoodieBackedTableMetadataWriter.class, CALLS_REAL_METHODS);
+    writer.dataMetaClient = dataMetaClient;
+    writer.metadataMetaClient = metadataMetaClient;
+    writer.dataWriteConfig = dataWriteConfig;
+    writer.metadataWriteConfig = mock(HoodieWriteConfig.class);
+    HoodieTableServiceManagerConfig tableServiceManagerConfig = mock(HoodieTableServiceManagerConfig.class);
+    when(tableServiceManagerConfig.isTableServiceManagerEnabled()).thenReturn(true);
+    when(writer.metadataWriteConfig.getTableServiceManagerConfig()).thenReturn(tableServiceManagerConfig);
+    when(writer.metadataWriteConfig.getMetadataConfig()).thenReturn(metadataConfig);
+    writer.metrics = Option.empty();
+
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    when(writeClient.createNewInstantTime(false)).thenReturn("100", "101");
+    when(writeClient.scheduleCompactionAtInstant("101", Option.empty())).thenReturn(true);
+
+    MetadataTableServiceRequest inlineRequest = MetadataTableServiceRequest.newBuilder()
+        .withMode(MetadataTableServiceMode.SCHEDULE)
+        .withServices(EnumSet.of(TableServiceType.COMPACT))
+        .build();
+    writer.runCompactionServicesIfNecessary(writeClient, Option.empty(), inlineRequest);
+    verify(writeClient, never()).scheduleCompactionAtInstant("100", Option.empty());
+
+    MetadataTableServiceRequest externalRequest = MetadataTableServiceRequest.newBuilder()
+        .withMode(MetadataTableServiceMode.SCHEDULE)
+        .withServices(EnumSet.of(TableServiceType.COMPACT))
+        .disableTableServiceManagerDelegation(true)
+        .build();
+    writer.runCompactionServicesIfNecessary(writeClient, Option.empty(), externalRequest);
+    verify(writeClient).scheduleCompactionAtInstant("101", Option.empty());
   }
 
   private static void setField(Object target, String name, Object value) throws Exception {

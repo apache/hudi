@@ -46,6 +46,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -96,6 +97,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1531,13 +1533,25 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    */
   @Override
   public void performTableServices(Option<String> inFlightInstantTimestamp, boolean requiresTimelineRefresh) {
+    MetadataTableServiceRequest request = MetadataTableServiceRequest.newBuilder()
+        .withMode(MetadataTableServiceMode.SCHEDULE_AND_EXECUTE)
+        .build();
+    runTableServicesInternal(request, requiresTimelineRefresh);
+  }
+
+  private void runTableServicesInternal(MetadataTableServiceRequest request,
+                                        boolean requiresTimelineRefresh) {
     HoodieTimer metadataTableServicesTimer = HoodieTimer.start();
     boolean allTableServicesExecutedSuccessfullyOrSkipped = true;
     BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();
     try {
+      HoodieActiveTimeline activeTimeline = requiresTimelineRefresh
+          ? metadataMetaClient.reloadActiveTimeline() : metadataMetaClient.getActiveTimeline();
       // Run any pending table services operations and return the active timeline
-      HoodieActiveTimeline activeTimeline = runPendingTableServicesOperationsAndRefreshTimeline(
-          metadataMetaClient, writeClient, requiresTimelineRefresh, metrics);
+      if (request.getMode().includesExecute()
+          && executePendingCompactionServices(request, activeTimeline, writeClient)) {
+        activeTimeline = metadataMetaClient.reloadActiveTimeline();
+      }
 
       Option<HoodieInstant> lastInstant = activeTimeline.getDeltaCommitTimeline()
           .filterCompletedInstants()
@@ -1545,15 +1559,30 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       if (!lastInstant.isPresent()) {
         return;
       }
+
       // Check and run clean operations.
-      cleanIfNecessary(writeClient, lastInstant.get().requestedTime());
-      // Do timeline validation before scheduling compaction/logCompaction operations.
-      if (validateCompactionScheduling(inFlightInstantTimestamp, lastInstant.get().requestedTime())) {
-        String latestDeltacommitTime = lastInstant.get().requestedTime();
-        LOG.info("Latest deltacommit time found is {}, running compaction operations.", latestDeltacommitTime);
-        compactIfNecessary(writeClient, Option.of(latestDeltacommitTime));
+      String latestDeltaCommitTime = lastInstant.get().requestedTime();
+      if (request.getMode().includesExecute()
+          && request.includes(TableServiceType.CLEAN)
+          && !shouldDelegateExecution(request, TableServiceType.CLEAN)) {
+        runCleanService(writeClient, latestDeltaCommitTime);
       }
-      writeClient.archive();
+
+      if (request.getMode().includesSchedule()
+          && (request.includes(TableServiceType.COMPACT) || request.includes(TableServiceType.LOG_COMPACT))
+          // Do timeline validation before scheduling compaction/logCompaction operations.
+          && validateCompactionScheduling(latestDeltaCommitTime)) {
+        LOG.info("Latest delta commit time found is {}, scheduling compaction operations.", latestDeltaCommitTime);
+        runCompactionServicesIfNecessary(writeClient, Option.of(latestDeltaCommitTime), request);
+      }
+
+      if (request.getMode().includesExecute() && request.includes(TableServiceType.ARCHIVE)) {
+        if (shouldDelegateExecution(request, TableServiceType.ARCHIVE)) {
+          LOG.info("Skipping archival on MDT as it is delegated to table service manager.");
+        } else {
+          writeClient.archive();
+        }
+      }
       LOG.info("All the table services operations on MDT completed successfully");
     } catch (Exception e) {
       LOG.error("Exception in running table services on metadata table", e);
@@ -1580,35 +1609,97 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
   }
 
-  static HoodieActiveTimeline runPendingTableServicesOperationsAndRefreshTimeline(HoodieTableMetaClient metadataMetaClient,
-                                                                                  BaseHoodieWriteClient<?, ?, ?, ?> writeClient,
-                                                                                  boolean initialTimelineRequiresRefresh,
-                                                                                  Option<HoodieMetadataMetrics> metricsOption) {
+  @Override
+  public void scheduleTableServices(MetadataTableServiceRequest request) {
+    MetadataTableServiceRequest scheduleRequest = request.copy(MetadataTableServiceMode.SCHEDULE);
+    runTableServicesInternal(scheduleRequest, true);
+  }
+
+  @Override
+  public void executeTableServices(MetadataTableServiceRequest request) {
+    MetadataTableServiceRequest executeRequest = request.copy(MetadataTableServiceMode.EXECUTE);
+    runTableServicesInternal(executeRequest, true);
+  }
+
+  private boolean executePendingCompactionServices(MetadataTableServiceRequest request,
+                                                   HoodieActiveTimeline activeTimeline,
+                                                   BaseHoodieWriteClient<?, I, ?, O> writeClient) {
+    boolean ranServices = false;
     try {
-      HoodieActiveTimeline activeTimeline = initialTimelineRequiresRefresh ? metadataMetaClient.reloadActiveTimeline() : metadataMetaClient.getActiveTimeline();
-      // finish off any pending log compaction or compactions operations if any from previous attempt.
-      boolean ranServices = false;
-      if (activeTimeline.filterPendingCompactionTimeline().countInstants() > 0) {
-        if (writeClient.shouldDelegateToTableServiceManager(writeClient.getConfig(), ActionType.compaction)) {
+      if (request.includes(TableServiceType.COMPACT)
+          && activeTimeline.filterPendingCompactionTimeline().countInstants() > 0) {
+        if (shouldDelegateExecution(request, TableServiceType.COMPACT)) {
           LOG.info("Skipping pending compactions on MDT as they are delegated to table service manager.");
+        } else if (request.getInstantTime().isPresent()) {
+          writeClient.compact(request.getInstantTime().get(), true);
+          ranServices = true;
         } else {
           writeClient.runAnyPendingCompactions();
           ranServices = true;
         }
       }
-      if (activeTimeline.filterPendingLogCompactionTimeline().countInstants() > 0) {
-        if (writeClient.shouldDelegateToTableServiceManager(writeClient.getConfig(), ActionType.logcompaction)) {
+      if (request.includes(TableServiceType.LOG_COMPACT)
+          && activeTimeline.filterPendingLogCompactionTimeline().countInstants() > 0) {
+        if (shouldDelegateExecution(request, TableServiceType.LOG_COMPACT)) {
           LOG.info("Skipping pending log compactions on MDT as they are delegated to table service manager.");
+        } else if (request.getInstantTime().isPresent()) {
+          writeClient.logCompact(request.getInstantTime().get(), true);
+          ranServices = true;
         } else {
           writeClient.runAnyPendingLogCompactions();
           ranServices = true;
         }
       }
-      return ranServices ? metadataMetaClient.reloadActiveTimeline() : activeTimeline;
+      return ranServices;
     } catch (Exception e) {
-      metricsOption.ifPresent(m -> m.incrementMetric(
-          HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1));
+      metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1));
       throw e;
+    }
+  }
+
+  private void runCleanService(BaseHoodieWriteClient<?, I, ?, O> writeClient,
+                               String latestDeltaCommitTime) {
+    if (shouldRunClean()) {
+      executeClean(writeClient, latestDeltaCommitTime);
+      writeClient.lazyRollbackFailedIndexing();
+    }
+  }
+
+  protected boolean shouldDelegateExecution(MetadataTableServiceRequest request, TableServiceType service) {
+    return shouldDelegate(request, service,
+        config -> config.getTableServiceManagerConfig().getTableServiceManagerActions());
+  }
+
+  protected boolean shouldDelegateScheduling(MetadataTableServiceRequest request, TableServiceType service) {
+    return shouldDelegate(request, service,
+        config -> config.getMetadataConfig().getTableServiceManagerScheduleActions());
+  }
+
+  private boolean shouldDelegate(MetadataTableServiceRequest request, TableServiceType service,
+                                 Function<HoodieWriteConfig, String> actionsProvider) {
+    if (request.shouldDisableTableServiceManagerDelegation()
+        || metadataWriteConfig == null
+        || !metadataWriteConfig.getTableServiceManagerConfig().isTableServiceManagerEnabled()) {
+      return false;
+    }
+    String action = actionName(service);
+    return Arrays.stream(actionsProvider.apply(metadataWriteConfig).split(","))
+        .map(String::trim)
+        .anyMatch(action::equals);
+  }
+
+  private static String actionName(TableServiceType service) {
+    switch (service) {
+      case COMPACT:
+        return ActionType.compaction.name();
+      case LOG_COMPACT:
+        return ActionType.logcompaction.name();
+      case CLEAN:
+        return ActionType.clean.name();
+      case ARCHIVE:
+        return "archive";
+      default:
+        throw new IllegalArgumentException("Unsupported MDT table service: " + service);
     }
   }
 
@@ -1622,7 +1713,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * 2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
    * deltacommit.
    */
-  void compactIfNecessary(BaseHoodieWriteClient<?,I,?,O> writeClient, Option<String> latestDeltaCommitTimeOpt) {
+  protected void runCompactionServicesIfNecessary(BaseHoodieWriteClient<?, I, ?, O> writeClient,
+                                                  Option<String> latestDeltaCommitTimeOpt,
+                                                  MetadataTableServiceRequest request) {
     // IMPORTANT: Trigger compaction with max instant time that is smaller than(or equals) the earliest pending instant from DT.
     // The compaction planner will manage to filter out the log files that finished with greater completion time.
     // see BaseHoodieCompactionPlanGenerator.generateCompactionPlan for more details.
@@ -1643,43 +1736,57 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     try {
       if (skipCompactions) {
         LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
-      } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
-        LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-        if (shouldDelegateToTableServiceManager(metadataWriteConfig, ActionType.compaction)) {
-          LOG.info("Skipping execution of compaction on MDT as it is delegated to table service manager.");
-        } else {
-          writeClient.compact(compactionInstantTime, true);
+      } else if (request.includes(TableServiceType.COMPACT)
+          && request.getMode().includesSchedule()) {
+        if (shouldDelegateScheduling(request, TableServiceType.COMPACT)) {
+          LOG.info("Skipping scheduling of compaction on MDT as it is delegated to table service manager.");
+        } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
+          LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
+          if (request.getMode().includesExecute()) {
+            if (shouldDelegateExecution(request, TableServiceType.COMPACT)) {
+              LOG.info("Skipping execution of compaction on MDT as it is delegated to table service manager.");
+            } else {
+              writeClient.compact(compactionInstantTime, true);
+            }
+          }
         }
       }
     } catch (Exception e) {
       metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.COMPACTION_FAILURES, 1));
-      LOG.error("Error in scheduling and executing compaction in metadata table", e);
+      LOG.error("Error running compaction service in metadata table", e);
       throw e;
     }
 
     try {
       if (skipCompactions) {
         LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
-      } else if (metadataWriteConfig.isLogCompactionEnabled()) {
-        // Schedule and execute log compaction with new instant time.
-        Option<String> scheduledLogCompaction = writeClient.scheduleLogCompaction(Option.empty());
-        if (scheduledLogCompaction.isPresent()) {
-          LOG.info("Log compaction is scheduled for timestamp {}", scheduledLogCompaction.get());
-          if (shouldDelegateToTableServiceManager(metadataWriteConfig, ActionType.logcompaction)) {
-            LOG.info("Skipping execution of log compaction on MDT as it is delegated to table service manager.");
-          } else {
-            writeClient.logCompact(scheduledLogCompaction.get(), true);
+      } else if (request.includes(TableServiceType.LOG_COMPACT)
+          && request.getMode().includesSchedule()
+          && metadataWriteConfig.isLogCompactionEnabled()) {
+        if (shouldDelegateScheduling(request, TableServiceType.LOG_COMPACT)) {
+          LOG.info("Skipping scheduling of log compaction on MDT as it is delegated to table service manager.");
+        } else {
+          Option<String> scheduledLogCompactionInstant = writeClient.scheduleLogCompaction(Option.empty());
+          if (scheduledLogCompactionInstant.isPresent()) {
+            LOG.info("Log compaction is scheduled for timestamp {}", scheduledLogCompactionInstant.get());
+            if (request.getMode().includesExecute()) {
+              if (shouldDelegateExecution(request, TableServiceType.LOG_COMPACT)) {
+                LOG.info("Skipping execution of log compaction on MDT as it is delegated to table service manager.");
+              } else {
+                writeClient.logCompact(scheduledLogCompactionInstant.get(), true);
+              }
+            }
           }
         }
       }
     } catch (Exception e) {
       metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.LOG_COMPACTION_FAILURES, 1));
-      LOG.error("Error in scheduling and executing logcompaction in metadata table", e);
+      LOG.error("Error running log compaction service in metadata table", e);
       throw e;
     }
   }
 
-  protected void cleanIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {
+  private boolean shouldRunClean() {
     Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.getActiveTimeline()
         .getCommitAndReplaceTimeline().filterCompletedInstants().lastInstant();
     if (lastCompletedCompactionInstant.isPresent()
@@ -1691,13 +1798,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // then a FileNotFoundException(for LogFormatReader) or NPE(for HFileReader) would throw.
 
       // 3 is a value that I think is enough for metadata table reader.
-      return;
+      return false;
     }
-    // Trigger cleaning with suffixes based on the same instant time. This ensures that any future
-    // delta commits synced over will not have an instant time lesser than the last completed instant on the
-    // metadata table.
-    executeClean(writeClient, instantTime);
-    writeClient.lazyRollbackFailedIndexing();
+    return true;
   }
 
   protected void executeClean(BaseHoodieWriteClient writeClient, String instantTime) {
@@ -1707,7 +1810,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   /**
    * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
    */
-  boolean validateCompactionScheduling(Option<String> inFlightInstantTimestamp, String latestDeltaCommitTimeInMetadataTable) {
+  boolean validateCompactionScheduling(String latestDeltaCommitTimeInMetadataTable) {
     // Under the log compaction scope, the sequence of the log-compaction and compaction needs to be ensured because metadata items such as RLI
     // only has proc-time ordering semantics. For "ensured", it means the completion sequence of the log-compaction/compaction is the same as the start sequence.
     if (metadataWriteConfig.isLogCompactionEnabled()) {
