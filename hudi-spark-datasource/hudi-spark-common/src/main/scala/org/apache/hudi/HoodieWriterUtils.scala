@@ -262,6 +262,30 @@ object HoodieWriterUtils {
    */
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
                           tableConfig: HoodieTableConfig, isOverWriteMode: Boolean): Unit = {
+    // Fail fast on writes that would produce a slash-separated layout with more than one
+    // partition field. The extra path fragments cannot be lined up with the partition columns on
+    // read (HUDI issue #19666), so without this check the write commits cleanly and every
+    // subsequent read of the table fails. Checked regardless of save mode, since an Overwrite
+    // produces the same layout.
+    val slashSeparatedDatePartitioning =
+      params.get(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key).exists(_.toBoolean) ||
+        (null != tableConfig && tableConfig.getSlashSeparatedDatePartitioning)
+    if (slashSeparatedDatePartitioning) {
+      // The table config is the source of truth for an existing table; for a new one the
+      // datasource value may still carry the CustomKeyGenerator "field:type" format, which the
+      // comma count is insensitive to
+      val partitionFields = Option(tableConfig)
+        .flatMap(tc => Option(HoodieTableConfig.getPartitionFieldProp(tc).orElse(null)))
+        .filter(_.nonEmpty)
+        .getOrElse(params.getOrElse(PARTITIONPATH_FIELD.key(), ""))
+      val partitionFieldCount = partitionFields.split(",").count(_.trim.nonEmpty)
+      if (partitionFieldCount > 1) {
+        throw new HoodieException(s"${HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key} requires"
+          + s" a single partition field, but found $partitionFieldCount: $partitionFields."
+          + " The slash-separated layout of a multi-field partition path cannot be read back."
+          + " Use a single date partition field or disable slash-separated date partitioning.")
+      }
+    }
     // If Overwrite is set as save mode, we don't need to do table config validation.
     if (!isOverWriteMode) {
       val resolver = spark.sessionState.conf.resolver

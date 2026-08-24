@@ -80,11 +80,13 @@ public abstract class PartitionPathFormatterBase<S> {
             .append(partitionPathPartStr);
       } else if (slashSeparatedDatePartitioning && !hasPathBreakingDash(partitionPathPartStr)) {
         // NOTE: Every part is substituted here, preserving the behaviour this branch had before the
-        //       [[ClassCastException]] fix. [[CustomKeyGenerator]] builds one single-field sub-keygen
-        //       per field, so its write path slashes each field individually, and
-        //       [[SparkHoodieTableFileIndex#composeRelativePartitionPath]] has to land on the same
-        //       directory when it composes the prefix in one [[combine]] call over all N columns.
-        //       Whether a multi-field table should be slash-separated at all is HUDI issue #19666
+        //       [[ClassCastException]] fix. Writes reject slash partitioning with more than one
+        //       partition field ([[HoodieWriterUtils#validateTableConfig]]), so this branch only
+        //       serves reads of tables written before that rejection: [[CustomKeyGenerator]] built
+        //       one single-field sub-keygen per field, so such tables slashed each field
+        //       individually, and [[SparkHoodieTableFileIndex#composeRelativePartitionPath]] has to
+        //       land on the same directory when it composes the prefix in one [[combine]] call over
+        //       all N columns. See HUDI issue #19666
         sb.append(replaceDashesWithSlashes(partitionPathPartStr));
       } else {
         sb.append(partitionPathPartStr);
@@ -121,15 +123,16 @@ public abstract class PartitionPathFormatterBase<S> {
    * (which guards on a single field as well) driving the Avro write-path: both write-paths have to
    * derive the very same partition path for a record.
    *
-   * <p>NOTE: The multi-part branch substitutes every part, which {@code CustomKeyGenerator} depends
-   * on: it builds one single-field sub-key-generator per partition field, so its own write path
-   * slashes each field individually, and {@code SparkHoodieTableFileIndex#composeRelativePartitionPath}
-   * -- which calls {@link #combine} once over all N columns to compose a listing prefix -- has to
-   * name the very same directory, or the prefix misses and the query silently returns no rows. For
-   * {@code ComplexKeyGenerator} this leaves the row-writer path slashing where the Avro path does
-   * not, and neither layout reads back: the extra fragments leave
-   * {@code HoodieSparkUtils#doParsePartitionColumnValues} unable to line the path up with the
-   * partition columns. Both are tracked in HUDI issue #19666.
+   * <p>NOTE: The multi-part branch substitutes every part, which reads of legacy tables depend on:
+   * {@code CustomKeyGenerator} built one single-field sub-key-generator per partition field, so
+   * such tables slashed each field individually, and
+   * {@code SparkHoodieTableFileIndex#composeRelativePartitionPath} -- which calls {@link #combine}
+   * once over all N columns to compose a listing prefix -- has to name the very same directory, or
+   * the prefix misses and the query silently returns no rows. New writes cannot reach this branch
+   * with slash partitioning enabled: multi-field slash tables produce a layout the extra fragments
+   * leave {@code HoodieSparkUtils#doParsePartitionColumnValues} unable to line up with the
+   * partition columns, so {@code HoodieWriterUtils#validateTableConfig} rejects them at write time.
+   * See HUDI issue #19666.
    */
   protected abstract S replaceDashesWithSlashes(S partitionPathPart);
 

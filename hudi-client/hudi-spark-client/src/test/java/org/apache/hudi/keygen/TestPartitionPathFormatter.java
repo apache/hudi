@@ -60,11 +60,12 @@ class TestPartitionPathFormatter {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testSlashSeparatedDatePartitioningAppliesToEveryField(boolean useRowWriterPath) {
-    // NOTE: Every part is substituted, which is what [[CustomKeyGenerator]] writes (one single-field
-    //       sub-keygen per field) and what [[SparkHoodieTableFileIndex#composeRelativePartitionPath]]
-    //       has to reproduce when it composes a listing prefix over all N columns in one call.
-    //       [[KeyGenUtils#getRecordPartitionPath]] guards on a single field instead, so for
-    //       [[ComplexKeyGenerator]] the Avro path diverges from this one -- HUDI issue #19666
+    // NOTE: Every part is substituted, which is what legacy [[CustomKeyGenerator]] tables hold on
+    //       disk (one single-field sub-keygen per field) and what
+    //       [[SparkHoodieTableFileIndex#composeRelativePartitionPath]] has to reproduce when it
+    //       composes a listing prefix over all N columns in one call. New writes cannot reach this
+    //       combination -- [[HoodieWriterUtils#validateTableConfig]] rejects slash partitioning
+    //       with more than one partition field. See HUDI issue #19666
     assertEquals("2026/01/05/san/francisco",
         combine(useRowWriterPath, false, false, true, TWO_FIELDS, "2026-01-05", "san-francisco"));
     // The guard applies per part, not just to the first one

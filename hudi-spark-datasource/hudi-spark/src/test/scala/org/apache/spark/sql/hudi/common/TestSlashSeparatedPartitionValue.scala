@@ -228,12 +228,16 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test slash separated date partitions with a multi-field CustomKeyGenerator") {
+  test("Test slash separated date partitioning rejects multiple partition fields at create") {
     withTempDir { tmp =>
       val targetTable = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
 
-      spark.sql(
+      // NOTE: A multi-field slash table writes extra path fragments that
+      //       [[HoodieSparkUtils#doParsePartitionColumnValues]] cannot line up with the partition
+      //       columns, so every read of the table fails under the default lazy listing. Rejecting
+      //       the combination up front keeps that layout from ever being written -- HUDI issue #19666
+      checkExceptionContain(
         s"""
            |create table $targetTable (
            |  `id` string,
@@ -252,26 +256,29 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
            | )
            | partitioned by (`datestr`, `city`)
            | location '$tablePath'
-        """.stripMargin)
+        """.stripMargin)("requires a single partition field")
+    }
+  }
 
-      spark.sql(
-        s"""
-           | insert into $targetTable values
-           | (1, 'a1', 1000, "2026-01-05", "NYC")
-        """.stripMargin)
+  test("Test slash separated date partitioning rejects multiple partition fields at write") {
+    withTempDir { tmp =>
+      val tablePath = s"${tmp.getCanonicalPath}/${generateTableName}"
 
-      // NOTE: [[CustomKeyGenerator]] builds one single-field sub-keygen per field, so its write path
-      //       slashes every field. With both partition columns bound
-      //       [[SparkHoodieTableFileIndex#composeRelativePartitionPath]] composes the listing prefix
-      //       in one [[PartitionPathFormatterBase#combine]] call over both columns and short-circuits
-      //       on an `exists` check, so the two have to derive the identical directory -- otherwise
-      //       the prefix misses and the query silently returns no rows rather than failing
-      val metaClient = buildMetaClient(tablePath)
-      assertPartitionDirsExist(metaClient, tablePath, "2026/01/05/NYC")
-
-      checkAnswer(s"select id, name from $targetTable where datestr = '2026-01-05' and city = 'NYC'")(
-        Seq("1", "a1")
-      )
+      // df.write bypasses the catalog-level check, so the rejection has to come from
+      // [[HoodieWriterUtils#validateTableConfig]]
+      val df = spark.sql(
+        "select '1' as id, 'a1' as name, 1000L as ts, '2026-01-05' as datestr, 'NYC' as city")
+      checkExceptionContain(new Runnable {
+        override def run(): Unit = {
+          df.write.format("hudi")
+            .option("hoodie.table.name", "rejected_slash_table")
+            .option("hoodie.datasource.write.recordkey.field", "id")
+            .option("hoodie.datasource.write.partitionpath.field", "datestr,city")
+            .option("hoodie.datasource.write.slash.separated.date.partitioning", "true")
+            .mode("append")
+            .save(tablePath)
+        }
+      })("requires a single partition field")
     }
   }
 
