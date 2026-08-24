@@ -555,6 +555,89 @@ Using `org.apache.hudi.utilities.sources.SqlFileBasedSource` allows setting the 
 table. SQL file path should be configured using this hoodie config:
 `hoodie.streamer.source.sql.file = 'hdfs://xxx/source.sql'`
 
+#### Debezium
+
+Hudi Streamer can keep a Hudi table in sync with an upstream database by ingesting change data capture (CDC) events
+produced by [Debezium](https://debezium.io/). Debezium publishes each change as an Avro message on a Kafka topic and
+registers the schema with a Confluent schema registry. The Debezium sources read that topic, flatten the nested Debezium
+change envelope into ordinary table columns, and apply the resulting inserts, updates and deletes to the target table.
+
+There is one source and one matching payload class per database:
+
+| Database   | Source class                                                        | Payload class                                                       |
+|------------|---------------------------------------------------------------------|---------------------------------------------------------------------|
+| PostgreSQL | `org.apache.hudi.utilities.sources.debezium.PostgresDebeziumSource` | `org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload` |
+| MySQL      | `org.apache.hudi.utilities.sources.debezium.MysqlDebeziumSource`    | `org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload`    |
+
+Note that the two halves spell MySQL differently: the source is `Mysql...` while the payload is `MySql...`.
+
+Both sources read Avro and require a schema registry, so set `--schemaprovider-class` to
+`org.apache.hudi.utilities.schema.SchemaRegistryProvider` and point `hoodie.streamer.schemaprovider.registry.url` at the
+subject for the topic. The registry has to be given to the Kafka consumer a second time, as a plain
+`schema.registry.url`, because Hudi drops every `hoodie.*` property before it constructs the consumer and the schema
+provider's URL therefore never reaches the deserializer. The value deserializer itself already defaults to
+`io.confluent.kafka.serializers.KafkaAvroDeserializer`, so `hoodie.streamer.source.kafka.value.deserializer.class` only
+needs setting in order to override it.
+
+A property file for a PostgreSQL table:
+
+```properties
+hoodie.streamer.source.kafka.topic=postgres.public.customers
+hoodie.streamer.schemaprovider.registry.url=http://localhost:8081/subjects/postgres.public.customers-value/versions/latest
+bootstrap.servers=localhost:9092
+auto.offset.reset=earliest
+schema.registry.url=http://localhost:8081
+
+hoodie.datasource.write.recordkey.field=id
+```
+
+and the job that reads it:
+
+```java
+[hoodie]$ spark-submit \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0 \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
+  --props file://${PWD}/debezium-source.properties \
+  --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
+  --source-class org.apache.hudi.utilities.sources.debezium.PostgresDebeziumSource \
+  --payload-class org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload \
+  --source-ordering-field _event_lsn \
+  --target-base-path file:///tmp/hudi-debezium-customers \
+  --target-table customers \
+  --table-type MERGE_ON_READ \
+  --op UPSERT \
+  --continuous
+```
+
+That example ingests PostgreSQL. For MySQL, substitute the three Debezium-specific arguments:
+
+```java
+  --source-class org.apache.hudi.utilities.sources.debezium.MysqlDebeziumSource \
+  --payload-class org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload \
+  --source-ordering-field _event_seq \
+```
+
+The record key must be the primary key of the upstream table, so that later changes to a row update it in place. A
+Merge-on-Read table suits the small, frequent writes a CDC stream produces, but Copy-on-Write works as well.
+
+**Ordering.** Change events can reach Kafka out of order, so the payload decides which version of a row wins rather than
+relying on arrival order. For PostgreSQL that is the log sequence number in `_event_lsn`, which the payload reads
+directly from the record. For MySQL the source derives an `_event_seq` column from the binlog coordinates
+`_event_bin_file` and `_event_pos`, giving the same total ordering. Pass whichever of the two columns applies as
+`--source-ordering-field`, since the payload compares that value when it deduplicates records within a batch.
+
+**Deletes.** The flattened `_change_operation_type` column carries the Debezium operation for each event, and the value
+`d` marks a delete. The payload applies those as deletes to the Hudi table instead of writing them as rows.
+
+For a table that is already being streamed, `hoodie.debezium.override.initial.checkpoint.key` sets the Kafka offsets the
+next run starts from. It is useful after seeding a table with a Debezium snapshot, or when the topic has been rewound.
+
+:::caution
+`hoodie.debezium.override.initial.checkpoint.key` takes effect on every batch for as long as it is set, not just the
+first one. While it is present the committed checkpoint is always the override, so the job keeps restarting from that
+same offset instead of advancing. Set it for the run that resumes the stream, then remove it.
+:::
+
 ### Error Table
 
 `HoodieStreamer` supports segregating error records into a separate table called "Error table" alongside with the 
