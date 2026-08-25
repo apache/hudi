@@ -23,7 +23,15 @@ jobs:
     strategy:
       matrix:
         include:
-          - scalaProfile: 'scala-2.13'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink2.2'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink2.1'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+          - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink2.0'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
