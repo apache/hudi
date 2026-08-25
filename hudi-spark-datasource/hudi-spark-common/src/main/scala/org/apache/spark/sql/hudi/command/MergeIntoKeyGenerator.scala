@@ -39,7 +39,11 @@ import org.apache.spark.unsafe.types.UTF8String
 class MergeIntoKeyGenerator(props: TypedProperties) extends SqlKeyGenerator(props) {
 
   override def getRecordKey(record: GenericRecord): String = {
-    val recordKey = record.get(RECORD_KEY_META_FIELD_ORD)
+    val recordKey = if (carriesMetaField(record, RECORD_KEY_META_FIELD_ORD)) {
+      record.get(RECORD_KEY_META_FIELD_ORD)
+    } else {
+      null
+    }
     if (recordKey != null) {
       recordKey.toString
     } else {
@@ -66,7 +70,11 @@ class MergeIntoKeyGenerator(props: TypedProperties) extends SqlKeyGenerator(prop
   }
 
   override def getPartitionPath(record: GenericRecord): String = {
-    val partitionPath = record.get(PARTITION_PATH_META_FIELD_ORD)
+    val partitionPath = if (carriesMetaField(record, PARTITION_PATH_META_FIELD_ORD)) {
+      record.get(PARTITION_PATH_META_FIELD_ORD)
+    } else {
+      null
+    }
     if (partitionPath != null) {
       partitionPath.toString
     } else {
@@ -92,4 +100,20 @@ class MergeIntoKeyGenerator(props: TypedProperties) extends SqlKeyGenerator(prop
     }
   }
 
+  /**
+   * Whether the record is long enough for `ord` to address a meta field at all.
+   *
+   * The meta fields are only prepended once a record has been through the write path, so a record
+   * built against a projected schema can be shorter than the ordinal: a MOR partial update
+   * materialises the merged record against `WRITE_PARTIAL_UPDATE_SCHEMA`, which carries only the
+   * columns named in `UPDATE SET`. Reading the ordinal off such a record raises a bare
+   * `ArrayIndexOutOfBoundsException` out of the key generator, which does not name the statement
+   * that caused it. Falling back to the SQL key generator gives the same answer the unpopulated
+   * meta field would have routed to.
+   *
+   * This is a bounds check, not a proof that the field at `ord` is a meta field: a record of the
+   * right length whose schema is not meta-prefixed still reads data here, exactly as before.
+   */
+  private def carriesMetaField(record: GenericRecord, ord: Int): Boolean =
+    record.getSchema.getFields.size > ord
 }
