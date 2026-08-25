@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
 import java.util.Locale;
@@ -43,9 +44,9 @@ public class SortUtils {
    * maps!"); a variant's {metadata, value} record does compare, but by its bytes, which is never
    * a meaningful sort key. The walk recurses through records and array elements just as
    * isOrderable does, so a struct or an array that merely holds a variant or a map at depth is
-   * rejected too. Without this check the failure surfaces deep in the write job (an
-   * AnalysisException from the row partitioner, a ClassCastException from the record-based one)
-   * without naming the column.
+   * rejected too, and the error names the nested member that made the column unorderable. Without
+   * this check the failure surfaces deep in the write job (an AnalysisException from the row
+   * partitioner, a ClassCastException from the record-based one) without naming the column.
    *
    * <p>Matching is case-insensitive, mirroring Spark's column resolution. Names absent from the
    * schema (nested paths, meta columns on a data-only schema) are left for the caller to handle.
@@ -61,38 +62,53 @@ public class SortUtils {
     Map<String, HoodieSchemaField> fieldsByLowerName = schema.getFields().stream()
         .collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT), Function.identity(), (first, second) -> first));
     for (String sortColumn : sortColumns) {
-      HoodieSchemaField field = fieldsByLowerName.get(sortColumn.trim().toLowerCase(Locale.ROOT));
-      if (field != null && !isOrderable(field.schema())) {
+      String columnName = sortColumn.trim();
+      HoodieSchemaField field = fieldsByLowerName.get(columnName.toLowerCase(Locale.ROOT));
+      if (field == null) {
+        continue;
+      }
+      Option<Pair<String, HoodieSchemaType>> unorderable = findUnorderableNode(field.schema(), columnName);
+      if (unorderable.isPresent()) {
+        // Only a nested offender needs pointing at; at the top level the column and its type already say it.
+        String nested = unorderable.get().getLeft().equals(columnName) ? ""
+            : String.format("it holds a %s at '%s', and ", unorderable.get().getRight(), unorderable.get().getLeft());
         throw new HoodieException(String.format(
-            "Sorting by column '%s' of type %s is not supported: VARIANT and MAP have no ordering, "
+            "Sorting by column '%s' of type %s is not supported: %sVARIANT and MAP have no ordering, "
                 + "at any depth. Remove it from the sort columns.",
-            sortColumn.trim(), field.schema().getNonNullType().getType()));
+            columnName, field.schema().getNonNullType().getType(), nested));
       }
     }
   }
 
   /**
-   * Mirrors Spark's RowOrdering.isOrderable: VARIANT and MAP are not orderable, a record is
-   * orderable when every field is, an array when its element type is, and every other type -
-   * BLOB (a struct of atomics in Spark) and VECTOR (an array of floats) included - is orderable.
+   * Mirrors Spark's RowOrdering.isOrderable, but reports where it fails rather than just that it
+   * does: VARIANT and MAP are the unorderable leaves, a record is orderable when every field is,
+   * an array when its element type is, and every other type - BLOB (a struct of atomics in Spark)
+   * and VECTOR (an array of floats) included - is orderable.
+   *
+   * @param schema the node to walk
+   * @param path   dotted path of {@code schema}, extended with "." + name per record field and
+   *               with "[]" per array element
+   * @return the path and type of the first unorderable node, or empty when the schema is orderable
    */
-  private static boolean isOrderable(HoodieSchema schema) {
+  private static Option<Pair<String, HoodieSchemaType>> findUnorderableNode(HoodieSchema schema, String path) {
     HoodieSchema unwrapped = schema.isNullable() ? schema.getNonNullType() : schema;
     switch (unwrapped.getType()) {
       case VARIANT:
       case MAP:
-        return false;
+        return Option.of(Pair.of(path, unwrapped.getType()));
       case RECORD:
         for (HoodieSchemaField field : unwrapped.getFields()) {
-          if (!isOrderable(field.schema())) {
-            return false;
+          Option<Pair<String, HoodieSchemaType>> found = findUnorderableNode(field.schema(), path + "." + field.name());
+          if (found.isPresent()) {
+            return found;
           }
         }
-        return true;
+        return Option.empty();
       case ARRAY:
-        return isOrderable(unwrapped.getElementType());
+        return findUnorderableNode(unwrapped.getElementType(), path + "[]");
       default:
-        return true;
+        return Option.empty();
     }
   }
 

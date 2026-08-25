@@ -882,7 +882,6 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
            |  content blob,
            |  embedding vector(4),
            |  attrs map<string, string>,
-           |  nested struct<m: map<string, string>>,
            |  ts long
            |) using hudi
            | options (
@@ -891,22 +890,20 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
            | )
            | location '$basePath'
        """.stripMargin)
-      spark.sql(s"insert into $tableName values (1, 'a1', null, null, null, null, 1000)")
+      spark.sql(s"insert into $tableName values (1, 'a1', null, null, null, 1000)")
 
-      // The procedure validates the order columns up front, before any plan is scheduled. A map
-      // is unsortable at any depth, so the struct wrapping one is rejected as well. Case-insensitive
-      // column resolution is pinned by TestSortUtils rather than repeated here.
-      Seq("attrs", "nested").foreach { col =>
-        checkNestedExceptionContains(s"call run_clustering(table => '$tableName', order => '$col')")(
-          s"Sorting by column '$col'")
-      }
+      // The procedure validates the order columns up front, before any plan is scheduled. The
+      // recursion into structs and arrays and the case-insensitive column resolution are pinned on
+      // the validator itself in TestSortUtils rather than re-run through this entry point.
+      checkNestedExceptionContains(s"call run_clustering(table => '$tableName', order => 'attrs')")(
+        "Sorting by column 'attrs'")
       // BLOB and VECTOR do have an ordering, so they are accepted and the clustering runs. One
       // run covers both, and the same run pins the normalisation: the procedure trims the order
       // list once, so the execution strategy - which splits the stored value on "," - sees
       // exactly the columns validated here. Every leg that needs a plan gets a fresh commit
       // first: incremental table services only consider partitions touched since the last
       // clustering, so a second back-to-back run would plan nothing.
-      spark.sql(s"insert into $tableName values (2, 'a2', null, null, null, null, 1001)")
+      spark.sql(s"insert into $tableName values (2, 'a2', null, null, null, 1001)")
       spark.sql(s"call run_clustering(table => '$tableName', order => 'content, embedding')").collect()
       val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(new Configuration), basePath)
       val clusteringInstant = metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant().get()
@@ -922,7 +919,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         "hoodie.clustering.inline" -> "true",
         "hoodie.clustering.inline.max.commits" -> "1",
         "hoodie.clustering.plan.strategy.sort.columns" -> "id, name") {
-        spark.sql(s"insert into $tableName values (3, 'a3', null, null, null, null, 1002)")
+        spark.sql(s"insert into $tableName values (3, 'a3', null, null, null, 1002)")
       }
       assertResult(replaceCommitsBefore + 1)(
         metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.getInstants.size())
@@ -932,7 +929,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       // check and are rejected by the execution strategy and partitioner constructors instead
       // (SortUtils.validateSortableColumns). Kept last: the failed run leaves a pending plan
       // holding the file group, which would starve any later scheduling.
-      spark.sql(s"insert into $tableName values (4, 'a4', null, null, null, null, 1003)")
+      spark.sql(s"insert into $tableName values (4, 'a4', null, null, null, 1003)")
       checkNestedExceptionContains(
         s"call run_clustering(table => '$tableName', options => 'hoodie.clustering.plan.strategy.sort.columns=attrs')")(
         "Sorting by column 'attrs'")

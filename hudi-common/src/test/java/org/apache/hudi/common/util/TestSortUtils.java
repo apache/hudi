@@ -44,6 +44,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -88,9 +89,21 @@ public class TestSortUtils {
         () -> SortUtils.validateSortableColumns(new String[] {"v"}, schema));
     assertTrue(variantFailure.getMessage().contains("Sorting by column 'v'"),
         "The error must name the column, got: " + variantFailure.getMessage());
+    // A top-level offender is fully described by the column and its type: no nested path is added.
+    assertFalse(variantFailure.getMessage().contains("it holds a"),
+        "A top-level VARIANT must not be reported as holding one, got: " + variantFailure.getMessage());
     assertThrows(HoodieException.class, () -> SortUtils.validateSortableColumns(new String[] {"m"}, schema));
-    assertThrows(HoodieException.class, () -> SortUtils.validateSortableColumns(new String[] {"s"}, schema));
-    assertThrows(HoodieException.class, () -> SortUtils.validateSortableColumns(new String[] {"arr"}, schema));
+
+    // A nested offender is named by its path, so the user can see which member to drop rather than
+    // only that some part of the struct or array is unorderable.
+    HoodieException structFailure = assertThrows(HoodieException.class,
+        () -> SortUtils.validateSortableColumns(new String[] {"s"}, schema));
+    assertTrue(structFailure.getMessage().contains("it holds a MAP at 's.m'"),
+        "The error must name the nested member, got: " + structFailure.getMessage());
+    HoodieException arrayFailure = assertThrows(HoodieException.class,
+        () -> SortUtils.validateSortableColumns(new String[] {"arr"}, schema));
+    assertTrue(arrayFailure.getMessage().contains("it holds a MAP at 'arr[]'"),
+        "The error must name the array element, got: " + arrayFailure.getMessage());
 
     // Matching is case-insensitive, mirroring Spark's column resolution.
     HoodieException upperCaseFailure = assertThrows(HoodieException.class,

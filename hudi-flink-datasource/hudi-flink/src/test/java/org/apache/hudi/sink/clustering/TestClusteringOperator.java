@@ -350,7 +350,8 @@ class TestClusteringOperator {
   @SuppressWarnings("unchecked")
   void testSortClustering() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    conf.set(FlinkOptions.CLUSTERING_SORT_COLUMNS, TestConfigurations.ROW_TYPE.getFieldNames().get(0));
+    // Padded on purpose: the config list is user-written ("a, b"), and the operator trims each name before lookup.
+    conf.set(FlinkOptions.CLUSTERING_SORT_COLUMNS, " " + TestConfigurations.ROW_TYPE.getFieldNames().get(0) + " ");
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
     HoodieFlinkTable table = mock(HoodieFlinkTable.class);
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);

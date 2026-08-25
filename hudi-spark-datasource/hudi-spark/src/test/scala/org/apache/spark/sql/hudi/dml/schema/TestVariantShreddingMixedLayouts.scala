@@ -652,13 +652,20 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         s"[$leg] nested typed_value should carry k:\n$innerGroup")
 
       // #18605 history: the batch-disabling guards in HoodieFileGroupReaderBasedFileFormat are
-      // top-level-only, so a NESTED variant may still take the vectorized reader. Which one runs
-      // is not selectable from the session conf: buildReaderWithPartitionValues overwrites
-      // spark.sql.parquet.enableVectorizedReader with the decision supportBatch derived from the
-      // schema, so this leg reads back through whichever reader that picks.
-      checkAnswer(s"select id, cast(s.inner as string) from $tableName")(
-        Seq(1, """{"k":"x1"}""")
-      )
+      // top-level-only, so a NESTED variant still reaches the vectorized reader. The session conf
+      // does pick the reader - HoodieFileGroupReaderBasedFileFormat.supportBatch reads
+      // sparkSession.sessionState.conf and ParquetUtils.isBatchReadSupportedForSchema gates on
+      // spark.sql.parquet.enableVectorizedReader, and only afterwards does
+      // buildReaderWithPartitionValues write that decision back into the conf - so sweep it and
+      // pin both readers. Every nested-variant read bug so far (HUDI-7190, HUDI-8803, #18605) is
+      // vectorized-only, which leaves the row-based leg as the control.
+      Seq("true", "false").foreach { vectorizedReader =>
+        withSQLConf("spark.sql.parquet.enableVectorizedReader" -> vectorizedReader) {
+          checkAnswer(s"select id, cast(s.inner as string) from $tableName")(
+            Seq(1, """{"k":"x1"}""")
+          )
+        }
+      }
 
       // A plain insert bin-packs into the same file group: the small-file merge must read the
       // nested-shredded base back (nested reconstruction on the AVRO record type leg).
