@@ -103,12 +103,8 @@ class BatchedBlobReader(
 
   private var storage: HoodieStorage = _
 
-  /**
-   * A HoodieStorage binds one filesystem for its lifetime, selected from the scheme of the path it
-   * is built with, and a blob reference is an absolute path carried in row data rather than
-   * something known up front. All references a reader sees are assumed to live on one filesystem,
-   * so the first one resolves the storage for the rest.
-   */
+  /** A HoodieStorage is bound to the filesystem of the path it is built with, and a blob reference
+    * is only known once its row arrives, so the first reference resolves the storage for the rest. */
   private def storageFor(path: StoragePath): HoodieStorage = {
     if (storage == null) {
       storage = HoodieStorageUtils.getStorage(path, storageConf)
@@ -118,12 +114,7 @@ class BatchedBlobReader(
 
   override def close(): Unit = {
     if (storage != null) {
-      try {
-        storage.close()
-      } catch {
-        case e: Exception => logger.warn(s"Error closing storage ${storage.getScheme}", e)
-      }
-      storage = null
+      storage.close()
     }
   }
 
@@ -719,7 +710,6 @@ object BatchedBlobReader {
 
     // Apply mapPartitions
     val result = df.mapPartitions { partition =>
-      // Create reader for this partition; it resolves storage per blob reference
       val reader = new BatchedBlobReader(broadcastConf.value, maxGapBytes, lookaheadSize)
 
       // Import implicit instances for Row
