@@ -34,6 +34,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
+import org.apache.hudi.sink.buffer.PreemptiveMemorySegmentPool;
 import org.apache.hudi.sink.buffer.RowDataBucket;
 import org.apache.hudi.sink.buffer.TotalSizeTracer;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
@@ -149,6 +150,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   protected transient MemorySegmentPool memorySegmentPool;
 
+  private transient PreemptiveMemorySegmentPool preemptiveMemorySegmentPool;
+
   protected transient RecordConverter recordConverter;
 
   private transient NormalizedKeyComputer recordKeyComputer;
@@ -209,7 +212,10 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   private void initBuffer() {
     this.buckets = new LinkedHashMap<>();
-    this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(config, OptionsResolver.getWriteBufferSizeInBytes(config));
+    MemorySegmentPool delegate = this.memorySegmentPoolFactory.createMemorySegmentPool(
+        config, OptionsResolver.getWriteBufferSizeInBytes(config));
+    this.preemptiveMemorySegmentPool = new PreemptiveMemorySegmentPool(delegate, this::preemptMemory);
+    this.memorySegmentPool = this.preemptiveMemorySegmentPool;
   }
 
   private void initRecordKeySort() {
@@ -322,7 +328,12 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
               getBucketInfo(record),
               this.config.get(FlinkOptions.WRITE_BATCH_SIZE)));
 
-      return bucket.writeRow(record.getRowData());
+      this.preemptiveMemorySegmentPool.setCurrentOwner(bucketID);
+      try {
+        return bucket.writeRow(record.getRowData());
+      } finally {
+        this.preemptiveMemorySegmentPool.clearCurrentOwner();
+      }
     } catch (MemoryPagesExhaustedException e) {
       log.info("There are not enough free pages in the memory pool to create a buffer; flushing is required first.");
       return false;
@@ -379,10 +390,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     // A creation failure leaves no bucket in the map, while a write failure leaves the
     // diverged bucket in the map so that its committed records can be flushed and disposed.
     RowDataBucket failedBucket = this.buckets.get(bucketID);
-    RowDataBucket bucketToFlush = this.buckets.values().stream()
-        .filter(bucket -> !bucketID.equals(bucket.getBucketId()) && !bucket.isEmpty())
-        .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
-        .orElse(null);
+    RowDataBucket bucketToFlush = findLargestNonEmptyBucketExcluding(bucketID);
 
     if (failedBucket == null) {
       if (bucketToFlush == null) {
@@ -418,6 +426,27 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     if (failure != null) {
       throw failure;
     }
+  }
+
+  /**
+   * Flushes the largest inactive bucket to return its pages to the shared memory pool.
+   *
+   * <p>The excluded bucket is in the middle of serializing a row and must never be flushed here.
+   */
+  private boolean preemptMemory(String excludedBucketID) {
+    RowDataBucket bucketToFlush = findLargestNonEmptyBucketExcluding(excludedBucketID);
+    if (bucketToFlush == null) {
+      return false;
+    }
+    flushAndDisposeBucket(bucketToFlush);
+    return true;
+  }
+
+  private RowDataBucket findLargestNonEmptyBucketExcluding(String excludedBucketID) {
+    return this.buckets.values().stream()
+        .filter(bucket -> !excludedBucketID.equals(bucket.getBucketId()) && !bucket.isEmpty())
+        .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
+        .orElse(null);
   }
 
   private void retryBufferRecord(

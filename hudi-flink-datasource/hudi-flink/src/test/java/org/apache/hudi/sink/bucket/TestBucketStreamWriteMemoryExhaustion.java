@@ -20,6 +20,7 @@ package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.buffer.RowDataBucket;
@@ -37,8 +38,9 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -55,8 +57,9 @@ class TestBucketStreamWriteMemoryExhaustion {
   @TempDir
   File tempFile;
 
-  @Test
-  void testRecoveryPreservesVariableLengthValuesAndReleasesPages() throws Exception {
+  @ParameterizedTest(name = "lsmTreeLayout={0}")
+  @ValueSource(booleans = {false, true})
+  void testRecoveryPreservesVariableLengthValuesAndReleasesPages(boolean lsmTreeLayout) throws Exception {
     DataType dataType = DataTypes.ROW(
         DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),
         DataTypes.FIELD("payload", DataTypes.VARCHAR(Integer.MAX_VALUE)),
@@ -71,9 +74,16 @@ class TestBucketStreamWriteMemoryExhaustion {
     conf.set(FlinkOptions.OPERATION, "upsert");
     conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
     conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
+    if (lsmTreeLayout) {
+      conf.setString(
+          HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+          HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    }
     // Leaves 1 MB for the shared RowData memory pool.
     conf.set(FlinkOptions.WRITE_TASK_MAX_SIZE, 201.0);
     conf.set(FlinkOptions.WRITE_MERGE_MAX_MEMORY, 100);
+    // Prevent batch-size based flushes so non-diverged mid-invocation flushes come from preemption.
+    conf.set(FlinkOptions.WRITE_BATCH_SIZE, 1024.0);
 
     Map<String, String> expectedPayloads = new HashMap<>();
     Map<String, String> expectedAttributes = new HashMap<>();
@@ -84,27 +94,21 @@ class TestBucketStreamWriteMemoryExhaustion {
     pipeline.openFunction();
     int initialFreePages = pipeline.freePages();
     try {
-      boolean reclaimedOtherBucketBeforeDivergedBucket = false;
+      boolean preemptedInactiveBucket = false;
       for (RowData row : rows) {
         int flushCountBeforeInvoke = pipeline.writeBatchCount();
         pipeline.invoke(row);
         List<FlushedBucket> invocationFlushes = pipeline.flushesFrom(flushCountBeforeInvoke);
-        for (int i = 1; i < invocationFlushes.size(); i++) {
-          FlushedBucket previous = invocationFlushes.get(i - 1);
-          FlushedBucket current = invocationFlushes.get(i);
-          if (current.diverged && !previous.diverged) {
-            assertTrue(
-                !current.bucketId.equals(previous.bucketId),
-                "memory reclamation should flush another bucket before the diverged bucket");
-            reclaimedOtherBucketBeforeDivergedBucket = true;
-          }
+        if (!invocationFlushes.isEmpty()
+            && invocationFlushes.stream().noneMatch(flushedBucket -> flushedBucket.diverged)) {
+          preemptedInactiveBucket = true;
         }
       }
       int recoveryFlushCount = pipeline.writeBatchCount();
-      assertTrue(recoveryFlushCount > 0, "the tight pool should trigger at least one recovery flush");
+      assertTrue(recoveryFlushCount > 0, "the tight pool should trigger at least one preemptive flush");
       assertTrue(
-          reclaimedOtherBucketBeforeDivergedBucket,
-          "a write failure should reclaim another bucket before disposing the diverged bucket");
+          preemptedInactiveBucket,
+          "memory exhaustion should flush an inactive bucket before the current buffer diverges");
       pipeline.checkpointFunction(1);
 
       assertEquals(
@@ -226,17 +230,15 @@ class TestBucketStreamWriteMemoryExhaustion {
     @Override
     protected List<WriteStatus> writeRecords(String instant, RowDataBucket rowDataBucket) {
       List<WriteStatus> writeStatuses = super.writeRecords(instant, rowDataBucket);
-      flushedBuckets.add(new FlushedBucket(rowDataBucket.getBucketId(), rowDataBucket.isDiverged()));
+      flushedBuckets.add(new FlushedBucket(rowDataBucket.isDiverged()));
       return writeStatuses;
     }
   }
 
   private static class FlushedBucket {
-    private final String bucketId;
     private final boolean diverged;
 
-    private FlushedBucket(String bucketId, boolean diverged) {
-      this.bucketId = bucketId;
+    private FlushedBucket(boolean diverged) {
       this.diverged = diverged;
     }
   }
