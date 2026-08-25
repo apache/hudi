@@ -572,7 +572,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
     syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1);
 
-    regressTableConfigToVersionOne(tableBasePath);
+    rewriteTableConfigAsVersionOne(tableBasePath);
 
     HoodieDeltaStreamer.Config upsertCfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     upsertCfg.sourceLimit = 2000;
@@ -585,13 +585,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   /**
    * Rewrites hoodie.properties to the shape a table version 1 writer would have left behind: the version pinned
-   * to 1 and every table config introduced at version 2 absent.
+   * to 1 and every table config that a later upgrade handler backfills absent. hoodie.table.checksum is not in
+   * that set because storeProperties regenerates it on every write, so a table config file can never lack it.
    */
-  private void regressTableConfigToVersionOne(String tableBasePath) {
+  private void rewriteTableConfigAsVersionOne(String tableBasePath) {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, tableBasePath);
-    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
-        new HashSet<>(Arrays.asList(HoodieTableConfig.RECORDKEY_FIELDS.key(),
-            HoodieTableConfig.PARTITION_FIELDS.key(), HoodieTableConfig.BASE_FILE_FORMAT.key())));
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(), new HashSet<>(Arrays.asList(
+        // backfilled by OneToTwoUpgradeHandler
+        HoodieTableConfig.RECORDKEY_FIELDS.key(),
+        HoodieTableConfig.PARTITION_FIELDS.key(),
+        HoodieTableConfig.BASE_FILE_FORMAT.key(),
+        // backfilled by TwoToThreeUpgradeHandler
+        HoodieTableConfig.URL_ENCODE_PARTITIONING.key(),
+        HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key(),
+        HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(),
+        // backfilled by ThreeToFourUpgradeHandler
+        HoodieTableConfig.DATABASE_NAME.key(),
+        HoodieTableConfig.TABLE_METADATA_PARTITIONS.key())));
     Properties versionProp = new Properties();
     versionProp.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(HoodieTableVersion.ONE.versionCode()));
     HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), versionProp);

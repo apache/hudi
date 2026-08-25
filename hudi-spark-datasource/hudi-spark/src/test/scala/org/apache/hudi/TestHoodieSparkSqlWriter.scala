@@ -230,7 +230,7 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> keyGenClass.getName)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, writeParams, newSingleRowDataFrame())
 
-    regressTableConfigToVersionOne()
+    rewriteTableConfigAsVersionOne()
 
     assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams, newSingleRowDataFrame())._1)
 
@@ -245,8 +245,8 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
   }
 
   /**
-   * From table version 2 onwards hoodie.table.recordkey.fields is expected to be present, so its absence still
-   * signals a genuine conflict rather than a config the table is too old to carry.
+   * Table version 2 is where hoodie.table.recordkey.fields starts being expected, so at that version its absence
+   * still signals a genuine conflict rather than a config the table is too old to carry.
    */
   @Test
   def testWriteToTableVersionTwoMissingRecordKeyStillConflicts(): Unit = {
@@ -260,6 +260,7 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
     val metaClient = loadMetaClient()
     HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath,
       Collections.singleton(HoodieTableConfig.RECORDKEY_FIELDS.key))
+    setTableVersion(HoodieTableVersion.TWO)
 
     val hoodieException = intercept[HoodieException](
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams, newSingleRowDataFrame()))
@@ -276,17 +277,31 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
 
   /**
    * Rewrites hoodie.properties to the shape a table version 1 writer would have left behind: the version pinned
-   * to 1 and every table config introduced at version 2 absent.
+   * to 1 and every table config that a later upgrade handler backfills absent. hoodie.table.checksum is not in
+   * that set because storeProperties regenerates it on every write, so a table config file can never lack it.
    */
-  private def regressTableConfigToVersionOne(): Unit = {
+  private def rewriteTableConfigAsVersionOne(): Unit = {
     val metaClient = loadMetaClient()
     val deletedConfigs = new java.util.HashSet[String]()
+    // backfilled by OneToTwoUpgradeHandler
     deletedConfigs.add(HoodieTableConfig.RECORDKEY_FIELDS.key)
     deletedConfigs.add(HoodieTableConfig.PARTITION_FIELDS.key)
     deletedConfigs.add(HoodieTableConfig.BASE_FILE_FORMAT.key)
+    // backfilled by TwoToThreeUpgradeHandler
+    deletedConfigs.add(HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
+    deletedConfigs.add(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)
+    deletedConfigs.add(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
+    // backfilled by ThreeToFourUpgradeHandler
+    deletedConfigs.add(HoodieTableConfig.DATABASE_NAME.key)
+    deletedConfigs.add(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key)
     HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath, deletedConfigs)
+    setTableVersion(HoodieTableVersion.ONE)
+  }
+
+  private def setTableVersion(version: HoodieTableVersion): Unit = {
+    val metaClient = loadMetaClient()
     val versionProp = new java.util.Properties()
-    versionProp.setProperty(HoodieTableConfig.VERSION.key, String.valueOf(HoodieTableVersion.ONE.versionCode()))
+    versionProp.setProperty(HoodieTableConfig.VERSION.key, String.valueOf(version.versionCode()))
     HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPath, versionProp)
   }
 
