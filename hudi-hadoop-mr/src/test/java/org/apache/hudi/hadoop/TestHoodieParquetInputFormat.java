@@ -65,6 +65,8 @@ import org.apache.hive.common.util.HiveVersionInfo;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -840,11 +842,15 @@ public class TestHoodieParquetInputFormat {
     assertThrows(HoodieException.class,
         () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(nested, columnPruned));
 
-    // An array of shredded variants: the collected path picks up the LIST wrapper group names the
-    // walk goes through (a.array on the 2-level layout parquet-avro writes by default, a.list.element
-    // on the 3-level one), while Hive's type for the column names neither.
+    // An array of shredded variants. Neither side names the collection's own levels: the walk
+    // drops the repeated group the 2-level layout puts the element in (a.array on disk), so the
+    // shredded group lands at the column's own path `a` - which is where Hive's type for the
+    // column puts it too.
     String arrayTypes = "int,array<struct<metadata:binary,value:binary>>";
-    FileSplit array = fileSplit(InputFormatTestUtil.writeArrayShreddedVariantParquetFile(basePath, "array_shredded.parquet"));
+    StoragePath arrayPath = InputFormatTestUtil.writeArrayShreddedVariantParquetFile(basePath, "array_shredded.parquet");
+    assertEquals("array", fileSchemaOf(arrayPath).getType("a").asGroupType().getType(0).getName(),
+        "the default fixture must be the 2-level layout, whose repeated group is the element itself");
+    FileSplit array = fileSplit(arrayPath);
     JobConf wholeArray = variantJobConf("id,a", arrayTypes, "id,a", "0,1");
     HoodieException arrayFailure = assertThrows(HoodieException.class,
         () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(array, wholeArray));
@@ -859,6 +865,22 @@ public class TestHoodieParquetInputFormat {
         () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(array, arrayPruned));
     assertTrue(arrayPrunedFailure.getMessage().contains("'a'"),
         "The error must name the column holding the array of shredded variants, got: " + arrayPrunedFailure.getMessage());
+
+    // The 3-level list/element layout, which is what the row writer - the only production writer
+    // that shreds inside a collection - emits. Here the repeated group IS a collection level, so
+    // the walk has to see through it as well and still land the shredded group at `a`. The layout
+    // is pinned on the footer, or the leg could silently degrade back to the 2-level one above.
+    StoragePath threeLevelPath =
+        InputFormatTestUtil.writeArrayShreddedVariantParquetFile(basePath, "array_shredded_3level.parquet", false, true);
+    GroupType repeated = fileSchemaOf(threeLevelPath).getType("a").asGroupType().getType(0).asGroupType();
+    assertEquals("list", repeated.getName(), "the 3-level layout names its repeated group `list`");
+    assertEquals(1, repeated.getFieldCount(), "the 3-level layout's repeated group holds the element alone");
+    assertEquals("element", repeated.getType(0).getName(), "the 3-level layout names its element `element`");
+    FileSplit threeLevelArray = fileSplit(threeLevelPath);
+    HoodieException threeLevelFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(threeLevelArray, wholeArray));
+    assertTrue(threeLevelFailure.getMessage().contains("'a'"),
+        "The error must name the column holding the 3-level array of shredded variants, got: " + threeLevelFailure.getMessage());
 
     // Which levels a collection contributes is structural, not a matter of their names: on the
     // 2-level layout the repeated group is the element itself, so an element member named `value`
@@ -901,12 +923,9 @@ public class TestHoodieParquetInputFormat {
     // guard: converting the footer to avro throws "INT96 is deprecated" before reaching the variant.
     JobConf withInt96 = variantJobConf("id,v,ts", "int,struct<metadata:binary,value:binary>,timestamp", "id,v", "0,1");
     StoragePath int96UnshreddedPath = InputFormatTestUtil.writeVariantParquetFile(basePath, "int96_unshredded.parquet", false, true);
-    try (ParquetFileReader reader = ParquetFileReader.open(
-        HadoopInputFile.fromPath(new Path(int96UnshreddedPath.toUri()), withInt96))) {
-      assertEquals(PrimitiveTypeName.INT96,
-          reader.getFooter().getFileMetaData().getSchema().getType("ts").asPrimitiveType().getPrimitiveTypeName(),
-          "the ts column must really be INT96, or this leg proves nothing");
-    }
+    assertEquals(PrimitiveTypeName.INT96,
+        fileSchemaOf(int96UnshreddedPath).getType("ts").asPrimitiveType().getPrimitiveTypeName(),
+        "the ts column must really be INT96, or this leg proves nothing");
     FileSplit int96Unshredded = fileSplit(int96UnshreddedPath);
     assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(int96Unshredded, withInt96));
     FileSplit int96Shredded = fileSplit(InputFormatTestUtil.writeVariantParquetFile(basePath, "int96_shredded.parquet", true, true));
@@ -951,6 +970,14 @@ public class TestHoodieParquetInputFormat {
 
   private static FileSplit fileSplit(StoragePath path) {
     return new FileSplit(new Path(path.toUri()), 0, Long.MAX_VALUE, (String[]) null);
+  }
+
+  /** The footer's file schema: what the fixture legs pin their on-disk layout on. */
+  private static MessageType fileSchemaOf(StoragePath path) throws IOException {
+    try (ParquetFileReader reader = ParquetFileReader.open(
+        HadoopInputFile.fromPath(new Path(path.toUri()), new JobConf()))) {
+      return reader.getFooter().getFileMetaData().getSchema();
+    }
   }
 
   private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,

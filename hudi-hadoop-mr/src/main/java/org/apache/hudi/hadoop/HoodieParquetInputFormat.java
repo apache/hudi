@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -310,6 +311,10 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
    * non-variant tables never pay it: the raw columns.types string is screened for the shape's
    * marker before it is parsed, keeping the type parse itself off every other table's splits.
    *
+   * <p>The footer read here is in addition to the one Hive's ParquetRecordReaderBase.getSplit
+   * performs right after, so a variant table pays one extra footer read per legacy-path split that
+   * requests the variant column; non-variant tables are screened out before it.
+   *
    * <p>The footer's MessageType is inspected directly, without converting it to Avro:
    * AvroSchemaConverterWithTimestampNTZ.convertINT96 throws unless parquet.avro.readInt96AsFixed
    * is set (nothing in Hudi sets it), and Spark writes timestamps as INT96 by default, so the
@@ -333,7 +338,10 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       return;
     }
     Path filePath = ((FileSplit) split).getPath();
-    if (!filePath.getName().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+    // A native parquet log file name ends in .parquet too. The realtime path never hands a log-only
+    // split here today, so the second clause only makes the intent explicit.
+    if (!filePath.getName().endsWith(HoodieFileFormat.PARQUET.getFileExtension())
+        || FSUtils.isLogFile(filePath.getName())) {
       return;
     }
     // Screen the raw type string before anything parses it: the TypeInfoUtils parse below is a

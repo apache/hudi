@@ -645,11 +645,11 @@ public class InputFormatTestUtil {
    *
    * <p>parquet-avro 1.13 writes the 2-level list layout by default
    * ({@code parquet.avro.write-old-list-structure} is true unless set), so the element group is
-   * named {@code array} and the shredded group sits at {@code a.array}; the 3-level layout would
-   * put it at {@code a.list.element}. Either is fine for the guard, which walks every child group.
+   * named {@code array} and the shredded group sits at {@code a.array}; on the 3-level layout it
+   * sits at {@code a.list.element}. Either is fine for the guard, which walks every child group.
    */
   public static StoragePath writeArrayShreddedVariantParquetFile(java.nio.file.Path dir, String fileName) throws IOException {
-    return writeArrayShreddedVariantParquetFile(dir, fileName, false);
+    return writeArrayShreddedVariantParquetFile(dir, fileName, false, false);
   }
 
   /**
@@ -660,6 +660,18 @@ public class InputFormatTestUtil {
    */
   public static StoragePath writeArrayShreddedVariantParquetFile(java.nio.file.Path dir, String fileName,
                                                                  boolean wrapElementInStruct) throws IOException {
+    return writeArrayShreddedVariantParquetFile(dir, fileName, wrapElementInStruct, false);
+  }
+
+  /**
+   * As {@link #writeArrayShreddedVariantParquetFile(java.nio.file.Path, String, boolean)}, with
+   * {@code threeLevelList} switching the layout from parquet-avro's default 2-level {@code array}
+   * to the 3-level {@code list}/{@code element} one, which is what the Spark row writer - the only
+   * production writer that shreds inside a collection - emits.
+   */
+  public static StoragePath writeArrayShreddedVariantParquetFile(java.nio.file.Path dir, String fileName,
+                                                                 boolean wrapElementInStruct,
+                                                                 boolean threeLevelList) throws IOException {
     HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
     HoodieSchema elementSchema = wrapElementInStruct
         ? HoodieSchema.createRecord("a_t", null, null, Arrays.asList(
@@ -669,9 +681,15 @@ public class InputFormatTestUtil {
     HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
         HoodieSchemaField.of("a", HoodieSchema.createArray(elementSchema))));
+    Configuration conf = new Configuration();
+    if (threeLevelList) {
+      conf.setBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, false);
+    }
     java.nio.file.Path file = dir.resolve(fileName);
-    try (AvroParquetWriter<GenericRecord> writer =
-             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(new Path(file.toString()))
+        .withSchema(writeSchema.toAvroSchema())
+        .withConf(conf)
+        .build()) {
       GenericRecord element = variantValue(shreddedVariant, true);
       if (wrapElementInStruct) {
         GenericRecord wrapper = new GenericData.Record(elementSchema.toAvroSchema());
@@ -682,6 +700,28 @@ public class InputFormatTestUtil {
       GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
       record.put("id", 1);
       record.put("a", Collections.singletonList(element));
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  /**
+   * Writes a one-row parquet file with an {@code id} column and an {@code m} column holding a
+   * {@code map<string, variant>} whose value is shredded: the shape the row writer produces inside
+   * a map. A map's entry level, key and value are levels Hive's dotted paths never name, so the
+   * shredded group has to land at the column's own path {@code m}.
+   */
+  public static StoragePath writeMapShreddedVariantParquetFile(java.nio.file.Path dir, String fileName) throws IOException {
+    HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("m", HoodieSchema.createMap(shreddedVariant))));
+    java.nio.file.Path file = dir.resolve(fileName);
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("m", Collections.singletonMap("k1", variantValue(shreddedVariant, true)));
       writer.write(record);
     }
     return new StoragePath(file.toUri().toString());

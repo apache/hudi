@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -61,6 +62,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
+import org.apache.hadoop.hive.ql.io.IOConstants;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
@@ -89,6 +91,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -105,6 +108,8 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
@@ -937,6 +942,57 @@ public class TestHoodieRealtimeRecordReader {
     FileStatus[] files = inputFormat.listStatus(baseJobConf);
     assertEquals(1, files.length);
     assertEquals(true, files[0] instanceof RealtimeFileStatus);
+  }
+
+  @Test
+  public void testLegacyReaderFailsFastOnShreddedVariantBaseFile() throws Exception {
+    // With the file group reader disabled the realtime path reaches the shredded-variant guard
+    // through super.getRecordReader, after addProjectionToJobConf has rewritten the read columns
+    // (HUDI-313). A MOR base file that shreds a variant must fail there rather than be handed to
+    // Hive's plain parquet reader, which drops typed_value and returns silent nulls.
+    HoodieSchema tableSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("v", HoodieSchema.createVariant())));
+    HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
+    InputFormatTestUtil.setupPartition(basePath, partitionPath);
+    String baseFileName = "fileid0_1-0-1_100.parquet";
+    InputFormatTestUtil.writeVariantParquetFile(partitionPath, baseFileName, true);
+    createDeltaCommitFile(basePath, "100", "2016/05/01", "2016/05/01/" + baseFileName, "fileid0", tableSchema.toString());
+    FileInputFormat.setInputPaths(baseJobConf, partitionPath.toString());
+
+    HoodieParquetRealtimeInputFormat inputFormat = new HoodieParquetRealtimeInputFormat();
+    inputFormat.setConf(baseJobConf);
+    InputSplit[] splits = inputFormat.getSplits(baseJobConf, 1);
+    assertEquals(1, splits.length);
+
+    // The split carries no log file: the guard sits on the parquet half of the read either way,
+    // and the log-block fixtures generate their records from the test schemas, which cannot carry
+    // a variant column.
+    JobConf wholeProjection = shreddedVariantReadJobConf("id,v", "0,1");
+    HoodieException failure = assertThrows(HoodieException.class,
+        () -> inputFormat.getRecordReader(splits[0], wholeProjection, Reporter.NULL));
+    assertTrue(failure.getMessage().contains("hold a shredded variant") && failure.getMessage().contains("'v'"),
+        "The error must name the shredded variant column, got: " + failure.getMessage());
+
+    // The control: the same split at a projection that leaves the variant column out reads on.
+    RecordReader<NullWritable, ArrayWritable> reader =
+        inputFormat.getRecordReader(splits[0], shreddedVariantReadJobConf("id", "0"), Reporter.NULL);
+    assertNotNull(reader);
+    reader.close();
+  }
+
+  /**
+   * A JobConf describing the {@code id, v} variant table to Hive and projecting {@code readNames}
+   * out of it, on the legacy route baseJobConf already pins.
+   */
+  private JobConf shreddedVariantReadJobConf(String readNames, String readIds) {
+    JobConf jobConf = new JobConf(baseJobConf);
+    jobConf.set(IOConstants.COLUMNS, "id,v");
+    jobConf.set(IOConstants.COLUMNS_TYPES, "int,struct<metadata:binary,value:binary>");
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readNames);
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, readIds);
+    return jobConf;
   }
 
   @Test
