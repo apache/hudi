@@ -107,19 +107,25 @@ else
   echo "Using Java 11 base image for Spark ${SPARK_VERSION}"
 fi
 
-# Select hadoop-aws/aws-sdk versions based on Hadoop major.minor.
-# hadoop-aws must track the Hadoop version; mismatches break the S3A FS classpath.
-HADOOP_MAJOR_MINOR=$(echo "$HADOOP_VERSION" | cut -d. -f1,2)
-case "$HADOOP_MAJOR_MINOR" in
-  3.4)
-    HADOOP_AWS_VERSION="3.4.0"
-    AWS_SDK_VERSION="1.12.734"
+# Select hadoop-aws/aws-sdk versions from the Hadoop line each Spark distribution bundles:
+# the jars land on Spark's classpath next to its own hadoop-client, not the cluster Hadoop.
+# hadoop-aws 3.4.x is built against AWS SDK v2 (software.amazon.awssdk:bundle); 3.3.x uses
+# SDK v1 (com.amazonaws:aws-java-sdk-bundle). spark_base picks the artifact from the SDK major.
+SPARK_MAJOR_MINOR=$(echo "$SPARK_VERSION" | cut -d. -f1,2)
+case "$SPARK_MAJOR_MINOR" in
+  4.0)
+    # Spark 4.0.x bundles Hadoop 3.4.1
+    HADOOP_AWS_VERSION="3.4.1"
+    AWS_SDK_VERSION="2.24.6"
     ;;
-  3.3)
-    HADOOP_AWS_VERSION="3.3.4"
-    AWS_SDK_VERSION="1.12.734"
+  4.*)
+    # Spark 4.1.x bundles Hadoop 3.4.2; newer 4.x lines land here until mapped. The opt-in
+    # analytics stream type of hadoop-aws 3.4.2 also needs analyticsaccelerator-s3, not shipped here.
+    HADOOP_AWS_VERSION="3.4.2"
+    AWS_SDK_VERSION="2.29.52"
     ;;
   *)
+    # Spark 3.x bundles Hadoop 3.3.x
     HADOOP_AWS_VERSION="3.3.4"
     AWS_SDK_VERSION="1.12.734"
     ;;
