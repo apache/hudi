@@ -29,6 +29,19 @@ public class PartitionPathEncodeUtils {
   public static final String DEPRECATED_DEFAULT_PARTITION_PATH = "default";
   public static final String DEFAULT_PARTITION_PATH = "__HIVE_DEFAULT_PARTITION__";
 
+  /**
+   * Returns whether {@code partitionValue} is the marker Hudi writes for a null or empty partition
+   * value. Both the current marker and the pre-0.12 {@code default} one are recognised, matching
+   * {@code PartitionPathParser#parseValue}. The value may be a whole partition directory, in which
+   * case a Hive-style column prefix (e.g. {@code datestr=__HIVE_DEFAULT_PARTITION__}) is stripped
+   * before comparing.
+   */
+  public static boolean isDefaultPartitionValue(String partitionValue) {
+    int separator = partitionValue.indexOf('=');
+    String value = separator < 0 ? partitionValue : partitionValue.substring(separator + 1);
+    return DEFAULT_PARTITION_PATH.equals(value) || DEPRECATED_DEFAULT_PARTITION_PATH.equals(value);
+  }
+
   static BitSet charToEscape = new BitSet(128);
   static BitSet charToEscapeFilename = new BitSet(128);
   static {
