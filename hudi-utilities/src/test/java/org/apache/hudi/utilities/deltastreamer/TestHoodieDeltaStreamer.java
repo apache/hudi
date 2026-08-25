@@ -3334,28 +3334,56 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testKafkaTimestampType() throws Exception {
-    topicName = "topic" + testNum;
+    // Timestamp-based Kafka checkpoints have two distinct fallback behaviors we need to cover:
+    //   (1) Checkpoint captured BEFORE records are produced: every record has ts >= checkpoint,
+    //       so `offsetsForTimes` returns concrete offsets and ingestion consumes all of them.
+    //   (2) Checkpoint captured AFTER records are produced: no record has ts >= checkpoint, so
+    //       `offsetsForTimes` returns null for every partition and we fall back to the end offset
+    //       of each partition. Nothing should be ingested, and a subsequent batch produced *after*
+    //       the checkpoint should be picked up on the next sync — this proves that the fallback
+    //       stored a usable checkpoint at the partition tip (not offset 0, which would replay the
+    //       original records).
     kafkaCheckpointType = "timestamp";
-    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName);
-    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName);
-    String tableBasePath = basePath + "/test_json_kafka_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
-            Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
-            true, 100000, false, null,
-            null, "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
-    deltaStreamer.sync();
-    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath, sqlContext);
 
-    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, false, topicName);
-    deltaStreamer = new HoodieDeltaStreamer(
-        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
-            Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
-            true, 100000, false, null, null,
-            "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
-    deltaStreamer.sync();
-    assertRecordCount(JSON_KAFKA_NUM_RECORDS * 2, tableBasePath, sqlContext);
-    deltaStreamer.shutdownGracefully();
+    // ---- Case 1: checkpoint captured BEFORE producing records ----
+    long checkpointBeforeProduction = System.currentTimeMillis();
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, "topic" + testNum);
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", "topic" + testNum);
+    String tableBasePath1 = basePath + "/test_json_kafka_table" + testNum;
+    syncOnce(TestHelpers.makeConfig(tableBasePath1, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null,
+        null, "timestamp", String.valueOf(checkpointBeforeProduction)));
+    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath1, sqlContext);
+
+    // ---- Case 2: checkpoint captured AFTER producing records ----
+    // First batch predates the checkpoint => fallback path returns end offsets (partition tips).
+    // Nothing should be ingested in the first sync; a second batch produced after the checkpoint
+    // should be fully consumed on the follow-up sync (which reuses the checkpoint stored by the
+    // first sync). This asserts we resumed at the tip, not at offset 0.
+    String topicName2 = "topic_after_" + testNum;
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName2);
+    // Small pause so the timestamp is guaranteed to be after the last produced record's ts.
+    Thread.sleep(10);
+    long checkpointAfterProduction = System.currentTimeMillis();
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName2);
+    String tableBasePath2 = basePath + "/test_json_kafka_table_after_" + testNum;
+    syncOnce(TestHelpers.makeConfig(tableBasePath2, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null, null,
+        "timestamp", String.valueOf(checkpointAfterProduction)));
+    assertRecordCount(0, tableBasePath2, sqlContext);
+
+    // Produce a fresh batch strictly after the checkpoint and sync again with no --checkpoint
+    // override, so the streamer picks up from the offsets we stored in the first sync.
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, false, topicName2);
+    syncOnce(TestHelpers.makeConfig(tableBasePath2, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null, null,
+        "timestamp", null));
+    // Only the second batch should be ingested; the first batch (which predates the checkpoint)
+    // stays skipped, confirming the fallback resumed at the partition tip.
+    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath2, sqlContext);
   }
 
   @Disabled("HUDI-6609")
