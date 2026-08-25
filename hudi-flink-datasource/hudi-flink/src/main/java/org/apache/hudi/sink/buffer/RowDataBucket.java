@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.buffer;
 
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
 
 import org.apache.flink.table.data.RowData;
@@ -36,6 +37,7 @@ public class RowDataBucket {
   private final BucketInfo bucketInfo;
   private final BufferSizeDetector detector;
   private final String bucketId;
+  private boolean diverged;
 
   public RowDataBucket(
       String bucketId,
@@ -57,9 +59,16 @@ public class RowDataBucket {
   }
 
   public boolean writeRow(RowData rowData) throws IOException {
+    ValidationUtils.checkState(
+        !diverged,
+        "RowData bucket " + bucketId + " diverged after a failed write and cannot be reused");
     boolean success = dataBuffer.write(rowData);
     if (success) {
       detector.detect(rowData);
+    } else {
+      // BinaryInMemorySortBuffer may have partially appended variable-length data before
+      // returning false. Its internal pointers can no longer be trusted for another write.
+      diverged = true;
     }
     return success;
   }
@@ -70,6 +79,10 @@ public class RowDataBucket {
 
   public long getBufferSize() {
     return detector.totalSize;
+  }
+
+  public boolean isDiverged() {
+    return diverged;
   }
 
   public boolean isEmpty() {
