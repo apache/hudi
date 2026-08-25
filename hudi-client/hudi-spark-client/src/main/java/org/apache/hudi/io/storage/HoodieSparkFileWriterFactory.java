@@ -18,6 +18,9 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
+import org.apache.hudi.common.avro.VariantShreddingRuntime;
+import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -30,6 +33,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.HoodieParquetConfigInjector;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
@@ -45,6 +49,8 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
 
@@ -54,6 +60,43 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
 
   @Override
   protected HoodieFileWriter newParquetFileWriter(
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
+      TaskContextSupplier taskContextSupplier) throws IOException {
+    // The row write support resolves its HoodieSchema from the config (hoodie.write.schema /
+    // hoodie.avro.schema), not the schema argument, so inferable columns are detected on that
+    // config schema (the one the splice below targets) intersected with the schema argument's
+    // (the shape of the rows being written, which the samples come from). The argument is
+    // checked first because it is already parsed: delete and CDC writers share this factory
+    // with schemas that have no top-level variant, and they must not pay a config-schema
+    // parse per file. The schema argument itself stays original: it flows through the global
+    // schema cache (getCachedSchema), which must never see per-file spliced schemas, and its
+    // StructType is identical either way (the variant column remains VariantType).
+    List<String> inferableColumns = inferableColumnsOf(config, schema);
+    if (!inferableColumns.isEmpty()) {
+      Option<VariantShreddingSchemaInferrer> inferrer = VariantShreddingRuntime.lookupInferrer();
+      if (inferrer.isPresent()) {
+        return new VariantShreddingInferenceFileWriter<>(
+            inferableColumns,
+            new SparkVariantSampleExtractor(inferableColumns, HoodieInternalRowUtils.getCachedSchema(schema)),
+            inferrer.get(),
+            inferred -> createParquetFileWriter(instantTime, path,
+                VariantSchemaUtils.applyInferredShreddingToConfig(config, inferred), schema, taskContextSupplier),
+            config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE));
+      }
+    }
+    return createParquetFileWriter(instantTime, path, config, schema, taskContextSupplier);
+  }
+
+  private static List<String> inferableColumnsOf(HoodieConfig config, HoodieSchema schema) {
+    List<String> inArgument = VariantSchemaUtils.getInferableVariantColumns(config, schema);
+    if (inArgument.isEmpty()) {
+      return inArgument;
+    }
+    List<String> inConfig = VariantSchemaUtils.getInferableVariantColumnsFromConfig(config);
+    return inArgument.stream().filter(inConfig::contains).collect(Collectors.toList());
+  }
+
+  private HoodieFileWriter createParquetFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);

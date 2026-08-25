@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -115,7 +116,13 @@ public class TableSchemaResolver {
   }
 
   private Option<HoodieSchema> getTableSchemaFromDataFileInternal() {
-    return getTableParquetSchemaFromDataFile();
+    // typed_value is a per-file physical layout (possibly inferred per file) and is stripped
+    // from the resolved table schema. Footer-derived schemas lose the variant logical type, so
+    // variant columns are also stripped by shape; that fallback walks top-level fields only, so
+    // a nested variant the row writer shredded at depth can still surface here.
+    return getTableParquetSchemaFromDataFile()
+        .map(VariantSchemaUtils::stripVariantShredding)
+        .map(VariantSchemaUtils::stripVariantShreddingByShape);
   }
 
   /**

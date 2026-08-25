@@ -20,8 +20,10 @@
 package org.apache.spark.sql.hudi.dml.schema
 
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
+import org.apache.hudi.common.avro.VariantShreddingRuntime
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.HoodieSchemaException
 import org.apache.hudi.common.table.TableSchemaResolver
@@ -39,8 +41,10 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, LongType, MapType, MetadataBuilder, StringType, StructField, StructType}
 
+import scala.collection.JavaConverters._
 
 class TestVariantDataType extends HoodieSparkSqlTestBase {
 
@@ -1183,39 +1187,40 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
            | )
         """.stripMargin)
 
-      spark.sql("set hoodie.parquet.variant.write.shredding.enabled = true")
-      spark.sql("set hoodie.parquet.variant.allow.reading.shredded = true")
-      spark.sql("set hoodie.parquet.variant.force.shredding.schema.for.test = a int, b string")
+      withSQLConf(
+        "hoodie.parquet.variant.write.shredding.enabled" -> "true",
+        "hoodie.parquet.variant.allow.reading.shredded" -> "true",
+        "hoodie.parquet.variant.force.shredding.schema.for.test" -> "a int, b string") {
+        spark.sql(
+          s"""
+             |insert into $tableName values
+             |  (1, 'row1', parse_json('{"a": 1, "b": "hello"}'), 1000)
+          """.stripMargin)
+        // Reading shredded variants back via Spark SQL needs Spark 4.1+ (spark.sql.variant.allowReadingShredded,
+        // SPARK-54410); Spark 4.0's native reader rejects the 3-field shredded layout. The shredded write is
+        // still validated below.
+        if (HoodieSparkUtils.gteqSpark4_1) {
+          checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
+            Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
+          )
+        }
 
-      spark.sql(
-        s"""
-           |insert into $tableName values
-           |  (1, 'row1', parse_json('{"a": 1, "b": "hello"}'), 1000)
-        """.stripMargin)
-      // Reading shredded variants back via Spark SQL needs Spark 4.1+ (spark.sql.variant.allowReadingShredded,
-      // SPARK-54410); Spark 4.0's native reader rejects the 3-field shredded layout. The shredded write is
-      // still validated below.
-      if (HoodieSparkUtils.gteqSpark4_1) {
-        checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
-          Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
-        )
-      }
+        // Verify parquet schema has shredded structure with typed_value
+        val parquetFiles = listDataParquetFiles(tmp.getCanonicalPath)
+        assert(parquetFiles.nonEmpty, "Should have at least one data parquet file")
 
-      // Verify parquet schema has shredded structure with typed_value
-      val parquetFiles = listDataParquetFiles(tmp.getCanonicalPath)
-      assert(parquetFiles.nonEmpty, "Should have at least one data parquet file")
-
-      parquetFiles.foreach { filePath =>
-        val schema = readParquetSchema(filePath)
-        val variantGroup = getFieldAsGroup(schema, "v")
-        assert(variantGroup.containsField("typed_value"),
-          s"Shredded variant should have typed_value field. Schema:\n$variantGroup")
-        val valueField = variantGroup.getType(variantGroup.getFieldIndex("value"))
-        assert(valueField.getRepetition == Type.Repetition.OPTIONAL,
-          "Shredded variant value field should be OPTIONAL")
-        val metadataField = variantGroup.getType(variantGroup.getFieldIndex("metadata"))
-        assert(metadataField.getRepetition == Type.Repetition.REQUIRED,
-          "Shredded variant metadata field should be REQUIRED")
+        parquetFiles.foreach { filePath =>
+          val schema = readParquetSchema(filePath)
+          val variantGroup = getFieldAsGroup(schema, "v")
+          assert(variantGroup.containsField("typed_value"),
+            s"Shredded variant should have typed_value field. Schema:\n$variantGroup")
+          val valueField = variantGroup.getType(variantGroup.getFieldIndex("value"))
+          assert(valueField.getRepetition == Type.Repetition.OPTIONAL,
+            "Shredded variant value field should be OPTIONAL")
+          val metadataField = variantGroup.getType(variantGroup.getFieldIndex("metadata"))
+          assert(metadataField.getRepetition == Type.Repetition.REQUIRED,
+            "Shredded variant metadata field should be REQUIRED")
+        }
       }
     })
   }
@@ -1241,49 +1246,230 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
            | )
               """.stripMargin)
 
-      spark.sql(s"set hoodie.parquet.variant.write.shredding.enabled = false")
+      withSQLConf(
+        "hoodie.parquet.variant.write.shredding.enabled" -> "false") {
+        spark.sql(
+          s"""
+             |insert into $tableName values
+             |  (1, 'row1', parse_json('{"a": 1, "b": "hello"}'), 1000)
+                """.stripMargin)
 
-      spark.sql(
-        s"""
-           |insert into $tableName values
-           |  (1, 'row1', parse_json('{"a": 1, "b": "hello"}'), 1000)
-              """.stripMargin)
+        checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
+          Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
+        )
 
-      checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
-        Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
-      )
+        // Verify parquet schema does NOT have typed_value
+        val parquetFiles = listDataParquetFiles(tmp.getCanonicalPath)
+        assert(parquetFiles.nonEmpty, "Should have at least one data parquet file")
 
-      // Verify parquet schema does NOT have typed_value
-      val parquetFiles = listDataParquetFiles(tmp.getCanonicalPath)
-      assert(parquetFiles.nonEmpty, "Should have at least one data parquet file")
+        parquetFiles.foreach { filePath =>
+          val schema = readParquetSchema(filePath)
+          val variantGroup = getFieldAsGroup(schema, "v")
+          assert(!variantGroup.containsField("typed_value"),
+            s"Non-shredded variant should NOT have typed_value field. Schema:\n$variantGroup")
+          val valueField = variantGroup.getType(variantGroup.getFieldIndex("value"))
+          assert(valueField.getRepetition == Type.Repetition.REQUIRED,
+            "Non-shredded variant value field should be REQUIRED")
+        }
 
-      parquetFiles.foreach { filePath =>
-        val schema = readParquetSchema(filePath)
-        val variantGroup = getFieldAsGroup(schema, "v")
-        assert(!variantGroup.containsField("typed_value"),
-          s"Non-shredded variant should NOT have typed_value field. Schema:\n$variantGroup")
-        val valueField = variantGroup.getType(variantGroup.getFieldIndex("value"))
-        assert(valueField.getRepetition == Type.Repetition.REQUIRED,
-          "Non-shredded variant value field should be REQUIRED")
+        // Verify data can still be read back for the non-shredded case
+        checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
+          Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
+        )
       }
-
-      // Verify data can still be read back for the non-shredded case
-      checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
-        Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
-      )
     })
   }
 
+  test("Test Auto-Inferred Variant Shredding on COW") {
+    // Inference reuses Spark's InferVariantShreddingSchema (SPARK-53659, Spark 4.1+); without an
+    // inferrer on the classpath, writes silently stay unshredded. Gate on the capability rather
+    // than the Spark version: each spark4.x profile only builds its own version module, so a
+    // profile whose module ships no inferrer (4.0 and older) must skip here rather than fail.
+    assume(VariantShreddingRuntime.lookupInferrer.isPresent,
+      "Variant shredding schema inference requires a VariantShreddingSchemaInferrer on the classpath")
+
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v1 variant,
+           |  v2 variant,
+           |  v3 variant,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.shredding.schema.inference.enabled = 'true'
+           | )
+        """.stripMargin)
+
+      // v1: consistent objects incl. a nested object and an avro-illegal key (dropped from
+      // typed_value, falls back to the residual value column). v2: empty objects (inference
+      // declines empty structs). v3: all null (inference declines). The declines must hold per
+      // ROW, not just across rows: inference is per file and a multi-row insert can fan out to
+      // one file per row, so a cross-row type conflict would not reach a single inference call.
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, parse_json('{"a": 1, "b": "x", "bad-key": true, "nested": {"c": 5}}'), parse_json('{}'), null, 1000),
+           |  (2, parse_json('{"a": 2, "b": "y", "bad-key": false, "nested": {"c": 6}}'), parse_json('{}'), null, 1000)
+        """.stripMargin)
+      checkAnswer(s"select id, cast(v1 as string), cast(v2 as string), cast(v3 as string), ts from $tableName order by id")(
+        Seq(1, "{\"a\":1,\"b\":\"x\",\"bad-key\":true,\"nested\":{\"c\":5}}", "{}", null, 1000),
+        Seq(2, "{\"a\":2,\"b\":\"y\",\"bad-key\":false,\"nested\":{\"c\":6}}", "{}", null, 1000)
+      )
+
+      def assertInferredFooters(): Unit = {
+        // v1: inferred, with the avro-illegal key dropped from typed_value (it falls back to value).
+        assertInferredTypedValue(tmp.getCanonicalPath, "v1", "cow v1",
+          present = Seq("a", "b", "nested"), absent = Seq("bad-key"))
+        // v2 holds empty objects and v3 is all null: inference declines both, per file.
+        assertVariantLayout(tmp.getCanonicalPath, shredded = false, "cow v2 (declined)", column = "v2")
+        assertVariantLayout(tmp.getCanonicalPath, shredded = false, "cow v3 (declined)", column = "v3")
+      }
+      assertInferredFooters()
+
+      // The update reads the shredded base (reconstruction on the AVRO path, native on SPARK),
+      // re-infers and writes a new shredded base file.
+      spark.sql(s"update $tableName set " +
+        "v1 = parse_json('{\"a\": 9, \"b\": \"z\", \"bad-key\": true, \"nested\": {\"c\": 7}}'), ts = 1001 " +
+        "where id = 1")
+      checkAnswer(s"select id, cast(v1 as string), cast(v2 as string), ts from $tableName order by id")(
+        Seq(1, "{\"a\":9,\"b\":\"z\",\"bad-key\":true,\"nested\":{\"c\":7}}", "{}", 1001),
+        Seq(2, "{\"a\":2,\"b\":\"y\",\"bad-key\":false,\"nested\":{\"c\":6}}", "{}", 1000)
+      )
+      assertInferredFooters()
+    })
+  }
+
+  test("Test Auto-Inferred Variant Shredding via MOR Compaction") {
+    assume(VariantShreddingRuntime.lookupInferrer.isPresent,
+      "Variant shredding schema inference requires a VariantShreddingSchemaInferrer on the classpath")
+
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      // Inference is per parquet file. On the default table version the log files of this MOR
+      // table are native parquet too (*.log.parquet, written through the same factory), so each
+      // log file infers its own layout; the compaction then writes the base file with its own.
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v variant,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.parquet.variant.shredding.schema.inference.enabled = 'true',
+           |  hoodie.index.type = 'INMEMORY',
+           |  hoodie.compact.inline = 'true',
+           |  hoodie.compact.inline.max.delta.commits = '3'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values " + "(1, parse_json('{\"key\":\"value1\"}'), 1000)")
+      spark.sql(s"insert into $tableName values " + "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
+      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tablePath))
+
+      // 3rd commit triggers inline compaction; the base file is written with inferred shredding.
+      spark.sql(s"insert into $tableName values " + "(3, parse_json('{\"key\":\"value3\"}'), 1000)")
+      assertResult(false)(DataSourceTestUtils.isLogFileOnly(tablePath))
+
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"value1\"}", 1000),
+        Seq(2, "{\"key\":\"value2\"}", 1000),
+        Seq(3, "{\"key\":\"value3\"}", 1000)
+      )
+
+      // Split by file kind so the base-file leg cannot pass on the shredded log files alone. Only
+      // native DATA logs (*.log.parquet) are checked on the log side: delete and CDC logs are
+      // parquet too but carry no variant column.
+      val parquetFiles = listDataParquetFiles(tablePath)
+      val baseFiles = parquetFiles.filter(f => FSUtils.isBaseFile(new HadoopPath(f).getName))
+      val nativeDataLogs = parquetFiles.filter(_.endsWith(".log.parquet"))
+      assert(baseFiles.nonEmpty, "Compaction should have produced a base parquet file")
+      assertInferredTypedValueIn(baseFiles, "v", "mor compacted base", present = Seq("key"))
+      // The default table version (10) writes native parquet log files, which are shredded per
+      // file by the same factory path. Asserted rather than guarded: a table version that wrote
+      // Avro log blocks here would silently turn this leg off.
+      assert(nativeDataLogs.nonEmpty, "table version 10 MOR tables write native parquet log files")
+      assertInferredTypedValueIn(nativeDataLogs, "v", "mor native log", present = Seq("key"))
+    })
+  }
+
+  test("A shredding-schema inferrer is registered for every Spark version that ships one") {
+    // Spark 4.1+ ships InferVariantShreddingSchema. A Spark version module without a registered
+    // inferrer silently writes unshredded with the flag on and turns every inference test above
+    // into a skip, which is how the spark4.2 module first shipped without one. Deliberately not
+    // gated on the inferrer itself: this is the leg that notices the gap.
+    assertResult(HoodieSparkUtils.gteqSpark4_1)(VariantShreddingRuntime.lookupInferrer.isPresent)
+  }
+
+  test("Test Auto-Inferred Variant Shredding with Bulk Insert Row Writer") {
+    assume(VariantShreddingRuntime.lookupInferrer.isPresent,
+      "Variant shredding schema inference requires a VariantShreddingSchemaInferrer on the classpath")
+
+    // The row-writer path (HoodieInternalRowFileWriterFactory) is record-type independent.
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  v variant,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  type = 'cow',
+             |  preCombineField = 'ts',
+             |  hoodie.parquet.variant.shredding.schema.inference.enabled = 'true',
+             |  hoodie.datasource.write.row.writer.enable = 'true'
+             | )
+          """.stripMargin)
+
+        spark.sql(
+          s"""
+             |insert into $tableName values
+             |  (1, parse_json('{"a": 1, "b": "x"}'), 1000),
+             |  (2, parse_json('{"a": 2, "b": "y"}'), 1000)
+          """.stripMargin)
+      }
+
+      // Pin the path: the footer would look the same if the insert silently fell back to the
+      // record-based writers, which infer through a different decorator.
+      assertResult(WriteOperationType.BULK_INSERT)(getLastCommitMetadata(spark, tmp.getCanonicalPath).getOperationType)
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"a\":1,\"b\":\"x\"}", 1000),
+        Seq(2, "{\"a\":2,\"b\":\"y\"}", 1000)
+      )
+
+      assertInferredTypedValue(tmp.getCanonicalPath, "v", "row writer", present = Seq("a", "b"))
+    }
+  }
+
   /**
-   * Pins the on-disk layout of the `v` column across every base file. Without it a leg meant to
-   * exercise the shredded path can silently degenerate into the unshredded one, or the reverse,
-   * and the branch it was written for goes uncovered.
+   * Pins the on-disk layout of `column` (the single `v` column most tests declare, by default)
+   * across every data parquet file. Without it a leg meant to exercise the shredded path can
+   * silently degenerate into the unshredded one, or the reverse, and the branch it was written
+   * for goes uncovered.
    */
-  private def assertVariantLayout(tablePath: String, shredded: Boolean, leg: String): Unit = {
+  private def assertVariantLayout(tablePath: String, shredded: Boolean, leg: String, column: String = "v"): Unit = {
     val files = listDataParquetFiles(tablePath)
     assert(files.nonEmpty, s"[$leg] should have at least one data parquet file")
     files.foreach { filePath =>
-      val variantGroup = getFieldAsGroup(readParquetSchema(filePath), "v")
+      val variantGroup = getFieldAsGroup(readParquetSchema(filePath), column)
       if (shredded) {
         assert(variantGroup.containsField("typed_value"),
           s"[$leg] base file should carry typed_value. Schema:\n$variantGroup")
@@ -1291,6 +1477,43 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         assert(!variantGroup.containsField("typed_value"),
           s"[$leg] base file must not carry typed_value. Schema:\n$variantGroup")
       }
+    }
+  }
+
+  /**
+   * Pins an INFERRED shredding layout of `column` across every data parquet file of the table:
+   * see [[assertInferredTypedValueIn]].
+   */
+  private def assertInferredTypedValue(tablePath: String, column: String, leg: String,
+                                       present: Seq[String], absent: Seq[String] = Seq.empty): Unit = {
+    assertInferredTypedValueIn(listDataParquetFiles(tablePath), column, leg, present, absent)
+  }
+
+  /**
+   * Pins an INFERRED shredding layout of `column` in the given parquet files: the variant group is
+   * shredded, carries the VARIANT logical type (the inferrer only exists on Spark 4.1+, whose
+   * parquet ships the annotation), its typed_value has every `present` member and none of
+   * the `absent` ones (e.g. an avro-illegal key the inferrer dropped), and typed_value holds
+   * non-null values per the block column statistics.
+   */
+  private def assertInferredTypedValueIn(files: Seq[String], column: String, leg: String,
+                                         present: Seq[String], absent: Seq[String] = Seq.empty): Unit = {
+    assert(files.nonEmpty, s"[$leg] should have at least one data parquet file")
+    files.foreach { filePath =>
+      val variantGroup = getFieldAsGroup(readParquetSchema(filePath), column)
+      assert(variantGroup.containsField("typed_value"),
+        s"[$leg] $column should be shredded with an inferred typed_value. File: $filePath Schema:\n$variantGroup")
+      assert(Option(variantGroup.getLogicalTypeAnnotation).exists(_.toString.contains("VARIANT")),
+        s"[$leg] inferred variant group must carry the VARIANT logical type. Schema:\n$variantGroup")
+      val typedValue = getFieldAsGroup(variantGroup, "typed_value")
+      present.foreach(member => assert(typedValue.containsField(member),
+        s"[$leg] inferred typed_value should contain $member. Schema:\n$typedValue"))
+      absent.foreach(member => assert(!typedValue.containsField(member),
+        s"[$leg] inferred typed_value must not contain $member. Schema:\n$typedValue"))
+      // The footer schema alone cannot tell real shredding from a file where every row fell
+      // back to the residual value with typed_value all-null.
+      assert(typedValueNonNullCount(filePath, column) > 0,
+        s"[$leg] inferred typed_value of $column should hold non-null values. File: $filePath")
     }
   }
 
@@ -1329,6 +1552,34 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     val reader = ParquetFileReader.open(inputFile)
     try {
       reader.getFooter.getFileMetaData.getSchema
+    } finally {
+      reader.close()
+    }
+  }
+
+  /**
+   * Sums the non-null value counts of the typed leaf columns under `column`.typed_value across
+   * all blocks of the file, from the block column statistics. The residual `value` leaves of
+   * shredded object fields are left out: they hold the rows that fell back, so counting them
+   * would let a file with every field fallen back pass as shredded.
+   */
+  private def typedValueNonNullCount(filePath: String, column: String): Long = {
+    val conf = spark.sparkContext.hadoopConfiguration
+    val inputFile = HadoopInputFile.fromPath(new HadoopPath(filePath), conf)
+    val reader = ParquetFileReader.open(inputFile)
+    try {
+      val prefix = s"$column.typed_value"
+      reader.getFooter.getBlocks.asScala.flatMap(_.getColumns.asScala)
+        .filter { c =>
+          val dot = c.getPath.toDotString
+          (dot == prefix || dot.startsWith(prefix + ".")) && !dot.endsWith(".value")
+        }
+        .map { c =>
+          val stats = c.getStatistics
+          // A chunk without a written null count must not pass as holding non-null values
+          if (stats == null || stats.getNumNulls < 0) 0L else c.getValueCount - stats.getNumNulls
+        }
+        .sum
     } finally {
       reader.close()
     }
