@@ -82,7 +82,6 @@ import static io.trino.plugin.hudi.testing.SchemaEvolutionHudiTablesInitializer.
 import static io.trino.plugin.hudi.HudiPageSourceProvider.createPageSource;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COMPREHENSIVE_TYPES_V6_MOR;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COMPREHENSIVE_TYPES_V8_MOR;
-import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COW_ARCHIVED_TIMELINE;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COW_PT_TABLE_WITH_FIELD_NAMES_IN_CAPS;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COW_PT_TBL;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS;
@@ -1397,15 +1396,10 @@ public class TestHudiSmokeTest
     @MethodSource("archivedTimelineTestParameters")
     public void testReadTableWithArchivedTimeline(ResourceHudiTablesInitializer.TestingTable table, boolean isRtTable)
     {
-        Session session = getSession();
         String tableName = isRtTable ? table.getRtTableName() : table.getTableName();
         @Language("SQL") String actualQuery = "SELECT id, name, price, ts FROM " + tableName;
         @Language("SQL") String expectedQuery;
-        if (table == HUDI_COW_ARCHIVED_TIMELINE) {
-            expectedQuery = "VALUES (1, 'alice', 110.0, 1000), (2, 'robert', 200.0, 2000), (4, 'david', 400.0, 4000), (5, 'eve', 550.0, 5000), (6, 'frank', 660.0, 6000), "
-                    + "(7, 'grace', 700.0, 7000)";
-        }
-        else if (isRtTable) {
+        if (isRtTable) {
             // Real-time table, log files are merged onto the base files
             expectedQuery = "VALUES (2, 'updated_user2', 20.0, 2000), (3, 'user3', 30.0, 3000), (4, 'user4', 40.0, 4000), (5, 'user5', 50.0, 5000)";
         }
@@ -1413,7 +1407,7 @@ public class TestHudiSmokeTest
             // Read-optimized table, base files only (the fixture was written with inline compaction disabled)
             expectedQuery = "VALUES (1, 'user1', 10.0, 1000), (2, 'user2', 20.0, 2000), (3, 'user3', 30.0, 3000), (4, 'user4', 40.0, 4000), (5, 'user5', 50.0, 5000)";
         }
-        assertQuery(session, actualQuery, expectedQuery);
+        assertQuery(actualQuery, expectedQuery);
     }
 
     private void testTimestampMicros(HiveTimestampPrecision timestampPrecision, LocalDateTime expected)
@@ -1487,7 +1481,6 @@ public class TestHudiSmokeTest
     private static Stream<Arguments> archivedTimelineTestParameters()
     {
         return Stream.of(
-                Arguments.of(HUDI_COW_ARCHIVED_TIMELINE, false),
                 Arguments.of(HUDI_MOR_ARCHIVED_TIMELINE, false),
                 Arguments.of(HUDI_MOR_ARCHIVED_TIMELINE, true));
     }

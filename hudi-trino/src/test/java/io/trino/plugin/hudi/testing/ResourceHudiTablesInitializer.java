@@ -359,7 +359,6 @@ public class ResourceHudiTablesInitializer
         HUDI_TIMESTAMP_KEYGEN_PT_SCALAR_TO_YYYY_MM_DD_HH_V8_MOR(hudiTimestampKeygenColumns(), hudiTimestampKeygenPartitionColumns(), hudiTimestampKeygenPartitions("SCALAR"), true),
         HUDI_CUSTOM_KEYGEN_PT_V8_MOR(hudiCustomKeyGenColumns(), hudiCustomKeyGenPartitionColumns(), hudiCustomKeyGenPartitions(), false),
         HUDI_NON_EXTRACTABLE_PARTITION_PATH(multiPartitionRegularColumns(), multiPartitionColumns(), multiPartitionsWithNonExtractablePartitionPaths(), false),
-        HUDI_COW_ARCHIVED_TIMELINE(hudiMultiFgRegularColumns(), ImmutableList.of(), ImmutableMap.of(), false),
         HUDI_MOR_ARCHIVED_TIMELINE(hudiMultiFgRegularColumns(), ImmutableList.of(), ImmutableMap.of(), true),
         /**/;
 

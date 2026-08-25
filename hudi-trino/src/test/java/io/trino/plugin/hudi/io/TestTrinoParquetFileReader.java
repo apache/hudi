@@ -27,31 +27,38 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Tests {@link TrinoParquetFileReader} against a four-instant LSM archived-timeline parquet file, the shape
- * Hudi's archived-timeline loader reads through the connector.
+ * Tests {@link TrinoParquetFileReader} against a four-instant LSM archived-timeline parquet file, the shape Hudi's
+ * archived-timeline loader reads through the connector. {@code archived_timeline.parquet} is the history file
+ * {@code 20250918121953134_20250918122001506_0.parquet} of a table-version-8 COW table written by Hudi 1.0.2 (four
+ * commit instants, 20250918121953134 through 20250918122001506), generated with the create script documented in
+ * {@code hudi-testing-data/hudi_mor_archived_timeline.md}, COW variant.
  */
-public class TestTrinoParquetFileReader
+class TestTrinoParquetFileReader
 {
     private static final String ARCHIVED_TIMELINE_PARQUET_FILE = "archived_timeline.parquet";
 
     @Test
-    public void testReadArchivedTimelineFile()
+    void testReadArchivedTimelineFile()
             throws Exception
     {
         HoodieSchema tableSchema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
         Schema avroSchema = tableSchema.toAvroSchema();
 
         try (TrinoParquetFileReader reader = createReader()) {
-            assertThat(reader.getSchema()).isNotNull();
+            assertThat(reader.getSchema().toAvroSchema()).isEqualTo(HoodieLSMTimelineInstant.getClassSchema());
             assertThat(reader.getTotalRecords()).isEqualTo(4);
 
             List<IndexedRecord> records = new ArrayList<>();
@@ -76,12 +83,16 @@ public class TestTrinoParquetFileReader
         }
     }
 
-    @Test
-    public void testProjectedReadUsesRequestedSchema()
+    @ParameterizedTest
+    @EnumSource(value = HoodieArchivedTimeline.LoadMode.class, names = {"TIME", "FULL"})
+    void testProjectedReadUsesRequestedSchema(HoodieArchivedTimeline.LoadMode loadMode)
             throws Exception
     {
-        // The exact projection ArchivedTimelineLoaderV2 requests when it only needs instant times
-        Schema projectedAvroSchema = LSMTimeline.getReadSchema(HoodieArchivedTimeline.LoadMode.TIME);
+        // The projections ArchivedTimelineLoaderV2 requests: TIME when it only needs instant times, FULL when it needs
+        // the payloads too. FULL is the interesting one -- its read schema orders plan before metadata, the reverse of
+        // the file's metadata, plan, so a passing read proves columns are mapped by name and not by position, and it is
+        // the only projection that materializes the bytes columns the SqlVarbinary -> ByteBuffer conversion exists for
+        Schema projectedAvroSchema = LSMTimeline.getReadSchema(loadMode);
         HoodieSchema tableSchema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
         HoodieSchema projectedSchema = HoodieSchema.fromAvroSchema(projectedAvroSchema);
 
@@ -99,17 +110,28 @@ public class TestTrinoParquetFileReader
             assertThat(records.getFirst().get(completionTimePos).toString()).isEqualTo("20250918121957816");
             assertThat(records.get(1).get(instantTimePos).toString()).isEqualTo("20250918121958100");
             assertThat(records.get(1).get(completionTimePos).toString()).isEqualTo("20250918121959081");
+
+            if (projectedAvroSchema.getField("metadata") != null) {
+                int metadataPos = projectedAvroSchema.getField("metadata").pos();
+                int planPos = projectedAvroSchema.getField("plan").pos();
+                // All four instants of the fixture are commits: every row has metadata bytes and a null plan
+                assertThat(records).allSatisfy(record -> {
+                    assertThat(record.get(metadataPos)).isInstanceOf(ByteBuffer.class);
+                    assertThat(((ByteBuffer) record.get(metadataPos)).remaining()).isGreaterThan(0);
+                    assertThat(record.get(planPos)).isNull();
+                });
+            }
         }
     }
 
     @Test
-    public void testFooterMetadataAbsent()
+    void testFooterLookupsUnsupported()
             throws Exception
     {
         // A timeline file is not a data file: it carries neither a bloom filter nor min/max record keys
         try (TrinoParquetFileReader reader = createReader()) {
-            assertThat(reader.readBloomFilter()).isNull();
-            assertThat(reader.readMinMaxRecordKeys()).isEmpty();
+            assertThatThrownBy(reader::readBloomFilter).isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(reader::readMinMaxRecordKeys).isInstanceOf(UnsupportedOperationException.class);
         }
     }
 

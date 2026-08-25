@@ -45,7 +45,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieAvroFileReader;
@@ -88,8 +87,6 @@ import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Objects.requireNonNull;
-import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
-import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
 
 /**
  * Reads an LSM archived-timeline Parquet file through Trino's {@link ParquetReader}, turning each
@@ -97,7 +94,8 @@ import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_M
  * archived-timeline loader asks {@link HudiTrinoFileReaderFactory} for an Avro file reader over the
  * history files under {@code .hoodie/timeline/history}, and this is the connector's answer to that
  * request. It is not a general data-file reader: record-key, key-prefix and row-key lookups are
- * unsupported, and the timeline files carry none of the footer metadata those lookups rely on.
+ * unsupported, and so are the bloom filter and min/max record key lookups -- a timeline file carries
+ * none of the data-file footer metadata those rely on.
  */
 public class TrinoParquetFileReader
         extends HoodieAvroFileReader
@@ -108,7 +106,6 @@ public class TrinoParquetFileReader
 
     private final StoragePath path;
     private final HudiTrinoStorage trinoStorage;
-    private final FileFormatUtils fileFormatUtils = new HudiTrinoParquetFileFormatUtils();
     private final ParquetReaderOptions readerOptions = new ParquetReaderConfig().toParquetReaderOptions();
     private final TrinoInputFile inputFile;
     private final long fileLength;
@@ -116,6 +113,9 @@ public class TrinoParquetFileReader
     private final Schema avroSchema;
     private final HoodieSchema hoodieSchema;
     private final long totalRecords;
+    // Every iterator handed out by getIndexedRecordIterator, so that close() can release the ParquetReader
+    // of one the caller left open. A reader instance is used by a single thread, but the list is cheap to guard
+    private final List<ParquetIndexedRecordIterator> openIterators = new ArrayList<>();
 
     public TrinoParquetFileReader(HoodieStorage storage, StoragePath path)
             throws IOException
@@ -143,7 +143,11 @@ public class TrinoParquetFileReader
     {
         // Timeline files are never schema-evolved, so no column can have been renamed under them
         Schema schema = requestedSchema != null ? requestedSchema.toAvroSchema() : avroSchema;
-        return new ParquetIndexedRecordIterator(schema);
+        ParquetIndexedRecordIterator iterator = new ParquetIndexedRecordIterator(schema);
+        synchronized (openIterators) {
+            openIterators.add(iterator);
+        }
+        return iterator;
     }
 
     @Override
@@ -161,20 +165,13 @@ public class TrinoParquetFileReader
     @Override
     public String[] readMinMaxRecordKeys()
     {
-        // Not FileFormatUtils#readMinMaxRecordKeys: that one demands both footer keys and throws when either
-        // is absent, and a timeline file carries no data-file footer keys at all
-        Map<String, String> minMaxKeys = fileFormatUtils.readFooter(
-                trinoStorage, false, path, HOODIE_MIN_RECORD_KEY_FOOTER, HOODIE_MAX_RECORD_KEY_FOOTER);
-        if (minMaxKeys.size() != 2) {
-            return new String[0];
-        }
-        return new String[] {minMaxKeys.get(HOODIE_MIN_RECORD_KEY_FOOTER), minMaxKeys.get(HOODIE_MAX_RECORD_KEY_FOOTER)};
+        throw new UnsupportedOperationException("Reading min/max record keys is not supported by this reader");
     }
 
     @Override
     public BloomFilter readBloomFilter()
     {
-        return fileFormatUtils.readBloomFilterFromMetadata(trinoStorage, path);
+        throw new UnsupportedOperationException("Reading a bloom filter is not supported by this reader");
     }
 
     @Override
@@ -204,22 +201,31 @@ public class TrinoParquetFileReader
     @Override
     public void close()
     {
-        // No-op: the only resource this reader opens outside the constructor is the ParquetReader of an
-        // iterator, and the iterator closes it
+        // The only resource this reader opens outside the constructor is the ParquetReader of an iterator.
+        // Closing the reader releases every iterator it handed out, including any the caller left open;
+        // an iterator's close() is idempotent, so closing one that is already closed is a no-op
+        synchronized (openIterators) {
+            for (ParquetIndexedRecordIterator iterator : openIterators) {
+                iterator.close();
+            }
+            openIterators.clear();
+        }
     }
 
     private ParquetMetadata readParquetMetadata()
             throws IOException
     {
-        try (ParquetDataSource dataSource = openDataSource(newSimpleAggregatedMemoryContext())) {
+        // No estimated size: with one at or below the small-file threshold createDataSource returns a
+        // MemoryParquetDataSource that slurps the whole file, where the footer read only needs the tail
+        try (ParquetDataSource dataSource = openDataSource(newSimpleAggregatedMemoryContext(), OptionalLong.empty())) {
             return MetadataReader.readFooter(dataSource, Optional.empty());
         }
     }
 
-    private ParquetDataSource openDataSource(AggregatedMemoryContext memoryContext)
+    private ParquetDataSource openDataSource(AggregatedMemoryContext memoryContext, OptionalLong estimatedFileSize)
             throws IOException
     {
-        return createDataSource(inputFile, OptionalLong.of(fileLength), readerOptions, memoryContext, new FileFormatDataSourceStats());
+        return createDataSource(inputFile, estimatedFileSize, readerOptions, memoryContext, new FileFormatDataSourceStats());
     }
 
     private Schema extractAvroSchema(FileMetadata fileMetaData)
@@ -324,6 +330,7 @@ public class TrinoParquetFileReader
         private final int[] binaryFieldPositions;
         private Page currentPage;
         private int currentPosition;
+        private boolean exhausted;
         private boolean closed;
 
         ParquetIndexedRecordIterator(Schema readerSchema)
@@ -341,19 +348,15 @@ public class TrinoParquetFileReader
         @Override
         public boolean hasNext()
         {
-            if (closed) {
+            if (closed || exhausted) {
                 return false;
             }
             if (currentPage != null && currentPosition < currentPage.getPositionCount()) {
                 return true;
             }
             try {
-                // Skip empty pages rather than mistaking one for the end of the file
-                do {
-                    loadNextPage();
-                }
-                while (currentPage != null && currentPage.getPositionCount() == 0);
-                return currentPage != null;
+                loadNextPage();
+                return !exhausted;
             }
             catch (IOException e) {
                 throw handleException(path, e);
@@ -396,7 +399,7 @@ public class TrinoParquetFileReader
                 throws IOException
         {
             AggregatedMemoryContext memoryContext = newSimpleAggregatedMemoryContext();
-            ParquetDataSource dataSource = openDataSource(memoryContext);
+            ParquetDataSource dataSource = openDataSource(memoryContext, OptionalLong.of(fileLength));
             try {
                 FileMetadata fileMetaData = parquetMetadata.getFileMetaData();
                 MessageType fileSchema = fileMetaData.getSchema();
@@ -448,7 +451,10 @@ public class TrinoParquetFileReader
                 throws IOException
         {
             SourcePage sourcePage = parquetReader.nextPage();
-            currentPage = sourcePage == null ? null : sourcePage.getPage();
+            // Once the reader has handed out its last page it must never be asked again: a nextBatch() past
+            // the end of the row groups throws IndexOutOfBoundsException instead of returning null a second time
+            exhausted = sourcePage == null;
+            currentPage = exhausted ? null : sourcePage.getPage();
             currentPosition = 0;
         }
     }
