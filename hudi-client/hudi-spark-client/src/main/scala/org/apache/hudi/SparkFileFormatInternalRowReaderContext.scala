@@ -111,7 +111,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   // PayloadUpdateProcessor.convertToAvroRecord against a schema that still types variant fields as
   // VariantType, so a row already rewritten into the projected struct shape would be mis-decoded.
   // Single source of truth for both reader paths (parquet native projection + avro rewrite).
-  private def shouldProjectVariants: Boolean = {
+  private def shouldProjectVariants(): Boolean = {
     val hasVariantProjection = sparkRequiredSchema.exists(_.fields.exists(_.dataType match {
       case st: StructType => sparkAdapter.isVariantProjectionStruct(st)
       case _ => false
@@ -131,7 +131,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   override def projectLogBlockRecords(
       recordIterator: ClosableIterator[InternalRow],
       dataBlockSchema: HoodieSchema): ClosableIterator[InternalRow] = {
-    if (!shouldProjectVariants) {
+    if (!shouldProjectVariants()) {
       return recordIterator
     }
     val requiredStruct = sparkRequiredSchema.get
@@ -232,7 +232,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
         case HoodieFileFormat.PARQUET =>
           val reader = new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
             .asInstanceOf[HoodieSparkParquetReader]
-          val rawIterator = if (shouldProjectVariants) {
+          val rawIterator = if (shouldProjectVariants()) {
             // Thread the variant-overlaid struct (carrying VariantMetadata that HoodieSchema can't
             // represent) so parquet-mr decodes variants into the projected struct shape natively,
             // mirroring the base-file branch below. Gated so payload-based tables keep full variants.
