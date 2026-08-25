@@ -566,7 +566,9 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
     // not here: this relation cannot serve an empty projection under schema-on-read at all, with or
     // without a variant. buildScan prunes the internal schema to the zero requested columns, and
     // InternalSchemaUtils.pruneInternalSchema builds an InternalSchema around a null record (NPE in
-    // buildIdToName; pre-existing, noted on #19688).
+    // buildIdToName; pre-existing, tracked by #19734).
+    // TODO(voon): once #19734 is fixed, restore the carve-out here so the legacy relation pins it too:
+    //   assertEquals(2L, legacyRelationDf(readOpts).count())
   }
 
   @Test
