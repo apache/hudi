@@ -92,7 +92,12 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
         }
       }
       if (this.hiveDriver != null) {
-        this.hiveDriver.close();
+        try {
+          this.hiveDriver.close();
+        } catch (Exception driverCloseException) {
+          log.error("Error while closing Hive Driver", driverCloseException);
+        }
+        destroyQuietly(this.hiveDriver);
       }
       // driverPool (if present) was already constructed by the caller before this
       // ctor ran; since we're about to throw, no one else will call close() on it.
@@ -314,7 +319,27 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       Hive.closeCurrent();
     }
     if (hiveDriver != null) {
-      hiveDriver.close();
+      try {
+        hiveDriver.close();
+      } finally {
+        destroyQuietly(hiveDriver);
+      }
+    }
+  }
+
+  /**
+   * Removes the shutdown hook that {@link Driver#compile} registered. A fresh HiveSyncTool, and
+   * therefore a fresh Driver, is built per sync, and close() leaves that hook in place, so without
+   * this every sync permanently adds a Driver to the static {@code ShutdownHookManager}. Runs even
+   * when close() failed, and reports rather than rethrows its own failure: destroy() ends up in
+   * {@code ShutdownHookManager.removeShutdownHook}, which refuses to run once JVM shutdown has
+   * begun, and by then the hook set no longer matters.
+   */
+  private static void destroyQuietly(Driver driver) {
+    try {
+      driver.destroy();
+    } catch (Exception e) {
+      log.warn("Error while destroying Hive Driver", e);
     }
   }
 }
