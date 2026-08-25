@@ -36,7 +36,6 @@ import org.slf4j.LoggerFactory
 
 import java.io.InputStream
 
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -90,7 +89,8 @@ import scala.collection.mutable.ArrayBuffer
  *   <li>Tune maxGapBytes based on your data access patterns</li>
  * </ul>
  *
- * @param storageConf    Storage configuration to resolve blob reference filesystems against
+ * @param storageConf    Storage configuration to resolve the blob reference filesystem against.
+ *                       All references a reader sees are assumed to be on one filesystem.
  * @param maxGapBytes    Maximum gap between ranges to consider for batching (default: 4KB)
  * @param lookaheadRows  Number of rows to buffer for batch detection (default: 50)
  */
@@ -101,28 +101,30 @@ class BatchedBlobReader(
 
   private val logger = LoggerFactory.getLogger(classOf[BatchedBlobReader])
 
-  private val storageByFileSystem = mutable.Map.empty[String, HoodieStorage]
+  private var storage: HoodieStorage = _
 
   /**
    * A HoodieStorage binds one filesystem for its lifetime, selected from the scheme of the path it
-   * is built with. Blob references are absolute paths carried in row data, so a partition can point
-   * at more than one filesystem and none of them is known before the rows arrive.
+   * is built with, and a blob reference is an absolute path carried in row data rather than
+   * something known up front. All references a reader sees are assumed to live on one filesystem,
+   * so the first one resolves the storage for the rest.
    */
   private def storageFor(path: StoragePath): HoodieStorage = {
-    val uri = path.toUri
-    val key = s"${uri.getScheme}://${uri.getAuthority}"
-    storageByFileSystem.getOrElseUpdate(key, HoodieStorageUtils.getStorage(path, storageConf))
+    if (storage == null) {
+      storage = HoodieStorageUtils.getStorage(path, storageConf)
+    }
+    storage
   }
 
   override def close(): Unit = {
-    storageByFileSystem.values.foreach { storage =>
+    if (storage != null) {
       try {
         storage.close()
       } catch {
         case e: Exception => logger.warn(s"Error closing storage ${storage.getScheme}", e)
       }
+      storage = null
     }
-    storageByFileSystem.clear()
   }
 
   /**

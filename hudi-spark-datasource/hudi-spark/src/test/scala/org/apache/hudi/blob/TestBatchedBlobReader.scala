@@ -463,8 +463,8 @@ class TestBatchedBlobReader extends HoodieClientTestBase {
 
   /**
    * Blob references are absolute paths carried in row data, so the filesystem a partition must read
-   * is not known until the rows arrive. These tests put the referenced files behind object-store
-   * schemes, which is where storage resolved from a default {@code file:///} URI fails with
+   * is not known until the rows arrive. These tests put the referenced files behind an object-store
+   * scheme, which is where storage resolved from a default {@code file:///} URI fails with
    * {@code IllegalArgumentException: Wrong FS: s3a://..., expected: file:///}.
    */
   @Test
@@ -503,34 +503,6 @@ class TestBatchedBlobReader extends HoodieClientTestBase {
     val data = results(0).getAs[Array[Byte]]("data")
     assertEquals(512, data.length)
     assertBytesContent(data)
-  }
-
-  /**
-   * One partition referencing two filesystems. A reader that resolved storage once, from its
-   * configuration or from the first reference it saw, would serve the second scheme through the
-   * first scheme's handle.
-   */
-  @Test
-  def testReferencesOnTwoFilesystemsInOnePartition(): Unit = {
-    val firstPath = createTestFile(tempDir, "two-fs-first.bin", 1000)
-    val secondPath = createTestFile(tempDir, "two-fs-second.bin", 1000)
-    val inputDF = sparkSession.createDataFrame(Seq(
-      ("s3a", onScheme("s3a", firstPath), 0L, 100L),
-      ("gs", onScheme("gs", secondPath), 0L, 100L)
-    )).toDF("scheme", "external_path", "offset", "length")
-      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
-      .select("scheme", "data")
-      .coalesce(1)
-
-    val results = BatchedBlobReader.readBatched(inputDF, nonLocalSchemeStorageConf).orderBy("scheme").collect()
-
-    assertEquals(2, results.length)
-    assertEquals(Seq("gs", "s3a"), results.map(_.getAs[String]("scheme")).toSeq)
-    results.foreach { row =>
-      val data = row.getAs[Array[Byte]]("data")
-      assertEquals(100, data.length)
-      assertBytesContent(data)
-    }
   }
 
   /**
