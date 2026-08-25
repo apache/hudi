@@ -859,6 +859,20 @@ public class TestHoodieParquetInputFormat {
         () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(array, arrayPruned));
     assertTrue(arrayPrunedFailure.getMessage().contains("'a'"),
         "The error must name the column holding the array of shredded variants, got: " + arrayPrunedFailure.getMessage());
+
+    // Which levels a collection contributes is structural, not a matter of their names: on the
+    // 2-level layout the repeated group is the element itself, so an element member named `value`
+    // is a user field and the shredded group sits at a.value - which is where the Hive type puts
+    // it too. Reading that member as a collection level would collect a.value as plain `a`, the
+    // two sides would not meet, and the guard would let the read through.
+    String structArrayTypes = "int,array<struct<key:string,value:struct<metadata:binary,value:binary>>>";
+    FileSplit structArray = fileSplit(
+        InputFormatTestUtil.writeArrayShreddedVariantParquetFile(basePath, "array_struct_shredded.parquet", true));
+    JobConf wholeStructArray = variantJobConf("id,a", structArrayTypes, "id,a", "0,1");
+    HoodieException structArrayFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(structArray, wholeStructArray));
+    assertTrue(structArrayFailure.getMessage().contains("'a'"),
+        "The error must name the column whose array elements hold a shredded variant, got: " + structArrayFailure.getMessage());
   }
 
   @Test
@@ -907,6 +921,18 @@ public class TestHoodieParquetInputFormat {
     JobConf plainStruct = variantJobConf(
         "id,v", "int,struct<metadata:binary,value:binary,typed_value:struct<a:int>>", "id,v", "0,1");
     assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(shredded, plainStruct));
+
+    // The exemption is anchored on the node shape, not on typed_value being absent from the whole
+    // column type string: a real variant at s.inner is still flagged when the sibling s.other is a
+    // user struct whose own member happens to be named typed_value.
+    FileSplit typedValueSibling = fileSplit(
+        InputFormatTestUtil.writeNestedShreddedVariantParquetFile(basePath, "nested_typed_value_sibling.parquet", true));
+    JobConf siblingTypes = variantJobConf(
+        "id,s", "int,struct<inner:struct<metadata:binary,value:binary>,other:struct<typed_value:string>>", "id,s", "0,1");
+    HoodieException siblingFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(typedValueSibling, siblingTypes));
+    assertTrue(siblingFailure.getMessage().contains("'s'"),
+        "A typed_value member on a sibling struct must not exempt the variant next to it, got: " + siblingFailure.getMessage());
   }
 
   /**

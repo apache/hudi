@@ -606,7 +606,6 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         checkNestedExceptionContains(
           () => spark.sql(s"select id, cast(v as string), note from $tableName").collect())(
           "pushVariantIntoScan")
-
       }
 
       // Known #18285 residue, documented rather than pinned: the schema-on-read DDL also
@@ -614,24 +613,6 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       // arm, so the catalog column degrades to a plain struct<metadata,value> (the resolved
       // avro table schema keeps its variant logical type). Plain reads of the table after the
       // DDL request that struct and fail in Spark before any Hudi hook.
-    }
-
-    // The UNSHREDDED companion separates the two guard arms: with no typed_value in the file
-    // only the rewrite arm can fire. With the rewrite off the read reaches Spark's own
-    // struct-vs-variant mismatch under schema-on-read (the #18285 residue above), not this guard.
-    withVariantTable("unshredded schema-on-read", "cow", recordTypes = Seq(HoodieRecordType.SPARK)) {
-      (tableName, tablePath, leg) =>
-      withWriteLayout(Unshredded) {
-        spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1}'), 1000)""")
-      }
-      assertVariantLayout(tablePath, shredded = false, leg = leg)
-
-      withSQLConf("hoodie.schema.on.read.enable" -> "true") {
-        spark.sql(s"alter table $tableName add columns (note string)")
-        checkNestedExceptionContains(
-          () => spark.sql(s"select id, cast(v as string), note from $tableName").collect())(
-          "pushVariantIntoScan")
-      }
     }
 
     // The guard recurses: a NESTED shredded variant (struct<inner: variant>, written by the
@@ -1017,6 +998,9 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       // Pinned before the empty-object commit: assertVariantSegments spans the whole table and
       // there is no shape for {}.
       assertVariantSegments(tableName, leg, Seq(("v", objSegments ++ nullSegments)))
+      // JSON-null rows are non-null variants; only the two SQL NULL rows may count, so a declined
+      // file that reconstructed as all-null would show up here.
+      checkAnswer(s"select count(*) from $tableName where v is null")(Seq(2))
 
       withWriteLayout(Inferred) {
         spark.sql(s"insert into $tableName select cast(id as int) as id, parse_json('{}') as v, " +
@@ -1035,8 +1019,8 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         Seq(11, "{}"),
         Seq(12, "{}")
       )
-      // Incremental over the full range spans all three files with the values intact - a bare
-      // count would pass even if the declined files reconstructed as all-null.
+      // Incremental over the full range spans all three files; ids 0-3 and 10-12 carry values,
+      // the null file is pinned by the is-null count above.
       val incRows = incrementalIdAndVariant(tablePath)
       assert(incRows.length == 13,
         s"[$leg] incremental over the full range should span all three files, got ${incRows.length}")

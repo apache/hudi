@@ -86,6 +86,7 @@ import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -353,8 +354,9 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   }
 
   private SortOperatorGen createSortOperatorGen() {
+    // Trim: the config list is user-written ("id, name"), and the column names are looked up as given.
     return new SortOperatorGen(rowType,
-        conf.get(FlinkOptions.CLUSTERING_SORT_COLUMNS).split(","));
+        Arrays.stream(conf.get(FlinkOptions.CLUSTERING_SORT_COLUMNS).split(",")).map(String::trim).toArray(String[]::new));
   }
 
   private String getFileIds(List<ClusteringOperation> clusteringOperations) {

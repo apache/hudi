@@ -32,6 +32,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.IntWritable;
@@ -55,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class TestHiveHoodieReaderContext {
@@ -231,6 +233,33 @@ class TestHiveHoodieReaderContext {
         readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
     assertTrue(failure.getMessage().contains("shredded variant") && failure.getMessage().contains("'s'"),
         "The error must name the column holding the nested shredded variant, got: " + failure.getMessage());
+
+    // Hive's read column names are top-level only; nested column pruning arrives separately, as
+    // dotted paths. `select s.other` names s but materializes nothing of s.inner, so that read has
+    // to go through - only a path that reaches the shredded group may fail.
+    Configuration conf = storageConfiguration.unwrapAs(Configuration.class);
+    when(readerCreator.getRecordReader(any(), any(), any()))
+        .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
+    try {
+      conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "s.other");
+      assertDoesNotThrow(() ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+      verify(readerCreator).getRecordReader(any(), any(), any());
+
+      conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "s.inner");
+      HoodieException innerFailure = assertThrows(HoodieException.class, () ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+      assertTrue(innerFailure.getMessage().contains("'s'"),
+          "A nested path reaching the shredded group must still fail, got: " + innerFailure.getMessage());
+
+      conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "s");
+      HoodieException columnFailure = assertThrows(HoodieException.class, () ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+      assertTrue(columnFailure.getMessage().contains("'s'"),
+          "A nested path naming the whole column must still fail, got: " + columnFailure.getMessage());
+    } finally {
+      conf.unset(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR);
+    }
   }
 
   private static HoodieSchema tableSchemaWithVariant() {

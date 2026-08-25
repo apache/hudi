@@ -42,6 +42,13 @@ import org.apache.hadoop.hive.ql.io.IOConstants;
 import org.apache.hadoop.hive.ql.io.parquet.read.ParquetRecordReaderWrapper;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
+import org.apache.hadoop.hive.serde.serdeConstants;
+import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.MapTypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.PrimitiveTypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.FileSplit;
@@ -52,6 +59,7 @@ import org.apache.hadoop.mapred.Reporter;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,7 +69,6 @@ import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -87,9 +94,9 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetInputFormat.class);
   // Compiled once: the raw columns.types screen below runs on every legacy-path split.
   private static final Pattern WHITESPACE = Pattern.compile("\\s");
-  // The members a synced variant's Hive type carries, as they appear in a struct<...> type string.
+  // A member a synced variant's Hive type carries, as it appears in a struct<...> type string:
+  // the cheap screen that decides whether the type string is worth parsing at all.
   private static final String HIVE_VARIANT_METADATA = HoodieSchema.Variant.VARIANT_METADATA_FIELD + ":binary";
-  private static final String HIVE_VARIANT_VALUE = HoodieSchema.Variant.VARIANT_VALUE_FIELD + ":binary";
 
   private boolean supportAvroRead = false;
 
@@ -306,14 +313,15 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
    * <p>The footer's MessageType is inspected directly, without converting it to Avro:
    * AvroSchemaConverterWithTimestampNTZ.convertINT96 throws unless parquet.avro.readInt96AsFixed
    * is set (nothing in Hudi sets it), and Spark writes timestamps as INT96 by default, so the
-   * conversion would fail the very reads this guard is careful to leave working. The requested
-   * column's group is matched by shape at any depth - the footer carries no variant logical type
-   * either way - anchored on the Hive type of the requested column as before.
+   * conversion would fail the very reads this guard is careful to leave working. The footer
+   * carries no variant logical type either way, so its groups are matched by shape at any depth,
+   * and only at a path where the requested column's parsed Hive type declares a variant node.
    *
    * <p>Hive's read column names are top-level only, so a requested struct column does not imply
    * its whole interior: nested column pruning is carried separately as dotted paths
-   * (hive.io.file.readNestedColumn.paths). A column with such paths configured is flagged only
-   * when one of them overlaps a shredded group's path; a column without them is read whole.
+   * (hive.io.file.readNestedColumn.paths), which
+   * {@link HoodieColumnProjectionUtils#columnsReadingShreddedPaths} applies for both this guard
+   * and its file-group-reader sibling in HiveHoodieReaderContext.
    *
    * <p>The guard is best-effort throughout: a malformed columns/columns.types pairing, an
    * unparseable type string, or a projection that names no column all fall through to the plain
@@ -328,10 +336,9 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     if (!filePath.getName().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
       return;
     }
-    // Screen the raw type string before anything parses it: getIOColumnTypes runs a full
-    // TypeInfoUtils parse, which every legacy-path split of every table would otherwise pay. Only
-    // the variant shape's marker earns the parse; the exact anchor check on the parsed types is
-    // below.
+    // Screen the raw type string before anything parses it: the TypeInfoUtils parse below is a
+    // cost every legacy-path split of every table would otherwise pay. Only the variant shape's
+    // marker earns the parse; the exact anchor check on the parsed types is below.
     String rawIoColumnTypes = WHITESPACE.matcher(job.get(IOConstants.COLUMNS_TYPES, ""))
         .replaceAll("")
         .toLowerCase(Locale.ROOT);
@@ -351,9 +358,9 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       return;
     }
     List<String> ioColumns = HoodieColumnProjectionUtils.getIOColumns(job);
-    List<String> ioColumnTypes;
+    List<TypeInfo> ioColumnTypes;
     try {
-      ioColumnTypes = HoodieColumnProjectionUtils.getIOColumnTypes(job);
+      ioColumnTypes = TypeInfoUtils.getTypeInfosFromTypeString(job.get(IOConstants.COLUMNS_TYPES, ""));
     } catch (RuntimeException e) {
       // The screen above strips whitespace and lower-cases; the TypeInfoUtils parse tolerates
       // neither, so a string it lets through can still fail to parse. Bail out like the pairing
@@ -366,53 +373,48 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       // reads the plain parquet reader would otherwise serve.
       return;
     }
-    // The requested columns whose synced Hive type embeds the variant {metadata, value} shape:
-    // the anchor for the shape match on the file side below. A synced VARIANT is always exactly
-    // struct<metadata:binary,value:binary> - the table schema declares variants unshredded and
-    // HiveSchemaUtil.convertField converts that record verbatim, for HMS and Glue sync alike - so
-    // a type that also carries typed_value is a plain user struct that happens to hold those two
-    // members. The sibling guards exempt such structs; this one has to as well.
-    Set<String> variantColumns = new HashSet<>();
+    // The anchor, per requested column: the Hive-form paths of every node whose synced type is the
+    // exact node shape struct<metadata:binary,value:binary> that HiveSchemaUtil.convertField emits
+    // for a VARIANT (HMS and Glue sync both pass doFormat=false, so no spaces and no backticks).
+    // A struct carrying any further member is a plain user struct that happens to hold those two,
+    // and is exempt here as it is in the sibling Spark guards. One route fails open:
+    // TableSchemaResolver's footer fallback (see the comment near TableSchemaResolver:118) strips
+    // shredding by shape at the top level only, so a variant shredded below the top level can
+    // reach the metastore with typed_value still in its synced type; that three-member struct
+    // reads as a user struct here, i.e. pre-PR behaviour.
+    Map<String, List<String>> variantPathsByColumn = new HashMap<>();
     for (int i = 0; i < ioColumns.size(); i++) {
-      String name = ioColumns.get(i).toLowerCase(Locale.ROOT);
-      String type = ioColumnTypes.get(i).toLowerCase(Locale.ROOT);
-      if (requestedColumns.contains(name) && type.contains(HIVE_VARIANT_METADATA) && type.contains(HIVE_VARIANT_VALUE)
-          && !type.contains(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)) {
-        variantColumns.add(name);
+      String columnName = ioColumns.get(i).toLowerCase(Locale.ROOT);
+      if (!requestedColumns.contains(columnName)) {
+        continue;
+      }
+      List<String> variantPaths = new ArrayList<>();
+      collectHiveVariantPaths(ioColumnTypes.get(i), columnName, variantPaths);
+      if (!variantPaths.isEmpty()) {
+        variantPathsByColumn.put(columnName, variantPaths);
       }
     }
-    if (variantColumns.isEmpty()) {
+    if (variantPathsByColumn.isEmpty()) {
       return;
-    }
-    // Hive's nested column pruning, keyed by the top-level column each dotted path starts at.
-    Map<String, List<String>> nestedPathsByColumn = new HashMap<>();
-    for (String path : HoodieColumnProjectionUtils.getNestedColumnPaths(job)) {
-      String lowerPath = path.toLowerCase(Locale.ROOT);
-      int firstDot = lowerPath.indexOf('.');
-      String head = firstDot < 0 ? lowerPath : lowerPath.substring(0, firstDot);
-      nestedPathsByColumn.computeIfAbsent(head, k -> new ArrayList<>()).add(lowerPath);
     }
     StoragePath storagePath = convertToStoragePath(filePath);
     HoodieStorage storage = HoodieStorageUtils.getStorage(storagePath, HadoopFSUtils.getStorageConf(job));
     MessageType fileSchema = new ParquetUtils().readMessageType(storage, storagePath);
-    List<String> offendingColumns = new ArrayList<>();
+    // The shredded groups the file holds at a path where the column's Hive type declares a variant:
+    // the two sides are matched, so neither a file group of that shape under a user struct nor a
+    // synced variant the file does not actually shred can flag the column on its own.
+    List<String> shreddedPaths = new ArrayList<>();
     for (Type field : fileSchema.getFields()) {
       String columnName = field.getName().toLowerCase(Locale.ROOT);
-      if (!variantColumns.contains(columnName)) {
+      List<String> variantPaths = variantPathsByColumn.get(columnName);
+      if (variantPaths == null) {
         continue;
       }
-      List<String> shreddedPaths = new ArrayList<>();
-      collectShreddedVariantPaths(field, columnName, shreddedPaths);
-      if (shreddedPaths.isEmpty()) {
-        continue;
-      }
-      List<String> readPaths = nestedPathsByColumn.get(columnName);
-      // No nested paths configured for the column: it is read whole, shredded group included.
-      if (readPaths == null
-          || readPaths.stream().anyMatch(read -> shreddedPaths.stream().anyMatch(shredded -> pathsOverlap(read, shredded)))) {
-        offendingColumns.add(field.getName());
-      }
+      List<String> filePaths = new ArrayList<>();
+      collectShreddedVariantPaths(field, columnName, filePaths);
+      filePaths.stream().filter(variantPaths::contains).forEach(shreddedPaths::add);
     }
+    List<String> offendingColumns = HoodieColumnProjectionUtils.columnsReadingShreddedPaths(job, shreddedPaths);
     if (!offendingColumns.isEmpty()) {
       throw new HoodieException(String.format(
           "Column(s) '%s' of %s hold a shredded variant (typed_value present); the Hive reader "
@@ -424,11 +426,83 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   }
 
   /**
-   * Collects into {@code shreddedPaths} the dotted path of every shredded variant group at or
-   * beneath {@code type}: a group carrying both {@code typed_value} and {@code metadata}. Paths
-   * are lower-cased parquet field names joined by "." starting at {@code path}, so LIST and MAP
-   * wrapper groups contribute their own names ({@code a.list.element}). The walk stops at the
-   * first shredded group on a branch - everything below it belongs to that variant.
+   * Collects into {@code variantPaths} the Hive-form dotted path of every node at or beneath
+   * {@code type} whose Hive type is the synced variant shape (see {@link #isVariantShapedStruct}),
+   * starting at {@code path}. Only struct members add a segment: Hive truncates its nested column
+   * paths at a LIST or MAP column, so a list element and a map value share their column's path.
+   */
+  private static void collectHiveVariantPaths(TypeInfo type, String path, List<String> variantPaths) {
+    switch (type.getCategory()) {
+      case STRUCT: {
+        StructTypeInfo struct = (StructTypeInfo) type;
+        if (isVariantShapedStruct(struct)) {
+          variantPaths.add(path);
+          return;
+        }
+        List<String> memberNames = struct.getAllStructFieldNames();
+        List<TypeInfo> memberTypes = struct.getAllStructFieldTypeInfos();
+        for (int i = 0; i < memberNames.size(); i++) {
+          collectHiveVariantPaths(memberTypes.get(i), path + "." + memberNames.get(i).toLowerCase(Locale.ROOT), variantPaths);
+        }
+        break;
+      }
+      case LIST:
+        collectHiveVariantPaths(((ListTypeInfo) type).getListElementTypeInfo(), path, variantPaths);
+        break;
+      case MAP:
+        collectHiveVariantPaths(((MapTypeInfo) type).getMapValueTypeInfo(), path, variantPaths);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Whether {@code struct} is the Hive type a synced VARIANT gets: exactly the two binary members
+   * {@code metadata} and {@code value}. A struct with a third member is a user struct - including
+   * one whose third member is named typed_value, which only the footer fallback of
+   * TableSchemaResolver can produce for a nested shredded variant.
+   */
+  private static boolean isVariantShapedStruct(StructTypeInfo struct) {
+    List<String> memberNames = struct.getAllStructFieldNames();
+    if (memberNames.size() != 2) {
+      return false;
+    }
+    List<String> lowered = memberNames.stream().map(name -> name.toLowerCase(Locale.ROOT)).collect(Collectors.toList());
+    return lowered.contains(HoodieSchema.Variant.VARIANT_METADATA_FIELD)
+        && lowered.contains(HoodieSchema.Variant.VARIANT_VALUE_FIELD)
+        && struct.getAllStructFieldTypeInfos().stream().allMatch(HoodieParquetInputFormat::isBinary);
+  }
+
+  /** Whether {@code type} is the Hive {@code binary} primitive. */
+  private static boolean isBinary(TypeInfo type) {
+    return type instanceof PrimitiveTypeInfo && serdeConstants.BINARY_TYPE_NAME.equals(type.getTypeName());
+  }
+
+  /**
+   * Collects into {@code shreddedPaths} the Hive-form dotted path of every shredded variant group
+   * at or beneath {@code type}: a group carrying both {@code typed_value} and {@code metadata}.
+   * The shape is checked at every group before descending, so a shredded element is recorded at
+   * its collection column's own path on either list layout. The walk stops at the first shredded
+   * group on a branch - everything below it belongs to that variant.
+   *
+   * <p>Paths are lower-cased parquet field names joined by "." starting at {@code path}, minus the
+   * levels a Hive dotted path never names, because Hive truncates its nested column paths at a
+   * LIST or MAP column: the collection's repeated level, the synthetic level between a LIST and
+   * its element, and a map entry's key and value. Only struct members append a segment. Which
+   * levels those are is decided structurally, by parquet's own backward-compatibility rule rather
+   * than by level names, so a struct element's member that happens to be called {@code element},
+   * {@code key} or {@code value} keeps its segment: under a LIST group with a single child, that
+   * child is the synthetic level only when it is a group with exactly one non-repeated field whose
+   * name is neither {@code array} nor a {@code _tuple} suffix (the 3-level layout), and otherwise
+   * it is the element itself (the 2-level layout); under a MAP group the single child is always
+   * the entry level, whose key and value both carry the map's own path.
+   *
+   * <p>LIST and MAP are read off OriginalType rather than the LogicalTypeAnnotation that replaced
+   * it: parquet 1.11 and later derive one from the other, while this module loads inside Hive,
+   * whose bundled parquet can predate the annotation class entirely (the reason ParquetAdapter
+   * picks its implementation reflectively). A collection group shaped unlike its annotation (no
+   * single child) is walked as a plain struct, the best-effort reading.
    */
   private static void collectShreddedVariantPaths(Type type, String path, List<String> shreddedPaths) {
     if (type.isPrimitive()) {
@@ -440,16 +514,40 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       shreddedPaths.add(path);
       return;
     }
+    OriginalType originalType = group.getOriginalType();
+    if (originalType == OriginalType.LIST && group.getFieldCount() == 1) {
+      Type repeated = group.getType(0);
+      Type element = isSyntheticListLevel(repeated) ? repeated.asGroupType().getType(0) : repeated;
+      collectShreddedVariantPaths(element, path, shreddedPaths);
+      return;
+    }
+    if (originalType == OriginalType.MAP && group.getFieldCount() == 1 && !group.getType(0).isPrimitive()) {
+      for (Type entryMember : group.getType(0).asGroupType().getFields()) {
+        collectShreddedVariantPaths(entryMember, path, shreddedPaths);
+      }
+      return;
+    }
     for (Type field : group.getFields()) {
       collectShreddedVariantPaths(field, path + "." + field.getName().toLowerCase(Locale.ROOT), shreddedPaths);
     }
   }
 
   /**
-   * Whether two dotted paths touch the same data: equal, or one a dotted prefix of the other
-   * ({@code s.inner.x} reads inside {@code s.inner}, and {@code s} reads all of it).
+   * Whether {@code repeated}, the single child of a LIST group, is the 3-level layout's synthetic
+   * level rather than the element itself. This is parquet's backward-compatibility rule (the one
+   * AvroSchemaConverter applies as isElementType, negated): a repeated level that is a group with
+   * exactly one non-repeated field and a name that is not one of the legacy element names is the
+   * synthetic level; anything else is a 2-level layout's element, whose members are user fields.
    */
-  private static boolean pathsOverlap(String left, String right) {
-    return left.equals(right) || left.startsWith(right + ".") || right.startsWith(left + ".");
+  private static boolean isSyntheticListLevel(Type repeated) {
+    if (repeated.isPrimitive()) {
+      return false;
+    }
+    GroupType group = repeated.asGroupType();
+    String name = repeated.getName().toLowerCase(Locale.ROOT);
+    return group.getFieldCount() == 1
+        && !group.getType(0).isRepetition(Type.Repetition.REPEATED)
+        && !"array".equals(name)
+        && !name.endsWith("_tuple");
   }
 }

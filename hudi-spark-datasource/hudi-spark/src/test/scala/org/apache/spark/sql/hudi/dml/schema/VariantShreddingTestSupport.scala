@@ -112,7 +112,7 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
    * production writer that shreds a variant BELOW the top level, so every nested-shredding leg
    * needs exactly this table and this seed row.
    */
-  protected def createNestedVariantRowWriterTable(tableName: String, tablePath: String): Unit = {
+  private def createNestedVariantRowWriterTable(tableName: String, tablePath: String): Unit = {
     spark.sql(
       s"""
          |create table $tableName (
@@ -259,7 +259,7 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
    * shredded object fields are left out: they hold the rows that fell back, so counting them
    * would let a file with every field fallen back pass as shredded.
    */
-  protected def typedValueNonNullCount(filePath: String, column: String): Long = {
+  private def typedValueNonNullCount(filePath: String, column: String): Long = {
     val conf = spark.sparkContext.hadoopConfiguration
     val inputFile = HadoopInputFile.fromPath(new HadoopPath(filePath), conf)
     val reader = ParquetFileReader.open(inputFile)
@@ -571,7 +571,7 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   // ---------------------------------------------------------------------------------------------
 
   /** The three write-side variant layout configs for a [[WriteLayout]]. */
-  protected def layoutConfs(layout: WriteLayout): Seq[(String, String)] = layout match {
+  private def layoutConfs(layout: WriteLayout): Seq[(String, String)] = layout match {
     case Unshredded => Seq(
       WRITE_SHREDDING_KEY -> "false",
       FORCE_SCHEMA_KEY -> "",

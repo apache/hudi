@@ -41,6 +41,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -124,6 +126,60 @@ public class HoodieColumnProjectionUtils {
       }
     }
     return result;
+  }
+
+  /**
+   * The top-level columns among {@code shreddedPaths} whose read actually materializes a shredded
+   * variant group, given Hive's nested column pruning (see
+   * {@link #READ_NESTED_COLUMN_PATH_CONF_STR}). Hive's read column names are top-level only, so a
+   * requested struct column does not imply its whole interior: a column with nested paths
+   * configured is flagged only when one of them overlaps a shredded path, while a column with none
+   * is read whole and is always flagged.
+   *
+   * @param conf          the read's configuration, carrying the nested column paths
+   * @param shreddedPaths lower-cased Hive-form dotted paths, each starting at the top-level column
+   *                      that holds the shredded group ({@code v}, {@code s.inner}, or {@code a}
+   *                      for a variant that is the element of the list column {@code a}: Hive
+   *                      never emits a path through a LIST or MAP, it truncates at the column)
+   * @return the flagged column names, first-seen order; empty when the read reaches none of them
+   */
+  static List<String> columnsReadingShreddedPaths(Configuration conf, List<String> shreddedPaths) {
+    if (shreddedPaths.isEmpty()) {
+      return Collections.emptyList();
+    }
+    // Hive's nested column pruning, keyed by the top-level column each dotted path starts at.
+    Map<String, List<String>> nestedPathsByColumn = new HashMap<>();
+    for (String path : getNestedColumnPaths(conf)) {
+      String lowerPath = path.toLowerCase(Locale.ROOT);
+      nestedPathsByColumn.computeIfAbsent(topLevelColumnOf(lowerPath), k -> new ArrayList<>()).add(lowerPath);
+    }
+    List<String> columns = new ArrayList<>();
+    for (String shreddedPath : shreddedPaths) {
+      String column = topLevelColumnOf(shreddedPath);
+      if (columns.contains(column)) {
+        continue;
+      }
+      List<String> readPaths = nestedPathsByColumn.get(column);
+      // No nested path configured for the column: it is read whole, shredded group included.
+      if (readPaths == null || readPaths.stream().anyMatch(read -> pathsOverlap(read, shreddedPath))) {
+        columns.add(column);
+      }
+    }
+    return columns;
+  }
+
+  /** The top-level column a dotted path starts at. */
+  private static String topLevelColumnOf(String path) {
+    int firstDot = path.indexOf('.');
+    return firstDot < 0 ? path : path.substring(0, firstDot);
+  }
+
+  /**
+   * Whether two dotted paths touch the same data: equal, or one a dotted prefix of the other
+   * ({@code s.inner.x} reads inside {@code s.inner}, and {@code s} reads all of it).
+   */
+  static boolean pathsOverlap(String left, String right) {
+    return left.equals(right) || left.startsWith(right + ".") || right.startsWith(left + ".");
   }
 
   public static List<String> getIOColumns(Configuration conf) {

@@ -547,7 +547,7 @@ public class InputFormatTestUtil {
   }
 
   /** A shredded variant schema whose typed_value carries one string field {@code key}. */
-  public static HoodieSchema.Variant shreddedVariantSchema() {
+  static HoodieSchema.Variant shreddedVariantSchema() {
     return HoodieSchema.createVariantShreddedObject(
         Collections.singletonMap("key", HoodieSchema.create(HoodieSchemaType.STRING)));
   }
@@ -599,9 +599,25 @@ public class InputFormatTestUtil {
    * {@code inner} member is a shredded variant: the shape the row writer produces at depth.
    */
   public static StoragePath writeNestedShreddedVariantParquetFile(java.nio.file.Path dir, String fileName) throws IOException {
+    return writeNestedShreddedVariantParquetFile(dir, fileName, false);
+  }
+
+  /**
+   * As {@link #writeNestedShreddedVariantParquetFile(java.nio.file.Path, String)}, optionally
+   * giving {@code s} a second member {@code other}: a plain struct whose only field is named
+   * {@code typed_value}, i.e. a user struct that must not be mistaken for a variant group.
+   */
+  public static StoragePath writeNestedShreddedVariantParquetFile(java.nio.file.Path dir, String fileName,
+                                                                  boolean withTypedValueSibling) throws IOException {
     HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
-    HoodieSchema structWithShredded = HoodieSchema.createRecord("s_t", null, null,
-        Collections.singletonList(HoodieSchemaField.of("inner", shreddedVariant)));
+    HoodieSchema siblingSchema = HoodieSchema.createRecord("other_t", null, null,
+        Collections.singletonList(HoodieSchemaField.of("typed_value", HoodieSchema.create(HoodieSchemaType.STRING))));
+    List<HoodieSchemaField> structFields = new ArrayList<>();
+    structFields.add(HoodieSchemaField.of("inner", shreddedVariant));
+    if (withTypedValueSibling) {
+      structFields.add(HoodieSchemaField.of("other", siblingSchema));
+    }
+    HoodieSchema structWithShredded = HoodieSchema.createRecord("s_t", null, null, structFields);
     HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
         HoodieSchemaField.of("s", structWithShredded)));
@@ -610,6 +626,11 @@ public class InputFormatTestUtil {
              new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
       GenericRecord struct = new GenericData.Record(structWithShredded.toAvroSchema());
       struct.put("inner", variantValue(shreddedVariant, true));
+      if (withTypedValueSibling) {
+        GenericRecord sibling = new GenericData.Record(siblingSchema.toAvroSchema());
+        sibling.put("typed_value", "s1");
+        struct.put("other", sibling);
+      }
       GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
       record.put("id", 1);
       record.put("s", struct);
@@ -628,23 +649,46 @@ public class InputFormatTestUtil {
    * put it at {@code a.list.element}. Either is fine for the guard, which walks every child group.
    */
   public static StoragePath writeArrayShreddedVariantParquetFile(java.nio.file.Path dir, String fileName) throws IOException {
+    return writeArrayShreddedVariantParquetFile(dir, fileName, false);
+  }
+
+  /**
+   * As {@link #writeArrayShreddedVariantParquetFile(java.nio.file.Path, String)}, optionally
+   * wrapping the element in a {@code struct<key:string, value:<variant>>}. On the 2-level layout
+   * the repeated group IS that element, so its member named {@code value} is a user field holding
+   * the shredded variant, not a collection level: the group must land at {@code a.value}.
+   */
+  public static StoragePath writeArrayShreddedVariantParquetFile(java.nio.file.Path dir, String fileName,
+                                                                 boolean wrapElementInStruct) throws IOException {
     HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
+    HoodieSchema elementSchema = wrapElementInStruct
+        ? HoodieSchema.createRecord("a_t", null, null, Arrays.asList(
+            HoodieSchemaField.of("key", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("value", shreddedVariant)))
+        : shreddedVariant;
     HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
-        HoodieSchemaField.of("a", HoodieSchema.createArray(shreddedVariant))));
+        HoodieSchemaField.of("a", HoodieSchema.createArray(elementSchema))));
     java.nio.file.Path file = dir.resolve(fileName);
     try (AvroParquetWriter<GenericRecord> writer =
              new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+      GenericRecord element = variantValue(shreddedVariant, true);
+      if (wrapElementInStruct) {
+        GenericRecord wrapper = new GenericData.Record(elementSchema.toAvroSchema());
+        wrapper.put("key", "k1");
+        wrapper.put("value", element);
+        element = wrapper;
+      }
       GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
       record.put("id", 1);
-      record.put("a", Collections.singletonList(variantValue(shreddedVariant, true)));
+      record.put("a", Collections.singletonList(element));
       writer.write(record);
     }
     return new StoragePath(file.toUri().toString());
   }
 
   /** A value of {@code variantSchema}: typed ({@code key = "k1"}) when asked, a residual value otherwise. */
-  public static GenericRecord variantValue(HoodieSchema.Variant variantSchema, boolean populateTypedValue) {
+  static GenericRecord variantValue(HoodieSchema.Variant variantSchema, boolean populateTypedValue) {
     GenericRecord variant = new GenericData.Record(variantSchema.toAvroSchema());
     variant.put("metadata", ByteBuffer.wrap(new byte[] {1}));
     if (populateTypedValue) {

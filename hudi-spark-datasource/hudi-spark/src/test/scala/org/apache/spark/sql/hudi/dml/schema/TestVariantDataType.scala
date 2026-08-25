@@ -383,6 +383,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath
+      val leg = "shredded clustering"
       // Clustering rewrites ALL rows of the clustered file groups through the internal
       // write-side reader context (SparkReaderContextFactory ->
       // SparkFileFormatInternalRowReaderContext), the stack whose blob handling silently
@@ -405,17 +406,10 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
         "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
         "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
 
-      // The pre-clustering base file must actually carry the shredded layout; without this
-      // check the test silently degrades into the unshredded twin below if the forced
-      // shredding schema ever stops taking effect.
-      val preClusteringFiles = listDataParquetFiles(tablePath)
-      assert(preClusteringFiles.nonEmpty, "Should have at least one data parquet file before clustering")
-      preClusteringFiles.foreach { filePath =>
-        val parquetSchema = readParquetSchema(filePath)
-        val variantGroup = getFieldAsGroup(parquetSchema, "v")
-        assert(variantGroup.containsField("typed_value"),
-          s"Pre-clustering base file should carry typed_value. Schema:\n$variantGroup")
-      }
+      // Pin the layout: these files must carry typed_value, or this test silently degrades
+      // into the unshredded twin below if the forced shredding schema ever stops taking
+      // effect.
+      assertVariantLayout(tablePath, shredded = true, leg)
 
       // Second commit trips inline clustering (max.commits = 2), which rewrites the rows
       // of the first commit too.
@@ -423,13 +417,9 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
         "(3, parse_json('{\"key\":\"value3\"}'), 1000), " +
         "(4, parse_json('{\"key\":\"value4\"}'), 1000)")
 
-      // getLastClusteringInstant filters by action only, so a REQUESTED/INFLIGHT instant
-      // satisfies isPresent; isCompleted confirms the rewrite finished.
-      val metaClient = createMetaClient(spark, tablePath)
-      val lastClustering = metaClient.getActiveTimeline.getLastClusteringInstant
-      assert(lastClustering.isPresent && lastClustering.get.isCompleted,
-        "A COMPLETED clustering (replacecommit) instant must exist after inline clustering; " +
-          "without a completed rewrite the round-trip below proves nothing")
+      // Asserts a COMPLETED replacecommit exists: without a finished rewrite the round trip
+      // below proves nothing.
+      completedClusteringInstant(tablePath, leg)
 
       checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
         Seq(1, "{\"key\":\"value1\"}", 1000),

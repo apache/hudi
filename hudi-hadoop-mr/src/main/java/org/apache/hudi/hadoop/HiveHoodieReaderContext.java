@@ -159,16 +159,25 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // footer schema and anchored on the requested column being a variant, so plain user structs
     // of the same shape are left alone. toShreddedReadSchema recurses through structs, array
     // elements and map values, matching the row writer, which shreds nested variants too.
-    // Columns not requested (e.g. count(*)) stay readable.
+    // Columns not requested (e.g. count(*)) stay readable, and so does a read whose nested column
+    // paths (hive.io.file.readNestedColumn.paths) all miss the shredded group: Hive's parquet
+    // reader materializes only the paths it is given, and the mask rewrite below already handles
+    // the compacted projection such a read comes back in.
     if (isParquetOrOrc && requiredSchema.getType() == HoodieSchemaType.RECORD) {
       HoodieSchema shreddedReadSchema = VariantSchemaUtils.toShreddedReadSchema(requiredSchema, fileSchema);
       if (shreddedReadSchema != requiredSchema) {
-        throw new HoodieException(String.format(
-            "Column(s) '%s' of %s hold a shredded variant (typed_value present); the Hive reader "
-                + "cannot reconstruct shredded variants. Read the table with Spark 4.1+, or "
-                + "rewrite it unshredded (e.g. cluster with "
-                + "hoodie.parquet.variant.write.shredding.enabled=false).",
-            shreddedVariantColumns(requiredSchema, shreddedReadSchema), filePath));
+        List<String> shreddedPaths = new ArrayList<>();
+        collectShreddedVariantPaths(requiredSchema, shreddedReadSchema, "", shreddedPaths);
+        List<String> offendingColumns = HoodieColumnProjectionUtils.columnsReadingShreddedPaths(
+            storage.getConf().unwrapAs(Configuration.class), shreddedPaths);
+        if (!offendingColumns.isEmpty()) {
+          throw new HoodieException(String.format(
+              "Column(s) '%s' of %s hold a shredded variant (typed_value present); the Hive reader "
+                  + "cannot reconstruct shredded variants. Read the table with Spark 4.1+, or "
+                  + "rewrite it unshredded (e.g. cluster with "
+                  + "hoodie.parquet.variant.write.shredding.enabled=false).",
+              String.join(", ", offendingColumns), filePath));
+        }
       }
     }
 
@@ -215,20 +224,57 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   /**
-   * Names the top-level columns whose subtree {@code toShreddedReadSchema} swapped, i.e. the
-   * requested columns that hold a shredded variant somewhere below them. Untouched columns keep
-   * their schema instance across the swap, so identity comparison is exact.
+   * Collects into {@code paths} the Hive-form dotted path of every variant node
+   * {@link VariantSchemaUtils#toShreddedReadSchema} swapped, i.e. every requested variant the file
+   * holds shredded. {@code shreddedRead} is {@code required} with exactly those nodes replaced by
+   * their on-disk form, so the two are walked in parallel from {@code path}. Only record fields add
+   * a segment: Hive truncates its nested column paths at a LIST or MAP column, so an array element
+   * and a map value share their column's path, matching the paths the legacy guard collects.
    */
-  private static String shreddedVariantColumns(HoodieSchema requestedSchema, HoodieSchema shreddedReadSchema) {
-    List<HoodieSchemaField> before = requestedSchema.getFields();
-    List<HoodieSchemaField> after = shreddedReadSchema.getFields();
-    List<String> columns = new ArrayList<>();
-    for (int i = 0; i < before.size(); i++) {
-      if (before.get(i).schema() != after.get(i).schema()) {
-        columns.add(before.get(i).name());
-      }
+  private static void collectShreddedVariantPaths(HoodieSchema required, HoodieSchema shreddedRead,
+                                                  String path, List<String> paths) {
+    HoodieSchema requiredNode = required.getNonNullType();
+    HoodieSchema readNode = shreddedRead.getNonNullType();
+    if (requiredNode.getType() == HoodieSchemaType.VARIANT && isShreddedVariantNode(readNode)) {
+      paths.add(path);
+      return;
     }
-    return String.join(", ", columns);
+    if (requiredNode.getType() != readNode.getType()) {
+      return;
+    }
+    switch (requiredNode.getType()) {
+      case RECORD:
+        for (HoodieSchemaField field : requiredNode.getFields()) {
+          Option<HoodieSchemaField> readField = readNode.getField(field.name());
+          if (readField.isPresent()) {
+            String name = field.name().toLowerCase(Locale.ROOT);
+            collectShreddedVariantPaths(field.schema(), readField.get().schema(),
+                path.isEmpty() ? name : path + "." + name, paths);
+          }
+        }
+        break;
+      case ARRAY:
+        collectShreddedVariantPaths(requiredNode.getElementType(), readNode.getElementType(), path, paths);
+        break;
+      case MAP:
+        collectShreddedVariantPaths(requiredNode.getValueType(), readNode.getValueType(), path, paths);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Whether this is the on-disk, typed_value-bearing form {@code toShreddedReadSchema} swaps in: a
+   * variant that kept its logical type answers directly, while a footer-derived one comes back as
+   * a plain record and is recognised by its {@code typed_value} member.
+   */
+  private static boolean isShreddedVariantNode(HoodieSchema schema) {
+    if (schema.getType() == HoodieSchemaType.VARIANT) {
+      return ((HoodieSchema.Variant) schema).isShredded();
+    }
+    return schema.getType() == HoodieSchemaType.RECORD
+        && schema.getField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD).isPresent();
   }
 
   @Override
