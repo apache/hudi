@@ -322,6 +322,22 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
   }
 
   @Test
+  public void testByteCapIsBoundedByTheSharedMaximum() throws IOException {
+    // The cap is min(MAX_BUFFERED_BYTES, maxFileSize): a file size limit above 64MB must not lift
+    // the buffer above 64MB. One UnsafeRow reporting exactly the maximum meets it on its own. The
+    // row is really allocated: the decorator copies it, and copy() reads sizeInBytes bytes.
+    List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
+    VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN, map -> {
+      factoryCalls.add(map);
+      return new RecordingRowWriter();
+    }, Long.MAX_VALUE);
+
+    writer.writeRow(unsafeRow(1, (int) VariantShreddingInferenceFileWriter.MAX_BUFFERED_BYTES));
+    assertEquals(1, factoryCalls.size(), "a row at the shared maximum materializes whatever the file size limit");
+    writer.close();
+  }
+
+  @Test
   public void testEstimatedByteCapTriggersEarlyMaterialization() throws IOException {
     // Non-UnsafeRow rows go through the size estimator; a 1-byte cap is exceeded by any row.
     List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
@@ -392,12 +408,17 @@ public class TestVariantShreddingInferenceInternalRowFileWriter {
     RecordingRowWriter delegate = new RecordingRowWriter();
     IOException boom = new IOException("replay failed");
     delegate.failWriteWith = boom;
+    IOException closeBoom = new IOException("close failed");
+    delegate.failCloseWith = closeBoom;
     VariantShreddingInferenceInternalRowFileWriter writer = writer(ABSENT_COLUMN, map -> delegate, Long.MAX_VALUE);
 
     writer.writeRow(row(1));
-    assertSame(boom, assertThrows(IOException.class, writer::close));
-    // Created but never closed by the try path, so the catch path closes it exactly once.
+    IOException fromClose = assertThrows(IOException.class, writer::close);
+    assertSame(boom, fromClose);
+    // Created but never closed by the try path, so the catch path closes it exactly once, and a
+    // failure of that close rides along as suppressed rather than replacing or hiding boom.
     assertEquals(1, delegate.closeCount);
+    assertSame(closeBoom, fromClose.getSuppressed()[0]);
     assertSame(boom, assertThrows(IOException.class, () -> writer.writeRow(row(2))));
   }
 

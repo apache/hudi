@@ -35,6 +35,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -206,6 +207,26 @@ public class TestVariantShreddingInferenceFileWriter {
     writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS);
     // A 1-byte cap is exceeded by any record.
     assertEquals(1, factoryCalls.size());
+    writer.close();
+  }
+
+  @Test
+  public void testByteCapIsBoundedByTheSharedMaximum() throws IOException {
+    // The cap is min(MAX_BUFFERED_BYTES, maxFileSize): a file size limit above 64MB must not lift
+    // the buffer above 64MB. One record estimating at least the maximum meets it on its own.
+    byte[] payload = new byte[(int) VariantShreddingInferenceFileWriter.MAX_BUFFERED_BYTES];
+    Arrays.fill(payload, (byte) 'x');
+    HoodieRecord record = newRecord(new String(payload, StandardCharsets.ISO_8859_1));
+    assertTrue(new DefaultSizeEstimator<HoodieRecord>().sizeEstimate(record) >= VariantShreddingInferenceFileWriter.MAX_BUFFERED_BYTES);
+    List<Map<String, HoodieSchema>> factoryCalls = new ArrayList<>();
+    VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
+        map -> {
+          factoryCalls.add(map);
+          return new RecordingWriter();
+        }, Long.MAX_VALUE);
+
+    writer.write("r1", record, RECORD_SCHEMA, PROPS);
+    assertEquals(1, factoryCalls.size(), "a record at the shared maximum materializes whatever the file size limit");
     writer.close();
   }
 
@@ -393,14 +414,18 @@ public class TestVariantShreddingInferenceFileWriter {
     RecordingWriter delegate = new RecordingWriter();
     IOException boom = new IOException("replay failed");
     delegate.failWriteWith = boom;
+    IOException closeBoom = new IOException("close failed");
+    delegate.failCloseWith = closeBoom;
     VariantShreddingInferenceFileWriter<Object> writer = writer((columns, samples) -> Collections.emptyMap(),
         map -> delegate, Long.MAX_VALUE);
 
     writer.write("r1", newRecord("r1"), RECORD_SCHEMA, PROPS);
     IOException fromClose = assertThrows(IOException.class, writer::close);
     assertSame(boom, fromClose);
-    // The delegate was created but never closed by the try path, so the catch path closes it once.
+    // The delegate was created but never closed by the try path, so the catch path closes it once,
+    // and a failure of that close rides along as suppressed rather than replacing or hiding boom.
     assertEquals(1, delegate.closeCount);
+    assertSame(closeBoom, fromClose.getSuppressed()[0]);
     // Latched: the buffered record was never written, so every later call keeps failing.
     assertSame(boom, assertThrows(IOException.class, () -> writer.write("r2", newRecord("r2"), RECORD_SCHEMA, PROPS)));
     assertSame(boom, assertThrows(HoodieIOException.class, writer::getFileFormatMetadata).getCause());

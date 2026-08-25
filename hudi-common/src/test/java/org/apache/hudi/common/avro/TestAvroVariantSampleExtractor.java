@@ -44,6 +44,7 @@ import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -132,11 +133,20 @@ public class TestAvroVariantSampleExtractor {
 
   @Test
   public void testSharedSizeIsTheSchemaGraphMemoizedPerSchema() {
-    // The Avro Schema every materialized record references is charged once, not per record.
+    // The Avro Schema every materialized record references is charged once, not per record, and
+    // the memo is keyed on the schema instance: another schema measures its own graph, and the
+    // first schema measures as before once it is back.
     AvroVariantSampleExtractor extractor = new AvroVariantSampleExtractor(singletonList("v"));
     long shared = extractor.sharedSizeEstimate(SCHEMA);
     assertEquals(ObjectSizeCalculator.getObjectSize(SCHEMA.toAvroSchema()), shared);
     assertTrue(shared > 0);
+    HoodieSchema other = HoodieSchema.createRecord("other", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("v", HoodieSchema.createVariant()),
+        HoodieSchemaField.of("extra", HoodieSchema.create(HoodieSchemaType.LONG))));
+    long otherShared = extractor.sharedSizeEstimate(other);
+    assertEquals(ObjectSizeCalculator.getObjectSize(other.toAvroSchema()), otherShared);
+    assertNotEquals(shared, otherShared);
     assertEquals(shared, extractor.sharedSizeEstimate(SCHEMA));
   }
 
