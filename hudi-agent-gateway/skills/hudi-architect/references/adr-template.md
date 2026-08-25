@@ -59,7 +59,7 @@ Two distinct categories — keep them separate.
 
 **Assumptions** — what the Architect inferred when the user was silent or a question didn't fire at this tier. These are unverified.
 - e.g., "Assumed daily partition granularity for date-based partitioning."
-- e.g., "Assumed single writer — the writer question did not fire at this tier and no other writing job was mentioned." (If the user *declared* additional writers, that is a **confirmed fact** for §2 plus an OCC requirement and a §13 blocking open question — never file it as an assumption.)
+- e.g., "Assumed single writer — EXPLORATION tier, where the writer question does not fire." This is the *only* tier at which single-writer may be an assumption; everywhere else Q1.7 asks, so the answer belongs in §2 as a confirmed fact either way. If the user *declared* additional writers, that is a confirmed fact plus a derived concurrency mode and provider — never file it as an assumption.
 - e.g., "Consumer read patterns not captured at this tier — Vice 1 alignment unverified."
 
 If a tier skipped a question that gates a durable decision, say so here explicitly. A reader must be able to tell which parts of the design were checked and which were guessed.
@@ -88,7 +88,10 @@ services:
   compaction: async in-process, every 5 delta commits
   clustering: OFF (revisit if fragmentation grows)
 metadata_table: enabled
-concurrency: SINGLE_WRITER
+concurrency: SINGLE_WRITER          # or OPTIMISTIC_CONCURRENCY_CONTROL / NON_BLOCKING_CONCURRENCY_CONTROL
+# when multi-writer, also record:
+#   writers: <inventory>
+#   lock_provider: <FQCN>             # omit for NBCC
 \`\`\`
 
 ## 5. Key Design Decisions
@@ -132,6 +135,8 @@ Structured table listing every one-way decision:
 | Bucket count (BUCKET index only) | Fixed at creation | Table rewrite | If key cardinality outgrows the bucket count |
 | RLI file-group count (RLI only) | Fixed when the index initializes | Table rewrite | If record count approaches the sized projection |
 | ...include only decisions relevant to this design... |
+
+**Concurrency mode is NOT a durable decision — but NBCC eligibility is.** `hoodie.write.concurrency.mode` can be changed on a live table, so it does not belong in this table. What does, when the design is NBCC, is the bucket count that makes NBCC legal at all: NBCC requires MOR + simple bucket index, and the bucket count is fixed at creation. Record it as the bucket-count row, and note in §5 that the concurrency mode is riding on a durable decision even though the mode itself is switchable. Never let this reasoning run backwards — reshaping a table to make NBCC possible trades a reversible choice for an irreversible one.
 
 **Do not describe an RLI as a fully reversible choice.** *Adding* a record index later is free (async build via `HoodieIndexer`, no rewrite). *Resizing* an initialized one is not — the file-group count is durable, like bucket count. If the design emits RLI config, the count belongs in this table.
 
@@ -210,6 +215,13 @@ Practical guidance for running this table:
 - Active timeline entry count (must stay under ~5000).
 - Small-file ratio.
 - Cleaner + archival activity.
+- **Multi-writer only:** lock acquisition failures and commit-conflict retries. A rising conflict rate means the writers are contending on the same file groups — a partitioning or key-space question, not a lock-tuning one.
+
+**Multi-writer operating rules** (include only when the design is OCC or NBCC):
+- The concurrency block is **part of every writing job's config**, not just the primary pipeline. A job that writes without it bypasses the lock entirely. This includes backfills, GDPR/cleanup jobs, and any standalone table-service job.
+- Adding a new writer later means applying the same block to it *before* its first commit.
+- With an explicit (non-implicit) lock provider, the lock identity values must match exactly across every job — verify them together, not job by job.
+- Do not switch a running multi-writer table to `SINGLE_WRITER` to "speed it up." The mode is switchable, but only after every concurrent writer is actually stopped.
 - MDT synchronization.
 - (Others per workload)
 
@@ -270,7 +282,18 @@ Anything the Architect couldn't fully resolve:
 - (User assumptions to validate)
 - (Unclear signals from workload)
 - (Deferred to Operations Agent)
-- (Deferred to future proposal versions — e.g., multi-writer)
+- (Deferred to future proposal versions)
+
+**Multi-writer pre-launch checklist** (when the design is OCC or NBCC). This is a checklist
+item, not an open question — the mode, the provider, and the full config are all decided. What
+remains is applying them:
+- [ ] The concurrency block is present in **every** job that writes this table — list them by name.
+- [ ] For OCC: the same `hoodie.write.lock.provider` on every side, with its required keys.
+- [ ] For an explicit lock provider only: the lock identity values (`lock_key` / `partition_key` / `base_path`) are byte-identical across jobs.
+- [ ] No writing job sets `hoodie.clean.failed.writes.policy=EAGER` — it is a hard validation failure under multi-writer modes.
+
+Escalate to a genuine open question only when a writer is named that this session could not
+inspect — e.g. a job owned by another team whose config the user cannot confirm.
 ```
 
 ## Notes on generation

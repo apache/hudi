@@ -157,11 +157,65 @@ Format for each: name, trigger condition, message template, when it fires.
 **Triggered when:** the design lands on a standalone `HoodieCompactor` job (MOR + a writer that can't run async compaction in-process — Spark DataSource, Spark SQL).
 
 **Message:**
-> "A separate compactor job means two processes write to this table, so `SINGLE_WRITER` is unsafe. Both jobs need `OPTIMISTIC_CONCURRENCY_CONTROL`, the same lock provider with identical configuration on both sides, and a matching failed-writes cleanup policy. Mismatched or missing lock config across the two jobs risks corruption. If setting up a lock provider isn't practical, use inline compaction instead and accept the per-batch latency."
+> "A separate compactor job means two processes write to this table, so `SINGLE_WRITER` is unsafe. Both jobs need `OPTIMISTIC_CONCURRENCY_CONTROL` and the same lock provider, configured identically on both sides. On AWS that's DynamoDB, and Hudi creates the lock table for you; if you already run ZooKeeper or a Hive Metastore, use that. If setting up locking isn't practical at all, use inline compaction instead and accept the per-batch latency."
 
 **When fires:** immediately when the standalone-compactor path is selected or recommended. Must appear in the ADR's operational playbook, not only in dialogue.
 
-Full multi-writer rubric (provider choice, OCC vs NBCC, conflict resolution) stays V2+. V1 owes the user the requirement, not the decision tree.
+Emit the concrete OCC block from config-templates.md → Concurrency for the deployment, in **both** jobs. Provider selection is decision-tables.md → Concurrency Step 3.
+
+### NBCC_INELIGIBLE
+
+**Triggered when:** the user asks for `NON_BLOCKING_CONCURRENCY_CONTROL` but the derived design fails the eligibility gate — table is not MOR, index is not BUCKET, table version < 8, or clustering is required.
+
+**Message:**
+> "NBCC needs a MOR table with simple bucket index, on table version 8 or later — Hudi's config validation rejects any other combination outright, so this would fail at write time rather than degrade. Your design is `<table_type>` + `<index>`. I'd recommend OCC here, which has no such restriction. I'm deliberately not reshaping the table to fit NBCC: bucket count is fixed at table creation, while the concurrency mode can be changed on a live table — trading a reversible decision for an irreversible one is the wrong way round."
+
+**When fires:** the moment NBCC is requested and the gate fails. Blocks the NBCC request, not the session — emit OCC and record the reason in the ADR.
+
+### NBCC_CLUSTERING_CONFLICT
+
+**Triggered when:** NBCC is otherwise eligible (MOR + BUCKET) AND clustering is wanted.
+
+**Message:**
+> "NBCC doesn't support clustering yet — the non-blocking path resolves conflicts between ingestion and compaction, but not with a clustering writer. Since clustering is part of this design, OCC is the right mode. If clustering is optional here, NBCC becomes available again."
+
+**When fires:** at the concurrency derivation, before emitting a mode. Not a hard block — the user may drop clustering.
+
+### STORAGE_LOCK_MATURITY
+
+**Triggered when:** `StorageBasedLockProvider` is selected — whether the Architect surfaced it as the only option without existing lock infrastructure, or the user asked for it by name.
+
+**Message:**
+> "One thing to know about this choice: the storage-based lock provider arrived in Hudi 1.0.2, which makes it years younger than the DynamoDB, ZooKeeper, and Hive Metastore providers. It isn't a thin wrapper either — it does lease renewal with a heartbeat and its own per-cloud lock clients, which is the kind of code whose edge cases surface under real contention and clock skew rather than in tests. There's no known defect here; it's an age argument. The zero-infrastructure story is genuinely the nicest of the options, so this is worth revisiting as it accumulates mileage. If you'd rather stay on well-trodden ground today, DynamoDB on AWS is the usual alternative and Hudi creates the lock table for you."
+
+**When fires:** at provider selection, once. **Not a hard block** — it is a maturity judgement, not a defect, and the user may reasonably accept it. Record the choice and the caveat in the ADR so a later reviewer sees it was deliberate. Do not re-raise it after the user has decided.
+
+### LOCK_PROVIDER_MISMATCH
+
+**Triggered when:** an **explicit** lock provider is chosen over its implicit variant — `ZookeeperBasedLockProvider` (needs `base_path` + `lock_key`) or `DynamoDBBasedLockProvider` (needs `partition_key`).
+
+**Message:**
+> "This provider takes its lock identity from config rather than deriving it from the table path, so every writing job has to set the same values by hand. If two jobs disagree — a different `lock_key`, a different `partition_key`, even `s3a://` on one side and `s3://` on the other — each takes out its own lock, every writer succeeds, and the table corrupts with nothing in any log. The implicit variant (`<implicit class>`) derives the identity from `hoodie.base.path` and makes that failure impossible. Use it unless you specifically need several tables to share one lock, or must match an existing deployment's lock identity."
+
+**When fires:** the moment an explicit provider is selected. Not a hard block — sharing a lock across tables is a legitimate reason — but the choice must land in the ADR with its rationale, and the pre-launch checklist must call for verifying the values match across every writing job.
+
+### FILESYSTEM_LOCK_UNSAFE
+
+**Triggered when:** `FileSystemBasedLockProvider` is selected and the table path is cloud storage (s3, s3a, gs, abfs, abfss, wasb, wasbs), or the deployment is production.
+
+**Message:**
+> "The filesystem lock provider isn't supported on cloud storage and isn't intended for production — it needs atomic filesystem semantics that object stores don't provide, so it can appear to work while granting the same lock twice. On cloud storage use `StorageBasedLockProvider` instead: same zero-infrastructure story, built for object-store semantics."
+
+**When fires:** immediately on selection. **Hard block** for cloud storage — this one silently appears to work, which is worse than failing.
+
+### OCC_INSERT_DUPLICATES
+
+**Triggered when:** OCC is derived AND any writer uses `INSERT` or `BULK_INSERT` (rather than `UPSERT`).
+
+**Message:**
+> "One caveat specific to multi-writer: with concurrent `INSERT`/`BULK_INSERT`, the table can end up with duplicates **even with dedup enabled**. Dedup applies within a writer's own batch; OCC's conflict detection is at file-group granularity and doesn't catch two writers inserting the same key into different file groups. If these writers can produce overlapping keys, use `UPSERT`, or partition the key space so no two writers ever touch the same key."
+
+**When fires:** at concurrency derivation, once the operation type per writer is known. Not a hard block — many multi-writer deployments have disjoint key spaces by construction — but it must be answered rather than assumed.
 
 ### THREE_CONCURRENT_SERVICES
 

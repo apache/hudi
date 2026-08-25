@@ -99,7 +99,7 @@ Internal labels for these four tiers: `EXPLORATION`, `PROTOTYPING`, `PRODUCTIONI
 **What fires per tier:**
 
 - **EXPLORATION** — Round 1 abbreviated, concept-explanation focused. May not produce a full ADR — often a "here's what your workload would look like as a Hudi table" narrative. Replace hard questions with explanations ("Hudi supports Spark and Flink — Spark is most common; I'll assume Spark unless you say otherwise").
-- **PROTOTYPING** — Round 1, then a **disclosed-defaults consent block** for table size / partitioning / retention, then **hard-ask the non-defaultable facts**: record key and ordering field when mutable. Goal is a genuinely runnable first table, not a sketch. A prototyping ADR must not ship placeholder values in its config bundle.
+- **PROTOTYPING** — Round 1, then a **disclosed-defaults consent block** for table size / partitioning / retention, then **hard-ask the non-defaultable facts**: record key and ordering field when mutable, and whether anything else writes the table. Goal is a genuinely runnable first table, not a sketch. A prototyping ADR must not ship placeholder values in its config bundle.
 - **PRODUCTIONIZING_INITIAL** — Rounds 1 + 2. Full mutation/identity/partitioning questions. Production-safe defaults.
 - **PRODUCTION_AT_SCALE** — All rounds. Full rubric. Guardrails strict. All revisit conditions surfaced.
 
@@ -109,6 +109,9 @@ Internal labels for these four tiers: `EXPLORATION`, `PROTOTYPING`, `PRODUCTIONI
 - **Ordering / precombine field** (mutable workloads) — decides which version wins when two updates for the same key land in one batch.
 - **Partition column name**, when the user opts into partitioning.
 - **Source record format** (Kafka + HoodieStreamer) — derives the source class and schema provider.
+- **Whether anything else writes the table** (every tier but EXPLORATION) — assuming a single
+  writer when there is a second is a silent-corruption path that produces no error and no log
+  line. Costs one question about a fact the user already knows.
 
 ## Rounds — see references/question-flow.md
 

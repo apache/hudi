@@ -86,10 +86,11 @@ This is **Milestone 1 of a longer arc** — meant to be shareable and playable, 
 2. **Check the warnings fire when they should.** Try configurations that should trigger Vice 1/2/3, the high-cardinality-partition trap, or the compaction-target-IO trap. Do the warnings surface at the right moment?
 3. **Try the tier gate at all four levels.** The `EXPLORATION` mode should feel like a Hudi tutor, not a design advisor. The `PRODUCTION_AT_SCALE` mode should feel rigorous. If either feels wrong, that's a signal.
 4. **Read the ADR output.** Are the revisit conditions actually measurable? Do the durability tables cover the one-way decisions relevant to your workload?
+5. **Declare a second writer.** Answer "yes" to the other-writers question and check the result: is the lock provider one you'd actually deploy, is the emitted block complete enough to paste into a second job, and does the pre-launch checklist name every job you'd have to touch?
 
 ## What's out of scope in Milestone 1
 
-- Multi-writer / concurrency (OCC, NBCC, lock providers) — deferred to a later pipeline-modeling rubric.
+- Multi-writer contention tuning — the mode, lock provider, and config bundle are derived, but retry/timeout tuning and early conflict detection stay at defaults (they depend on observed behavior, not design-time facts).
 - Benchmarking / scale-characterization — different flow shape, future revision.
 - CONSISTENT_HASHING bucket recommendations at design time.
 - Partial-update MERGE nudging (Spark SQL only).
@@ -99,7 +100,7 @@ This is **Milestone 1 of a longer arc** — meant to be shareable and playable, 
 ## Longer arc
 
 - **M1 (this)** — Skill-shaped shareable version for colleague/community review.
-- **M2** — Sort out pending items (concurrency, benchmarking, session persistence, etc.).
+- **M2** — Sort out pending items (benchmarking, session persistence, etc.).
 - **M3** — Feedback incorporation from reviewers.
 - **M4** — Integration into Hudi's Agentic Lakehouse (`hudi-agent-gateway`) — see [discussion #19264](https://github.com/apache/hudi/discussions/19264).
 

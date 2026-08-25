@@ -65,6 +65,10 @@ SOURCE_GLOBS = [
     "hudi-spark-datasource/**/src/main/**/*.java",
     "hudi-flink-datasource/**/src/main/**/*.java",
     "hudi-sync/**/src/main/**/*.java",
+    # Cloud lock providers live in their own modules; the multi-writer references
+    # emit hoodie.write.lock.dynamodb.* keys defined only here.
+    "hudi-aws/src/main/**/*.java",
+    "hudi-gcp/src/main/**/*.java",
 ]
 
 MARKDOWN_FILES = [SKILL_DIR / "SKILL.md"] + sorted((SKILL_DIR / "references").glob("*.md"))
