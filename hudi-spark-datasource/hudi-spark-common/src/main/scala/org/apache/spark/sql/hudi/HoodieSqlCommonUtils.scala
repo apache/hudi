@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstantTimeGenerator, Hoodie
 import org.apache.hudi.common.table.timeline.TimelineUtils.parseDateFromInstantTime
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.storage.{HoodieStorage, StoragePath, StoragePathInfo}
 import org.apache.hudi.util.SparkConfigUtils
 
@@ -437,13 +438,13 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
    * requested by `hoodie.datasource.write.slash.separated.date.partitioning`, mirroring the
    * substitution the write path performs in `KeyGenUtils#getRecordPartitionPath`.
    *
-   * A value with a leading dash is returned as-is: substituting would make the partition path start
-   * with "/", and an absolute relative-partition-path is resolved inconsistently -- the writer and
-   * the file-system view disagree on where such a partition lives. Such a value is not a date to
-   * begin with, so nothing is lost by not slashing it.
+   * The path-breaking values the writer refuses to slash are refused here for the same reasons, by
+   * asking [[KeyGenUtils#hasPathBreakingDash]] rather than restating the rule: these commands have
+   * to name the directory the writer created, so the two have to agree on every value, not just on
+   * the dates. See that method for what each excluded case does to the path.
    */
   private def toSlashSeparatedDate(partitionValue: String): String = {
-    if (partitionValue.startsWith("-")) partitionValue else partitionValue.replace('-', '/')
+    if (KeyGenUtils.hasPathBreakingDash(partitionValue)) partitionValue else partitionValue.replace('-', '/')
   }
 
   def makePartitionPath(hoodieCatalogTable: HoodieCatalogTable,

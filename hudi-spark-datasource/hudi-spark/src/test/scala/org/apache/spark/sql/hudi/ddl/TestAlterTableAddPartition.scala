@@ -271,4 +271,57 @@ class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
         "Partition metadata already exists for path")
     }
   }
+
+  test("Add partition leaves path breaking values alone under slash separated date partitioning") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id bigint,
+           |  name string,
+           |  ts string,
+           |  dt string
+           | )
+           | using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts',
+           |  hoodie.datasource.write.slash.separated.date.partitioning = 'true'
+           | )
+           | partitioned by (dt)
+           | location '$tablePath'
+           |""".stripMargin)
+
+      // NOTE: The writer refuses to slash these values -- see [[KeyGenUtils#hasPathBreakingDash]]
+      //       for what each one does to the path -- so the DDL command has to refuse them too, or
+      //       it creates a directory the writer would never have named
+      spark.sql(s"alter table $tableName add partition (dt='..-a')")
+      assertTrue(new File(tablePath, "..-a").exists(),
+        "ADD PARTITION should create the literal directory, not a dot segment")
+      // "../a" would resolve to a sibling of the table directory
+      assertFalse(new File(tmp.getCanonicalPath, "a").exists(),
+        "ADD PARTITION must not create a directory outside the table base path")
+
+      // "2026/" is normalized back to "2026" by StoragePath#normalize
+      spark.sql(s"alter table $tableName add partition (dt='2026-')")
+      assertTrue(new File(tablePath, "2026-").exists(),
+        "ADD PARTITION should keep a trailing dash")
+      assertFalse(new File(tablePath, "2026").exists(),
+        "ADD PARTITION should not drop a trailing dash by way of a trailing slash")
+
+      // "a//b" is collapsed to "a/b" by URI#normalize
+      spark.sql(s"alter table $tableName add partition (dt='a--b')")
+      assertTrue(new File(tablePath, "a--b").exists(),
+        "ADD PARTITION should keep a doubled dash")
+      assertFalse(new File(tablePath, "a").exists(),
+        "ADD PARTITION should not split a doubled dash into nested directories")
+
+      // a single interior dash is still a separator
+      spark.sql(s"alter table $tableName add partition (dt='2026-02-06')")
+      assertTrue(new File(tablePath, "2026/02/06").exists(),
+        "ADD PARTITION should still slash a well formed date")
+    }
+  }
 }
