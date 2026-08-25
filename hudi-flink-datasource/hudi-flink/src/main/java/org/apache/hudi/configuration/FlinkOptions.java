@@ -354,11 +354,14 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
 
   @AdvancedConfig
-  public static final ConfigOption<Boolean> INDEX_RLI_CACHE_ROCKSDB_ENABLED = ConfigOptions
-      .key("index.rli.cache.rocksdb.enabled")
-      .booleanType()
-      .defaultValue(false)
-      .withDescription("Enable RocksDB-based partitioned cache for record level index lookups, default false.");
+  public static final ConfigOption<String> INDEX_RLI_BACKEND_TYPE = ConfigOptions
+      .key("index.rli.backend.type")
+      .stringType()
+      .defaultValue("mdt")
+      .withDescription("The backend used to serve record level index lookups. Supported values are "
+          + "mdt (default), which reads the record level index directly from the metadata table, and "
+          + "rocksdb, which uses a local RocksDB-based partitioned cache in front of the metadata table "
+          + "to accelerate lookups.");
 
   @AdvancedConfig
   public static final ConfigOption<String> INDEX_RLI_CACHE_ROCKSDB_BASE_PATH = ConfigOptions
