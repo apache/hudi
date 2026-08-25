@@ -132,6 +132,80 @@ Adapt the "ops surface" row to the derived writer before showing it. With Hoodie
 
 Derives table type + compaction posture (see decision-tables.md → table-type).
 
+### Q1.7 — Other writers (ALL TIERS EXCEPT EXPLORATION)
+
+**Fires at PROTOTYPING, PRODUCTIONIZING_INITIAL, and PRODUCTION_AT_SCALE.** Not a scale
+concern — it is a correctness one. Assuming a single writer when there is a second is the
+silent-corruption path (two OCC-less processes committing to one table), and unlike most
+defaults it cannot be walked back by inspection: nothing errors, nothing logs. One closed-set
+question, asked of a fact the user already knows.
+
+Skipped at EXPLORATION, which produces a narrative rather than a runnable bundle.
+
+> "Does anything else ever write to this table — another pipeline, a backfill job, a
+> GDPR/cleanup job, a standalone compactor? Even occasionally counts."
+>
+> - **No, just this one pipeline**
+> - **Yes — another regular pipeline**
+> - **Yes — occasional backfills or cleanup jobs**
+> - **Not sure yet**
+
+**"No"** → `SINGLE_WRITER`. Record it as a **confirmed fact** in ADR §2, not an assumption —
+the user was asked and answered.
+
+**Any "yes"** → a multi-writer deployment. `SINGLE_WRITER` is off the table. Record the
+declared writers as a **confirmed fact** in ADR §2 (never an assumption), and continue to the
+concurrency derivation below. Note that "occasional" is not weaker than "regular" here: a
+backfill that runs once a month still corrupts the table if it races an ingestion commit.
+
+**"Not sure yet"** → treat as multi-writer for safety and say why: "I'll design for
+concurrent writers. If it turns out to be a single pipeline you can drop the lock config —
+that direction is safe. The reverse isn't, because the damage happens before you notice."
+Record as an assumption with a revisit condition.
+
+### Q1.7b — Concurrency derivation (fires only when Q1.7 declared a second writer)
+
+Runs at the point the mode can be derived — after table type and index are known. At
+PROTOTYPING that is immediately after Round 1; at higher tiers it lands after Round 2 / Round 3
+where the index is settled. **Do not ask a mode question.** Derive per
+decision-tables.md → Concurrency, then confirm.
+
+**Mode.** OCC unless the design has *already* landed on MOR + BUCKET for its own reasons, in
+which case offer NBCC as the default with OCC as the alternative. Never reshape table type or
+index to reach NBCC — see `NBCC_INELIGIBLE` for the reasoning to give.
+
+**Operation type.** If any writer uses `INSERT`/`BULK_INSERT` rather than `UPSERT`, fire
+`OCC_INSERT_DUPLICATES` — concurrent inserts can duplicate even with dedup enabled, and the
+user needs to confirm the key spaces are disjoint.
+
+**Provider.** Only for OCC (NBCC needs none). Derive from the storage path the flow already
+holds; ask only what cannot be derived:
+
+> "Which locking backend should the writers coordinate through?
+>
+> - **DynamoDB (recommended on AWS)** — Hudi creates the lock table for you; you supply a name,
+>   a region, and IAM access for each writing job.
+> - **ZooKeeper** — if you already run a quorum.
+> - **Hive Metastore** — if you already run one.
+> - **The table's own storage** — nothing extra to run, but a newer provider (1.0.2) with less
+>   production mileage than the others."
+
+**Order the options by maturity, not convenience** — see decision-tables.md → Concurrency Step 3.
+On AWS, default to DynamoDB. If the user already runs ZooKeeper or a Hive Metastore, prefer that
+over standing up anything new. Offer storage-based when the user is on cloud storage with no
+existing lock infrastructure — and state its maturity caveat in the option itself, so choosing it
+is a knowing choice rather than an accident of it being listed first. If the user asks for it
+directly, emit it and record the caveat in the ADR rather than arguing the point twice.
+
+Emit the **implicit** provider variants for DynamoDB and ZooKeeper (see decision-tables.md →
+Concurrency Step 3); only surface the explicit variants if the user asks to share one lock across
+tables or must match an existing lock identity, and fire `LOCK_PROVIDER_MISMATCH` when they do.
+
+Then emit the matching block from config-templates.md → Concurrency, and state the requirement
+that carries the whole design: **the identical block goes in every writing job.** That becomes
+a pre-launch checklist item in ADR §13 — no longer a blocking open question, since the provider
+is now chosen and the config is complete.
+
 ## Round 1 outputs
 
 - Engine (user-answered).
@@ -140,12 +214,17 @@ Derives table type + compaction posture (see decision-tables.md → table-type).
 - Table type PROVISIONAL (derived from experience + mutability + distribution).
 - Compaction posture PROVISIONAL.
 - Writer will be derived in Round 2.
+- Writer count (user-answered, all tiers but EXPLORATION) — confirmed fact, feeds concurrency
+  mode. Concurrency itself derives later, once table type and index are settled.
 
 **Delivery:** Round 1 batches into widget screens of at most 3 questions each.
 
 - **Screen 1** — engine, source, cadence. Fold in the Kafka record-format question (Q1.2b) when the source is Kafka — a gated follow-up that exists only because of an answer on the same screen may share it as a fourth item (see SKILL.md batching rule).
 - **Screen 2** — mutability and update distribution. Keep these together: Q1.4 gates Q1.5, and splitting them strands the gate.
 - **Screen 3** — experience (Q1.6), preceded by the COW/MOR tradeoff table.
+- **Screen 4** — other writers (Q1.7). Shares screen 3 when the workload is immutable (Q1.6 is
+  mutable-only, so screen 3 would otherwise be empty). Q1.7b is not part of Round 1 delivery —
+  it fires later, once table type and index are known.
 
 **Why experience gets its own screen.** The tradeoff table must precede the widget it informs (tradeoff-as-prose rule), but the COW/MOR tradeoff is only meaningful for mutable workloads — an immutable table has no log files to merge, so MOR buys nothing. Putting experience on the same screen as mutability forces the table to be shown before the answer that determines whether it applies, and on an immutable workload it has to be retracted immediately.
 
@@ -426,19 +505,22 @@ Only reach this moment when the writer was genuinely undetermined until Q2.9.
 
 ## Round 3 — Scale, concurrency, index (PRODUCTION_AT_SCALE ONLY)
 
-### Q3.1 — Writers
+### Q3.1 — Writers (asked in Round 1 as Q1.7; refined here)
 
-> "Does anything else ever write this table — another pipeline, a backfill job, a GDPR/cleanup job, a standalone compactor? Even occasionally counts."
+The writer question itself moved to **Q1.7**, where it fires at every tier but EXPLORATION —
+a second writer is a correctness fact, not a scale fact, and the tier that skips it is the one
+that ships no bundle.
 
-**Single writer** → emit `hoodie.write.concurrency.mode=SINGLE_WRITER`.
+What remains at PRODUCTION_AT_SCALE is refinement, and only when Q1.7 declared a second writer:
 
-**User declares any second writer** → `SINGLE_WRITER` is unsafe: two OCC-less processes writing one table is the silent corruption path named in config-templates.md → Concurrency. Do **not** proceed assuming single. Instead:
+- **Confirm the writer inventory** now that the design is concrete — a standalone
+  `HoodieCompactor` or an async clustering job derived during Rounds 2-3 may itself be a writer
+  the user did not count when answering Q1.7. Re-state the full list and have them confirm it.
+- **Run the concurrency derivation** (Q1.7b) here, where table type and index are final.
+- **Operation type per writer**, for `OCC_INSERT_DUPLICATES`.
 
-- Emit the OCC skeleton (`OPTIMISTIC_CONCURRENCY_CONTROL` + `hoodie.write.lock.provider=<lock provider class>` + `hoodie.clean.failed.writes.policy=LAZY`), with the identical-in-every-writing-job requirement stated.
-- Record a **blocking open question** in ADR §13: a lock provider must be chosen and configured in every writing job before go-live. Provider selection is V2+ scope — point to the Hudi concurrency-control docs.
-- Record the declared writers in ADR §2 Confirmed Facts. A declared multi-writer deployment is a confirmed fact, never an "assumption."
-
-Full multi-writer rubric (provider choice, OCC vs NBCC, conflict resolution) remains deferred — V1 owes the user the requirement and a bundle that is safe as emitted, not the decision tree.
+If Q1.7 answered single-writer and nothing derived since has added a second writing process,
+emit `hoodie.write.concurrency.mode=SINGLE_WRITER` and move on.
 
 ### Q3.1b — Record count and growth (fires when the derived index is RLI)
 

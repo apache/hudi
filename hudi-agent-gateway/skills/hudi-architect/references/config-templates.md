@@ -454,34 +454,152 @@ hoodie.layout.optimize.strategy=LINEAR    # or ZORDER or HILBERT
 hoodie.table.services.incremental.enabled=true
 ```
 
-## Concurrency (V1 default = SINGLE_WRITER)
+## Concurrency
+
+Default is single writer. Emit only the mode line:
 
 ```
 hoodie.write.concurrency.mode=SINGLE_WRITER
 ```
 
-Multi-writer configs (OCC, NBCC, lock providers, LAZY failed writes policy) are deferred to V2+ per §7.6 — **with one exception that V1 must handle**, below.
+`SINGLE_WRITER` is correct — and required for maximum throughput — whenever exactly one
+process commits to the table. Inline table services, and async services running **in the
+writer's own process** (HoodieStreamer continuous, Flink streaming), do not make a second
+writer. A *standalone* service job does.
+
+Mode selection, NBCC eligibility, and provider choice are derived in
+decision-tables.md → Concurrency. This section holds the blocks to emit once that derivation
+has run.
+
+### Rule: every block below goes in EVERY writing job
+
+A lock only serializes writers that agree on it. A block applied to the ingestion job but not
+the compactor job, or applied with a different provider on each side, gives each writer its own
+lock: every writer succeeds, and the table corrupts silently with nothing in any log. State
+this every time a multi-writer bundle is emitted — it is the single most common way these
+deployments fail. See warnings.md → `LOCK_PROVIDER_MISMATCH`.
+
+### OCC — DynamoDB (default on AWS)
+
+Uses the **implicit** partition-key provider: the lock's partition key is derived from
+`hoodie.base.path`, so it cannot drift between jobs.
+
+```
+# ---- apply IDENTICALLY in every job that writes this table ----
+hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL
+hoodie.write.lock.provider=org.apache.hudi.aws.transaction.lock.DynamoDBBasedImplicitPartitionKeyLockProvider
+hoodie.write.lock.dynamodb.table=<lock table name>
+hoodie.write.lock.dynamodb.region=<aws region>
+hoodie.clean.failed.writes.policy=LAZY
+```
+
+The lock table is created automatically if absent, so setup is a table name, a region, and IAM
+permissions on that table for **every** writing job. `hoodie.write.lock.dynamodb.partition_key`
+is **not** set — that is the point of the implicit provider. (Published docs list
+`hoodie.write.lock.dynamodb.endpoint_url` as required; it is optional. The keys actually
+validated are `table` and `region`.)
+
+Requires the AWS bundle on the classpath of every writing job.
+
+### OCC — ZooKeeper (existing quorum)
+
+Uses the **implicit** base-path provider: ZK base path and lock key are both derived from
+`hoodie.base.path`.
+
+```
+# ---- apply IDENTICALLY in every job that writes this table ----
+hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLockProvider
+hoodie.write.lock.zookeeper.url=<zk connect string>
+hoodie.write.lock.zookeeper.port=<zk port>
+hoodie.clean.failed.writes.policy=LAZY
+```
+
+Neither `hoodie.write.lock.zookeeper.base_path` nor `hoodie.write.lock.zookeeper.lock_key` is
+set — both are derived. The derived ZK base path looks like `/tmp/<hash>`; that is a **znode
+path, not a filesystem path**, it is not on disk, and it is not tunable. Mention it in the ADR
+so it is not "fixed" later by switching to the explicit provider.
+
+### OCC — Hive Metastore
+
+```
+# ---- apply IDENTICALLY in every job that writes this table ----
+hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL
+hoodie.write.lock.provider=org.apache.hudi.hive.transaction.lock.HiveMetastoreBasedLockProvider
+hoodie.write.lock.hivemetastore.database=<db>
+hoodie.write.lock.hivemetastore.table=<table>
+hoodie.clean.failed.writes.policy=LAZY
+```
+
+Metastore URIs are picked up from the Hadoop configuration at runtime; set
+`hoodie.write.lock.hivemetastore.uris` only when that is not the case.
+
+### OCC — storage-based (cloud storage, no existing lock infrastructure)
+
+**Not the default — see decision-tables.md → Concurrency Step 3 for the maturity caution.**
+Available since **1.0.2**, years younger than every other provider, and it implements lease
+renewal with a heartbeat plus per-cloud lock clients. Emit it when the user is on cloud storage
+with no existing lock infrastructure and would otherwise stand up ZooKeeper for one table, or
+when they ask for it directly — and state the maturity point once, plainly, so the choice is
+made knowingly.
+
+The appeal is real: it locks under the table's own path, so there is no infrastructure to stand
+up and no lock identity to keep in sync.
+
+```
+# ---- apply IDENTICALLY in every job that writes this table ----
+hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.StorageBasedLockProvider
+# Inferred automatically for multi-writer modes; emitted to document intent.
+# EAGER here is a hard config-validation failure.
+hoodie.clean.failed.writes.policy=LAZY
+```
+
+Optional, only if lock renewal needs tuning (validity must be >= 10x renew interval, and >= 10s):
+
+```
+hoodie.write.lock.storage.validity.timeout.secs=300
+hoodie.write.lock.storage.renew.interval.secs=30
+```
+
+Requires the cloud bundle matching the storage scheme on the classpath of every writing job.
+
+### NBCC — MOR + simple bucket index only
+
+Emit **only** when decision-tables.md → Concurrency Step 2 passes: MOR, BUCKET index, table
+version ≥ 8, no clustering. Never adjust table type or index to reach this block.
+
+```
+# ---- apply IDENTICALLY in every job that writes this table ----
+hoodie.write.concurrency.mode=NON_BLOCKING_CONCURRENCY_CONTROL
+hoodie.clean.failed.writes.policy=LAZY
+```
+
+No lock provider is required — writers append to their own log files and conflicts are resolved
+by the reader and the compactor. `hoodie.write.lock.conflict.resolution.strategy` is **not**
+emitted: it auto-infers to the bucket-index strategy from the index type, and setting it by
+hand is how that gets broken.
 
 ### Standalone HoodieCompactor implies concurrent writers
 
-Whenever the design lands on a **separate `HoodieCompactor` job** (the recommended async path for MOR + Spark DataSource / Spark SQL), two processes now write to the same table. `SINGLE_WRITER` is unsafe in that deployment — emitting it alongside a two-job recommendation is a silent corruption path.
+Whenever the design lands on a **separate `HoodieCompactor` job** (the async path for MOR +
+Spark DataSource / Spark SQL), two processes write the same table. `SINGLE_WRITER` is unsafe
+there — emitting it alongside a two-job recommendation is a silent corruption path.
 
-When this path is chosen, the Architect must surface:
+Emit the OCC block matching the deployment (DynamoDB on AWS; an existing ZooKeeper quorum or
+Hive Metastore otherwise) in **both** the ingestion job and the compactor job. See warnings.md → `COMPACTOR_CONCURRENCY_REQUIRED`.
 
-- A write-concurrency mode appropriate to concurrent writers (`OPTIMISTIC_CONCURRENCY_CONTROL`).
-- **The same lock provider, configured identically in BOTH jobs** — the ingestion writer and the compactor. Mismatched or absent lock config across the two is the failure mode.
-- Matching failed-writes cleanup policy across both jobs.
+If the user is not prepared to run a lock provider at all, recommend inline compaction instead
+and record the latency tradeoff in the ADR.
 
-```
-# Must be set IDENTICALLY in the ingestion job and the compactor job
-hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL
-hoodie.write.lock.provider=<lock provider class>
-hoodie.clean.failed.writes.policy=LAZY   # modern key — hoodie.cleaner.policy.failed.writes is a deprecated alias
-# ... plus the provider-specific lock config (ZK quorum, DynamoDB table, HMS URI, etc.),
-#     identical on both sides
-```
+### Not emitted, and why
 
-Full multi-writer rubric (choosing a provider, OCC vs NBCC, conflict resolution) remains V2+. What V1 owes the user is the warning that this deployment requires it, not the full decision tree. If the user is not prepared to set up locking, recommend inline compaction instead and record the latency tradeoff.
+| Config | Why not |
+|---|---|
+| `hoodie.write.lock.conflict.resolution.strategy` | Auto-infers from index type; hand-setting breaks bucket-index conflict handling. |
+| `hoodie.write.concurrency.early.conflict.detection.enable` | Experimental, OCC-only, default false. Offer for high-contention OCC; do not emit. |
+| `hoodie.write.num.retries.on.conflict.failures` | Default 0. Contention tuning — Operations Agent territory. |
+| Lock retry and timeout keys (the `wait_time_ms` / `num_retries` family) | Defaults are sound. Tune on observed contention, not at design time. |
 
 ## Sample bundles per archetype
 
@@ -521,7 +639,8 @@ hoodie.metadata.enable=true
 
 # Concurrency — valid ONLY while exactly one process writes this table, counting
 # backfills, GDPR/cleanup jobs, and any standalone compactor. Any second writer
-# means the OCC block above, not this line (see Concurrency section).
+# means this line is replaced by the OCC (or NBCC) block for the deployment —
+# see Concurrency section — applied identically in every writing job.
 hoodie.write.concurrency.mode=SINGLE_WRITER
 ```
 
@@ -566,7 +685,8 @@ hoodie.metadata.enable=true
 
 # Concurrency — valid ONLY while exactly one process writes this table, counting
 # backfills, GDPR/cleanup jobs, and any standalone compactor. Any second writer
-# means the OCC block above, not this line (see Concurrency section).
+# means this line is replaced by the OCC (or NBCC) block for the deployment —
+# see Concurrency section — applied identically in every writing job.
 hoodie.write.concurrency.mode=SINGLE_WRITER
 ```
 
@@ -689,6 +809,7 @@ hoodie.metadata.enable=true
 
 # Concurrency — valid ONLY while exactly one process writes this table, counting
 # backfills, GDPR/cleanup jobs, and any standalone compactor. Any second writer
-# means the OCC block above, not this line (see Concurrency section).
+# means this line is replaced by the OCC (or NBCC) block for the deployment —
+# see Concurrency section — applied identically in every writing job.
 hoodie.write.concurrency.mode=SINGLE_WRITER
 ```

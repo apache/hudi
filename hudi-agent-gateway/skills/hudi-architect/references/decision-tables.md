@@ -468,6 +468,152 @@ hoodie.clustering.plan.strategy.target.file.max.bytes=1GB
 hoodie.table.services.incremental.enabled=true  # 1.2.0 win
 ```
 
+## Concurrency (writer count → mode → lock provider)
+
+Derived from the writer inventory (question-flow.md Q3.1), the derived table type, and the
+derived index. Nothing here is asked twice — mode and NBCC eligibility fall out of facts the
+flow already holds.
+
+**`hoodie.write.concurrency.mode` is not durable** — it can be changed on a running table.
+What *is* durable is the bucket count that makes NBCC possible at all (see → Index,
+"Two durability exceptions"). So NBCC eligibility is effectively decided at table creation
+even though the mode itself is switchable. Say that in the ADR rather than implying the mode
+is a one-way door.
+
+### Step 1 — mode
+
+A "writer" is any process that commits to the table. Table services count **only** when they
+run as their own job: inline services and async services running *in the same process as a
+writer* are not a second writer.
+
+| Writers | Table type + index | Mode | Why |
+|---|---|---|---|
+| 1, inline or in-process services | any | `SINGLE_WRITER` | Default. Maximum throughput, no lock overhead. |
+| 1 writer + async services **in the writer's process** | any | `SINGLE_WRITER` | Table services stay lock-free while they share a writer's process. |
+| 1 writer + **standalone** service job (e.g. `HoodieCompactor`) | any | **OCC** | Two processes commit → see warnings.md → `COMPACTOR_CONCURRENCY_REQUIRED`. |
+| ≥2 ingestion writers | anything other than MOR + BUCKET | **OCC** | NBCC is ineligible; OCC is the general answer. |
+| ≥2 ingestion writers | MOR + BUCKET, **already derived independently** | **NBCC** offered as default, OCC as the stated alternative | Writers append to their own log files; conflicts resolved by reader and compactor, no lock contention. |
+| ≥2 writers **and** clustering is wanted | any | **OCC** | NBCC does not support clustering. |
+
+**OCC is the default recommendation for multi-writer.** NBCC is surfaced only when the user
+asks for it by name, or when the workload has *already* landed on MOR + BUCKET for its own
+reasons. **Never steer table type or index toward NBCC** — a bucket count is durable and a
+concurrency mode is not, so trading a reversible decision for an irreversible one is backwards.
+
+### Step 2 — NBCC eligibility (hard gate, verified in source)
+
+`HoodieWriteConfig` validation requires **MOR table _and_ simple bucket index** (or the
+metadata table). `CommonClientUtils` additionally rejects NBCC on table version < 8.
+
+```
+nbcc_eligible = (table_type == MERGE_ON_READ)
+                and (index == BUCKET)          # engine SIMPLE — see note
+                and (table_version >= 8)       # 1.0+ tables
+                and (clustering not required)
+```
+
+`hoodie.index.bucket.engine` defaults to `SIMPLE`, and this rubric never recommends
+`CONSISTENT_HASHING` at design time (see → Index). So **whenever the flow derives BUCKET, the
+engine is SIMPLE** and the index half of the gate is satisfied. Do not ask a separate engine
+question to establish it.
+
+If the user asks for NBCC and the gate fails → warnings.md → `NBCC_INELIGIBLE`. Refuse the
+mode, not the session: emit OCC and record why.
+
+### Step 3 — lock provider (OCC; also NBCC where a lock is still wanted)
+
+Two axes decide this: **maturity first, then lock-identity safety.**
+
+**Maturity outranks convenience.** A lock provider is the thing standing between two writers and
+a silently corrupted table, so it is the wrong place to be an early adopter. Provider ages differ
+by years:
+
+| Provider | Available since | Production exposure |
+|---|---|---|
+| ZooKeeper, Hive Metastore, filesystem | 0.8.0 | Years |
+| DynamoDB | 0.10.0 | Years |
+| **Storage-based** | **1.0.2** | **Recent — see caution below** |
+
+**Prefer the implicit-identity variants.** Both DynamoDB and ZooKeeper ship two variants: one
+that derives the lock identity from `hoodie.base.path` (xxHash-64, with `s3a://` normalized to
+`s3://`), and one that reads it from operator-supplied config. The implicit variants make
+`LOCK_PROVIDER_MISMATCH` unrepresentable — same table means same base path means same lock —
+and they remove durable strings that would otherwise have to match by hand across every
+writing job.
+
+| Deployment | Provider class (emit verbatim) | Required keys |
+|---|---|---|
+| **AWS** — *default on AWS* | `org.apache.hudi.aws.transaction.lock.DynamoDBBasedImplicitPartitionKeyLockProvider` | `hoodie.write.lock.dynamodb.table`, `hoodie.write.lock.dynamodb.region` |
+| **Existing ZooKeeper quorum** | `org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLockProvider` | `hoodie.write.lock.zookeeper.url`, `hoodie.write.lock.zookeeper.port` |
+| **Hive ecosystem** | `org.apache.hudi.hive.transaction.lock.HiveMetastoreBasedLockProvider` | `hoodie.write.lock.hivemetastore.database`, `hoodie.write.lock.hivemetastore.table` |
+| **Single process only** (multiple threads, one JVM) | `org.apache.hudi.core.transaction.lock.InProcessLockProvider` | none |
+| Cloud storage, no existing lock infrastructure | `org.apache.hudi.client.transaction.lock.StorageBasedLockProvider` | none beyond the matching cloud bundle — **read the caution below before recommending** |
+| **Local / testing only** | `org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider` | `hoodie.write.lock.filesystem.path` |
+
+**Selection order:**
+
+1. **On AWS → DynamoDB.** The default. Hudi creates the lock table automatically if absent, so
+   setup is modest: a table name, a region, and IAM permissions on it for every writing job.
+2. **Existing ZooKeeper quorum or Hive Metastore → use it.** No new dependency, and both are
+   long-standing providers.
+3. **Neither, and not on AWS (GCS / Azure / on-prem object storage) → ask, do not assume.**
+   Present storage-based with its maturity caution alongside the cost of standing up ZooKeeper,
+   and let the user decide. This is a genuine tradeoff, not a derivable answer.
+
+### Storage-based provider — maturity caution
+
+`StorageBasedLockProvider` arrived in **1.0.2** (2025). It is appealing — it locks under the
+table's own path, so there is no infrastructure to stand up and no lock identity to keep in
+sync — but it is years younger than every other provider here, and it is not a thin wrapper:
+it implements lease renewal with a heartbeat plus per-cloud lock clients. That is precisely
+the kind of code whose interesting failure modes show up under real contention, clock skew,
+and partial cloud outages rather than in tests.
+
+**Do not recommend it as the default.** Surface it when the user is on cloud storage with no
+existing lock infrastructure and would otherwise have to stand up ZooKeeper for one table —
+and when you do, say plainly that it is newer and less battle-tested than the alternatives, so
+the choice is theirs to make knowingly. If the user asks for it directly, emit it; note the
+maturity point once and record it in the ADR rather than arguing.
+
+Revisit as it accumulates production mileage — the zero-infrastructure story is genuinely the
+best of the options, and this caution is about age, not about a known defect.
+
+**Two provider notes worth stating before an operator asks:**
+
+- `InProcessLockProvider` moved package (`org.apache.hudi.client.transaction.lock` →
+  `org.apache.hudi.core.transaction.lock`). The old class is kept as a deprecated shim, and
+  published docs still cite it. Emit the `core` FQCN.
+- `ZookeeperBasedImplicitBasePathLockProvider` derives its ZK base path as `/tmp/<hash>`. That
+  is a **znode path, not a filesystem path** — it is not on any disk and is not tunable. Say so
+  in the ADR, because it reliably looks like a bug in config review, and "fixing" it by
+  switching to the explicit provider reintroduces the mismatch risk this table exists to avoid.
+
+**When to override to an explicit provider.** Only two real reasons:
+several tables that should intentionally share one lock, or an existing deployment whose lock
+identity you must match. Both are deliberate acts, not defaults. Choosing
+`ZookeeperBasedLockProvider` or `DynamoDBBasedLockProvider` adds
+`hoodie.write.lock.zookeeper.base_path` + `hoodie.write.lock.zookeeper.lock_key`, or
+`hoodie.write.lock.dynamodb.partition_key`, and those values must then match **exactly** in
+every writing job → warnings.md → `LOCK_PROVIDER_MISMATCH`.
+
+`FileSystemBasedLockProvider` is **not for production and is not supported on cloud storage**
+→ warnings.md → `FILESYSTEM_LOCK_UNSAFE`.
+
+### Step 4 — what not to emit
+
+Emitting these is at best noise and at worst a correctness bug:
+
+| Config | Why not |
+|---|---|
+| `hoodie.write.lock.conflict.resolution.strategy` | **Auto-infers** to the bucket-index strategy when index type is BUCKET, and to the simple strategy otherwise. Hand-setting it is how bucket-index conflict handling gets silently broken. |
+| `hoodie.write.concurrency.early.conflict.detection.enable` | Experimental (0.13.0), OCC-only, defaults false. Mention as an option for high-contention OCC; do not emit. |
+| `hoodie.write.num.retries.on.conflict.failures` | Defaults 0. A contention-tuning knob — Operations Agent territory, not design time. |
+
+`hoodie.clean.failed.writes.policy=LAZY` is the one exception: it is **auto-inferred** for any
+multi-writer mode, so emitting it is not strictly required, but emit it anyway with a comment
+saying so. It documents intent, and an explicitly-set `EAGER` is a hard config validation
+failure — worth making visible rather than invisible.
+
 ## Meta-fields
 
 For mutable: silent default — keep all meta fields. No user question.
