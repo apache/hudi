@@ -97,6 +97,7 @@ parameters:
       - '!packaging/hudi-metaserver-server-bundle'
       - '!packaging/hudi-presto-bundle'
       - '!packaging/hudi-spark-bundle'
+      - '!packaging/hudi-native-spark-bundle'
       - '!packaging/hudi-timeline-server-bundle'
       - '!packaging/hudi-utilities-slim-bundle'
 

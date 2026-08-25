@@ -1282,7 +1282,7 @@ jobs:
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run: |
           if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-native-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
           else
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
             # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
@@ -1309,6 +1309,43 @@ jobs:
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
+
+  # Every published native bundle coordinate is shaded here. Only the Spark 3.5 lane above runs
+  # it, because Comet's libcomet.so needs a glibc image; this catches shade and dependency breakage
+  # on the other coordinates rather than discovering it on release day.
+  build-native-bundle:
+    runs-on: ubuntu-latest
+    needs: changes
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: 'scala-2.12'
+            sparkProfile: 'spark3.4'
+            javaVersion: '11'
+          - scalaProfile: 'scala-2.13'
+            sparkProfile: 'spark4.0'
+            javaVersion: '17'
+          - scalaProfile: 'scala-2.13'
+            sparkProfile: 'spark4.1'
+            javaVersion: '17'
+    steps:
+      - if: needs.changes.outputs.relevant == 'true'
+        uses: actions/checkout@v5
+      - name: Set up JDK ${{ matrix.javaVersion }}
+        if: needs.changes.outputs.relevant == 'true'
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ matrix.javaVersion }}
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build native bundle
+        if: needs.changes.outputs.relevant == 'true'
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true -Dmaven.javadoc.skip=true $MVN_ARGS -pl packaging/hudi-native-spark-bundle -am
 
   validate-bundle-spark4:
     runs-on: ubuntu-latest

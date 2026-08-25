@@ -54,19 +54,22 @@ declare -a ALL_VERSION_OPTS=(
 # hudi-spark3.5.x_2.13
 # hudi-utilities_2.13
 # hudi-spark3.5-bundle_2.13
+# hudi-native-spark3.5-bundle_2.13
 # hudi-utilities-bundle_2.13
 # hudi-utilities-slim-bundle_2.13
 # hudi-cli-bundle_2.13
-"-T 1C -Dscala-2.13 -Dspark3.5 -pl hudi-spark-datasource/hudi-spark-common,hudi-spark-datasource/hudi-spark3.5.x,hudi-spark-datasource/hudi-spark,hudi-utilities,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am"
+"-T 1C -Dscala-2.13 -Dspark3.5 -pl hudi-spark-datasource/hudi-spark-common,hudi-spark-datasource/hudi-spark3.5.x,hudi-spark-datasource/hudi-spark,hudi-utilities,packaging/hudi-spark-bundle,packaging/hudi-native-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am"
 # For Spark 3.3, Scala 2.12:
+# (no hudi-native-spark3.3-bundle: Apache DataFusion Comet dropped Spark 3.3 after 0.7.0)
 # hudi-spark3.3.x_2.12
 # hudi-spark3.3-bundle_2.12
 "-T 1C -Dscala-2.12 -Dspark3.3 -pl hudi-spark-datasource/hudi-spark3.3.x,packaging/hudi-spark-bundle -am"
 # For Spark 3.4, Scala 2.12:
 # hudi-spark3.4.x_2.12
 # hudi-spark3.4-bundle_2.12
-"-T 1C -Dscala-2.12 -Dspark3.4 -pl hudi-spark-datasource/hudi-spark3.4.x,packaging/hudi-spark-bundle -am"
-# For all modules spark3.5
+# hudi-native-spark3.4-bundle_2.12
+"-T 1C -Dscala-2.12 -Dspark3.4 -pl hudi-spark-datasource/hudi-spark3.4.x,packaging/hudi-spark-bundle,packaging/hudi-native-spark-bundle -am"
+# For all modules spark3.5 (this pass also produces hudi-native-spark3.5-bundle_2.12)
 "-Dscala-2.12 -Dspark3.5 -Dflink1.20 -Ddocker.compose.skip=true"
 
 # Upload legacy Spark bundles (not overwriting previous uploads as these jar names are unique)
