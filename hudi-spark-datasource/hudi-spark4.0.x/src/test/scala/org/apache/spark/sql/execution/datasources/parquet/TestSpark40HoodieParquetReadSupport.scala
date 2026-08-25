@@ -19,7 +19,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.exception.HoodieException
 
-import org.apache.parquet.schema.{LogicalTypeAnnotation, Types}
+import org.apache.parquet.schema.{LogicalTypeAnnotation, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, StringType, StructType, VariantType}
 import org.junit.jupiter.api.{Assertions, Test}
@@ -69,12 +69,7 @@ class TestSpark40HoodieParquetReadSupport {
   @Test
   def testRejectShreddedVariantsFailsFastOnShreddedGroup(): Unit = {
     val schema = Types.buildMessage()
-      .addField(Types.requiredGroup()
-        .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
-        .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
-        .addField(Types.optionalGroup()
-          .addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("typed_value"))
-        .named("v"))
+      .addField(shreddedVariant("v"))
       .named("test")
 
     Seq(None, Some(new StructType().add("v", VariantType))).foreach { sparkSchema =>
@@ -102,12 +97,7 @@ class TestSpark40HoodieParquetReadSupport {
   def testRejectShreddedVariantsFailsFastOnNestedVariant(): Unit = {
     val schema = Types.buildMessage()
       .addField(Types.requiredGroup()
-        .addField(Types.optionalGroup()
-          .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
-          .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
-          .addField(Types.optionalGroup()
-            .addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("typed_value"))
-          .named("inner"))
+        .addField(shreddedVariant("inner"))
         .named("s"))
       .named("test")
 
@@ -119,10 +109,7 @@ class TestSpark40HoodieParquetReadSupport {
         s"The error must name the nested variant path, got: ${failure.getMessage}")
     }
 
-    val structSchema = new StructType().add("s", new StructType().add("inner", new StructType()
-      .add("metadata", BinaryType)
-      .add("value", BinaryType)
-      .add("typed_value", new StructType().add("a", IntegerType))))
+    val structSchema = new StructType().add("s", new StructType().add("inner", plainStructTwin))
     Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, Some(structSchema))
   }
 
@@ -136,12 +123,7 @@ class TestSpark40HoodieParquetReadSupport {
     val schema = Types.buildMessage()
       .addField(Types.optionalGroup().as(LogicalTypeAnnotation.listType())
         .addField(Types.repeatedGroup()
-          .addField(Types.optionalGroup()
-            .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
-            .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
-            .addField(Types.optionalGroup()
-              .addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("typed_value"))
-            .named("element"))
+          .addField(shreddedVariant("element"))
           .named("list"))
         .named("v"))
       .named("test")
@@ -152,10 +134,7 @@ class TestSpark40HoodieParquetReadSupport {
     Assertions.assertTrue(failure.getMessage.contains("'v.element'"),
       s"The error must name the array element path, got: ${failure.getMessage}")
 
-    val structSchema = new StructType().add("v", ArrayType(new StructType()
-      .add("metadata", BinaryType)
-      .add("value", BinaryType)
-      .add("typed_value", new StructType().add("a", IntegerType))))
+    val structSchema = new StructType().add("v", ArrayType(plainStructTwin))
     Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, Some(structSchema))
   }
 
@@ -169,12 +148,7 @@ class TestSpark40HoodieParquetReadSupport {
       .addField(Types.optionalGroup().as(LogicalTypeAnnotation.mapType())
         .addField(Types.repeatedGroup()
           .addField(Types.required(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("key"))
-          .addField(Types.optionalGroup()
-            .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
-            .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
-            .addField(Types.optionalGroup()
-              .addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("typed_value"))
-            .named("value"))
+          .addField(shreddedVariant("value"))
           .named("key_value"))
         .named("v"))
       .named("test")
@@ -185,10 +159,7 @@ class TestSpark40HoodieParquetReadSupport {
     Assertions.assertTrue(failure.getMessage.contains("'v.value'"),
       s"The error must name the map value path, got: ${failure.getMessage}")
 
-    val structSchema = new StructType().add("v", MapType(StringType, new StructType()
-      .add("metadata", BinaryType)
-      .add("value", BinaryType)
-      .add("typed_value", new StructType().add("a", IntegerType))))
+    val structSchema = new StructType().add("v", MapType(StringType, plainStructTwin))
     Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, Some(structSchema))
   }
 
@@ -207,4 +178,24 @@ class TestSpark40HoodieParquetReadSupport {
     Assertions.assertEquals("value", group.getFields.get(0).getName)
     Assertions.assertEquals("metadata", group.getFields.get(1).getName)
   }
+
+  /**
+   * The shredded variant group the tests above wrap differently: [metadata, value, typed_value].
+   * The group repetition is not part of what isVariantGroup checks, so one optional shape serves
+   * every wrapper.
+   */
+  private def shreddedVariant(name: String): Type =
+    Types.optionalGroup()
+      .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
+      .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
+      .addField(Types.optionalGroup()
+        .addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("typed_value"))
+      .named(name)
+
+  /** The same parquet shape typed as a plain struct in catalyst, which must be left alone. */
+  private def plainStructTwin: StructType =
+    new StructType()
+      .add("metadata", BinaryType)
+      .add("value", BinaryType)
+      .add("typed_value", new StructType().add("a", IntegerType))
 }

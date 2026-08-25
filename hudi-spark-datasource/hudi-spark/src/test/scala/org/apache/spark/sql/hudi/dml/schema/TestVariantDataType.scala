@@ -1217,16 +1217,19 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
           )
         } else {
           // Spark 4.0 cannot reconstruct shredded variants; the read must fail loudly instead of
-          // returning a partial payload. Depending on the path that is Spark's own
-          // INVALID_VARIANT_FROM_PARQUET.WRONG_NUM_FIELDS (schema conversion rejects the 3-field
-          // group) or Hudi's read-support guard naming the shredded column; both name the variant.
+          // returning a partial payload. Depending on the path that is Hudi's read-support guard
+          // naming the shredded column, or Spark's own INVALID_VARIANT_FROM_PARQUET.WRONG_NUM_FIELDS
+          // (schema conversion rejects the 3-field group). Pinned to those two wordings: any
+          // variant-mentioning failure would pass a looser check. No CI lane builds Spark 4.0, so
+          // this arm only runs locally.
           val failure = intercept[Throwable] {
             spark.sql(s"select id, name, cast(v as string), ts from $tableName order by id").collect()
           }
           val messages = Iterator.iterate(failure)(_.getCause).takeWhile(_ != null)
             .map(t => Option(t.getMessage).getOrElse("")).mkString("\n")
-          assert(messages.toLowerCase.contains("variant"),
-            s"spark 4.0 shredded read: expected a variant-naming failure, got:\n$messages")
+          assert(messages.contains("shredded variant") || messages.contains("WRONG_NUM_FIELDS"),
+            "spark 4.0 shredded read: expected Hudi's shredded-variant guard or Spark's " +
+              s"WRONG_NUM_FIELDS, got:\n$messages")
         }
 
         // Verify parquet schema has shredded structure with typed_value
@@ -1381,24 +1384,11 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
       // Inference is per parquet file. On the default table version the log files of this MOR
       // table are native parquet too (*.log.parquet, written through the same factory), so each
       // log file infers its own layout; the compaction then writes the base file with its own.
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  v variant,
-           |  ts long
-           |) using hudi
-           | location '$tablePath'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  type = 'mor',
-           |  preCombineField = 'ts',
-           |  hoodie.parquet.variant.shredding.schema.inference.enabled = 'true',
-           |  hoodie.index.type = 'INMEMORY',
-           |  hoodie.compact.inline = 'true',
-           |  hoodie.compact.inline.max.delta.commits = '3'
-           | )
-       """.stripMargin)
+      createVariantTable(tableName, tablePath, "mor", props = Seq(
+        "hoodie.parquet.variant.shredding.schema.inference.enabled = 'true'",
+        "hoodie.index.type = 'INMEMORY'",
+        "hoodie.compact.inline = 'true'",
+        "hoodie.compact.inline.max.delta.commits = '3'"))
 
       spark.sql(s"insert into $tableName values " + "(1, parse_json('{\"key\":\"value1\"}'), 1000)")
       spark.sql(s"insert into $tableName values " + "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
@@ -1446,22 +1436,9 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
     withTempDir { tmp =>
       val tableName = generateTableName
       withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  v variant,
-             |  ts long
-             |) using hudi
-             | location '${tmp.getCanonicalPath}'
-             | tblproperties (
-             |  primaryKey = 'id',
-             |  type = 'cow',
-             |  preCombineField = 'ts',
-             |  hoodie.parquet.variant.shredding.schema.inference.enabled = 'true',
-             |  hoodie.datasource.write.row.writer.enable = 'true'
-             | )
-          """.stripMargin)
+        createVariantTable(tableName, tmp.getCanonicalPath, "cow", props = Seq(
+          "hoodie.parquet.variant.shredding.schema.inference.enabled = 'true'",
+          "hoodie.datasource.write.row.writer.enable = 'true'"))
 
         spark.sql(
           s"""

@@ -412,14 +412,8 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
   test("Clustering rewrites heterogeneous files into the configured layout") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
-    // The row-writer path is record-type independent; the RDD path writes through the
-    // record-type file writer factories, so it sweeps both.
     Seq(true, false).foreach { rowWriter =>
-      val recordTypes = if (rowWriter) {
-        Seq(HoodieRecordType.SPARK)
-      } else {
-        Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK)
-      }
+      val recordTypes = clusteringRecordTypes(rowWriter)
       Seq(Unshredded, Inferred).foreach { outLayout =>
         // The unshredded output cell only re-pins the unshredded rewrite, which the evolution
         // test's clustering leg already sweeps over both record types; SPARK alone here, so this
@@ -464,11 +458,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
     Seq(true, false).foreach { rowWriter =>
-      val recordTypes = if (rowWriter) {
-        Seq(HoodieRecordType.SPARK)
-      } else {
-        Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK)
-      }
+      val recordTypes = clusteringRecordTypes(rowWriter)
       // No INMEMORY index: the first insert creates a base file, the update goes to a log.
       withVariantTable(s"mor clustering rowWriter=$rowWriter", "mor",
         props = Seq("hoodie.compact.inline = 'false'"), recordTypes = recordTypes) { (tableName, tablePath, leg) =>
@@ -681,15 +671,13 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         s"[$leg] nested typed_value should carry k:\n$innerGroup")
 
       // #18605 history: the batch-disabling guards in HoodieFileGroupReaderBasedFileFormat are
-      // top-level-only, so a NESTED variant may still take the vectorized reader. Sweep both
-      // modes so this leg cannot silently flip branches.
-      Seq("true", "false").foreach { vectorized =>
-        withSQLConf("spark.sql.parquet.enableVectorizedReader" -> vectorized) {
-          checkAnswer(s"select id, cast(s.inner as string) from $tableName")(
-            Seq(1, """{"k":"x1"}""")
-          )
-        }
-      }
+      // top-level-only, so a NESTED variant may still take the vectorized reader. Which one runs
+      // is not selectable from the session conf: buildReaderWithPartitionValues overwrites
+      // spark.sql.parquet.enableVectorizedReader with the decision supportBatch derived from the
+      // schema, so this leg reads back through whichever reader that picks.
+      checkAnswer(s"select id, cast(s.inner as string) from $tableName")(
+        Seq(1, """{"k":"x1"}""")
+      )
 
       // A plain insert bin-packs into the same file group: the small-file merge must read the
       // nested-shredded base back (nested reconstruction on the AVRO record type leg).
@@ -697,14 +685,10 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         spark.sql(s"""insert into $tableName values (2, named_struct('inner', parse_json('{"k":"x2"}')), 1000)""")
       }
       assertSingleFileGroup(tablePath, leg)
-      Seq("true", "false").foreach { vectorized =>
-        withSQLConf("spark.sql.parquet.enableVectorizedReader" -> vectorized) {
-          checkAnswer(s"select id, cast(s.inner as string) from $tableName order by id")(
-            Seq(1, """{"k":"x1"}"""),
-            Seq(2, """{"k":"x2"}""")
-          )
-        }
-      }
+      checkAnswer(s"select id, cast(s.inner as string) from $tableName order by id")(
+        Seq(1, """{"k":"x1"}"""),
+        Seq(2, """{"k":"x2"}""")
+      )
     }
   }
 

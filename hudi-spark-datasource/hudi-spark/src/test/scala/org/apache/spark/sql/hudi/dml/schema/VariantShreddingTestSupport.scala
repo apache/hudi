@@ -79,9 +79,21 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
 
   /**
    * The scaffold nearly every leg opens with: sweep the record types, take a temp dir, generate a
-   * table name, create the `(id int, v variant, ts long)` table in it and hand the body the
+   * table name, create the table in it through `create` and hand the body the
    * (tableName, tablePath, leg) triple, where `leg` is `"<label>, <tableName>"`.
    */
+  private def withTableScaffold[T](label: String, recordTypes: Seq[HoodieRecordType])
+                                  (create: (String, String) => Unit)
+                                  (f: (String, String, String) => T): Unit = {
+    withRecordType(recordTypes)(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      create(tableName, tablePath)
+      f(tableName, tablePath, s"$label, $tableName")
+    })
+  }
+
+  /** [[withTableScaffold]] over the `(id int, v variant, ts long)` table of [[createVariantTable]]. */
   protected def withVariantTable[T](label: String,
                                     tableType: String,
                                     props: Seq[String] = Seq.empty,
@@ -89,12 +101,9 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
                                     recordTypes: Seq[HoodieRecordType] =
                                       Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))
                                    (f: (String, String, String) => T): Unit = {
-    withRecordType(recordTypes)(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
+    withTableScaffold(label, recordTypes) { (tableName, tablePath) =>
       createVariantTable(tableName, tablePath, tableType, props = props, extraCols = extraCols)
-      f(tableName, tablePath, s"$label, $tableName")
-    })
+    }(f)
   }
 
   /**
@@ -134,12 +143,7 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
                                           recordTypes: Seq[HoodieRecordType] =
                                             Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))
                                          (f: (String, String, String) => T): Unit = {
-    withRecordType(recordTypes)(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      createNestedVariantRowWriterTable(tableName, tablePath)
-      f(tableName, tablePath, s"$label, $tableName")
-    })
+    withTableScaffold(label, recordTypes)(createNestedVariantRowWriterTable)(f)
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -609,6 +613,13 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   // ---------------------------------------------------------------------------------------------
   // Table-service idioms
   // ---------------------------------------------------------------------------------------------
+
+  /**
+   * The record types a clustering leg sweeps: the row-writer path is record-type independent; the
+   * RDD path writes through the record-type file writer factories, so it sweeps both.
+   */
+  protected def clusteringRecordTypes(rowWriter: Boolean): Seq[HoodieRecordType] =
+    if (rowWriter) Seq(HoodieRecordType.SPARK) else Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK)
 
   /** Asserts a COMPLETED clustering (replacecommit) instant exists and returns its time. */
   protected def completedClusteringInstant(tablePath: String, leg: String): String = {

@@ -186,6 +186,23 @@ class TestHoodieVariantReconstructionRoundTrip {
     return out;
   }
 
+  /**
+   * What every bootstrap leg expects of the joined row read at {@code requestedSchema}: the
+   * variant column survives the join, rebuilds to {@code original}, and the data column below it
+   * keeps its value rather than shifting.
+   */
+  private static void assertBootstrapRoundTrip(IndexedRecord out, HoodieSchema requestedSchema, Variant original) {
+    GenericRecord rebuiltV = (GenericRecord) out.get(requestedSchema.getAvroSchema().getField("v").pos());
+    assertNotNull(rebuiltV, "the variant column must survive the bootstrap join");
+    Variant rebuilt = new Variant(
+        toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD)),
+        toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD)));
+    assertEquals(original.toJson(ZoneOffset.UTC), rebuilt.toJson(ZoneOffset.UTC),
+        "the shredded payload must be reconstructed, not dropped");
+    assertEquals(7L, out.get(requestedSchema.getAvroSchema().getField("id").pos()),
+        "the data column must keep its value");
+  }
+
   @Test
   void bootstrapReaderReconstructsShreddedDataFileUsingTableSchema(@TempDir java.nio.file.Path tmp) throws Exception {
     // HoodieMergeHelper's bootstrap branch uses the one-argument getRecordIterator overload,
@@ -261,15 +278,7 @@ class TestHoodieVariantReconstructionRoundTrip {
              (ClosableIterator) bootstrapReader.getRecordIterator(tableSchema)) {
       assertTrue(iterator.hasNext(), "the joined bootstrap row must come back");
       IndexedRecord out = (IndexedRecord) iterator.next().getData();
-      int vPos = tableSchema.getAvroSchema().getField("v").pos();
-      GenericRecord rebuiltV = (GenericRecord) out.get(vPos);
-      assertNotNull(rebuiltV, "the variant column must survive the bootstrap join");
-      Variant rebuilt = new Variant(
-          toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD)),
-          toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD)));
-      assertEquals(original.toJson(ZoneOffset.UTC), rebuilt.toJson(ZoneOffset.UTC),
-          "the shredded payload must be reconstructed, not dropped");
-      assertEquals(7L, out.get(tableSchema.getAvroSchema().getField("id").pos()));
+      assertBootstrapRoundTrip(out, tableSchema, original);
     }
 
     // The alignment only bites when the requested schema holds a column the external data file
@@ -298,14 +307,7 @@ class TestHoodieVariantReconstructionRoundTrip {
       IndexedRecord out = (IndexedRecord) iterator.next().getData();
       assertEquals(partitionedTableSchema.getAvroSchema(), out.getSchema(),
           "the record must carry exactly the requested schema's fields");
-      GenericRecord rebuiltV = (GenericRecord) out.get(partitionedTableSchema.getAvroSchema().getField("v").pos());
-      assertNotNull(rebuiltV, "the variant must survive a request that adds a column the data file lacks");
-      Variant rebuilt = new Variant(
-          toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD)),
-          toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD)));
-      assertEquals(original.toJson(ZoneOffset.UTC), rebuilt.toJson(ZoneOffset.UTC),
-          "the typed rows must carry their values, not nulls");
-      assertEquals(7L, out.get(partitionedTableSchema.getAvroSchema().getField("id").pos()));
+      assertBootstrapRoundTrip(out, partitionedTableSchema, original);
       assertEquals("p1", String.valueOf(out.get(partitionedTableSchema.getAvroSchema().getField("part").pos())),
           "the partition column, absent from the data file, is filled from the partition values");
     }
