@@ -295,11 +295,38 @@ This denotes that the previous action that wrote the log block was unsuccessful.
 
 ### Delete Block (Id: 1)
 
+A delete block carries the tombstones for records deleted by a commit. Within a batch it is always written after the
+data (Avro/HFile/Parquet) block, so that the deletes are applied after the inserts and updates they accompany.
+
 | Section | #bytes | Description |
 | ---| ---| --- |
-| format version | 4 | version of the log file format |
-| length | 8 | length of the deleted keys section to follow |
-| deleted keys | variable | Tombstone of the record to encode a delete. The following 3 fields are serialized using the KryoSerializer. **Record Key** - Unique record key within the partition to deleted **Partition Path** - Partition path of the record deleted **Ordering Value** - In a particular batch of updates, the delete block is always written after the data (Avro/HFile/Parquet) block. This field would preserve the ordering of deletes and inserts within the same batch. |
+| block version | 4 | The log block version the writer emitted. The reader selects the payload encoding below from this value. |
+| length | 4 | Length in bytes of the payload to follow |
+| payload | variable | The serialized tombstones, in the encoding selected by the block version |
+
+The payload encoding has changed twice, and readers dispatch on the block version so blocks written by older writers
+remain readable:
+
+| Block version | Encoding | Tombstone contents |
+|---------------|----------|--------------------|
+| 1             | Kryo-serialized `HoodieKey[]` | Record key and partition path only. These blocks carry no ordering value. |
+| 2             | Kryo-serialized `DeleteRecord[]` | Record key, partition path and ordering value. |
+| 3             | Avro, binary-encoded `HoodieDeleteRecordList` | Record key, partition path and a typed ordering value. |
+
+Version 3 is what current writers produce. Encoding the payload with Avro rather than Kryo makes a delete block readable
+by any Avro implementation instead of only a JVM with matching Kryo registrations, and it gives the ordering value a
+declared type rather than leaving it an opaque serialized object.
+
+Each element of the version 3 `deleteRecordList` array is a `HoodieDeleteRecord`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `recordKey` | nullable `string` | Unique record key within the partition being deleted. |
+| `partitionPath` | nullable `string` | Partition path of the record being deleted. |
+| `orderingVal` | nullable union of typed wrappers | Ordering value used to resolve merge order against other writes to the same key, encoded with the wrapper matching the value's own type: `BooleanWrapper`, `IntWrapper`, `LongWrapper`, `FloatWrapper`, `DoubleWrapper`, `BytesWrapper`, `StringWrapper`, `DateWrapper`, `DecimalWrapper`, `TimeMicrosWrapper`, `TimestampMicrosWrapper` or `ArrayWrapper`. |
+
+A delete block may also carry the [`RECORD_POSITIONS`](#headers) header. When it does, the reader can apply the deletes
+positionally against the base file named by `BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS` instead of resolving each key.
 
 
 ### Corrupted Block (Id: 2)
@@ -313,9 +340,9 @@ Data block serializes the actual records written into the log file
 
 | Section | #bytes | Description |
 | ---| ---| --- |
-| format version | 4 | version of the log file format |
+| block version | 4 | The log block version the writer emitted |
 | record count | 4 | total number of records in this block |
-| record length | 8 | length of the record content to follow |
+| record length | 4 | length of the record content to follow, written once per record |
 | record content | variable | Record represented as an Avro record serialized using BinaryEncoder |
 
 
