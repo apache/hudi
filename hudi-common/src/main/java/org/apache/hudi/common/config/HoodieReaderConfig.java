@@ -110,6 +110,16 @@ public class HoodieReaderConfig extends HoodieConfig {
           + "from the cache after this duration to prevent memory leaks. "
           + "Only effective when hfile.block.cache.enabled is true.");
 
+  public static final ConfigProperty<Integer> HFILE_BLOCK_CACHE_MAX_WEIGHT_MB = ConfigProperty
+      .key("hoodie.hfile.block.cache.max.weight.mb")
+      .defaultValue(0)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("When greater than 0, the shared HFile block cache is bounded by this many "
+          + "megabytes of retained block bytes instead of a fixed block count. Byte weighting "
+          + "bounds heap use when metadata block sizes vary widely. Only effective when "
+          + "hfile.block.cache.enabled is true.");
+
   public static final String BLOB_INLINE_READ_MODE_CONTENT = "CONTENT";
   public static final String BLOB_INLINE_READ_MODE_DESCRIPTOR = "DESCRIPTOR";
   public static final ConfigProperty<String> BLOB_INLINE_READ_MODE = ConfigProperty

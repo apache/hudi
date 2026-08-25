@@ -49,7 +49,7 @@ class TestRaBitQEncoder {
     byte[] interleavedLevels = {(byte) 0xD1, 0x08};
 
     assertArrayEquals(
-        new byte[] {0x05, 0x06, 0x08},
+        new byte[] {0x08, 0x06, 0x05},
         VectorIndexBootstrapUtils.splitExPlanes(interleavedLevels, 3, 4, 1));
   }
 
@@ -58,7 +58,7 @@ class TestRaBitQEncoder {
     byte[] interleavedLevels = {(byte) 0xD1, 0x00};
 
     assertArrayEquals(
-        new byte[] {0x05, 0x06, 0x00},
+        new byte[] {0x00, 0x06, 0x05},
         VectorIndexBootstrapUtils.splitExPlanes(interleavedLevels, 3, 3, 1));
   }
 

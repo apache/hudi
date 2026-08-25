@@ -38,6 +38,7 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
   // Store first config values to check against cache config
   private static volatile Integer INITIAL_CACHE_SIZE;
   private static volatile Integer INITIAL_CACHE_TTL;
+  private static volatile Long INITIAL_CACHE_MAX_WEIGHT_BYTES;
   private static final Object CACHE_LOCK = new Object();
 
   // Per-thread physical (cache-miss) read attribution: [blocksLoaded, bytesLoaded].
@@ -47,35 +48,41 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
   private final String filePath;
 
   public CachingHFileReaderImpl(SeekableDataInputStream stream, long fileSize, String filePath, int cacheSize, int cacheTtlMinutes) {
+    this(stream, fileSize, filePath, cacheSize, 0L, cacheTtlMinutes);
+  }
+
+  public CachingHFileReaderImpl(SeekableDataInputStream stream, long fileSize, String filePath,
+                                int cacheSize, long cacheMaxWeightBytes, int cacheTtlMinutes) {
     super(stream, fileSize);
-    this.filePath = filePath;
-    // Initialize global cache with provided config (ignored if already initialized)
-    getGlobalCache(cacheSize, cacheTtlMinutes);
+    // A rewritten physical file must not inherit blocks cached for an older file at the same path.
+    this.filePath = filePath + "#len=" + fileSize;
+    getGlobalCache(cacheSize, cacheMaxWeightBytes, cacheTtlMinutes);
   }
 
   /**
    * Gets or creates the global cache shared by all CachingHFileReaderImpl instances.
    * Thread-safe singleton pattern with double-checked locking.
    */
-  private static HFileBlockCache getGlobalCache(int cacheSize, int cacheTtlMinutes) {
+  private static HFileBlockCache getGlobalCache(
+      int cacheSize, long cacheMaxWeightBytes, int cacheTtlMinutes) {
     if (GLOBAL_BLOCK_CACHE == null) {
       synchronized (CACHE_LOCK) {
         if (GLOBAL_BLOCK_CACHE == null) {
-          log.info("Initializing global HFileBlockCache with size: {}, TTL: {} minutes.",
-              cacheSize, cacheTtlMinutes);
-          // Store the config used for initialization
+          log.info("Initializing global HFileBlockCache with size: {} blocks, maxWeightBytes: {}, TTL: {} minutes.",
+              cacheSize, cacheMaxWeightBytes, cacheTtlMinutes);
           INITIAL_CACHE_SIZE = cacheSize;
           INITIAL_CACHE_TTL = cacheTtlMinutes;
+          INITIAL_CACHE_MAX_WEIGHT_BYTES = cacheMaxWeightBytes;
           GLOBAL_BLOCK_CACHE = new HFileBlockCache(
-              cacheSize,
-              cacheTtlMinutes,
-              TimeUnit.MINUTES);
-        } else if (!INITIAL_CACHE_SIZE.equals(cacheSize) || !INITIAL_CACHE_TTL.equals(cacheTtlMinutes)) {
-          // Log a warning if a different config is provided after initialization
+              cacheSize, cacheMaxWeightBytes, cacheTtlMinutes, TimeUnit.MINUTES);
+        } else if (!INITIAL_CACHE_SIZE.equals(cacheSize)
+            || !INITIAL_CACHE_TTL.equals(cacheTtlMinutes)
+            || !INITIAL_CACHE_MAX_WEIGHT_BYTES.equals(cacheMaxWeightBytes)) {
           log.warn("HFile block cache is already initialized. The provided configuration is being ignored. "
-                  + "Existing config: [Size: {}, TTL: {} mins], Ignored config: [Size: {}, TTL: {} mins].",
-              INITIAL_CACHE_SIZE, INITIAL_CACHE_TTL,
-              cacheSize, cacheTtlMinutes);
+                  + "Existing config: [Size: {}, MaxWeightBytes: {}, TTL: {} mins], "
+                  + "Ignored config: [Size: {}, MaxWeightBytes: {}, TTL: {} mins].",
+              INITIAL_CACHE_SIZE, INITIAL_CACHE_MAX_WEIGHT_BYTES, INITIAL_CACHE_TTL,
+              cacheSize, cacheMaxWeightBytes, cacheTtlMinutes);
         }
       }
     }
@@ -101,6 +108,25 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
       throw e;
     } catch (Exception e) {
       throw new IOException("Failed to load HFile block", e);
+    }
+  }
+
+  @Override
+  protected HFileBlock instantiateHFileIndexBlock(
+      BlockIndexEntry indexEntry, HFileBlockType blockType) throws IOException {
+    HFileBlockCache.BlockCacheKey cacheKey = new HFileBlockCache.BlockCacheKey(
+        filePath, indexEntry.getOffset(), indexEntry.getSize());
+    try {
+      return GLOBAL_BLOCK_CACHE.getOrCompute(cacheKey, () -> {
+        long[] physicalRead = PHYSICAL_READ.get();
+        physicalRead[0] += 1;
+        physicalRead[1] += indexEntry.getSize();
+        return super.instantiateHFileIndexBlock(indexEntry, blockType);
+      });
+    } catch (IOException | RuntimeException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new IOException("Failed to load HFile index block", e);
     }
   }
 
@@ -156,7 +182,7 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
    * @return formatted statistics string.
    */
   public static String globalCacheStatsString() {
-    return GLOBAL_BLOCK_CACHE != null ? "cache=size:" + GLOBAL_BLOCK_CACHE.size() : "cache=inactive";
+    return GLOBAL_BLOCK_CACHE != null ? GLOBAL_BLOCK_CACHE.statsString() : "cache=inactive";
   }
 
   /**
@@ -170,6 +196,7 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
       }
       INITIAL_CACHE_SIZE = null;
       INITIAL_CACHE_TTL = null;
+      INITIAL_CACHE_MAX_WEIGHT_BYTES = null;
     }
   }
 }

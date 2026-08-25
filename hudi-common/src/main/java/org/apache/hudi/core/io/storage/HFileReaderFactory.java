@@ -73,8 +73,11 @@ public class HFileReaderFactory {
           properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE);
       int cacheTtlMinutes = ConfigUtils.getIntWithAltKeys(
           properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES);
+      long cacheMaxWeightBytes = (long) ConfigUtils.getIntWithAltKeys(
+          properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_MAX_WEIGHT_MB) * 1024L * 1024L;
       String filePath = getFilePath();
-      return new CachingHFileReaderImpl(inputStream, fileSize, filePath, blockCacheSize, cacheTtlMinutes);
+      return new CachingHFileReaderImpl(
+          inputStream, fileSize, filePath, blockCacheSize, cacheMaxWeightBytes, cacheTtlMinutes);
     }
 
     return new HFileReaderImpl(inputStream, fileSize);

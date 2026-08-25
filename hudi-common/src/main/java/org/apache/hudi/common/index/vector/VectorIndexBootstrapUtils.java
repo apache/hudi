@@ -114,7 +114,8 @@ public final class VectorIndexBootstrapUtils {
       for (int plane = 0; plane < planeCount; plane++) {
         int sourceBit = vectorOffset * planeCount + plane;
         if ((extendedCode[sourceBit >> 3] & (1 << (sourceBit & 7))) != 0) {
-          int targetBit = plane * rowBytes * 8 + vectorOffset;
+          int targetPlane = planeCount - 1 - plane;
+          int targetBit = targetPlane * rowBytes * 8 + vectorOffset;
           planes[targetBit >> 3] |= (byte) (1 << (targetBit & 7));
         }
       }
