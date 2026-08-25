@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
+import org.apache.hudi.sync.common.model.Partition;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -33,6 +34,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
@@ -56,6 +58,8 @@ public class TestHiveSyncToolLongRunningWriteWatermark {
   private static final String EMPTY_COMMIT_DURING_WRITE = "102";
   private static final String EMPTY_COMMIT_AFTER_WRITE = "103";
   private static final String NEW_PARTITION = "2026/08/04";
+  /** {@link org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor} maps {@link #NEW_PARTITION} to this datestr value. */
+  private static final List<String> NEW_PARTITION_VALUES = Collections.singletonList("2026-08-04");
 
   private HiveSyncTool hiveSyncTool;
   private HoodieHiveSyncClient hiveClient;
@@ -107,23 +111,27 @@ public class TestHiveSyncToolLongRunningWriteWatermark {
 
     // Next sync cycle.
     reSyncHiveTable(clientPersistsCompletionTime);
-    int partitionsAfterCompletion = hiveClient.getAllPartitions(TABLE_NAME).size();
+    List<Partition> partitionsAfterCompletion = hiveClient.getAllPartitions(TABLE_NAME);
 
     // t=103: more unrelated commits keep arriving; every later sync advances the watermark further.
     HiveTestUtil.addEmptyCommit(EMPTY_COMMIT_AFTER_WRITE);
     reSyncHiveTable(clientPersistsCompletionTime);
-    int partitionsAfterLaterSyncs = hiveClient.getAllPartitions(TABLE_NAME).size();
+    List<Partition> partitionsAfterLaterSyncs = hiveClient.getAllPartitions(TABLE_NAME);
     assertEquals(EMPTY_COMMIT_AFTER_WRITE, hiveClient.getLastCommitTimeSynced(TABLE_NAME).get());
 
     if (clientPersistsCompletionTime) {
       // Stock Hive client: the completion-time watermark rescues the hollow instant.
-      assertEquals(2, partitionsAfterCompletion, "hollow instant rescued by completion-time watermark");
-      assertEquals(2, partitionsAfterLaterSyncs);
+      assertEquals(2, partitionsAfterCompletion.size(), "hollow instant rescued by completion-time watermark");
+      assertTrue(containsNewPartition(partitionsAfterCompletion), "the registered partition is the INSERT_OVERWRITE's");
+      assertEquals(2, partitionsAfterLaterSyncs.size());
+      assertTrue(containsNewPartition(partitionsAfterLaterSyncs));
     } else {
       // Instant-time-only client: the partition is on storage with a completed replacecommit, yet it is
       // never added - and the watermark keeps moving, so no future incremental sync will add it.
-      assertEquals(1, partitionsAfterCompletion, "partition of the late-completing write was skipped");
-      assertEquals(1, partitionsAfterLaterSyncs, "partition is permanently lost to incremental sync");
+      assertEquals(1, partitionsAfterCompletion.size(), "partition of the late-completing write was skipped");
+      assertFalse(containsNewPartition(partitionsAfterCompletion));
+      assertEquals(1, partitionsAfterLaterSyncs.size(), "partition is permanently lost to incremental sync");
+      assertFalse(containsNewPartition(partitionsAfterLaterSyncs));
       // read through a stock client to show the completion key was never written to the metastore
       try (HiveSyncTool stockTool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf())) {
         assertFalse(((HoodieHiveSyncClient) stockTool.syncClient).getLastCommitCompletionTimeSynced(TABLE_NAME).isPresent());
@@ -144,6 +152,10 @@ public class TestHiveSyncToolLongRunningWriteWatermark {
         ? new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf())
         : new InstantTimeWatermarkHiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf());
     hiveClient = (HoodieHiveSyncClient) hiveSyncTool.syncClient;
+  }
+
+  private static boolean containsNewPartition(List<Partition> partitions) {
+    return partitions.stream().anyMatch(partition -> NEW_PARTITION_VALUES.equals(partition.getValues()));
   }
 
   private void closeHiveSyncTool() {

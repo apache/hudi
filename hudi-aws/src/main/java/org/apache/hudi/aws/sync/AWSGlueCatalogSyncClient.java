@@ -961,7 +961,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         .getLatestCompletionTime();
     if (lastCommitSynced.isPresent()) {
       try {
-        HashMap<String, String> propertyMap = new HashMap<>();
+        Map<String, String> propertyMap = new HashMap<>();
         propertyMap.put(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
         if (lastCommitCompletionSynced.isPresent()) {
           propertyMap.put(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCommitCompletionSynced.get());
@@ -971,7 +971,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         throw new HoodieGlueSyncException("Fail to update last sync commit time for " + tableId(databaseName, tableName), e);
       }
     } else {
-      log.info("No commit in active timeline.");
+      log.info("No commit in active timeline for table {}.", tableId(databaseName, tableName));
     }
     try {
       // as a side effect, we also refresh the partition indexes if needed

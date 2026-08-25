@@ -892,7 +892,8 @@ class TestAWSGlueSyncClient {
     List<Column> partitionKeys = Collections.singletonList(GlueTestUtil.getColumn("city", "string", "person's city"));
     CompletableFuture<UpdateTableResponse> mockUpdateTableResponse = mock(CompletableFuture.class);
     Mockito.when(mockUpdateTableResponse.get()).thenReturn(UpdateTableResponse.builder().build());
-    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(getTableWithDefaultProps(tableName, columns, partitionKeys));
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(getTableWithProps(tableName, columns, partitionKeys, Collections.singletonMap("EXTERNAL", "TRUE")));
     Mockito.when(mockAwsGlue.updateTable(any(UpdateTableRequest.class))).thenReturn(mockUpdateTableResponse);
 
     // A second commit whose instant time sorts below the fixture's but whose completion time is later:
@@ -913,6 +914,8 @@ class TestAWSGlueSyncClient {
     assertEquals(GlueTestUtil.INSTANT_TIME, params.get(HOODIE_LAST_COMMIT_TIME_SYNC));
     assertEquals(earlierInstantCompletionTime, params.get(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC),
         "incremental sync needs the completion-time watermark to pick up commits that complete out of instant-time order");
+    assertEquals("TRUE", params.get("EXTERNAL"),
+        "updating the watermarks must merge into the existing table parameters, not replace them");
   }
 
   @Test
