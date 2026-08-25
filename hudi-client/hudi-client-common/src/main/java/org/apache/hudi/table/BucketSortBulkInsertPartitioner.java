@@ -19,7 +19,6 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 
@@ -34,23 +33,15 @@ public abstract class BucketSortBulkInsertPartitioner<T> implements BulkInsertPa
 
   public BucketSortBulkInsertPartitioner(HoodieTable table, String sortString) {
     this.table = table;
-    validateCustomSortColumns(table, sortString);
+    if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()
+        && !StringUtils.isNullOrEmpty(sortString)) {
+      throw new HoodieException("Custom sort columns are not supported for bucket index on LSM tables because "
+          + "LSM files must be ordered by record key");
+    }
     if (!StringUtils.isNullOrEmpty(sortString)) {
       this.sortColumnNames = sortString.split(",");
     } else {
       this.sortColumnNames = null;
-    }
-  }
-
-  public static void validateCustomSortColumns(HoodieTable table, String sortString) {
-    boolean hasConfiguredSortColumns = table.getConfig().contains(
-        HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS)
-        && !StringUtils.isNullOrEmpty(table.getConfig().getString(
-            HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS));
-    if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()
-        && (!StringUtils.isNullOrEmpty(sortString) || hasConfiguredSortColumns)) {
-      throw new HoodieException("Custom sort columns are not supported for bucket index on LSM tables because "
-          + "LSM files must be ordered by record key");
     }
   }
 

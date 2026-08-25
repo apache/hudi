@@ -122,10 +122,9 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
       LOG.warn("Bucket index does not support global sort mode, the sort will only be done within each data partition");
     }
 
-    boolean lsmTable = table.getMetaClient().getTableConfig().isLSMTreeStorageLayout();
-    Comparator<HoodieKey> comparator = (Comparator<HoodieKey> & Serializable) (t1, t2) -> lsmTable
-        ? StringUtils.compareUtf8Bytes(t1.getRecordKey(), t2.getRecordKey())
-        : t1.getRecordKey().compareTo(t2.getRecordKey());
+    Comparator<HoodieKey> comparator = table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()
+        ? (Comparator<HoodieKey> & Serializable) (t1, t2) -> StringUtils.compareUtf8Bytes(t1.getRecordKey(), t2.getRecordKey())
+        : (Comparator<HoodieKey> & Serializable) (t1, t2) -> t1.getRecordKey().compareTo(t2.getRecordKey());
 
     return records.mapToPair(record -> new Tuple2<>(record.getKey(), record))
         .repartitionAndSortWithinPartitions(partitioner, comparator)

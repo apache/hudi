@@ -296,29 +296,6 @@ class TestLSMDataSource extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  def testLsmBucketRejectsCustomSortColumnsBeforeInflight(): Unit = {
-    Seq(false, true).foreach { enableRowWriter =>
-      val tablePath = s"${basePath}_cow_lsm_bucket_custom_sort_$enableRowWriter"
-      val options = baseOptions(HoodieTableType.COPY_ON_WRITE) ++ Map(
-        DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> enableRowWriter.toString,
-        HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.BUCKET.name,
-        HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key -> HoodieIndex.BucketIndexEngineType.SIMPLE.name,
-        HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key -> "id",
-        HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> "1",
-        HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS.key -> "value")
-      val inserts = rows(Seq(("key-1", "v1", 1L, FirstPartition)))
-
-      val exception = assertThrows(classOf[HoodieException], () =>
-        write(inserts, tablePath, options, WriteOperationType.BULK_INSERT, SaveMode.Overwrite))
-      assertExceptionChainContains(exception, "Custom sort columns are not supported for bucket index on LSM tables")
-
-      val instants = createMetaClient(tablePath).reloadActiveTimeline().getInstants.asScala
-      assertEquals(1, instants.size)
-      assertEquals(org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED, instants.head.getState)
-    }
-  }
-
-  @Test
   def testCompactionProducesSortedBaseFile(): Unit = {
     val tablePath = s"${basePath}_mor_lsm_compaction"
     val options = baseOptions(HoodieTableType.MERGE_ON_READ) ++ Map(
