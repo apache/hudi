@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{DataSourceUtils, HoodieWriterUtils}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, WriteOperationType}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.schema.internal.InternalSchema
@@ -27,7 +28,7 @@ import org.apache.hudi.common.schema.internal.action.TableChanges
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
 import org.apache.hudi.common.schema.internal.io.FileBasedInternalSchemaStorageManager
 import org.apache.hudi.common.schema.internal.utils.{SchemaChangeUtils, SerDeHelper}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
@@ -194,6 +195,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     val tableComment = if (propKeys.contains(TableCatalog.PROP_COMMENT)) None else table.comment
     val newProperties = table.properties.filter { case (k, _) => !propKeys.contains(k) }
     val newTable = table.copy(properties = newProperties, comment = tableComment)
+    deleteHoodieTableConfigs(sparkSession, propKeys)
     catalog.alterTable(newTable)
     logInfo("table properties change finished")
   }
@@ -208,8 +210,55 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     val newTable = table.copy(
       properties = table.properties ++ properties,
       comment = properties.get(TableCatalog.PROP_COMMENT).orElse(table.comment))
+    updateHoodieTableConfigs(sparkSession, properties)
     catalog.alterTable(newTable)
     logInfo("table properties change finished")
+  }
+
+  /**
+   * Persists Hudi table properties in hoodie.properties as well as the Spark catalog.
+   *
+   * The analyzer only creates this command for Hudi V2 tables, so the table is known to be a Hudi
+   * table. Keep non-Hudi properties catalog-only, matching Spark's normal ALTER TABLE behavior.
+   * Hudi's SQL aliases and datasource options are converted to the canonical keys stored in
+   * hoodie.properties before validation and persistence.
+   */
+  private def updateHoodieTableConfigs(sparkSession: SparkSession, properties: Map[String, String]): Unit = {
+    val tableConfigs = HoodieOptionConfig.mapSqlOptionsToTableConfigs(
+      HoodieOptionConfig.extractHoodieOptions(properties))
+
+    if (tableConfigs.nonEmpty) {
+      val metaClient = getMetaClient(sparkSession)
+
+      HoodieWriterUtils.validateTableConfig(
+        sparkSession,
+        tableConfigs,
+        metaClient.getTableConfig)
+
+      HoodieTableConfig.update(
+        metaClient.getStorage,
+        metaClient.getMetaPath,
+        TypedProperties.fromMap(tableConfigs.asJava))
+    }
+  }
+  private def deleteHoodieTableConfigs(sparkSession: SparkSession, propertyKeys: Seq[String]): Unit = {
+    val tableConfigs = HoodieOptionConfig.mapSqlOptionsToTableConfigs(
+      HoodieOptionConfig.extractHoodieOptions(propertyKeys.map(_ -> "").toMap))
+
+    if (tableConfigs.nonEmpty) {
+      val metaClient = getMetaClient(sparkSession)
+      HoodieTableConfig.delete(
+        metaClient.getStorage,
+        metaClient.getMetaPath,
+        tableConfigs.keySet.asJava)
+    }
+  }
+
+  private def getMetaClient(sparkSession: SparkSession): HoodieTableMetaClient = {
+    HoodieTableMetaClient.builder()
+      .setBasePath(AlterTableCommand.getTableLocation(table, sparkSession))
+      .setConf(HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf()))
+      .build()
   }
 
   def getInternalSchemaAndHistorySchemaStr(sparkSession: SparkSession): (InternalSchema, String) = {
