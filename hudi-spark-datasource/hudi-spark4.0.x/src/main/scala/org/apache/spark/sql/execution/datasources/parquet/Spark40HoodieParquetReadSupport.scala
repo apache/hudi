@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieException
 
@@ -121,8 +122,10 @@ object Spark40HoodieParquetReadSupport {
    *
    * With a Spark catalyst schema the walk is anchored on it and recurses through structs,
    * arrays and maps: only what catalyst types as `VariantType` is rejected, and a variant
-   * nested inside a struct is just as unreadable as a top-level one. Without one (callers that
-   * have no catalyst schema) it falls back to a shape-only walk over every group.
+   * nested inside a struct is just as unreadable as a top-level one. A column Spark's
+   * PushVariantIntoScan rewrote into a struct of ordinal-named extraction fields is rejected on
+   * the parquet shape alone, since none of those field names exist in the file. Without a
+   * catalyst schema (callers that have none) it falls back to a shape-only walk over every group.
    */
   def rejectShreddedVariants(schema: MessageType, sparkSchema: Option[StructType]): Unit = {
     sparkSchema match {
@@ -139,6 +142,15 @@ object Spark40HoodieParquetReadSupport {
   private def rejectShreddedVariant(parquetType: Type, dataType: DataType, path: String): Unit = {
     (parquetType, dataType) match {
       case (group: GroupType, _: VariantType) =>
+        if (group.containsField("typed_value")) {
+          throw shreddedVariantException(path)
+        }
+      case (group: GroupType, struct: StructType) if SparkInternalSchemaConverter.isVariantRewriteStruct(struct) =>
+        // PushVariantIntoScan replaced the variant with a struct of ordinal-named extraction
+        // fields ("0", "1"), none of which exist in the parquet group, so the generic struct arm
+        // below would walk nothing and let a shredded group through. On that path the
+        // file-group-reader format forces row reads, which leaves this read support as the last
+        // stop before Spark's own converter.
         if (group.containsField("typed_value")) {
           throw shreddedVariantException(path)
         }
@@ -174,9 +186,9 @@ object Spark40HoodieParquetReadSupport {
 
   private def shreddedVariantException(path: String): HoodieException = {
     new HoodieException(String.format(
-      "Column '%s' is a shredded variant (typed_value present); Spark 4.0 cannot read "
-        + "shredded variants. Read the table with Spark 4.1+, or rewrite it unshredded "
-        + "(e.g. cluster with hoodie.parquet.variant.write.shredding.enabled=false).", path))
+      "Column '%s' is a shredded variant (typed_value present); Hudi's Spark 4.0 reader does "
+        + "not support shredded variants. Read the table with Spark 4.1+, or rewrite it "
+        + "unshredded (e.g. cluster with hoodie.parquet.variant.write.shredding.enabled=false).", path))
   }
 
   private def isVariantGroup(group: GroupType): Boolean = {

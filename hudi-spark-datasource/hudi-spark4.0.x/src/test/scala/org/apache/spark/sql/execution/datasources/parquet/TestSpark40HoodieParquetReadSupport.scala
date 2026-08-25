@@ -19,9 +19,11 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.exception.HoodieException
 
-import org.apache.parquet.schema.{LogicalTypeAnnotation, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, StringType, StructType, VariantType}
+import org.apache.parquet.schema.Types
+import org.apache.spark.sql.execution.datasources.VariantMetadata
+import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, unshreddedVariant}
+import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, MetadataBuilder, StringType, StructField, StructType, VariantType}
 import org.junit.jupiter.api.{Assertions, Test}
 
 class TestSpark40HoodieParquetReadSupport {
@@ -63,8 +65,10 @@ class TestSpark40HoodieParquetReadSupport {
   /**
    * A shredded variant group (typed_value present) must fail fast: Spark 4.0's unshredded
    * converter reads only [value, metadata], so reading the group (which used to drop
-   * typed_value from the requested schema) silently lost the typed rows' payload. Both the
-   * catalyst-anchored walk and the shape-only fallback reject it.
+   * typed_value from the requested schema) silently lost the typed rows' payload. The
+   * shape-only fallback, the catalyst-anchored walk and the PushVariantIntoScan rewrite of the
+   * same column all reject it. The rewrite arm cannot recurse by name - its fields are the
+   * ordinals "0" and "1", which exist nowhere in the parquet group - so it reads the shape.
    */
   @Test
   def testRejectShreddedVariantsFailsFastOnShreddedGroup(): Unit = {
@@ -72,13 +76,22 @@ class TestSpark40HoodieParquetReadSupport {
       .addField(shreddedVariant("v"))
       .named("test")
 
-    Seq(None, Some(new StructType().add("v", VariantType))).foreach { sparkSchema =>
+    val catalystArms = Seq(
+      None,
+      Some(new StructType().add("v", VariantType)),
+      Some(new StructType().add("v", variantRewriteStruct)))
+    catalystArms.foreach { sparkSchema =>
       val failure = Assertions.assertThrows(classOf[HoodieException],
         () => Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, sparkSchema))
       Assertions.assertTrue(
         failure.getMessage.contains("shredded variant") && failure.getMessage.contains("'v'"),
         s"The error must name the shredded variant column, got: ${failure.getMessage}")
     }
+
+    // Only typed_value is fatal: the same rewrite over an unshredded file still reads.
+    Spark40HoodieParquetReadSupport.rejectShreddedVariants(
+      Types.buildMessage().addField(unshreddedVariant("v")).named("test"),
+      Some(new StructType().add("v", variantRewriteStruct)))
 
     // The reorder itself no longer throws, and must leave typed_value in place: rebuilding the
     // group as [value, metadata] is what dropped the typed rows' payload.
@@ -102,7 +115,8 @@ class TestSpark40HoodieParquetReadSupport {
       .named("test")
 
     val variantSchema = new StructType().add("s", new StructType().add("inner", VariantType))
-    Seq(None, Some(variantSchema)).foreach { sparkSchema =>
+    val rewriteSchema = new StructType().add("s", new StructType().add("inner", variantRewriteStruct))
+    Seq(None, Some(variantSchema), Some(rewriteSchema)).foreach { sparkSchema =>
       val failure = Assertions.assertThrows(classOf[HoodieException],
         () => Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, sparkSchema))
       Assertions.assertTrue(failure.getMessage.contains("'s.inner'"),
@@ -121,11 +135,7 @@ class TestSpark40HoodieParquetReadSupport {
   @Test
   def testRejectShreddedVariantsFailsFastOnVariantInArray(): Unit = {
     val schema = Types.buildMessage()
-      .addField(Types.optionalGroup().as(LogicalTypeAnnotation.listType())
-        .addField(Types.repeatedGroup()
-          .addField(shreddedVariant("element"))
-          .named("list"))
-        .named("v"))
+      .addField(threeLevelList("v", shreddedVariant("element")))
       .named("test")
 
     val variantSchema = new StructType().add("v", ArrayType(VariantType))
@@ -145,12 +155,7 @@ class TestSpark40HoodieParquetReadSupport {
   @Test
   def testRejectShreddedVariantsFailsFastOnVariantInMap(): Unit = {
     val schema = Types.buildMessage()
-      .addField(Types.optionalGroup().as(LogicalTypeAnnotation.mapType())
-        .addField(Types.repeatedGroup()
-          .addField(Types.required(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("key"))
-          .addField(shreddedVariant("value"))
-          .named("key_value"))
-        .named("v"))
+      .addField(stringKeyMap("v", shreddedVariant("value")))
       .named("test")
 
     val variantSchema = new StructType().add("v", MapType(StringType, VariantType))
@@ -167,10 +172,7 @@ class TestSpark40HoodieParquetReadSupport {
   @Test
   def testReorderVariantFieldsReordersUnshreddedGroup(): Unit = {
     val schema = Types.buildMessage()
-      .addField(Types.requiredGroup()
-        .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
-        .addField(Types.required(PrimitiveTypeName.BINARY).named("value"))
-        .named("v"))
+      .addField(unshreddedVariant("v"))
       .named("test")
 
     val result = Spark40HoodieParquetReadSupport.reorderVariantFields(schema)
@@ -180,17 +182,15 @@ class TestSpark40HoodieParquetReadSupport {
   }
 
   /**
-   * The shredded variant group the tests above wrap differently: [metadata, value, typed_value].
-   * The group repetition is not part of what isVariantGroup checks, so one optional shape serves
-   * every wrapper.
+   * Spark's PushVariantIntoScan rewrite of one variant column: extraction fields named by
+   * ordinal, each carrying the marker metadata the rewrite arm keys on.
    */
-  private def shreddedVariant(name: String): Type =
-    Types.optionalGroup()
-      .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
-      .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
-      .addField(Types.optionalGroup()
-        .addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("typed_value"))
-      .named(name)
+  private def variantRewriteStruct: StructType = {
+    val marker = new MetadataBuilder().putString(VariantMetadata.METADATA_KEY, "$").build()
+    new StructType()
+      .add(StructField("0", BinaryType, nullable = true, marker))
+      .add(StructField("1", BinaryType, nullable = true, marker))
+  }
 
   /** The same parquet shape typed as a plain struct in catalyst, which must be left alone. */
   private def plainStructTwin: StructType =

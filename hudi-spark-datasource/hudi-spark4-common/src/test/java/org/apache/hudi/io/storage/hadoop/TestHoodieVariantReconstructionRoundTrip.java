@@ -53,6 +53,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -311,5 +312,33 @@ class TestHoodieVariantReconstructionRoundTrip {
       assertEquals("p1", String.valueOf(out.get(partitionedTableSchema.getAvroSchema().getField("part").pos())),
           "the partition column, absent from the data file, is filled from the partition values");
     }
+
+    // A column the data file lacks that is NON-nullable and has no default has nothing to fill it
+    // with, so the read must fail rather than serve a row. Pre-PR the data file was read at its own
+    // footer schema, so the same request silently shifted the columns instead.
+    HoodieSchema extraColumnSchema = HoodieSchemaUtils.addMetadataFields(
+        HoodieSchema.createRecord("r", "org.apache.hudi.test", null, Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("v", HoodieSchema.createNullable(unshreddedVariant), null, HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("extra", HoodieSchema.create(HoodieSchemaType.STRING)))));
+    HoodieAvroBootstrapFileReader extraColumnReader = (HoodieAvroBootstrapFileReader)
+        readerFactory.newBootstrapFileReader(
+            readerFactory.getFileReader(new HoodieConfig(), new StoragePath(skeletonFile.toUri().toString())),
+            readerFactory.getFileReader(new HoodieConfig(), new StoragePath(dataFile.toUri().toString())),
+            Option.empty(), new Object[0]);
+    Exception failure = assertThrows(Exception.class, () -> {
+      try (ClosableIterator<HoodieRecord<IndexedRecord>> iterator =
+               (ClosableIterator) extraColumnReader.getRecordIterator(extraColumnSchema)) {
+        while (iterator.hasNext()) {
+          iterator.next();
+        }
+      }
+    });
+    StringBuilder causes = new StringBuilder();
+    for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+      causes.append(cause.getMessage()).append('\n');
+    }
+    assertTrue(causes.toString().contains("extra"),
+        "the failure must name the column that cannot be filled, got:\n" + causes);
   }
 }

@@ -25,8 +25,8 @@ import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.parquet.hadoop.metadata.FileMetaData
-import org.apache.parquet.schema.{LogicalTypeAnnotation, Type, Types}
-import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import org.apache.parquet.schema.{Type, Types}
+import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, twoLevelList, unshreddedVariant}
 import org.apache.spark.sql.types.{BinaryType, MetadataBuilder, StructField, StructType}
 import org.junit.jupiter.api.{Assertions, Test}
 
@@ -72,17 +72,11 @@ class TestParquetSchemaEvolutionUtils {
   @Test
   def testValidateNoShreddedVariantsRejectsShreddedVariantInList(): Unit = {
     // Pins the unwrapping arm: the repeated "list" group is not the element, its only field is.
-    val threeLevel = Types.optionalGroup().as(LogicalTypeAnnotation.listType())
-      .addField(Types.repeatedGroup().addField(shreddedVariant("element")).named("list"))
-      .named("v")
+    val threeLevel = threeLevelList("v", shreddedVariant("element"))
     // Pins the "array" name arm: parquet-avro's repeated group is itself the element record.
-    val twoLevel = Types.optionalGroup().as(LogicalTypeAnnotation.listType())
-      .addField(nestedVariantElement("array"))
-      .named("v")
+    val twoLevel = twoLevelList("v", "array", nestedVariantElement)
     // Pins the "<field>_tuple" name arm: parquet-thrift's spelling of the same 2-level layout.
-    val thriftTuple = Types.optionalGroup().as(LogicalTypeAnnotation.listType())
-      .addField(nestedVariantElement("v_tuple"))
-      .named("v")
+    val thriftTuple = twoLevelList("v", "v_tuple", nestedVariantElement)
 
     val variantElement = querySchemaOf("v", HoodieSchema.createArray(HoodieSchema.createVariant()))
     // array<struct<e: struct<inner: variant>>>, the query side of the two 2-level shapes: without
@@ -108,12 +102,7 @@ class TestParquetSchemaEvolutionUtils {
   @Test
   def testValidateNoShreddedVariantsRejectsShreddedVariantInMap(): Unit = {
     val querySchema = querySchemaOf("v", HoodieSchema.createMap(HoodieSchema.createVariant()))
-    val map = Types.optionalGroup().as(LogicalTypeAnnotation.mapType())
-      .addField(Types.repeatedGroup()
-        .addField(Types.required(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("key"))
-        .addField(shreddedVariant("value"))
-        .named("key_value"))
-      .named("v")
+    val map = stringKeyMap("v", shreddedVariant("value"))
 
     val failure = Assertions.assertThrows(classOf[HoodieException], () =>
       ParquetSchemaEvolutionUtils.validateNoShreddedVariants(noVariantRewrite, querySchema, footerOf(map)))
@@ -166,20 +155,39 @@ class TestParquetSchemaEvolutionUtils {
 
   /**
    * A scan rewritten by PushVariantIntoScan fails regardless of the file's layout: the merged
-   * request materializes {metadata, value} while codegen expects the extraction struct.
+   * request materializes {metadata, value} while codegen expects the extraction struct. Spark
+   * rewrites variants at the root of the relation output schema and variants nested in struct
+   * types (PushVariantIntoScan), so the walk has to reach both.
    */
   @Test
   def testValidateNoShreddedVariantsRejectsVariantRewriteOverUnshreddedFile(): Unit = {
-    val marker = new MetadataBuilder().putString(variantRewriteMarker, "v").build()
-    val rewritten = new StructType().add("v", new StructType()
-      .add(StructField("0", BinaryType, nullable = true, marker))
-      .add(StructField("1", BinaryType, nullable = true, marker)))
+    val nested = HoodieSchema.createRecord("nested", "org.apache.hudi.test", null,
+      Collections.singletonList(HoodieSchemaField.of("inner", HoodieSchema.createVariant())))
 
-    val failure = Assertions.assertThrows(classOf[HoodieException], () =>
-      ParquetSchemaEvolutionUtils.validateNoShreddedVariants(rewritten,
-        querySchemaOf("v", HoodieSchema.createVariant()), footerOf(unshreddedVariant("v"))))
-    Assertions.assertTrue(failure.getMessage.contains("pushVariantIntoScan") && failure.getMessage.contains("'v'"),
-      s"The error must name the rewrite and the column, got: ${failure.getMessage}")
+    Seq(
+      ("top-level", new StructType().add("v", variantRewriteStruct),
+        querySchemaOf("v", HoodieSchema.createVariant()), footerOf(unshreddedVariant("v")), "'v'"),
+      ("nested", new StructType().add("s", new StructType().add("inner", variantRewriteStruct)),
+        querySchemaOf("s", nested),
+        footerOf(Types.optionalGroup().addField(unshreddedVariant("inner")).named("s")), "'s.inner'")
+    ).foreach { case (leg, requiredSchema, querySchema, footer, path) =>
+      val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchema, footer))
+      Assertions.assertTrue(
+        failure.getMessage.contains("pushVariantIntoScan") && failure.getMessage.contains(path),
+        s"The $leg rewrite error must name the rewrite and $path, got: ${failure.getMessage}")
+    }
+  }
+
+  /**
+   * Spark's PushVariantIntoScan rewrite of one variant column: ordinal-named extraction fields,
+   * every one carrying the marker metadata the guard keys on.
+   */
+  private def variantRewriteStruct: StructType = {
+    val marker = new MetadataBuilder().putString(variantRewriteMarker, "v").build()
+    new StructType()
+      .add(StructField("0", BinaryType, nullable = true, marker))
+      .add(StructField("1", BinaryType, nullable = true, marker))
   }
 
   /** The query-side internal schema for a table of one top-level column. */
@@ -192,28 +200,10 @@ class TestParquetSchemaEvolutionUtils {
     new FileMetaData(Types.buildMessage().addField(column).named("test"), new HashMap[String, String](), "test")
 
   /**
-   * A 2-level list element as parquet-avro and parquet-thrift write it: the repeated group is
-   * itself the element record - named "array" or "<field>_tuple" - and holds a single struct
-   * field "e" wrapping the shredded variant "inner".
+   * What a 2-level repeated group wraps here: a single struct field "e" holding the shredded
+   * variant "inner". The repeated group is itself the element record, so without the name arms
+   * of [[ParquetSchemaEvolutionUtils.parquetListElement]] the walk would take "e" for the element.
    */
-  private def nestedVariantElement(name: String): Type =
-    Types.repeatedGroup()
-      .addField(Types.optionalGroup().addField(shreddedVariant("inner")).named("e"))
-      .named(name)
-
-  /** The shredded parquet layout: {metadata, value, typed_value}. */
-  private def shreddedVariant(name: String): Type =
-    Types.optionalGroup()
-      .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
-      .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
-      .addField(Types.optionalGroup()
-        .addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("typed_value"))
-      .named(name)
-
-  /** The unshredded twin: {metadata, value}. */
-  private def unshreddedVariant(name: String): Type =
-    Types.optionalGroup()
-      .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
-      .addField(Types.required(PrimitiveTypeName.BINARY).named("value"))
-      .named(name)
+  private def nestedVariantElement: Type =
+    Types.optionalGroup().addField(shreddedVariant("inner")).named("e")
 }

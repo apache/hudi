@@ -204,11 +204,12 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
 
   test("Test Query Log Only MOR Table With VARIANT column triggers compaction") {
     // Gated on Spark >= 4.1. Compaction writes the base file via the AVRO shredding writer, which
-    // lays the variant group out as [metadata, value, typed_value]. Spark 4.0 cannot read that back:
+    // lays the variant group out as [metadata, value, typed_value]. Hudi's Spark 4.0 reader does not
+    // read that back: Spark40ParquetReader calls
     // Spark40HoodieParquetReadSupport.rejectShreddedVariants (catalyst-anchored, recursing into
-    // structs, arrays and maps) fails the read with a HoodieException naming the column, and Spark
-    // 4.0's own schema conversion may reject the 3-field group before it. The reorder step leaves a
-    // shredded group untouched. Spark 4.1+ reads variant fields by name (SPARK-54410) and
+    // structs, arrays and maps) off the footer before it picks the vectorized or the row reader, so
+    // the read fails with a HoodieException naming the column on either branch. The reorder step
+    // leaves a shredded group untouched. Spark 4.1+ reads variant fields by name (SPARK-54410) and
     // reconstructs correctly.
     // TODO(voon): drop this comment once Spark 4.0 is removed.
     assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
@@ -323,14 +324,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
       // second compaction that reads it through the internal reader
       // (SparkFileFormatInternalRowReaderContext) and must carry rows 3 and 4, which
       // exist only in that base file, forward (#19556).
-      val compactedFiles = listDataParquetFiles(tablePath)
-      assert(compactedFiles.nonEmpty, "Should have a compacted base parquet file")
-      compactedFiles.foreach { filePath =>
-        val parquetSchema = readParquetSchema(filePath)
-        val variantGroup = getFieldAsGroup(parquetSchema, "v")
-        assert(variantGroup.containsField("typed_value"),
-          s"Compacted base file should carry typed_value. Schema:\n$variantGroup")
-      }
+      assertVariantLayout(tablePath, shredded = true, "compacted base")
 
       // The v2-merged deltacommit above was the first after the compaction; four more
       // reach max.delta.commits = 5 and trip the second compaction inline.
@@ -740,14 +734,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
 
         // The written parquet must actually carry the shredded layout; otherwise the
         // read-back below silently validates the unshredded path a second time.
-        val parquetFiles = listDataParquetFiles(tmp.getCanonicalPath)
-        assert(parquetFiles.nonEmpty, "Should have at least one data parquet file")
-        parquetFiles.foreach { filePath =>
-          val schema = readParquetSchema(filePath)
-          val variantGroup = getFieldAsGroup(schema, "v")
-          assert(variantGroup.containsField("typed_value"),
-            s"bulk_insert with shredding forced should write typed_value. Schema:\n$variantGroup")
-        }
+        assertVariantLayout(tmp.getCanonicalPath, shredded = true, "bulk_insert forced")
 
         val readDf = spark.read.format("hudi").load(tmp.getCanonicalPath)
         val rows = readDf.selectExpr("id", "cast(v as string) as v").orderBy("id").collect()
@@ -1206,20 +1193,19 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
             Seq(1, "row1", "{\"a\":1,\"b\":\"hello\"}", 1000)
           )
         } else {
-          // Spark 4.0 cannot reconstruct shredded variants; the read must fail loudly instead of
-          // returning a partial payload. Depending on the path that is Hudi's read-support guard
-          // naming the shredded column, or Spark's own INVALID_VARIANT_FROM_PARQUET.WRONG_NUM_FIELDS
-          // (schema conversion rejects the 3-field group). Pinned to those two wordings: any
-          // variant-mentioning failure would pass a looser check. No CI lane builds Spark 4.0, so
-          // this arm only runs locally.
+          // Hudi's Spark 4.0 reader cannot reconstruct shredded variants; the read must fail
+          // loudly instead of returning a partial payload. Spark40ParquetReader runs the guard off
+          // the footer before it picks the vectorized or the row reader, so the failure is Hudi's
+          // own wording naming the column on either branch - not Spark's column-less
+          // INVALID_VARIANT_FROM_PARQUET.WRONG_NUM_FIELDS, which used to be what the vectorized
+          // branch produced. No CI lane builds Spark 4.0, so this arm only runs locally.
           val failure = intercept[Throwable] {
             spark.sql(s"select id, name, cast(v as string), ts from $tableName order by id").collect()
           }
           val messages = Iterator.iterate(failure)(_.getCause).takeWhile(_ != null)
             .map(t => Option(t.getMessage).getOrElse("")).mkString("\n")
-          assert(messages.contains("shredded variant") || messages.contains("WRONG_NUM_FIELDS"),
-            "spark 4.0 shredded read: expected Hudi's shredded-variant guard or Spark's " +
-              s"WRONG_NUM_FIELDS, got:\n$messages")
+          assert(messages.contains("shredded variant"),
+            s"spark 4.0 shredded read: expected Hudi's shredded-variant guard, got:\n$messages")
         }
 
         // Verify parquet schema has shredded structure with typed_value
