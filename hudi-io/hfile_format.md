@@ -109,18 +109,30 @@ Note that one tick mark represents one bit position.
 
 Header:
 
-- **Block Magic**: 8 bytes, a sequence of bytes indicating the block type. Supported block types are:
+- **Block Magic**: 8 bytes, a sequence of bytes indicating the block type. The block types Hudi writes are:
     - `DATABLK*`: `DATA` block type for data blocks
     - `METABLKc`: `META` block type for meta blocks
     - `IDXROOT2`: `ROOT_INDEX` block type for root-level index blocks
     - `FILEINF2`: `FILE_INFO` block type for the file info block, a small key-value map of metadata
+    - `TRABLK"$`: `TRAILER` block type, described in the [Trailer](#trailer) section below
+
+  Hudi's reader also recognises the remaining HFile v3 block types, so it can read files written by
+  HBase. It never writes them:
+    - `IDXLEAF2` / `IDXINTE2`: `LEAF_INDEX` and `INTERMEDIATE_INDEX`, the lower levels of a
+      multi-level data block index (see [Multi-level data block index](#multi-level-data-block-index))
+    - `BLMFBLK2`, `BLMFMET2`, `DFBLMET2`: `BLOOM_CHUNK`, `GENERAL_BLOOM_META` and
+      `DELETE_FAMILY_BLOOM_META`, HBase's own bloom filter blocks. These are unrelated to the bloom
+      filter Hudi stores, which goes in an ordinary meta block (see [Meta Block](#meta-block))
+    - `DATABLKE`: `ENCODED_DATA`, a data block using an HBase data block encoding
+    - `IDXBLK)+`: `INDEX_V1`, the index block of the superseded HFile v1 format
 - **On-disk Size Without Header**: 4 bytes, integer, compressed size of the block's data, not including the header. Can
   be used for skipping the current data block when scanning HFile data.
 - **Uncompressed Size Without Header**: 4 bytes, integer, uncompressed size of the block's data, not including the
   header. This is equal to the compressed size if the compression algorithm is NONE.
 - **Previous Block Offset**: 8 bytes, long, file offset of the previous block of the same type. Can be used for seeking
   to the previous data/index block.
-- **Checksum Type**: 1 byte, type of checksum used.
+- **Checksum Type**: 1 byte, type of checksum used: `0` = `NULL` (no checksum), `1` = `CRC32`,
+  `2` = `CRC32C`.
 - **Bytes Per Checksum**: 4 bytes, integer, number of data bytes covered per checksum.
 - **On-disk Data Size With Header**: 4 bytes, integer, on disk data size with header.
 
@@ -213,8 +225,11 @@ This is used by HBase and written to HFile. For Hudi, this field should always b
 ## Meta Block
 
 The "Data" part of the Meta Block contains the meta information in byte array. The key of the meta block can be found in
-the
-Meta Index Block.
+the Meta Index Block.
+
+Hudi stores the bloom filter of a file in a meta block under the key `bloomFilter`, which is the key the
+reader looks up when serving a bloom filter. This is Hudi's own meta block and is unrelated to HBase's
+`BLMFMET2` / `BLMFBLK2` bloom blocks, which Hudi never writes.
 
 ## Index Block
 
@@ -299,6 +314,23 @@ For Data Index, the "Key Bytes" part has the following format (same as the key f
 
 For Meta Index, the "Key Bytes" part is the byte array of the key of the Meta Block.
 
+### Multi-level data block index
+
+The block index can have more than one level. `num_data_index_levels` in the [Trailer](#trailer) says how
+many. With one level, the Root Data Index Block in the "Load-on-open" section points straight at the data
+blocks, and that is all Hudi's writer ever produces: it writes a single root level and sets
+`num_data_index_levels` to `1`.
+
+With more than one level, the root index entries point at index blocks rather than data blocks. Those
+intermediate levels use the `IDXINTE2` (`INTERMEDIATE_INDEX`) magic and the bottom level uses `IDXLEAF2`
+(`LEAF_INDEX`); both carry the same block index entry layout described above. HBase produces these once a
+file has more data blocks than fit in a single root index.
+
+Hudi's reader handles this so it can read HFiles written by HBase: starting from the root entries it walks
+down `num_data_index_levels`, reading each level's index blocks until the entries it holds are data block
+entries, then uses those for lookups. Reading a multi-level file therefore costs one extra block read per
+level beyond the root.
+
 ## File Info Block
 
 The "Data" part of the File Info Block has the following format:
@@ -337,11 +369,19 @@ message InfoProto {
 The key and value are represented in byte array. When Hudi adds more key-value metadata entry to the file info, the key
 and value are encoded from String into byte array using UTF-8.
 
-Here are common metadata stored in the File Info Block:
+Here are common metadata stored in the File Info Block. Note that only some of these keys carry the
+reserved `hfile.` prefix; `KEY_VALUE_VERSION` and `MAX_MEMSTORE_TS_KEY` do not, and looking them up with
+the prefix finds nothing:
 
 - `hfile.LASTKEY`: The last key of the file (byte array)
-- `hfile.MAX_MEMSTORE_TS_KEY`: Maximum MVCC timestamp of the key-value pairs in the file. In Hudi, this should always be
-    0.
+- `hfile.CREATE_TIME_TS`: File creation timestamp
+- `hfile.AVG_KEY_LEN`: Average key length in the file, integer
+- `hfile.AVG_VALUE_LEN`: Average value length in the file, integer
+- `KEY_VALUE_VERSION`: Whether the key-value entries carry an MVCC timestamp. `1`
+  (`KEY_VALUE_VERSION_WITH_MVCC_TS`) means they do. Hudi writes the MVCC timestamp as a single zero byte
+  on every entry, as described in [Data Block](#data-block).
+- `MAX_MEMSTORE_TS_KEY`: Maximum MVCC timestamp of the key-value pairs in the file. In Hudi, this should
+  always be 0, and the reader validates that assumption when parsing the file info.
 
 ## Trailer
 
