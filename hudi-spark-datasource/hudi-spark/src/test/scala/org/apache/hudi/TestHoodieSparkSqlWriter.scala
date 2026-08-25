@@ -232,16 +232,16 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
 
     rewriteTableConfigAsVersionOne()
 
-    assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams, newSingleRowDataFrame())._1)
+    assertTrue(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams, newSingleRowDataFrame())._1)
 
     val upgradedConfig = loadTableConfig()
     assertEquals("uuid", upgradedConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS))
     assertEquals(partitionField, upgradedConfig.getString(HoodieTableConfig.PARTITION_FIELDS))
     assertEquals("PARQUET", upgradedConfig.getString(HoodieTableConfig.BASE_FILE_FORMAT))
-    assertTrue(upgradedConfig.getTableVersion.versionCode() >= HoodieTableVersion.TWO.versionCode())
+    assertEquals(HoodieTableVersion.SIX, upgradedConfig.getTableVersion)
 
     // the backfilled table configs must not conflict with the same write config on the next write
-    assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams, newSingleRowDataFrame())._1)
+    assertTrue(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams, newSingleRowDataFrame())._1)
   }
 
   /**
@@ -264,8 +264,8 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
 
     val hoodieException = intercept[HoodieException](
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams, newSingleRowDataFrame()))
-    assert(hoodieException.getMessage.contains("Config conflict"))
-    assert(hoodieException.getMessage.contains("RecordKey:\tuuid\tnull"))
+    assertTrue(hoodieException.getMessage.contains("Config conflict"))
+    assertTrue(hoodieException.getMessage.contains("RecordKey:\tuuid\tnull"))
   }
 
   private def newSingleRowDataFrame(): DataFrame =

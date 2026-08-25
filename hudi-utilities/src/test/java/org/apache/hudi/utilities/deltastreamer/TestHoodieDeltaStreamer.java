@@ -580,7 +580,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     HoodieTableConfig tableConfig = HoodieTestUtils.createMetaClient(storage, tableBasePath).getTableConfig();
     assertEquals("_row_key", tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
-    assertTrue(tableConfig.getTableVersion().versionCode() >= HoodieTableVersion.TWO.versionCode());
+    assertEquals(HoodieTableVersion.SIX, tableConfig.getTableVersion());
   }
 
   /**
