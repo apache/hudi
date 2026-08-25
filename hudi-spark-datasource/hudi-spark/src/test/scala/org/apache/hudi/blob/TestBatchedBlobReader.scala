@@ -21,8 +21,14 @@ package org.apache.hudi.blob
 
 import org.apache.hudi.blob.BlobTestHelpers._
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.util.HoodieStorageUtils
+import org.apache.hudi.hadoop.fs.{HadoopFSUtils, NonLocalSchemeLocalFileSystem}
+import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestBase
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.SparkException
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions._
@@ -453,5 +459,118 @@ class TestBatchedBlobReader extends HoodieClientTestBase {
     })
     assertTrue(thrown.getCause.isInstanceOf[IllegalArgumentException])
     assertTrue(thrown.getCause.getMessage.contains("Overlapping blob ranges detected"))
+  }
+
+  /**
+   * Blob references are absolute paths carried in row data, so the filesystem a partition must read
+   * is not known until the rows arrive. These tests put the referenced files behind object-store
+   * schemes, which is where storage resolved from a default {@code file:///} URI fails with
+   * {@code IllegalArgumentException: Wrong FS: s3a://..., expected: file:///}.
+   */
+  @Test
+  def testRangedReadOfAReferenceOnANonLocalScheme(): Unit = {
+    val localPath = createTestFile(tempDir, "ranged-non-local.bin", 10000)
+    val inputDF = sparkSession.createDataFrame(Seq(
+      (onScheme("s3a", localPath), 0L, 100L),
+      (onScheme("s3a", localPath), 100L, 100L)
+    )).toDF("external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
+      .select("offset", "data")
+      .coalesce(1)
+
+    val results = BatchedBlobReader.readBatched(inputDF, nonLocalSchemeStorageConf).orderBy("offset").collect()
+
+    assertEquals(2, results.length)
+    results.zipWithIndex.foreach { case (row, i) =>
+      val data = row.getAs[Array[Byte]]("data")
+      assertEquals(100, data.length)
+      assertBytesContent(data, expectedOffset = i * 100)
+    }
+  }
+
+  @Test
+  def testWholeFileReadOfAReferenceOnANonLocalScheme(): Unit = {
+    val localPath = createTestFile(tempDir, "whole-non-local.bin", 512)
+    val inputDF = sparkSession.createDataFrame(Seq(Tuple1(onScheme("gs", localPath))))
+      .toDF("external_path")
+      .withColumn("data", wholeFileBlobStructCol("data", col("external_path")))
+      .select("data")
+      .coalesce(1)
+
+    val results = BatchedBlobReader.readBatched(inputDF, nonLocalSchemeStorageConf).collect()
+
+    assertEquals(1, results.length)
+    val data = results(0).getAs[Array[Byte]]("data")
+    assertEquals(512, data.length)
+    assertBytesContent(data)
+  }
+
+  /**
+   * One partition referencing two filesystems. A reader that resolved storage once, from its
+   * configuration or from the first reference it saw, would serve the second scheme through the
+   * first scheme's handle.
+   */
+  @Test
+  def testReferencesOnTwoFilesystemsInOnePartition(): Unit = {
+    val firstPath = createTestFile(tempDir, "two-fs-first.bin", 1000)
+    val secondPath = createTestFile(tempDir, "two-fs-second.bin", 1000)
+    val inputDF = sparkSession.createDataFrame(Seq(
+      ("s3a", onScheme("s3a", firstPath), 0L, 100L),
+      ("gs", onScheme("gs", secondPath), 0L, 100L)
+    )).toDF("scheme", "external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
+      .select("scheme", "data")
+      .coalesce(1)
+
+    val results = BatchedBlobReader.readBatched(inputDF, nonLocalSchemeStorageConf).orderBy("scheme").collect()
+
+    assertEquals(2, results.length)
+    assertEquals(Seq("gs", "s3a"), results.map(_.getAs[String]("scheme")).toSeq)
+    results.foreach { row =>
+      val data = row.getAs[Array[Byte]]("data")
+      assertEquals(100, data.length)
+      assertBytesContent(data)
+    }
+  }
+
+  /**
+   * Harness sanity, so none of the tests above can pass for the wrong reason: the borrowed schemes
+   * must reach the local file the test wrote, and must not be silently rewritten to {@code file}.
+   */
+  @Test
+  def testBorrowedSchemesReachLocalFiles(): Unit = {
+    val localPath = createTestFile(tempDir, "harness-sanity.bin", 256)
+    val conf = nonLocalSchemeStorageConf
+    Seq("s3a", "gs").foreach { scheme =>
+      val path = new StoragePath(onScheme(scheme, localPath))
+      val storage = HoodieStorageUtils.getStorage(path, conf)
+      try {
+        assertEquals(scheme, storage.getScheme)
+        assertEquals(256, storage.getPathInfo(path).getLength)
+      } finally {
+        storage.close()
+      }
+    }
+    val localStorage = HoodieTestUtils.getLocalStorage(conf)
+    try {
+      assertEquals("file", localStorage.getScheme)
+    } finally {
+      localStorage.close()
+    }
+  }
+
+  private def onScheme(scheme: String, localPath: String): String = s"$scheme://test-bucket$localPath"
+
+  /**
+   * The table's storage configuration with the local filesystem also exposed under two object-store
+   * schemes. Neither scheme has a real implementation on this module's test classpath, so nothing
+   * else claims them.
+   */
+  private def nonLocalSchemeStorageConf: StorageConfiguration[_] = {
+    val hadoopConf = new Configuration(storageConf.unwrapAs(classOf[Configuration]))
+    Seq("s3a", "gs").foreach { scheme =>
+      hadoopConf.setClass(s"fs.$scheme.impl", classOf[NonLocalSchemeLocalFileSystem], classOf[FileSystem])
+    }
+    HadoopFSUtils.getStorageConf(hadoopConf)
   }
 }
