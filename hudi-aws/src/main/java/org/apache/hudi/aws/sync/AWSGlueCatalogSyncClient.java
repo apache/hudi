@@ -941,11 +941,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public Option<String> getLastCommitCompletionTimeSynced(String tableName) {
-    // Get the last commit completion time from the TBLproperties
     try {
       return Option.ofNullable(getInitialTable(tableName).parameters().getOrDefault(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, null));
     } catch (Exception e) {
-      throw new HoodieGlueSyncException("Failed to get the last commit completion time synced from the table " + tableName, e);
+      throw new HoodieGlueSyncException("Fail to get last commit completion time synced for " + tableId(databaseName, tableName), e);
     }
   }
 
