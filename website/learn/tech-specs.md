@@ -326,7 +326,9 @@ Each element of the version 3 `deleteRecordList` array is a `HoodieDeleteRecord`
 | `orderingVal` | nullable union of typed wrappers | Ordering value used to resolve merge order against other writes to the same key, encoded with the wrapper matching the value's own type: `BooleanWrapper`, `IntWrapper`, `LongWrapper`, `FloatWrapper`, `DoubleWrapper`, `BytesWrapper`, `StringWrapper`, `DateWrapper`, `DecimalWrapper`, `TimeMicrosWrapper`, `TimestampMicrosWrapper` or `ArrayWrapper`. |
 
 A delete block may also carry the [`RECORD_POSITIONS`](#headers) header. When it does, the reader can apply the deletes
-positionally against the base file named by `BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS` instead of resolving each key.
+positionally instead of resolving each key, against the base file identified by the instant time in
+`BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS`. The reader matches that instant time against the base file of the file
+slice, which is also how it validates that the positions still refer to the base file the bitmap was built against.
 
 
 ### Corrupted Block (Id: 2)
