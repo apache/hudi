@@ -75,8 +75,8 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
     super(table,
         strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null),
         preserveHoodieMetadata);
-    // This strategy sorts within buckets itself rather than through the custom-columns
-    // partitioners, so it validates the sort columns itself too.
+    // This strategy sorts within buckets directly rather than through the custom-columns
+    // partitioners, so it must validate the sort columns too.
     SortUtils.validateSortableColumns(strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null), table.getConfig().getSchema());
     ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
         "Consistent hash bucket index doesn't support CoW table");

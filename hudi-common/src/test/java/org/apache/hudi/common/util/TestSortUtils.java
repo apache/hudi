@@ -25,7 +25,10 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -35,9 +38,14 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestSortUtils {
 
@@ -58,6 +66,49 @@ public class TestSortUtils {
     Object[] columnValues = new Object[] {"col1", "col2", "col3"};
     Object[] sortColumns = SortUtils.prependPartitionPathAndSuffixRecordKey("partition_path", "record_key", columnValues);
     Assertions.assertArrayEquals(new Object[] {"partition_path", "col1", "col2", "col3", "record_key"}, sortColumns);
+  }
+
+  @Test
+  void testValidateSortableColumnsRejectsTypesWithoutOrderingAtAnyDepth() {
+    HoodieSchema stringMap = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema structWithMap = HoodieSchema.createRecord("struct_with_map", null, null,
+        Collections.singletonList(HoodieSchemaField.of("m", stringMap)));
+    HoodieSchema schema = HoodieSchema.createRecord("sortable_rec", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG)),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("v", HoodieSchema.createVariant()),
+        HoodieSchemaField.of("m", HoodieSchema.createNullable(stringMap)),
+        HoodieSchemaField.of("s", structWithMap),
+        HoodieSchemaField.of("arr", HoodieSchema.createArray(stringMap)),
+        HoodieSchemaField.of("blob", HoodieSchema.createBlob()),
+        HoodieSchemaField.of("vec", HoodieSchema.createVector(8))));
+
+    // VARIANT and MAP have no ordering, at the top level or nested inside a struct or an array.
+    HoodieException variantFailure = assertThrows(HoodieException.class,
+        () -> SortUtils.validateSortableColumns(new String[] {"v"}, schema));
+    assertTrue(variantFailure.getMessage().contains("Sorting by column 'v'"),
+        "The error must name the column, got: " + variantFailure.getMessage());
+    assertThrows(HoodieException.class, () -> SortUtils.validateSortableColumns(new String[] {"m"}, schema));
+    assertThrows(HoodieException.class, () -> SortUtils.validateSortableColumns(new String[] {"s"}, schema));
+    assertThrows(HoodieException.class, () -> SortUtils.validateSortableColumns(new String[] {"arr"}, schema));
+
+    // Matching is case-insensitive, mirroring Spark's column resolution.
+    HoodieException upperCaseFailure = assertThrows(HoodieException.class,
+        () -> SortUtils.validateSortableColumns(new String[] {"V"}, schema));
+    assertTrue(upperCaseFailure.getMessage().contains("Sorting by column 'V'"),
+        "The error must name the column as configured, got: " + upperCaseFailure.getMessage());
+
+    // BLOB is a struct of atomics in Spark and VECTOR an array of floats: both are orderable, and
+    // rejecting them would be a new restriction on a path this check does not otherwise touch.
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[] {"blob"}, schema));
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[] {"vec"}, schema));
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[] {"id", "name"}, schema));
+
+    // Names absent from the schema are left for the caller to handle, and missing inputs are no-ops.
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[] {"not_a_column"}, schema));
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumns((String[]) null, schema));
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[0], schema));
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[] {"v"}, (HoodieSchema) null));
   }
 
   @ParameterizedTest

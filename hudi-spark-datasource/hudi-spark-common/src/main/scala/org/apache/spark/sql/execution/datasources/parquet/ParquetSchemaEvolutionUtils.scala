@@ -223,6 +223,10 @@ object ParquetSchemaEvolutionUtils {
    * the same shape are left alone. The walk recurses through structs, arrays and maps because
    * the row writer shreds nested variants too (see VariantSchemaUtils).
    *
+   * Footer columns are resolved by the query-schema name. A column renamed under schema-on-read
+   * still carries its old name in the file and is not matched here; such reads are left to
+   * #18285 with reconstruction itself.
+   *
    * A scan rewritten by Spark's PushVariantIntoScan (4.x) fails fast regardless of the file's
    * layout: the merged internal-schema request materializes the variant as {metadata, value}
    * while downstream codegen expects the rewrite's ordinal-named extraction struct, so the
@@ -305,7 +309,7 @@ object ParquetSchemaEvolutionUtils {
    * ParquetSchemaConverter.isElementType. An unrecognized shape returns None, which stops the
    * walk without failing the read.
    */
-  private def parquetListElement(parquetType: ParquetType): Option[ParquetType] = {
+  private[parquet] def parquetListElement(parquetType: ParquetType): Option[ParquetType] = {
     if (parquetType.isPrimitive || parquetType.asGroupType().getFieldCount != 1) {
       None
     } else {
@@ -313,7 +317,7 @@ object ParquetSchemaEvolutionUtils {
       if (!repeated.isRepetition(ParquetType.Repetition.REPEATED)) {
         None
       } else if (!repeated.isPrimitive && repeated.asGroupType().getFieldCount == 1
-        && repeated.getName != "array" && !repeated.getName.endsWith("_tuple")) {
+        && repeated.getName != "array" && repeated.getName != parquetType.getName + "_tuple") {
         Some(repeated.asGroupType().getType(0))
       } else {
         Some(repeated)
@@ -321,7 +325,8 @@ object ParquetSchemaEvolutionUtils {
     }
   }
 
-  private def parquetMapValue(parquetType: ParquetType): Option[ParquetType] = {
+  /** Resolves the value type of a parquet MAP group; an unrecognized shape returns None. */
+  private[parquet] def parquetMapValue(parquetType: ParquetType): Option[ParquetType] = {
     if (parquetType.isPrimitive || parquetType.asGroupType().getFieldCount != 1) {
       None
     } else {

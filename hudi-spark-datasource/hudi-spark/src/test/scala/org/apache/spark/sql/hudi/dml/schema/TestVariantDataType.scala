@@ -206,10 +206,12 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
 
   test("Test Query Log Only MOR Table With VARIANT column triggers compaction") {
     // Gated on Spark >= 4.1. Compaction writes the base file via the AVRO shredding writer, which
-    // lays the variant group out as [metadata, value, typed_value]. Spark 4.0's read support
-    // (Spark40HoodieParquetReadSupport.reorderVariantFields) rebuilds that group as [value, metadata]
-    // and drops typed_value, so the subsequent native read fails with MALFORMED_VARIANT. Spark 4.1+
-    // reads variant fields by name (SPARK-54410) and reconstructs correctly.
+    // lays the variant group out as [metadata, value, typed_value]. Spark 4.0 cannot read that back:
+    // Spark40HoodieParquetReadSupport.rejectShreddedVariants (catalyst-anchored, recursing into
+    // structs, arrays and maps) fails the read with a HoodieException naming the column, and Spark
+    // 4.0's own schema conversion may reject the 3-field group before it. The reorder step leaves a
+    // shredded group untouched. Spark 4.1+ reads variant fields by name (SPARK-54410) and
+    // reconstructs correctly.
     // TODO(voon): drop this comment once Spark 4.0 is removed.
     assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
 
@@ -497,6 +499,11 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
               (if (shredded) "" else "key string")) {
             spark.sql(s"""update $tableName set v = parse_json('{"key":"value3"}'), ts = 1002 where id = 1""")
           }
+
+          // Pin the flip too: if the session confs never reached the update writer this leg
+          // would just be a second copy of the other one.
+          assertLayoutsByInstant(baseLayouts(tablePath), leg)(
+            latestCompletedInstant(tablePath) -> (if (shredded) None else Some(Seq("key"))))
 
           val cdc = spark.read.format("hudi")
             .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)

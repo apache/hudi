@@ -394,40 +394,6 @@ public class VariantSchemaUtils {
   }
 
   /**
-   * Whether {@code schema} holds a shredded variant at any depth, detected by shape as well as by
-   * logical type. For callers whose file schema came from converting the parquet footer (where
-   * variant groups surface as plain records, see {@link #isShreddedVariantTarget}) and whose
-   * requested side is not a HoodieSchema to anchor on, such as the Hive reader's column types.
-   * The caller supplies the anchor: only ask about a column the requested side declares as a
-   * variant, or a plain user struct of the same shape would match too. Walks records, array
-   * elements and map values, as the row writer shreds at any depth (see
-   * {@link #swapShreddedVariantFields}).
-   */
-  public static boolean containsShreddedVariantShape(HoodieSchema schema) {
-    HoodieSchema unwrapped = schema.isNullable() ? schema.getNonNullType() : schema;
-    switch (unwrapped.getType()) {
-      case VARIANT:
-        return ((HoodieSchema.Variant) unwrapped).isShredded();
-      case RECORD:
-        if (isShreddedVariantShape(unwrapped)) {
-          return true;
-        }
-        for (HoodieSchemaField field : unwrapped.getFields()) {
-          if (containsShreddedVariantShape(field.schema())) {
-            return true;
-          }
-        }
-        return false;
-      case ARRAY:
-        return containsShreddedVariantShape(unwrapped.getElementType());
-      case MAP:
-        return containsShreddedVariantShape(unwrapped.getValueType());
-      default:
-        return false;
-    }
-  }
-
-  /**
    * Returns {@code fileSchema} with each shredded variant column (per
    * {@link #isShreddedVariantTarget}) replaced by its requested counterpart, for projection or
    * compatibility checks against {@code requestedSchema}. A footer-derived shredded variant column

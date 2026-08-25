@@ -60,6 +60,8 @@ import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.avro.AvroWriteSupport;
+import org.apache.parquet.hadoop.ParquetWriter;
 
 import java.io.File;
 import java.io.IOException;
@@ -552,16 +554,41 @@ public class InputFormatTestUtil {
 
   /** Writes a one-row parquet file with an {@code id} column and a {@code v} variant column, shredded or not. */
   public static StoragePath writeVariantParquetFile(java.nio.file.Path dir, String fileName, boolean shredded) throws IOException {
+    return writeVariantParquetFile(dir, fileName, shredded, false);
+  }
+
+  /**
+   * As {@link #writeVariantParquetFile(java.nio.file.Path, String, boolean)}, optionally adding a
+   * {@code ts} column stored as an INT96 primitive: the encoding Spark gives timestamps by default,
+   * which the avro converter refuses to read back.
+   */
+  public static StoragePath writeVariantParquetFile(java.nio.file.Path dir, String fileName, boolean shredded,
+                                                    boolean withInt96Timestamp) throws IOException {
     HoodieSchema.Variant variantSchema = shredded ? shreddedVariantSchema() : HoodieSchema.createVariant();
-    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+    HoodieSchema timestampSchema = HoodieSchema.createFixed("ts_fixed", null, null, 12);
+    List<HoodieSchemaField> fields = new ArrayList<>(Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
         HoodieSchemaField.of("v", variantSchema)));
+    if (withInt96Timestamp) {
+      fields.add(HoodieSchemaField.of("ts", timestampSchema));
+    }
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, fields);
+    Configuration conf = new Configuration();
+    if (withInt96Timestamp) {
+      // parquet-avro writes a fixed(12) as INT96 only for the paths named here.
+      conf.set(AvroWriteSupport.WRITE_FIXED_AS_INT96, "ts");
+    }
     java.nio.file.Path file = dir.resolve(fileName);
-    try (AvroParquetWriter<GenericRecord> writer =
-             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(new Path(file.toString()))
+        .withSchema(writeSchema.toAvroSchema())
+        .withConf(conf)
+        .build()) {
       GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
       record.put("id", 1);
       record.put("v", variantValue(variantSchema, shredded));
+      if (withInt96Timestamp) {
+        record.put("ts", new GenericData.Fixed(timestampSchema.toAvroSchema(), new byte[12]));
+      }
       writer.write(record);
     }
     return new StoragePath(file.toUri().toString());

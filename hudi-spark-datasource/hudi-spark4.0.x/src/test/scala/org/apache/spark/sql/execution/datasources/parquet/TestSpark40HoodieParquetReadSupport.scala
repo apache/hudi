@@ -21,6 +21,7 @@ import org.apache.hudi.exception.HoodieException
 
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.Types
+import org.apache.spark.sql.types.{BinaryType, IntegerType, StructType, VariantType}
 import org.junit.jupiter.api.{Assertions, Test}
 
 class TestSpark40HoodieParquetReadSupport {
@@ -61,11 +62,12 @@ class TestSpark40HoodieParquetReadSupport {
 
   /**
    * A shredded variant group (typed_value present) must fail fast: Spark 4.0's unshredded
-   * converter reads only [value, metadata], so reordering the group (which used to drop
-   * typed_value from the requested schema) silently lost the typed rows' payload.
+   * converter reads only [value, metadata], so reading the group (which used to drop
+   * typed_value from the requested schema) silently lost the typed rows' payload. Both the
+   * catalyst-anchored walk and the shape-only fallback reject it.
    */
   @Test
-  def testReorderVariantFieldsFailsFastOnShreddedGroup(): Unit = {
+  def testRejectShreddedVariantsFailsFastOnShreddedGroup(): Unit = {
     val schema = Types.buildMessage()
       .addField(Types.requiredGroup()
         .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
@@ -75,11 +77,50 @@ class TestSpark40HoodieParquetReadSupport {
         .named("v"))
       .named("test")
 
-    val failure = Assertions.assertThrows(classOf[HoodieException],
-      () => Spark40HoodieParquetReadSupport.reorderVariantFields(schema))
+    Seq(None, Some(new StructType().add("v", VariantType))).foreach { sparkSchema =>
+      val failure = Assertions.assertThrows(classOf[HoodieException],
+        () => Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, sparkSchema))
+      Assertions.assertTrue(
+        failure.getMessage.contains("shredded variant") && failure.getMessage.contains("'v'"),
+        s"The error must name the shredded variant column, got: ${failure.getMessage}")
+    }
+
+    // The reorder itself no longer throws, and must leave typed_value in place: rebuilding the
+    // group as [value, metadata] is what dropped the typed rows' payload.
+    val reordered = Spark40HoodieParquetReadSupport.reorderVariantFields(schema)
     Assertions.assertTrue(
-      failure.getMessage.contains("shredded variant") && failure.getMessage.contains("'v'"),
-      s"The error must name the shredded variant column, got: ${failure.getMessage}")
+      reordered.getType(reordered.getFieldIndex("v")).asGroupType().containsField("typed_value"),
+      "The reorder must not drop typed_value")
+  }
+
+  /**
+   * A variant nested inside a struct is rejected too, reported by its dotted path - the walk is
+   * anchored on catalyst, so the same parquet shape typed as a plain struct is left alone.
+   */
+  @Test
+  def testRejectShreddedVariantsFailsFastOnNestedVariant(): Unit = {
+    val schema = Types.buildMessage()
+      .addField(Types.requiredGroup()
+        .addField(Types.optionalGroup()
+          .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
+          .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
+          .addField(Types.optionalGroup()
+            .addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("typed_value"))
+          .named("inner"))
+        .named("s"))
+      .named("test")
+
+    val variantSchema = new StructType().add("s", new StructType().add("inner", VariantType))
+    val failure = Assertions.assertThrows(classOf[HoodieException],
+      () => Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, Some(variantSchema)))
+    Assertions.assertTrue(failure.getMessage.contains("'s.inner'"),
+      s"The error must name the nested variant path, got: ${failure.getMessage}")
+
+    val structSchema = new StructType().add("s", new StructType().add("inner", new StructType()
+      .add("metadata", BinaryType)
+      .add("value", BinaryType)
+      .add("typed_value", new StructType().add("a", IntegerType))))
+    Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, Some(structSchema))
   }
 
   /** The unshredded twin still reorders to [value, metadata] as before. */

@@ -120,14 +120,16 @@ class RunClusteringProcedure extends BaseProcedure
       logInfo(s"Partition selected: $selectedPartitions")
     }
 
-    // Construct sort column info
+    // Construct sort column info. The execution strategy splits the stored list on "," without
+    // trimming, so normalise once here and validate and store the same normalised list.
     orderColumns match {
       case Some(o) =>
-        validateOrderColumns(o.asInstanceOf[String], metaClient)
+        val normalized = o.asInstanceOf[String].split(",").map(_.trim).mkString(",")
+        validateOrderColumns(normalized, metaClient)
         confs = confs ++ Map(
-          HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> o.asInstanceOf[String]
+          HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> normalized
         )
-        logInfo(s"Order columns: $o")
+        logInfo(s"Order columns: $normalized")
       case _ =>
         logInfo("No order columns")
     }
@@ -227,6 +229,9 @@ class RunClusteringProcedure extends BaseProcedure
     prunedPartitions.map(partitionPath => partitionPath.getPath).toSet.mkString(",")
   }
 
+  /**
+   * Validates the already-normalised (comma-separated, trimmed) order column list.
+   */
   private def validateOrderColumns(orderColumns: String, metaClient: HoodieTableMetaClient): Unit = {
     if (orderColumns == null) {
       throw new HoodieClusteringException("Order columns is null")
@@ -237,7 +242,7 @@ class RunClusteringProcedure extends BaseProcedure
     val fields = tableSchema.getFields.asScala.map(_.name().toLowerCase)
     val columns = orderColumns.split(",")
     columns.foreach(col => {
-      if (!fields.contains(col.trim.toLowerCase)) {
+      if (!fields.contains(col.toLowerCase)) {
         throw new HoodieClusteringException("Order column not exist:" + col)
       }
     })

@@ -62,6 +62,9 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hive.common.util.HiveVersionInfo;
 import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.hadoop.ParquetFileReader;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -788,6 +791,14 @@ public class TestHoodieParquetInputFormat {
     FileSplit unshredded = fileSplit(InputFormatTestUtil.writeVariantParquetFile(basePath, "unshredded.parquet", false));
     assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(unshredded, jobConf));
 
+    // A bootstrap split (shouldUseFilegroupReader is false for one by construction) is guarded on
+    // its bootstrap half; its own file is the skeleton, which carries meta columns only.
+    BootstrapBaseFileSplit bootstrapSplit = new BootstrapBaseFileSplit(unshredded, shredded);
+    HoodieException bootstrapFailure = assertThrows(HoodieException.class,
+        () -> inputFormat.getRecordReader(bootstrapSplit, jobConf, null));
+    assertTrue(bootstrapFailure.getMessage().contains("'v'"),
+        "The error must name the shredded variant column of the bootstrap file, got: " + bootstrapFailure.getMessage());
+
     // A shredded variant below the top level (the row writer shreds at depth) fails too, naming
     // the struct column that holds it.
     jobConf.set(IOConstants.COLUMNS, "id,s");
@@ -798,6 +809,27 @@ public class TestHoodieParquetInputFormat {
         () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(nested, jobConf));
     assertTrue(nestedFailure.getMessage().contains("'s'"),
         "The error must name the column holding the nested shredded variant, got: " + nestedFailure.getMessage());
+
+    // An INT96 column anywhere in the file (Spark's default timestamp encoding) must not break the
+    // guard: converting the footer to avro throws "INT96 is deprecated" before reaching the variant.
+    jobConf.set(IOConstants.COLUMNS, "id,v,ts");
+    jobConf.set(IOConstants.COLUMNS_TYPES, "int,struct<metadata:binary,value:binary>,timestamp");
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "0,1");
+    jobConf.set(READ_COLUMN_NAMES_CONF_STR, "id,v");
+    StoragePath int96UnshreddedPath = InputFormatTestUtil.writeVariantParquetFile(basePath, "int96_unshredded.parquet", false, true);
+    try (ParquetFileReader reader = ParquetFileReader.open(
+        HadoopInputFile.fromPath(new Path(int96UnshreddedPath.toUri()), jobConf))) {
+      assertEquals(PrimitiveTypeName.INT96,
+          reader.getFooter().getFileMetaData().getSchema().getType("ts").asPrimitiveType().getPrimitiveTypeName(),
+          "the ts column must really be INT96, or this leg proves nothing");
+    }
+    FileSplit int96Unshredded = fileSplit(int96UnshreddedPath);
+    assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(int96Unshredded, jobConf));
+    FileSplit int96Shredded = fileSplit(InputFormatTestUtil.writeVariantParquetFile(basePath, "int96_shredded.parquet", true, true));
+    HoodieException int96Failure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(int96Shredded, jobConf));
+    assertTrue(int96Failure.getMessage().contains("'v'"),
+        "The error must name the shredded variant column, got: " + int96Failure.getMessage());
   }
 
   private static FileSplit fileSplit(StoragePath path) {

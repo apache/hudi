@@ -38,11 +38,12 @@ public class SortUtils {
 
   /**
    * Rejects sort columns whose type cannot serve as a sort key. VARIANT and MAP have no total
-   * order (Spark's RowOrdering.isOrderable is false for both), and BLOB and VECTOR are rejected
-   * deliberately: their struct/array encodings would compare by raw bytes or elements, which is
-   * never a meaningful sort key, and the record-based write path fails on them outright. Without
-   * this check the failure surfaces deep in the write job (an AnalysisException from the row
-   * partitioner, a ClassCastException from the record-based one) without naming the column.
+   * order: Spark's RowOrdering.isOrderable is false for both, and Avro's GenericData.compare
+   * cannot compare maps. The walk recurses through records and array elements just as
+   * isOrderable does, so a struct or an array that merely holds a variant or a map at depth is
+   * rejected too. Without this check the failure surfaces deep in the write job (an
+   * AnalysisException from the row partitioner, a ClassCastException from the record-based one)
+   * without naming the column.
    *
    * <p>Matching is case-insensitive, mirroring Spark's column resolution. Names absent from the
    * schema (nested paths, meta columns on a data-only schema) are left for the caller to handle.
@@ -59,15 +60,37 @@ public class SortUtils {
         .collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT), Function.identity(), (first, second) -> first));
     for (String sortColumn : sortColumns) {
       HoodieSchemaField field = fieldsByLowerName.get(sortColumn.trim().toLowerCase(Locale.ROOT));
-      if (field != null) {
-        HoodieSchemaType type = field.schema().getNonNullType().getType();
-        if (type == HoodieSchemaType.VARIANT || type == HoodieSchemaType.MAP
-            || type == HoodieSchemaType.BLOB || type == HoodieSchemaType.VECTOR) {
-          throw new HoodieException(String.format(
-              "Sorting by column '%s' of type %s is not supported. Remove it from the sort columns.",
-              sortColumn.trim(), type));
-        }
+      if (field != null && !isOrderable(field.schema())) {
+        throw new HoodieException(String.format(
+            "Sorting by column '%s' of type %s is not supported: VARIANT and MAP have no ordering, "
+                + "at any depth. Remove it from the sort columns.",
+            sortColumn.trim(), field.schema().getNonNullType().getType()));
       }
+    }
+  }
+
+  /**
+   * Mirrors Spark's RowOrdering.isOrderable: VARIANT and MAP are not orderable, a record is
+   * orderable when every field is, an array when its element type is, and every other type -
+   * BLOB (a struct of atomics in Spark) and VECTOR (an array of floats) included - is orderable.
+   */
+  private static boolean isOrderable(HoodieSchema schema) {
+    HoodieSchema unwrapped = schema.isNullable() ? schema.getNonNullType() : schema;
+    switch (unwrapped.getType()) {
+      case VARIANT:
+      case MAP:
+        return false;
+      case RECORD:
+        for (HoodieSchemaField field : unwrapped.getFields()) {
+          if (!isOrderable(field.schema())) {
+            return false;
+          }
+        }
+        return true;
+      case ARRAY:
+        return isOrderable(unwrapped.getElementType());
+      default:
+        return true;
     }
   }
 

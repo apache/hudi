@@ -18,18 +18,15 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -52,6 +49,9 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.parquet.hadoop.ParquetInputFormat;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -165,11 +165,13 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     // }
     // From here on the split is read by Hive's plain parquet reader, which the file-group-reader
     // guard in HiveHoodieReaderContext never sees; repeat the shredded-variant fail-fast for it.
-    validateNoShreddedVariantRead(split, job);
+    // A bootstrap split's own file is the skeleton, which holds meta columns only, so only its
+    // bootstrap half is worth a footer read.
     if (split instanceof BootstrapBaseFileSplit) {
       validateNoShreddedVariantRead(((BootstrapBaseFileSplit) split).getBootstrapFileSplit(), job);
       return createBootstrappingRecordReader(split, job, reporter);
     }
+    validateNoShreddedVariantRead(split, job);
 
     // adapt schema evolution
     SchemaEvolutionContext schemaEvolutionContext = new SchemaEvolutionContext(split, job);
@@ -289,10 +291,14 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
    * fail-fast for them. Only reads that request a column holding a shredded variant fail;
    * count(*) and projections that skip the variant keep working. The footer read is gated on a
    * requested column whose synced Hive type embeds the variant {metadata, value} shape, so
-   * non-variant tables never pay it; when it does run it mirrors the per-file readSchema the
-   * file-group-reader path already performs. That footer-derived schema carries no variant
-   * logical type (the converter turns variant groups into plain records), so the file side is
-   * matched by shape, anchored on the Hive type of the requested column.
+   * non-variant tables never pay it.
+   *
+   * <p>The footer's MessageType is inspected directly, without converting it to Avro:
+   * AvroSchemaConverterWithTimestampNTZ.convertINT96 throws unless parquet.avro.readInt96AsFixed
+   * is set (nothing in Hudi sets it), and Spark writes timestamps as INT96 by default, so the
+   * conversion would fail the very reads this guard is careful to leave working. The requested
+   * column's group is matched by shape at any depth - the footer carries no variant logical type
+   * either way - anchored on the Hive type of the requested column as before.
    */
   @VisibleForTesting
   static void validateNoShreddedVariantRead(InputSplit split, JobConf job) {
@@ -332,15 +338,12 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     }
     StoragePath storagePath = convertToStoragePath(filePath);
     HoodieStorage storage = HoodieStorageUtils.getStorage(storagePath, HadoopFSUtils.getStorageConf(job));
-    HoodieSchema fileSchema = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(storagePath).readSchema(storage, storagePath);
-    if (fileSchema.getType() != HoodieSchemaType.RECORD) {
-      return;
-    }
+    MessageType fileSchema = new ParquetUtils().readMessageType(storage, storagePath);
     List<String> offendingColumns = new ArrayList<>();
-    for (HoodieSchemaField field : fileSchema.getFields()) {
-      if (variantColumns.contains(field.name().toLowerCase(Locale.ROOT))
-          && VariantSchemaUtils.containsShreddedVariantShape(field.schema())) {
-        offendingColumns.add(field.name());
+    for (Type field : fileSchema.getFields()) {
+      if (variantColumns.contains(field.getName().toLowerCase(Locale.ROOT))
+          && containsShreddedVariantGroup(field)) {
+        offendingColumns.add(field.getName());
       }
     }
     if (!offendingColumns.isEmpty()) {
@@ -351,5 +354,27 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
               + "hoodie.parquet.variant.write.shredding.enabled=false).",
           String.join(", ", offendingColumns), filePath));
     }
+  }
+
+  /**
+   * Whether {@code type} holds a shredded variant group at any depth: a group carrying both
+   * {@code typed_value} and {@code metadata}. Every child group is walked, so LIST and MAP
+   * wrapper groups are descended through like any other.
+   */
+  private static boolean containsShreddedVariantGroup(Type type) {
+    if (type.isPrimitive()) {
+      return false;
+    }
+    GroupType group = type.asGroupType();
+    if (group.containsField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)
+        && group.containsField(HoodieSchema.Variant.VARIANT_METADATA_FIELD)) {
+      return true;
+    }
+    for (Type field : group.getFields()) {
+      if (containsShreddedVariantGroup(field)) {
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -87,8 +87,8 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows extends BucketSo
                                                             Map<String, String> strategyParams,
                                                             boolean populateMetaFields, Map<String, List<ConsistentHashingNode>> hashingChildrenNodes) {
     super(table, strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), ""));
-    // This strategy sorts within buckets itself rather than through the custom-columns
-    // partitioners, so it validates the sort columns itself too.
+    // This strategy sorts within buckets directly rather than through the custom-columns
+    // partitioners, so it must validate the sort columns too.
     SortUtils.validateSortableColumns(strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null), table.getConfig().getSchema());
     this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(table.getConfig().getBucketIndexHashField());
     this.populateMetaFields = populateMetaFields;

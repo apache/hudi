@@ -705,10 +705,12 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         // well: pruning treats the rewritten ordinal-named struct as the variant column itself
         // (SparkInternalSchemaConverter.isVariantRewriteStruct), so the guard sees the request
         // and rejects it up front instead of an engine-internal pruning error or codegen NPE.
-        // Both legs' messages share "cannot reconstruct"; the real fix is #18285.
+        // Pinned on the rewrite arm's own wording: both messages carry "cannot reconstruct", so
+        // matching on that alone would stay green with the rewrite arm gone. Fix is #18285.
         checkNestedExceptionContains(
           () => spark.sql(s"select id, cast(v as string), note from $tableName").collect())(
-          "cannot reconstruct")
+          "pushVariantIntoScan")
+
       }
 
       // Known #18285 residue, documented rather than pinned: the schema-on-read DDL also
@@ -716,6 +718,27 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       // arm, so the catalog column degrades to a plain struct<metadata,value> (the resolved
       // avro table schema keeps its variant logical type). Plain reads of the table after the
       // DDL request that struct and fail in Spark before any Hudi hook.
+    })
+
+    // The UNSHREDDED companion separates the two guard arms: with no typed_value in the file
+    // only the rewrite arm can fire. With the rewrite off the read reaches Spark's own
+    // struct-vs-variant mismatch under schema-on-read (the #18285 residue above), not this guard.
+    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"unshredded schema-on-read, $tableName"
+      createVariantTable(tableName, tablePath, "cow")
+      withWriteLayout(Unshredded) {
+        spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1}'), 1000)""")
+      }
+      assertVariantLayout(tablePath, shredded = false, leg = leg)
+
+      withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+        spark.sql(s"alter table $tableName add columns (note string)")
+        checkNestedExceptionContains(
+          () => spark.sql(s"select id, cast(v as string), note from $tableName").collect())(
+          "pushVariantIntoScan")
+      }
     })
 
     // The guard recurses: a NESTED shredded variant (struct<inner: variant>, written by the
