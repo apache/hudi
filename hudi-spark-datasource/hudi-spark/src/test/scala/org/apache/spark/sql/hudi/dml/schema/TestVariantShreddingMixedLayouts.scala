@@ -21,9 +21,12 @@ package org.apache.spark.sql.hudi.dml.schema
 
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter
 import org.apache.hudi.testutils.DataSourceTestUtils
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 
 /**
  * Mixed-layout variant shredding matrix: files with DIFFERENT typed_value layouts in one table,
@@ -52,6 +55,8 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
   import VariantShreddingTestSupport.VariantShape._
 
   private val SPARK_4_1_GATE = "Shredded variant read-back requires Spark 4.1 or higher"
+  private val INFERRER_GATE =
+    "Per-file shredding-schema inference requires a VariantShreddingSchemaInferrer on the classpath"
 
   /** One insert commit per layout; returns the completed instant of each commit, in order. */
   private def seedMixedLayoutTable(tableName: String,
@@ -960,6 +965,348 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         spark.sql(s"insert into $tableName ${variantSourceSql(Seq((6 until 8, ObjA)))}")
       }
       checkAnswer(s"select count(*) from $tableName")(Seq(6))
+    })
+  }
+
+  // -----------------------------------------------------------------------------------------------
+  // I. Inference
+  // -----------------------------------------------------------------------------------------------
+
+  test("Inference samples the head of a file; keys that only appear past the sample stay residual and read back") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+    assume(inferrerPresent, INFERRER_GATE)
+
+    // The inferrer only ever sees the buffered head of a file: MAX_BUFFERED_RECORDS records, or
+    // MAX_BUFFERED_BYTES (capped by the max file size) worth of them, whichever comes first.
+    val cap = VariantShreddingInferenceFileWriter.MAX_BUFFERED_RECORDS
+    val total = cap + 500
+    val tailJson = """concat('{"a":', id, ',"b":"b', id, '","late":', id, '}')"""
+    // Ids below the cap are plain ObjA - everything the sample can see; the tail adds a "late"
+    // key the inferred typed_value therefore cannot carry.
+    val rowJson = s"case when id < $cap then ${ObjA.jsonExpr} else $tailJson end"
+    val sourceSql = s"select cast(id as int) as id, parse_json($rowJson) as v, 1000L as ts " +
+      s"from range(0, $total, 1, 1)"
+
+    def assertHeadAndTailReads(tableName: String, leg: String): Unit = {
+      checkAnswer(s"select count(*) from $tableName")(Seq(total))
+      // Whole-table round trip: every row renders what was written, typed keys and residual
+      // "late" alike (a spot check would miss a systematically dropped residual).
+      checkAnswer(s"select count(*) from $tableName where cast(v as string) <> $rowJson")(Seq(0))
+      // $.late resolves out of the residual for every tail row...
+      checkAnswer(s"select count(*) from $tableName where variant_get(v, '$$.late', 'int') is not null")(
+        Seq(total - cap))
+      checkAnswer(s"select count(*) from $tableName " +
+        s"where id >= $cap and coalesce(variant_get(v, '$$.late', 'int'), -1) <> id")(Seq(0))
+      // ...and stays null over the sampled head, which never carried the key.
+      checkAnswer(s"select count(*) from $tableName " +
+        s"where id < $cap and variant_get(v, '$$.late', 'int') is not null")(Seq(0))
+      checkAnswer(s"select id, cast(v as string) from $tableName where id in (0, ${total - 1}) order by id")(
+        Seq(0, ObjA.expected(0)),
+        Seq(total - 1, s"""{"a":${total - 1},"b":"b${total - 1}","late":${total - 1}}""")
+      )
+    }
+
+    // The AVRO read reconstructs the residual rows through HoodieVariantReconstruction, SPARK
+    // natively, so both record types have to serve the split.
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"head sample cow, $tableName"
+      createVariantTable(tableName, tablePath, "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT))
+
+      withWriteLayout(Inferred) {
+        spark.sql(s"insert into $tableName $sourceSql")
+      }
+      val instant = latestCompletedInstant(tablePath)
+      assertLayoutsByInstant(baseLayouts(tablePath), leg)(instant -> Some(Seq("a", "b")))
+      assertHeadAndTailReads(tableName, leg)
+
+      // The split is physical, not just a read-side artifact: every row types a and b, only the
+      // tail rows also carry a root residual (the unmatched "late" key).
+      val stats = baseLayouts(tablePath).map(l => inspectVariantRows(l.path))
+      assert(stats.map(_.rows).sum == total, s"[$leg] rows: $stats")
+      assert(stats.map(_.fieldTyped("a")).sum == total, s"[$leg] every row should type a: $stats")
+      assert(stats.map(_.rootResidual).sum == total - cap,
+        s"[$leg] only the tail rows should carry a root residual: $stats")
+    })
+
+    // MOR twin: the same rows in a base file, the late keys re-applied through a log file, then
+    // a compaction that re-infers from the merged rows. Whatever the compacted base types, the
+    // reads must hold.
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"head sample mor, $tableName"
+      createVariantTable(tableName, tablePath, "mor",
+        props = Seq(NEW_FILE_GROUP_PER_COMMIT, "hoodie.compact.inline = 'false'"))
+
+      withWriteLayout(Inferred) {
+        spark.sql(s"insert into $tableName $sourceSql")
+      }
+      val baseInstant = latestCompletedInstant(tablePath)
+      assertLayoutsByInstant(baseLayouts(tablePath), leg)(baseInstant -> Some(Seq("a", "b")))
+
+      withWriteLayout(Inferred) {
+        spark.sql(s"update $tableName set v = parse_json($tailJson), ts = 1001 where id >= $cap")
+        runCompaction(tableName)
+      }
+      assertCompactionCount(tablePath, 1, leg)
+      assertHeadAndTailReads(tableName, leg)
+    })
+
+    // The row writer buffers through a decorator of its own, sharing the same cap constants.
+    // Record-type independent, SPARK pinned.
+    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"head sample row writer, $tableName"
+      createVariantTable(tableName, tablePath, "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT))
+
+      withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert",
+        "hoodie.datasource.write.row.writer.enable" -> "true") {
+        withWriteLayout(Inferred) {
+          spark.sql(s"insert into $tableName $sourceSql")
+        }
+      }
+      // Pin the path: the footer would look the same if the insert fell back to the
+      // record-based writers, which infer through the other decorator.
+      assertResult(WriteOperationType.BULK_INSERT)(getLastCommitMetadata(spark, tablePath).getOperationType)
+      val instant = latestCompletedInstant(tablePath)
+      assertLayoutsByInstant(baseLayouts(tablePath), leg)(instant -> Some(Seq("a", "b")))
+      assertHeadAndTailReads(tableName, leg)
+    })
+  }
+
+  test("The buffer cap materializes mid-insert on a real writer and rolls over cleanly") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+    assume(inferrerPresent, INFERRER_GATE)
+
+    // A 256KB max file size puts the byte cap - min(MAX_BUFFERED_BYTES, max file size) - far
+    // below the row count, so the buffer materializes part way through the insert instead of at
+    // close, and the writer rolls over into several files that each infer on their own head.
+    // Dictionary encoding is off on purpose: the pad is the same 1KB string in every row, and a
+    // one-entry dictionary keeps the writer's data-size estimate near zero, so the file-size
+    // rollover the row-writer leg depends on would never trip.
+    val maxFileSize = 256 * 1024
+    val rows = 2000
+    val pad = "x" * 1024
+    val padJson = """concat('{"a":', id, ',"pad":"', repeat('x', 1024), '"}')"""
+    val sourceSql = s"select cast(id as int) as id, parse_json($padJson) as v, 1000L as ts " +
+      s"from range(0, $rows, 1, 1)"
+    val props = Seq(
+      NEW_FILE_GROUP_PER_COMMIT,
+      s"hoodie.parquet.max.file.size = '$maxFileSize'",
+      "hoodie.parquet.dictionary.enabled = 'false'")
+
+    def assertRolledOver(tableName: String, tablePath: String, leg: String): Unit = {
+      val layouts = baseLayouts(tablePath)
+      assert(layouts.size > 1,
+        s"[$leg] the insert should have rolled over into several base files, got ${layouts.map(_.path)}")
+      layouts.foreach { layout =>
+        assert(layout.isShredded, s"[$leg] every base file should infer its own schema: ${layout.path}")
+        assert(layout.typedFields.toSet == Set("a", "pad"),
+          s"[$leg] typed_value should carry a and pad, got ${layout.typedFields}: ${layout.path}")
+      }
+      // Nothing is dropped or duplicated across the rollover.
+      checkAnswer(s"select count(*), count(distinct id) from $tableName")(Seq(rows, rows))
+      assertResult(rows.toLong)(getLastCommitMetadata(spark, tablePath).fetchTotalRecordsWritten)
+      checkAnswer(s"select id, cast(v as string) from $tableName where id in (0, 999, 1999) order by id")(
+        Seq(0, s"""{"a":0,"pad":"$pad"}"""),
+        Seq(999, s"""{"a":999,"pad":"$pad"}"""),
+        Seq(1999, s"""{"a":1999,"pad":"$pad"}""")
+      )
+    }
+
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"buffer cap, $tableName"
+      createVariantTable(tableName, tablePath, "cow", props = props)
+
+      withWriteLayout(Inferred) {
+        spark.sql(s"insert into $tableName $sourceSql")
+      }
+      assertRolledOver(tableName, tablePath, leg)
+    })
+
+    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"buffer cap row writer, $tableName"
+      createVariantTable(tableName, tablePath, "cow", props = props)
+
+      withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert",
+        "hoodie.datasource.write.row.writer.enable" -> "true") {
+        withWriteLayout(Inferred) {
+          spark.sql(s"insert into $tableName $sourceSql")
+        }
+      }
+      assertResult(WriteOperationType.BULK_INSERT)(getLastCommitMetadata(spark, tablePath).getOperationType)
+      assertRolledOver(tableName, tablePath, leg)
+    })
+  }
+
+  test("The inference tblproperty alone reaches SQL DML and run_clustering by table name") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+    assume(inferrerPresent, INFERRER_GATE)
+
+    // No withWriteLayout and no session confs anywhere in this test. The flag is a WRITE config,
+    // not a table config, so it is never persisted in hoodie.properties: SQL DML and procedures
+    // called by TABLE NAME pick it up from the table's catalog properties, while path-based
+    // procedures, the DataSource writer and the streamer have to be handed it explicitly.
+    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"tblproperty inference, $tableName"
+      createVariantTable(tableName, tablePath, "cow",
+        props = Seq(NEW_FILE_GROUP_PER_COMMIT, s"$INFERENCE_KEY = 'true'"))
+
+      spark.sql(s"insert into $tableName ${variantSourceSql(Seq((0 until 2, ObjA)))}")
+      val instant1 = latestCompletedInstant(tablePath)
+      spark.sql(s"insert into $tableName ${variantSourceSql(Seq((2 until 4, ObjA)))}")
+      val instant2 = latestCompletedInstant(tablePath)
+      assertLayoutsByInstant(baseLayouts(tablePath), leg)(
+        instant1 -> Some(Seq("a", "b")),
+        instant2 -> Some(Seq("a", "b")))
+
+      // The procedure resolves the table by name, so the same catalog properties reach the
+      // clustering write: no options are passed here at all.
+      spark.sql(s"call run_clustering(table => '$tableName')")
+      val clusteringInstant = completedClusteringInstant(tablePath, leg)
+      assertLayoutsByInstant(baseLayouts(tablePath), leg)(clusteringInstant -> Some(Seq("a", "b")))
+      assertVariantSegments(tableName, leg, Seq(("v", Seq((0 until 4, ObjA)))))
+    })
+  }
+
+  test("Nested variants stay unshredded under inference") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+    assume(inferrerPresent, INFERRER_GATE)
+
+    // Inference is top-level only (VariantSchemaUtils.getInferableVariantColumns), so the nested
+    // variant keeps the plain {metadata, value} shape in the very file where the top-level one
+    // shredded. Only the forced hook shreds below the top level, and only through the row writer.
+    val nestedSourceSql = s"select cast(id as int) as id, parse_json(${ObjA.jsonExpr}) as v, " +
+      s"named_struct('inner', parse_json(${ObjA.jsonExpr})) as s, 1000L as ts from range(0, 4, 1, 1)"
+
+    def assertNestedUnshredded(tableName: String, tablePath: String, leg: String): Unit = {
+      val instant = latestCompletedInstant(tablePath)
+      assertLayoutsByInstant(baseLayouts(tablePath), leg)(instant -> Some(Seq("a", "b")))
+      baseLayouts(tablePath).foreach { layout =>
+        val inner = getFieldAsGroup(getFieldAsGroup(readParquetSchema(layout.path), "s"), "inner")
+        assert(!inner.containsField("typed_value"),
+          s"[$leg] the nested variant must stay unshredded:\n$inner")
+      }
+      checkAnswer(s"select id, cast(v as string), cast(s.inner as string) from $tableName order by id")(
+        (0 until 4).map(id => Seq(id, ObjA.expected(id), ObjA.expected(id))): _*)
+    }
+
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"nested inference, $tableName"
+      createVariantTable(tableName, tablePath, "cow",
+        props = Seq(NEW_FILE_GROUP_PER_COMMIT), extraCols = "s struct<inner: variant>")
+
+      withWriteLayout(Inferred) {
+        spark.sql(s"insert into $tableName $nestedSourceSql")
+      }
+      assertNestedUnshredded(tableName, tablePath, leg)
+    })
+
+    // The row writer is the one production writer that CAN shred a nested variant; under
+    // inference it must not, because inference never asks it to.
+    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"nested inference row writer, $tableName"
+      createVariantTable(tableName, tablePath, "cow",
+        props = Seq(NEW_FILE_GROUP_PER_COMMIT), extraCols = "s struct<inner: variant>")
+
+      withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert",
+        "hoodie.datasource.write.row.writer.enable" -> "true") {
+        withWriteLayout(Inferred) {
+          spark.sql(s"insert into $tableName $nestedSourceSql")
+        }
+      }
+      assertResult(WriteOperationType.BULK_INSERT)(getLastCommitMetadata(spark, tablePath).getOperationType)
+      assertNestedUnshredded(tableName, tablePath, leg)
+    })
+  }
+
+  test("Files whose inference declined sit next to inferred ones; reads and compaction span them") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+    assume(inferrerPresent, INFERRER_GATE)
+
+    // Read-mode heavy; SPARK pinned for the COW half (see the mixed-files test above).
+    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"declined beside inferred cow, $tableName"
+      createVariantTable(tableName, tablePath, "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT))
+
+      val nullSegments: Seq[(Range, VariantShape)] = Seq((4 until 8, JsonNull), (8 until 10, SqlNull))
+      val instants = seedMixedLayoutTable(tableName, tablePath, Seq(
+        (Inferred, Seq((0 until 4, ObjA))),
+        (Inferred, nullSegments)))
+      // Pinned before the empty-object commit: assertVariantSegments spans the whole table and
+      // there is no shape for {}.
+      assertVariantSegments(tableName, leg, Seq(("v", Seq((0 until 4, ObjA)) ++ nullSegments)))
+
+      withWriteLayout(Inferred) {
+        spark.sql(s"insert into $tableName select cast(id as int) as id, parse_json('{}') as v, " +
+          "1000L as ts from range(10, 13, 1, 1)")
+      }
+      val emptyObjectInstant = latestCompletedInstant(tablePath)
+      // Inference declines a file of nulls and a file of empty objects (nothing survives the
+      // sample), and those files sit unshredded beside the inferred one.
+      assertLayoutsByInstant(baseLayouts(tablePath), leg)(
+        instants(0) -> Some(Seq("a", "b")),
+        instants(1) -> None,
+        emptyObjectInstant -> None)
+
+      checkAnswer(s"select id, cast(v as string) from $tableName where id >= 10 order by id")(
+        Seq(10, "{}"),
+        Seq(11, "{}"),
+        Seq(12, "{}")
+      )
+      val incCount = spark.read.format("hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        .option(DataSourceReadOptions.START_COMMIT.key, "000")
+        .load(tablePath)
+        .count()
+      assert(incCount == 13,
+        s"[$leg] incremental over the full range should span all three files, got $incCount")
+    })
+
+    // MOR twin: an inferred base file, a log file the inference declined, and a compaction that
+    // has to merge across the two.
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"declined beside inferred mor, $tableName"
+      createVariantTable(tableName, tablePath, "mor",
+        props = Seq(NEW_FILE_GROUP_PER_COMMIT, "hoodie.compact.inline = 'false'"))
+
+      withWriteLayout(Inferred) {
+        spark.sql(s"insert into $tableName ${variantSourceSql(Seq((0 until 10, ObjA)))}")
+      }
+      val baseInstant = latestCompletedInstant(tablePath)
+      assertLayoutsByInstant(baseLayouts(tablePath), leg)(baseInstant -> Some(Seq("a", "b")))
+
+      withWriteLayout(Inferred) {
+        spark.sql(s"update $tableName set v = parse_json('null'), ts = 1001 where id < 5")
+      }
+      val logInstant = latestCompletedInstant(tablePath)
+      assertLayoutsByInstant(nativeLogLayouts(tablePath), leg)(logInstant -> None)
+
+      withWriteLayout(Inferred) {
+        runCompaction(tableName)
+      }
+      assertCompactionCount(tablePath, 1, leg)
+      assertVariantSegments(tableName, leg, Seq(("v", Seq((0 until 5, JsonNull), (5 until 10, ObjA)))))
+      // The updated rows hold a JSON null, not a SQL NULL variant: the merge kept the value the
+      // declined log file wrote, it did not lose the column.
+      checkAnswer(s"select count(*) from $tableName where v is null")(Seq(0))
     })
   }
 }
