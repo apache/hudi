@@ -62,6 +62,14 @@ import scala.collection.JavaConverters._
  *                          not required for reading a file group with only log files.
  * @param filters           spark filters that might be pushed down into the reader
  * @param requiredFilters   filters that are required and should always be used, even in merging situations
+ * @param sparkRequiredSchema the query's Spark-side required schema, when the caller has one. It travels
+ *                            alongside the engine's [[HoodieSchema]] because a Spark 4.1 PushVariantIntoScan
+ *                            projection carries per-field VariantMetadata (extraction path / timezone /
+ *                            failOnError) that HoodieSchema has nowhere to store: HoodieSparkSchemaConverters
+ *                            collapses the projected struct back to a plain VARIANT, so the projected Spark
+ *                            schema cannot be recovered from a HoodieSchema round-trip (#18739 sub-task 4).
+ *                            Kept Spark-side so the engine-neutral schema model stays free of Spark 4.1
+ *                            variant concepts.
  */
 class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileReader,
                                               filters: Seq[Filter],
@@ -86,15 +94,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   private lazy val allFilters = filters ++ requiredFilters
 
   // For each field of `target`, replace its dataType with the matching field's projected
-  // variant struct from `source` (when present). Non-matching fields pass through.
-  //
-  // Why a parallel `sparkRequiredSchema` overlay exists at all (#18739 sub-task 4): a Spark 4.1
-  // PushVariantIntoScan projection carries per-field `VariantMetadata` (extraction path / timezone /
-  // failOnError) that `HoodieSchema` has nowhere to store — `HoodieSparkSchemaConverters` collapses
-  // the projected struct back to a plain VARIANT and the reverse can't reconstruct the metadata. So
-  // the engine must keep the projected Spark schema alongside the HoodieSchema; it cannot be
-  // recovered from a HoodieSchema round-trip. Kept Spark-side on purpose so the engine-neutral schema
-  // model stays free of Spark-4.1 variant concepts.
+  // variant struct from `source` (when present). Non-matching fields pass through. Why a parallel
+  // `sparkRequiredSchema` overlay exists at all is documented on that constructor parameter.
   private def overlayVariantProjections(target: StructType, source: StructType): StructType = {
     StructType(target.fields.map { f =>
       SparkFileFormatInternalRowReaderContext.findFieldByName(source, f.name).map(_.dataType) match {
