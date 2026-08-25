@@ -618,6 +618,31 @@ public class InputFormatTestUtil {
     return new StoragePath(file.toUri().toString());
   }
 
+  /**
+   * Writes a one-row parquet file with an {@code id} column and an {@code a} column holding an
+   * array of shredded variants: the shape the row writer produces inside a collection.
+   *
+   * <p>parquet-avro 1.13 writes the 2-level list layout by default
+   * ({@code parquet.avro.write-old-list-structure} is true unless set), so the element group is
+   * named {@code array} and the shredded group sits at {@code a.array}; the 3-level layout would
+   * put it at {@code a.list.element}. Either is fine for the guard, which walks every child group.
+   */
+  public static StoragePath writeArrayShreddedVariantParquetFile(java.nio.file.Path dir, String fileName) throws IOException {
+    HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("a", HoodieSchema.createArray(shreddedVariant))));
+    java.nio.file.Path file = dir.resolve(fileName);
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("a", Collections.singletonList(variantValue(shreddedVariant, true)));
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
   /** A value of {@code variantSchema}: typed ({@code key = "k1"}) when asked, a residual value otherwise. */
   public static GenericRecord variantValue(HoodieSchema.Variant variantSchema, boolean populateTypedValue) {
     GenericRecord variant = new GenericData.Record(variantSchema.toAvroSchema());

@@ -19,8 +19,10 @@
 
 package org.apache.spark.sql.hudi.dml.schema
 
-import org.apache.hudi.common.avro.VariantShreddingRuntime
+import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -32,7 +34,9 @@ import org.apache.parquet.hadoop.api.ReadSupport
 import org.apache.parquet.hadoop.example.GroupReadSupport
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.schema.{GroupType, MessageType, Type}
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -41,10 +45,6 @@ import scala.collection.mutable
  * Shared helpers for variant-shredding tests: parquet-footer layout inspection, a row-level
  * typed-vs-residual inspector, a shape-drift data generator, and a write-layout toggle. Mixed
  * into [[TestVariantDataType]] and [[TestVariantShreddingMixedLayouts]].
- *
- * The shredding-schema inferrer ships only in the Spark 4.1+ version modules; on the other
- * profiles [[inferredOr]] resolves to its forced stand-in, and since the forced DDLs are
- * struct-shaped, only OBJECT-shaped typed_value is written there.
  */
 trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
 
@@ -75,6 +75,71 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
          |  type = '$tableType'$extraProps
          | )
        """.stripMargin)
+  }
+
+  /**
+   * The scaffold nearly every leg opens with: sweep the record types, take a temp dir, generate a
+   * table name, create the `(id int, v variant, ts long)` table in it and hand the body the
+   * (tableName, tablePath, leg) triple, where `leg` is `"<label>, <tableName>"`.
+   */
+  protected def withVariantTable[T](label: String,
+                                    tableType: String,
+                                    props: Seq[String] = Seq.empty,
+                                    extraCols: String = "",
+                                    recordTypes: Seq[HoodieRecordType] =
+                                      Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))
+                                   (f: (String, String, String) => T): Unit = {
+    withRecordType(recordTypes)(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      createVariantTable(tableName, tablePath, tableType, props = props, extraCols = extraCols)
+      f(tableName, tablePath, s"$label, $tableName")
+    })
+  }
+
+  /**
+   * Creates `(id int, s struct<inner: variant>, ts long)` and bulk-inserts row 1 through the row
+   * writer under a forced `k string` nested schema: the bulk-insert row writer is the only
+   * production writer that shreds a variant BELOW the top level, so every nested-shredding leg
+   * needs exactly this table and this seed row.
+   */
+  protected def createNestedVariantRowWriterTable(tableName: String, tablePath: String): Unit = {
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  s struct<inner: variant>,
+         |  ts long
+         |) using hudi
+         | location '$tablePath'
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts',
+         |  type = 'cow',
+         |  hoodie.datasource.write.row.writer.enable = 'true'
+         | )
+       """.stripMargin)
+    withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
+      withWriteLayout(Forced("k string")) {
+        spark.sql(s"""insert into $tableName values (1, named_struct('inner', parse_json('{"k":"x1"}')), 1000)""")
+      }
+    }
+  }
+
+  /**
+   * [[withVariantTable]] for the nested case: the table and its seed row come from
+   * [[createNestedVariantRowWriterTable]], so the body opens on a nested-shredded base file.
+   */
+  protected def withNestedVariantTable[T](label: String,
+                                          recordTypes: Seq[HoodieRecordType] =
+                                            Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))
+                                         (f: (String, String, String) => T): Unit = {
+    withRecordType(recordTypes)(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      createNestedVariantRowWriterTable(tableName, tablePath)
+      f(tableName, tablePath, s"$label, $tableName")
+    })
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -119,16 +184,24 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   }
 
   /**
-   * Pins the on-disk layout of `column` across every data parquet file. Without it a leg meant to
-   * exercise the shredded path can silently degenerate into the unshredded one, or the reverse,
-   * and the branch it was written for goes uncovered.
+   * The variant group of `column` inside one parquet file. `column` may be a dotted path
+   * ("s.inner"), walked one struct level per segment, so a nested variant is inspected the same
+   * way as a top-level one.
+   */
+  protected def variantGroupOf(filePath: String, column: String): GroupType =
+    column.split('.').foldLeft(readParquetSchema(filePath): GroupType)(getFieldAsGroup)
+
+  /**
+   * Pins the on-disk layout of `column` (a name or a dotted path) across every data parquet file.
+   * Without it a leg meant to exercise the shredded path can silently degenerate into the
+   * unshredded one, or the reverse, and the branch it was written for goes uncovered.
    */
   protected def assertVariantLayout(tablePath: String, shredded: Boolean, leg: String,
                                     column: String = "v"): Unit = {
     val files = listDataParquetFiles(tablePath)
     assert(files.nonEmpty, s"[$leg] should have at least one data parquet file")
     files.foreach { filePath =>
-      val variantGroup = getFieldAsGroup(readParquetSchema(filePath), column)
+      val variantGroup = variantGroupOf(filePath, column)
       if (shredded) {
         assert(variantGroup.containsField("typed_value"),
           s"[$leg] base file should carry typed_value. Schema:\n$variantGroup")
@@ -277,6 +350,17 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   /** The native parquet data-log subset of [[variantFileLayouts]]. */
   protected def nativeLogLayouts(tablePath: String, column: String = "v"): Seq[VariantFileLayout] =
     variantFileLayouts(tablePath, column).filter(l => !l.isBaseFile && l.path.endsWith(".log.parquet"))
+
+  /**
+   * Pins that `layouts` is non-empty and every file in it is shredded (or none is). `leg` names
+   * the file set being checked, e.g. "<leg> compacted base under Inferred".
+   */
+  protected def assertAllShredded(layouts: Seq[VariantFileLayout], shredded: Boolean, leg: String): Unit = {
+    assert(layouts.nonEmpty, s"[$leg] expected at least one file to check, got none")
+    val expected = if (shredded) "shredded" else "unshredded"
+    val wrong = layouts.filter(_.isShredded != shredded)
+    assert(wrong.isEmpty, s"[$leg] every file must be $expected, these are not: ${wrong.map(_.path)}")
+  }
 
   /**
    * Pins the layout of every file written by each listed instant: None = unshredded,
@@ -460,6 +544,25 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   }
 
   // ---------------------------------------------------------------------------------------------
+  // Read idioms
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * Incremental query over the whole timeline, as `(id, cast(v as string))` rows ordered by id.
+   * Selecting the value rather than a count keeps a variant that reconstructed as all-null from
+   * passing.
+   */
+  protected def incrementalIdAndVariant(tablePath: String): Array[Row] = {
+    spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
+      .load(tablePath)
+      .selectExpr("id", "cast(v as string)")
+      .orderBy("id")
+      .collect()
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // Write-layout toggle
   // ---------------------------------------------------------------------------------------------
 
@@ -487,20 +590,21 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   protected def withWriteLayout[T](layout: WriteLayout)(f: => T): T =
     withSQLConf(layoutConfs(layout): _*)(f)
 
-  /**
-   * Whether a shredding-schema inferrer is registered with VariantShreddingRuntime. The inferrer
-   * ships only in the Spark 4.1+ version modules, and each spark4.x profile builds just its own
-   * module, so on every other profile this is false and [[inferredOr]] substitutes the forced
-   * stand-in instead of leaving the leg silently unshredded.
-   */
-  protected lazy val inferrerPresent: Boolean = VariantShreddingRuntime.lookupInferrer.isPresent
+  /** Runs `f` with SQL inserts routed through the bulk-insert row writer. */
+  protected def withBulkInsertRowWriter[T](f: => T): T =
+    withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert",
+      "hoodie.datasource.write.row.writer.enable" -> "true")(f)
 
   /**
-   * The `Inferred` layout when an inferrer is registered, otherwise the forced stand-in.
-   * Lets heterogeneity tests keep their mixed-layout shape on profiles without an inferrer.
+   * Pins that the last commit really took the row-writer path: the footer of a shredded file
+   * looks the same when the insert falls back to the record-based writers, which infer through
+   * the other buffering decorator.
    */
-  protected def inferredOr(standIn: WriteLayout): WriteLayout =
-    if (inferrerPresent) Inferred else standIn
+  protected def assertBulkInsertOperation(tablePath: String, leg: String): Unit = {
+    val operation = getLastCommitMetadata(spark, tablePath).getOperationType
+    assert(operation == WriteOperationType.BULK_INSERT,
+      s"[$leg] insert should have taken the bulk-insert row writer, got $operation")
+  }
 
   // ---------------------------------------------------------------------------------------------
   // Table-service idioms

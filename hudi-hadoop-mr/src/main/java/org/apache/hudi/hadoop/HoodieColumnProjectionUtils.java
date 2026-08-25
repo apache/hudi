@@ -106,6 +106,26 @@ public class HoodieColumnProjectionUtils {
     return new String[] {};
   }
 
+  /**
+   * The nested column paths Hive configured for this read (see
+   * {@link #READ_NESTED_COLUMN_PATH_CONF_STR}): dotted root-to-leaf paths, trimmed, in the
+   * configured order. Empty when the conf is unset or holds only blanks.
+   */
+  static List<String> getNestedColumnPaths(Configuration conf) {
+    List<String> result = new ArrayList<>();
+    String paths = conf.get(READ_NESTED_COLUMN_PATH_CONF_STR, "");
+    if (paths == null || paths.isEmpty()) {
+      return result;
+    }
+    for (String path : paths.split(",")) {
+      String trimmed = path.trim();
+      if (!trimmed.isEmpty()) {
+        result.add(trimmed);
+      }
+    }
+    return result;
+  }
+
   public static List<String> getIOColumns(Configuration conf) {
     String colNames = conf.get(IOConstants.COLUMNS, "");
     if (colNames != null && !colNames.isEmpty()) {
@@ -193,7 +213,7 @@ public class HoodieColumnProjectionUtils {
    * column has a sub-field projection.
    */
   public static HoodieProjectionMask buildNestedProjectionMask(Configuration conf, HoodieSchema dataSchema) {
-    String paths = conf.get(READ_NESTED_COLUMN_PATH_CONF_STR, "");
+    List<String> paths = getNestedColumnPaths(conf);
     if (paths.isEmpty()) {
       return HoodieProjectionMask.all();
     }
@@ -201,11 +221,7 @@ public class HoodieColumnProjectionUtils {
     // component, e.g. "blob_data") are ignored here — Hive does not compact at the
     // top level, so canonical positions still apply.
     Map<String, List<List<String>>> pathsByField = new LinkedHashMap<>();
-    for (String path : paths.split(",")) {
-      String trimmed = path.trim();
-      if (trimmed.isEmpty()) {
-        continue;
-      }
+    for (String trimmed : paths) {
       String[] components = trimmed.split("\\.");
       if (components.length < 2) {
         continue;

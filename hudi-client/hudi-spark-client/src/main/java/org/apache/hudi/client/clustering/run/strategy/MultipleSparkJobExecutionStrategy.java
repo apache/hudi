@@ -75,6 +75,7 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -195,9 +196,11 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   private <I> BulkInsertPartitioner<I> getPartitioner(Map<String, String> strategyParams,
                                                       HoodieSchema schema,
                                                       boolean isRowPartitioner) {
+    // Trim: the config and inline paths pass the list through verbatim (`id, ts`), while the
+    // partitioners look up the column names as given.
     Option<String[]> orderByColumnsOpt =
         Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
-            .map(listStr -> listStr.split(","));
+            .map(listStr -> Arrays.stream(listStr.split(",")).map(String::trim).toArray(String[]::new));
 
     return orderByColumnsOpt.map(orderByColumns -> {
       // The custom-columns partitioners re-validate in their constructors; this earlier check

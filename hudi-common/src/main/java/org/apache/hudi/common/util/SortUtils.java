@@ -37,9 +37,11 @@ import java.util.stream.Collectors;
 public class SortUtils {
 
   /**
-   * Rejects sort columns whose type cannot serve as a sort key. VARIANT and MAP have no total
-   * order: Spark's RowOrdering.isOrderable is false for both, and Avro's GenericData.compare
-   * cannot compare maps. The walk recurses through records and array elements just as
+   * Rejects sort columns whose type cannot serve as a sort key. Spark's RowOrdering.isOrderable
+   * is false for both VARIANT and MAP, which is the binding constraint on the row path. On the
+   * Avro path only MAP is outright uncomparable (GenericData.compare throws "Can't compare
+   * maps!"); a variant's {metadata, value} record does compare, but by its bytes, which is never
+   * a meaningful sort key. The walk recurses through records and array elements just as
    * isOrderable does, so a struct or an array that merely holds a variant or a map at depth is
    * rejected too. Without this check the failure surfaces deep in the write job (an
    * AnalysisException from the row partitioner, a ClassCastException from the record-based one)

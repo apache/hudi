@@ -271,5 +271,43 @@ class TestHoodieVariantReconstructionRoundTrip {
           "the shredded payload must be reconstructed, not dropped");
       assertEquals(7L, out.get(tableSchema.getAvroSchema().getField("id").pos()));
     }
+
+    // The alignment only bites when the requested schema holds a column the external data file
+    // does not: a partitioned bootstrap table's partition column (the source is read with
+    // basePath, so the table schema gains it while the file lacks it) or a column added after
+    // bootstrap. Reading the data file at its own footer schema also mis-sizes the meta-field
+    // prefix in HoodieAvroIndexedRecord.prependMetaFields, which shifts every data column.
+    // HUDI-5392 (#7461) pinned the same "request the caller's schema" alignment for arrays, which
+    // were read at the wrong LIST level when the request came from Hudi instead of the file.
+    HoodieSchema partitionedTableSchema = HoodieSchemaUtils.addMetadataFields(
+        HoodieSchema.createRecord("r", "org.apache.hudi.test", null, Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("v", HoodieSchema.createNullable(unshreddedVariant), null, HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("part", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, HoodieSchema.NULL_VALUE))));
+    // Partition values reach the reader through its constructor - HoodieBootstrapRecordIterator
+    // reads them from there and never parses them out of the file path - so `part` comes back as
+    // the value handed in here, not as null and not from a part=p1 directory.
+    HoodieAvroBootstrapFileReader partitionedReader = (HoodieAvroBootstrapFileReader)
+        readerFactory.newBootstrapFileReader(
+            readerFactory.getFileReader(new HoodieConfig(), new StoragePath(skeletonFile.toUri().toString())),
+            readerFactory.getFileReader(new HoodieConfig(), new StoragePath(dataFile.toUri().toString())),
+            Option.of(new String[] {"part"}), new Object[] {"p1"});
+    try (ClosableIterator<HoodieRecord<IndexedRecord>> iterator =
+             (ClosableIterator) partitionedReader.getRecordIterator(partitionedTableSchema)) {
+      assertTrue(iterator.hasNext(), "the joined bootstrap row must come back");
+      IndexedRecord out = (IndexedRecord) iterator.next().getData();
+      assertEquals(partitionedTableSchema.getAvroSchema(), out.getSchema(),
+          "the record must carry exactly the requested schema's fields");
+      GenericRecord rebuiltV = (GenericRecord) out.get(partitionedTableSchema.getAvroSchema().getField("v").pos());
+      assertNotNull(rebuiltV, "the variant must survive a request that adds a column the data file lacks");
+      Variant rebuilt = new Variant(
+          toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD)),
+          toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD)));
+      assertEquals(original.toJson(ZoneOffset.UTC), rebuilt.toJson(ZoneOffset.UTC),
+          "the typed rows must carry their values, not nulls");
+      assertEquals(7L, out.get(partitionedTableSchema.getAvroSchema().getField("id").pos()));
+      assertEquals("p1", String.valueOf(out.get(partitionedTableSchema.getAvroSchema().getField("part").pos())),
+          "the partition column, absent from the data file, is filled from the partition values");
+    }
   }
 }

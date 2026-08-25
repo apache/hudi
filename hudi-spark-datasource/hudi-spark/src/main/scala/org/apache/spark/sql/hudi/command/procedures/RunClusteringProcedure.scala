@@ -120,8 +120,9 @@ class RunClusteringProcedure extends BaseProcedure
       logInfo(s"Partition selected: $selectedPartitions")
     }
 
-    // Construct sort column info. The execution strategy splits the stored list on "," without
-    // trimming, so normalise once here and validate and store the same normalised list.
+    // Construct sort column info. Normalise once so the plan stores the same trimmed list the
+    // strategies and partitioners work from: the procedure validates the argument up front, and
+    // the stored value is what later services see.
     orderColumns match {
       case Some(o) =>
         val normalized = o.asInstanceOf[String].split(",").map(_.trim).mkString(",")

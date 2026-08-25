@@ -38,6 +38,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
+import org.apache.hadoop.hive.ql.io.IOConstants;
 import org.apache.hadoop.hive.ql.io.parquet.read.ParquetRecordReaderWrapper;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
@@ -59,10 +60,13 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -81,6 +85,11 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFileg
 public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetInputFormat.class);
+  // Compiled once: the raw columns.types screen below runs on every legacy-path split.
+  private static final Pattern WHITESPACE = Pattern.compile("\\s");
+  // The members a synced variant's Hive type carries, as they appear in a struct<...> type string.
+  private static final String HIVE_VARIANT_METADATA = HoodieSchema.Variant.VARIANT_METADATA_FIELD + ":binary";
+  private static final String HIVE_VARIANT_VALUE = HoodieSchema.Variant.VARIANT_VALUE_FIELD + ":binary";
 
   private boolean supportAvroRead = false;
 
@@ -291,7 +300,8 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
    * fail-fast for them. Only reads that request a column holding a shredded variant fail;
    * count(*) and projections that skip the variant keep working. The footer read is gated on a
    * requested column whose synced Hive type embeds the variant {metadata, value} shape, so
-   * non-variant tables never pay it.
+   * non-variant tables never pay it: the raw columns.types string is screened for the shape's
+   * marker before it is parsed, keeping the type parse itself off every other table's splits.
    *
    * <p>The footer's MessageType is inspected directly, without converting it to Avro:
    * AvroSchemaConverterWithTimestampNTZ.convertINT96 throws unless parquet.avro.readInt96AsFixed
@@ -299,6 +309,15 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
    * conversion would fail the very reads this guard is careful to leave working. The requested
    * column's group is matched by shape at any depth - the footer carries no variant logical type
    * either way - anchored on the Hive type of the requested column as before.
+   *
+   * <p>Hive's read column names are top-level only, so a requested struct column does not imply
+   * its whole interior: nested column pruning is carried separately as dotted paths
+   * (hive.io.file.readNestedColumn.paths). A column with such paths configured is flagged only
+   * when one of them overlaps a shredded group's path; a column without them is read whole.
+   *
+   * <p>The guard is best-effort throughout: a malformed columns/columns.types pairing, an
+   * unparseable type string, or a projection that names no column all fall through to the plain
+   * parquet reader rather than failing a read it would have served.
    */
   @VisibleForTesting
   static void validateNoShreddedVariantRead(InputSplit split, JobConf job) {
@@ -309,40 +328,88 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     if (!filePath.getName().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
       return;
     }
+    // Screen the raw type string before anything parses it: getIOColumnTypes runs a full
+    // TypeInfoUtils parse, which every legacy-path split of every table would otherwise pay. Only
+    // the variant shape's marker earns the parse; the exact anchor check on the parsed types is
+    // below.
+    String rawIoColumnTypes = WHITESPACE.matcher(job.get(IOConstants.COLUMNS_TYPES, ""))
+        .replaceAll("")
+        .toLowerCase(Locale.ROOT);
+    if (!rawIoColumnTypes.contains(HIVE_VARIANT_METADATA)) {
+      return;
+    }
     Set<String> requestedColumns = Arrays.stream(HoodieColumnProjectionUtils.getReadColumnNames(job))
         .map(name -> name.toLowerCase(Locale.ROOT))
         .collect(Collectors.toSet());
     if (requestedColumns.isEmpty()) {
-      // count(*)-style read: no column data is materialized
+      // Hive writes the FULL column-name list for `select *`: HiveInputFormat.pushProjection
+      // fills in every table column with read.all.columns=false. setReadAllColumns is only
+      // called by ProjectionPusher, on the JobConf it clones downstream of getRecordReader, so
+      // that flag never reaches the conf seen here (verified in hive-exec 2.3.10, 3.1.3, 4.0.1).
+      // Empty names here therefore means a read that materializes no column (count(*)) or a
+      // caller that never projected; read.all.columns, true when untouched, is not a signal.
       return;
     }
     List<String> ioColumns = HoodieColumnProjectionUtils.getIOColumns(job);
-    List<String> ioColumnTypes = HoodieColumnProjectionUtils.getIOColumnTypes(job);
+    List<String> ioColumnTypes;
+    try {
+      ioColumnTypes = HoodieColumnProjectionUtils.getIOColumnTypes(job);
+    } catch (RuntimeException e) {
+      // The screen above strips whitespace and lower-cases; the TypeInfoUtils parse tolerates
+      // neither, so a string it lets through can still fail to parse. Bail out like the pairing
+      // check below rather than failing a read the plain parquet reader would serve.
+      LOG.debug("Skipping the shredded variant guard for {}: {} did not parse", filePath, IOConstants.COLUMNS_TYPES, e);
+      return;
+    }
     if (ioColumns.size() != ioColumnTypes.size()) {
       // The guard is best-effort: a malformed columns/columns.types pairing must not fail
       // reads the plain parquet reader would otherwise serve.
       return;
     }
     // The requested columns whose synced Hive type embeds the variant {metadata, value} shape:
-    // the anchor for the shape match on the file side below.
+    // the anchor for the shape match on the file side below. A synced VARIANT is always exactly
+    // struct<metadata:binary,value:binary> - the table schema declares variants unshredded and
+    // HiveSchemaUtil.convertField converts that record verbatim, for HMS and Glue sync alike - so
+    // a type that also carries typed_value is a plain user struct that happens to hold those two
+    // members. The sibling guards exempt such structs; this one has to as well.
     Set<String> variantColumns = new HashSet<>();
     for (int i = 0; i < ioColumns.size(); i++) {
       String name = ioColumns.get(i).toLowerCase(Locale.ROOT);
       String type = ioColumnTypes.get(i).toLowerCase(Locale.ROOT);
-      if (requestedColumns.contains(name) && type.contains("metadata:binary") && type.contains("value:binary")) {
+      if (requestedColumns.contains(name) && type.contains(HIVE_VARIANT_METADATA) && type.contains(HIVE_VARIANT_VALUE)
+          && !type.contains(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)) {
         variantColumns.add(name);
       }
     }
     if (variantColumns.isEmpty()) {
       return;
     }
+    // Hive's nested column pruning, keyed by the top-level column each dotted path starts at.
+    Map<String, List<String>> nestedPathsByColumn = new HashMap<>();
+    for (String path : HoodieColumnProjectionUtils.getNestedColumnPaths(job)) {
+      String lowerPath = path.toLowerCase(Locale.ROOT);
+      int firstDot = lowerPath.indexOf('.');
+      String head = firstDot < 0 ? lowerPath : lowerPath.substring(0, firstDot);
+      nestedPathsByColumn.computeIfAbsent(head, k -> new ArrayList<>()).add(lowerPath);
+    }
     StoragePath storagePath = convertToStoragePath(filePath);
     HoodieStorage storage = HoodieStorageUtils.getStorage(storagePath, HadoopFSUtils.getStorageConf(job));
     MessageType fileSchema = new ParquetUtils().readMessageType(storage, storagePath);
     List<String> offendingColumns = new ArrayList<>();
     for (Type field : fileSchema.getFields()) {
-      if (variantColumns.contains(field.getName().toLowerCase(Locale.ROOT))
-          && containsShreddedVariantGroup(field)) {
+      String columnName = field.getName().toLowerCase(Locale.ROOT);
+      if (!variantColumns.contains(columnName)) {
+        continue;
+      }
+      List<String> shreddedPaths = new ArrayList<>();
+      collectShreddedVariantPaths(field, columnName, shreddedPaths);
+      if (shreddedPaths.isEmpty()) {
+        continue;
+      }
+      List<String> readPaths = nestedPathsByColumn.get(columnName);
+      // No nested paths configured for the column: it is read whole, shredded group included.
+      if (readPaths == null
+          || readPaths.stream().anyMatch(read -> shreddedPaths.stream().anyMatch(shredded -> pathsOverlap(read, shredded)))) {
         offendingColumns.add(field.getName());
       }
     }
@@ -357,24 +424,32 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   }
 
   /**
-   * Whether {@code type} holds a shredded variant group at any depth: a group carrying both
-   * {@code typed_value} and {@code metadata}. Every child group is walked, so LIST and MAP
-   * wrapper groups are descended through like any other.
+   * Collects into {@code shreddedPaths} the dotted path of every shredded variant group at or
+   * beneath {@code type}: a group carrying both {@code typed_value} and {@code metadata}. Paths
+   * are lower-cased parquet field names joined by "." starting at {@code path}, so LIST and MAP
+   * wrapper groups contribute their own names ({@code a.list.element}). The walk stops at the
+   * first shredded group on a branch - everything below it belongs to that variant.
    */
-  private static boolean containsShreddedVariantGroup(Type type) {
+  private static void collectShreddedVariantPaths(Type type, String path, List<String> shreddedPaths) {
     if (type.isPrimitive()) {
-      return false;
+      return;
     }
     GroupType group = type.asGroupType();
     if (group.containsField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)
         && group.containsField(HoodieSchema.Variant.VARIANT_METADATA_FIELD)) {
-      return true;
+      shreddedPaths.add(path);
+      return;
     }
     for (Type field : group.getFields()) {
-      if (containsShreddedVariantGroup(field)) {
-        return true;
-      }
+      collectShreddedVariantPaths(field, path + "." + field.getName().toLowerCase(Locale.ROOT), shreddedPaths);
     }
-    return false;
+  }
+
+  /**
+   * Whether two dotted paths touch the same data: equal, or one a dotted prefix of the other
+   * ({@code s.inner.x} reads inside {@code s.inner}, and {@code s} reads all of it).
+   */
+  private static boolean pathsOverlap(String left, String right) {
+    return left.equals(right) || left.startsWith(right + ".") || right.startsWith(left + ".");
   }
 }

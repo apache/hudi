@@ -19,9 +19,9 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.exception.HoodieException
 
+import org.apache.parquet.schema.{LogicalTypeAnnotation, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-import org.apache.parquet.schema.Types
-import org.apache.spark.sql.types.{BinaryType, IntegerType, StructType, VariantType}
+import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, StringType, StructType, VariantType}
 import org.junit.jupiter.api.{Assertions, Test}
 
 class TestSpark40HoodieParquetReadSupport {
@@ -94,8 +94,9 @@ class TestSpark40HoodieParquetReadSupport {
   }
 
   /**
-   * A variant nested inside a struct is rejected too, reported by its dotted path - the walk is
-   * anchored on catalyst, so the same parquet shape typed as a plain struct is left alone.
+   * A variant nested inside a struct is rejected too, reported by its dotted path, by both the
+   * catalyst-anchored walk and the shape-only fallback. The catalyst-anchored walk is what keeps
+   * the same parquet shape typed as a plain struct out of it.
    */
   @Test
   def testRejectShreddedVariantsFailsFastOnNestedVariant(): Unit = {
@@ -111,12 +112,80 @@ class TestSpark40HoodieParquetReadSupport {
       .named("test")
 
     val variantSchema = new StructType().add("s", new StructType().add("inner", VariantType))
-    val failure = Assertions.assertThrows(classOf[HoodieException],
-      () => Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, Some(variantSchema)))
-    Assertions.assertTrue(failure.getMessage.contains("'s.inner'"),
-      s"The error must name the nested variant path, got: ${failure.getMessage}")
+    Seq(None, Some(variantSchema)).foreach { sparkSchema =>
+      val failure = Assertions.assertThrows(classOf[HoodieException],
+        () => Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, sparkSchema))
+      Assertions.assertTrue(failure.getMessage.contains("'s.inner'"),
+        s"The error must name the nested variant path, got: ${failure.getMessage}")
+    }
 
     val structSchema = new StructType().add("s", new StructType().add("inner", new StructType()
+      .add("metadata", BinaryType)
+      .add("value", BinaryType)
+      .add("typed_value", new StructType().add("a", IntegerType))))
+    Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, Some(structSchema))
+  }
+
+  /**
+   * A shredded variant inside an array is unreadable too. The walk resolves the parquet element
+   * through the 3-level list layout and reports it as v.element; the plain-struct catalyst twin
+   * over the same file is left alone.
+   */
+  @Test
+  def testRejectShreddedVariantsFailsFastOnVariantInArray(): Unit = {
+    val schema = Types.buildMessage()
+      .addField(Types.optionalGroup().as(LogicalTypeAnnotation.listType())
+        .addField(Types.repeatedGroup()
+          .addField(Types.optionalGroup()
+            .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
+            .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
+            .addField(Types.optionalGroup()
+              .addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("typed_value"))
+            .named("element"))
+          .named("list"))
+        .named("v"))
+      .named("test")
+
+    val variantSchema = new StructType().add("v", ArrayType(VariantType))
+    val failure = Assertions.assertThrows(classOf[HoodieException],
+      () => Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, Some(variantSchema)))
+    Assertions.assertTrue(failure.getMessage.contains("'v.element'"),
+      s"The error must name the array element path, got: ${failure.getMessage}")
+
+    val structSchema = new StructType().add("v", ArrayType(new StructType()
+      .add("metadata", BinaryType)
+      .add("value", BinaryType)
+      .add("typed_value", new StructType().add("a", IntegerType))))
+    Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, Some(structSchema))
+  }
+
+  /**
+   * Same for a shredded variant as a map value, reported as v.value; only the value side of the
+   * key_value group is walked.
+   */
+  @Test
+  def testRejectShreddedVariantsFailsFastOnVariantInMap(): Unit = {
+    val schema = Types.buildMessage()
+      .addField(Types.optionalGroup().as(LogicalTypeAnnotation.mapType())
+        .addField(Types.repeatedGroup()
+          .addField(Types.required(PrimitiveTypeName.BINARY).as(LogicalTypeAnnotation.stringType()).named("key"))
+          .addField(Types.optionalGroup()
+            .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
+            .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
+            .addField(Types.optionalGroup()
+              .addField(Types.optional(PrimitiveTypeName.INT32).named("a")).named("typed_value"))
+            .named("value"))
+          .named("key_value"))
+        .named("v"))
+      .named("test")
+
+    val variantSchema = new StructType().add("v", MapType(StringType, VariantType))
+    val failure = Assertions.assertThrows(classOf[HoodieException],
+      () => Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, Some(variantSchema)))
+    Assertions.assertTrue(failure.getMessage.contains("'v.value'"),
+      s"The error must name the map value path, got: ${failure.getMessage}")
+
+    val structSchema = new StructType().add("v", MapType(StringType, new StructType()
       .add("metadata", BinaryType)
       .add("value", BinaryType)
       .add("typed_value", new StructType().add("a", IntegerType))))

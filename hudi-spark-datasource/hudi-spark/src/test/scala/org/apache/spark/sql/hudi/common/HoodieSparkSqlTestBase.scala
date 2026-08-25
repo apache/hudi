@@ -146,24 +146,12 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     assertResult(expects.map(row => Row(row: _*)).toArray)(array)
   }
 
+  /**
+   * Analysis-time twin of [[checkNestedExceptionContains(runnable:Runnable)*]]: `spark.sql` is
+   * lazy for queries, so this only catches failures raised while the statement is built.
+   */
   protected def checkNestedExceptionContains(sql: String)(errorMsg: String): Unit = {
-    var hasException = false
-    try {
-      spark.sql(sql)
-    } catch {
-      case e: Throwable =>
-        var t = e
-        while (t != null) {
-          if (t.getMessage.trim.contains(errorMsg.trim)) {
-            hasException = true
-          }
-          t = t.getCause
-        }
-        if (!hasException) {
-          e.printStackTrace(System.err)
-        }
-    }
-    assertResult(true)(hasException)
+    checkNestedExceptionContains(() => spark.sql(sql))(errorMsg)
   }
 
   /**

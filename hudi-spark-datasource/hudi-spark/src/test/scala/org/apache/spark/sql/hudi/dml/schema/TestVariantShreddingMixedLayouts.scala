@@ -19,12 +19,12 @@
 
 package org.apache.spark.sql.hudi.dml.schema
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter
 import org.apache.hudi.testutils.DataSourceTestUtils
 
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 
@@ -37,9 +37,10 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMeta
  *
  * Layouts are toggled per commit or table service through session confs (session hoodie.* confs
  * override tblproperties for SQL DML and for the run_compaction/run_clustering procedures alike).
- * Legs that need #18961's per-file shredding-schema inference substitute a forced stand-in
- * schema via [[inferredOr]] when no inferrer is on the classpath, so the mixed-layout shape is
- * preserved on every profile.
+ * Every test is gated on Spark 4.1+, which is exactly the set of profiles that register #18961's
+ * per-file shredding-schema inferrer (pinned by TestVariantDataType's "A shredding-schema
+ * inferrer is registered for every Spark version that ships one"), so an [[Inferred]] leg here
+ * always infers rather than silently degrading to an unshredded write.
  *
  * Deliberately not covered here:
  * - Custom payloads: FileGroupRecordBuffer.getProjectedTransformer short-circuits the variant
@@ -55,8 +56,6 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
   import VariantShreddingTestSupport.VariantShape._
 
   private val SPARK_4_1_GATE = "Shredded variant read-back requires Spark 4.1 or higher"
-  private val INFERRER_GATE =
-    "Per-file shredding-schema inference requires a VariantShreddingSchemaInferrer on the classpath"
 
   /** One insert commit per layout; returns the completed instant of each commit, in order. */
   private def seedMixedLayoutTable(tableName: String,
@@ -88,12 +87,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
   test("Forced shredding: non-matching rows fall back to the residual in the same file") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"same-file mix, $tableName"
-      createVariantTable(tableName, tablePath, "cow")
-
+    withVariantTable("same-file mix", "cow") { (tableName, tablePath, leg) =>
       // One insert, one file: rows 0-9 match the forced schema exactly; 10-14 conflict on the
       // type of a (string into a bigint slot -> per-field residual); 15-19 carry disjoint keys
       // (root residual); 20-22 are root scalars and 23 a JSON null (no object typed_value);
@@ -139,7 +133,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         Seq(20, """{"a":100,"b":"bu"}""", 1001)
       )
       assertVariantLayout(tablePath, shredded = true, leg)
-    })
+    }
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -151,20 +145,15 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
 
     // Read-mode test: layouts are writer-side and every layout is written identically by both
     // record types, so the sweep would only re-run the same reads. SPARK pinned.
-    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"mixed-files, $tableName"
-      createVariantTable(tableName, tablePath, "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT))
-
+    withVariantTable("mixed-files", "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT),
+      recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, tablePath, leg) =>
       // Four commits, four layouts, one file each (small.file.limit=0 keeps every commit in its
-      // own file group). The last commit infers when an inferrer is present; the forced stand-in
-      // yields the same {c, d} typed_value, so the expectations below hold either way.
+      // own file group). The last commit infers {c, d} from its own ObjB rows.
       val instants = seedMixedLayoutTable(tableName, tablePath, Seq(
         (Unshredded, Seq((0 until 2, ObjA))),
         (Forced("a bigint, b string"), Seq((2 until 4, ObjA))),
         (Forced("b string"), Seq((4 until 6, ObjA))),
-        (inferredOr(Forced("c bigint, d boolean")), Seq((6 until 8, ObjB)))))
+        (Inferred, Seq((6 until 8, ObjB)))))
 
       assertLayoutsByInstant(baseLayouts(tablePath), leg)(
         instants(0) -> None,
@@ -186,13 +175,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
 
       // Incremental over the full range returns the latest state of all eight keys, values
       // intact (a count alone would pass even if v reconstructed as all-null).
-      val incRows = spark.read.format("hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, "000")
-        .load(tablePath)
-        .selectExpr("id", "cast(v as string)")
-        .orderBy("id")
-        .collect()
+      val incRows = incrementalIdAndVariant(tablePath)
       assert(incRows.length == 8, s"[$leg] incremental over the full range should see all rows")
       incRows.foreach { row =>
         val id = row.getInt(0)
@@ -207,22 +190,17 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         Seq(0, """{"a":0,"b":"b0"}"""),
         Seq(6, """{"c":6,"d":true}""")
       )
-    })
+    }
   }
 
   test("Small-file bin-pack rewrites the file under the layout of the incoming commit") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"bin-pack layout flip, $tableName"
-      // Default small.file.limit on purpose: each insert bin-packs into the first file group
-      // and rewrites it (HoodieConcatHandle -> HoodieMergeHelper on the AVRO record type).
-      // The value round-trip of that merge is owned by TestVariantDataType's small-file test;
-      // this one exists for the per-instant LAYOUT pin below.
-      createVariantTable(tableName, tablePath, "cow")
-
+    // Default small.file.limit on purpose: each insert bin-packs into the first file group
+    // and rewrites it (HoodieConcatHandle -> HoodieMergeHelper on the AVRO record type).
+    // The value round-trip of that merge is owned by TestVariantDataType's small-file test;
+    // this one exists for the per-instant LAYOUT pin below.
+    withVariantTable("bin-pack layout flip", "cow") { (tableName, tablePath, leg) =>
       withWriteLayout(Forced("a bigint, b string")) {
         spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1,"b":"b1"}'), 1000)""")
       }
@@ -249,7 +227,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         Seq(2, """{"a":2,"b":"b2"}""", 1000),
         Seq(3, """{"a":3,"b":"b3"}""", 1000)
       )
-    })
+    }
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -259,16 +237,10 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
   test("MOR compaction merges logs of three layouts and re-derives the base layout per service run") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"compaction layout split, $tableName"
-      // INMEMORY sends MOR inserts to log files; compaction runs via the procedure so each run
-      // can happen under its own layout confs.
-      createVariantTable(tableName, tablePath, "mor",
-        props = Seq("hoodie.index.type = 'INMEMORY'", "hoodie.compact.inline = 'false'"))
-      val layout3 = inferredOr(Forced("c bigint, d boolean"))
-
+    // INMEMORY sends MOR inserts to log files; compaction runs via the procedure so each run
+    // can happen under its own layout confs.
+    withVariantTable("compaction layout split", "mor", props = Seq(
+      "hoodie.index.type = 'INMEMORY'", "hoodie.compact.inline = 'false'")) { (tableName, tablePath, leg) =>
       withWriteLayout(Forced("a bigint, b string")) {
         spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1,"b":"b1"}'), 1000)""")
       }
@@ -278,7 +250,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           """(3, parse_json('{"a":3,"b":"b3"}'), 1000), (4, parse_json('{"a":4,"b":"b4"}'), 1000)""")
       }
       val instant2 = latestCompletedInstant(tablePath)
-      withWriteLayout(layout3) {
+      withWriteLayout(Inferred) {
         spark.sql(s"""insert into $tableName values (5, parse_json('{"c":5,"d":true}'), 1000), """ +
           """(6, parse_json('{"c":6,"d":true}'), 1000)""")
       }
@@ -303,24 +275,19 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         Seq(6, """{"c":6,"d":true}""")
       )
 
-      // Compaction 1 under layout3: reads all three log layouts, writes the base under layout3.
-      withWriteLayout(layout3) {
+      // Compaction 1 under Inferred: reads all three log layouts, infers the base layout from
+      // the merged rows.
+      withWriteLayout(Inferred) {
         runCompaction(tableName)
       }
       assertResult(false)(DataSourceTestUtils.isLogFileOnly(tablePath))
       assertCompactionCount(tablePath, 1, leg)
       val base1 = baseLayouts(tablePath)
-      assert(base1.nonEmpty && base1.forall(_.isShredded),
-        s"[$leg] compacted base must be shredded under $layout3: $base1")
-      if (inferrerPresent) {
-        // 6 rows: a and b on 4 (66 percent), c and d on 2 (33 percent) - all clear the 10
-        // percent inference bar.
-        base1.foreach(l => assert(l.typedFields.toSet == Set("a", "b", "c", "d"),
-          s"[$leg] inferred typed_value should carry all four keys: ${l.typedFields}"))
-      } else {
-        base1.foreach(l => assert(l.typedFields.toSet == Set("c", "d"),
-          s"[$leg] forced typed_value should carry c, d: ${l.typedFields}"))
-      }
+      assertAllShredded(base1, shredded = true, s"$leg compacted base under Inferred")
+      // 6 rows: a and b on 4 (66 percent), c and d on 2 (33 percent) - all clear the 10
+      // percent inference bar.
+      base1.foreach(l => assert(l.typedFields.toSet == Set("a", "b", "c", "d"),
+        s"[$leg] inferred typed_value should carry all four keys: ${l.typedFields}"))
       checkAnswer(s"select id, cast(v as string) from $tableName where id in (1, 5) order by id")(
         Seq(1, """{"a":1,"b":"b1"}"""),
         Seq(5, """{"c":5,"d":true}""")
@@ -356,24 +323,22 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       assertCompactionCount(tablePath, 2, leg)
       val compact2Instant = latestCompletedInstant(tablePath)
       val base2 = baseLayouts(tablePath).filter(_.instantTime == compact2Instant)
-      assert(base2.nonEmpty && base2.forall(!_.isShredded),
-        s"[$leg] compaction under Unshredded must write an unshredded base: $base2")
+      assertAllShredded(base2, shredded = false, s"$leg base of the compaction under Unshredded")
       checkAnswer(s"select id, cast(v as string) from $tableName where id in (2, 3) order by id")(
         Seq(2, """{"a":22,"b":"b22"}"""),
         Seq(3, """{"a":33,"b":"b33"}""")
       )
 
-      // Round 3: compaction under layout3 again, this time reading an UNSHREDDED base plus a
+      // Round 3: compaction under Inferred again, this time reading an UNSHREDDED base plus a
       // shredded log.
-      withWriteLayout(layout3) {
+      withWriteLayout(Inferred) {
         spark.sql(s"""update $tableName set v = parse_json('{"a":44,"b":"b44"}'), ts = 1001 where id = 4""")
         runCompaction(tableName)
       }
       assertCompactionCount(tablePath, 3, leg)
       val compact3Instant = latestCompletedInstant(tablePath)
       val base3 = baseLayouts(tablePath).filter(_.instantTime == compact3Instant)
-      assert(base3.nonEmpty && base3.forall(_.isShredded),
-        s"[$leg] compaction under $layout3 must write a shredded base again: $base3")
+      assertAllShredded(base3, shredded = true, s"$leg base of the second compaction under Inferred")
 
       checkAnswer(s"select id, cast(v as string) from $tableName order by id")(
         Seq(1, """{"a":1,"b":"b1"}"""),
@@ -384,13 +349,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       )
       // Incremental over the full range sees the latest value of every LIVE key (id 6 deleted),
       // values intact - a bare count would pass with v all-null.
-      val incRows = spark.read.format("hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, "000")
-        .load(tablePath)
-        .selectExpr("id", "cast(v as string)")
-        .orderBy("id")
-        .collect()
+      val incRows = incrementalIdAndVariant(tablePath)
       assert(incRows.map(r => (r.getInt(0), r.getString(1))).toSeq == Seq(
         (1, """{"a":1,"b":"b1"}"""),
         (2, """{"a":22,"b":"b22"}"""),
@@ -398,24 +357,17 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         (4, """{"a":44,"b":"b44"}"""),
         (5, """{"c":5,"d":true}""")
       ), s"[$leg] incremental over the full range, got: ${incRows.mkString(", ")}")
-    })
+    }
   }
 
   test("Table version 9 legacy log blocks stay unshredded and compact onto a shredded base") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"table version 9, $tableName"
-      createVariantTable(tableName, tablePath, "mor",
-        props = Seq(
-          "hoodie.write.table.version = '9'",
-          "hoodie.index.type = 'INMEMORY'",
-          "hoodie.compact.inline = 'false'"))
-      val layout = inferredOr(Forced("key string"))
-
-      withWriteLayout(layout) {
+    withVariantTable("table version 9", "mor", props = Seq(
+      "hoodie.write.table.version = '9'",
+      "hoodie.index.type = 'INMEMORY'",
+      "hoodie.compact.inline = 'false'")) { (tableName, tablePath, leg) =>
+      withWriteLayout(Inferred) {
         spark.sql(s"""insert into $tableName values (1, parse_json('{"key":"value1"}'), 1000)""")
         spark.sql(s"""insert into $tableName values (2, parse_json('{"key":"value2"}'), 1000)""")
       }
@@ -426,32 +378,31 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       assert(nativeLogLayouts(tablePath).isEmpty,
         s"[$leg] table version 9 must not write native parquet log files")
 
-      withWriteLayout(layout) {
+      withWriteLayout(Inferred) {
         runCompaction(tableName)
       }
       assertResult(false)(DataSourceTestUtils.isLogFileOnly(tablePath))
       val base1 = baseLayouts(tablePath)
-      assert(base1.nonEmpty && base1.forall(_.isShredded),
-        s"[$leg] compacted base must be shredded: $base1")
+      assertAllShredded(base1, shredded = true, s"$leg compacted base")
       base1.foreach(l => assert(l.typedFields == Seq("key"),
         s"[$leg] typed_value should carry key: ${l.typedFields}"))
 
       // Legacy log over the shredded base, then a second compaction reads base + legacy log.
-      withWriteLayout(layout) {
+      withWriteLayout(Inferred) {
         spark.sql(s"""update $tableName set v = parse_json('{"key":"v1-updated"}'), ts = 1001 where id = 1""")
       }
       checkAnswer(s"select id, cast(v as string) from $tableName order by id")(
         Seq(1, """{"key":"v1-updated"}"""),
         Seq(2, """{"key":"value2"}""")
       )
-      withWriteLayout(layout) {
+      withWriteLayout(Inferred) {
         runCompaction(tableName)
       }
       checkAnswer(s"select id, cast(v as string) from $tableName order by id")(
         Seq(1, """{"key":"v1-updated"}"""),
         Seq(2, """{"key":"value2"}""")
       )
-    })
+    }
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -469,17 +420,17 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       } else {
         Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK)
       }
-      Seq(Unshredded, inferredOr(Forced("a bigint"))).foreach { outLayout =>
-        withRecordType(recordTypes)(withTempDir { tmp =>
-          val tableName = generateTableName
-          val tablePath = tmp.getCanonicalPath
-          val leg = s"clustering rowWriter=$rowWriter out=$outLayout, $tableName"
-          createVariantTable(tableName, tablePath, "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT))
-
+      Seq(Unshredded, Inferred).foreach { outLayout =>
+        // The unshredded output cell only re-pins the unshredded rewrite, which the evolution
+        // test's clustering leg already sweeps over both record types; SPARK alone here, so this
+        // test runs 5 clustering jobs instead of 6.
+        val cellRecordTypes = if (outLayout == Unshredded) Seq(HoodieRecordType.SPARK) else recordTypes
+        withVariantTable(s"clustering rowWriter=$rowWriter out=$outLayout", "cow",
+          props = Seq(NEW_FILE_GROUP_PER_COMMIT), recordTypes = cellRecordTypes) { (tableName, tablePath, leg) =>
           val instants = seedMixedLayoutTable(tableName, tablePath, Seq(
             (Forced("a bigint, b string"), Seq((0 until 2, ObjA))),
             (Unshredded, Seq((2 until 4, ObjA))),
-            (inferredOr(Forced("c bigint, d boolean")), Seq((4 until 6, ObjB)))))
+            (Inferred, Seq((4 until 6, ObjB)))))
 
           withWriteLayout(outLayout) {
             runClustering(tableName, rowWriter)
@@ -487,17 +438,13 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           val clusteringInstant = completedClusteringInstant(tablePath, leg)
           val outFiles = baseLayouts(tablePath).filter(_.instantTime == clusteringInstant)
           assert(outFiles.nonEmpty, s"[$leg] clustering should have written base files")
-          outLayout match {
-            case Unshredded =>
-              outFiles.foreach(l => assert(!l.isShredded,
-                s"[$leg] clustering under Unshredded must write unshredded output: ${l.path}"))
-            case Forced(_) =>
-              outFiles.foreach(l => assert(l.typedFields == Seq("a"),
-                s"[$leg] forced output typed_value should be {a}: ${l.typedFields}"))
-            case Inferred =>
-              // 6 rows: a, b on 4 and c, d on 2 - all clear the 10 percent bar.
-              outFiles.foreach(l => assert(l.typedFields.toSet == Set("a", "b", "c", "d"),
-                s"[$leg] inferred output typed_value should carry all keys: ${l.typedFields}"))
+          if (outLayout == Unshredded) {
+            outFiles.foreach(l => assert(!l.isShredded,
+              s"[$leg] clustering under Unshredded must write unshredded output: ${l.path}"))
+          } else {
+            // 6 rows: a, b on 4 and c, d on 2 - all clear the 10 percent bar.
+            outFiles.foreach(l => assert(l.typedFields.toSet == Set("a", "b", "c", "d"),
+              s"[$leg] inferred output typed_value should carry all keys: ${l.typedFields}"))
           }
 
           // Values survive the rewrite; the pre-clustering slice stays readable via time travel.
@@ -508,35 +455,9 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
             Seq(0, """{"a":0,"b":"b0"}"""),
             Seq(4, """{"c":4,"d":true}""")
           )
-        })
+        }
       }
     }
-  }
-
-  test("Clustering sort on a variant column is rejected with a clear error") {
-    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
-
-    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      createVariantTable(tableName, tablePath, "cow")
-      withWriteLayout(Forced("a bigint")) {
-        spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1}'), 1000)""")
-      }
-
-      // The procedure's order parameter is validated up front...
-      checkNestedExceptionContains(
-        s"call run_clustering(table => '$tableName', order => 'v')")(
-        "Sorting by column 'v'")
-      // ...and the config-driven sort columns are validated by the execution strategy and the
-      // partitioner constructors (SortUtils.validateSortableColumns), so the inline/async paths
-      // get the same error instead of an AnalysisException (row partitioner) or
-      // ClassCastException (RDD partitioner) deep in the job.
-      checkNestedExceptionContains(
-        s"call run_clustering(table => '$tableName', " +
-          "options => 'hoodie.clustering.plan.strategy.sort.columns=v')")(
-        "Sorting by column 'v'")
-    })
   }
 
   test("MOR clustering folds log files of another layout into the rewritten base") {
@@ -548,15 +469,9 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       } else {
         Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK)
       }
-      withRecordType(recordTypes)(withTempDir { tmp =>
-        val tableName = generateTableName
-        val tablePath = tmp.getCanonicalPath
-        val leg = s"mor clustering rowWriter=$rowWriter, $tableName"
-        // No INMEMORY index: the first insert creates a base file, the update goes to a log.
-        createVariantTable(tableName, tablePath, "mor",
-          props = Seq("hoodie.compact.inline = 'false'"))
-        val outLayout = inferredOr(Forced("c bigint"))
-
+      // No INMEMORY index: the first insert creates a base file, the update goes to a log.
+      withVariantTable(s"mor clustering rowWriter=$rowWriter", "mor",
+        props = Seq("hoodie.compact.inline = 'false'"), recordTypes = recordTypes) { (tableName, tablePath, leg) =>
         withWriteLayout(Forced("a bigint, b string")) {
           spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1,"b":"b1"}'), 1000), """ +
             """(2, parse_json('{"a":2,"b":"b2"}'), 1000)""")
@@ -565,28 +480,24 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           spark.sql(s"""update $tableName set v = parse_json('{"a":10,"b":"b10"}'), ts = 1001 where id = 1""")
         }
         // The slice going into clustering: a shredded base plus an unshredded native log.
-        val preBase = baseLayouts(tablePath)
-        assert(preBase.nonEmpty && preBase.forall(_.isShredded),
-          s"[$leg] pre-clustering base must be shredded: $preBase")
-        val preLogs = nativeLogLayouts(tablePath)
-        assert(preLogs.nonEmpty && preLogs.forall(!_.isShredded),
-          s"[$leg] pre-clustering log must be unshredded: $preLogs")
+        assertAllShredded(baseLayouts(tablePath), shredded = true, s"$leg pre-clustering base")
+        assertAllShredded(nativeLogLayouts(tablePath), shredded = false, s"$leg pre-clustering log")
 
-        withWriteLayout(outLayout) {
+        withWriteLayout(Inferred) {
           runClustering(tableName, rowWriter)
         }
         val clusteringInstant = completedClusteringInstant(tablePath, leg)
         val outFiles = baseLayouts(tablePath).filter(_.instantTime == clusteringInstant)
         assert(outFiles.nonEmpty, s"[$leg] clustering should have written base files")
         outFiles.foreach(l => assert(l.isShredded,
-          s"[$leg] clustering under $outLayout must write shredded output: ${l.path}"))
+          s"[$leg] clustering under Inferred must write shredded output: ${l.path}"))
 
         // The clustered base carries the merged (updated) row.
         checkAnswer(s"select id, cast(v as string) from $tableName order by id")(
           Seq(1, """{"a":10,"b":"b10"}"""),
           Seq(2, """{"a":2,"b":"b2"}""")
         )
-      })
+      }
     }
   }
 
@@ -599,20 +510,17 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
 
     // Read-mode test; SPARK pinned (see the mixed-files test above).
     Seq("true", "false").foreach { pushIntoScan =>
-      withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-        withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
-          val tableName = generateTableName
-          val tablePath = tmp.getCanonicalPath
-          val leg = s"cow pushVariantIntoScan=$pushIntoScan, $tableName"
-          createVariantTable(tableName, tablePath, "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT))
-
+      withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+        withVariantTable(s"cow pushVariantIntoScan=$pushIntoScan", "cow",
+          props = Seq(NEW_FILE_GROUP_PER_COMMIT), recordTypes = Seq(HoodieRecordType.SPARK)) {
+          (tableName, tablePath, leg) =>
           // $.a is typed in file 1, residual (unshredded) in file 2, a type-conflicted residual
           // in file 3 and absent in file 4.
           seedMixedLayoutTable(tableName, tablePath, Seq(
             (Forced("a bigint"), Seq((0 until 10, ObjA))),
             (Unshredded, Seq((10 until 20, ObjA))),
             (Forced("a bigint"), Seq((20 until 30, ObjAConflict))),
-            (inferredOr(Forced("c bigint, d boolean")), Seq((30 until 40, ObjB)))))
+            (Inferred, Seq((30 until 40, ObjB)))))
 
           // Typed and residual rows answer alike; the string a declines the cast, the missing
           // a returns null.
@@ -636,20 +544,16 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           assertVariantSegments(tableName, leg, Seq(("v", Seq(
             (0 until 20, ObjA), (20 until 30, ObjAConflict), (30 until 40, ObjB)))))
         }
-      })
+      }
     }
 
     // MOR: the same path is typed in the base, then updated through an unshredded log and a
     // shredded log; the merged read serves each row from a different physical slot.
     Seq("true", "false").foreach { pushIntoScan =>
-      withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-        withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
-          val tableName = generateTableName
-          val tablePath = tmp.getCanonicalPath
-          val leg = s"mor pushVariantIntoScan=$pushIntoScan, $tableName"
-          createVariantTable(tableName, tablePath, "mor",
-            props = Seq("hoodie.compact.inline = 'false'"))
-
+      withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+        withVariantTable(s"mor pushVariantIntoScan=$pushIntoScan", "mor",
+          props = Seq("hoodie.compact.inline = 'false'"), recordTypes = Seq(HoodieRecordType.SPARK)) {
+          (tableName, tablePath, leg) =>
           withWriteLayout(Forced("a bigint")) {
             spark.sql(s"insert into $tableName ${variantSourceSql(Seq((0 until 10, ObjA)))}")
           }
@@ -678,18 +582,15 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           checkAnswer(
             s"select id from $tableName where variant_get(v, '$$.b', 'string') = 'b7'")(Seq(7))
         }
-      })
+      }
     }
   }
 
   test("Schema-on-read reads of shredded variant files fail fast") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
-    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"schema-on-read, $tableName"
-      createVariantTable(tableName, tablePath, "cow")
+    withVariantTable("schema-on-read", "cow", recordTypes = Seq(HoodieRecordType.SPARK)) {
+      (tableName, tablePath, leg) =>
       withWriteLayout(Forced("a bigint")) {
         spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1}'), 1000)""")
       }
@@ -723,16 +624,13 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       // arm, so the catalog column degrades to a plain struct<metadata,value> (the resolved
       // avro table schema keeps its variant logical type). Plain reads of the table after the
       // DDL request that struct and fail in Spark before any Hudi hook.
-    })
+    }
 
     // The UNSHREDDED companion separates the two guard arms: with no typed_value in the file
     // only the rewrite arm can fire. With the rewrite off the read reaches Spark's own
     // struct-vs-variant mismatch under schema-on-read (the #18285 residue above), not this guard.
-    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"unshredded schema-on-read, $tableName"
-      createVariantTable(tableName, tablePath, "cow")
+    withVariantTable("unshredded schema-on-read", "cow", recordTypes = Seq(HoodieRecordType.SPARK)) {
+      (tableName, tablePath, leg) =>
       withWriteLayout(Unshredded) {
         spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1}'), 1000)""")
       }
@@ -744,39 +642,14 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           () => spark.sql(s"select id, cast(v as string), note from $tableName").collect())(
           "pushVariantIntoScan")
       }
-    })
+    }
 
     // The guard recurses: a NESTED shredded variant (struct<inner: variant>, written by the
     // bulk-insert row writer, the one production writer that shreds below the top level) fails
     // fast too, instead of slipping past a top-level-only walk.
-    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"nested schema-on-read, $tableName"
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  s struct<inner: variant>,
-           |  ts long
-           |) using hudi
-           | location '$tablePath'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  type = 'cow',
-           |  hoodie.datasource.write.row.writer.enable = 'true'
-           | )
-         """.stripMargin)
-      withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
-        withWriteLayout(Forced("k string")) {
-          spark.sql(s"""insert into $tableName values (1, named_struct('inner', parse_json('{"k":"x1"}')), 1000)""")
-        }
-      }
-      val files = listDataParquetFiles(tablePath)
-      assert(files.size == 1
-        && getFieldAsGroup(getFieldAsGroup(readParquetSchema(files.head), "s"), "inner").containsField("typed_value"),
-        s"[$leg] setup: the nested variant must be shredded")
+    withNestedVariantTable("nested schema-on-read", recordTypes = Seq(HoodieRecordType.SPARK)) {
+      (tableName, tablePath, leg) =>
+      assertVariantLayout(tablePath, shredded = true, s"$leg setup", column = "s.inner")
 
       withSQLConf("hoodie.schema.on.read.enable" -> "true") {
         spark.sql(s"alter table $tableName add columns (note string)")
@@ -786,7 +659,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
             "shredded variant")
         }
       }
-    })
+    }
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -799,38 +672,11 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     // The bulk-insert row writer is the only production writer that shreds a NESTED variant
     // (the forced hook of the AVRO write support is top-level only, and #18961's inference
     // never shreds nested columns).
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"nested forced shredding, $tableName"
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  s struct<inner: variant>,
-           |  ts long
-           |) using hudi
-           | location '$tablePath'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  type = 'cow',
-           |  hoodie.datasource.write.row.writer.enable = 'true'
-           | )
-         """.stripMargin)
-
-      withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
-        withWriteLayout(Forced("k string")) {
-          spark.sql(s"""insert into $tableName values (1, named_struct('inner', parse_json('{"k":"x1"}')), 1000)""")
-        }
-      }
-
+    withNestedVariantTable("nested forced shredding") { (tableName, tablePath, leg) =>
       val files = listDataParquetFiles(tablePath)
       assert(files.size == 1, s"[$leg] expected one base file, got $files")
-      val sGroup = getFieldAsGroup(readParquetSchema(files.head), "s")
-      val innerGroup = getFieldAsGroup(sGroup, "inner")
-      assert(innerGroup.containsField("typed_value"),
-        s"[$leg] nested variant should be shredded by the row writer:\n$innerGroup")
+      assertVariantLayout(tablePath, shredded = true, leg, column = "s.inner")
+      val innerGroup = variantGroupOf(files.head, "s.inner")
       assert(getFieldAsGroup(innerGroup, "typed_value").containsField("k"),
         s"[$leg] nested typed_value should carry k:\n$innerGroup")
 
@@ -859,7 +705,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           )
         }
       }
-    })
+    }
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -869,24 +715,18 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
   test("Add-column evolution followed by compaction and clustering over mixed layouts") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"evolution + services, $tableName"
-      createVariantTable(tableName, tablePath, "mor",
-        props = Seq("hoodie.index.type = 'INMEMORY'", "hoodie.compact.inline = 'false'"))
-      val layout2 = inferredOr(Forced("c bigint, d boolean"))
-
+    withVariantTable("evolution + services", "mor", props = Seq(
+      "hoodie.index.type = 'INMEMORY'", "hoodie.compact.inline = 'false'")) { (tableName, tablePath, leg) =>
       withWriteLayout(Forced("a bigint, b string")) {
         spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1,"b":"b1"}'), 1000), """ +
           """(2, parse_json('{"a":2,"b":"b2"}'), 1000)""")
       }
       spark.sql(s"alter table $tableName add columns (note string)")
-      withWriteLayout(layout2) {
+      withWriteLayout(Inferred) {
         spark.sql(s"""insert into $tableName values (3, parse_json('{"c":3,"d":true}'), 1000, 'n3')""")
       }
 
-      withWriteLayout(layout2) {
+      withWriteLayout(Inferred) {
         runCompaction(tableName)
       }
       assertCompactionCount(tablePath, 1, leg)
@@ -895,23 +735,20 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         Seq(2, """{"a":2,"b":"b2"}""", null),
         Seq(3, """{"c":3,"d":true}""", "n3")
       )
-      val compactedBase = baseLayouts(tablePath)
-      assert(compactedBase.nonEmpty && compactedBase.forall(_.isShredded),
-        s"[$leg] compacted base must be shredded under $layout2: $compactedBase")
+      assertAllShredded(baseLayouts(tablePath), shredded = true, s"$leg compacted base under Inferred")
 
       withWriteLayout(Unshredded) {
         runClustering(tableName, rowWriter = true)
       }
       val clusteringInstant = completedClusteringInstant(tablePath, leg)
       val clustered = baseLayouts(tablePath).filter(_.instantTime == clusteringInstant)
-      assert(clustered.nonEmpty && clustered.forall(!_.isShredded),
-        s"[$leg] clustering under Unshredded must write unshredded output: $clustered")
+      assertAllShredded(clustered, shredded = false, s"$leg output of the clustering under Unshredded")
       checkAnswer(s"select id, cast(v as string), note from $tableName order by id")(
         Seq(1, """{"a":1,"b":"b1"}""", null),
         Seq(2, """{"a":2,"b":"b2"}""", null),
         Seq(3, """{"c":3,"d":true}""", "n3")
       )
-    })
+    }
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -921,15 +758,11 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
   test("Rollback and savepoint restore across layout changes") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
-    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"rollback/savepoint, $tableName"
-      createVariantTable(tableName, tablePath, "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT))
-
+    withVariantTable("rollback/savepoint", "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT),
+      recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, tablePath, leg) =>
       val instants = seedMixedLayoutTable(tableName, tablePath, Seq(
         (Forced("a bigint, b string"), Seq((0 until 2, ObjA))),
-        (inferredOr(Forced("c bigint")), Seq((2 until 4, ObjB)))))
+        (Inferred, Seq((2 until 4, ObjB)))))
       spark.sql(s"call create_savepoint(table => '$tableName', commit_time => '${instants(1)}')")
 
       withWriteLayout(Unshredded) {
@@ -965,7 +798,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         spark.sql(s"insert into $tableName ${variantSourceSql(Seq((6 until 8, ObjA)))}")
       }
       checkAnswer(s"select count(*) from $tableName")(Seq(6))
-    })
+    }
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -974,7 +807,6 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
 
   test("Inference samples the head of a file; keys that only appear past the sample stay residual and read back") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
-    assume(inferrerPresent, INFERRER_GATE)
 
     // The inferrer only ever sees the buffered head of a file: MAX_BUFFERED_RECORDS records, or
     // MAX_BUFFERED_BYTES (capped by the max file size) worth of them, whichever comes first.
@@ -990,11 +822,12 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     def assertHeadAndTailReads(tableName: String, leg: String): Unit = {
       checkAnswer(s"select count(*) from $tableName")(Seq(total))
       // Whole-table round trip: every row renders what was written, typed keys and residual
-      // "late" alike (a spot check would miss a systematically dropped residual).
-      checkAnswer(s"select count(*) from $tableName where cast(v as string) <> $rowJson")(Seq(0))
+      // "late" alike (a spot check would miss a systematically dropped residual). `is distinct
+      // from` rather than `<>`: a row whose variant reconstructed as NULL would make `<>` NULL
+      // too and slip past the count.
+      checkAnswer(
+        s"select count(*) from $tableName where cast(v as string) is distinct from $rowJson")(Seq(0))
       // $.late resolves out of the residual for every tail row...
-      checkAnswer(s"select count(*) from $tableName where variant_get(v, '$$.late', 'int') is not null")(
-        Seq(total - cap))
       checkAnswer(s"select count(*) from $tableName " +
         s"where id >= $cap and coalesce(variant_get(v, '$$.late', 'int'), -1) <> id")(Seq(0))
       // ...and stays null over the sampled head, which never carried the key.
@@ -1008,12 +841,8 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
 
     // The AVRO read reconstructs the residual rows through HoodieVariantReconstruction, SPARK
     // natively, so both record types have to serve the split.
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"head sample cow, $tableName"
-      createVariantTable(tableName, tablePath, "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT))
-
+    withVariantTable("head sample cow", "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT)) {
+      (tableName, tablePath, leg) =>
       withWriteLayout(Inferred) {
         spark.sql(s"insert into $tableName $sourceSql")
       }
@@ -1028,18 +857,15 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       assert(stats.map(_.fieldTyped("a")).sum == total, s"[$leg] every row should type a: $stats")
       assert(stats.map(_.rootResidual).sum == total - cap,
         s"[$leg] only the tail rows should carry a root residual: $stats")
-    })
+    }
 
     // MOR twin: the same rows in a base file, the late keys re-applied through a log file, then
     // a compaction that re-infers from the merged rows. Whatever the compacted base types, the
     // reads must hold.
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"head sample mor, $tableName"
-      createVariantTable(tableName, tablePath, "mor",
-        props = Seq(NEW_FILE_GROUP_PER_COMMIT, "hoodie.compact.inline = 'false'"))
-
+    // SPARK pinned: AVRO compaction over a shredded base is swept by the MOR compaction and declines tests.
+    withVariantTable("head sample mor", "mor",
+      props = Seq(NEW_FILE_GROUP_PER_COMMIT, "hoodie.compact.inline = 'false'"),
+      recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, tablePath, leg) =>
       withWriteLayout(Inferred) {
         spark.sql(s"insert into $tableName $sourceSql")
       }
@@ -1052,38 +878,32 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       }
       assertCompactionCount(tablePath, 1, leg)
       assertHeadAndTailReads(tableName, leg)
-    })
+    }
 
     // The row writer buffers through a decorator of its own, sharing the same cap constants.
     // Record-type independent, SPARK pinned.
-    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"head sample row writer, $tableName"
-      createVariantTable(tableName, tablePath, "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT))
-
-      withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert",
-        "hoodie.datasource.write.row.writer.enable" -> "true") {
+    withVariantTable("head sample row writer", "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT),
+      recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, tablePath, leg) =>
+      withBulkInsertRowWriter {
         withWriteLayout(Inferred) {
           spark.sql(s"insert into $tableName $sourceSql")
         }
       }
-      // Pin the path: the footer would look the same if the insert fell back to the
-      // record-based writers, which infer through the other decorator.
-      assertResult(WriteOperationType.BULK_INSERT)(getLastCommitMetadata(spark, tablePath).getOperationType)
+      assertBulkInsertOperation(tablePath, leg)
       val instant = latestCompletedInstant(tablePath)
       assertLayoutsByInstant(baseLayouts(tablePath), leg)(instant -> Some(Seq("a", "b")))
       assertHeadAndTailReads(tableName, leg)
-    })
+    }
   }
 
-  test("The buffer cap materializes mid-insert on a real writer and rolls over cleanly") {
+  test("An insert that rolls over infers each file on its own and keeps every row") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
-    assume(inferrerPresent, INFERRER_GATE)
 
-    // A 256KB max file size puts the byte cap - min(MAX_BUFFERED_BYTES, max file size) - far
-    // below the row count, so the buffer materializes part way through the insert instead of at
-    // close, and the writer rolls over into several files that each infer on their own head.
+    // The inference buffer's byte cap is min(MAX_BUFFERED_BYTES, max file size), so with a 256KB
+    // max file size the cap coincides with the file-size rollover by construction - materializing
+    // the buffer mid-insert is not what this leg pins. What it pins is the rollover itself: the
+    // insert spreads over several base files, each infers its own schema, and the record counts
+    // and distinct ids across those files still add up to the input.
     // Dictionary encoding is off on purpose: the pad is the same 1KB string in every row, and a
     // one-entry dictionary keeps the writer's data-size estimate near zero, so the file-size
     // rollover the row-writer leg depends on would never trip.
@@ -1117,57 +937,38 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       )
     }
 
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"buffer cap, $tableName"
-      createVariantTable(tableName, tablePath, "cow", props = props)
-
+    withVariantTable("buffer cap", "cow", props = props) { (tableName, tablePath, leg) =>
       withWriteLayout(Inferred) {
         spark.sql(s"insert into $tableName $sourceSql")
       }
       assertRolledOver(tableName, tablePath, leg)
-    })
+    }
 
-    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"buffer cap row writer, $tableName"
-      createVariantTable(tableName, tablePath, "cow", props = props)
-
-      withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert",
-        "hoodie.datasource.write.row.writer.enable" -> "true") {
+    withVariantTable("buffer cap row writer", "cow", props = props,
+      recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, tablePath, leg) =>
+      withBulkInsertRowWriter {
         withWriteLayout(Inferred) {
           spark.sql(s"insert into $tableName $sourceSql")
         }
       }
-      assertResult(WriteOperationType.BULK_INSERT)(getLastCommitMetadata(spark, tablePath).getOperationType)
+      assertBulkInsertOperation(tablePath, leg)
       assertRolledOver(tableName, tablePath, leg)
-    })
+    }
   }
 
-  test("The inference tblproperty alone reaches SQL DML and run_clustering by table name") {
+  test("The inference tblproperty alone reaches run_clustering by table name") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
-    assume(inferrerPresent, INFERRER_GATE)
 
     // No withWriteLayout and no session confs anywhere in this test. The flag is a WRITE config,
     // not a table config, so it is never persisted in hoodie.properties: SQL DML and procedures
     // called by TABLE NAME pick it up from the table's catalog properties, while path-based
-    // procedures, the DataSource writer and the streamer have to be handed it explicitly.
-    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"tblproperty inference, $tableName"
-      createVariantTable(tableName, tablePath, "cow",
-        props = Seq(NEW_FILE_GROUP_PER_COMMIT, s"$INFERENCE_KEY = 'true'"))
-
-      spark.sql(s"insert into $tableName ${variantSourceSql(Seq((0 until 2, ObjA)))}")
-      val instant1 = latestCompletedInstant(tablePath)
-      spark.sql(s"insert into $tableName ${variantSourceSql(Seq((2 until 4, ObjA)))}")
-      val instant2 = latestCompletedInstant(tablePath)
-      assertLayoutsByInstant(baseLayouts(tablePath), leg)(
-        instant1 -> Some(Seq("a", "b")),
-        instant2 -> Some(Seq("a", "b")))
+    // procedures, the DataSource writer and the streamer have to be handed it explicitly. The
+    // DML half is pinned by TestVariantDataType's inference tests; this one is about the
+    // procedure.
+    withVariantTable("tblproperty inference", "cow",
+      props = Seq(NEW_FILE_GROUP_PER_COMMIT, s"$INFERENCE_KEY = 'true'"),
+      recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, tablePath, leg) =>
+      spark.sql(s"insert into $tableName ${variantSourceSql(Seq((0 until 4, ObjA)))}")
 
       // The procedure resolves the table by name, so the same catalog properties reach the
       // clustering write: no options are passed here at all.
@@ -1175,12 +976,11 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       val clusteringInstant = completedClusteringInstant(tablePath, leg)
       assertLayoutsByInstant(baseLayouts(tablePath), leg)(clusteringInstant -> Some(Seq("a", "b")))
       assertVariantSegments(tableName, leg, Seq(("v", Seq((0 until 4, ObjA)))))
-    })
+    }
   }
 
   test("Nested variants stay unshredded under inference") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
-    assume(inferrerPresent, INFERRER_GATE)
 
     // Inference is top-level only (VariantSchemaUtils.getInferableVariantColumns), so the nested
     // variant keeps the plain {metadata, value} shape in the very file where the top-level one
@@ -1191,66 +991,48 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     def assertNestedUnshredded(tableName: String, tablePath: String, leg: String): Unit = {
       val instant = latestCompletedInstant(tablePath)
       assertLayoutsByInstant(baseLayouts(tablePath), leg)(instant -> Some(Seq("a", "b")))
-      baseLayouts(tablePath).foreach { layout =>
-        val inner = getFieldAsGroup(getFieldAsGroup(readParquetSchema(layout.path), "s"), "inner")
-        assert(!inner.containsField("typed_value"),
-          s"[$leg] the nested variant must stay unshredded:\n$inner")
-      }
+      assertVariantLayout(tablePath, shredded = false, leg, column = "s.inner")
       checkAnswer(s"select id, cast(v as string), cast(s.inner as string) from $tableName order by id")(
         (0 until 4).map(id => Seq(id, ObjA.expected(id), ObjA.expected(id))): _*)
     }
 
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"nested inference, $tableName"
-      createVariantTable(tableName, tablePath, "cow",
-        props = Seq(NEW_FILE_GROUP_PER_COMMIT), extraCols = "s struct<inner: variant>")
-
+    withVariantTable("nested inference", "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT),
+      extraCols = "s struct<inner: variant>") { (tableName, tablePath, leg) =>
       withWriteLayout(Inferred) {
         spark.sql(s"insert into $tableName $nestedSourceSql")
       }
       assertNestedUnshredded(tableName, tablePath, leg)
-    })
+    }
 
     // The row writer is the one production writer that CAN shred a nested variant; under
     // inference it must not, because inference never asks it to.
-    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"nested inference row writer, $tableName"
-      createVariantTable(tableName, tablePath, "cow",
-        props = Seq(NEW_FILE_GROUP_PER_COMMIT), extraCols = "s struct<inner: variant>")
-
-      withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert",
-        "hoodie.datasource.write.row.writer.enable" -> "true") {
+    withVariantTable("nested inference row writer", "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT),
+      extraCols = "s struct<inner: variant>", recordTypes = Seq(HoodieRecordType.SPARK)) {
+      (tableName, tablePath, leg) =>
+      withBulkInsertRowWriter {
         withWriteLayout(Inferred) {
           spark.sql(s"insert into $tableName $nestedSourceSql")
         }
       }
-      assertResult(WriteOperationType.BULK_INSERT)(getLastCommitMetadata(spark, tablePath).getOperationType)
+      assertBulkInsertOperation(tablePath, leg)
       assertNestedUnshredded(tableName, tablePath, leg)
-    })
+    }
   }
 
   test("Files whose inference declined sit next to inferred ones; reads and compaction span them") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
-    assume(inferrerPresent, INFERRER_GATE)
 
     // Read-mode heavy; SPARK pinned for the COW half (see the mixed-files test above).
-    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"declined beside inferred cow, $tableName"
-      createVariantTable(tableName, tablePath, "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT))
-
+    withVariantTable("declined beside inferred cow", "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT),
+      recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, tablePath, leg) =>
+      val objSegments: Seq[(Range, VariantShape)] = Seq((0 until 4, ObjA))
       val nullSegments: Seq[(Range, VariantShape)] = Seq((4 until 8, JsonNull), (8 until 10, SqlNull))
       val instants = seedMixedLayoutTable(tableName, tablePath, Seq(
-        (Inferred, Seq((0 until 4, ObjA))),
+        (Inferred, objSegments),
         (Inferred, nullSegments)))
       // Pinned before the empty-object commit: assertVariantSegments spans the whole table and
       // there is no shape for {}.
-      assertVariantSegments(tableName, leg, Seq(("v", Seq((0 until 4, ObjA)) ++ nullSegments)))
+      assertVariantSegments(tableName, leg, Seq(("v", objSegments ++ nullSegments)))
 
       withWriteLayout(Inferred) {
         spark.sql(s"insert into $tableName select cast(id as int) as id, parse_json('{}') as v, " +
@@ -1269,24 +1051,45 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         Seq(11, "{}"),
         Seq(12, "{}")
       )
-      val incCount = spark.read.format("hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, "000")
-        .load(tablePath)
-        .count()
-      assert(incCount == 13,
-        s"[$leg] incremental over the full range should span all three files, got $incCount")
-    })
+      // Incremental over the full range spans all three files with the values intact - a bare
+      // count would pass even if the declined files reconstructed as all-null.
+      val incRows = incrementalIdAndVariant(tablePath)
+      assert(incRows.length == 13,
+        s"[$leg] incremental over the full range should span all three files, got ${incRows.length}")
+      incRows.foreach { row =>
+        val id = row.getInt(0)
+        val expected = if (id < 10) expectedVariantString(objSegments ++ nullSegments, id) else "{}"
+        val actual = if (row.isNullAt(1)) null else row.getString(1)
+        assert(actual == expected, s"[$leg] incremental id=$id: expected $expected, got $actual")
+      }
+
+      // A file of root scalars is the third inference outcome beside inferred-object and
+      // declined: Spark types the root and Spark41VariantShreddingSchemaInferrer.sanitizeTypedValue
+      // passes scalars through, so the file IS shredded, with a typed_value that is a leaf rather
+      // than an object.
+      withWriteLayout(Inferred) {
+        spark.sql(s"insert into $tableName ${variantSourceSql(Seq((13 until 16, RootScalar)))}")
+      }
+      val scalarInstant = latestCompletedInstant(tablePath)
+      val scalarFiles = baseLayouts(tablePath).filter(_.instantTime == scalarInstant)
+      assert(scalarFiles.nonEmpty, s"[$leg] the scalar insert should have written a base file")
+      scalarFiles.foreach { layout =>
+        assert(layout.typedValue.exists(_.isPrimitive),
+          s"[$leg] an all-scalar file should shred with a scalar typed_value, not decline: " +
+            s"${layout.typedValue}: ${layout.path}")
+        // Spark reads the JSON integers as Decimal(2,0) and finalizeSimpleSchema widens that
+        // back to a long, so the leaf lands on parquet INT64.
+        assert(layout.typedValue.exists(_.asPrimitiveType().getPrimitiveTypeName == PrimitiveTypeName.INT64),
+          s"[$leg] the scalar typed_value should be an INT64 leaf, got ${layout.typedValue}: ${layout.path}")
+      }
+      checkAnswer(s"select id, cast(v as string) from $tableName where id >= 13 order by id")(
+        (13 until 16).map(id => Seq(id, RootScalar.expected(id))): _*)
+    }
 
     // MOR twin: an inferred base file, a log file the inference declined, and a compaction that
     // has to merge across the two.
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath
-      val leg = s"declined beside inferred mor, $tableName"
-      createVariantTable(tableName, tablePath, "mor",
-        props = Seq(NEW_FILE_GROUP_PER_COMMIT, "hoodie.compact.inline = 'false'"))
-
+    withVariantTable("declined beside inferred mor", "mor",
+      props = Seq(NEW_FILE_GROUP_PER_COMMIT, "hoodie.compact.inline = 'false'")) { (tableName, tablePath, leg) =>
       withWriteLayout(Inferred) {
         spark.sql(s"insert into $tableName ${variantSourceSql(Seq((0 until 10, ObjA)))}")
       }
@@ -1307,6 +1110,27 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       // The updated rows hold a JSON null, not a SQL NULL variant: the merge kept the value the
       // declined log file wrote, it did not lose the column.
       checkAnswer(s"select count(*) from $tableName where v is null")(Seq(0))
-    })
+    }
+  }
+
+  test("Inference types decimal leaves and they read back") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // Issue #19442 reports FIXED-typed typed_value broken on the Avro paths; an inferred decimal
+    // leaf is how that type reaches a typed_value without a forced schema, so pin that it still
+    // round-trips today.
+    withVariantTable("inferred decimal", "cow") { (tableName, tablePath, leg) =>
+      withWriteLayout(Inferred) {
+        spark.sql(s"insert into $tableName select cast(id as int) as id, parse_json(" +
+          """concat('{"amt":', cast(id as string), '.25,"n":', cast(id as string), '}')) as v, """ +
+          "1000L as ts from range(0, 4, 1, 1)")
+      }
+      assertLayoutsByInstant(baseLayouts(tablePath), leg)(
+        latestCompletedInstant(tablePath) -> Some(Seq("amt", "n")))
+      checkAnswer(s"select id, cast(v as string), variant_get(v, '$$.amt', 'decimal(5,2)') " +
+        s"from $tableName order by id")(
+        (0 until 4).map(id =>
+          Seq(id, s"""{"amt":$id.25,"n":$id}""", new java.math.BigDecimal(s"$id.25"))): _*)
+    }
   }
 }

@@ -377,8 +377,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
     // layout before SPARK-54410 (Spark 4.1+).
     //
     // This test pins the INLINE clustering trigger; the run_clustering procedure over
-    // heterogeneous inputs (including the unshredded output cell that used to have a twin
-    // test here) is covered by TestVariantShreddingMixedLayouts.
+    // heterogeneous inputs is covered by TestVariantShreddingMixedLayouts.
     assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
 
     withRecordType()(withTempDir { tmp =>
@@ -442,6 +441,54 @@ class TestVariantDataType extends HoodieSparkSqlTestBase with VariantShreddingTe
       // VARIANT must still surface as the native type after the clustering rewrite.
       val variantField = spark.table(tableName).schema.find(_.name == "v").get
       assertResult("variant")(variantField.dataType.typeName)
+    })
+  }
+
+  test("Test COW clustering preserves unshredded VARIANT values") {
+    // Companion to the shredded clustering test above, with shredding disabled. If this
+    // passes while the shredded one fails, the loss is specific to reading the shredded
+    // layout inside the clustering rewrite, not to variant clustering in general.
+    //
+    // The procedure-driven unshredded rewrite lives in TestVariantShreddingMixedLayouts; this
+    // is the only leg that reaches it through the INLINE clustering trigger.
+    assume(HoodieSparkUtils.gteqSpark4_1, "Variant clustering read-back requires Spark 4.1 or higher")
+
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = "unshredded clustering"
+      createVariantTable(tableName, tablePath, "cow", props = Seq(
+        "hoodie.parquet.variant.write.shredding.enabled = 'false'",
+        "hoodie.index.type = 'INMEMORY'",
+        "hoodie.parquet.small.file.limit = '0'",
+        "hoodie.clustering.inline = 'true'",
+        "hoodie.clustering.inline.max.commits = '2'"))
+
+      spark.sql(s"insert into $tableName values " +
+        "(1, parse_json('{\"key\":\"value1\"}'), 1000), " +
+        "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
+
+      // Pin the layout: these files must NOT carry typed_value, or this twin silently
+      // becomes a copy of the shredded test above and the unshredded leg of the rewrite
+      // goes uncovered.
+      assertVariantLayout(tablePath, shredded = false, leg)
+
+      // Second commit trips inline clustering (max.commits = 2), which rewrites the rows
+      // of the first commit too.
+      spark.sql(s"insert into $tableName values " +
+        "(3, parse_json('{\"key\":\"value3\"}'), 1000), " +
+        "(4, parse_json('{\"key\":\"value4\"}'), 1000)")
+
+      // Asserts a COMPLETED replacecommit exists: without a finished rewrite the round trip
+      // below proves nothing.
+      completedClusteringInstant(tablePath, leg)
+
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"value1\"}", 1000),
+        Seq(2, "{\"key\":\"value2\"}", 1000),
+        Seq(3, "{\"key\":\"value3\"}", 1000),
+        Seq(4, "{\"key\":\"value4\"}", 1000)
+      )
     })
   }
 
