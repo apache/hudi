@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.hudi.dml.schema
 
+import org.apache.hudi.common.avro.VariantShreddingRuntime
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -41,8 +42,9 @@ import scala.collection.mutable
  * typed-vs-residual inspector, a shape-drift data generator, and a write-layout toggle. Mixed
  * into [[TestVariantDataType]] and [[TestVariantShreddingMixedLayouts]].
  *
- * Until #18961 lands, [[inferredOr]] always resolves to its forced stand-in, and the forced DDLs
- * are struct-shaped: only OBJECT-shaped typed_value is ever written by these suites.
+ * The shredding-schema inferrer ships only in the Spark 4.1+ version modules; on the other
+ * profiles [[inferredOr]] resolves to its forced stand-in, and since the forced DDLs are
+ * struct-shaped, only OBJECT-shaped typed_value is written there.
  */
 trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
 
@@ -134,6 +136,71 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
         assert(!variantGroup.containsField("typed_value"),
           s"[$leg] base file must not carry typed_value. Schema:\n$variantGroup")
       }
+    }
+  }
+
+  /**
+   * Pins an INFERRED shredding layout of `column` across every data parquet file of the table:
+   * see [[assertInferredTypedValueIn]].
+   */
+  protected def assertInferredTypedValue(tablePath: String, column: String, leg: String,
+                                         present: Seq[String], absent: Seq[String] = Seq.empty): Unit = {
+    assertInferredTypedValueIn(listDataParquetFiles(tablePath), column, leg, present, absent)
+  }
+
+  /**
+   * Pins an INFERRED shredding layout of `column` in the given parquet files: the variant group is
+   * shredded, carries the VARIANT logical type (the inferrer only exists on Spark 4.1+, whose
+   * parquet ships the annotation), its typed_value has every `present` member and none of
+   * the `absent` ones (e.g. an avro-illegal key the inferrer dropped), and typed_value holds
+   * non-null values per the block column statistics.
+   */
+  protected def assertInferredTypedValueIn(files: Seq[String], column: String, leg: String,
+                                           present: Seq[String], absent: Seq[String] = Seq.empty): Unit = {
+    assert(files.nonEmpty, s"[$leg] should have at least one data parquet file")
+    files.foreach { filePath =>
+      val variantGroup = getFieldAsGroup(readParquetSchema(filePath), column)
+      assert(variantGroup.containsField("typed_value"),
+        s"[$leg] $column should be shredded with an inferred typed_value. File: $filePath Schema:\n$variantGroup")
+      assert(Option(variantGroup.getLogicalTypeAnnotation).exists(_.toString.contains("VARIANT")),
+        s"[$leg] inferred variant group must carry the VARIANT logical type. Schema:\n$variantGroup")
+      val typedValue = getFieldAsGroup(variantGroup, "typed_value")
+      present.foreach(member => assert(typedValue.containsField(member),
+        s"[$leg] inferred typed_value should contain $member. Schema:\n$typedValue"))
+      absent.foreach(member => assert(!typedValue.containsField(member),
+        s"[$leg] inferred typed_value must not contain $member. Schema:\n$typedValue"))
+      // The footer schema alone cannot tell real shredding from a file where every row fell
+      // back to the residual value with typed_value all-null.
+      assert(typedValueNonNullCount(filePath, column) > 0,
+        s"[$leg] inferred typed_value of $column should hold non-null values. File: $filePath")
+    }
+  }
+
+  /**
+   * Sums the non-null value counts of the typed leaf columns under `column`.typed_value across
+   * all blocks of the file, from the block column statistics. The residual `value` leaves of
+   * shredded object fields are left out: they hold the rows that fell back, so counting them
+   * would let a file with every field fallen back pass as shredded.
+   */
+  protected def typedValueNonNullCount(filePath: String, column: String): Long = {
+    val conf = spark.sparkContext.hadoopConfiguration
+    val inputFile = HadoopInputFile.fromPath(new HadoopPath(filePath), conf)
+    val reader = ParquetFileReader.open(inputFile)
+    try {
+      val prefix = s"$column.typed_value"
+      reader.getFooter.getBlocks.asScala.flatMap(_.getColumns.asScala)
+        .filter { c =>
+          val dot = c.getPath.toDotString
+          (dot == prefix || dot.startsWith(prefix + ".")) && !dot.endsWith(".value")
+        }
+        .map { c =>
+          val stats = c.getStatistics
+          // A chunk without a written null count must not pass as holding non-null values
+          if (stats == null || stats.getNumNulls < 0) 0L else c.getValueCount - stats.getNumNulls
+        }
+        .sum
+    } finally {
+      reader.close()
     }
   }
 
@@ -421,24 +488,16 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
     withSQLConf(layoutConfs(layout): _*)(f)
 
   /**
-   * Whether a shredding-schema inferrer is on the classpath (#18961's VariantShreddingRuntime,
-   * Spark 4.1+ modules only). Resolved reflectively so this trait compiles before #18961 lands;
-   * swap to a direct call once it merges.
+   * Whether a shredding-schema inferrer is registered with VariantShreddingRuntime. The inferrer
+   * ships only in the Spark 4.1+ version modules, and each spark4.x profile builds just its own
+   * module, so on every other profile this is false and [[inferredOr]] substitutes the forced
+   * stand-in instead of leaving the leg silently unshredded.
    */
-  protected lazy val inferrerPresent: Boolean = try {
-    val runtime = Class.forName("org.apache.hudi.common.avro.VariantShreddingRuntime")
-    runtime.getMethod("lookupInferrer").invoke(null) match {
-      case opt: org.apache.hudi.common.util.Option[_] => opt.isPresent
-      case _ => false
-    }
-  } catch {
-    case _: ClassNotFoundException => false
-    case _: NoSuchMethodException => false
-  }
+  protected lazy val inferrerPresent: Boolean = VariantShreddingRuntime.lookupInferrer.isPresent
 
   /**
-   * The `Inferred` layout when an inferrer is on the classpath, otherwise the forced stand-in.
-   * Lets heterogeneity tests keep their mixed-layout shape on classpaths without #18961.
+   * The `Inferred` layout when an inferrer is registered, otherwise the forced stand-in.
+   * Lets heterogeneity tests keep their mixed-layout shape on profiles without an inferrer.
    */
   protected def inferredOr(standIn: WriteLayout): WriteLayout =
     if (inferrerPresent) Inferred else standIn
@@ -477,7 +536,7 @@ object VariantShreddingTestSupport {
 
   val WRITE_SHREDDING_KEY = "hoodie.parquet.variant.write.shredding.enabled"
   val FORCE_SCHEMA_KEY = "hoodie.parquet.variant.force.shredding.schema.for.test"
-  // #18961; unknown to older writers, which is harmless (the key is simply ignored).
+  // Per-file shredding-schema inference (#18961); a writer with no inferrer ignores it.
   val INFERENCE_KEY = "hoodie.parquet.variant.shredding.schema.inference.enabled"
 
   /** How the writer lays out variant columns for one commit or table service. */
