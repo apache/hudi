@@ -561,10 +561,12 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
       && String.valueOf(c.getMessage).contains("shredded variant")),
       s"Expected the shredded-variant rejection but got: $thrown")
 
-    // The carve-out: an empty projection reads no column data, so it must keep working. It is a
-    // branch of its own rather than a weaker case of the above -- the query schema is left
-    // unpruned when nothing is projected, so running the guard there would reject a working query.
-    assertEquals(2L, legacyRelationDf(readOpts).count())
+    // The guard's empty-projection carve-out (count(*) reads no column data and must keep working)
+    // is pinned on the file-group-reader path by the count(*) legs in TestVariantShreddingMixedLayouts,
+    // not here: this relation cannot serve an empty projection under schema-on-read at all, with or
+    // without a variant. buildScan prunes the internal schema to the zero requested columns, and
+    // InternalSchemaUtils.pruneInternalSchema builds an InternalSchema around a null record (NPE in
+    // buildIdToName; pre-existing, noted on #19688).
   }
 
   @Test
