@@ -150,9 +150,10 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
         }
         lock = null;
       }
-      this.client.close();
     } catch (Exception e) {
       LOG.error(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
+    } finally {
+      this.client.close();
     }
   }
 
