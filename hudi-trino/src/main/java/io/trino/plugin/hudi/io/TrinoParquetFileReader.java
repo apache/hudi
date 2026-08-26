@@ -253,7 +253,9 @@ public class TrinoParquetFileReader
     /**
      * One {@link HiveColumnHandle} per field of the projection, typed from the field's Avro schema the way
      * {@link HudiUtil#toColumnHandle} types the handles of a data-file read. Handle {@code i} is built from
-     * field {@code i}, so a handle's index is its field's position in the records this reader produces.
+     * field {@code i}, so a handle's position in the returned list is its field's position in the records this
+     * reader produces. That list position is what {@link #binaryFieldPositions} relies on, not the handle's own
+     * column index, which {@code toColumnHandle} leaves at 0.
      */
     private static List<HiveColumnHandle> buildColumnHandles(HoodieSchema projectedSchema)
     {
