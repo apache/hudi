@@ -22,8 +22,10 @@ package org.apache.hudi.blob
 import org.apache.hudi.blob.BlobTestHelpers._
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.exception.HoodieIOException
+import org.apache.hudi.hadoop.fs.NonLocalSchemeLocalFileSystem
 import org.apache.hudi.testutils.HoodieClientTestBase
 
+import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
@@ -95,6 +97,62 @@ class TestReadBlobSQL extends HoodieClientTestBase {
 
     assertEquals(3, result.length)
     // Verify the bytes read from the external file match the recorded offsets.
+    result.zipWithIndex.foreach { case (row, idx) =>
+      assertEquals(idx + 1, row.getInt(0))
+      val bytes = row.getAs[Array[Byte]]("data")
+      assertEquals(100, bytes.length)
+      assertBytesContent(bytes, expectedOffset = idx * 100)
+    }
+  }
+
+  /**
+   * The same out-of-line read, but with the blob reference on an object-store scheme while the table
+   * stays local. read_blob() reaches BatchedBlobReader through BatchedBlobReadExec and processRDD,
+   * which is a separate call site from the readBatched path covered in TestBatchedBlobReader, so
+   * storage resolved from a default file:/// URI fails here with
+   * IllegalArgumentException: Wrong FS: s3a://..., expected: file:///.
+   */
+  @Test
+  def testReadOutOfLineBlobReferenceOnANonLocalScheme(): Unit = {
+    // BatchedBlobReaderStrategy builds the storage configuration from the session's Hadoop conf,
+    // so the borrowed scheme has to be registered there rather than on a conf the test holds.
+    sparkSession.sparkContext.hadoopConfiguration.setClass(
+      "fs.s3a.impl", classOf[NonLocalSchemeLocalFileSystem], classOf[FileSystem])
+
+    val extFile = createTestFile(tempDir, "non-local-sql.bin", 10000)
+    val reference = s"s3a://test-bucket$extFile"
+    val tablePath = s"$tempDir/hudi_blob_table_non_local"
+
+    val rawDf = sparkSession.createDataFrame(Seq(
+        (1, "rec1", reference, 0L, 100L),
+        (2, "rec2", reference, 100L, 100L)
+      )).toDF("id", "name", "external_path", "offset", "length")
+      .withColumn("file_info",
+        blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
+      .select("id", "name", "file_info")
+
+    val canonicalSchema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("name", StringType, nullable = true),
+      StructField("file_info", BlobType().asInstanceOf[StructType], nullable = true, blobMetadata)
+    ))
+    sparkSession.createDataFrame(rawDf.rdd, canonicalSchema).write.format("hudi")
+      .option("hoodie.table.name", "blob_test_non_local")
+      .option("hoodie.datasource.write.recordkey.field", "id")
+      .option("hoodie.datasource.write.operation", "bulk_insert")
+      .mode("overwrite")
+      .save(tablePath)
+
+    sparkSession.read.format("hudi").load(tablePath)
+      .createOrReplaceTempView("hudi_blob_non_local_view")
+
+    val result = sparkSession.sql("""
+      SELECT id, read_blob(file_info) AS data
+      FROM hudi_blob_non_local_view
+      ORDER BY id
+    """).collect()
+
+    assertEquals(2, result.length)
     result.zipWithIndex.foreach { case (row, idx) =>
       assertEquals(idx + 1, row.getInt(0))
       val bytes = row.getAs[Array[Byte]]("data")
