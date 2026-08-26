@@ -31,7 +31,7 @@ import java.util.function.Predicate;
  * declare it up front because an {@code AccumulatorV2} must be registered with the {@code SparkContext}
  * before a task can contribute; the bundle sent to executors and the commit drain both iterate this.
  */
-public enum ExecutorMetricRegistry implements ExecutorMetricGroup {
+public enum ExecutorMetricRegistry {
 
   RECORD_INDEX_LOOKUP(
       "HoodieRecordIndexLookup",
@@ -53,23 +53,19 @@ public enum ExecutorMetricRegistry implements ExecutorMetricGroup {
   }
 
   /** The bare name emitting code passes to {@link Registry#getRegistry(String)}. */
-  @Override
   public String registryName() {
     return registryName;
   }
 
-  @Override
   public String metricAction() {
     return metricAction;
   }
 
-  @Override
   public String metricQualifier() {
     return metricQualifier;
   }
 
   /** Gating here, rather than in the drain, is what lets a new class of metric need no new config. */
-  @Override
   public boolean isEnabled(HoodieWriteConfig config) {
     return enabled.test(config);
   }
@@ -78,7 +74,6 @@ public enum ExecutorMetricRegistry implements ExecutorMetricGroup {
    * Driver-side {@code REGISTRY_MAP} key. Table name alone is not an identity: two tables can share one
    * and would then share a registry. Executors use the bare {@link #registryName()}.
    */
-  @Override
   public String scopedName(String basePath) {
     return registryName + "." + digest(basePath);
   }

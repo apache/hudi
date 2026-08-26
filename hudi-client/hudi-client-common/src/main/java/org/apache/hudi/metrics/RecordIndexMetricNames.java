@@ -46,8 +46,4 @@ public class RecordIndexMetricNames {
   public static String key(String caller, String metric) {
     return caller + "." + metric;
   }
-
-  public static String registryName(String basePath) {
-    return ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.scopedName(basePath);
-  }
 }

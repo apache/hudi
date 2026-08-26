@@ -22,8 +22,6 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -46,13 +44,7 @@ public class ExecutorMetrics {
    * mid-publish carries into the next commit instead of being dropped. An all-zero registry is skipped.
    */
   public static void publishAndRelease(HoodieWriteConfig config, HoodieMetrics hoodieMetrics) {
-    publishAndRelease(config, hoodieMetrics, Arrays.asList(ExecutorMetricRegistry.values()));
-  }
-
-  /** Visible for testing the collection machinery against a group it does not ship with. */
-  static void publishAndRelease(HoodieWriteConfig config, HoodieMetrics hoodieMetrics,
-                                Collection<? extends ExecutorMetricGroup> groups) {
-    for (ExecutorMetricGroup group : groups) {
+    for (ExecutorMetricRegistry group : ExecutorMetricRegistry.values()) {
       if (!group.isEnabled(config)) {
         continue;
       }
@@ -75,7 +67,7 @@ public class ExecutorMetrics {
    * Resets this group's gauges to zero, for a commit that collected nothing. Only names already published
    * are touched, so a table that has never emitted stays absent rather than reporting a row of zeros.
    */
-  private static void zeroPreviouslyReported(ExecutorMetricGroup group, HoodieMetrics hoodieMetrics) {
+  private static void zeroPreviouslyReported(ExecutorMetricRegistry group, HoodieMetrics hoodieMetrics) {
     if (hoodieMetrics == null || hoodieMetrics.getMetrics() == null) {
       return;
     }
@@ -93,7 +85,7 @@ public class ExecutorMetrics {
   }
 
   /** Gauges, so each commit overwrites the previous value rather than accumulating. */
-  private static void publishToReporter(ExecutorMetricGroup group, Map<String, Long> counts,
+  private static void publishToReporter(ExecutorMetricRegistry group, Map<String, Long> counts,
                                         HoodieMetrics hoodieMetrics) {
     if (hoodieMetrics == null || hoodieMetrics.getMetrics() == null) {
       return;

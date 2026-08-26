@@ -22,11 +22,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.DistributedRegistry;
-import org.apache.hudi.metrics.ExecutorMetricGroup;
 import org.apache.hudi.metrics.ExecutorMetricRegistry;
 import org.apache.hudi.metrics.RecordIndexMetricNames;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -65,14 +63,8 @@ public class RecordIndexLookupMetrics {
    * by name, which lets code below the write API take part without a signature change.
    */
   public static Map<String, Registry> resolveBundle(HoodieEngineContext context, HoodieWriteConfig config) {
-    return resolveBundle(context, config, Arrays.asList(ExecutorMetricRegistry.values()));
-  }
-
-  /** Visible for testing the bundle against a group the enum does not ship with. */
-  public static Map<String, Registry> resolveBundle(HoodieEngineContext context, HoodieWriteConfig config,
-                                                    Collection<? extends ExecutorMetricGroup> groups) {
     Map<String, Registry> bundle = new HashMap<>();
-    for (ExecutorMetricGroup metricRegistry : groups) {
+    for (ExecutorMetricRegistry metricRegistry : ExecutorMetricRegistry.values()) {
       if (!metricRegistry.isEnabled(config)) {
         continue;
       }
