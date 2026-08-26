@@ -16,6 +16,7 @@ package io.trino.plugin.hudi;
 import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.OmittedMetaColumnsHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.SchemaEvolutionHudiTablesInitializer;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
 
@@ -35,10 +36,12 @@ public class TestHudiConnectorParquetColumnNamesTest
                 .addConnectorProperty("hudi.parquet.use-column-names", "false")
                 // The resource tables all register the Hudi meta columns in the metastore, so their metastore
                 // ordinals already equal their physical ones and nothing here resolves a stale ordinal. The
-                // second fixture is the one whose metastore omits them.
+                // second fixture is the one whose metastore omits them, and the third is the type-evolution table
+                // TestHudiSmokeTest reads, carried here so its predicates are resolved positionally too.
                 .setDataLoader(new CompositeHudiTablesInitializer(
                         new ResourceHudiTablesInitializer(),
-                        new OmittedMetaColumnsHudiTablesInitializer()))
+                        new OmittedMetaColumnsHudiTablesInitializer(),
+                        new SchemaEvolutionHudiTablesInitializer()))
                 .build();
     }
 

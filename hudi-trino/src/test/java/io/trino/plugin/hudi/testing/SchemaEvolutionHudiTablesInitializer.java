@@ -40,7 +40,15 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
  * they were widened TO -- the state every unrewritten base file is in after a Hudi type evolution followed by a hive
  * sync. The two halves are declared independently on purpose: {@link #avroSchema()} is what the write client puts in
  * the file, {@link #dataColumns()} is what the metastore hands the connector, and only their disagreement is being
- * modelled. No schema-evolution write path is exercised, because none is needed to reproduce apache/hudi#19457.
+ * modelled.
+ * <p>
+ * No schema-evolution write path is exercised, because none is needed to reproduce apache/hudi#19457 and because
+ * neither route can run here. A real evolution is produced either by a DataFrame append carrying a widened schema -
+ * schema-on-write, which is what apache/hudi#19457 was reported against - or by
+ * {@code ALTER TABLE ... ALTER COLUMN ... TYPE}, which needs {@code hoodie.schema.on.read.enable=true}:
+ * {@code AlterHoodieTableChangeColumnCommand} throws {@code HoodieAnalysisException} for any type change. Both want
+ * a Spark writer, so the end-to-end version of this fixture belongs with the docker-based integ tests rather than in
+ * a connector unit test; it is tracked in apache/hudi#19743.
  * <p>
  * The three widenings are the ones Hudi allows and the parquet reader can serve: {@code float -> double},
  * {@code int -> long} and {@code int -> string}. Reading them has always worked. Putting a predicate on one is what
@@ -49,7 +57,9 @@ import static io.trino.metastore.HiveType.HIVE_STRING;
  * <p>
  * Unlike {@link OmittedMetaColumnsHudiTablesInitializer} this fixture registers the Hudi meta columns, so every
  * metastore ordinal equals its physical one and nothing here depends on how columns are resolved. What the two
- * {@code hudi.parquet.use-column-names} modes must agree on is the TYPE handling alone.
+ * {@code hudi.parquet.use-column-names} modes must agree on is the TYPE handling alone; both run it, because
+ * {@code TestHudiSmokeTest} loads this fixture and {@code TestHudiConnectorParquetColumnNamesTest} reruns that class
+ * positionally.
  * <p>
  * A single bulk-insert commit, so the file slice has no log files: predicate pushdown is only enabled for
  * base-file-only splits.
