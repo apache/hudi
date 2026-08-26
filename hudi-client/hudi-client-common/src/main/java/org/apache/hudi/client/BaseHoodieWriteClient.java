@@ -256,12 +256,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       return true;
     }
     extraMetadata = updateExtraMetadata(extraMetadata);
-    // The commit is the boundary for the record index lookup counters. Snapshot them into this commit's
-    // metadata now, but only release them from the registry once the commit has actually landed --
-    // hooked here rather than in updateExtraMetadata because that is shared with table-service
-    // scheduling, which would otherwise consume the counters into a compaction or clustering plan.
-    ExecutorMetrics.DrainedCounters executorCounters =
-        ExecutorMetrics.snapshotIntoCommitMetadata(extraMetadata.get(), config);
     log.info("Committing {} action {}", instantTime, commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = hoodieTableOpt.orElse(createTable(config));
@@ -282,9 +276,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
       commit(table, commitActionType, instantTime, metadata, tableWriteStats, skipStreamingWritesToMetadataTable);
       log.info("Committed {}", instantTime);
-      // The commit landed, so the counters it carries can be published and released. On failure they
-      // stay in the registry rather than being lost with a commit nobody can read.
-      ExecutorMetrics.publishAndRelease(executorCounters, metrics);
+      // The commit landed, so the executor counters it accounts for can be reported and released. On
+      // failure they stay in the registry for the retry.
+      ExecutorMetrics.publishAndRelease(config, metrics);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {

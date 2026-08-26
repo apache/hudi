@@ -30,9 +30,6 @@ public interface ExecutorMetricGroup {
   /** The bare name emitting code passes to {@code Registry.getRegistry}. */
   String registryName();
 
-  /** Prefix under which this group's counters are stamped into commit metadata. */
-  String commitMetadataPrefix();
-
   String metricAction();
 
   String metricQualifier();

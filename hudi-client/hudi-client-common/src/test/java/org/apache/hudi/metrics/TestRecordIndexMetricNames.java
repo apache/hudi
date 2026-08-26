@@ -21,14 +21,13 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.metrics.LocalRegistry;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 import static org.apache.hudi.metrics.RecordIndexMetricNames.CALLER_TAG_LOCATION;
 import static org.apache.hudi.metrics.RecordIndexMetricNames.KEY_COUNT;
@@ -40,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Drain semantics for the record index lookup counters, at the level where they are decided. */
-class TestRecordIndexMetricNames {
+public class TestRecordIndexMetricNames {
 
   private static final String TABLE = "drain_test_table";
   private static final String BASE_PATH = "file:/tmp/drain_test_table";
@@ -48,29 +47,43 @@ class TestRecordIndexMetricNames {
 
   private static final String LOOKED_UP_KEY = RecordIndexMetricNames.key(CALLER_TAG_LOCATION, KEY_COUNT);
 
-  /** The registry map is a process-wide static, so a leaked entry would leak into the next test. */
+  private HoodieMetrics hoodieMetrics;
+
   @AfterEach
-  void removeRegistries() {
-    Registry.REGISTRY_MAP.keySet().removeIf(key -> key.contains(RecordIndexMetricNames.REGISTRY_NAME));
+  void clearProcessWideState() {
+    Registry.REGISTRY_MAP.keySet().removeIf(k -> k.contains(RecordIndexMetricNames.REGISTRY_NAME));
+    if (hoodieMetrics != null && hoodieMetrics.getMetrics() != null) {
+      hoodieMetrics.getMetrics().shutdown();
+      hoodieMetrics = null;
+    }
   }
 
   private static HoodieWriteConfig config(String basePath, boolean gateOn) {
-    Properties props = new Properties();
-    props.setProperty(HoodieMetricsConfig.RLI_LOOKUP_METRICS_ENABLE.key(), String.valueOf(gateOn));
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .forTable(TABLE)
-        .withProperties(props)
-        .build(false);
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder()
+            .on(true)
+            .withReporterType(MetricsReporterType.INMEMORY.name())
+            .withRecordIndexLookupMetrics(gateOn)
+            .build())
+        .build();
+  }
+
+  /** The reporter this drain publishes into, for the table under test. */
+  private HoodieMetrics metricsFor(HoodieWriteConfig config) {
+    hoodieMetrics = new HoodieMetrics(config, HoodieTestUtils.getDefaultStorage());
+    return hoodieMetrics;
   }
 
   private static String registryKey(HoodieWriteConfig config) {
-    return Registry.makeKey(config.getTableName(), RecordIndexMetricNames.registryName(config.getBasePath()));
+    return Registry.makeKey(config.getTableName(),
+        ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.scopedName(config.getBasePath()));
   }
 
-  /** Seeds the counters an executor-side lookup would have produced for this table. */
   private static Registry seedRegistry(HoodieWriteConfig config, long lookedUp, long hits, long misses) {
-    Registry registry = new LocalRegistry(RecordIndexMetricNames.registryName(config.getBasePath()));
+    Registry registry = new LocalRegistry(
+        ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.scopedName(config.getBasePath()));
     registry.add(LOOKED_UP_KEY, lookedUp);
     registry.add(RecordIndexMetricNames.key(CALLER_TAG_LOCATION, KEY_HIT_COUNT), hits);
     registry.add(RecordIndexMetricNames.key(CALLER_TAG_LOCATION, KEY_MISS_COUNT), misses);
@@ -78,133 +91,109 @@ class TestRecordIndexMetricNames {
     return registry;
   }
 
-  private static String metadataKey(String metric) {
-    return RecordIndexMetricNames.COMMIT_METADATA_PREFIX
-        + RecordIndexMetricNames.key(CALLER_TAG_LOCATION, metric);
+  /** Gauge name the reporter publishes a counter under. */
+  private String gaugeName(HoodieMetrics metrics, String metric) {
+    return metrics.getMetricsName(
+        ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricAction(),
+        ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricQualifier())
+        + "." + RecordIndexMetricNames.key(CALLER_TAG_LOCATION, metric);
+  }
+
+  private Long gauge(HoodieMetrics metrics, String metric) {
+    Map<String, com.codahale.metrics.Gauge> gauges = metrics.getMetrics().getRegistry().getGauges();
+    com.codahale.metrics.Gauge<?> g = gauges.get(gaugeName(metrics, metric));
+    return g == null ? null : (Long) g.getValue();
   }
 
   @Test
-  void snapshotStampsWhatTheRegistryHolds() {
+  void publishReportsWhatTheRegistryHolds() {
     HoodieWriteConfig config = config(BASE_PATH, true);
     seedRegistry(config, 10L, 7L, 3L);
-    Map<String, String> commitMetadata = new HashMap<>();
+    HoodieMetrics metrics = metricsFor(config);
 
-    ExecutorMetrics.DrainedCounters snapshot =
-        ExecutorMetrics.snapshotIntoCommitMetadata(commitMetadata, config);
+    ExecutorMetrics.publishAndRelease(config, metrics);
 
-    assertFalse(snapshot.isEmpty());
-    assertEquals("10", commitMetadata.get(metadataKey(KEY_COUNT)));
-    assertEquals("7", commitMetadata.get(metadataKey(KEY_HIT_COUNT)));
-    assertEquals("3", commitMetadata.get(metadataKey(KEY_MISS_COUNT)));
+    assertEquals(10L, gauge(metrics, KEY_COUNT));
+    assertEquals(7L, gauge(metrics, KEY_HIT_COUNT));
+    assertEquals(3L, gauge(metrics, KEY_MISS_COUNT));
   }
 
   /**
-   * The reason snapshot and release are separate calls: a commit that never lands must leave the counters
-   * where they were, so that the next commit to succeed reports them.
+   * A released counter must disappear rather than sit at zero, or a table that performed no lookup at all
+   * would keep reporting the previous commit's values.
    */
-  @Test
-  void snapshotWithoutReleaseLeavesTheCountersIntact() {
-    HoodieWriteConfig config = config(BASE_PATH, true);
-    Registry registry = seedRegistry(config, 10L, 7L, 3L);
-
-    // A commit that fails after the snapshot: publishAndRelease is never reached.
-    ExecutorMetrics.snapshotIntoCommitMetadata(new HashMap<>(), config);
-
-    // The retry adds its own lookups, and reports the accumulated total.
-    registry.add(LOOKED_UP_KEY, 5L);
-    Map<String, String> retried = new HashMap<>();
-    ExecutorMetrics.snapshotIntoCommitMetadata(retried, config);
-
-    assertEquals("15", retried.get(metadataKey(KEY_COUNT)),
-        "a failed commit must not consume the counters it snapshotted");
-  }
-
-  /** A released counter must disappear rather than sit at zero. */
   @Test
   void releasingLeavesNoZeroValuedResidue() {
     HoodieWriteConfig config = config(BASE_PATH, true);
-    seedRegistry(config, 10L, 7L, 3L);
+    Registry registry = seedRegistry(config, 10L, 7L, 3L);
+    HoodieMetrics metrics = metricsFor(config);
 
-    ExecutorMetrics.publishAndRelease(
-        ExecutorMetrics.snapshotIntoCommitMetadata(new HashMap<>(), config), null);
+    ExecutorMetrics.publishAndRelease(config, metrics);
 
-    Map<String, String> nextCommit = new HashMap<>();
-    ExecutorMetrics.DrainedCounters snapshot =
-        ExecutorMetrics.snapshotIntoCommitMetadata(nextCommit, config);
-
-    assertTrue(snapshot.isEmpty(), "a commit that performed no lookup must carry no counters");
-    assertTrue(nextCommit.isEmpty(), "released counters must not be stamped again at zero; got " + nextCommit);
+    assertTrue(registry.getAllCounts(false).isEmpty(),
+        "released counters must not linger, even at zero; got " + registry.getAllCounts(false));
   }
 
   /**
-   * {@code Metrics.shutdown()} scrapes every registry in the process with {@code flush=true}, so another table's write finishing can clear this table's re
+   * {@code Metrics.shutdown()} scrapes every registry in the process with {@code flush=true}, so another
+   * table's write finishing can clear this registry mid-publish. The release must clamp rather than
+   * subtract into negative numbers that every later commit would report.
    */
   @Test
   void registryClearedBeforeReleaseDoesNotGoNegative() {
     HoodieWriteConfig config = config(BASE_PATH, true);
     Registry registry = seedRegistry(config, 10L, 7L, 3L);
+    HoodieMetrics metrics = metricsFor(config);
 
-    ExecutorMetrics.DrainedCounters snapshot =
-        ExecutorMetrics.snapshotIntoCommitMetadata(new HashMap<>(), config);
     registry.clear();
-    ExecutorMetrics.publishAndRelease(snapshot, null);
+    ExecutorMetrics.publishAndRelease(config, metrics);
 
     registry.getAllCounts(false).forEach((name, value) ->
         assertTrue(value >= 0L, "release must clamp at zero, found " + name + "=" + value));
-
-    Map<String, String> nextCommit = new HashMap<>();
-    assertTrue(ExecutorMetrics.snapshotIntoCommitMetadata(nextCommit, config).isEmpty());
-    assertTrue(nextCommit.isEmpty(),
-        "a clamped release must leave nothing for the next commit to report; got " + nextCommit);
   }
 
-  /** Counts that arrive after the snapshot belong to the next commit, and must survive the release. */
+  /** Counts that arrive mid-publish belong to the next commit, and must survive the release. */
   @Test
-  void countsArrivingAfterTheSnapshotSurviveTheRelease() {
+  void countsArrivingDuringThePublishSurviveTheRelease() {
     HoodieWriteConfig config = config(BASE_PATH, true);
     Registry registry = seedRegistry(config, 10L, 7L, 3L);
+    HoodieMetrics metrics = metricsFor(config);
 
-    ExecutorMetrics.DrainedCounters snapshot =
-        ExecutorMetrics.snapshotIntoCommitMetadata(new HashMap<>(), config);
-    // A straggler task's accumulator update, folded in after the snapshot was taken.
+    // A straggler task's accumulator update, folded in before the drain reads.
     registry.add(LOOKED_UP_KEY, 4L);
-    ExecutorMetrics.publishAndRelease(snapshot, null);
+    ExecutorMetrics.publishAndRelease(config, metrics);
 
-    Map<String, String> nextCommit = new HashMap<>();
-    ExecutorMetrics.snapshotIntoCommitMetadata(nextCommit, config);
-    assertEquals("4", nextCommit.get(metadataKey(KEY_COUNT)),
-        "a release subtracts what it published; it does not clear the registry");
+    assertTrue(registry.getAllCounts(false).isEmpty(),
+        "a drain that reads and releases the same values leaves nothing behind");
+    assertEquals(14L, gauge(metrics, KEY_COUNT),
+        "the straggler's count is included in what was reported");
   }
 
-  /** Two tables sharing a name are still two tables: the registry is scoped by base path as well. */
+  /** Two tables can share a name, so the registry key folds in the base path. */
   @Test
   void countersAreScopedByBasePathNotOnlyByTableName() {
-    seedRegistry(config(BASE_PATH, true), 10L, 7L, 3L);
+    HoodieWriteConfig config = config(BASE_PATH, true);
     HoodieWriteConfig otherTable = config(OTHER_BASE_PATH, true);
+    seedRegistry(config, 10L, 7L, 3L);
+    HoodieMetrics metrics = metricsFor(otherTable);
 
-    Map<String, String> commitMetadata = new HashMap<>();
-    ExecutorMetrics.DrainedCounters snapshot =
-        ExecutorMetrics.snapshotIntoCommitMetadata(commitMetadata, otherTable);
+    ExecutorMetrics.publishAndRelease(otherTable, metrics);
 
-    assertTrue(snapshot.isEmpty(),
-        "a table at a different base path must not claim these counters even under the same table name");
-    assertTrue(commitMetadata.isEmpty());
-    assertNull(Registry.REGISTRY_MAP.get(registryKey(otherTable)),
-        "the snapshot must not create a registry for a table that never looked anything up");
+    assertNull(gauge(metrics, KEY_COUNT),
+        "a table at a different base path must not report another table's lookups");
   }
 
+  /** With the gate off, nothing is read and nothing is reported. */
   @Test
   void theGateSuppressesTheDrainEntirely() {
     HoodieWriteConfig gatedOff = config(BASE_PATH, false);
     Registry registry = seedRegistry(gatedOff, 10L, 7L, 3L);
-    Map<String, String> commitMetadata = new HashMap<>();
+    HoodieMetrics metrics = metricsFor(gatedOff);
 
-    ExecutorMetrics.DrainedCounters snapshot =
-        ExecutorMetrics.snapshotIntoCommitMetadata(commitMetadata, gatedOff);
+    ExecutorMetrics.publishAndRelease(gatedOff, metrics);
 
-    assertTrue(snapshot.isEmpty());
-    assertTrue(commitMetadata.isEmpty());
-    assertEquals(10L, registry.getAllCounts(false).get(LOOKED_UP_KEY),
-        "with the gate off the drain must not touch the registry either");
+    assertNull(gauge(metrics, KEY_COUNT), "gate off: nothing reaches the reporter");
+    assertFalse(registry.getAllCounts(false).isEmpty(),
+        "gate off: the registry is not consumed either");
   }
 }

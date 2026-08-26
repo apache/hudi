@@ -27,9 +27,6 @@ public class RecordIndexMetricNames {
   /** Scoping, prefix and reporter naming all live on the enum entry. */
   public static final String REGISTRY_NAME = ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.registryName();
 
-  public static final String COMMIT_METADATA_PREFIX =
-      ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.commitMetadataPrefix();
-
   // Counters are tagged by caller so dedupe traffic is distinguishable from tag-location traffic.
   public static final String CALLER_TAG_LOCATION = "tag";
   public static final String CALLER_DEDUPE = "dedupe";

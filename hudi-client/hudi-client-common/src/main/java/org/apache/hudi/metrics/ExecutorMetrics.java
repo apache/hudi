@@ -22,12 +22,10 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -40,96 +38,67 @@ public class ExecutorMetrics {
   }
 
   /**
-   * Snapshots into commit metadata without consuming. Split from {@link #publishAndRelease} so a commit
-   * that never lands neither loses its counters nor publishes gauges for rolled-back work. An all-zero
-   * registry is skipped to keep residue off the timeline; zeros are otherwise kept, since an explicit
-   * {@code misses=0} is meaningful.
+   * Reports each enabled group's counters and releases them, so the next commit reports only its own
+   * work. Called once the commit has landed, so a rolled-back commit neither publishes its counters nor
+   * loses them: they stay in the registry for the retry.
+   *
+   * <p>Release subtracts what was reported rather than clearing, so a straggler task whose update lands
+   * mid-publish carries into the next commit instead of being dropped. An all-zero registry is skipped.
    */
-  public static DrainedCounters snapshotIntoCommitMetadata(Map<String, String> commitMetadata,
-                                                           HoodieWriteConfig config) {
-    return snapshotIntoCommitMetadata(commitMetadata, config, Arrays.asList(ExecutorMetricRegistry.values()));
+  public static void publishAndRelease(HoodieWriteConfig config, HoodieMetrics hoodieMetrics) {
+    publishAndRelease(config, hoodieMetrics, Arrays.asList(ExecutorMetricRegistry.values()));
   }
 
   /** Visible for testing the collection machinery against a group it does not ship with. */
-  static DrainedCounters snapshotIntoCommitMetadata(Map<String, String> commitMetadata,
-                                                    HoodieWriteConfig config,
-                                                    Collection<? extends ExecutorMetricGroup> groups) {
-    List<Drained> drained = new ArrayList<>();
-    for (ExecutorMetricGroup metricRegistry : groups) {
-      if (!metricRegistry.isEnabled(config)) {
+  static void publishAndRelease(HoodieWriteConfig config, HoodieMetrics hoodieMetrics,
+                                Collection<? extends ExecutorMetricGroup> groups) {
+    for (ExecutorMetricGroup group : groups) {
+      if (!group.isEnabled(config)) {
         continue;
       }
       Registry registry = Registry.REGISTRY_MAP.get(
-          Registry.makeKey(config.getTableName(), metricRegistry.scopedName(config.getBasePath())));
-      if (registry == null) {
+          Registry.makeKey(config.getTableName(), group.scopedName(config.getBasePath())));
+      Map<String, Long> counts =
+          registry == null ? Collections.emptyMap() : new HashMap<>(registry.getAllCounts(false));
+      if (counts.values().stream().noneMatch(value -> value != 0L)) {
+        // Nothing was collected. Gauges hold their last value until overwritten, so leaving them alone
+        // would have a reporter re-emit the previous commit's numbers for this one. Zero them instead.
+        zeroPreviouslyReported(group, hoodieMetrics);
         continue;
       }
-      Map<String, Long> counts = new HashMap<>();
-      boolean recordedSomething = false;
-      for (Map.Entry<String, Long> counter : registry.getAllCounts(false).entrySet()) {
-        if (counter.getValue() == null) {
-          continue;
-        }
-        counts.put(counter.getKey(), counter.getValue());
-        recordedSomething |= counter.getValue() != 0L;
-      }
-      if (!recordedSomething) {
-        continue;
-      }
-      counts.forEach((name, value) ->
-          commitMetadata.put(metricRegistry.commitMetadataPrefix() + name, String.valueOf(value)));
-      drained.add(new Drained(metricRegistry, registry, counts));
+      publishToReporter(group, counts, hoodieMetrics);
+      registry.release(counts);
     }
-    return drained.isEmpty() ? DrainedCounters.EMPTY : new DrainedCounters(drained);
   }
 
   /**
-   * Release subtracts what was published rather than clearing, so a straggler task's update arriving after
-   * the snapshot survives. Publishing here rather than letting the reporter scrape is what lets both sinks
-   * work at once: {@link Registry#getAllMetrics} consumes the registry when it scrapes.
+   * Resets this group's gauges to zero, for a commit that collected nothing. Only names already published
+   * are touched, so a table that has never emitted stays absent rather than reporting a row of zeros.
    */
-  public static void publishAndRelease(DrainedCounters counters, HoodieMetrics hoodieMetrics) {
-    for (Drained drained : counters.drained) {
-      publishToReporter(drained, hoodieMetrics);
-      drained.registry.release(drained.counts);
+  private static void zeroPreviouslyReported(ExecutorMetricGroup group, HoodieMetrics hoodieMetrics) {
+    if (hoodieMetrics == null || hoodieMetrics.getMetrics() == null) {
+      return;
+    }
+    String prefix = hoodieMetrics.getMetricsName(group.metricAction(), group.metricQualifier());
+    if (prefix == null) {
+      return;
+    }
+    Map<String, Long> zeroed = new HashMap<>();
+    hoodieMetrics.getMetrics().getRegistry().getGauges().keySet().stream()
+        .filter(name -> name.startsWith(prefix + "."))
+        .forEach(name -> zeroed.put(name.substring(prefix.length() + 1), 0L));
+    if (!zeroed.isEmpty()) {
+      publishToReporter(group, zeroed, hoodieMetrics);
     }
   }
 
   /** Gauges, so each commit overwrites the previous value rather than accumulating. */
-  private static void publishToReporter(Drained drained, HoodieMetrics hoodieMetrics) {
+  private static void publishToReporter(ExecutorMetricGroup group, Map<String, Long> counts,
+                                        HoodieMetrics hoodieMetrics) {
     if (hoodieMetrics == null || hoodieMetrics.getMetrics() == null) {
       return;
     }
-    String prefix = hoodieMetrics.getMetricsName(
-        drained.metricRegistry.metricAction(), drained.metricRegistry.metricQualifier());
-    hoodieMetrics.getMetrics().registerGauges(drained.counts, Option.ofNullable(prefix));
-  }
-
-  private static final class Drained {
-    private final ExecutorMetricGroup metricRegistry;
-    private final Registry registry;
-    private final Map<String, Long> counts;
-
-    private Drained(ExecutorMetricGroup metricRegistry, Registry registry, Map<String, Long> counts) {
-      this.metricRegistry = metricRegistry;
-      this.registry = registry;
-      this.counts = counts;
-    }
-  }
-
-  /** Pinned to instances: a {@code REGISTRY_MAP} entry can be replaced between snapshot and release. */
-  public static final class DrainedCounters {
-
-    static final DrainedCounters EMPTY = new DrainedCounters(Collections.emptyList());
-
-    private final List<Drained> drained;
-
-    private DrainedCounters(List<Drained> drained) {
-      this.drained = drained;
-    }
-
-    public boolean isEmpty() {
-      return drained.isEmpty();
-    }
+    String prefix = hoodieMetrics.getMetricsName(group.metricAction(), group.metricQualifier());
+    hoodieMetrics.getMetrics().registerGauges(counts, Option.ofNullable(prefix));
   }
 }

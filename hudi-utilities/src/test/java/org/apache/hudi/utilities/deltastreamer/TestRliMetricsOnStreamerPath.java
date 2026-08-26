@@ -25,6 +25,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metrics.ExecutorMetricRegistry;
+import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.RecordIndexMetricNames;
 
 import org.junit.jupiter.api.Tag;
@@ -47,38 +52,41 @@ public class TestRliMetricsOnStreamerPath extends HoodieDeltaStreamerTestBase {
   /** Selects the global or partitioned record index. */
   private static void enableRecordIndex(HoodieDeltaStreamer.Config cfg, boolean partitioned) {
     cfg.configs.add(HoodieMetadataConfig.ENABLE.key() + "=true");
+    cfg.configs.add(HoodieMetricsConfig.TURN_METRICS_ON.key() + "=true");
+    cfg.configs.add(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key() + "=INMEMORY");
     cfg.configs.add(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=" + !partitioned);
     cfg.configs.add(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=" + partitioned);
     cfg.configs.add(HoodieIndexConfig.INDEX_TYPE.key() + "="
         + (partitioned ? "RECORD_LEVEL_INDEX" : "GLOBAL_RECORD_LEVEL_INDEX"));
   }
 
-  private static Map<String, String> rliCountersOnLatestCommit(String tableBasePath) throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HoodieTestUtils.getDefaultStorageConf())
-        .setBasePath(tableBasePath)
-        .build();
-    metaClient.reloadActiveTimeline();
-    HoodieInstant lastInstant = metaClient.getActiveTimeline()
-        .getCommitsTimeline().filterCompletedInstants().lastInstant().get();
-    HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().readCommitMetadata(lastInstant);
+  /** {@code Metrics} is keyed by base path, so this returns the instance the sync published into. */
+  private static Map<String, String> rliCountersOnLatestCommit(String tableBasePath) {
+    HoodieMetrics metrics = new HoodieMetrics(
+        HoodieWriteConfig.newBuilder().withPath(tableBasePath).forTable("streamer_rli_metrics")
+            .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(true)
+                .withReporterType(MetricsReporterType.INMEMORY.name()).build())
+            .build(),
+        HoodieTestUtils.getDefaultStorage());
+    String prefix = metrics.getMetricsName(
+        ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricAction(),
+        ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricQualifier()) + ".";
     Map<String, String> rli = new HashMap<>();
-    commitMetadata.getExtraMetadata().forEach((k, v) -> {
-      if (k.startsWith(RecordIndexMetricNames.COMMIT_METADATA_PREFIX)) {
-        rli.put(k, v);
+    metrics.getMetrics().getRegistry().getGauges().forEach((name, gauge) -> {
+      if (name.startsWith(prefix)) {
+        rli.put(name.substring(prefix.length()), String.valueOf(gauge.getValue()));
       }
     });
     return rli;
   }
 
   private static String tagKey(String metric) {
-    return RecordIndexMetricNames.COMMIT_METADATA_PREFIX
-        + RecordIndexMetricNames.key(RecordIndexMetricNames.CALLER_TAG_LOCATION, metric);
+    return RecordIndexMetricNames.key(RecordIndexMetricNames.CALLER_TAG_LOCATION, metric);
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
-  public void testRliCountersReachCommitMetadataOnStreamerPath(boolean partitioned) throws Exception {
+  public void testRliCountersReachTheReporterOnStreamerPath(boolean partitioned) throws Exception {
     String label = partitioned ? "partitioned" : "global";
     String tableBasePath = basePath + "/test_rli_metrics_streamer_" + label;
 

@@ -19,11 +19,12 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.metrics.RecordIndexMetricNames
+import org.apache.hudi.metrics.{ExecutorMetricRegistry, MetricsReporterType, RecordIndexMetricNames}
+import org.apache.hudi.testutils.CapturingMetricsReporter
 
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
@@ -39,6 +40,10 @@ class TestRliLookupMetricsMultiTable extends RecordLevelIndexTestBase {
   private val tableA = "rli_multi_a"
   private val tableB = "rli_multi_b"
 
+  /** The reporter is process-wide, so each test starts from a clean slate. */
+  @org.junit.jupiter.api.BeforeEach
+  def resetCapturedMetrics(): Unit = CapturingMetricsReporter.reset()
+
   private def pathFor(table: String): String = s"$basePath/$table"
 
   private def optsFor(table: String): Map[String, String] = Map(
@@ -53,7 +58,13 @@ class TestRliLookupMetricsMultiTable extends RecordLevelIndexTestBase {
     HoodieIndexConfig.INDEX_TYPE.key -> "GLOBAL_RECORD_LEVEL_INDEX",
     "hoodie.insert.shuffle.parallelism" -> "2",
     "hoodie.upsert.shuffle.parallelism" -> "2",
-    "hoodie.write.lock.provider" -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider")
+    "hoodie.write.lock.provider" -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+    HoodieMetricsConfig.TURN_METRICS_ON.key -> "true",
+    HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key -> MetricsReporterType.INMEMORY.name(),
+    HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME.key -> classOf[CapturingMetricsReporter].getName,
+    // Named explicitly rather than left to be inferred from the table name: it is what separates the
+    // two tables' gauges in the shared reporter.
+    HoodieMetricsConfig.METRICS_REPORTER_PREFIX.key -> table)
 
   /** Keys are namespaced per table so a cross-table leak cannot accidentally look like a correct hit. */
   private def write(table: String, operation: String, saveMode: SaveMode, from: Int, until: Int): Unit = {
@@ -66,14 +77,16 @@ class TestRliLookupMetricsMultiTable extends RecordLevelIndexTestBase {
       .mode(saveMode).save(pathFor(table))
   }
 
+  /**
+   * Read back the way an operator would, off the reporter. The gauge name carries the per-table prefix,
+   * so a leak between tables shows up as a count landing under the wrong name rather than going unseen.
+   */
   private def countersOn(table: String): Map[String, String] = {
-    val metaClient = HoodieTableMetaClient.builder()
-      .setConf(HoodieTestUtils.getDefaultStorageConf)
-      .setBasePath(pathFor(table)).build()
-    metaClient.reloadActiveTimeline()
-    val last = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
-    metaClient.getActiveTimeline.readCommitMetadata(last).getExtraMetadata.asScala.toMap
-      .filter { case (k, _) => k.startsWith(RecordIndexMetricNames.COMMIT_METADATA_PREFIX) }
+    val prefix = s"$table.${ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricAction()}." +
+      s"${ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricQualifier()}."
+    CapturingMetricsReporter.captured().asScala.toMap
+      .collect { case (name, value) if name.startsWith(prefix) =>
+        name.substring(prefix.length) -> value.toString }
   }
 
   /**
@@ -81,8 +94,8 @@ class TestRliLookupMetricsMultiTable extends RecordLevelIndexTestBase {
    * covers a caller that contributed nothing at all.
    */
   private def tagCount(counters: Map[String, String], metric: String): Long =
-    counters.getOrElse(RecordIndexMetricNames.COMMIT_METADATA_PREFIX
-      + RecordIndexMetricNames.key(RecordIndexMetricNames.CALLER_TAG_LOCATION, metric), "0").toLong
+    counters.getOrElse(
+      RecordIndexMetricNames.key(RecordIndexMetricNames.CALLER_TAG_LOCATION, metric), "0").toLong
 
   private def report(label: String, counters: Map[String, String]): Unit = {
     println(s"\n===== $label =====")

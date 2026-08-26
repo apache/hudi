@@ -426,6 +426,11 @@ public class HoodieMetricsConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withRecordIndexLookupMetrics(boolean enable) {
+      hoodieMetricsConfig.setValue(RLI_LOOKUP_METRICS_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
     public Builder withLockingMetrics(boolean enable) {
       hoodieMetricsConfig.setValue(LOCK_METRICS_ENABLE, String.valueOf(enable));
       return this;

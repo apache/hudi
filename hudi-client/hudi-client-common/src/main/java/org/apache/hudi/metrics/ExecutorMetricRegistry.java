@@ -35,21 +35,18 @@ public enum ExecutorMetricRegistry implements ExecutorMetricGroup {
 
   RECORD_INDEX_LOOKUP(
       "HoodieRecordIndexLookup",
-      "hoodie.rli.lookup.",
       "rli",
       "lookup",
       HoodieWriteConfig::isRecordIndexLookupMetricsEnabled);
 
   private final String registryName;
-  private final String commitMetadataPrefix;
   private final String metricAction;
   private final String metricQualifier;
   private final Predicate<HoodieWriteConfig> enabled;
 
-  ExecutorMetricRegistry(String registryName, String commitMetadataPrefix, String metricAction,
+  ExecutorMetricRegistry(String registryName, String metricAction,
                          String metricQualifier, Predicate<HoodieWriteConfig> enabled) {
     this.registryName = registryName;
-    this.commitMetadataPrefix = commitMetadataPrefix;
     this.metricAction = metricAction;
     this.metricQualifier = metricQualifier;
     this.enabled = enabled;
@@ -59,11 +56,6 @@ public enum ExecutorMetricRegistry implements ExecutorMetricGroup {
   @Override
   public String registryName() {
     return registryName;
-  }
-
-  @Override
-  public String commitMetadataPrefix() {
-    return commitMetadataPrefix;
   }
 
   @Override

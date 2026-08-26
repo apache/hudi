@@ -19,14 +19,16 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.metrics.Registry
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.config.HoodieIndexConfig
-import org.apache.hudi.metrics.RecordIndexMetricNames
+import org.apache.hudi.metrics.{ExecutorMetricRegistry, MetricsReporterType, RecordIndexMetricNames}
+import org.apache.hudi.testutils.CapturingMetricsReporter
 
 import scala.collection.JavaConverters._
 
 /**
- * Shared plumbing for the record level index lookup metric tests: index selection, and reading the counters back the way an operator would -- off the la
+ * Shared plumbing for the record level index lookup metric tests: index selection, and reading the
+ * counters back the way an operator would -- off the configured metrics reporter.
  */
 abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
 
@@ -49,8 +51,16 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
    * `commonOpts` turns the global record index on, so the metadata-partition flags and the index type
    * have to be flipped together to select the partitioned variant.
    */
+  /** The drain reports to the configured reporter, so these tests need one. */
+  protected def metricsOpts: Map[String, String] = Map(
+    HoodieMetricsConfig.TURN_METRICS_ON.key -> "true",
+    // The type still has to be set: it defaults to GRAPHITE, whose config builder NPEs without a prefix.
+    // The factory prefers the class when one is given, so this only keeps the builder happy.
+    HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key -> MetricsReporterType.INMEMORY.name(),
+    HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME.key -> classOf[CapturingMetricsReporter].getName)
+
   protected def rliOpts: Map[String, String] = {
-    val withTableType = Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableTypeOpt)
+    val withTableType = Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableTypeOpt) ++ metricsOpts
     if (isPartitionedRli) {
       commonOpts ++ withTableType ++ Map(
         HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false",
@@ -65,7 +75,7 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
   }
 
   protected def counterKey(caller: String, metric: String): String =
-    RecordIndexMetricNames.COMMIT_METADATA_PREFIX + RecordIndexMetricNames.key(caller, metric)
+    RecordIndexMetricNames.key(caller, metric)
 
   protected def tagKey(metric: String): String =
     counterKey(RecordIndexMetricNames.CALLER_TAG_LOCATION, metric)
@@ -77,20 +87,22 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
   protected def counterOrZero(counters: Map[String, String], caller: String, metric: String): Long =
     counters.getOrElse(counterKey(caller, metric), "0").toLong
 
-  /** The counters as an operator would read them: off the latest completed commit. */
+  /**
+   * The counters as an operator would read them: off the metrics reporter. {@code Metrics} is keyed by
+   * base path, so building a handle here returns the same instance the write published into.
+   */
   protected def rliCountersFromLatestCommit(): Map[String, String] = {
-    metaClient.reloadActiveTimeline()
-    val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
-    metaClient.getActiveTimeline.readCommitMetadata(lastInstant).getExtraMetadata.asScala.toMap
-      .filter { case (k, _) => k.startsWith(RecordIndexMetricNames.COMMIT_METADATA_PREFIX) }
+    val marker = "." + ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricAction() +
+      "." + ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricQualifier() + "."
+    CapturingMetricsReporter.captured().asScala.toMap
+      .collect { case (name, value) if name.contains(marker) =>
+        name.substring(name.indexOf(marker) + marker.length) -> value.toString }
   }
 
-  /** Leftover counters from a previous write would otherwise be folded into the next commit. */
-  protected def clearRliRegistry(): Unit = {
-    Registry.REGISTRY_MAP.asScala.foreach {
-      case (key, registry) => if (key.contains(RecordIndexMetricNames.REGISTRY_NAME)) registry.clear()
-    }
-  }
+  /** The reporter is process-wide, so each test starts from a clean slate. */
+  @org.junit.jupiter.api.BeforeEach
+  def resetCapturedMetrics(): Unit = CapturingMetricsReporter.reset()
+
 
   /** Asserts the core invariant and returns the looked-up count. */
   protected def assertSumInvariant(counters: Map[String, String], caller: String): Long = {
@@ -124,9 +136,9 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
   protected def report(label: String, counters: Map[String, String]): Unit = {
     println(s"\n===== $label =====")
     if (counters.isEmpty) {
-      println("  (no RLI counters in commit metadata) -- full commit extraMetadata follows:")
-      allExtraMetadataFromLatestCommit().toSeq.sorted.foreach { case (k, v) =>
-        println(f"    $k%-60s ${v.take(90)}")
+      println("  (no RLI counters published) -- every gauge the reporter holds follows:")
+      CapturingMetricsReporter.captured().asScala.toSeq.sortBy(_._1).foreach { case (k, v) =>
+        println(f"    $k%-70s $v")
       }
     } else {
       counters.toSeq.sorted.foreach { case (k, v) => println(f"  $k%-52s $v") }
