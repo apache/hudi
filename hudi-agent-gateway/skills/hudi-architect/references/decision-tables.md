@@ -793,6 +793,60 @@ use DataHub as our catalog" and needs Trino to query the table needs **both** Da
 Say this explicitly — the word "catalog" covers both meanings and conflating them produces a
 table that is documented but unqueryable.
 
+### Step 5 — Iceberg or Delta readers: mention Apache XTable, don't configure it
+
+**No question for this, and no config emitted.** Raise it only when the user's own answers make
+it relevant — they name an Iceberg or Delta consumer, ask about cross-format interoperability, or
+mention a team standardized on another format. Otherwise stay silent; volunteering a
+cross-format tool to someone who never asked is noise.
+
+**What to say when it does come up:**
+
+> "If Iceberg or Delta readers need this table, you don't have to pick a format or maintain a
+> second copy — Apache XTable translates the metadata so the same data files can be read as
+> Hudi, Iceberg, or Delta. It writes format-specific metadata alongside your table and never
+> copies or rewrites the data.
+>
+> It's a separate tool rather than a Hudi config, so it runs after your writes — either as a
+> standalone job or as a post-commit step on HoodieStreamer. Worth reading their docs before
+> committing to it: https://xtable.apache.org and
+> https://github.com/apache/incubator-xtable, plus Hudi's own page at
+> https://hudi.apache.org/docs/syncing_xtable."
+
+**The one design-time coupling worth stating, because it is durable:** the XTable FAQ
+(xtable.apache.org) lists **"Hudi and Iceberg MoR tables not supported"** — Copy-on-Write only.
+Attribute it that way rather than asserting it flatly: the claim appears on their FAQ but not in
+the repo README, and this skill cannot verify it against code the way it verifies Hudi's own
+behavior. Tell the user to confirm it against XTable's current docs, since an incubating project's
+support matrix moves.
+
+If it holds, the implication is real: a workload needing Iceberg or Delta interoperability should
+probably be **CoW**, and table type *is* fixed at creation. If the design has landed on MOR and the user then raises XTable, name the
+conflict rather than leaving them to discover it: they can keep MOR and drop XTable, or choose
+CoW to keep the option open. Do not silently reshape the table type — surface the tension and let
+them decide, as with any durable decision.
+
+**Everything else is a hand-off, deliberately.** Do not emit `hoodie.onetable.*` properties, a
+YAML dataset config, or the `hudi-extensions` bundle coordinate. Three reasons, worth being
+explicit about:
+
+- Those keys are defined in **XTable's** codebase, not Hudi's, so `validate_config_keys.py`
+  cannot check them. Every other `hoodie.*` key this skill emits is machine-verified against a
+  `ConfigProperty` in this source tree; XTable's are not, and emitting unverifiable keys next to
+  verified ones misrepresents how much is checked.
+- The bundle is built and versioned by XTable, so its coordinate moves independently of the Hudi
+  version this skill targets.
+- XTable is **incubating** at the ASF, so its interfaces and config surface are less settled than
+  the sync tools that ship in this repo.
+
+Point at the docs and recommend the user follow up there. That is more useful than a config block
+this skill cannot keep honest.
+
+**Not a catalog.** XTable translates *format* metadata; it does not register the table in HMS,
+Glue, or BigQuery. A user who needs both cross-format reads and SQL-engine discovery needs XTable
+**and** a catalog sync from Steps 1-4 — the same additive relationship DataHub has, for a
+different reason.
+
 ### Bundles — the failure mode is a runtime ClassNotFoundException
 
 Each non-HMS sync tool lives in its own module, so the sync class is absent unless the matching

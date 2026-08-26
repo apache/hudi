@@ -264,6 +264,15 @@ Emit the concrete OCC block from config-templates.md → Concurrency for the dep
 
 Must appear in **the emitted submit command**, not only in dialogue — see config-templates.md → "Cloud bundles are load-bearing". Also in the ADR's pre-launch checklist. Bundle mapping is in that same section.
 
+### XTABLE_MOR_UNSUPPORTED
+
+**Triggered when:** the user raises Apache XTable, or names an Iceberg or Delta consumer, AND the derived table type is MERGE_ON_READ.
+
+**Message:**
+> "One conflict worth checking before you commit to this: XTable's FAQ lists MOR tables as unsupported — Copy-on-Write only, for both Hudi and Iceberg. Your design is MOR. I'd verify that against their current docs rather than take my word for it, since XTable is incubating and its support matrix moves. If it still holds, table type is fixed at creation, so it's a decision for now rather than later: keep MOR and read this table only through Hudi, or switch to CoW to keep Iceberg and Delta interoperability open. The MOR case here was `<the reason MOR was derived>` — worth weighing that against how much cross-format access matters."
+
+**When fires:** the moment XTable or a cross-format consumer comes up, if the design is MOR. **Do not silently reshape the table type** — surface the tension with both options, as with any durable decision. Record whichever way it goes in the ADR, since a future reader will want to know the interop question was considered rather than missed.
+
 ### THREE_CONCURRENT_SERVICES
 
 **Triggered when:** writer is HoodieStreamer continuous AND table type is MOR AND clustering enabled.
