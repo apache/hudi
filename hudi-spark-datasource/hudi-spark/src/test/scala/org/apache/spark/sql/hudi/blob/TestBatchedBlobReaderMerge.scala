@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test
  * Direct unit tests for the merge algorithm in {@link BatchedBlobReader}.
  *
  * These tests bypass Spark and storage entirely: they construct a reader with
- * a null storage (the merge methods do not touch I/O) and call mergeRanges /
+ * a null storage resolver (the merge methods do not touch I/O) and call mergeRanges /
  * identifyConsecutiveRanges with crafted RowInfo inputs to assert the
  * structure of the merged output (counts, boundaries, ordering, grouping).
  *
@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Test
 class TestBatchedBlobReaderMerge {
 
   private def reader(maxGapBytes: Int = 4096) =
-    new BatchedBlobReader(storage = null, maxGapBytes = maxGapBytes, lookaheadRows = 50)
+    new BatchedBlobReader(resolveStorage = null, maxGapBytes = maxGapBytes, lookaheadRows = 50)
 
   private def row(filePath: String, offset: Long, length: Long, index: Long = 0L): RowInfo[Row] =
     RowInfo[Row](

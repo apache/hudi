@@ -25,12 +25,14 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
+/**
+ * Factory for {@link HoodieStorage}.
+ *
+ * <p>Every overload takes the path the storage will be used for. {@link HoodieStorage} binds one
+ * filesystem for its lifetime, and the filesystem is selected from the path's scheme rather than
+ * from the configuration, so a handle built for one scheme cannot serve another.
+ */
 public class HoodieStorageUtils {
-  public static final String DEFAULT_URI = "file:///";
-
-  public static HoodieStorage getStorage(StorageConfiguration<?> conf) {
-    return getStorage(DEFAULT_URI, conf);
-  }
 
   public static HoodieStorage getStorage(String basePath, StorageConfiguration<?> conf) {
     return getStorage(new StoragePath(basePath), conf);
