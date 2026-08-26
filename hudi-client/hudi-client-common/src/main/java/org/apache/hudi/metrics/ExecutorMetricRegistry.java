@@ -20,6 +20,7 @@ package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -78,10 +79,21 @@ public enum ExecutorMetricRegistry {
     return registryName + "." + digest(basePath);
   }
 
-  /** 48 bits of SHA-256: collision-safe enough, and short enough to sit in a metric name. */
+  /**
+   * 48 bits of SHA-256: collision-safe enough, and short enough to sit in a metric name.
+   *
+   * <p>Digests the authority and path rather than the raw string, because one table is spelled more than
+   * one way: Spark SQL builds its config from the catalog location ({@code file:///data/t}) while the
+   * DataSource passes the bare path ({@code /data/t}). Digesting the raw string gives those two different
+   * keys, so the executors register under one and the commit-boundary drain looks under the other and
+   * finds nothing. The authority is kept so that {@code s3://a/t} and {@code s3://b/t} stay distinct.
+   */
   private static String digest(String basePath) {
+    StoragePath path = new StoragePath(basePath);
+    String authority = path.toUri().getAuthority();
+    String normalized = (authority == null ? "" : authority) + path.getPathWithoutSchemeAndAuthority();
     try {
-      byte[] hash = MessageDigest.getInstance("SHA-256").digest(basePath.getBytes(StandardCharsets.UTF_8));
+      byte[] hash = MessageDigest.getInstance("SHA-256").digest(normalized.getBytes(StandardCharsets.UTF_8));
       StringBuilder hex = new StringBuilder(12);
       for (int i = 0; i < 6; i++) {
         hex.append(String.format("%02x", hash[i]));
