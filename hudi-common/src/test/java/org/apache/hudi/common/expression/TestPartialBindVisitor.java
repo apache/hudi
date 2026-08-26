@@ -81,4 +81,160 @@ public class TestPartialBindVisitor {
     Assertions.assertFalse((Boolean) binded.eval(new ArrayData(Arrays.asList("Lone", "2023-04-02", 15, 5L, false))));
     Assertions.assertFalse((Boolean) binded.eval(new ArrayData(Arrays.asList("Lone", "2023-04-02", 10, 5L, false))));
   }
+
+  @Test
+  public void testPartialBindNotWithAllFieldsPresent() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.Not expr = Predicates.not(Predicates.eq(new NameReference("a"), Literal.from("Jane")));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertFalse((Boolean) binded.eval(new ArrayData(Arrays.asList("Jane", "2023-04-02", 15, 5L, false))));
+    Assertions.assertTrue((Boolean) binded.eval(new ArrayData(Arrays.asList("Lone", "2023-04-02", 15, 5L, false))));
+  }
+
+  @Test
+  public void testPartialBindNotWithMissingFieldIsAlwaysFalse() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.Not expr = Predicates.not(Predicates.eq(new NameReference("m"), Literal.from(5)));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue(binded instanceof Predicates.FalseExpression);
+    Assertions.assertFalse((Boolean) binded.eval(new ArrayData(Arrays.asList("Jane", "2023-04-02", 15, 5L, false))));
+  }
+
+  @Test
+  public void testPartialBindInWithAllValuesPresent() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.In expr = Predicates.in(new NameReference("c"),
+        Arrays.asList(Literal.from(1), Literal.from(2)));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue((Boolean) binded.eval(new ArrayData(Arrays.asList("Jane", "2023-04-02", 1, 5L, false))));
+    Assertions.assertFalse((Boolean) binded.eval(new ArrayData(Arrays.asList("Jane", "2023-04-02", 99, 5L, false))));
+  }
+
+  @Test
+  public void testPartialBindInWithMissingValueExpressionIsAlwaysTrue() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.In expr = Predicates.in(new NameReference("m"),
+        Arrays.asList(Literal.from(1), Literal.from(2)));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue(binded instanceof Predicates.TrueExpression);
+  }
+
+  @Test
+  public void testPartialBindInWithMissingValidValueIsAlwaysTrue() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.In expr = Predicates.in(new NameReference("c"),
+        Arrays.asList(new NameReference("m")));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue(binded instanceof Predicates.TrueExpression);
+  }
+
+  @Test
+  public void testPartialBindIsNullWithFieldPresent() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.IsNull expr = Predicates.isNull(new NameReference("a"));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue((Boolean) binded.eval(new ArrayData(Arrays.asList(null, "2023-04-02", 15, 5L, false))));
+    Assertions.assertFalse((Boolean) binded.eval(new ArrayData(Arrays.asList("Jane", "2023-04-02", 15, 5L, false))));
+  }
+
+  @Test
+  public void testPartialBindIsNullWithMissingFieldIsAlwaysTrue() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.IsNull expr = Predicates.isNull(new NameReference("m"));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue(binded instanceof Predicates.TrueExpression);
+  }
+
+  @Test
+  public void testPartialBindIsNotNullWithFieldPresent() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.IsNotNull expr = Predicates.isNotNull(new NameReference("a"));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertFalse((Boolean) binded.eval(new ArrayData(Arrays.asList(null, "2023-04-02", 15, 5L, false))));
+    Assertions.assertTrue((Boolean) binded.eval(new ArrayData(Arrays.asList("Jane", "2023-04-02", 15, 5L, false))));
+  }
+
+  @Test
+  public void testPartialBindIsNotNullWithMissingFieldIsAlwaysTrue() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.IsNotNull expr = Predicates.isNotNull(new NameReference("m"));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue(binded instanceof Predicates.TrueExpression);
+  }
+
+  @Test
+  public void testPartialBindStringStartsWithBothFieldsPresent() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.StringStartsWith expr = Predicates.startsWith(new NameReference("a"), Literal.from("Ja"));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue((Boolean) binded.eval(new ArrayData(Arrays.asList("Jane", "2023-04-02", 15, 5L, false))));
+    Assertions.assertFalse((Boolean) binded.eval(new ArrayData(Arrays.asList("Lone", "2023-04-02", 15, 5L, false))));
+  }
+
+  @Test
+  public void testPartialBindStringStartsWithMissingLeftIsAlwaysTrue() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.StringStartsWith expr = Predicates.startsWith(new NameReference("m"), Literal.from("Ja"));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue(binded instanceof Predicates.TrueExpression);
+  }
+
+  @Test
+  public void testPartialBindStringStartsWithMissingRightIsAlwaysTrue() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.StringStartsWith expr = Predicates.startsWith(new NameReference("a"), new NameReference("m"));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue(binded instanceof Predicates.TrueExpression);
+  }
+
+  @Test
+  public void testPartialBindStringContainsBothFieldsPresent() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.StringContains expr = Predicates.contains(new NameReference("a"), Literal.from("an"));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue((Boolean) binded.eval(new ArrayData(Arrays.asList("Jane", "2023-04-02", 15, 5L, false))));
+    Assertions.assertFalse((Boolean) binded.eval(new ArrayData(Arrays.asList("Lone", "2023-04-02", 15, 5L, false))));
+  }
+
+  @Test
+  public void testPartialBindStringContainsMissingLeftIsAlwaysTrue() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.StringContains expr = Predicates.contains(new NameReference("m"), Literal.from("an"));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue(binded instanceof Predicates.TrueExpression);
+  }
+
+  @Test
+  public void testPartialBindStringContainsMissingRightIsAlwaysTrue() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.StringContains expr = Predicates.contains(new NameReference("a"), new NameReference("m"));
+    Expression binded = expr.accept(partialBindVisitor);
+
+    Assertions.assertTrue(binded instanceof Predicates.TrueExpression);
+  }
+
+  @Test
+  public void testPartialBindThrowsForUnsupportedPredicateType() {
+    PartialBindVisitor partialBindVisitor = new PartialBindVisitor(schema, false);
+    Predicates.StringStartsWithAny expr = Predicates.startsWithAny(new NameReference("a"),
+        Arrays.asList(Literal.from("Ja")));
+
+    IllegalArgumentException e = Assertions.assertThrows(IllegalArgumentException.class,
+        () -> expr.accept(partialBindVisitor));
+    Assertions.assertTrue(e.getMessage().contains("cannot be visited as predicate"));
+  }
 }

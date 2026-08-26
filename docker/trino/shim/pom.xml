@@ -33,8 +33,9 @@
   installing would shadow the real io.trino:trino-hudi release coordinates in
   the local repository.
 
-  The parent version below must stay in sync with trino.version in the root pom,
-  the TRINO_VERSION ARG in docker/trino/Dockerfile, and the compose image tag.
+  The parent version below must stay in sync with trino.version in the root pom. On
+  master that version is a -SNAPSHOT and resolves from the local m2 only, so run
+  scripts/trino/bootstrap_trino.sh first; on release branches it resolves from Central.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
@@ -42,8 +43,8 @@
     <parent>
         <groupId>io.trino</groupId>
         <artifactId>trino-root</artifactId>
-        <version>481</version>
-        <!-- Resolve the parent from Maven Central, never the file system. -->
+        <version>484-SNAPSHOT</version>
+        <!-- Resolve the parent from the repositories, never the file system. -->
         <relativePath />
     </parent>
 
@@ -153,9 +154,10 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- NOTE: unlike the upstream 482-SNAPSHOT shim, jts-core must NOT be
-             declared provided here: it is not part of the Trino 481 SPI surface
-             and SpiDependencyChecker rejects provided scope for it. It ships
-             inside the plugin dir at its transitive scope instead. -->
+        <dependency>
+            <groupId>org.locationtech.jts</groupId>
+            <artifactId>jts-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 </project>

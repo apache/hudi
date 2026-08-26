@@ -197,6 +197,22 @@ class TestLsmFileGroupRecordIterator {
   }
 
   @Test
+  void testLoserTreeUsesUtf8Ordering() {
+    String fullWidthExclamationKey = "！";
+    String emojiKey = "😀";
+
+    LsmFileGroupRecordIterator.LoserTree<String> loserTree =
+        new LsmFileGroupRecordIterator.LoserTree<>(
+            Arrays.asList(
+                sortedRunReader(0, record(fullWidthExclamationKey, "full-width-exclamation")),
+                sortedRunReader(1, record(emojiKey, "emoji"))));
+    // UTF-16 orders the emoji first, while UTF-8 bytes order the full-width character first.
+    assertEquals(Arrays.asList(
+        fullWidthExclamationKey + ":full-width-exclamation",
+        emojiKey + ":emoji"), drain(loserTree));
+  }
+
+  @Test
   void testSelectDirectLogReadersPrioritizesDeletesThenSmallFiles() {
     List<LsmFileGroupRecordIterator.LogReaderSpec> logReaderSpecs = Arrays.asList(
         new LsmFileGroupRecordIterator.LogReaderSpec(1, logFile("file1_1-0-1_001_1.log.parquet", 10)),
@@ -219,7 +235,7 @@ class TestLsmFileGroupRecordIterator {
     tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, "ts");
     tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
     tableConfig.setValue(HoodieTableConfig.BASE_FILE_FORMAT, HoodieFileFormat.PARQUET.name());
-    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, "NONE");
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieAvroReaderContext context = org.mockito.Mockito.spy(
         new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty()));

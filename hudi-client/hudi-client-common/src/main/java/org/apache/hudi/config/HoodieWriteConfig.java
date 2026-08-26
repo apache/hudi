@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
@@ -166,6 +167,19 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("If enabled, writers automatically migrate the table to the specified write table version "
           + "if the current table version is lower.");
+
+  public static final ConfigProperty<Boolean> ALLOW_META_FIELDS_MODE_RETENTION_ON_DOWNGRADE = ConfigProperty
+      .key("hoodie.downgrade.allow.meta.fields.mode.retention")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("Permits downgrading a table below version 10 while it still carries a selective "
+          + HoodieTableConfig.META_FIELDS_MODE.key() + ". Only consulted for tables created at version 10 or "
+          + "later: those never existed under an older version, so no reader outside this deployment has ever "
+          + "had to honor the mode. Setting this asserts that every reader of the table understands "
+          + HoodieTableConfig.META_FIELDS_MODE.key() + " rather than relying on "
+          + HoodieTableConfig.POPULATE_META_FIELDS.key() + " alone. Tables created before version 10 are "
+          + "downgraded without this flag -- they predate the mode, so returning them to a version that "
+          + "predates it is not a new state for them.");
 
   public static final ConfigProperty<String> TAGGED_RECORD_STORAGE_LEVEL_VALUE = ConfigProperty
       .key("hoodie.write.tagged.record.storage.level")
@@ -1761,6 +1775,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
   }
 
+  public boolean isLSMTreeStorageLayout() {
+    return HoodieTableConfig.TableStorageLayout.fromConfigValue(
+        getStringOrDefault(HoodieTableConfig.TABLE_STORAGE_LAYOUT))
+        == HoodieTableConfig.TableStorageLayout.LSM_TREE;
+  }
+
   public boolean isMergeDataValidationCheckEnabled() {
     return getBoolean(MERGE_DATA_VALIDATION_CHECK_ENABLE);
   }
@@ -1773,8 +1793,36 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT);
   }
 
+  /**
+   * @return true when every meta column is populated.
+   *
+   * <p>Derived from {@link #getMetaFieldsMode()} so that call sites still written against the
+   * deprecated {@code hoodie.populate.meta.fields} boolean observe the same answer as the enum:
+   * only {@link MetaFieldsMode#ALL} populates every meta column.
+   */
   public boolean populateMetaFields() {
-    return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    return getMetaFieldsMode().toLegacyPopulateMetaFields();
+  }
+
+  /**
+   * @return the {@link MetaFieldsMode} configured for writes.
+   */
+  public MetaFieldsMode getMetaFieldsMode() {
+    return MetaFieldsMode.resolve(this);
+  }
+
+  /**
+   * @return true when {@code _hoodie_commit_time} is physically populated on every row.
+   */
+  public boolean isCommitTimePopulated() {
+    return getMetaFieldsMode().isCommitTimePopulated();
+  }
+
+  /**
+   * @return true when {@code _hoodie_file_name} is physically populated on every row.
+   */
+  public boolean isFileNamePopulated() {
+    return getMetaFieldsMode().isFileNamePopulated();
   }
 
   /**
@@ -3587,9 +3635,45 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    /**
+     * @deprecated since 1.3.0, use {@link #withMetaFieldsMode(MetaFieldsMode)} instead
+     * ({@code true} maps to {@link MetaFieldsMode#ALL}, {@code false} to {@link MetaFieldsMode#NONE}).
+     */
+    @Deprecated
     public Builder withPopulateMetaFields(boolean populateMetaFields) {
       writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       return this;
+    }
+
+    public Builder withMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
+      // Leaving the mode unset defers to the deprecated populate.meta.fields boolean. The legacy
+      // boolean is derived from the mode in build() rather than here, so the two cannot be made to
+      // disagree by calling the setters in either order.
+      writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE,
+          metaFieldsMode == null ? "" : metaFieldsMode.name());
+      return this;
+    }
+
+    /**
+     * Rewrite the deprecated {@code populate.meta.fields} boolean from {@code meta.fields.mode}
+     * whenever a mode is set, so the two can never disagree on the resulting config.
+     *
+     * <p>Done at build time, not in the setter: {@code withPopulateMetaFields} does not re-derive
+     * the mode, so deriving in {@link #withMetaFieldsMode} alone would make the invariant depend on
+     * call order. {@code withMetaFieldsMode(COMMIT_TIME_ONLY).withPopulateMetaFields(true)} would
+     * leave a selective mode sitting next to {@code populate.meta.fields=true} — a config that
+     * resolves correctly (the mode wins) but carries the contradiction to disk on any path that
+     * copies raw write-config props into {@code hoodie.properties}, misleading pre-1.3.0 readers
+     * into treating the table as ALL.
+     */
+    private void deriveMetaFieldsPopulationOptions() {
+      MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(writeConfig);
+      writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
+
+      // The mode is the source of truth. Always rewrite the deprecated boolean so inherited props,
+      // direct builder calls, and their ordering all produce the same coherent config.
+      writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+          Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
     }
 
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
@@ -3724,6 +3808,9 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
+      if (writeConfig.isLSMTreeStorageLayout()) {
+        writeConfig.setDefaultValue(BULK_INSERT_SORT_MODE, BulkInsertSortMode.PARTITION_SORT.name());
+      }
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
       // Make sure the props is propagated
@@ -3772,6 +3859,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieTTLConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
+      // Keep the legacy boolean coherent after every explicit and derived default has been applied.
+      deriveMetaFieldsPopulationOptions();
     }
 
     private boolean isLockRequiredForSingleWriter() {
@@ -3889,6 +3978,27 @@ public class HoodieWriteConfig extends HoodieConfig {
       checkArgument(ttlStatsMaxParallelism > 0,
           String.format("%s must be positive, but was %d",
               HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), ttlStatsMaxParallelism));
+
+      // hoodie.meta.fields.mode is the source of truth for meta-column population; the deprecated
+      // populate.meta.fields boolean is consulted only when the mode is absent. There is therefore
+      // no ambiguous combination to reject here — MetaFieldsMode.resolve throws on unrecognized
+      // values.
+      MetaFieldsMode metaFieldsMode = writeConfig.getMetaFieldsMode();
+      // Selective meta-field modes are CoW-only in this release. MoR log-write path does not yet
+      // respect the mode, which would silently produce log records with null meta columns.
+      boolean isSelective = metaFieldsMode.isSelective();
+      checkArgument(!(writeConfig.getTableType() == HoodieTableType.MERGE_ON_READ && isSelective),
+          String.format("%s=%s is currently supported for COPY_ON_WRITE tables only. MoR support is a follow-up. "
+                  + "For MoR use %s=ALL or %s=NONE.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
+              HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.key()));
+      // Selective meta-field modes are wired only for the Spark writer path in this release. Flink
+      // RowData / Java-client writers ignore the mode and would silently produce NONE-mode output.
+      checkArgument(!(engineType != EngineType.SPARK && isSelective),
+          String.format("%s=%s is currently supported for the Spark writer only. Support for engine=%s is a follow-up. "
+                  + "Use %s=ALL or %s=NONE.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode, engineType,
+              HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.key()));
     }
 
     public HoodieWriteConfig build() {

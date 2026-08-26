@@ -44,8 +44,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
-
 /**
  * This only use by reader returning.
  */
@@ -281,7 +279,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     GenericRecord record = (GenericRecord) data;
     String key;
     String partition;
-    if (keyGen.isPresent() && !Boolean.parseBoolean(props.getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
+    // Resolve via hoodie.meta.fields.mode — reading the deprecated boolean alone would report
+    // "populated" for a selective-mode table (whose _hoodie_record_key column is null), sending us
+    // down the meta-column branch below and NPE-ing on the null field.
+    boolean recordKeyPopulated = MetaFieldsMode.resolve(props).isRecordKeyPopulated();
+    if (keyGen.isPresent() && !recordKeyPopulated) {
       BaseKeyGenerator keyGeneratorOpt = keyGen.get();
       key = keyGeneratorOpt.getRecordKey(record);
       partition = keyGeneratorOpt.getPartitionPath(record);

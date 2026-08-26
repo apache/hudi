@@ -427,11 +427,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * and pass this reader on parquet file. So that, we can query the partition columns.
    */
 
+  protected def getPartitionColumnsAsInternalRow(filePath: StoragePath): InternalRow =
+    getPartitionColumnsAsInternalRowInternal(filePath, metaClient.getBasePath, shouldExtractPartitionValuesFromPartitionPath)
+
   protected def getPartitionColumnsAsInternalRow(file: StoragePathInfo): InternalRow =
-    getPartitionColumnsAsInternalRowInternal(file, metaClient.getBasePath, shouldExtractPartitionValuesFromPartitionPath)
+    getPartitionColumnsAsInternalRow(file.getPath)
 
   protected def getPartitionColumnValuesAsInternalRow(file: StoragePathInfo): InternalRow =
-    getPartitionColumnsAsInternalRowInternal(file,
+    getPartitionColumnsAsInternalRowInternal(file.getPath,
       metaClient.getBasePath, extractPartitionValuesFromPartitionPath = true)
 
   protected def usePartitionValueExtractorOnRead(optParams: Map[String, String], sparkSession: SparkSession): Boolean = {
@@ -439,11 +442,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.defaultValue).toBoolean
   }
 
-  protected def getPartitionColumnsAsInternalRowInternal(file: StoragePathInfo, basePath: StoragePath,
+  protected def getPartitionColumnsAsInternalRowInternal(filePath: StoragePath, basePath: StoragePath,
                                                          extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
     if (extractPartitionValuesFromPartitionPath) {
       val tablePathWithoutScheme = basePath.getPathWithoutSchemeAndAuthority
-      val partitionPathWithoutScheme = file.getPath.getParent.getPathWithoutSchemeAndAuthority
+      val partitionPathWithoutScheme = filePath.getParent.getPathWithoutSchemeAndAuthority
       val relativePath = tablePathWithoutScheme.toUri.relativize(partitionPathWithoutScheme.toUri).toString
       val timeZoneId = conf.get("timeZone", sparkSession.sessionState.conf.sessionLocalTimeZone)
       val rowValues = HoodieSparkUtils.parsePartitionColumnValues(

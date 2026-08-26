@@ -126,7 +126,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     String keyField = config.populateMetaFields()
         ? HoodieRecord.RECORD_KEY_METADATA_FIELD
         : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-    if (!writer.canWriteDataFile()) {
+    if (!canWriteDataFile()) {
       flushAppend();
     }
     writer.appendRecord(populatedRecord, writeSchemaWithMetaFields, keyField);
@@ -146,7 +146,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     String keyField = schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).isPresent()
         ? HoodieRecord.RECORD_KEY_METADATA_FIELD
         : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-    if (!writer.canWriteDeleteFile()) {
+    if (!canWriteDeleteFile()) {
       flushAppend();
     }
     writer.appendDeleteRecord(hoodieRecord, schema, keyField);
@@ -197,6 +197,14 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
 
   protected StoragePath getLogFilePath() {
     return writer.getLogFile().getPath();
+  }
+
+  protected boolean canWriteDataFile() {
+    return writer.canWriteDataFile();
+  }
+
+  protected boolean canWriteDeleteFile() {
+    return writer.canWriteDeleteFile();
   }
 
   @Override

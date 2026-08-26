@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -273,7 +274,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice1));
         partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice2));
         // NOTE: we need to set table config as we are not using write client explicitly and these configs are needed for log record reader
-        metaClient.getTableConfig().setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+        metaClient.getTableConfig().setValue(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
         metaClient.getTableConfig().setValue(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
         metaClient.getTableConfig().setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
         List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataLogFile = HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(
@@ -559,7 +560,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             Lazy.eagerly(Option.of(HOODIE_SCHEMA_WITH_METADATA_FIELDS)), false, V1).keySet()));
 
     //test with meta cols disabled
-    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .build();

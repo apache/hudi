@@ -236,6 +236,11 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
     VariantMetadata.isVariantStruct(structType)
   }
 
+  // Spark 4.1 reconstructs shredded variants on read (SPARK-54410), so opt in to the
+  // shared rewrite; Spark 4.0 stays on the default None.
+  override def buildFullVariantReadSchema(schema: StructType): Option[StructType] =
+    rewriteTopLevelVariantsForFullRead(schema)
+
   override def buildVariantProjector(sparkDataSchema: StructType,
                                      sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = {
     // Quick check: any required field a variant projection struct?
@@ -280,7 +285,7 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
 
   // Apply LogicalTypeAnnotation.variantType((byte) 1) to the variant group, matching parquet 1.16+'s
   // SparkToParquetSchemaConverter convention.
-  override protected def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = {
+  override def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = {
     builder.as(LogicalTypeAnnotation.variantType(1.toByte))
   }
 

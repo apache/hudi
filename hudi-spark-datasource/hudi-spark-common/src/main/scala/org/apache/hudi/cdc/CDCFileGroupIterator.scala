@@ -378,8 +378,24 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
           val pf = sparkPartitionedFileUtils.createPartitionedFile(
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
-          recordIter = baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
-            toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
+          // This read bypasses SparkFileFormatInternalRowReaderContext, so it needs the same
+          // full-variant treatment that context applies: requesting native VariantType against
+          // a SHREDDED base file clips the shredded group to {metadata, value} and reads
+          // value=null, which would surface as null variants in the insert after-images
+          // (#19556 family, #19578). The restore projection reuses one output buffer, hence
+          // the copy before buffering.
+          val baseRows = SparkFileFormatInternalRowReaderContext
+            .fullVariantReadSchemaWithOrdinals(originTableSchema.structTypeSchema) match {
+            case Some((rewritten, ordinals)) =>
+              val restore = SparkFileFormatInternalRowReaderContext.variantRestoreProjection(rewritten, ordinals)
+              baseFileReader.read(pf, rewritten, new StructType(),
+                toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
+                .map(row => restore(row).copy(): InternalRow)
+            case None =>
+              baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
+                toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
+          }
+          recordIter = baseRows
             .map(record => BufferedRecords.fromEngineRecord(record, schema, readerContext.getRecordContext, orderingFieldNames, false))
         case BASE_FILE_DELETE =>
           assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)

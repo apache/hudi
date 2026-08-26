@@ -496,7 +496,7 @@ public class HudiAvroSerializer
             type.writeObject(output, trinoNativeDecimalValue);
         }
         else {
-            throw new TrinoException(GENERIC_INTERNAL_ERROR, "Unhandled type for Object: " + type.getTypeSignature());
+            throw new TrinoException(GENERIC_INTERNAL_ERROR, "Unhandled type for Object: " + type.getTypeDescriptor());
         }
     }
 

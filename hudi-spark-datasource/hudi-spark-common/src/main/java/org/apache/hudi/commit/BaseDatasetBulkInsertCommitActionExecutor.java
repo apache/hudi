@@ -146,11 +146,21 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
           return new ConsistentBucketIndexBulkInsertPartitionerWithRows(table, Collections.emptyMap(), true);
         }
       } else {
-        return DataSourceUtils
-            .createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
-            .orElseGet(() -> BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig, isTablePartitioned));
+        Option<BulkInsertPartitioner<Dataset<Row>>> userDefinedPartitioner =
+            DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig);
+        if (userDefinedPartitioner.isPresent() && table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+          throw new HoodieException(
+              "User-defined bulk insert partitioners are not supported for LSM tables because "
+                  + "their record-key ordering cannot be verified");
+        }
+        return userDefinedPartitioner.orElseGet(
+            () -> BulkInsertInternalPartitionerWithRowsFactory.get(
+                table.getMetaClient().getTableConfig(), writeConfig, isTablePartitioned));
       }
     } else {
+      if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+        throw new HoodieException("The Dataset Row writer requires hoodie.populate.meta.fields=true for LSM tables.");
+      }
       // Sort modes are not yet supported when meta fields are disabled
       return new NonSortPartitionerWithRows();
     }

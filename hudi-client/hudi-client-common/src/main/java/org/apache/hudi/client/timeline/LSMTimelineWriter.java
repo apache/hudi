@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLSMTimelineManifest;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ActiveAction;
@@ -445,7 +446,7 @@ public class LSMTimelineWriter {
     if (this.writeConfig == null) {
       this.writeConfig = HoodieWriteConfig.newBuilder()
           .withProperties(this.config.getProps())
-          .withPopulateMetaFields(false).build();
+          .withMetaFieldsMode(MetaFieldsMode.NONE).build();
     }
     return this.writeConfig;
   }

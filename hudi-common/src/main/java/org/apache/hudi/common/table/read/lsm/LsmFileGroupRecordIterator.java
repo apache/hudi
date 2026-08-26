@@ -39,6 +39,7 @@ import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -473,7 +474,8 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     private int compare(int leftIndex, int rightIndex) {
       SortedRunReader<T> left = leaves.get(leftIndex);
       SortedRunReader<T> right = leaves.get(rightIndex);
-      int keyCompare = left.current.getRecordKey().compareTo(right.current.getRecordKey());
+      int keyCompare = StringUtils.compareUtf8Bytes(
+          left.current.getRecordKey(), right.current.getRecordKey());
       if (keyCompare != 0) {
         return keyCompare;
       }

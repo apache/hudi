@@ -102,7 +102,7 @@ public class StringUtils {
   }
 
   public static String toHexString(byte[] bytes) {
-    return new String(encodeHex(bytes));
+    return String.valueOf(encodeHex(bytes));
   }
 
   public static char[] encodeHex(byte[] data) {

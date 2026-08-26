@@ -19,6 +19,7 @@
 package org.apache.hudi.parquet.io;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 
@@ -119,6 +120,20 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   // Flag to control schema evolution behavior
   protected Boolean schemaEvolutionEnabled = null;
 
+  /**
+   * Whether {@code _hoodie_file_name} is populated on this table.
+   *
+   * <p>Binary copy rewrites the column to the output file name, which is right for a table that
+   * populates it and wrong for one that does not -- clustering would hand such a table a file name it
+   * never advertised. Defaults to {@code ALL} so callers that do not state a mode keep the historical
+   * behaviour.
+   */
+  private MetaFieldsMode metaFieldsMode = MetaFieldsMode.ALL;
+
+  public void setMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
+    this.metaFieldsMode = java.util.Objects.requireNonNull(metaFieldsMode, "metaFieldsMode");
+  }
+
   public HoodieParquetBinaryCopyBase(Configuration conf) {
     this.conf = conf;
   }
@@ -129,9 +144,13 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
 
   protected void initFileWriter(Path outPutFile, CompressionCodecName newCodecName, MessageType schema) {
     try {
-      // For meta column '_hoodie_file_name', rewriter will mask value with output file name
-      Binary maskValue = Binary.fromString(outPutFile.getName());
-      maskColumns.put(ColumnPath.fromDotString(HoodieRecord.FILENAME_METADATA_FIELD), maskValue);
+      // For meta column '_hoodie_file_name', rewriter will mask value with output file name -- but
+      // only on a table that populates it. Masking unconditionally would give a COMMIT_TIME_ONLY or
+      // NONE table a populated file name that contradicts the mode it advertises.
+      if (metaFieldsMode.isFileNamePopulated()) {
+        Binary maskValue = Binary.fromString(outPutFile.getName());
+        maskColumns.put(ColumnPath.fromDotString(HoodieRecord.FILENAME_METADATA_FIELD), maskValue);
+      }
       this.requiredSchema = schema;
       this.newCodecName = newCodecName;
       ParquetFileWriter.Mode writerMode = ParquetFileWriter.Mode.CREATE;

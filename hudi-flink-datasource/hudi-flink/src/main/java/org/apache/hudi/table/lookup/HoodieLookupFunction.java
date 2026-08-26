@@ -155,15 +155,16 @@ public class HoodieLookupFunction extends LookupFunction implements Serializable
       try {
         long count = 0;
         GenericRowData reuse = new GenericRowData(rowType.getFieldCount());
-        partitionReader.open();
-        RowData row;
-        while ((row = partitionReader.read(reuse)) != null) {
-          count++;
-          RowData rowData = serializer.copy(row);
-          RowData key = extractLookupKey(rowData);
-          cache.addRow(key, rowData);
+        try (HoodieLookupTableReader reader = partitionReader) {
+          reader.open();
+          RowData row;
+          while ((row = reader.read(reuse)) != null) {
+            count++;
+            RowData rowData = serializer.copy(row);
+            RowData key = extractLookupKey(rowData);
+            cache.addRow(key, rowData);
+          }
         }
-        partitionReader.close();
         currentCommit = latestCommitInstant.get();
         scheduleNextLoad();
         log.info("Loaded {} row(s) into lookup join cache", count);

@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
+import org.apache.hudi.utilities.sources.helpers.KplTestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -30,6 +31,7 @@ import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -121,7 +123,7 @@ class TestShardRecordIterator {
   @Test
   void testMillisBehindLatestZeroStopsAfterCurrentPage() {
     KinesisClient client = mock(KinesisClient.class);
-    // Page 1: millisBehindLatest=0 → no second page should be fetched.
+    // Page 1: millisBehindLatest=0 -> no second page should be fetched.
     when(client.getRecords(isA(GetRecordsRequest.class)))
         .thenReturn(response(Arrays.asList(record("seq1"), record("seq2")), NEXT_ITER, 0L));
 
@@ -199,7 +201,7 @@ class TestShardRecordIterator {
   // -------------------------------------------------------------------------
 
   /**
-   * lastSequenceNumber must not advance until a page is fully consumed — it commits only when
+   * lastSequenceNumber must not advance until a page is fully consumed -- it commits only when
    * hasNext() observes the current page is exhausted.
    */
   @Test
@@ -213,14 +215,14 @@ class TestShardRecordIterator {
     // Before any consumption no checkpoint yet.
     assertFalse(it.getLastSequenceNumber().isPresent());
 
-    it.next(); // seq1 — mid-page
+    it.next(); // seq1 -- mid-page
     assertFalse(it.getLastSequenceNumber().isPresent());
 
     it.next(); // seq2
-    it.next(); // seq3 — page iterator is exhausted but commit hasn't fired yet
+    it.next(); // seq3 -- page iterator is exhausted but commit hasn't fired yet
     assertFalse(it.getLastSequenceNumber().isPresent());
 
-    // hasNext() sees currentPage.hasNext() == false → commits pendingPageLastSeq.
+    // hasNext() sees currentPage.hasNext() == false -> commits pendingPageLastSeq.
     assertFalse(it.hasNext());
     assertEquals("seq3", it.getLastSequenceNumber().get());
   }
@@ -240,7 +242,7 @@ class TestShardRecordIterator {
     KinesisSource.ShardRecordIterator it = iterator(client, 100, 1000, THROTTLE_TIMEOUT_LARGE);
 
     it.next(); // seq1
-    it.next(); // seq2 — exhausted page 1
+    it.next(); // seq2 -- exhausted page 1
     // Page 1 not committed yet (hasNext() for seq3 commits it).
     assertFalse(it.getLastSequenceNumber().isPresent());
 
@@ -277,10 +279,10 @@ class TestShardRecordIterator {
   void testMultipleThrottlesHalveToFloorOfOne() {
     KinesisClient client = mock(KinesisClient.class);
     when(client.getRecords(isA(GetRecordsRequest.class)))
-        .thenThrow(throttleEx())   // 8 → 4
-        .thenThrow(throttleEx())   // 4 → 2
-        .thenThrow(throttleEx())   // 2 → 1
-        .thenThrow(throttleEx())   // 1 → 1  (floor)
+        .thenThrow(throttleEx())   // 8 -> 4
+        .thenThrow(throttleEx())   // 4 -> 2
+        .thenThrow(throttleEx())   // 2 -> 1
+        .thenThrow(throttleEx())   // 1 -> 1  (floor)
         .thenReturn(response(Collections.singletonList(record("seq1")), null, 0L));
 
     KinesisSource.ShardRecordIterator it = iterator(client, 8, 1000, THROTTLE_TIMEOUT_LARGE);
@@ -315,7 +317,7 @@ class TestShardRecordIterator {
   void testHalveAndHoldLimitForSubsequentPages() {
     KinesisClient client = mock(KinesisClient.class);
     when(client.getRecords(isA(GetRecordsRequest.class)))
-        .thenThrow(throttleEx())                                                         // call 1: throttled → halve 100→50
+        .thenThrow(throttleEx())                                                         // call 1: throttled -> halve 100->50
         .thenReturn(response(Collections.singletonList(record("seq1")), NEXT_ITER, 5000L)) // call 2: success at 50
         .thenReturn(response(Collections.singletonList(record("seq2")), null,     0L));    // call 3: next page, still at 50
 
@@ -329,7 +331,7 @@ class TestShardRecordIterator {
     List<GetRecordsRequest> reqs = captor.getAllValues();
     assertEquals(100, reqs.get(0).limit()); // initial attempt before throttle
     assertEquals(50,  reqs.get(1).limit()); // halved, succeeded
-    assertEquals(50,  reqs.get(2).limit()); // held — no recovery to 100
+    assertEquals(50,  reqs.get(2).limit()); // held -- no recovery to 100
   }
 
   /**
@@ -360,5 +362,54 @@ class TestShardRecordIterator {
     verify(client, times(2)).getRecords(captor.capture());
     assertEquals(200, captor.getAllValues().get(0).limit());
     assertEquals(100, captor.getAllValues().get(1).limit());
+  }
+
+  // -------------------------------------------------------------------------
+  // KPL de-aggregation
+  // -------------------------------------------------------------------------
+
+  /**
+   * Encodes a KPL aggregated record carrying one sub-record per payload string, where payload i
+   * uses partition key index i. Frame building is shared with {@link KplTestUtils}.
+   */
+  private static byte[] kplAggregate(List<String> partitionKeys, List<String> payloads) throws Exception {
+    List<byte[]> subRecords = new ArrayList<>(payloads.size());
+    for (int i = 0; i < payloads.size(); i++) {
+      subRecords.add(KplTestUtils.encodeSubRecord(
+          i, null, payloads.get(i).getBytes(StandardCharsets.UTF_8), null));
+    }
+    return KplTestUtils.frame(KplTestUtils.encodeAggregatedRecord(
+        partitionKeys, Collections.emptyList(), subRecords));
+  }
+
+  @Test
+  void deaggregationEnabledFlattensKplAggregate() throws Exception {
+    KinesisClient client = mock(KinesisClient.class);
+    Record aggregated = Record.builder()
+        .data(SdkBytes.fromByteArray(kplAggregate(
+            Arrays.asList("pk-a", "pk-b"), Arrays.asList("{\"id\":1}", "{\"id\":2}"))))
+        .sequenceNumber("seq-agg")
+        .partitionKey("parent-pk")
+        .approximateArrivalTimestamp(Instant.now())
+        .build();
+    when(client.getRecords(isA(GetRecordsRequest.class)))
+        .thenReturn(response(Collections.singletonList(aggregated), null, 0L));
+
+    KinesisSource.ShardRecordIterator it = new KinesisSource.ShardRecordIterator(INITIAL_ITER, client,
+        SHARD_ID, 100, INTERVAL_MS, 1000, /* enableDeaggregation */ true,
+        RETRY_INITIAL_MS, RETRY_MAX_MS, THROTTLE_TIMEOUT_LARGE);
+
+    List<Record> collected = new ArrayList<>();
+    while (it.hasNext()) {
+      collected.add(it.next());
+    }
+
+    assertEquals(2, collected.size());
+    assertEquals("pk-a", collected.get(0).partitionKey());
+    assertEquals("{\"id\":1}", collected.get(0).data().asUtf8String());
+    assertEquals("pk-b", collected.get(1).partitionKey());
+    assertEquals("{\"id\":2}", collected.get(1).data().asUtf8String());
+    // Checkpoint must track the raw aggregated record's sequence number, not a sub-record's.
+    assertEquals("seq-agg", it.getLastSequenceNumber().get());
   }
 }

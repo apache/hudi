@@ -15,21 +15,25 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Builds the apachehudi/hudi-trino_<version> image with a locally-built
-# trino-hudi plugin baked in. The plugin dir (typically the in-repo shim's
+# Builds the apachehudi/hudi-trino-e2e image with a locally-built trino-hudi
+# plugin baked in. The plugin dir (typically the in-repo shim's
 # docker/trino/shim/target/trino-hudi-<v>, see docker/trino/shim/pom.xml) is
 # staged into the build context at docker/trino/plugin/ (gitignored), then
 # baked into the image.
 # Usage: ./build_image.sh --plugin-dir <path> [--trino-version <v>] [--image-tag <t>]
-# Typical: ./build_image.sh --plugin-dir "$(dirname "$0")/shim/target/trino-hudi-481"
-# Note: --trino-version must match the shim pom's parent version and the root
-# pom's trino.version property.
+# Typical: ./build_image.sh --plugin-dir "$(dirname "$0")/shim/target/trino-hudi-<trino.version>"
+# Note: --trino-version is the released Trino server image to build on top of
+# (the root pom's trino.e2e.version), not the version the plugin was built at.
 
 set -e
 
-# Default values
+# Directory of this script, so the build context and pom lookups are stable regardless of cwd
+SCRIPT_DIR=$(cd $(dirname "$0") && pwd)
+
+# Default values. The server version defaults to the root pom's trino.e2e.version (the
+# nightly pin-advance job keeps that current; a literal default here would rot).
 PLUGIN_DIR=""
-TRINO_VERSION="481"
+TRINO_VERSION=$(sed -n 's|.*<trino.e2e.version>\(.*\)</trino.e2e.version>.*|\1|p' "$SCRIPT_DIR/../../pom.xml")
 IMAGE_TAG="latest"
 
 # Parse command-line arguments
@@ -43,8 +47,10 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# Directory of this script, so the build context path is stable regardless of cwd
-SCRIPT_DIR=$(cd $(dirname "$0") && pwd)
+if [ -z "$TRINO_VERSION" ]; then
+  echo "Error: could not read trino.e2e.version from the root pom and no --trino-version given." >&2
+  exit 1
+fi
 
 # Validate --plugin-dir: required, must exist and be non-empty
 if [ -z "$PLUGIN_DIR" ]; then
@@ -66,7 +72,7 @@ echo "Staging plugin from '$PLUGIN_DIR' into '$STAGE_DIR'"
 rm -rf "$STAGE_DIR"
 cp -r "$PLUGIN_DIR" "$STAGE_DIR"
 
-IMAGE="apachehudi/hudi-trino_${TRINO_VERSION}:${IMAGE_TAG}"
+IMAGE="apachehudi/hudi-trino-e2e:${IMAGE_TAG}"
 echo "Building $IMAGE (TRINO_VERSION=${TRINO_VERSION})"
 docker build --build-arg TRINO_VERSION="${TRINO_VERSION}" -t "$IMAGE" "$SCRIPT_DIR"
 

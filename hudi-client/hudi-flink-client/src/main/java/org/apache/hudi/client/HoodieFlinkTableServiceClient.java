@@ -162,7 +162,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       }
     }
     log.info("Clustering successfully on commit {}", clusteringCommitTime);
-    fireCommitCallbackIfNecessary(clusteringCommitTime, clusteringInstant.getAction(),
+    fireCommitCallbackIfNecessary(clusteringCommitTime, HoodieActiveTimeline.REPLACE_COMMIT_ACTION,
         writeStats, table::getBaseFileOnlyView, Option.empty());
   }
 
