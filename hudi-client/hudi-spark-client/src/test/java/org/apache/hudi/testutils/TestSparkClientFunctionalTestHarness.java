@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,7 +55,7 @@ public class TestSparkClientFunctionalTestHarness extends SparkClientFunctionalT
   public void nioResolvesPartitionsUnderTheTableDirectory() {
     // A scheme-qualified basePath() silently yields a relative path here, placing partitions under
     // the working directory rather than the table. This is the failure mode FileCreateUtils hits.
-    java.nio.file.Path partition = Paths.get(basePath(), "2016/03/15");
+    Path partition = Paths.get(basePath(), "2016/03/15");
     assertTrue(partition.isAbsolute(), "partition path must be absolute, but was " + partition);
     assertTrue(partition.startsWith(Paths.get(basePath())),
         "partition path must sit under the table directory, but was " + partition);
