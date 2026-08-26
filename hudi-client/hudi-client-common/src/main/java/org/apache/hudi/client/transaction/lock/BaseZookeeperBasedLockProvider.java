@@ -185,9 +185,10 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
         lock.release();
         lock = null;
       }
-      this.curatorFrameworkClient.close();
     } catch (Exception e) {
       log.error(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
+    } finally {
+      this.curatorFrameworkClient.close();
     }
   }
 
