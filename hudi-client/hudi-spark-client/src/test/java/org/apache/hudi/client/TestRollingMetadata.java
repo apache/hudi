@@ -37,7 +37,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,7 +61,7 @@ class TestRollingMetadata extends SparkClientFunctionalTestHarness {
   @Test
   public void testRollingMetadataCarriedForward() throws IOException {
     // Given: A table with rolling metadata keys configured
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), new Properties());
     HoodieWriteConfig config = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .withRollingMetadataKeys("checkpoint.offset,checkpoint.partition")
@@ -146,7 +145,7 @@ class TestRollingMetadata extends SparkClientFunctionalTestHarness {
   @Test
   public void testRollingMetadataWithNoConfiguredKeys() throws IOException {
     // Given: A table with no rolling metadata keys configured
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), new Properties());
     HoodieWriteConfig config = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .build();
@@ -202,7 +201,7 @@ class TestRollingMetadata extends SparkClientFunctionalTestHarness {
   @Test
   public void testRollingMetadataWithTimelineWalkback() throws IOException {
     // Given: A table with rolling metadata keys and walkback configured
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), new Properties());
     HoodieWriteConfig config = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .withRollingMetadataKeys("key1,key2,key3")
@@ -277,7 +276,7 @@ class TestRollingMetadata extends SparkClientFunctionalTestHarness {
   @Test
   public void testRollingMetadataWalkbackLimit() throws IOException {
     // Given: A table with rolling metadata keys and small walkback limit
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), new Properties());
     HoodieWriteConfig config = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .withRollingMetadataKeys("checkpoint.offset")
@@ -362,7 +361,7 @@ class TestRollingMetadata extends SparkClientFunctionalTestHarness {
   public void testRollingMetadataWithDifferentTableTypes(String tableTypeStr) throws IOException {
     // Given: A table of specified type with rolling metadata keys
     HoodieTableType tableType = HoodieTableType.valueOf(tableTypeStr);
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), tableType, new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), tableType, new Properties());
     HoodieWriteConfig config = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .withRollingMetadataKeys("test.key")
@@ -411,7 +410,7 @@ class TestRollingMetadata extends SparkClientFunctionalTestHarness {
   @Test
   public void testRollingMetadataOverrideSemantics() throws IOException {
     // Given: A table with rolling metadata keys configured
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), new Properties());
     HoodieWriteConfig config = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .withRollingMetadataKeys("checkpoint.offset")
@@ -484,7 +483,7 @@ class TestRollingMetadata extends SparkClientFunctionalTestHarness {
   @Test
   public void testRollingMetadataFirstCommit() throws IOException {
     // Given: A new empty table with rolling metadata keys configured
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), new Properties());
     HoodieWriteConfig config = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .withRollingMetadataKeys("checkpoint.offset")
@@ -522,7 +521,7 @@ class TestRollingMetadata extends SparkClientFunctionalTestHarness {
   @Test
   public void testRollingMetadataWithEmptyAndWhitespaceKeys() throws IOException {
     // Given: A table with rolling metadata keys that include empty strings and whitespace
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), new Properties());
     HoodieWriteConfig config = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .withRollingMetadataKeys("key1,  , key2,  ,key3")  // Has empty and whitespace entries
@@ -581,7 +580,7 @@ class TestRollingMetadata extends SparkClientFunctionalTestHarness {
    */
   @Test
   public void testRollingMetadataEmptyStringTreatedAsMissing() throws IOException {
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath(), new Properties());
     HoodieWriteConfig config = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .withRollingMetadataKeys("checkpoint.offset")

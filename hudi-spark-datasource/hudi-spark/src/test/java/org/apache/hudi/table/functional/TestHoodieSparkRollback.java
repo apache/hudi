@@ -67,7 +67,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
   private String basePath;
 
   private void initBasePath() {
-    basePath = basePath().substring(7);
+    basePath = basePath();
   }
 
   private SparkRDDWriteClient getHoodieWriteClient(Boolean autoCommitEnabled) throws IOException {
@@ -172,7 +172,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     //delete commit from timeline
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String filename = new InstantFileNameGeneratorV1().getFileName(metaClient.getActiveTimeline().lastInstant().get());
-    File commit = new File(metaClient.getBasePath().toString().substring(5) + "/.hoodie/" + filename);
+    File commit = new File(metaClient.getBasePath().toUri().getPath() + "/.hoodie/" + filename);
     assertTrue(commit.delete());
     metaClient.reloadActiveTimeline();
 
@@ -198,7 +198,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
       copyIn(tableType, "002");
       rollbackMetadata.getPartitionMetadata().forEach((partition, metadata) -> metadata.getRollbackLogFiles().forEach((n, k) -> recreateMarkerFile(cfg, "003", partition, n)));
       rollbackMetadata.getPartitionMetadata().forEach((partition, metadata) -> metadata.getLogFilesFromFailedCommit().forEach((n, k) -> recreateMarkerFile(cfg, "002", partition, n)));
-      commit = new File(metaClient.getBasePath().toString().substring(5) + "/.hoodie/" + new InstantFileNameGeneratorV1().getFileName(lastInstant));
+      commit = new File(metaClient.getBasePath().toUri().getPath() + "/.hoodie/" + new InstantFileNameGeneratorV1().getFileName(lastInstant));
       assertTrue(commit.delete());
       metaClient.reloadActiveTimeline();
     }
@@ -221,7 +221,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     File tmpDir = new File(basePath, ".tmpdir");
     assertTrue(tmpDir.mkdir());
     String commitAction = (tableType.equals(COPY_ON_WRITE) ? ".commit" : ".deltacommit");
-    String metaDir = basePath + ".hoodie/";
+    String metaDir = basePath + "/.hoodie/";
     String inflight = commitTime + (tableType.equals(COPY_ON_WRITE) ? "" : commitAction) + ".inflight";
     Files.copy(new File(metaDir + inflight).toPath(), tmpDir.toPath().resolve(inflight), StandardCopyOption.REPLACE_EXISTING);
     String requested = commitTime + commitAction + ".requested";
@@ -231,7 +231,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
   private void copyIn(HoodieTableType tableType, String commitTime) throws IOException {
     Path tmpDir = new File(basePath, ".tmpdir").toPath();
     String commitAction = (tableType.equals(COPY_ON_WRITE) ? ".commit" : ".deltacommit");
-    String metaDir = basePath + ".hoodie/";
+    String metaDir = basePath + "/.hoodie/";
     String inflight = commitTime + (tableType.equals(COPY_ON_WRITE) ? "" : commitAction) + ".inflight";
     Files.copy(tmpDir.resolve(inflight), new File(metaDir + inflight).toPath(), StandardCopyOption.REPLACE_EXISTING);
     String requested = commitTime + commitAction + ".requested";
@@ -260,7 +260,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     //delete commit from timeline
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String filename = new InstantFileNameGeneratorV1().getFileName(metaClient.getActiveTimeline().lastInstant().get());
-    File deltacommit = new File(metaClient.getBasePath().toString().substring(5) + "/.hoodie/" + filename);
+    File deltacommit = new File(metaClient.getBasePath().toUri().getPath() + "/.hoodie/" + filename);
     assertTrue(deltacommit.delete());
     metaClient.reloadActiveTimeline();
 
