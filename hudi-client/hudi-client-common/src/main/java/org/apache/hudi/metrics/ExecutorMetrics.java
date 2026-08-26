@@ -22,6 +22,9 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,6 +34,8 @@ import java.util.Map;
  * the shared commit path, so it covers Spark DataSource, Spark SQL and DeltaStreamer alike.
  */
 public class ExecutorMetrics {
+
+  private static final Logger LOG = LoggerFactory.getLogger(ExecutorMetrics.class);
 
   private ExecutorMetrics() {
   }
@@ -44,6 +49,15 @@ public class ExecutorMetrics {
    * mid-publish carries into the next commit instead of being dropped. An all-zero registry is skipped.
    */
   public static void publishAndRelease(HoodieWriteConfig config, HoodieMetrics hoodieMetrics) {
+    try {
+      publish(config, hoodieMetrics);
+    } catch (Exception e) {
+      // This runs after the commit has landed. Reporting is not worth failing a completed write over.
+      LOG.warn("Failed to publish executor metrics; the commit is unaffected.", e);
+    }
+  }
+
+  private static void publish(HoodieWriteConfig config, HoodieMetrics hoodieMetrics) {
     for (ExecutorMetricRegistry group : ExecutorMetricRegistry.values()) {
       if (!group.isEnabled(config)) {
         continue;
@@ -52,7 +66,7 @@ public class ExecutorMetrics {
           Registry.makeKey(config.getTableName(), group.scopedName(config.getBasePath())));
       Map<String, Long> counts =
           registry == null ? Collections.emptyMap() : new HashMap<>(registry.getAllCounts(false));
-      if (counts.values().stream().noneMatch(value -> value != 0L)) {
+      if (counts.values().stream().allMatch(value -> value == 0L)) {
         // Nothing was collected. Gauges hold their last value until overwritten, so leaving them alone
         // would have a reporter re-emit the previous commit's numbers for this one. Zero them instead.
         zeroPreviouslyReported(group, hoodieMetrics);

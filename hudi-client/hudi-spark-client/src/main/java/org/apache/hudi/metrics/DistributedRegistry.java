@@ -23,6 +23,8 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.util.AccumulatorV2;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -34,6 +36,9 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<String, Long>>
     implements Registry, Serializable {
+
+  private static final Logger LOG = LoggerFactory.getLogger(DistributedRegistry.class);
+
   private final String name;
   ConcurrentHashMap<String, Long> counters = new ConcurrentHashMap<>();
   /** Driver-only, to detect a SparkContext restart in the same JVM (shells, notebooks, Spark Connect). */
@@ -82,9 +87,10 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
     // Last-writer-wins is neither commutative nor associative, and the driver merges executor copies in
     // an unspecified order. Driver only; executors use increment()/add().
     if (TaskContext.get() != null) {
-      throw new UnsupportedOperationException(
-          "DistributedRegistry.set() must not be called from a Spark executor: it is non-commutative under "
-              + "accumulator merges and would produce non-deterministic values. Use increment()/add() instead.");
+      // Warn rather than throw: this runs inside a task, and a metrics problem must not fail a write.
+      LOG.warn("DistributedRegistry.set() called from a Spark executor and ignored: it is non-commutative "
+          + "under accumulator merges and would produce non-deterministic values. Use increment()/add().");
+      return;
     }
     counters.merge(name,  value, (oldValue, newValue) -> newValue);
   }
@@ -99,9 +105,9 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
   public void release(Map<String, Long> counts) {
     // Driver-only for the same reason as set(): clamping and eviction are order-dependent under merges.
     if (TaskContext.get() != null) {
-      throw new UnsupportedOperationException(
-          "DistributedRegistry.release() must not be called from a Spark executor: clamping and eviction are "
-              + "order-dependent under accumulator merges. Release at the commit boundary on the driver.");
+      LOG.warn("DistributedRegistry.release() called from a Spark executor and ignored: clamping and eviction "
+          + "are order-dependent under accumulator merges. Release at the commit boundary on the driver.");
+      return;
     }
     counts.forEach((name, released) -> counters.compute(name, (key, current) -> {
       long remaining = (current == null ? 0L : current) - released;

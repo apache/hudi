@@ -122,8 +122,12 @@ public class TestRliMetricsOnStreamerPath extends HoodieDeltaStreamerTestBase {
     long records = Long.parseLong(counters.get(lookedUp));
     long hits = Long.parseLong(counters.get(tagKey(RecordIndexMetricNames.KEY_HIT_COUNT)));
     long misses = Long.parseLong(counters.get(tagKey(RecordIndexMetricNames.KEY_MISS_COUNT)));
-    assertTrue(records > 0, "the upsert sync looked up at least one key");
-    assertEquals(records, hits + misses, "hits + misses must account for every key looked up");
+    // Exact rather than an invariant: misses is derived as records - hits at the emission site, so
+    // records == hits + misses holds by construction and would survive a doubled count. The workload is
+    // deterministic -- the first sync writes 1000 records, the second updates 500 and inserts 500.
+    assertEquals(1000L, records, "the upsert sync looked up every key from the first sync");
+    assertEquals(500L, hits, "the 500 updates hit the index");
+    assertEquals(500L, misses, "the 500 fresh inserts missed");
     assertTrue(Long.parseLong(counters.get(tagKey(RecordIndexMetricNames.SHARDS_READ))) > 0,
         "at least one shard was read");
   }

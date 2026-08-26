@@ -45,8 +45,8 @@ public class TestDistributedRegistryLifecycle {
    */
   @AfterEach
   public void removeRegistriesFromProcessWideMaps() {
-    HoodieSparkEngineContext.removeMetricRegistryForTesting("", "restartRegistry");
-    HoodieSparkEngineContext.removeMetricRegistryForTesting("", "concurrentRestartRegistry");
+    HoodieSparkEngineContext.removeMetricRegistry("", "restartRegistry");
+    HoodieSparkEngineContext.removeMetricRegistry("", "concurrentRestartRegistry");
   }
 
   @Test

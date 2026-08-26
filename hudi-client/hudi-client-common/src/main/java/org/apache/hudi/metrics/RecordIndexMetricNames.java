@@ -27,12 +27,20 @@ public class RecordIndexMetricNames {
   /** Scoping, prefix and reporter naming all live on the enum entry. */
   public static final String REGISTRY_NAME = ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.registryName();
 
+  /** Counts records, not distinct keys: a batch repeating a key contributes once per record, which is
+   * what keeps {@code hits + misses == key_count} exact. */
   public static final String KEY_COUNT = "lookup_record_index_key_count";
   public static final String KEY_HIT_COUNT = "lookup_record_index_key_hit_count";
   public static final String KEY_MISS_COUNT = "lookup_record_index_key_miss_count";
   public static final String SHARDS_READ = "lookup_record_index_shards_read";
-  /** Wall-clock spent in the shard read, summed across shards. Revives the third dead upstream constant,
-   * {@code HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_TIME_STR}. */
+  /**
+   * Wall-clock spent in the shard read, summed across shards rather than averaged because shards are read
+   * in parallel: the value is per-commit read effort, and dividing by {@link #SHARDS_READ} gives a mean.
+   *
+   * <p>Distinct from {@code index.lookup.duration} published by {@code HoodieMetrics.updateIndexMetrics},
+   * which is driver wall-clock for the whole {@code tagLocation} including scheduling. Comparing the two
+   * shows how much of a lookup was actually spent reading the index.
+   */
   public static final String LOOKUP_TIME = "lookup_record_index_time";
 
   private RecordIndexMetricNames() {

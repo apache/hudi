@@ -19,6 +19,7 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.metrics.NoOpRegistry;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -49,7 +50,13 @@ public class RecordIndexLookupMetrics {
       if (!metricRegistry.isEnabled(config)) {
         continue;
       }
-      Registry registry = context.getMetricRegistry(config.getTableName(),
+      // TBL_NAME has no default and Builder.validate() only requires BASE_PATH, so a config built without
+      // forTable() reaches here with a null name. getMetricRegistry dereferences it immediately.
+      String tableName = config.getTableName();
+      if (tableName == null || tableName.isEmpty()) {
+        continue;
+      }
+      Registry registry = context.getMetricRegistry(tableName,
           metricRegistry.scopedName(config.getBasePath()));
       // Only the accumulator-backed registry aggregates back to the driver, so anything else is left out
       // rather than bound: a bound LocalRegistry would collect on the executor and be dropped on the floor,
@@ -76,6 +83,11 @@ public class RecordIndexLookupMetrics {
       return;
     }
     Registry registry = Registry.getRegistry(RecordIndexMetricNames.REGISTRY_NAME);
+    // The query read path and the disabled path both resolve to a discarding registry. Return before the
+    // hit scan below, which is O(keys looked up), rather than computing counts nothing will read.
+    if (registry instanceof NoOpRegistry) {
+      return;
+    }
     Set<String> found = foundKeys instanceof Set ? (Set<String>) foundKeys : new HashSet<>(foundKeys);
     long records = keysLookedUp.size();
     long hits = found.isEmpty() ? 0L : keysLookedUp.stream().filter(found::contains).count();

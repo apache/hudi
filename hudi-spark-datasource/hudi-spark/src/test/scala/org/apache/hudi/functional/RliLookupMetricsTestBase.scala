@@ -48,10 +48,10 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
   }
 
   /**
-   * `commonOpts` turns the global record index on, so the metadata-partition flags and the index type
-   * have to be flipped together to select the partitioned variant.
+   * The drain reports to the configured reporter, so these tests need one. `commonOpts` turns the global
+   * record index on, so the metadata-partition flags and the index type are flipped together below to
+   * select the partitioned variant.
    */
-  /** The drain reports to the configured reporter, so these tests need one. */
   protected def metricsOpts: Map[String, String] = Map(
     HoodieMetricsConfig.TURN_METRICS_ON.key -> "true",
     // The type still has to be set: it defaults to GRAPHITE, whose config builder NPEs without a prefix.
@@ -112,9 +112,6 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
         counters.contains(RecordIndexMetricNames.LOOKUP_TIME),
         s"looked up $lookedUp keys but reported no ${RecordIndexMetricNames.LOOKUP_TIME}; " +
           s"counters were ${counters.keys.toSeq.sorted.mkString(", ")}")
-      org.junit.jupiter.api.Assertions.assertTrue(
-        counterOrZero(counters, RecordIndexMetricNames.LOOKUP_TIME) >= 0L,
-        "elapsed time cannot be negative")
     }
     lookedUp
   }

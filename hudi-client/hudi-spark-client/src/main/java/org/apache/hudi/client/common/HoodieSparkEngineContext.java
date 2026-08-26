@@ -285,9 +285,13 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
    * same JVM.
    */
   @VisibleForTesting
-  public static void removeMetricRegistryForTesting(String tableName, String registryName) {
-    DISTRIBUTED_REGISTRY_MAP.remove(tableName.isEmpty() ? registryName : tableName + "." + registryName);
+  public static void removeMetricRegistry(String tableName, String registryName) {
+    String prefixedName = tableName.isEmpty() ? registryName : tableName + "." + registryName;
+    DISTRIBUTED_REGISTRY_MAP.remove(prefixedName);
     Registry.REGISTRY_MAP.remove(Registry.makeKey(tableName, registryName));
+    // setRegistries also indexes under the empty table name, so evicting only the table-scoped key leaves
+    // the accumulator reachable under ::<table>.<registry>.
+    Registry.REGISTRY_MAP.remove(Registry.makeKey("", prefixedName));
   }
 
   @Override

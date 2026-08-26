@@ -22,6 +22,7 @@ import org.apache.hudi.common.metrics.ExecutorMetricsContext;
 import org.apache.hudi.common.metrics.LocalRegistry;
 import org.apache.hudi.common.metrics.Registry;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -34,6 +35,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Characterizes how an executor reaches a driver-published registry by name. */
 public class TestRegistryExecutorLookup {
+
+  /**
+   * REGISTRY_MAP is a process-wide static, so entries left here outlive the class under reuseForks and
+   * leak into sibling tests in this package that scrape it.
+   */
+  @AfterEach
+  public void clearProcessWideRegistries() {
+    Registry.REGISTRY_MAP.clear();
+  }
 
   private static final String TABLE = "someTable";
   private static final String REGISTRY = "TestRegistryExecutorLookup_fs";

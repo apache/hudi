@@ -46,8 +46,8 @@ public class TestDistributedRegistryUnderTaskRetry {
       jsc.stop();
       jsc = null;
     }
-    HoodieSparkEngineContext.removeMetricRegistryForTesting("", "retryRegistry");
-    HoodieSparkEngineContext.removeMetricRegistryForTesting("", "recomputeRegistry");
+    HoodieSparkEngineContext.removeMetricRegistry("", "retryRegistry");
+    HoodieSparkEngineContext.removeMetricRegistry("", "recomputeRegistry");
   }
 
   /** {@code local[n, maxFailures]} -- the second number is what makes Spark re-attempt a failed task. */

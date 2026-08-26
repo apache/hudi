@@ -22,13 +22,11 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
-import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.function.Executable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -188,7 +186,7 @@ public class TestDistributedRegistry {
   }
 
   @Test
-  public void testSetThrowsOnExecutor() {
+  public void testSetOnExecutorIsIgnoredWithoutFailingTheJob() {
     // Given: a registry registered to the spark context
     String registryName = REGISTRY_NAME + "_testSetOnExecutor";
     Registry registry = engineContext.getMetricRegistry("", registryName);
@@ -196,47 +194,39 @@ public class TestDistributedRegistry {
     List<Integer> data = new ArrayList<>();
     data.add(1);
 
-    // When/Then: set() invoked on an executor must fail - it is non-commutative under accumulator merges.
-    // The UnsupportedOperationException thrown on the executor surfaces wrapped in a SparkException.
-    assertFailsOnExecutorWith("DistributedRegistry.set() must not be called from a Spark executor", () ->
-        engineContext.map(data, value -> {
-          registry.set(METRIC_1, value);
-          return null;
-        }, 1));
+    // When: set() is invoked from an executor. It is non-commutative under accumulator merges, so the
+    // value must not be recorded -- but the guard runs inside a task, where failing would take the write
+    // down with it, so it is ignored rather than thrown.
+    engineContext.map(data, value -> {
+      registry.set(METRIC_1, value);
+      return null;
+    }, 1);
+
+    // Then: the job succeeded and nothing was recorded.
+    Assertions.assertFalse(registry.getAllCounts().containsKey(METRIC_1),
+        "set() from an executor must not record a value: " + registry.getAllCounts());
   }
 
   @Test
-  public void testReleaseThrowsOnExecutor() {
-    // Given: a registry registered to the spark context
+  public void testReleaseOnExecutorIsIgnoredWithoutFailingTheJob() {
+    // Given: a registry holding a known count
     String registryName = REGISTRY_NAME + "_testReleaseOnExecutor";
     Registry registry = engineContext.getMetricRegistry("", registryName);
+    registry.add(METRIC_1, 5L);
 
     List<Integer> data = new ArrayList<>();
     data.add(1);
 
-    // When/Then: release() invoked on an executor must fail - clamping and eviction are order-dependent
-    // under accumulator merges. The UnsupportedOperationException surfaces wrapped in a SparkException.
-    assertFailsOnExecutorWith("DistributedRegistry.release() must not be called from a Spark executor", () ->
-        engineContext.map(data, value -> {
-          registry.release(Collections.singletonMap(METRIC_1, (long) value));
-          return null;
-        }, 1));
-  }
+    // When: release() is invoked from an executor. Clamping and eviction are order-dependent under
+    // accumulator merges, and this runs after the commit has landed, so it is ignored rather than thrown.
+    engineContext.map(data, value -> {
+      registry.release(Collections.singletonMap(METRIC_1, (long) value));
+      return null;
+    }, 1);
 
-  /**
-   * Asserts the job failed because the executor-side guard fired, not for some unrelated reason such as a serialization error.
-   */
-  private static void assertFailsOnExecutorWith(String expectedMessage, Executable executable) {
-    SparkException thrown = Assertions.assertThrows(SparkException.class, executable);
-    StringBuilder chain = new StringBuilder();
-    for (Throwable t = thrown; t != null; t = t.getCause()) {
-      chain.append(t).append('\n');
-      if (t.getCause() == t) {
-        break;
-      }
-    }
-    Assertions.assertTrue(chain.toString().contains(expectedMessage),
-        "expected the executor-side guard to fail the job, got: " + chain);
+    // Then: the job succeeded and the count was left alone.
+    Assertions.assertEquals(5L, registry.getAllCounts().get(METRIC_1),
+        "release() from an executor must not mutate the counters");
   }
 
   @Test

@@ -63,7 +63,7 @@ public class PartitionedRecordIndexFileGroupLookupFunction
 
   @Override
   public Iterator<Tuple2<String, HoodieRecordGlobalLocation>> call(Iterator<Pair<String, String>> partitionPathRecordKeyIterator) {
-    // Bound for the whole task so a metric raised deeper in the lookup resolves here too.
+    // Bound for the duration of the shard read so a metric raised deeper in the lookup resolves here too.
     Map<String, Registry> previousBinding = ExecutorMetricsContext.bind(metricsBundle);
     try {
       String partitionName = null;
