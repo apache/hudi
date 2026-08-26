@@ -296,6 +296,7 @@ remains is applying them:
 - [ ] For OCC: the same `hoodie.write.lock.provider` on every side, with its required keys.
 - [ ] For an explicit lock provider only: the lock identity values (`lock_key` / `partition_key` / `base_path`) are byte-identical across jobs.
 - [ ] No writing job sets `hoodie.clean.failed.writes.policy=EAGER` — it is a hard validation failure under multi-writer modes.
+- [ ] Any cloud bundle the design requires (`hudi-aws-bundle` for DynamoDB locking or Glue sync, `hudi-gcp-bundle` for BigQuery, `hudi-datahub-sync-bundle` for DataHub) is on the classpath of **every** writing job. The config is valid without it and fails at the first commit.
 
 Escalate to a genuine open question only when a writer is named that this session could not
 inspect — e.g. a job owned by another team whose config the user cannot confirm.

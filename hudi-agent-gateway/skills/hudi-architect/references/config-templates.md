@@ -504,7 +504,10 @@ provider. (Published docs list
 `hoodie.write.lock.dynamodb.endpoint_url` as required; it is optional. The keys actually
 validated are `table` and `region`.)
 
-Requires the AWS bundle on the classpath of every writing job.
+**Requires `hudi-aws-bundle` in `--packages` on every writing job** — see "Cloud bundles are
+load-bearing" under Sample submit commands. Without it the job fails at the first commit with a
+`ClassNotFoundException` on the lock provider. If this design also syncs to Glue, the same
+bundle covers both.
 
 ### OCC — ZooKeeper (existing quorum)
 
@@ -838,6 +841,36 @@ hoodie.write.concurrency.mode=SINGLE_WRITER
 
 Emit alongside the properties bundle. Parameterize on the derived writer, table type, source class, and operation. **Always distinguish load-bearing flags (derived from design decisions) from environment-specific placeholders (paths, memory, engine/Scala versions) that the flow never asked about.**
 
+#### Cloud bundles are load-bearing — put them in `--packages`
+
+Some derived decisions need a class that is **not** in the Spark or utilities bundle. The config
+is valid without the jar, so nothing complains at submit time: the job starts, runs, and dies at
+the first commit with a `ClassNotFoundException` on a class the properties file names. That is
+the worst shape of failure this skill can emit — correct config that cannot possibly work — so
+the bundle belongs in the emitted `--packages` line, not in prose the user may skim past.
+
+| Derived decision | Class that needs the jar | Add to `--packages` |
+|---|---|---|
+| DynamoDB lock provider (OCC on AWS) | `DynamoDBBasedImplicitPartitionKeyLockProvider` | `org.apache.hudi:hudi-aws-bundle:<HUDI_VERSION>` |
+| Glue catalog sync | `AwsGlueCatalogSyncTool` | `org.apache.hudi:hudi-aws-bundle:<HUDI_VERSION>` |
+| BigQuery sync | `BigQuerySyncTool` | `org.apache.hudi:hudi-gcp-bundle:<HUDI_VERSION>` |
+| DataHub sync | `DataHubSyncTool` | `org.apache.hudi:hudi-datahub-sync-bundle:<HUDI_VERSION>` |
+| Storage-based lock provider | the per-cloud lock client | the bundle matching the storage scheme |
+
+**`hudi-aws-bundle` covers both AWS cases**, so a design with DynamoDB locking *and* Glue sync
+needs it once, not twice. Say that when both apply — a reader who sees the same jar justified by
+two different decisions may wonder whether they need two.
+
+Two rules when emitting:
+
+- **Every writing job needs it**, exactly like the concurrency block. A backfill job that writes
+  without `hudi-aws-bundle` cannot take the DynamoDB lock — and it will fail rather than write
+  unsafely, which is the good outcome, but only if the operator knows why.
+- Version it with the same `<HUDI_VERSION>` placeholder as the other bundles. Never pin a
+  concrete version; a mismatched bundle version is its own confusing classpath failure.
+
+Also list these in the ADR's pre-launch checklist → warnings.md → `CLOUD_BUNDLE_REQUIRED`.
+
 #### HoodieStreamer — continuous mode (MOR with free async compaction)
 
 ```bash
@@ -845,7 +878,7 @@ spark-submit \
   --master yarn \
   --deploy-mode cluster \
   --class org.apache.hudi.utilities.streamer.HoodieStreamer \
-  --packages org.apache.hudi:hudi-utilities-slim-bundle_<SCALA>:<HUDI_VERSION>,org.apache.hudi:hudi-spark<SPARK_VERSION>-bundle_<SCALA>:<HUDI_VERSION> \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_<SCALA>:<HUDI_VERSION>,org.apache.hudi:hudi-spark<SPARK_VERSION>-bundle_<SCALA>:<HUDI_VERSION><CLOUD_BUNDLE> \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
@@ -868,6 +901,13 @@ spark-submit \
 
 **Never suggest `--disable-compaction` on MOR.**
 
+`<CLOUD_BUNDLE>` is **not** a placeholder for the user to fill in — substitute it when emitting,
+from the table above, or drop it entirely when no cloud bundle is needed. For a design with
+DynamoDB locking or Glue sync it becomes
+`,org.apache.hudi:hudi-aws-bundle:<HUDI_VERSION>`. Leaving a literal `<CLOUD_BUNDLE>` in the
+emitted command is a defect: unlike `<MEM>` or `<SCALA>`, this one is derived, and the user has
+no way to know what belongs there.
+
 **Environment-specific — leave these to the user, deliberately.** Master and deploy mode, memory and executor counts, `<SCALA>` (2.12 or 2.13), `<SPARK_VERSION>` in the bundle artifact name, `<HUDI_VERSION>`, and all paths.
 
 The flow does not ask about these and shouldn't: they're facts about the user's build and cluster, not design decisions, and asking would add several infrastructure questions to a design conversation for no design benefit. Emit them as clearly-marked placeholders and say plainly that the user fills them in from their own environment. Don't guess concrete versions — a wrong Scala suffix produces a confusing classpath failure, and a placeholder that looks like a recommendation is worse than one that looks like a blank.
@@ -879,6 +919,25 @@ Same as above, minus `--continuous` and `--min-sync-interval-seconds`. Schedule 
 #### Spark DataSource
 
 No submit template — the user's own application carries the write. Emit the properties bundle as `.option(...)` calls, plus the required session config.
+
+**The cloud bundle still applies, and is easier to miss here** precisely because there is no
+submit command to hang it on. The user's own `spark-submit` (or `spark-shell` / `spark-sql`)
+invocation needs it, and the skill never sees that command. So state it explicitly rather than
+assuming it carries over from the properties bundle:
+
+```bash
+# Whatever launches your job needs the cloud bundle on the classpath.
+# spark-submit, spark-shell, and spark-sql all take --packages:
+spark-shell \
+  --packages org.apache.hudi:hudi-spark<SPARK_VERSION>-bundle_<SCALA>:<HUDI_VERSION>,org.apache.hudi:hudi-aws-bundle:<HUDI_VERSION> \
+  --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+  --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
+  --conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar
+```
+
+Substitute the bundle from the table above; drop it when the design needs none. For a
+long-running application, the equivalent is a compile-time dependency on the same artifact
+rather than `--packages`.
 
 Batch job:
 ```scala

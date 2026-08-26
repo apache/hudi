@@ -380,32 +380,80 @@ Then proceed to the final revisit gate as normal.
 
 Rule engine maps answers to Hudi query types internally. See decision-tables.md → read-behavior.
 
+### Q2.1a — Storage scheme (asked BEFORE engines)
+
+**This must precede Q2.1b, not share its screen.** Storage constrains which catalogs and engines
+are even possible, so asking them together lets an impossible combination through: Athena and
+Glue are AWS-only and cannot touch a table on GCS, while BigQuery is GCP-only. A live run
+produced exactly that contradiction — GCS storage plus Athena — because the two were asked
+side by side. Gate first, then offer only what the gate permits.
+
+> "Where does this table live?"
+>
+> - **S3 (AWS)** — `s3://` or `s3a://`
+> - **GCS (Google Cloud)** — `gs://`
+> - **ADLS / ABFS (Azure)** — `abfs://` or `abfss://`
+> - **HDFS or on-prem**
+
+Often already known from a base path the user has given; skip the question when it is. The
+answer also feeds the lock-provider derivation (Q1.7b) and `FILESYSTEM_LOCK_UNSAFE`, so capture
+it once and reuse it.
+
 ### Q2.1b — Query engines (drives catalog sync)
 
-Pairs with Q2.1 and shares its screen. Q2.1 establishes *how* consumers read; this establishes
-*what* reads. A Hudi table on storage is invisible to Trino, Athena, Presto, or BigQuery until
-it is registered in a catalog those engines look at — and Spark and Flink can read by path with
-no catalog at all, so this genuinely changes the emitted config.
+Follows Q2.1a. Q2.1 establishes *how* consumers read; this establishes *what* reads. A Hudi
+table on storage is invisible to Trino, Athena, Presto, or BigQuery until it is registered in a
+catalog those engines look at — and Spark and Flink can read by path with no catalog at all, so
+this genuinely changes the emitted config.
 
 **Never ask "do you want Hive sync?"** — that is a Hudi question. Ask what queries the table.
 
+**Filter the option set by the storage answer.** Never offer an engine that cannot read the
+storage:
+
+| Storage | Offer |
+|---|---|
+| S3 | Spark/Flink · **Athena** · Trino or Presto · BI tool |
+| GCS | Spark/Flink · **BigQuery** · Trino or Presto · BI tool |
+| ABFS / ADLS | Spark/Flink · Trino or Presto · BI tool |
+| HDFS / on-prem | Spark/Flink · Trino or Presto · Hive · BI tool |
+
 > "Which engines and tools will query this table?"
 >
-> - **Spark and/or Flink only** — reading the table directly.
-> - **Trino, Presto, or Athena**
-> - **BigQuery**
-> - **A mix, or something else** — tell me which.
+> - **Spark and/or Flink** — reading the table directly.
+> - **Athena** *(S3 only)* — reads through the Glue Data Catalog.
+> - **Trino or Presto** — reads through Hive Metastore or Glue.
+> - **BigQuery** *(GCS only)* — its own sync mechanism, with real constraints on MOR.
+> - **A BI tool** (Tableau, Looker, Superset) — through whichever catalog its SQL engine uses.
+
+**Keep Athena separate from Trino/Presto.** They need the same *kind* of registration, so
+grouping them is tempting — but Athena is AWS-only and Trino runs anywhere. Bundling them lets a
+GCS-plus-Athena answer through unchallenged, which is precisely the contradiction Q2.1a exists
+to prevent.
 
 Multi-select where the widget supports it; a table read by both Spark jobs and Athena is the
 common case, not an edge case.
+
+**Delivery:** Q2.1a and Q2.1b **must not share a screen** — Q2.1a gates Q2.1b's option set, and a
+widget's options are fixed when it renders, so a same-screen pairing cannot filter on the answer
+beside it. Q2.1a may share a screen with Q2.1 (read pattern), which it does not gate. This is the
+mirror of the Q1.4/Q1.5 rule: never split a gate from what it gates, and never *merge* a gate with
+what it gates either.
+
+**If a contradiction still arrives** — the user names an engine the storage cannot serve — do not
+silently pick one. Name the conflict and ask which they meant: "Athena is AWS-only and can't read
+a table on GCS — did you mean Trino, or is this table actually on S3?" Both readings lead to
+different catalogs, so guessing produces a wrong bundle rather than an imprecise one.
 
 **Routing** (full derivation in decision-tables.md → Catalog / metastore sync):
 
 - **Spark/Flink only** → **no catalog sync**. Emit nothing, and say so explicitly: "nothing to
   register — Spark and Flink read the table by path." Silence here reads as an omission.
-- **Trino / Presto / Athena, or anything Hive-based** → HMS, or **Glue if the environment is
-  AWS**. Do not ask which; derive it from the storage path and any AWS signals already
-  collected, then state the choice.
+- **Athena** → **Glue**, necessarily. Athena reads through Glue; it is not a preference.
+- **Trino / Presto, or anything Hive-based** → Glue when Q2.1a said S3, HMS otherwise. Do not ask
+  which; derive it from the storage answer and state the choice. When Athena and Trino both
+  appear, one Glue catalog serves both — say so, because standing up an HMS alongside Glue is a
+  second thing to operate for no gain.
 - **BigQuery** → BigQuery sync, and surface its constraints at that moment: hive-style
   partitioning is required, and the manifest lists base files only, so a MOR table is read
   **read-optimized** rather than as a snapshot.
