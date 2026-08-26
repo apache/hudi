@@ -34,6 +34,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SortUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableConcatenatingIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -175,6 +176,13 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     // and there may be some files written by spark, force update schema as nullable to make sure clustering
     // scan successfully without schema validating exception.
     this.readerSchema = HoodieSchemaUtils.asNullable(schema);
+
+    if (this.sortClusteringEnabled) {
+      // Reject a MAP or VARIANT sort column here, once and by name, as the Spark and Java
+      // clients do: left alone it reaches SortOperatorGen, whose generated comparator throws
+      // "Unsupported sort field value type" per record inside the sorter.
+      SortUtils.validateSortableColumns(sortColumns(), schema);
+    }
 
     this.binarySerializer = new BinaryRowDataSerializer(rowType.getFieldCount());
 
@@ -354,9 +362,12 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   }
 
   private SortOperatorGen createSortOperatorGen() {
-    // Trim: the config list is user-written ("id, name"), and the column names are looked up as given.
-    return new SortOperatorGen(rowType,
-        Arrays.stream(conf.get(FlinkOptions.CLUSTERING_SORT_COLUMNS).split(",")).map(String::trim).toArray(String[]::new));
+    return new SortOperatorGen(rowType, sortColumns());
+  }
+
+  /** The configured sort columns, trimmed: the list is user-written ("id, name") and the names are looked up as given. */
+  private String[] sortColumns() {
+    return Arrays.stream(conf.get(FlinkOptions.CLUSTERING_SORT_COLUMNS).split(",")).map(String::trim).toArray(String[]::new);
   }
 
   private String getFileIds(List<ClusteringOperation> clusteringOperations) {

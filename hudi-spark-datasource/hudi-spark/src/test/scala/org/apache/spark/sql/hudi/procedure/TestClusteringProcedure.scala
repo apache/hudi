@@ -925,14 +925,27 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.getInstants.size())
       assertResult(3)(spark.sql(s"select * from $tableName").collect().length)
 
-      // The execution-time twin: configured plan-strategy sort columns skip the procedure
-      // check and are rejected by the execution strategy and partitioner constructors instead
-      // (SortUtils.validateSortableColumns). Kept last: the failed run leaves a pending plan
-      // holding the file group, which would starve any later scheduling.
+      // The `options` route: the plan-strategy sort columns can arrive through it too, and it is
+      // merged after `order`, so it has to go through the same up-front check. That the check ran
+      // before scheduling is what the empty pending timeline pins: an execution-time rejection
+      // (the strategy and partitioner constructors validate as well) would have left a pending
+      // plan holding the file group, which starves every later scheduling.
       spark.sql(s"insert into $tableName values (4, 'a4', null, null, null, 1003)")
       checkNestedExceptionContains(
         s"call run_clustering(table => '$tableName', options => 'hoodie.clustering.plan.strategy.sort.columns=attrs')")(
         "Sorting by column 'attrs'")
+      metaClient.reloadActiveTimeline()
+      assertResult(0L)(ClusteringUtils.getAllPendingClusteringPlans(metaClient).count())
+      // ... and an orderable column through the same route passes the check and reaches the plan.
+      // (A multi-column list cannot travel through `options`: HoodieCLIUtils.extractOptions splits
+      // the string on commas into key=value pairs, so the trimming pin above stays on `order`.)
+      spark.sql(s"insert into $tableName values (5, 'a5', null, null, null, 1004)")
+      spark.sql(s"call run_clustering(table => '$tableName', " +
+        "options => 'hoodie.clustering.plan.strategy.sort.columns=embedding')").collect()
+      val optionsInstant = metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.lastInstant().get()
+      assertResult("embedding")(
+        ClusteringUtils.getClusteringPlan(metaClient, optionsInstant).get().getRight
+          .getStrategy.getStrategyParams.get(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key()))
     }
   }
 

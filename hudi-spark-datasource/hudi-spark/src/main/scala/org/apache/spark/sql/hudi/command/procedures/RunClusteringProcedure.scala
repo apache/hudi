@@ -120,17 +120,14 @@ class RunClusteringProcedure extends BaseProcedure
       logInfo(s"Partition selected: $selectedPartitions")
     }
 
-    // Construct sort column info. Normalise once so the plan stores the same trimmed list the
-    // strategies and partitioners work from: the procedure validates the argument up front, and
-    // the stored value is what later services see.
+    // Construct sort column info. `options`, merged below, may carry the same key and wins over
+    // `order` as it always has; the value is normalised and validated once after the merges, so
+    // the check covers both routes and the plan stores exactly what was checked.
     orderColumns match {
       case Some(o) =>
-        val normalized = o.asInstanceOf[String].split(",").map(_.trim).mkString(",")
-        validateOrderColumns(normalized, metaClient)
         confs = confs ++ Map(
-          HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> normalized
+          HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> o.asInstanceOf[String]
         )
-        logInfo(s"Order columns: $normalized")
       case _ =>
         logInfo("No order columns")
     }
@@ -150,6 +147,20 @@ class RunClusteringProcedure extends BaseProcedure
         confs = confs ++ HoodieCLIUtils.extractOptions(p.asInstanceOf[String])
       case _ =>
         logInfo("No options")
+    }
+
+    // Normalise once so the plan stores the same trimmed list the strategies and partitioners
+    // work from, and validate it up front, before any plan is scheduled - whichever of `order`
+    // or `options` set it. A blank value is no sort at all, as the strategies read it.
+    confs.get(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key()).foreach { sortColumns =>
+      val normalized = sortColumns.split(",").map(_.trim).filter(_.nonEmpty).mkString(",")
+      if (normalized.isEmpty) {
+        confs = confs - HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key()
+      } else {
+        validateOrderColumns(normalized, metaClient)
+        confs = confs ++ Map(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> normalized)
+        logInfo(s"Order columns: $normalized")
+      }
     }
 
     val pendingClusteringInstants = ClusteringUtils.getAllPendingClusteringPlans(metaClient)

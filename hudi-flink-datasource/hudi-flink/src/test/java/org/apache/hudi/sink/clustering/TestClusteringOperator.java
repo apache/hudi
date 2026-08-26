@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
@@ -343,6 +344,33 @@ class TestClusteringOperator {
           (StreamRecord<ClusteringCommitEvent>) harness.getOutput().poll();
       assertEquals("old-file", output.getValue().getFileIds());
       assertFalse(output.getValue().isFailed());
+    }
+  }
+
+  @Test
+  void testSortClusteringRejectsUnorderableColumnAtOpen() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
+    // f_map is a MAP: Spark's RowOrdering.isOrderable is false for it, and Flink's SortOperatorGen
+    // would only fail per record inside the sorter, without naming the column.
+    conf.set(FlinkOptions.CLUSTERING_SORT_COLUMNS, "f_map");
+    HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
+    HoodieFlinkTable table = mock(HoodieFlinkTable.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeClient.getHoodieTable()).thenReturn(table);
+
+    ClusteringOperator operator = new ClusteringOperator(conf, TestConfigurations.ROW_TYPE_EVOLUTION_BEFORE);
+    try (MockedStatic<FlinkWriteClients> writeClients = mockStatic(FlinkWriteClients.class);
+         OneInputStreamOperatorTestHarness<ClusteringPlanEvent, ClusteringCommitEvent> harness =
+             new OneInputStreamOperatorTestHarness<>(operator, 1, 1, 0)) {
+      writeClients.when(() -> FlinkWriteClients.getHoodieClientConfig(
+          any(Configuration.class), eq(false), eq(false))).thenReturn(writeConfig);
+      writeClients.when(() -> FlinkWriteClients.createWriteClient(
+          any(Configuration.class), any(RuntimeContext.class))).thenReturn(writeClient);
+
+      // Rejected at open, before any plan is processed, and the error names the column.
+      HoodieException failure = assertThrows(HoodieException.class, harness::open);
+      assertTrue(failure.getMessage().contains("'f_map'"),
+          "The error must name the unorderable sort column, got: " + failure.getMessage());
     }
   }
 

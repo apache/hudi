@@ -61,7 +61,13 @@ import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.avro.AvroWriteSupport;
+import org.apache.parquet.example.data.Group;
+import org.apache.parquet.example.data.simple.SimpleGroupFactory;
 import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.example.ExampleParquetWriter;
+import org.apache.parquet.io.api.Binary;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.MessageTypeParser;
 
 import java.io.File;
 import java.io.IOException;
@@ -700,6 +706,44 @@ public class InputFormatTestUtil {
       GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
       record.put("id", 1);
       record.put("a", Collections.singletonList(element));
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  /**
+   * Writes a one-row parquet file whose {@code a} column is a 3-level LIST with its repeated level
+   * named {@code other_tuple} and a shredded variant as that level's single child. Parquet's
+   * backward-compatibility rule (AvroSchemaConverter.isElementType) takes a repeated group for
+   * the element only when it is named {@code array} or exactly {@code <list>_tuple}, so this level
+   * is a synthetic one and the shredded group has to land at the column's own path {@code a}.
+   * Nothing in Hudi writes this shape; it pins that the guard applies the rule by the list's own
+   * name rather than by the suffix alone, which would have collected {@code a.element} instead.
+   */
+  public static StoragePath writeMisnamedTupleListShreddedVariantParquetFile(java.nio.file.Path dir, String fileName)
+      throws IOException {
+    MessageType schema = MessageTypeParser.parseMessageType(
+        "message TestRecord {"
+            + " required int32 id;"
+            + " optional group a (LIST) {"
+            + "   repeated group other_tuple {"
+            + "     optional group element {"
+            + "       optional binary metadata;"
+            + "       optional binary value;"
+            + "       optional int64 typed_value;"
+            + "     }"
+            + "   }"
+            + " }"
+            + "}");
+    java.nio.file.Path file = dir.resolve(fileName);
+    try (ParquetWriter<Group> writer = ExampleParquetWriter.builder(new Path(file.toString()))
+        .withType(schema)
+        .build()) {
+      Group record = new SimpleGroupFactory(schema).newGroup();
+      record.add("id", 1);
+      Group element = record.addGroup("a").addGroup("other_tuple").addGroup("element");
+      element.add("metadata", Binary.fromConstantByteArray(new byte[] {1}));
+      element.add("typed_value", 5L);
       writer.write(record);
     }
     return new StoragePath(file.toUri().toString());

@@ -633,6 +633,57 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     }
   }
 
+  test("Inline compaction and clustering under schema-on-read fail fast on the variant column") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // Hudi's own base-file reads request the same full-variant shape as Spark's PushVariantIntoScan
+    // rewrite (SparkFileFormatInternalRowReaderContext), and a table service's reader context
+    // carries the table's internal schema once one is committed (SparkReaderContextFactory puts
+    // the table path and the valid commits on the conf), so an inline service under a schema-on-read
+    // write reaches the guard's rewrite arm on a variant column that was never shredded. It cannot be
+    // served until #18285 - the merged internal-schema request comes back as {metadata, value} where
+    // the restore projection expects the ordinal struct - and before the guard the same read died
+    // inside pruning ("cannot prune col: v.0"). What is pinned here is that the failure names this
+    // route rather than a Spark conf the service never set. Upserts are unaffected (the merge
+    // handle's base-file read never enters the reader's schema-on-read branch), and so are
+    // run_compaction / run_clustering, whose clients carry no internal schema.
+    def writeThroughDataFrame(tableName: String, tablePath: String, tableType: String, id: Int,
+                              serviceOptions: (String, String)*): Unit = {
+      var writer = spark.sql(s"""select $id as id, parse_json('{"a":$id}') as v, 2000L as ts, cast(null as string) as note""")
+        .write.format("hudi")
+        .option("hoodie.table.name", tableName)
+        .option("hoodie.datasource.write.recordkey.field", "id")
+        .option("hoodie.datasource.write.precombine.field", "ts")
+        .option("hoodie.datasource.write.operation", "upsert")
+        .option("hoodie.datasource.write.table.type", tableType)
+        .option("hoodie.schema.on.read.enable", "true")
+      serviceOptions.foreach { case (key, value) => writer = writer.option(key, value) }
+      writer.mode("append").save(tablePath)
+    }
+    def seedWithCommittedInternalSchema(tableName: String): Unit = {
+      withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+        spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1}'), 1000)""")
+        // The schema-on-read DDL is what commits the internal schema; the insert alone does not.
+        spark.sql(s"alter table $tableName add columns (note string)")
+      }
+    }
+
+    withVariantTable("inline clustering under schema-on-read", "cow", recordTypes = Seq(HoodieRecordType.SPARK)) {
+      (tableName, tablePath, leg) =>
+      seedWithCommittedInternalSchema(tableName)
+      checkNestedExceptionContains(() => writeThroughDataFrame(tableName, tablePath, "COPY_ON_WRITE", 2,
+        "hoodie.clustering.inline" -> "true", "hoodie.clustering.inline.max.commits" -> "1"))(
+        "Hudi's own base-file reads")
+    }
+    withVariantTable("inline compaction under schema-on-read", "mor", recordTypes = Seq(HoodieRecordType.SPARK)) {
+      (tableName, tablePath, leg) =>
+      seedWithCommittedInternalSchema(tableName)
+      checkNestedExceptionContains(() => writeThroughDataFrame(tableName, tablePath, "MERGE_ON_READ", 1,
+        "hoodie.compact.inline" -> "true", "hoodie.compact.inline.max.delta.commits" -> "1"))(
+        "Hudi's own base-file reads")
+    }
+  }
+
   // -----------------------------------------------------------------------------------------------
   // F. Nested variant
   // -----------------------------------------------------------------------------------------------

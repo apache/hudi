@@ -502,9 +502,9 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
    * than by level names, so a struct element's member that happens to be called {@code element},
    * {@code key} or {@code value} keeps its segment: under a LIST group with a single child, that
    * child is the synthetic level only when it is a group with exactly one non-repeated field whose
-   * name is neither {@code array} nor a {@code _tuple} suffix (the 3-level layout), and otherwise
-   * it is the element itself (the 2-level layout); under a MAP group the single child is always
-   * the entry level, whose key and value both carry the map's own path.
+   * name is neither {@code array} nor exactly {@code <list>_tuple} (the 3-level layout), and
+   * otherwise it is the element itself (the 2-level layout); under a MAP group the single child is
+   * always the entry level, whose key and value both carry the map's own path.
    *
    * <p>LIST and MAP are read off OriginalType rather than the LogicalTypeAnnotation that replaced
    * it: parquet 1.11 and later derive one from the other, while this module loads inside Hive,
@@ -525,7 +525,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     OriginalType originalType = group.getOriginalType();
     if (originalType == OriginalType.LIST && group.getFieldCount() == 1) {
       Type repeated = group.getType(0);
-      Type element = isSyntheticListLevel(repeated) ? repeated.asGroupType().getType(0) : repeated;
+      Type element = isSyntheticListLevel(repeated, group.getName()) ? repeated.asGroupType().getType(0) : repeated;
       collectShreddedVariantPaths(element, path, shreddedPaths);
       return;
     }
@@ -541,13 +541,15 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   }
 
   /**
-   * Whether {@code repeated}, the single child of a LIST group, is the 3-level layout's synthetic
-   * level rather than the element itself. This is parquet's backward-compatibility rule (the one
-   * AvroSchemaConverter applies as isElementType, negated): a repeated level that is a group with
-   * exactly one non-repeated field and a name that is not one of the legacy element names is the
-   * synthetic level; anything else is a 2-level layout's element, whose members are user fields.
+   * Whether {@code repeated}, the single child of the LIST group named {@code listName}, is the
+   * 3-level layout's synthetic level rather than the element itself. This is parquet's
+   * backward-compatibility rule (the one AvroSchemaConverter applies as isElementType, negated):
+   * a repeated level that is a group with exactly one non-repeated field and a name that is not
+   * one of the legacy element names - {@code array}, or {@code <listName>_tuple} for that list
+   * exactly, not any {@code _tuple} suffix - is the synthetic level; anything else is a 2-level
+   * layout's element, whose members are user fields.
    */
-  private static boolean isSyntheticListLevel(Type repeated) {
+  private static boolean isSyntheticListLevel(Type repeated, String listName) {
     if (repeated.isPrimitive()) {
       return false;
     }
@@ -556,6 +558,6 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     return group.getFieldCount() == 1
         && !group.getType(0).isRepetition(Type.Repetition.REPEATED)
         && !"array".equals(name)
-        && !name.endsWith("_tuple");
+        && !name.equals(listName.toLowerCase(Locale.ROOT) + "_tuple");
   }
 }

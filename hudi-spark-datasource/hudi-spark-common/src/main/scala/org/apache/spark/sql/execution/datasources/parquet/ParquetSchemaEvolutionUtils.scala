@@ -227,11 +227,22 @@ object ParquetSchemaEvolutionUtils {
    * still carries its old name in the file and is not matched here; such reads are left to
    * #18285 with reconstruction itself.
    *
-   * A scan rewritten by Spark's PushVariantIntoScan (4.x) fails fast regardless of the file's
-   * layout: the merged internal-schema request materializes the variant as {metadata, value}
-   * while downstream codegen expects the rewrite's ordinal-named extraction struct, so the
-   * read cannot be served either way (pruning treats the rewritten struct as the variant
-   * column itself, see SparkInternalSchemaConverter.isVariantRewriteStruct).
+   * A request in the full-variant projection shape fails fast regardless of the file's layout:
+   * the merged internal-schema request materializes the variant as {metadata, value} while the
+   * consumer expects the ordinal-named extraction struct, so the read cannot be served either
+   * way (pruning treats the rewritten struct as the variant column itself, see
+   * SparkInternalSchemaConverter.isVariantRewriteStruct). Two producers ask for that shape: a
+   * query rewritten by Spark's PushVariantIntoScan (4.x), and Hudi's own base-file reads on
+   * 4.1+ (SparkFileFormatInternalRowReaderContext, via SparkAdapter.buildFullVariantReadSchema)
+   * whenever their reader context carries the table's internal schema - SparkReaderContextFactory
+   * puts the table path and valid commits on the conf once one is committed, so inline compaction
+   * and clustering under a schema-on-read write, and CDC reads, land here on an unshredded
+   * variant column. Upserts do not - the merge handle's base-file read never enters this
+   * schema-on-read branch (probed against a committed internal schema) - nor do run_compaction /
+   * run_clustering, whose clients carry no internal schema. Before this guard the same reads
+   * died inside pruning ("cannot prune col: v.0"), so nothing that worked is lost; the error
+   * names both routes rather than blaming pushVariantIntoScan on a read that never set it.
+   * Real support is #18285.
    *
    * Shared by [[ParquetSchemaEvolutionUtils.getHadoopConfClone]] and the per-version legacy
    * file formats, which carry a copy of the same schema-merge block. Callers gate on a
@@ -241,10 +252,12 @@ object ParquetSchemaEvolutionUtils {
   def validateNoShreddedVariants(requiredSchema: StructType, querySchema: InternalSchema, footerFileMetaData: FileMetaData): Unit = {
     findVariantRewritePath(requiredSchema).foreach { path =>
       throw new HoodieException(String.format(
-        "Column '%s' is a variant projected through Spark's variant rewrite "
-          + "(spark.sql.variant.pushVariantIntoScan) and the table is read with schema-on-read "
-          + "(hoodie.schema.on.read.enable), which cannot reconstruct variants (see issue "
-          + "#18285). Read without schema-on-read.", path))
+        "Column '%s' is a variant requested in Spark's full-variant projection shape - by the "
+          + "PushVariantIntoScan rewrite (spark.sql.variant.pushVariantIntoScan) on a query, or by "
+          + "Hudi's own base-file reads for compaction, clustering and CDC - and the table is read "
+          + "with schema-on-read (hoodie.schema.on.read.enable), which cannot reconstruct variants "
+          + "(see issue #18285). Read without schema-on-read, and run compaction and clustering from "
+          + "a client without it (run_compaction / run_clustering).", path))
     }
     val fileParquetSchema = footerFileMetaData.getSchema
     querySchema.getRecord.fields().foreach { field =>

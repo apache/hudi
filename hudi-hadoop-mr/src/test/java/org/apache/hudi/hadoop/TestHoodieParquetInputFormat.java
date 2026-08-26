@@ -895,6 +895,24 @@ public class TestHoodieParquetInputFormat {
         () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(structArray, wholeStructArray));
     assertTrue(structArrayFailure.getMessage().contains("'a'"),
         "The error must name the column whose array elements hold a shredded variant, got: " + structArrayFailure.getMessage());
+
+    // The rule is applied by the list's own name, as AvroSchemaConverter.isElementType applies it:
+    // a repeated group is the element when named `array` or exactly `<list>_tuple`, and a
+    // synthetic level otherwise. So other_tuple under the list `a` is synthetic and its single
+    // child is the element, landing the shredded group at `a` again. Taking any `_tuple` suffix
+    // for the element would append the child's name and collect a.element, which the column's
+    // Hive type never declares: the two sides would not meet and the read would go through with
+    // typed_value silently dropped.
+    StoragePath misnamedTuplePath =
+        InputFormatTestUtil.writeMisnamedTupleListShreddedVariantParquetFile(basePath, "array_shredded_other_tuple.parquet");
+    GroupType misnamedRepeated = fileSchemaOf(misnamedTuplePath).getType("a").asGroupType().getType(0).asGroupType();
+    assertEquals("other_tuple", misnamedRepeated.getName(), "the fixture's repeated group must carry a foreign _tuple name");
+    assertEquals(1, misnamedRepeated.getFieldCount(), "the fixture's repeated group holds the element alone");
+    FileSplit misnamedTuple = fileSplit(misnamedTuplePath);
+    HoodieException misnamedTupleFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(misnamedTuple, wholeArray));
+    assertTrue(misnamedTupleFailure.getMessage().contains("'a'"),
+        "The error must name the column whose misnamed list level holds a shredded variant, got: " + misnamedTupleFailure.getMessage());
   }
 
   @Test
