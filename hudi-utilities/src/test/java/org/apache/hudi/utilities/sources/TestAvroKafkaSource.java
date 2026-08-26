@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -33,12 +34,16 @@ import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.SchemaTestProvider;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.KafkaTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import com.google.crypto.tink.subtle.Base64;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -56,6 +61,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -63,6 +69,8 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_VALUE_DESERIALIZER_SCHEMA;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
@@ -148,6 +156,31 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
         // null kafka value
         producer.send(new ProducerRecord<>(topic, i % numPartitions, "key", null));
       }
+    }
+  }
+
+  private void sendUserRecordsWithConfluentSerializer(String topic, String registryUrl, HoodieSchema schema, int count, String phone) {
+    Properties config = getProducerProperties();
+    config.put("value.serializer", KafkaAvroSerializer.class.getName());
+    config.put("schema.registry.url", registryUrl);
+    config.put("auto.register.schemas", "true");
+    try (Producer<String, GenericRecord> producer = new KafkaProducer<>(config)) {
+      for (int i = 0; i < count; i++) {
+        GenericRecordBuilder builder = new GenericRecordBuilder(schema.toAvroSchema())
+            .set("name", "user" + i)
+            .set("favorite_number", i)
+            .set("favorite_color", "blue");
+        if (phone != null) {
+          builder.set("phone", phone);
+        }
+        producer.send(new ProducerRecord<>(topic, "key", builder.build()));
+      }
+    }
+  }
+
+  private HoodieSchema loadSchemaFromResource(String resourcePath) throws IOException {
+    try (InputStream schemaStream = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
+      return HoodieSchema.parse(schemaStream);
     }
   }
 
@@ -309,6 +342,59 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     assertNotEquals(groupId, newGroupId);
     String schemaHash = Base64.encode(HashID.hash(schemaProvider.getSourceHoodieSchema().toString(), HashID.Size.BITS_128));
     assertEquals(StringUtils.concatenateWithThreshold(String.format("%s_", groupId), schemaHash, GROUP_ID_MAX_BYTES_LENGTH), newGroupId);
+  }
+
+  /**
+   * Covers the per-fetch re-configure branch of {@link AvroKafkaSource#readFromCheckpoint}, which regressed twice
+   * (#10118 and #12111). When the source schema evolves between two fetches on the same source instance, the second
+   * batch must decode with the refreshed schema instead of the one the source was constructed with.
+   */
+  @Test
+  void testSchemaDeserializerRefreshesSchemaBetweenFetches() throws IOException {
+    final String topic = TEST_TOPIC_PREFIX + "testSchemaDeserializerRefresh";
+    // a scope of its own keeps this test's registrations out of the registry shared by the other mock:// tests
+    final String registryUrl = "mock://" + topic;
+    HoodieSchema simpleSchema = loadSchemaFromResource("schema/simple-test-with-default-value.avsc");
+    HoodieSchema evolvedSchema = loadSchemaFromResource("schema/evolved-test-with-default-value.avsc");
+
+    HoodieSchema previousSchema = SchemaTestProvider.schemaToReturn.getAndSet(simpleSchema);
+    try {
+      // single partition so both fetches map to the same spark consumer-cache key (group.id + partition),
+      // leaving the rotated group.id as the only thing separating the old consumer from the new one
+      testUtils.createTopic(topic, 1);
+      TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+      props.put(KAFKA_AVRO_VALUE_DESERIALIZER_CLASS.key(), KafkaAvroSchemaDeserializer.class.getName());
+      props.put("schema.registry.url", registryUrl);
+      AvroKafkaSource avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), new SchemaTestProvider(props), metrics);
+
+      sendUserRecordsWithConfluentSerializer(topic, registryUrl, simpleSchema, 5, null);
+      InputBatch<JavaRDD<GenericRecord>> fetch1 = avroKafkaSource.fetchNext(Option.empty(), Long.MAX_VALUE);
+      List<GenericRecord> firstBatch = fetch1.getBatch().get().collect();
+      assertEquals(5, firstBatch.size());
+      for (GenericRecord record : firstBatch) {
+        assertNull(record.getSchema().getField("phone"));
+      }
+      String groupIdAfterFirstFetch = avroKafkaSource.props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, "");
+
+      // evolve the source schema between fetches, as a continuous-mode streamer would see it
+      SchemaTestProvider.schemaToReturn.set(evolvedSchema);
+      sendUserRecordsWithConfluentSerializer(topic, registryUrl, evolvedSchema, 5, "555-0100");
+
+      InputBatch<JavaRDD<GenericRecord>> fetch2 = avroKafkaSource.fetchNext(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+      List<GenericRecord> secondBatch = fetch2.getBatch().get().collect();
+      assertEquals(5, secondBatch.size());
+      for (GenericRecord record : secondBatch) {
+        assertEquals(evolvedSchema.toAvroSchema(), record.getSchema());
+        assertEquals("555-0100", record.get("phone").toString());
+      }
+
+      // pin the mechanism both past fixes introduced: the stamped reader schema and the group.id rotation
+      assertEquals(evolvedSchema.toString(), avroKafkaSource.props.getString(KAFKA_VALUE_DESERIALIZER_SCHEMA.key()));
+      assertNotEquals(groupIdAfterFirstFetch, avroKafkaSource.props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, ""));
+    } finally {
+      SchemaTestProvider.schemaToReturn.set(previousSchema);
+      MockSchemaRegistry.dropScope(topic);
+    }
   }
 
   @Test
