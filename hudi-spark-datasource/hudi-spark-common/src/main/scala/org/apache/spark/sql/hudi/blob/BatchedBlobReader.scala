@@ -388,10 +388,12 @@ class BatchedBlobReader(
       outputSchema: StructType)
       (implicit builder: RowBuilder[R]): RowResult[R] = {
 
+    var storage: HoodieStorage = null
     var inputStream: InputStream = null
     try {
       val path = new StoragePath(rowInfo.filePath)
-      inputStream = resolveStorage(path).open(path)
+      storage = resolveStorage(path)
+      inputStream = storage.open(path)
       val buffer = inputStream.readAllBytes()
 
       logger.debug(s"Read entire file ${rowInfo.filePath} (${buffer.length} bytes)")
@@ -406,6 +408,7 @@ class BatchedBlobReader(
             logger.warn(s"Error closing stream for ${rowInfo.filePath}", e)
         }
       }
+      closeStorage(storage, rowInfo.filePath)
     }
   }
 
@@ -427,11 +430,13 @@ class BatchedBlobReader(
       outputSchema: StructType)
       (implicit builder: RowBuilder[R]): Seq[RowResult[R]] = {
 
+    var storage: HoodieStorage = null
     var inputStream: SeekableDataInputStream = null
     try {
       // Get or open file handle
       val path = new StoragePath(range.filePath)
-      inputStream = resolveStorage(path).openSeekable(path, false)
+      storage = resolveStorage(path)
+      inputStream = storage.openSeekable(path, false)
 
       // Seek to start offset
       inputStream.seek(range.startOffset)
@@ -478,6 +483,23 @@ class BatchedBlobReader(
           case e: Exception =>
             logger.warn(s"Error closing input stream for ${range.filePath}", e)
         }
+      }
+      closeStorage(storage, range.filePath)
+    }
+  }
+
+  /**
+   * Storage is resolved per read, so the read that resolved it closes it. HoodieHadoopStorage
+   * treats this as a no-op because it does not own the cached Hadoop filesystem, but another
+   * hoodie.storage.class implementation may hold resources of its own.
+   */
+  private def closeStorage(storage: HoodieStorage, filePath: String): Unit = {
+    if (storage != null) {
+      try {
+        storage.close()
+      } catch {
+        case e: Exception =>
+          logger.warn(s"Error closing storage for $filePath", e)
       }
     }
   }

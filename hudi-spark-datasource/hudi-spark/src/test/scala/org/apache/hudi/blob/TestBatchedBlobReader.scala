@@ -20,6 +20,7 @@
 package org.apache.hudi.blob
 
 import org.apache.hudi.blob.BlobTestHelpers._
+import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.HoodieStorageUtils
@@ -532,6 +533,35 @@ class TestBatchedBlobReader extends HoodieClientTestBase {
       assertEquals(100, data.length)
       assertBytesContent(data)
     }
+  }
+
+  /**
+   * Every storage the reader resolves is closed. HoodieHadoopStorage.close is a no-op because it
+   * does not own the cached Hadoop filesystem, but hoodie.storage.class is pluggable and another
+   * implementation may hold resources, so the reader must not leak the handles it creates.
+   */
+  @Test
+  def testResolvedStorageIsClosed(): Unit = {
+    val localPath = createTestFile(tempDir, "counted-close.bin", 1000)
+    val conf = nonLocalSchemeStorageConf
+    conf.set(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key, classOf[CountingHoodieStorage].getName)
+
+    val inputDF = sparkSession.createDataFrame(Seq(
+      (onScheme("s3a", localPath), 0L, 100L),
+      (onScheme("s3a", localPath), 500L, 100L)
+    )).toDF("external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
+      .select("offset", "data")
+      .coalesce(1)
+
+    CountingHoodieStorage.reset()
+    val results = BatchedBlobReader.readBatched(inputDF, conf).collect()
+    assertEquals(2, results.length)
+
+    val constructed = CountingHoodieStorage.constructed.get()
+    assertTrue(constructed > 0, "the reader should have resolved storage at least once")
+    assertEquals(constructed, CountingHoodieStorage.closed.get(),
+      s"every resolved storage must be closed, constructed $constructed")
   }
 
   /**
