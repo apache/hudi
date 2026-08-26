@@ -253,14 +253,16 @@ Emit the concrete OCC block from config-templates.md → Concurrency for the dep
 
 **When fires:** at catalog-sync derivation. Not a hard block — read-optimized is a legitimate choice — but it must be an explicit one, since nothing errors and the data merely looks stale.
 
-### CATALOG_BUNDLE_REQUIRED
+### CLOUD_BUNDLE_REQUIRED
 
-**Triggered when:** a sync tool outside the Spark bundle is selected — Glue, BigQuery, or DataHub.
+**Triggered when:** the design names a class outside the Spark and utilities bundles — the DynamoDB lock provider, the storage-based lock provider, or a Glue / BigQuery / DataHub sync tool.
 
 **Message:**
-> "`<sync tool>` lives in its own module, so `<bundle>` has to be on the classpath of every job that writes this table. The config is correct without it, which is the problem: the job submits fine and then fails at the first commit with a ClassNotFoundException on the sync class."
+> "`<class>` lives in its own module, so `<bundle>` has to be on the classpath of every job that writes this table — in `--packages` for `spark-submit`, `spark-shell`, or `spark-sql`, or as a compile-time dependency for a packaged application. The config is correct without it, which is exactly the problem: the job submits fine, starts, and then fails at the first commit with a ClassNotFoundException on a class your properties file names."
 
-**When fires:** on sync-tool selection. Must appear in the ADR's pre-launch checklist, not only in dialogue. Bundle mapping is in decision-tables.md → Catalog / metastore sync.
+**When fires:** the moment such a class is derived — at lock-provider selection and at sync-tool selection, whichever comes first. Fire it **once per bundle, not once per decision**: a design with DynamoDB locking *and* Glue sync needs `hudi-aws-bundle` one time, and saying it twice invites the reader to think they need two jars.
+
+Must appear in **the emitted submit command**, not only in dialogue — see config-templates.md → "Cloud bundles are load-bearing". Also in the ADR's pre-launch checklist. Bundle mapping is in that same section.
 
 ### THREE_CONCURRENT_SERVICES
 
