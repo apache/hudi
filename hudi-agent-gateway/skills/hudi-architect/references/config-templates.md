@@ -494,8 +494,13 @@ hoodie.clean.failed.writes.policy=LAZY
 ```
 
 The lock table is created automatically if absent, so setup is a table name, a region, and IAM
-permissions on that table for **every** writing job. `hoodie.write.lock.dynamodb.partition_key`
-is **not** set — that is the point of the implicit provider. (Published docs list
+permissions on that table for **every** writing job. It defaults to `PAY_PER_REQUEST` billing
+(`hoodie.write.lock.dynamodb.billing_mode`), which is the right mode for a table that sees one
+short lock per commit — switching it to `PROVISIONED` means paying for reserved capacity this
+workload will not use.
+
+`hoodie.write.lock.dynamodb.partition_key` is **not** set — that is the point of the implicit
+provider. (Published docs list
 `hoodie.write.lock.dynamodb.endpoint_url` as required; it is optional. The keys actually
 validated are `table` and `region`.)
 
@@ -562,6 +567,9 @@ hoodie.write.lock.storage.validity.timeout.secs=300
 hoodie.write.lock.storage.renew.interval.secs=30
 ```
 
+`hoodie.write.lock.storage.heartbeat.poll.secs` is a **deprecated alias** for
+`renew.interval.secs` — set one, never both.
+
 Requires the cloud bundle matching the storage scheme on the classpath of every writing job.
 
 ### NBCC — MOR + simple bucket index only
@@ -600,6 +608,10 @@ and record the latency tradeoff in the ADR.
 | `hoodie.write.concurrency.early.conflict.detection.enable` | Experimental, OCC-only, default false. Offer for high-contention OCC; do not emit. |
 | `hoodie.write.num.retries.on.conflict.failures` | Default 0. Contention tuning — Operations Agent territory. |
 | Lock retry and timeout keys (the `wait_time_ms` / `num_retries` family) | Defaults are sound. Tune on observed contention, not at design time. |
+| ZooKeeper session and connection timeouts | Defaults are sound; same reasoning. |
+| DynamoDB capacity keys (`read_capacity`, `write_capacity`, `table_creation_timeout`) | Only apply under `PROVISIONED` billing, which this workload should not use. |
+| `hoodie.write.lock.app_id` | Identifies the lock holder for debugging. Environment-specific, not a design decision. |
+| `hoodie.write.lock.dynamodb.endpoint_url` | Local-development override for pointing at a DynamoDB emulator. |
 
 ## Sample bundles per archetype
 
