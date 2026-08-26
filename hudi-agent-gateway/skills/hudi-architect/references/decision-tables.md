@@ -693,7 +693,14 @@ path with no catalog at all, so a Spark-only pipeline may legitimately need none
 **Ask what reads the table, then derive.** Never ask "do you want Hive sync?" — that is a Hudi
 question. Ask which query engines and BI tools consume the table, which is a workload fact.
 
-### Step 1 — is a catalog needed at all?
+### Step 1 — does the user want a catalog at all?
+
+**Ask before deriving.** question-flow.md → Q2.1a gates this whole section: a plain question about
+whether anything needs to find the table by name, asked before storage or engines. Many tables
+need no catalog — Spark-only pipelines, intermediate tables in a chain, anything whose consumers
+all read by path. A "no" closes the section and emits nothing.
+
+Only derive when the user says they are unsure:
 
 | Consumers | Catalog needed |
 |---|---|
@@ -703,7 +710,18 @@ question. Ask which query engines and BI tools consume the table, which is a wor
 | BigQuery | **Yes** — BigQuery sync (separate mechanism) |
 | A data-discovery tool (DataHub and similar) | **Optional, and additive** — see Step 4 |
 
-Sync is off by default. Nothing below is emitted unless a consumer requires it.
+Sync is off by default. Nothing below is emitted unless the user wants it or a named consumer
+requires it.
+
+**Catalog sync is not a durable decision.** It can be enabled later against a live table: run the
+standalone sync tool once to register it, then add the properties so subsequent commits keep it
+current. Nothing is rewritten. Say this whenever the user declines or defers — it is the fact that
+makes "no" a cheap answer rather than a risky one.
+
+The exception, and the only reason to act now for a maybe-later table: **BigQuery sync requires
+hive-style partitioning, which IS fixed at table creation.** So a table that might later be read
+from BigQuery should set `hoodie.datasource.write.hive_style_partitioning=true` today even with no
+sync configured. Raise this only on GCS or when the user hints at a future BigQuery consumer.
 
 ### Step 2 — which catalog
 
