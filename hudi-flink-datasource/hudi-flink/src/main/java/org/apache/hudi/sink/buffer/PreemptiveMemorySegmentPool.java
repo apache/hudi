@@ -55,8 +55,15 @@ public class PreemptiveMemorySegmentPool implements MemorySegmentPool, Closeable
   private final MemorySegmentPool delegate;
   private final MemoryReclaimer memoryReclaimer;
 
+  /**
+   * The owner whose buffer is currently serializing a row. This is {@code null} outside
+   * {@code writeRow}, including while a new buffer is being created, so allocation failures in
+   * those contexts are handled by the caller's existing fallback path.
+   */
   @Nullable
   private String currentOwnerId;
+
+  /** Prevents an allocation made from the reclamation callback from recursively reclaiming. */
   private boolean preempting;
 
   public PreemptiveMemorySegmentPool(
@@ -100,8 +107,18 @@ public class PreemptiveMemorySegmentPool implements MemorySegmentPool, Closeable
   @Override
   public MemorySegment nextSegment() {
     MemorySegment segment = delegate.nextSegment();
-    if (segment != null || currentOwnerId == null || preempting) {
+    if (segment != null) {
       return segment;
+    }
+    if (currentOwnerId == null) {
+      // No buffer is in the middle of serializing a row. In particular, buffer creation uses
+      // this path and lets StreamWriteFunction apply its creation-failure recovery.
+      return null;
+    }
+    if (preempting) {
+      // The callback may transitively request a page while its victim is still registered.
+      // Re-entering it could select and flush the same victim recursively.
+      return null;
     }
 
     preempting = true;

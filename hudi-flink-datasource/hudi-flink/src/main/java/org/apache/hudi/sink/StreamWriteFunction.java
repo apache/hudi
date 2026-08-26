@@ -66,7 +66,6 @@ import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -148,9 +147,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    */
   protected transient FlinkStreamWriteMetrics writeMetrics;
 
-  protected transient MemorySegmentPool memorySegmentPool;
-
-  private transient PreemptiveMemorySegmentPool preemptiveMemorySegmentPool;
+  protected transient PreemptiveMemorySegmentPool preemptiveMemorySegmentPool;
 
   protected transient RecordConverter recordConverter;
 
@@ -215,7 +212,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     MemorySegmentPool delegate = this.memorySegmentPoolFactory.createMemorySegmentPool(
         config, OptionsResolver.getWriteBufferSizeInBytes(config));
     this.preemptiveMemorySegmentPool = new PreemptiveMemorySegmentPool(delegate, this::preemptMemory);
-    this.memorySegmentPool = this.preemptiveMemorySegmentPool;
   }
 
   private void initRecordKeySort() {
@@ -390,9 +386,9 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     // A creation failure leaves no bucket in the map, while a write failure leaves the
     // diverged bucket in the map so that its committed records can be flushed and disposed.
     RowDataBucket failedBucket = this.buckets.get(bucketID);
-    RowDataBucket bucketToFlush = findLargestNonEmptyBucketExcluding(bucketID);
 
     if (failedBucket == null) {
+      RowDataBucket bucketToFlush = findLargestNonEmptyBucketExcluding(bucketID);
       if (bucketToFlush == null) {
         throw new HoodieException(
             "Not enough memory pages to create a RowData buffer and no non-empty bucket can be flushed");
@@ -403,29 +399,9 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
     ValidationUtils.checkState(
         failedBucket.isDiverged(), "The failed RowData bucket has not diverged");
-
-    RuntimeException failure = null;
-    if (bucketToFlush != null) {
-      try {
-        flushAndDisposeBucket(bucketToFlush);
-      } catch (RuntimeException e) {
-        failure = e;
-      }
-    }
-
-    try {
-      flushAndDisposeBucket(failedBucket);
-    } catch (RuntimeException e) {
-      if (failure == null) {
-        failure = e;
-      } else {
-        failure.addSuppressed(e);
-      }
-    }
-
-    if (failure != null) {
-      throw failure;
-    }
+    // Allocation failures during writeRow have already tried to preempt inactive buckets. The
+    // diverged bucket only needs to flush its committed rows and return its own pages before retry.
+    flushAndDisposeBucket(failedBucket);
   }
 
   /**
@@ -592,12 +568,12 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   private BinaryInMemorySortBuffer createDataBuffer() {
     if (recordKeyComputer == null) {
-      return BufferUtils.createBuffer(rowType, memorySegmentPool);
+      return BufferUtils.createBuffer(rowType, preemptiveMemorySegmentPool);
     }
     try {
       return BufferUtils.createBuffer(
           rowType,
-          memorySegmentPool,
+          preemptiveMemorySegmentPool,
           recordKeyComputer,
           recordKeyComparator);
     } catch (MemoryPagesExhaustedException e) {
@@ -650,8 +626,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     }
 
     try {
-      if (this.memorySegmentPool instanceof Closeable) {
-        ((Closeable) this.memorySegmentPool).close();
+      if (this.preemptiveMemorySegmentPool != null) {
+        this.preemptiveMemorySegmentPool.close();
       }
     } catch (Exception e) {
       closeFailure = addCloseFailure(closeFailure, e);

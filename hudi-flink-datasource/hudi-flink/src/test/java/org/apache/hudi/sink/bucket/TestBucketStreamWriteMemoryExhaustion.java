@@ -216,7 +216,7 @@ class TestBucketStreamWriteMemoryExhaustion {
     }
 
     int freePages() {
-      return memorySegmentPool.freePages();
+      return preemptiveMemorySegmentPool.freePages();
     }
 
     int writeBatchCount() {
