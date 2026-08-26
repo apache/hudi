@@ -105,7 +105,6 @@ public class TrinoParquetFileReader
     private static final int DOMAIN_COMPACTION_THRESHOLD = 1000;
 
     private final StoragePath path;
-    private final HudiTrinoStorage trinoStorage;
     private final ParquetReaderOptions readerOptions = new ParquetReaderConfig().toParquetReaderOptions();
     private final TrinoInputFile inputFile;
     private final long fileLength;
@@ -123,7 +122,7 @@ public class TrinoParquetFileReader
         this.path = requireNonNull(path, "path is null");
         requireNonNull(storage, "storage is null");
         checkArgument(storage instanceof HudiTrinoStorage, "storage must be an instance of HudiTrinoStorage");
-        this.trinoStorage = (HudiTrinoStorage) storage;
+        HudiTrinoStorage trinoStorage = (HudiTrinoStorage) storage;
 
         // HudiTrinoStorage#getFileSystem is typed Object so that hudi-common stays free of Trino types
         TrinoFileSystem fileSystem = (TrinoFileSystem) trinoStorage.getFileSystem();

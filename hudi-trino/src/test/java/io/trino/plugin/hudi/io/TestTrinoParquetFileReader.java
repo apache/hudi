@@ -35,16 +35,17 @@ import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests {@link TrinoParquetFileReader} against a four-instant LSM archived-timeline parquet file, the shape Hudi's
- * archived-timeline loader reads through the connector. {@code archived_timeline.parquet} is the history file
- * {@code 20250918121953134_20250918122001506_0.parquet} of a table-version-8 COW table written by Hudi 1.0.2 (four
- * commit instants, 20250918121953134 through 20250918122001506), generated with the create script documented in
- * {@code hudi-testing-data/hudi_mor_archived_timeline.md}, COW variant.
+ * archived-timeline loader reads through the connector. {@code archived_timeline.parquet} is the first history file,
+ * {@code 20250918121953134_20250918122001506_0.parquet}, of the table-version-8 COW table that the create script in
+ * {@code hudi-testing-data/hudi_cow_archived_timeline.md} produces with Hudi 1.0.2: four commit instants,
+ * 20250918121953134 through 20250918122001506. Only that file is checked in, not the table.
  */
 class TestTrinoParquetFileReader
 {
@@ -122,6 +123,43 @@ class TestTrinoParquetFileReader
                 });
             }
         }
+    }
+
+    @Test
+    void testDrainedIteratorStaysDrained()
+            throws Exception
+    {
+        // Once the ParquetReader has handed out its last page it must not be asked for another: a nextPage() past the
+        // end of the row groups throws instead of returning null again, so the iterator has to remember it is done
+        HoodieSchema tableSchema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
+        try (TrinoParquetFileReader reader = createReader();
+                ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(tableSchema, tableSchema)) {
+            List<IndexedRecord> records = new ArrayList<>();
+            iterator.forEachRemaining(records::add);
+            assertThat(records).hasSize(4);
+
+            assertThat(iterator.hasNext()).isFalse();
+            assertThat(iterator.hasNext()).isFalse();
+            assertThatThrownBy(iterator::next).isInstanceOf(NoSuchElementException.class);
+        }
+    }
+
+    @Test
+    void testCloseReleasesOpenIterator()
+            throws Exception
+    {
+        // Closing the reader closes an iterator the caller left open; closing that iterator afterwards is a no-op
+        HoodieSchema tableSchema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
+        TrinoParquetFileReader reader = createReader();
+        ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(tableSchema, tableSchema);
+        assertThat(iterator.hasNext()).isTrue();
+        assertThat(iterator.next()).isNotNull();
+
+        reader.close();
+        assertThat(iterator.hasNext()).isFalse();
+        assertThatThrownBy(iterator::next).isInstanceOf(NoSuchElementException.class);
+        iterator.close();
+        reader.close();
     }
 
     @Test
