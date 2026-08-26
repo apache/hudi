@@ -68,6 +68,7 @@ import org.apache.parquet.avro.AvroSchemaConverter;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -159,17 +160,27 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // footer schema and anchored on the requested column being a variant, so plain user structs
     // of the same shape are left alone. toShreddedReadSchema recurses through structs, array
     // elements and map values, matching the row writer, which shreds nested variants too.
-    // Columns not requested (e.g. count(*)) stay readable, and so does a read whose nested column
-    // paths (hive.io.file.readNestedColumn.paths) all miss the shredded group: Hive's parquet
-    // reader materializes only the paths it is given, and the mask rewrite below already handles
-    // the compacted projection such a read comes back in.
+    // Columns not requested stay readable: the flagged columns are checked against Hive's read
+    // column names, not requiredSchema, which can be wider than the query -- a CUSTOM merge reads
+    // the whole table schema for merging (no merger overrides isProjectionCompatible), so
+    // `select id` arrives here asking for the variant column too. Hive writes the full name list
+    // for `select *` and none for count(*). So does a read whose nested column paths
+    // (hive.io.file.readNestedColumn.paths) all miss the shredded group: Hive's parquet reader
+    // materializes only the paths it is given, and the mask rewrite below already handles the
+    // compacted projection such a read comes back in.
     if (isParquetOrOrc && requiredSchema.getType() == HoodieSchemaType.RECORD) {
       HoodieSchema shreddedReadSchema = VariantSchemaUtils.toShreddedReadSchema(requiredSchema, fileSchema);
       if (shreddedReadSchema != requiredSchema) {
         List<String> shreddedPaths = new ArrayList<>();
         collectShreddedVariantPaths(requiredSchema, shreddedReadSchema, "", shreddedPaths);
-        List<String> offendingColumns = HoodieColumnProjectionUtils.columnsReadingShreddedPaths(
-            storage.getConf().unwrapAs(Configuration.class), shreddedPaths);
+        Configuration conf = storage.getConf().unwrapAs(Configuration.class);
+        Set<String> requestedColumns = Arrays.stream(HoodieColumnProjectionUtils.getReadColumnNames(conf))
+            .map(name -> name.trim().toLowerCase(Locale.ROOT))
+            .collect(Collectors.toSet());
+        List<String> offendingColumns = HoodieColumnProjectionUtils.columnsReadingShreddedPaths(conf, shreddedPaths)
+            .stream()
+            .filter(requestedColumns::contains)
+            .collect(Collectors.toList());
         if (!offendingColumns.isEmpty()) {
           throw new HoodieException(String.format(
               "Column(s) '%s' of %s hold a shredded variant (typed_value present); the Hive reader "

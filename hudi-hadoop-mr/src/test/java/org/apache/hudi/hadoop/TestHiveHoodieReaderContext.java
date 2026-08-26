@@ -190,19 +190,51 @@ class TestHiveHoodieReaderContext {
     HoodieSchema tableSchema = tableSchemaWithVariant();
     HiveHoodieReaderContext readerContext = newReaderContext();
     HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+    requestColumns("id", "v");
 
     HoodieException failure = assertThrows(HoodieException.class, () ->
         readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
     assertTrue(failure.getMessage().contains("shredded variant") && failure.getMessage().contains("'v'"),
         "The error must name the shredded variant column, got: " + failure.getMessage());
 
-    // Queries that do not project the variant column (e.g. count(*)) stay readable.
+    // A query that does not project the variant column (`select id`) stays readable.
     HoodieSchema withoutVariant = HoodieSchema.createRecord("TestRecord", null, null, Collections.singletonList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT))));
+    requestColumns("id");
     when(readerCreator.getRecordReader(any(), any(), any()))
         .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
     assertDoesNotThrow(() ->
         readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, withoutVariant, storage));
+  }
+
+  @Test
+  void getFileRecordIteratorFlagsOnlyColumnsHiveReads(@TempDir java.nio.file.Path tempDir) throws Exception {
+    // The required schema can be wider than the query: a CUSTOM merge (no merger overrides
+    // isProjectionCompatible) reads the whole table schema for merging, so `select id` reaches the
+    // context asking for the variant column too. What Hive hands back to the query is its read
+    // column names, so those decide: the full list `select *` carries fails, `select id` reads,
+    // and count(*), which names no column, reads.
+    StoragePath filePath = InputFormatTestUtil.writeVariantParquetFile(tempDir, "shredded.parquet", true);
+    HoodieSchema tableSchema = tableSchemaWithVariant();
+    HiveHoodieReaderContext readerContext = newReaderContext();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+    when(readerCreator.getRecordReader(any(), any(), any()))
+        .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
+
+    requestColumns("id", "v");
+    HoodieException failure = assertThrows(HoodieException.class, () ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    assertTrue(failure.getMessage().contains("'v'"),
+        "select * must still fail on the shredded variant column, got: " + failure.getMessage());
+
+    requestColumns("id");
+    assertDoesNotThrow(() ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    verify(readerCreator).getRecordReader(any(), any(), any());
+
+    requestColumns();
+    assertDoesNotThrow(() ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
   }
 
   @Test
@@ -213,6 +245,7 @@ class TestHiveHoodieReaderContext {
     HoodieSchema tableSchema = tableSchemaWithVariant();
     HiveHoodieReaderContext readerContext = newReaderContext();
     HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+    requestColumns("id", "v");
     when(readerCreator.getRecordReader(any(), any(), any()))
         .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
     assertDoesNotThrow(() ->
@@ -231,6 +264,7 @@ class TestHiveHoodieReaderContext {
     StoragePath filePath = fixture.write(tempDir, "nested_shredded.parquet");
     HiveHoodieReaderContext readerContext = newReaderContext();
     HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+    requestColumns("id", columnName);
 
     HoodieException failure = assertThrows(HoodieException.class, () ->
         readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
@@ -249,6 +283,7 @@ class TestHiveHoodieReaderContext {
     HoodieSchema tableSchema = nestedVariantTableSchema();
     HiveHoodieReaderContext readerContext = newReaderContext();
     HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+    requestColumns("id", "s");
     Configuration conf = storageConfiguration.unwrapAs(Configuration.class);
     when(readerCreator.getRecordReader(any(), any(), any()))
         .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
@@ -298,6 +333,12 @@ class TestHiveHoodieReaderContext {
     return HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
         HoodieSchemaField.of(columnName, columnSchema)));
+  }
+
+  /** Hive's read column names for the query, as HiveInputFormat.pushProjection sets them (none for count(*)). */
+  private void requestColumns(String... columns) {
+    storageConfiguration.unwrapAs(Configuration.class)
+        .set(HoodieColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, String.join(",", columns));
   }
 
   private HiveHoodieReaderContext newReaderContext() {

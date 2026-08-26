@@ -70,6 +70,18 @@ public class TestSortUtils {
   }
 
   @Test
+  void testValidateSortableColumnChecksAResolvedLeafUnderTheCallerName() {
+    // A caller that resolved a nested path itself hands the leaf over with the full path, which the
+    // error then carries; an orderable leaf passes.
+    HoodieSchema stringMap = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieException failure = assertThrows(HoodieException.class,
+        () -> SortUtils.validateSortableColumn("s.tags", HoodieSchema.createNullable(stringMap)));
+    assertTrue(failure.getMessage().contains("Sorting by column 's.tags' of type MAP"),
+        "The error must name the column under the caller's path, got: " + failure.getMessage());
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumn("s.level", HoodieSchema.create(HoodieSchemaType.INT)));
+  }
+
+  @Test
   void testValidateSortableColumnsRejectsTypesWithoutOrderingAtAnyDepth() {
     HoodieSchema stringMap = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING));
     HoodieSchema structWithMap = HoodieSchema.createRecord("struct_with_map", null, null,

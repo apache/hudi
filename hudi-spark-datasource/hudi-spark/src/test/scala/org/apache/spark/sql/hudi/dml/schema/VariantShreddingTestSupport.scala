@@ -50,7 +50,10 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
 
   import VariantShreddingTestSupport._
 
-  /** The `(id int, v variant, ts long)` table both suites use, with the knobs they vary. */
+  /**
+   * The `(id int, v variant, ts long)` table both suites use, with the knobs they vary.
+   * `preCombine = false` drops preCombineField, which resolves the table to COMMIT_TIME ordering.
+   */
   protected def createVariantTable(tableName: String,
                                    tablePath: String,
                                    tableType: String,
@@ -99,10 +102,12 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
                                     props: Seq[String] = Seq.empty,
                                     extraCols: String = "",
                                     recordTypes: Seq[HoodieRecordType] =
-                                      Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))
+                                      Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK),
+                                    preCombine: Boolean = true)
                                    (f: (String, String, String) => T): Unit = {
     withTableScaffold(label, recordTypes) { (tableName, tablePath) =>
-      createVariantTable(tableName, tablePath, tableType, props = props, extraCols = extraCols)
+      createVariantTable(tableName, tablePath, tableType, props = props, extraCols = extraCols,
+        preCombine = preCombine)
     }(f)
   }
 
@@ -628,6 +633,14 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
     assert(lastClustering.isPresent && lastClustering.get.isCompleted,
       s"[$leg] a COMPLETED clustering (replacecommit) instant must exist")
     lastClustering.get.requestedTime
+  }
+
+  /** Asserts the latest clustering (replacecommit) instant exists and is NOT completed. */
+  protected def assertPendingClustering(tablePath: String, leg: String): Unit = {
+    val metaClient = createMetaClient(spark, tablePath)
+    val lastClustering = metaClient.getActiveTimeline.getLastClusteringInstant
+    assert(lastClustering.isPresent && !lastClustering.get.isCompleted,
+      s"[$leg] a clustering (replacecommit) instant must exist and be left incomplete")
   }
 
   /** Asserts the number of completed compaction commits (MOR `commit` actions). */

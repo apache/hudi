@@ -151,11 +151,16 @@ class RunClusteringProcedure extends BaseProcedure
 
     // Normalise once so the plan stores the same trimmed list the strategies and partitioners
     // work from, and validate it up front, before any plan is scheduled - whichever of `order`
-    // or `options` set it. A blank value is no sort at all, as the strategies read it.
+    // or `options` set it. A blank value is no sort at all, as the strategies read it
+    // (SparkSizeBasedClusteringPlanStrategy.getStrategyParams), and it is stored blank rather
+    // than dropped: `confs` is the top override in HoodieCLIUtils.createHoodieWriteClient, so a
+    // dropped key would let a sort column set in the session conf or table config through,
+    // unvalidated.
     confs.get(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key()).foreach { sortColumns =>
       val normalized = sortColumns.split(",").map(_.trim).filter(_.nonEmpty).mkString(",")
       if (normalized.isEmpty) {
-        confs = confs - HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key()
+        confs = confs ++ Map(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> "")
+        logInfo("Order columns cleared")
       } else {
         validateOrderColumns(normalized, metaClient)
         confs = confs ++ Map(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> normalized)
@@ -242,7 +247,12 @@ class RunClusteringProcedure extends BaseProcedure
   }
 
   /**
-   * Validates the already-normalised (comma-separated, trimmed) order column list.
+   * Validates the already-normalised (comma-separated, trimmed) order column list against the
+   * table schema with its metadata fields, which is what the partitioners sort on at execution
+   * time (the execution strategy adds them to the schema it hands the partitioners), so a
+   * `_hoodie_*` column is accepted. A dotted path names a nested field: the partitioners resolve
+   * it (getNestedFieldVal on the record path, Column(name) on the row path) but the shared
+   * check only walks top-level names, so it is resolved here and its leaf checked under the path.
    */
   private def validateOrderColumns(orderColumns: String, metaClient: HoodieTableMetaClient): Unit = {
     if (orderColumns == null) {
@@ -250,17 +260,24 @@ class RunClusteringProcedure extends BaseProcedure
     }
 
     val tableSchemaResolver = new TableSchemaResolver(metaClient)
-    val tableSchema = tableSchemaResolver.getTableSchema(false)
+    val tableSchema = tableSchemaResolver.getTableSchema(true)
     val fields = tableSchema.getFields.asScala.map(_.name().toLowerCase)
-    val columns = orderColumns.split(",")
-    columns.foreach(col => {
+    val (nestedColumns, topLevelColumns) = orderColumns.split(",").partition(_.contains("."))
+    topLevelColumns.foreach(col => {
       if (!fields.contains(col.toLowerCase)) {
         throw new HoodieClusteringException("Order column not exist:" + col)
       }
     })
     // The same validation the partitioners apply at execution time (see
     // SortUtils.validateSortableColumns), surfaced here before the job is submitted.
-    SortUtils.validateSortableColumns(columns, tableSchema)
+    SortUtils.validateSortableColumns(topLevelColumns, tableSchema)
+    nestedColumns.foreach { col =>
+      val leaf = tableSchema.getNestedField(col)
+      if (!leaf.isPresent) {
+        throw new HoodieClusteringException("Order column not exist:" + col)
+      }
+      SortUtils.validateSortableColumn(col, leaf.get().getRight.schema())
+    }
   }
 }
 

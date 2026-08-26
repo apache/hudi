@@ -46,7 +46,8 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMeta
  * - Custom payloads: FileGroupRecordBuffer.getProjectedTransformer short-circuits the variant
  *   log-block projection when payload classes are present (#18674), so that is a real,
  *   explicitly UNTESTED variant branch; PartialUpdateMode and the CUSTOM merge mode are
- *   likewise unreached (only EVENT_TIME/COMMIT_TIME ordering is swept).
+ *   likewise unreached (EVENT_TIME ordering is swept throughout, COMMIT_TIME in the one leg
+ *   that drops preCombineField).
  * - Multi-writer OCC: conflict resolution is key/instant based and never inspects layouts; the
  *   mixed-file outcomes it can produce are the same ones pinned here.
  */
@@ -360,6 +361,37 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     }
   }
 
+  test("COMMIT_TIME ordering lets a lower-ts update win across layouts, in the log merge and after compaction") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // Every other table in the suite carries preCombineField = 'ts' and merges under EVENT_TIME
+    // ordering. Without it the table config resolves to COMMIT_TIME ordering, where the later commit
+    // wins whatever its ts: the update below carries a LOWER ts than the row it replaces and must
+    // still win - under EVENT_TIME the read would keep {"a":1}. Pinned once in the log merge over
+    // two layouts and again on the compacted base.
+    withVariantTable("commit-time ordering", "mor", props = Seq(
+      "hoodie.index.type = 'INMEMORY'", "hoodie.compact.inline = 'false'"), preCombine = false) {
+      (tableName, tablePath, leg) =>
+      withWriteLayout(Forced("a bigint")) {
+        spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1}'), 1000)""")
+      }
+      withWriteLayout(Unshredded) {
+        spark.sql(s"""update $tableName set v = parse_json('{"a":2}'), ts = 500 where id = 1""")
+      }
+      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tablePath))
+      checkAnswer(s"select id, cast(v as string) from $tableName")(Seq(1, """{"a":2}"""))
+
+      withWriteLayout(Forced("a bigint")) {
+        runCompaction(tableName)
+      }
+      assertCompactionCount(tablePath, 1, leg)
+      assertAllShredded(baseLayouts(tablePath), shredded = true, s"$leg compacted base")
+      checkAnswer(s"select id, cast(v as string) from $tableName")(Seq(1, """{"a":2}"""))
+      checkAnswer(s"select id, cast(v as string) from hudi_query('$tableName', 'read_optimized')")(
+        Seq(1, """{"a":2}"""))
+    }
+  }
+
   test("Table version 9 legacy log blocks stay unshredded and compact onto a shredded base") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
@@ -606,6 +638,11 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         checkNestedExceptionContains(
           () => spark.sql(s"select id, cast(v as string), note from $tableName").collect())(
           "pushVariantIntoScan")
+        // The guard's empty-projection carve-out: count(*) reads no column data, and the query
+        // schema it would be checked against is the UNPRUNED table schema, variant included, so
+        // the guard must not run at all. Drop the requiredSchema.nonEmpty gate at any of its five
+        // sites and this count fails on the shredded file.
+        checkAnswer(s"select count(*) from $tableName")(Seq(1))
       }
 
       // Known #18285 residue, documented rather than pinned: the schema-on-read DDL also
@@ -671,9 +708,18 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     withVariantTable("inline clustering under schema-on-read", "cow", recordTypes = Seq(HoodieRecordType.SPARK)) {
       (tableName, tablePath, leg) =>
       seedWithCommittedInternalSchema(tableName)
-      checkNestedExceptionContains(() => writeThroughDataFrame(tableName, tablePath, "COPY_ON_WRITE", 2,
+      // With the default small-file limit a new key bin-packs into the seed file, so the upsert's
+      // own base-file read (the merge handle) takes the very file the service would. That write
+      // passes on its own; only the one that also schedules clustering fails, and it fails after
+      // its commit completed, leaving the scheduled clustering incomplete - which pins the failure
+      // on the clustering read and not on the write.
+      writeThroughDataFrame(tableName, tablePath, "COPY_ON_WRITE", 2)
+      val beforeClustering = latestCompletedInstant(tablePath)
+      checkNestedExceptionContains(() => writeThroughDataFrame(tableName, tablePath, "COPY_ON_WRITE", 3,
         "hoodie.clustering.inline" -> "true", "hoodie.clustering.inline.max.commits" -> "1"))(
         "Hudi's own base-file reads")
+      assert(latestCompletedInstant(tablePath) != beforeClustering, s"[$leg] the upsert itself must commit")
+      assertPendingClustering(tablePath, leg)
     }
     withVariantTable("inline compaction under schema-on-read", "mor", recordTypes = Seq(HoodieRecordType.SPARK)) {
       (tableName, tablePath, leg) =>

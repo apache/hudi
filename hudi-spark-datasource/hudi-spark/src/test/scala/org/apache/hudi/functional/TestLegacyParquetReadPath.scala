@@ -562,8 +562,9 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
       s"Expected the shredded-variant rejection but got: $thrown")
 
     // The guard's empty-projection carve-out (count(*) reads no column data and must keep working)
-    // is pinned on the file-group-reader path by the count(*) legs in TestVariantShreddingMixedLayouts,
-    // not here: this relation cannot serve an empty projection under schema-on-read at all, with or
+    // is pinned on the file-group-reader path by the count(*) leg of "Schema-on-read reads of
+    // shredded variant files fail fast" in TestVariantShreddingMixedLayouts, not here: this relation
+    // cannot serve an empty projection under schema-on-read at all, with or
     // without a variant. buildScan prunes the internal schema to the zero requested columns, and
     // InternalSchemaUtils.pruneInternalSchema builds an InternalSchema around a null record (NPE in
     // buildIdToName; pre-existing, tracked by #19734).

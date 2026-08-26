@@ -234,10 +234,13 @@ object ParquetSchemaEvolutionUtils {
    * SparkInternalSchemaConverter.isVariantRewriteStruct). Two producers ask for that shape: a
    * query rewritten by Spark's PushVariantIntoScan (4.x), and Hudi's own base-file reads on
    * 4.1+ (SparkFileFormatInternalRowReaderContext, via SparkAdapter.buildFullVariantReadSchema)
-   * whenever their reader context carries the table's internal schema - SparkReaderContextFactory
-   * puts the table path and valid commits on the conf once one is committed, so inline compaction
-   * and clustering under a schema-on-read write, and CDC reads, land here on an unshredded
-   * variant column. Upserts do not - the merge handle's base-file read never enters this
+   * whenever their reader context carries the table's internal schema. Two producers put the
+   * table path and valid commits on that conf once an internal schema is committed:
+   * SparkReaderContextFactory for the write-side services, so inline compaction and clustering
+   * under a schema-on-read write land here, and HoodieFileGroupReaderBasedFileFormat
+   * .setSchemaEvolutionConfigs query-side, whose conf CDCFileGroupIterator builds its reader
+   * context from, so CDC reads land here too - each on an unshredded variant column. Upserts do
+   * not - the merge handle's base-file read never enters this
    * schema-on-read branch (probed against a committed internal schema) - nor do run_compaction /
    * run_clustering, whose clients carry no internal schema. Before this guard the same reads
    * died inside pruning ("cannot prune col: v.0"), so nothing that worked is lost; the error

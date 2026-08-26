@@ -67,16 +67,27 @@ public class SortUtils {
       if (field == null) {
         continue;
       }
-      Option<Pair<String, HoodieSchemaType>> unorderable = findUnorderableNode(field.schema(), columnName);
-      if (unorderable.isPresent()) {
-        // Only a nested offender needs pointing at; at the top level the column and its type already say it.
-        String nested = unorderable.get().getLeft().equals(columnName) ? ""
-            : String.format("it holds a %s at '%s', and ", unorderable.get().getRight(), unorderable.get().getLeft());
-        throw new HoodieException(String.format(
-            "Sorting by column '%s' of type %s is not supported: %sVARIANT and MAP have no ordering, "
-                + "at any depth. Remove it from the sort columns.",
-            columnName, field.schema().getNonNullType().getType(), nested));
-      }
+      validateSortableColumn(columnName, field.schema());
+    }
+  }
+
+  /**
+   * The check behind {@link #validateSortableColumns(String[], HoodieSchema)} for one column whose
+   * schema the caller has already resolved, such as a nested path the array overload leaves alone.
+   *
+   * @param columnName   the column as the caller names it, so a nested path reads as one in the error
+   * @param columnSchema schema of the column's value, nullable or not
+   */
+  public static void validateSortableColumn(String columnName, HoodieSchema columnSchema) {
+    Option<Pair<String, HoodieSchemaType>> unorderable = findUnorderableNode(columnSchema, columnName);
+    if (unorderable.isPresent()) {
+      // Only a nested offender needs pointing at; at the top level the column and its type already say it.
+      String nested = unorderable.get().getLeft().equals(columnName) ? ""
+          : String.format("it holds a %s at '%s', and ", unorderable.get().getRight(), unorderable.get().getLeft());
+      throw new HoodieException(String.format(
+          "Sorting by column '%s' of type %s is not supported: %sVARIANT and MAP have no ordering, "
+              + "at any depth. Remove it from the sort columns.",
+          columnName, columnSchema.getNonNullType().getType(), nested));
     }
   }
 

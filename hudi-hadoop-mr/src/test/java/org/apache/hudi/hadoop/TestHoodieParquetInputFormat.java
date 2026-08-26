@@ -916,6 +916,33 @@ public class TestHoodieParquetInputFormat {
   }
 
   @Test
+  public void testLegacyReaderGuardSeesThroughMapEntries() throws Exception {
+    // A map of shredded variants. On disk the shredded group sits at m.key_value.value, under the
+    // entry level and the entry's value, both levels a Hive dotted path never names: the column's
+    // Hive type puts the variant at `m` itself. The walk has to drop those two levels, or the two
+    // sides never meet and the read goes through with typed_value silently dropped.
+    String mapTypes = "int,map<string,struct<metadata:binary,value:binary>>";
+    StoragePath mapPath = InputFormatTestUtil.writeMapShreddedVariantParquetFile(basePath, "map_shredded.parquet");
+    GroupType entry = fileSchemaOf(mapPath).getType("m").asGroupType().getType(0).asGroupType();
+    assertEquals("key_value", entry.getName(), "the fixture's map must keep its entries under key_value");
+    assertEquals("value", entry.getType(1).getName(), "the fixture's map entry must hold the variant as `value`");
+    FileSplit map = fileSplit(mapPath);
+    JobConf wholeMap = variantJobConf("id,m", mapTypes, "id,m", "0,1");
+    HoodieException mapFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(map, wholeMap));
+    assertTrue(mapFailure.getMessage().contains("'m'"),
+        "The error must name the column whose map values hold a shredded variant, got: " + mapFailure.getMessage());
+
+    // The nested path Hive carries for the map stops at the column, as it does for a list.
+    JobConf mapPruned = variantJobConf("id,m", mapTypes, "id,m", "0,1");
+    mapPruned.set(READ_NESTED_COLUMN_PATH_CONF_STR, "m");
+    HoodieException mapPrunedFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(map, mapPruned));
+    assertTrue(mapPrunedFailure.getMessage().contains("'m'"),
+        "The error must name the column whose map values hold a shredded variant, got: " + mapPrunedFailure.getMessage());
+  }
+
+  @Test
   public void testLegacyReaderGuardIsBestEffort() throws Exception {
     FileSplit shredded = fileSplit(InputFormatTestUtil.writeVariantParquetFile(basePath, "shredded.parquet", true));
 
