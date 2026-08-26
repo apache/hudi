@@ -166,8 +166,8 @@ class TestParquetStatisticsDomains
 
                 // Promotions the min/max side reads correctly but the BLOOM side does not. checkInBloomFilter hashes
                 // the lookup at the domain's width, parquet-mr hashed the column at the file's, so the filter misses
-                // and the row group is dropped with its rows still in it. See apache/hudi#19457 and
-                // trinodb/trino#30544; testABigintLookupNeverFindsAnInt32ColumnsBloomHashes pins the mechanism.
+                // and the row group is dropped with its rows still in it. See apache/hudi#19457 and trinodb/trino#30544;
+                // TestHudiEvolvedColumnPredicates.testEqualityOnAnIntColumnEvolvedToBigintStillFindsItsRows pins the mechanism.
                 dropped("int -> long", BIGINT, plain(INT32), NARROW),
                 dropped("long -> int", INTEGER, plain(INT64), NARROW),
                 // Hudi rejects this evolution as lossy (HoodieSchemaCompatibilityChecker lets neither the integer
