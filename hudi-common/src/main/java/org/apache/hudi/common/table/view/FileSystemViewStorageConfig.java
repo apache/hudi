@@ -171,7 +171,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       .key("hoodie.filesystem.view.remote.response.charset")
       .defaultValue(StandardCharsets.ISO_8859_1.name())
       .markAdvanced()
-      .sinceVersion("0.14.1")
+      .sinceVersion("1.3.0")
       .withDocumentation("Charset used for decoding HTTP responses from the timeline server. "
           + "Set to 'UTF-8' if partition paths or file paths contain non-ASCII characters (e.g. Unicode). "
           + "Default is ISO-8859-1 for backwards compatibility.");
