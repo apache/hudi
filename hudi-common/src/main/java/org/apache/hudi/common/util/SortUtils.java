@@ -120,7 +120,10 @@ public class SortUtils {
     validateSortableColumns(sortColumns, HoodieSchema.parse(avroSchema));
   }
 
-  /** Overload for callers holding the sort columns as a comma-separated string. */
+  /**
+   * Overload for callers holding the sort columns as a comma-separated string. The split does not trim;
+   * the array overload trims each entry, so spaces around the commas are tolerated either way.
+   */
   public static void validateSortableColumns(String sortColumnsCsv, String avroSchema) {
     if (StringUtils.isNullOrEmpty(sortColumnsCsv)) {
       return;

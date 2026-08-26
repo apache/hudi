@@ -97,7 +97,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   private static final Pattern WHITESPACE = Pattern.compile("\\s");
   // A member a synced variant's Hive type carries, as it appears in a struct<...> type string:
   // the cheap screen that decides whether the type string is worth parsing at all.
-  private static final String HIVE_VARIANT_METADATA = HoodieSchema.Variant.VARIANT_METADATA_FIELD + ":binary";
+  private static final String HIVE_VARIANT_SHAPE_MARKER = HoodieSchema.Variant.VARIANT_METADATA_FIELD + ":binary";
 
   private boolean supportAvroRead = false;
 
@@ -350,7 +350,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     String rawIoColumnTypes = WHITESPACE.matcher(job.get(IOConstants.COLUMNS_TYPES, ""))
         .replaceAll("")
         .toLowerCase(Locale.ROOT);
-    if (!rawIoColumnTypes.contains(HIVE_VARIANT_METADATA)) {
+    if (!rawIoColumnTypes.contains(HIVE_VARIANT_SHAPE_MARKER)) {
       return;
     }
     Set<String> requestedColumns = Arrays.stream(HoodieColumnProjectionUtils.getReadColumnNames(job))
