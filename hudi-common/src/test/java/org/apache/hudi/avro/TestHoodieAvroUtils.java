@@ -141,6 +141,11 @@ public class TestHoodieAvroUtils {
       + "{\"name\":\"student\",\"type\":{\"name\":\"student\",\"type\":\"record\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
 
+  private static String SCHEMA_WITH_UNIQUELY_NAMED_NESTED_FIELD = "{\"type\":\"record\",\"name\":\"parent\",\"fields\":["
+      + "{\"name\":\"top\",\"type\":\"string\"},"
+      + "{\"name\":\"child\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"child\",\"fields\":["
+      + "{\"name\":\"seq\",\"type\":\"long\"}]}],\"default\":null}]}";
+
   private static String SCHEMA_WITH_NESTED_FIELD_RENAMED = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
       + "{\"name\":\"fn\",\"type\":\"string\"},"
       + "{\"name\":\"ln\",\"type\":\"string\"},"
@@ -453,6 +458,23 @@ public class TestHoodieAvroUtils {
 
     assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(rec3.getSchema(), "student.firstname"));
     assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(nestedSchema, "student.firstname"));
+  }
+
+  /**
+   * The schema here names the nested field differently from every top level one, so a lookup that
+   * resolved the last part of the path against the top level schema could not pass.
+   */
+  @Test
+  public void testGetNestedFieldSchemaForAbsentAndNestedFields() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_UNIQUELY_NAMED_NESTED_FIELD);
+    assertEquals(Schema.create(Schema.Type.LONG), getNestedFieldSchemaFromWriteSchema(schema, "child.seq"));
+    assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(schema, "top"));
+
+    assertNull(getNestedFieldSchemaFromWriteSchema(schema, "child.missing", true));
+    assertNull(getNestedFieldSchemaFromWriteSchema(schema, "missing", true));
+    // "top" is a leaf, so nothing can be nested under it
+    assertNull(getNestedFieldSchemaFromWriteSchema(schema, "top.seq", true));
+    assertThrows(HoodieException.class, () -> getNestedFieldSchemaFromWriteSchema(schema, "child.missing"));
   }
 
   @Test

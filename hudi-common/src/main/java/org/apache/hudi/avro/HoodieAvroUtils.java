@@ -752,24 +752,36 @@ public class HoodieAvroUtils {
    * @return
    */
   public static Schema getNestedFieldSchemaFromWriteSchema(Schema writeSchema, String fieldName) {
-    String[] parts = fieldName.split("\\.");
-    Schema currentSchema = writeSchema;
-    int i = 0;
-    for (; i < parts.length; i++) {
-      String part = parts[i];
-      try {
-        // Resolve nullable/union schema to the actual schema
-        currentSchema = getNonNullTypeFromUnion(currentSchema.getField(part).schema());
+    Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(writeSchema, fieldName, true);
+    if (fieldSchema == null) {
+      throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
+    }
+    return fieldSchema;
+  }
 
-        if (i == parts.length - 1) {
-          // Return the schema for the final part
-          return getNonNullTypeFromUnion(currentSchema);
+  /**
+   * Same as {@link #getNestedFieldSchemaFromWriteSchema(Schema, String)}, returning null instead of
+   * throwing when the schema has no such field.
+   *
+   * @param writeSchema          - write schema of the record
+   * @param fieldName            - name of the field, which can be nested, denoted by dot notation. e.g: a.b.c
+   * @param returnNullIfNotFound - whether to return null rather than throw when the field is absent
+   * @return the schema of the field, with a nullable union resolved to its non-null type
+   */
+  public static Schema getNestedFieldSchemaFromWriteSchema(Schema writeSchema, String fieldName, boolean returnNullIfNotFound) {
+    Schema currentSchema = writeSchema;
+    for (String part : fieldName.split("\\.")) {
+      Schema recordSchema = getNonNullTypeFromUnion(currentSchema);
+      Schema.Field field = recordSchema.getType() == Schema.Type.RECORD ? recordSchema.getField(part) : null;
+      if (field == null) {
+        if (returnNullIfNotFound) {
+          return null;
         }
-      } catch (Exception e) {
         throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
       }
+      currentSchema = field.schema();
     }
-    throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
+    return getNonNullTypeFromUnion(currentSchema);
   }
 
   /**

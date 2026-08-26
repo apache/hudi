@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -71,8 +71,8 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
    * every write config materializes whether or not the user asked for it; recording that default on
    * a table that has no such field would leave behind an ordering field no reader can resolve, and
    * would make any later writer that configures a real ordering field fail table config validation
-   * with a config conflict. A field that cannot be resolved, including one nested under dot
-   * notation, is left unrecorded rather than recorded unverified.
+   * with a config conflict. A field the schema cannot resolve is left unrecorded rather than
+   * recorded unverified.
    */
   private static Option<String> getPreCombineFieldToPersist(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     String preCombineField = config.getPreCombineField();
@@ -85,9 +85,9 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
           + "resolve it against", preCombineField, config.getBasePath());
       return Option.empty();
     }
-    if (!AvroSchemaUtils.containsFieldInSchema(schema.get(), preCombineField)) {
-      LOG.warn("Skipping the ordering field {} while upgrading {} to table version two: the schema has no such "
-          + "top level field", preCombineField, config.getBasePath());
+    if (HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema(schema.get(), preCombineField, true) == null) {
+      LOG.warn("Skipping the ordering field {} while upgrading {} to table version two: the schema has no such field",
+          preCombineField, config.getBasePath());
       return Option.empty();
     }
     return Option.of(preCombineField);
