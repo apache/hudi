@@ -111,24 +111,28 @@ fi
 # the jars land on Spark's classpath next to its own hadoop-client, not the cluster Hadoop.
 # hadoop-aws 3.4+ is built against AWS SDK v2 (software.amazon.awssdk:bundle); 3.3.x uses
 # SDK v1 (com.amazonaws:aws-java-sdk-bundle). spark_base picks the artifact from the SDK major.
-# The opt-in analytics stream type of hadoop-aws 3.4.2+ also needs analyticsaccelerator-s3,
-# not shipped here.
+# hadoop-aws 3.4.2+ also compiles against analyticsaccelerator-s3 for its analytics input
+# stream: opt-in via fs.s3a.input.stream.type in 3.4.2, the default from 3.5.0 on, so S3A
+# init fails there without the jar. Each arm pins the version its hadoop-project pom declares.
 SPARK_MAJOR_MINOR=$(echo "$SPARK_VERSION" | cut -d. -f1,2)
 case "$SPARK_MAJOR_MINOR" in
   4.0)
     # Spark 4.0.x bundles Hadoop 3.4.1
     HADOOP_AWS_VERSION="3.4.1"
     AWS_SDK_VERSION="2.24.6"
+    ANALYTICS_ACCELERATOR_VERSION="" # no analytics stream type before hadoop-aws 3.4.2
     ;;
   4.1)
     # Spark 4.1.x bundles Hadoop 3.4.2
     HADOOP_AWS_VERSION="3.4.2"
     AWS_SDK_VERSION="2.29.52"
+    ANALYTICS_ACCELERATOR_VERSION="1.2.1"
     ;;
   4.2)
     # Spark 4.2.x bundles Hadoop 3.5.0
     HADOOP_AWS_VERSION="3.5.0"
     AWS_SDK_VERSION="2.35.4"
+    ANALYTICS_ACCELERATOR_VERSION="1.3.1"
     ;;
   *)
     if [ "$SPARK_MAJOR" -ge 4 ]; then
@@ -137,10 +141,12 @@ case "$SPARK_MAJOR_MINOR" in
       echo "Warning: no hadoop-aws mapping for Spark ${SPARK_VERSION}; using the Spark 4.2 pairing" >&2
       HADOOP_AWS_VERSION="3.5.0"
       AWS_SDK_VERSION="2.35.4"
+      ANALYTICS_ACCELERATOR_VERSION="1.3.1"
     else
       # Spark 3.x bundles Hadoop 3.3.x
       HADOOP_AWS_VERSION="3.3.4"
       AWS_SDK_VERSION="1.12.734"
+      ANALYTICS_ACCELERATOR_VERSION=""
     fi
     ;;
 esac
@@ -180,6 +186,7 @@ for IMAGE_CONFIG in "${DOCKER_IMAGES[@]}"; do
     --build-arg BASE_IMAGE_TAG=${BASE_JAVA_TAG} \
     --build-arg HADOOP_AWS_VERSION=${HADOOP_AWS_VERSION} \
     --build-arg AWS_SDK_VERSION=${AWS_SDK_VERSION} \
+    --build-arg ANALYTICS_ACCELERATOR_VERSION=${ANALYTICS_ACCELERATOR_VERSION} \
     "$IMAGE_CONTEXT" -t "$TAG_LATEST" -t "$TAG_VERSIONED"; then
     echo "Error: Failed to build docker image for $IMAGE_CONTEXT"
     exit 1
