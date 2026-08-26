@@ -26,7 +26,7 @@ import org.apache.hudi.io.util.IOUtils;
 
 import com.google.protobuf.CodedOutputStream;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.hbase.CellComparatorImpl;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.io.compress.Compression;
@@ -41,12 +41,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -74,6 +71,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestHFileWriter {
   private static final Logger LOG = LoggerFactory.getLogger(TestHFileWriter.class);
   private static final HFileContext CONTEXT = HFileContext.builder().build();
+  private static final String[] THREE_KEYS = {"key1", "key2", "key3"};
+  private static final byte[][] THREE_VALUES = {bytes("value1"), bytes("value2"), bytes("value3")};
   // Golden bytes (NONE compression, fixed input) that lock the on-disk encoding of the data block
   // and the root block-index block. Update intentionally ONLY after reviewing HBase-reader
   // compatibility, since any change here is a storage-format change.
@@ -123,23 +122,18 @@ class TestHFileWriter {
     // Block 3: 5   records, whose first key is "key06"
     // Block 4: 1   record,  whose first key is "key11",
     //              whose length is larger than the block size.
-    try (DataOutputStream outputStream = new DataOutputStream(hfileBytes);
-        HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
+    try (HFileWriter writer = new HFileWriterImpl(context, hfileBytes)) {
       // All entries for key00 are stored in the first block.
       for (int i = 0; i < 100; i++) {
-        writer.append("key00", String.format("value%02d", i).getBytes());
+        writer.append("key00", bytes(String.format("value%02d", i)));
       }
       // Otherwise, 5 records in each other blocks.
       for (int i = 1; i < 11; i++) {
-        writer.append(
-            String.format("key%02d", i),
-            String.format("value%02d", i).getBytes());
+        writer.append(String.format("key%02d", i), bytes(String.format("value%02d", i)));
       }
       // Adding a record whose size is larger than block size.
       String longValue = generateRandomStringStream(200);
-      writer.append("key11", longValue.getBytes());
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+      writer.append("key11", bytes(longValue));
     }
 
     // Validate.
@@ -179,14 +173,10 @@ class TestHFileWriter {
     // 50 bytes for data part limit.
     HFileContext context = new HFileContext.Builder().blockSize(100).build();
     ByteArrayOutputStream hfileBytes = new ByteArrayOutputStream();
-    try (DataOutputStream outputStream = new DataOutputStream(hfileBytes);
-         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
+    try (HFileWriter writer = new HFileWriterImpl(context, hfileBytes)) {
       for (int i = 0; i < 50; i++) {
-        writer.append(
-            String.format("key%02d", i), String.format("value%02d", i).getBytes());
+        writer.append(String.format("key%02d", i), bytes(String.format("value%02d", i)));
       }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
     }
 
     // Validate.
@@ -200,10 +190,10 @@ class TestHFileWriter {
       for (int i = 0; i < 50; i++) {
         KeyValue kv = reader.getKeyValue().get();
         assertArrayEquals(
-            String.format("key%02d", i).getBytes(),
-            kv.getKey().getContentInString().getBytes());
+            bytes(String.format("key%02d", i)),
+            bytes(kv.getKey().getContentInString()));
         assertArrayEquals(
-            String.format("value%02d", i).getBytes(),
+            bytes(String.format("value%02d", i)),
             Arrays.copyOfRange(
                 kv.getBytes(),
                 kv.getValueOffset(),
@@ -240,9 +230,7 @@ class TestHFileWriter {
   void writerBlockBytesAreStableFormatLock() throws Exception {
     byte[][] vals = {bytes("v0"), bytes("v1"), bytes("v2")};
     assertSingleBlockBytesMatchGoldenAndHBase(
-        new String[] {"key1", "key2", "key3"},
-        new byte[][] {bytes("value1"), bytes("value2"), bytes("value3")},
-        GOLDEN_DATA_REGION_HEX, GOLDEN_ROOT_INDEX_BLOCK_HEX);
+        THREE_KEYS, THREE_VALUES, GOLDEN_DATA_REGION_HEX, GOLDEN_ROOT_INDEX_BLOCK_HEX);
     assertSingleBlockBytesMatchGoldenAndHBase(
         new String[] {rep('a', 116), rep('b', 8), rep('c', 12)}, vals,
         GOLDEN_VARLEN_DATA_REGION_HEX, GOLDEN_VARLEN_ROOT_INDEX_BLOCK_HEX);
@@ -314,7 +302,7 @@ class TestHFileWriter {
    */
   private static byte[] assertSingleBlockBytesMatchHBase(
       String[] keys, byte[][] values, String dataGolden, String rootGolden) throws Exception {
-    byte[] nativeFile = writeNativeHFile(HFileContext.builder().build(), keys, values, null, null);
+    byte[] nativeFile = writeNativeHFile(CONTEXT, keys, values, null, null);
     String[] nativeBlocks = dataAndRootIndexBlockHex(nativeFile);
     String[] hbaseBlocks = dataAndRootIndexBlockHex(writeHBaseFile(keys, values));
     assertEquals(hbaseBlocks[0], nativeBlocks[0], "native vs HBase data block bytes");
@@ -343,12 +331,14 @@ class TestHFileWriter {
     };
   }
 
-  /** Writes the given records with the HBase HFile writer, matching the native writer's settings. */
+  /**
+   * Writes the given records with the HBase HFile writer, matching the native writer's settings,
+   * returning the complete file as bytes. The HBase writer only needs a position-tracking stream,
+   * so it is driven through an in-memory {@link FSDataOutputStream} rather than a temp file.
+   */
   private static byte[] writeHBaseFile(String[] keys, byte[][] values) throws IOException {
     Configuration conf = new Configuration();
-    FileSystem fs = FileSystem.getLocal(conf);
-    org.apache.hadoop.fs.Path path =
-        new org.apache.hadoop.fs.Path(Files.createTempFile("hbase_fixed_", ".hfile").toString());
+    ByteArrayOutputStream hfileBytes = new ByteArrayOutputStream();
     org.apache.hadoop.hbase.io.hfile.HFileContext context = new HFileContextBuilder()
         .withBlockSize(1024 * 1024)
         .withCompression(Compression.Algorithm.NONE)
@@ -356,15 +346,16 @@ class TestHFileWriter {
         .withCellComparator(CellComparatorImpl.COMPARATOR)
         .withIncludesMvcc(true)
         .build();
-    try (HFile.Writer writer = HFile.getWriterFactory(conf, new CacheConfig(conf))
-        .withPath(fs, path).withFileContext(context).create()) {
+    try (FSDataOutputStream outputStream = new FSDataOutputStream(hfileBytes, null);
+         HFile.Writer writer = HFile.getWriterFactory(conf, new CacheConfig(conf))
+             .withOutputStream(outputStream).withFileContext(context).create()) {
       for (int i = 0; i < keys.length; i++) {
         writer.append(new org.apache.hadoop.hbase.KeyValue(
             keys[i].getBytes(StandardCharsets.UTF_8), new byte[0], new byte[0],
             HConstants.LATEST_TIMESTAMP, values[i]));
       }
     }
-    return Files.readAllBytes(Paths.get(path.toString()));
+    return hfileBytes.toByteArray();
   }
 
   /**
@@ -503,8 +494,7 @@ class TestHFileWriter {
                                          byte[][] values, String metaKey, byte[] metaValue)
       throws IOException {
     ByteArrayOutputStream hfileBytes = new ByteArrayOutputStream();
-    try (DataOutputStream outputStream = new DataOutputStream(hfileBytes);
-         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
+    try (HFileWriter writer = new HFileWriterImpl(context, hfileBytes)) {
       for (int i = 0; i < keys.length; i++) {
         writer.append(keys[i], values[i]);
       }
@@ -630,12 +620,8 @@ class TestHFileWriter {
   }
 
   /** Writes a three-record HFile with the default context, returning the file bytes. */
-  private static byte[] writeThreeRecordHFile() throws Exception {
-    return writeNativeHFile(
-        CONTEXT,
-        new String[] {"key1", "key2", "key3"},
-        new byte[][] {bytes("value1"), bytes("value2"), bytes("value3")},
-        null, null);
+  private static byte[] writeThreeRecordHFile() throws IOException {
+    return writeNativeHFile(CONTEXT, THREE_KEYS, THREE_VALUES, null, null);
   }
 
   private static void validateHFileSize(byte[] hfile) {
