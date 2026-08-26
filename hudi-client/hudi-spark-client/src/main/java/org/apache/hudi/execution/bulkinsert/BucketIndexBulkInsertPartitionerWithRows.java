@@ -40,9 +40,21 @@ public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertParti
   private FileSystemViewStorageConfig viewConfig;
 
   public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields,
+                                                  HoodieWriteConfig writeConfig) {
+    this(indexKeyFields, writeConfig, false);
+  }
+
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields,
                                                   HoodieWriteConfig writeConfig,
                                                   boolean sortByRecordKey) {
     this(writeConfig, NumBucketsFunction.fromWriteConfig(writeConfig), indexKeyFields, sortByRecordKey);
+  }
+
+  public BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig,
+                                                  String expressions,
+                                                  String rule,
+                                                  int bucketNumber) {
+    this(writeConfig, expressions, rule, bucketNumber, false);
   }
 
   public BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig,
