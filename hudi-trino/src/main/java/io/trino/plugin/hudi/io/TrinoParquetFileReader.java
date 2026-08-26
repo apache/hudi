@@ -17,7 +17,6 @@ import com.google.common.collect.ImmutableList;
 import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoInputFile;
 import io.trino.memory.context.AggregatedMemoryContext;
-import io.trino.metastore.HiveType;
 import io.trino.parquet.Column;
 import io.trino.parquet.Field;
 import io.trino.parquet.ParquetCorruptionException;
@@ -33,6 +32,7 @@ import io.trino.parquet.reader.RowGroupInfo;
 import io.trino.plugin.base.metrics.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
+import io.trino.plugin.hudi.HudiUtil;
 import io.trino.plugin.hudi.storage.HudiTrinoStorage;
 import io.trino.plugin.hudi.util.HudiAvroSerializer;
 import io.trino.spi.Page;
@@ -40,7 +40,6 @@ import io.trino.spi.TrinoException;
 import io.trino.spi.connector.SourcePage;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.SqlVarbinary;
-import io.trino.spi.type.Type;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -64,6 +63,7 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.stream.IntStream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.trino.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
@@ -75,17 +75,10 @@ import static io.trino.parquet.predicate.PredicateUtils.buildPredicate;
 import static io.trino.parquet.predicate.PredicateUtils.getFilteredRowGroups;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.createDataSource;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.getParquetMessageType;
-import static io.trino.plugin.hive.util.HiveTypeTranslator.toHiveType;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CURSOR_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
-import static io.trino.spi.type.BigintType.BIGINT;
-import static io.trino.spi.type.BooleanType.BOOLEAN;
-import static io.trino.spi.type.DoubleType.DOUBLE;
-import static io.trino.spi.type.IntegerType.INTEGER;
-import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.VarbinaryType.VARBINARY;
-import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -109,7 +102,6 @@ public class TrinoParquetFileReader
     private final TrinoInputFile inputFile;
     private final long fileLength;
     private final ParquetMetadata parquetMetadata;
-    private final Schema avroSchema;
     private final HoodieSchema hoodieSchema;
     private final long totalRecords;
     // Every iterator handed out by getIndexedRecordIterator, so that close() can release the ParquetReader
@@ -117,7 +109,6 @@ public class TrinoParquetFileReader
     private final List<ParquetIndexedRecordIterator> openIterators = new ArrayList<>();
 
     public TrinoParquetFileReader(HoodieStorage storage, StoragePath path)
-            throws IOException
     {
         this.path = requireNonNull(path, "path is null");
         requireNonNull(storage, "storage is null");
@@ -127,9 +118,16 @@ public class TrinoParquetFileReader
         // HudiTrinoStorage#getFileSystem is typed Object so that hudi-common stays free of Trino types
         TrinoFileSystem fileSystem = (TrinoFileSystem) trinoStorage.getFileSystem();
         this.inputFile = fileSystem.newInputFile(HudiTrinoStorage.convertToLocation(path));
-        this.fileLength = inputFile.length();
-        this.parquetMetadata = readParquetMetadata();
-        this.avroSchema = extractAvroSchema(parquetMetadata.getFileMetaData());
+        try {
+            this.fileLength = inputFile.length();
+            this.parquetMetadata = readParquetMetadata();
+        }
+        catch (IOException e) {
+            // Failing to open the file surfaces the way a failing read does: a corrupt footer as HUDI_BAD_DATA,
+            // anything else as HUDI_CURSOR_ERROR, each with its cause attached
+            throw handleException(path, e);
+        }
+        Schema avroSchema = extractAvroSchema(parquetMetadata.getFileMetaData());
         this.hoodieSchema = HoodieSchema.fromAvroSchema(avroSchema);
         this.totalRecords = parquetMetadata.getBlocks().stream()
                 .mapToLong(BlockMetadata::rowCount)
@@ -138,10 +136,9 @@ public class TrinoParquetFileReader
 
     @Override
     public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema, Map<String, String> renamedColumns)
-            throws IOException
     {
         // Timeline files are never schema-evolved, so no column can have been renamed under them
-        Schema projectedSchema = requestedSchema != null ? requestedSchema.toAvroSchema() : avroSchema;
+        HoodieSchema projectedSchema = requestedSchema != null ? requestedSchema : hoodieSchema;
         ParquetIndexedRecordIterator iterator = new ParquetIndexedRecordIterator(projectedSchema);
         synchronized (openIterators) {
             openIterators.add(iterator);
@@ -202,12 +199,28 @@ public class TrinoParquetFileReader
     {
         // The only resource this reader opens outside the constructor is the ParquetReader of an iterator.
         // Closing the reader releases every iterator it handed out, including any the caller left open;
-        // an iterator's close() is idempotent, so closing one that is already closed is a no-op
+        // an iterator's close() is idempotent, so closing one that is already closed is a no-op. One that fails
+        // to close does not stop the others from being closed: the first failure is rethrown once every iterator
+        // has been released, with the later failures attached to it as suppressed
         synchronized (openIterators) {
+            RuntimeException failure = null;
             for (ParquetIndexedRecordIterator iterator : openIterators) {
-                iterator.close();
+                try {
+                    iterator.close();
+                }
+                catch (RuntimeException e) {
+                    if (failure == null) {
+                        failure = e;
+                    }
+                    else {
+                        failure.addSuppressed(e);
+                    }
+                }
             }
             openIterators.clear();
+            if (failure != null) {
+                throw failure;
+            }
         }
     }
 
@@ -236,77 +249,40 @@ public class TrinoParquetFileReader
         return new Schema.Parser().parse(avroSchemaStr);
     }
 
-    private static List<Column> buildTrinoColumns(Schema projectedSchema, MessageColumnIO messageColumnIO)
+    /**
+     * One {@link HiveColumnHandle} per field of the projection, typed from the field's Avro schema the way
+     * {@link HudiUtil#toColumnHandle} types the handles of a data-file read. Handle {@code i} is built from
+     * field {@code i}, so a handle's index is its field's position in the records this reader produces.
+     */
+    private static List<HiveColumnHandle> buildColumnHandles(HoodieSchema projectedSchema)
+    {
+        return projectedSchema.getFields().stream()
+                .map(HudiUtil::toColumnHandle)
+                .toList();
+    }
+
+    private static List<Column> buildTrinoColumns(List<HiveColumnHandle> columnHandles, MessageColumnIO messageColumnIO)
     {
         ImmutableList.Builder<Column> columnsBuilder = ImmutableList.builder();
-        for (Schema.Field field : projectedSchema.getFields()) {
-            Type trinoType = avroTypeToTrinoType(field.schema());
-            Field parquetField = constructField(trinoType, lookupColumnByName(messageColumnIO, field.name()))
-                    .orElseThrow(() -> new TrinoException(HUDI_SCHEMA_ERROR, "Could not find column: " + field.name()));
-            columnsBuilder.add(new Column(field.name(), parquetField));
+        for (HiveColumnHandle columnHandle : columnHandles) {
+            String name = columnHandle.getName();
+            Field parquetField = constructField(columnHandle.getType(), lookupColumnByName(messageColumnIO, name))
+                    .orElseThrow(() -> new TrinoException(HUDI_SCHEMA_ERROR, "Could not find column: " + name));
+            columnsBuilder.add(new Column(name, parquetField));
         }
         return columnsBuilder.build();
     }
 
-    private static List<HiveColumnHandle> buildColumnHandles(Schema projectedSchema)
-    {
-        List<HiveColumnHandle> columnHandles = new ArrayList<>();
-        List<Schema.Field> fields = projectedSchema.getFields();
-        for (int i = 0; i < fields.size(); i++) {
-            Schema.Field field = fields.get(i);
-            Type trinoType = avroTypeToTrinoType(field.schema());
-            HiveType hiveType = toHiveType(trinoType);
-            columnHandles.add(new HiveColumnHandle(
-                    field.name(),
-                    i,
-                    hiveType,
-                    trinoType,
-                    Optional.empty(),
-                    HiveColumnHandle.ColumnType.REGULAR,
-                    Optional.empty()));
-        }
-        return columnHandles;
-    }
-
-    private static Type avroTypeToTrinoType(Schema fieldSchema)
-    {
-        // Handle Avro's nullable fields, which are represented as a UNION of null and a type
-        if (fieldSchema.isUnion()) {
-            List<Schema> nonNullSchemas = fieldSchema.getTypes().stream()
-                    .filter(schema -> schema.getType() != Schema.Type.NULL)
-                    .toList();
-            // A union of multiple non-null types is not supported
-            if (nonNullSchemas.size() != 1) {
-                throw new UnsupportedOperationException("Unsupported Avro union type: " + fieldSchema);
-            }
-            fieldSchema = nonNullSchemas.getFirst();
-        }
-
-        return switch (fieldSchema.getType()) {
-            case STRING -> VARCHAR;
-            case INT -> INTEGER;
-            case LONG -> BIGINT;
-            case FLOAT -> REAL;
-            case DOUBLE -> DOUBLE;
-            case BOOLEAN -> BOOLEAN;
-            case BYTES -> VARBINARY;
-            // Be explicit about unhandled types instead of a silent fallback to prevent subtle bugs if the schema contains
-            // types like MAP, ARRAY, FIXED, etc
-            default -> throw new UnsupportedOperationException("Unsupported Avro type: " + fieldSchema.getType());
-        };
-    }
-
     /**
-     * Positions of the {@code bytes} fields of the record, if any. Trino hands a VARBINARY value out as a
+     * Record positions of the projection's VARBINARY columns, if any. Trino hands a VARBINARY value out as a
      * {@link SqlVarbinary}, while Avro's in-memory representation of {@code bytes} is a {@link ByteBuffer} --
      * and that is what hudi-common casts to when it reads the {@code metadata} and {@code plan} columns of an
      * LSM instant, so those values have to be converted before the record leaves this reader.
      */
-    private static int[] binaryFieldPositions(Schema projectedSchema)
+    private static int[] binaryFieldPositions(List<HiveColumnHandle> columnHandles)
     {
-        return projectedSchema.getFields().stream()
-                .filter(field -> avroTypeToTrinoType(field.schema()).equals(VARBINARY))
-                .mapToInt(Schema.Field::pos)
+        return IntStream.range(0, columnHandles.size())
+                .filter(position -> columnHandles.get(position).getType().equals(VARBINARY))
                 .toArray();
     }
 
@@ -332,16 +308,15 @@ public class TrinoParquetFileReader
         private boolean exhausted;
         private boolean closed;
 
-        ParquetIndexedRecordIterator(Schema projectedSchema)
-                throws IOException
+        ParquetIndexedRecordIterator(HoodieSchema projectedSchema)
         {
             List<HiveColumnHandle> columnHandles = buildColumnHandles(projectedSchema);
-            this.parquetReader = createParquetReader(columnHandles, projectedSchema);
+            this.parquetReader = createParquetReader(columnHandles);
             // Null prefilled values: PrefilledColumnValues answers partition and hidden metadata columns of a
             // split, of which a timeline read has neither, and serialize() only ever reads page values. There
             // is no split here to build one from -- create(HudiSplit) is its only factory.
-            this.avroSerializer = new HudiAvroSerializer(columnHandles, null, projectedSchema);
-            this.binaryFieldPositions = binaryFieldPositions(projectedSchema);
+            this.avroSerializer = new HudiAvroSerializer(columnHandles, null, projectedSchema.toAvroSchema());
+            this.binaryFieldPositions = binaryFieldPositions(columnHandles);
         }
 
         @Override
@@ -394,17 +369,17 @@ public class TrinoParquetFileReader
             }
         }
 
-        private ParquetReader createParquetReader(List<HiveColumnHandle> columnHandles, Schema projectedSchema)
-                throws IOException
+        private ParquetReader createParquetReader(List<HiveColumnHandle> columnHandles)
         {
             AggregatedMemoryContext memoryContext = newSimpleAggregatedMemoryContext();
-            ParquetDataSource dataSource = openDataSource(memoryContext, OptionalLong.of(fileLength));
+            ParquetDataSource dataSource = null;
             try {
+                dataSource = openDataSource(memoryContext, OptionalLong.of(fileLength));
                 FileMetadata fileMetaData = parquetMetadata.getFileMetaData();
                 MessageType fileSchema = fileMetaData.getSchema();
                 MessageType requestedSchema = getParquetMessageType(columnHandles, true, fileSchema)
                         .orElse(new MessageType(fileSchema.getName(), ImmutableList.of()));
-                List<Column> columns = buildTrinoColumns(projectedSchema, getColumnIO(fileSchema, requestedSchema));
+                List<Column> columns = buildTrinoColumns(columnHandles, getColumnIO(fileSchema, requestedSchema));
 
                 Map<List<String>, ColumnDescriptor> descriptorsByPath = getDescriptors(fileSchema, requestedSchema);
                 TupleDomain<ColumnDescriptor> tupleDomain = TupleDomain.all();
@@ -437,12 +412,14 @@ public class TrinoParquetFileReader
             }
             catch (IOException | RuntimeException e) {
                 // The reader owns the data source only once it is constructed
-                try {
-                    dataSource.close();
+                if (dataSource != null) {
+                    try {
+                        dataSource.close();
+                    }
+                    catch (IOException _) {
+                    }
                 }
-                catch (IOException _) {
-                }
-                throw e;
+                throw handleException(path, e);
             }
         }
 

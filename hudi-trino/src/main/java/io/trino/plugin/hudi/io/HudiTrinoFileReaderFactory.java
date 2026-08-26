@@ -21,7 +21,6 @@ import org.apache.hudi.core.io.storage.HoodieAvroBootstrapFileReader;
 import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.core.io.storage.HoodieNativeAvroHFileReader;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -39,12 +38,7 @@ public class HudiTrinoFileReaderFactory
     @Override
     protected HoodieFileReader newParquetFileReader(StoragePath path)
     {
-        try {
-            return new TrinoParquetFileReader(storage, path);
-        }
-        catch (IOException e) {
-            throw new HoodieIOException("Failed to open Parquet file reader for " + path, e);
-        }
+        return new TrinoParquetFileReader(storage, path);
     }
 
     @Override

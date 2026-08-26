@@ -107,7 +107,7 @@ class TestCompactedTimelineTable extends HoodieSparkSqlTestBase {
             // Check that archived timeline exists and has entries
             assertResult(true)(archivedTimeline.reload().countInstants() > 0)
 
-            // Verify archived timeline files exist in .hoodie/archived directory
+            // Verify archived timeline files exist in the .hoodie/timeline/history directory
             val archivedDir = new File(tablePath, ".hoodie/timeline/history")
             assertResult(true)(archivedDir.exists() && archivedDir.listFiles().nonEmpty)
 

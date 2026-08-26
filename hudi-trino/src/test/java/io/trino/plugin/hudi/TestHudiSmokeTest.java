@@ -1393,10 +1393,11 @@ public class TestHudiSmokeTest
     // HudiTrinoFileReaderFactory#newParquetFileReader and threw UnsupportedOperationException before
     // TrinoParquetFileReader existed (apache/hudi#13994).
     @ParameterizedTest
-    @MethodSource("archivedTimelineTestParameters")
-    public void testReadTableWithArchivedTimeline(ResourceHudiTablesInitializer.TestingTable table, boolean isRtTable)
+    @ValueSource(booleans = {true, false})
+    public void testReadTableWithArchivedTimeline(boolean isRtTable)
     {
-        String tableName = isRtTable ? table.getRtTableName() : table.getTableName();
+        String tableName = isRtTable ? HUDI_MOR_ARCHIVED_TIMELINE.getRtTableName()
+                : HUDI_MOR_ARCHIVED_TIMELINE.getTableName();
         @Language("SQL") String actualQuery = "SELECT id, name, price, ts FROM " + tableName;
         @Language("SQL") String expectedQuery;
         if (isRtTable) {
@@ -1476,13 +1477,6 @@ public class TestHudiSmokeTest
                 .flatMap(table ->
                         Stream.of(booleanValues)
                                 .map(boolValue -> Arguments.of(table, boolValue)));
-    }
-
-    private static Stream<Arguments> archivedTimelineTestParameters()
-    {
-        return Stream.of(
-                Arguments.of(HUDI_MOR_ARCHIVED_TIMELINE, false),
-                Arguments.of(HUDI_MOR_ARCHIVED_TIMELINE, true));
     }
 
     /**

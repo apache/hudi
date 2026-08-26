@@ -15,8 +15,10 @@ package io.trino.plugin.hudi.io;
 
 import com.google.common.io.Resources;
 import io.trino.filesystem.local.LocalFileSystem;
+import io.trino.parquet.ParquetCorruptionException;
 import io.trino.plugin.hudi.storage.HudiTrinoStorage;
 import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
+import io.trino.spi.TrinoException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
@@ -27,16 +29,20 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -168,6 +174,24 @@ class TestTrinoParquetFileReader
     }
 
     @Test
+    void testCorruptFileFailsWithBadData(@TempDir Path tempDir)
+            throws Exception
+    {
+        // A footer that does not parse is reported the way a failed page read is: HUDI_BAD_DATA with the corruption as
+        // its cause. The ParquetCorruptionException it starts out as is an IOException, and left raw it would reach
+        // hudi-common as a HoodieIOException instead
+        Path corruptFile = tempDir.resolve("corrupt.parquet");
+        Files.write(corruptFile, new byte[] {1, 2, 3});
+        StoragePath path = new StoragePath(corruptFile.toFile().toURI().toString());
+
+        assertThatThrownBy(() -> new TrinoParquetFileReader(localStorage(), path))
+                .isInstanceOf(TrinoException.class)
+                .hasCauseInstanceOf(ParquetCorruptionException.class)
+                .extracting(e -> ((TrinoException) e).getErrorCode())
+                .isEqualTo(HUDI_BAD_DATA.toErrorCode());
+    }
+
+    @Test
     void testFooterLookupsUnsupported()
             throws Exception
     {
@@ -182,7 +206,11 @@ class TestTrinoParquetFileReader
             throws Exception
     {
         File parquetFile = new File(Resources.getResource(ARCHIVED_TIMELINE_PARQUET_FILE).toURI());
-        HoodieStorage storage = new HudiTrinoStorage(new LocalFileSystem(Paths.get("/")), new TrinoStorageConfiguration());
-        return new TrinoParquetFileReader(storage, new StoragePath(parquetFile.toURI().toString()));
+        return new TrinoParquetFileReader(localStorage(), new StoragePath(parquetFile.toURI().toString()));
+    }
+
+    private static HoodieStorage localStorage()
+    {
+        return new HudiTrinoStorage(new LocalFileSystem(Paths.get("/")), new TrinoStorageConfiguration());
     }
 }
