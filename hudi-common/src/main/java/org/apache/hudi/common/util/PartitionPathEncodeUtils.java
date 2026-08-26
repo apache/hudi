@@ -79,6 +79,10 @@ public class PartitionPathEncodeUtils {
     return c >= 0 && c < charToEscapeFilename.size() && charToEscapeFilename.get(c);
   }
 
+  static boolean needsEscapingFilenameWithDot(char c) {
+    return c == '.' || needsEscapingFilename(c);
+  }
+
   public static String escapePathName(String path) {
     return escapePathName(path, null);
   }
@@ -118,9 +122,25 @@ public class PartitionPathEncodeUtils {
     return sb.toString();
   }
 
+  /**
+   * Escapes a filename derived from a partition path for use in metadata-table file ids.
+   * For a single-level hive-style segment (like "fare.currency=USD"), dots in the column name
+   * (before the first '=') are escaped, since a literal dot there makes the metadata log file
+   * name unparseable by the log-file pattern. Dots in the partition value (after '=') are left
+   * as-is. Partition values that contain dots, and nested or non-hive-style dotted paths, are
+   * not handled here.
+   */
   public static String escapeFileName(String filename) {
     if (filename == null || filename.length() == 0) {
       return filename;
+    }
+    int eqIdx = filename.indexOf('=');
+    if (eqIdx > 0) {
+      // Hive-style partition path: escape dots only in the column name (before '=')
+      String columnName = filename.substring(0, eqIdx);
+      String value = filename.substring(eqIdx); // includes '='
+      return doEscape(columnName, PartitionPathEncodeUtils::needsEscapingFilenameWithDot)
+          + doEscape(value, PartitionPathEncodeUtils::needsEscapingFilename);
     }
     return doEscape(filename, PartitionPathEncodeUtils::needsEscapingFilename);
   }
