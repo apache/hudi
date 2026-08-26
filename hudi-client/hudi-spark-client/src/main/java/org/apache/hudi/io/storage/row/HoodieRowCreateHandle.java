@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -104,7 +105,10 @@ public class HoodieRowCreateHandle implements Serializable {
                                long taskEpochId,
                                StructType structType,
                                boolean shouldPreserveHoodieMetadata) {
-    this.partitionPath = partitionPath;
+    // Reject directory-traversal partition paths once per handle (i.e. once per partition being
+    // written), rather than per row, so a row's partition field cannot make this handle create
+    // files outside the table base path.
+    this.partitionPath = PartitionPathEncodeUtils.validateNoPathTraversal(partitionPath);
     this.table = table;
     this.writeConfig = writeConfig;
     this.fileId = fileId;
@@ -117,7 +121,7 @@ public class HoodieRowCreateHandle implements Serializable {
     String writeToken = getWriteToken(taskPartitionId, taskId, taskEpochId);
     String fileName = FSUtils.makeBaseFileName(instantTime, writeToken, this.fileId,
         table.getBaseFileExtension());
-    this.path = makeNewPath(storage, partitionPath, fileName, writeConfig);
+    this.path = makeNewPath(storage, this.partitionPath, fileName, writeConfig);
 
     // Read from the TABLE config, not the write config -- see the note on BaseCreateHandle.
     this.metaFieldsMode = table.getMetaClient().getTableConfig().getMetaFieldsMode();
