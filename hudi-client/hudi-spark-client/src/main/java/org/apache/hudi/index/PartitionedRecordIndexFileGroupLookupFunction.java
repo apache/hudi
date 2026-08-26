@@ -49,18 +49,16 @@ public class PartitionedRecordIndexFileGroupLookupFunction
   private final HoodieTableMetadata metadataTable;
   // Empty when no counters should be collected; see RecordIndexLookupMetrics#resolveBundle.
   private final Map<String, Registry> metricsBundle;
-  private final String caller;
 
   /** Uninstrumented, for the query-side read path. */
   public PartitionedRecordIndexFileGroupLookupFunction(HoodieTableMetadata metadataTable) {
-    this(metadataTable, Collections.emptyMap(), null);
+    this(metadataTable, Collections.emptyMap());
   }
 
   public PartitionedRecordIndexFileGroupLookupFunction(HoodieTableMetadata metadataTable,
-                                                       Map<String, Registry> metricsBundle, String caller) {
+                                                       Map<String, Registry> metricsBundle) {
     this.metadataTable = metadataTable;
     this.metricsBundle = metricsBundle;
-    this.caller = caller;
   }
 
   @Override
@@ -89,7 +87,7 @@ public class PartitionedRecordIndexFileGroupLookupFunction
         Map<String, HoodieRecordGlobalLocation> recordIndexInfo = recordIndexData.collectAsList().stream()
             .collect(HashMap::new, (map, pair) -> map.put(pair.getKey(), pair.getValue()), HashMap::putAll);
         // recordIndexInfo is keyed by record key, so its key set is the found set with no extra allocation.
-        RecordIndexLookupMetrics.recordShardLookup(caller, keysToLookup, recordIndexInfo.keySet(),
+        RecordIndexLookupMetrics.recordShardLookup(keysToLookup, recordIndexInfo.keySet(),
             shardTimer.endTimer());
         return recordIndexInfo.entrySet().stream()
             .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();

@@ -46,10 +46,10 @@ class TestRliLookupMetricsOnDataSource extends RliLookupMetricsTestBase {
     report(s"DataSource ($indexLabel) -- RLI counters on the commit", counters)
 
     assertTrue(counters.nonEmpty, "commit metadata must carry the RLI counters")
-    assertEquals(numUpdates.toString, counters(tagKey(RecordIndexMetricNames.KEY_HIT_COUNT)), "every updated key is a hit")
-    assertEquals("1", counters(tagKey(RecordIndexMetricNames.KEY_MISS_COUNT)), "the fresh insert is a miss")
-    assertEquals(numUpdates + 1L, assertSumInvariant(counters, RecordIndexMetricNames.CALLER_TAG_LOCATION))
-    assertTrue(counters(tagKey(RecordIndexMetricNames.SHARDS_READ)).toInt > 0, "at least one shard was read")
+    assertEquals(numUpdates.toString, counters(RecordIndexMetricNames.KEY_HIT_COUNT), "every updated key is a hit")
+    assertEquals("1", counters(RecordIndexMetricNames.KEY_MISS_COUNT), "the fresh insert is a miss")
+    assertEquals(numUpdates + 1L, assertSumInvariant(counters))
+    assertTrue(counters(RecordIndexMetricNames.SHARDS_READ).toInt > 0, "at least one shard was read")
   }
 
   /** Each commit must report only its own work: the drain clears the registry as it publishes. */
@@ -60,7 +60,7 @@ class TestRliLookupMetricsOnDataSource extends RliLookupMetricsTestBase {
 
     val perCommit = (1 to 3).map { commit =>
       doWriteAndValidateDataAndRecordIndex(rliOpts, UPSERT_OPERATION_OPT_VAL, SaveMode.Append, validate = false, numUpdates = numUpdates)
-      val lookedUp = rliCountersFromLatestCommit().getOrElse(tagKey(RecordIndexMetricNames.KEY_COUNT), "0")
+      val lookedUp = rliCountersFromLatestCommit().getOrElse(RecordIndexMetricNames.KEY_COUNT, "0")
       println(s"[per-commit] commit $commit ($indexLabel): records_looked_up=$lookedUp")
       lookedUp
     }

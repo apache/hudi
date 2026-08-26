@@ -74,18 +74,12 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
     }
   }
 
-  protected def counterKey(caller: String, metric: String): String =
-    RecordIndexMetricNames.key(caller, metric)
-
-  protected def tagKey(metric: String): String =
-    counterKey(RecordIndexMetricNames.CALLER_TAG_LOCATION, metric)
-
   /**
-   * A caller that looked something up stamps its full counter set, zeros included, so an absent key means
-   * that caller contributed nothing at all. The default is defensive against exactly that case.
+   * A lookup that happened stamps the full counter set, zeros included, so an absent key means nothing was
+   * looked up at all. The default is defensive against exactly that case.
    */
-  protected def counterOrZero(counters: Map[String, String], caller: String, metric: String): Long =
-    counters.getOrElse(counterKey(caller, metric), "0").toLong
+  protected def counterOrZero(counters: Map[String, String], metric: String): Long =
+    counters.getOrElse(metric, "0").toLong
 
   /**
    * The counters as an operator would read them: off the metrics reporter. {@code Metrics} is keyed by
@@ -105,21 +99,21 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
 
 
   /** Asserts the core invariant and returns the looked-up count. */
-  protected def assertSumInvariant(counters: Map[String, String], caller: String): Long = {
-    val lookedUp = counterOrZero(counters, caller, RecordIndexMetricNames.KEY_COUNT)
-    val hits = counterOrZero(counters, caller, RecordIndexMetricNames.KEY_HIT_COUNT)
-    val misses = counterOrZero(counters, caller, RecordIndexMetricNames.KEY_MISS_COUNT)
+  protected def assertSumInvariant(counters: Map[String, String]): Long = {
+    val lookedUp = counterOrZero(counters, RecordIndexMetricNames.KEY_COUNT)
+    val hits = counterOrZero(counters, RecordIndexMetricNames.KEY_HIT_COUNT)
+    val misses = counterOrZero(counters, RecordIndexMetricNames.KEY_MISS_COUNT)
     org.junit.jupiter.api.Assertions.assertEquals(lookedUp, hits + misses,
-      s"hits + misses must account for every key looked up by '$caller'")
-    // A caller that looked something up must also report the time it took, or the timing metric is
-    // silently absent on paths nobody checked. Zero is allowed: a shard read can round below a millisecond.
+      "hits + misses must account for every key looked up")
+    // A lookup that happened must also report the time it took, or the timing metric is silently absent on
+    // paths nobody checked. Zero is allowed: a shard read can round below a millisecond.
     if (lookedUp > 0) {
       org.junit.jupiter.api.Assertions.assertTrue(
-        counters.contains(counterKey(caller, RecordIndexMetricNames.LOOKUP_TIME)),
-        s"'$caller' looked up $lookedUp keys but reported no ${RecordIndexMetricNames.LOOKUP_TIME}; " +
+        counters.contains(RecordIndexMetricNames.LOOKUP_TIME),
+        s"looked up $lookedUp keys but reported no ${RecordIndexMetricNames.LOOKUP_TIME}; " +
           s"counters were ${counters.keys.toSeq.sorted.mkString(", ")}")
       org.junit.jupiter.api.Assertions.assertTrue(
-        counterOrZero(counters, caller, RecordIndexMetricNames.LOOKUP_TIME) >= 0L,
+        counterOrZero(counters, RecordIndexMetricNames.LOOKUP_TIME) >= 0L,
         "elapsed time cannot be negative")
     }
     lookedUp

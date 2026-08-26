@@ -132,11 +132,10 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
     // keyToLocationPairRDD and records RDD.
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
 
-    // Registry bundle and caller are resolved on the driver so the closure carries them to executors.
+    // The registry bundle is resolved on the driver so the closure carries it to executors.
     Map<String, Registry> metricsBundle = RecordIndexLookupMetrics.resolveBundle(context, hoodieTable.getConfig());
-    String caller = RecordIndexLookupMetrics.currentCaller();
     return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(
-        new RecordIndexFileGroupLookupFunction(hoodieTable, metricsBundle, caller)));
+        new RecordIndexFileGroupLookupFunction(hoodieTable, metricsBundle)));
   }
 
   protected Either<Integer, Map<String, Integer>> fetchFileGroupSize(HoodieTable hoodieTable) {
@@ -189,12 +188,10 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
     private final HoodieTable hoodieTable;
     // Empty when no counters should be collected; see RecordIndexLookupMetrics#resolveBundle.
     private final Map<String, Registry> metricsBundle;
-    private final String caller;
 
-    public RecordIndexFileGroupLookupFunction(HoodieTable hoodieTable, Map<String, Registry> metricsBundle, String caller) {
+    public RecordIndexFileGroupLookupFunction(HoodieTable hoodieTable, Map<String, Registry> metricsBundle) {
       this.hoodieTable = hoodieTable;
       this.metricsBundle = metricsBundle;
-      this.caller = caller;
     }
 
     @Override
@@ -211,7 +208,7 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
             hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
         try {
           List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
-          RecordIndexLookupMetrics.recordShardLookup(caller, keysToLookup,
+          RecordIndexLookupMetrics.recordShardLookup(keysToLookup,
               recordIndexInfo.stream().map(Pair::getKey).collect(Collectors.toSet()), shardTimer.endTimer());
           return recordIndexInfo.stream()
               .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();

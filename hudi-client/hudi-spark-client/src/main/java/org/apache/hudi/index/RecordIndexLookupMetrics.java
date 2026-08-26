@@ -35,26 +35,7 @@ import java.util.Set;
 /** Executor-side emission for the record index lookup counters. */
 public class RecordIndexLookupMetrics {
 
-  /** Set by the read client around its own tagging call, so dedupe traffic is attributable separately. */
-  private static final ThreadLocal<String> CALLER =
-      ThreadLocal.withInitial(() -> RecordIndexMetricNames.CALLER_TAG_LOCATION);
-
   private RecordIndexLookupMetrics() {
-  }
-
-  public static String currentCaller() {
-    return CALLER.get();
-  }
-
-  /** Restore rather than clear, so a nested tagging call does not reset the label. */
-  public static String setCaller(String caller) {
-    String previous = CALLER.get();
-    CALLER.set(caller);
-    return previous;
-  }
-
-  public static void restoreCaller(String previous) {
-    CALLER.set(previous);
   }
 
   /**
@@ -89,7 +70,7 @@ public class RecordIndexLookupMetrics {
    * @param foundKeys    the subset present in the index
    * @param elapsedMs    wall-clock spent reading this shard
    */
-  public static void recordShardLookup(String caller, Collection<String> keysLookedUp,
+  public static void recordShardLookup(Collection<String> keysLookedUp,
                                        Collection<String> foundKeys, long elapsedMs) {
     if (keysLookedUp.isEmpty()) {
       return;
@@ -98,12 +79,12 @@ public class RecordIndexLookupMetrics {
     Set<String> found = foundKeys instanceof Set ? (Set<String>) foundKeys : new HashSet<>(foundKeys);
     long records = keysLookedUp.size();
     long hits = found.isEmpty() ? 0L : keysLookedUp.stream().filter(found::contains).count();
-    registry.add(RecordIndexMetricNames.key(caller, RecordIndexMetricNames.KEY_COUNT), records);
-    registry.add(RecordIndexMetricNames.key(caller, RecordIndexMetricNames.KEY_HIT_COUNT), hits);
-    registry.add(RecordIndexMetricNames.key(caller, RecordIndexMetricNames.KEY_MISS_COUNT), records - hits);
-    registry.increment(RecordIndexMetricNames.key(caller, RecordIndexMetricNames.SHARDS_READ));
+    registry.add(RecordIndexMetricNames.KEY_COUNT, records);
+    registry.add(RecordIndexMetricNames.KEY_HIT_COUNT, hits);
+    registry.add(RecordIndexMetricNames.KEY_MISS_COUNT, records - hits);
+    registry.increment(RecordIndexMetricNames.SHARDS_READ);
     // Summed, not averaged: shards are read in parallel, so the total is per-commit read effort rather
     // than latency. Divide by shards_read for a mean.
-    registry.add(RecordIndexMetricNames.key(caller, RecordIndexMetricNames.LOOKUP_TIME), elapsedMs);
+    registry.add(RecordIndexMetricNames.LOOKUP_TIME, elapsedMs);
   }
 }

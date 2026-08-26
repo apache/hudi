@@ -94,8 +94,7 @@ class TestRliLookupMetricsMultiTable extends RecordLevelIndexTestBase {
    * covers a caller that contributed nothing at all.
    */
   private def tagCount(counters: Map[String, String], metric: String): Long =
-    counters.getOrElse(
-      RecordIndexMetricNames.key(RecordIndexMetricNames.CALLER_TAG_LOCATION, metric), "0").toLong
+    counters.getOrElse(metric, "0").toLong
 
   private def report(label: String, counters: Map[String, String]): Unit = {
     println(s"\n===== $label =====")

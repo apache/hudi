@@ -27,10 +27,6 @@ public class RecordIndexMetricNames {
   /** Scoping, prefix and reporter naming all live on the enum entry. */
   public static final String REGISTRY_NAME = ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.registryName();
 
-  // Counters are tagged by caller so dedupe traffic is distinguishable from tag-location traffic.
-  public static final String CALLER_TAG_LOCATION = "tag";
-  public static final String CALLER_DEDUPE = "dedupe";
-
   public static final String KEY_COUNT = "lookup_record_index_key_count";
   public static final String KEY_HIT_COUNT = "lookup_record_index_key_hit_count";
   public static final String KEY_MISS_COUNT = "lookup_record_index_key_miss_count";
@@ -40,10 +36,5 @@ public class RecordIndexMetricNames {
   public static final String LOOKUP_TIME = "lookup_record_index_time";
 
   private RecordIndexMetricNames() {
-  }
-
-  /** Counter key for a metric attributed to a caller, e.g. {@code tag.hits}. */
-  public static String key(String caller, String metric) {
-    return caller + "." + metric;
   }
 }

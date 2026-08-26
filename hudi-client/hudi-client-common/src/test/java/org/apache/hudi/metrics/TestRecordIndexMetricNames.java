@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
-import static org.apache.hudi.metrics.RecordIndexMetricNames.CALLER_TAG_LOCATION;
 import static org.apache.hudi.metrics.RecordIndexMetricNames.KEY_COUNT;
 import static org.apache.hudi.metrics.RecordIndexMetricNames.KEY_HIT_COUNT;
 import static org.apache.hudi.metrics.RecordIndexMetricNames.KEY_MISS_COUNT;
@@ -45,7 +44,7 @@ public class TestRecordIndexMetricNames {
   private static final String BASE_PATH = "file:/tmp/drain_test_table";
   private static final String OTHER_BASE_PATH = "file:/tmp/somewhere_else";
 
-  private static final String LOOKED_UP_KEY = RecordIndexMetricNames.key(CALLER_TAG_LOCATION, KEY_COUNT);
+  private static final String LOOKED_UP_KEY = KEY_COUNT;
 
   private HoodieMetrics hoodieMetrics;
 
@@ -85,8 +84,8 @@ public class TestRecordIndexMetricNames {
     Registry registry = new LocalRegistry(
         ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.scopedName(config.getBasePath()));
     registry.add(LOOKED_UP_KEY, lookedUp);
-    registry.add(RecordIndexMetricNames.key(CALLER_TAG_LOCATION, KEY_HIT_COUNT), hits);
-    registry.add(RecordIndexMetricNames.key(CALLER_TAG_LOCATION, KEY_MISS_COUNT), misses);
+    registry.add(KEY_HIT_COUNT, hits);
+    registry.add(KEY_MISS_COUNT, misses);
     Registry.REGISTRY_MAP.put(registryKey(config), registry);
     return registry;
   }
@@ -96,7 +95,7 @@ public class TestRecordIndexMetricNames {
     return metrics.getMetricsName(
         ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricAction(),
         ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricQualifier())
-        + "." + RecordIndexMetricNames.key(CALLER_TAG_LOCATION, metric);
+        + "." + metric;
   }
 
   private Long gauge(HoodieMetrics metrics, String metric) {

@@ -78,12 +78,11 @@ public class SparkMetadataTableRecordLevelIndex extends SparkMetadataTableGlobal
         .partitionBy(new PartitionIdPassthrough(numFileGroups))
         .map(t -> t._2);
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
-    // Lookup the keys in the record index. Registry and caller are resolved on the driver so the
+    // Lookup the keys in the record index. The registry bundle is resolved on the driver so the
     // closure carries them to the executors.
     Map<String, Registry> metricsBundle = RecordIndexLookupMetrics.resolveBundle(context, hoodieTable.getConfig());
-    String caller = RecordIndexLookupMetrics.currentCaller();
     return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(
-        new PartitionedRecordIndexFileGroupLookupFunction(hoodieTable.getTableMetadata(), metricsBundle, caller)));
+        new PartitionedRecordIndexFileGroupLookupFunction(hoodieTable.getTableMetadata(), metricsBundle)));
   }
 
   @Override

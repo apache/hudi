@@ -19,13 +19,10 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.ExecutorMetricRegistry;
 import org.apache.hudi.metrics.HoodieMetrics;
@@ -81,7 +78,7 @@ public class TestRliMetricsOnStreamerPath extends HoodieDeltaStreamerTestBase {
   }
 
   private static String tagKey(String metric) {
-    return RecordIndexMetricNames.key(RecordIndexMetricNames.CALLER_TAG_LOCATION, metric);
+    return metric;
   }
 
   @ParameterizedTest

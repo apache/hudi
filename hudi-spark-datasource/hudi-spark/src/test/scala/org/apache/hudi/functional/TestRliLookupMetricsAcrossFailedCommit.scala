@@ -98,7 +98,7 @@ class TestRliLookupMetricsAcrossFailedCommit extends RliLookupMetricsTestBase {
     // this path an abandoned attempt's counters are dropped rather than double-counted, which is the safer
     // of the two failure modes but is not a carry-forward guarantee.
     assertEquals(retriedLookups.toLong,
-      assertSumInvariant(counters, RecordIndexMetricNames.CALLER_TAG_LOCATION),
+      assertSumInvariant(counters),
       "the retry must report exactly its own lookups, uncontaminated by the attempt that never landed")
   }
 }

@@ -34,9 +34,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.RecordIndexLookupMetrics;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
-import org.apache.hudi.metrics.RecordIndexMetricNames;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -212,16 +210,8 @@ public class SparkRDDReadClient<T> implements Serializable {
    * @return Tagged RDD of Hoodie records
    */
   public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> hoodieRecords) throws HoodieIndexException {
-    // Lookups driven from the read client are dedupe traffic, not tag-location traffic. Label them so
-    // the two are distinguishable in the reported counters. Driver-side only: the label is
-    // captured when the lookup closure is built.
-    String previousCaller = RecordIndexLookupMetrics.setCaller(RecordIndexMetricNames.CALLER_DEDUPE);
-    try {
-      return HoodieJavaRDD.getJavaRDD(
-          index.tagLocation(HoodieJavaRDD.of(hoodieRecords), context, hoodieTable));
-    } finally {
-      RecordIndexLookupMetrics.restoreCaller(previousCaller);
-    }
+    return HoodieJavaRDD.getJavaRDD(
+        index.tagLocation(HoodieJavaRDD.of(hoodieRecords), context, hoodieTable));
   }
 
   /**
