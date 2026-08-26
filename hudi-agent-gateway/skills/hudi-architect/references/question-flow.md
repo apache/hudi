@@ -178,26 +178,63 @@ index to reach NBCC — see `NBCC_INELIGIBLE` for the reasoning to give.
 `OCC_INSERT_DUPLICATES` — concurrent inserts can duplicate even with dedup enabled, and the
 user needs to confirm the key spaces are disjoint.
 
-**Provider.** Only for OCC (NBCC needs none). Derive from the storage path the flow already
-holds; ask only what cannot be derived:
+**Provider.** Only for OCC (NBCC needs none). **Two steps: find out what they already have,
+then educate only if they need it.** Most users arrive with this decided by their platform —
+their org runs ZooKeeper, or standardizes on DynamoDB locking, or a sibling Hudi table already
+made the call. Handing that user a menu of four backends asks them to re-decide something
+settled, and invites them to change a working answer.
 
-> "Which locking backend should the writers coordinate through?
+**Step A — what do they have?** Ask this first, always.
+
+> "Before I recommend anything: do you already have a locking backend in mind, or one your
+> platform standardizes on?"
 >
-> - **DynamoDB (recommended on AWS)** — Hudi creates the lock table for you; you supply a name,
->   a region, and IAM access for each writing job.
-> - **ZooKeeper** — if you already run a quorum.
-> - **Hive Metastore** — if you already run one.
-> - **The table's own storage** — nothing extra to run, but a newer provider (1.0.2) with less
->   production mileage than the others."
+> - **Yes, we already use one** — I'll use it.
+> - **We have infrastructure but haven't decided** — e.g. a ZooKeeper quorum or Hive Metastore
+>   already running for other purposes.
+> - **Nothing set up — walk me through the options**
+> - **Not sure what this even is** — I'll explain what a lock provider does first.
 
-**Order the options by maturity, not convenience** — see decision-tables.md → Concurrency Step 3.
-On AWS, default to DynamoDB. If the user already runs ZooKeeper or a Hive Metastore, prefer that
-over standing up anything new. Offer storage-based when the user is on cloud storage with no
-existing lock infrastructure — and state its maturity caveat in the option itself, so choosing it
-is a knowing choice rather than an accident of it being listed first. If the user asks for it
-directly, emit it and record the caveat in the ADR rather than arguing the point twice.
+**Routing:**
 
-Emit the **implicit** provider variants for DynamoDB and ZooKeeper (see decision-tables.md →
+- **"Already use one"** → take it as the answer. Ask which, confirm the implicit variant where
+  one exists, emit it. **Do not re-litigate it** — a platform standard is a good reason, and
+  consistency across an org's Hudi tables is worth more than a marginally better fit for one
+  table. The single exception is a genuine incompatibility (e.g. filesystem-based on cloud
+  storage → `FILESYSTEM_LOCK_UNSAFE`), which is a correctness objection, not a preference.
+  Record the choice and its rationale in the ADR.
+- **"Have infrastructure but haven't decided"** → name what they have and recommend using it
+  rather than adding a dependency. Go to Step B, but lead with their existing option.
+- **"Nothing set up"** → Step B, full comparison.
+- **"Not sure what this is"** → explain the mechanism first (below), then Step B.
+
+**Step B — educate, then recommend.** Only reached when the user actually needs it. Lead with
+what the thing *does*, in workload terms, before naming any backend:
+
+> "With two writers, each one takes a short lock right before it commits — just long enough to
+> check that nobody else changed the same files. The lock lives outside the table, so both jobs
+> need to agree on where it is. That's all a lock provider is: the shared place they check.
+>
+> It matters because if two writers use *different* locks, both succeed, and the table
+> corrupts silently — no error, nothing in the logs."
+
+Then the comparison, as a tradeoff table in prose (per the decision UX contract), before the
+widget. Include only rows that apply — do not show DynamoDB to a GCP user:
+
+| Backend | What it costs you | Maturity |
+|---|---|---|
+| **DynamoDB** (AWS) | A table Hudi creates for you, plus IAM access from each writing job | Since 0.10.0 — well-trodden |
+| **ZooKeeper** | A quorum to run, if you don't already have one | Since 0.8.0 — well-trodden |
+| **Hive Metastore** | Nothing, if you already run one | Since 0.8.0 — well-trodden |
+| **The table's own storage** | Nothing at all — it locks under the table's path | Since 1.0.2 — newer, less production mileage |
+
+Then recommend one and ask for confirmation, per decision-tables.md → Concurrency Step 3:
+DynamoDB on AWS; an existing ZooKeeper quorum or Hive Metastore otherwise; storage-based only
+where there is no existing lock infrastructure, with its maturity stated so choosing it is a
+knowing choice. If the user picks storage-based, fire `STORAGE_LOCK_MATURITY` once and move on
+— do not argue the point twice.
+
+**Emit the implicit provider variants** for DynamoDB and ZooKeeper (see decision-tables.md →
 Concurrency Step 3); only surface the explicit variants if the user asks to share one lock across
 tables or must match an existing lock identity, and fire `LOCK_PROVIDER_MISMATCH` when they do.
 
@@ -205,6 +242,39 @@ Then emit the matching block from config-templates.md → Concurrency, and state
 that carries the whole design: **the identical block goes in every writing job.** That becomes
 a pre-launch checklist item in ADR §13 — no longer a blocking open question, since the provider
 is now chosen and the config is complete.
+
+**Step C — disclose the lock defaults and take an acknowledgement.** Apply the standard
+disclosed-defaults pattern (SKILL.md → Disclosed defaults) to the values the user never chose.
+Every one of these has a default in code, so nothing is broken by leaving them alone — but the
+user should see them once rather than discover them during an incident.
+
+State the values, not the key names, and say what each one means in operational terms:
+
+> "The rest of the locking config keeps Hudi's defaults, which are sensible for a
+> two-writer table:
+>
+> - **Wait up to 60s to acquire a lock**, 15 retries a second apart — a writer that can't get
+>   the lock fails the commit rather than proceeding unsafely.
+> - **Lock validity 5 minutes, renewed every 30s** (storage-based only) — if a writer dies, the
+>   lock expires instead of blocking the table forever.
+> - **Conflict resolution: whole-file-group**, inferred from your index type — do not set this
+>   by hand.
+> - **DynamoDB billing: pay-per-request** — right for one short lock per commit.
+>
+> Keep these, or set any of them yourself?"
+>
+> - `Keep the defaults`
+> - `I want to set some myself`
+
+**If they want to set some**, present the multi-select router — lock acquisition timeout and
+retries, lock validity and renewal, DynamoDB capacity — and prompt only for what they claim.
+Everything unclaimed keeps its default and is **not emitted**, per the emit-config-that-changes-
+behavior rule; a value the user explicitly chose *is* emitted even when it equals the default,
+because it now records a decision.
+
+Do not walk through this block when the user's answer at Step A was an existing platform
+standard — their platform already owns these values, and re-opening them invites drift from a
+working configuration. Note in the ADR that lock tuning follows the platform standard.
 
 ## Round 1 outputs
 
