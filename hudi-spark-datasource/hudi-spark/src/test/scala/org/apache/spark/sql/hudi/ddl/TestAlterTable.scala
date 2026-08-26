@@ -511,4 +511,70 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test ALTER TABLE SET/UNSET TBLPROPERTIES validation") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts',
+           |  hoodie.clean.commits.retained = '10'
+           | )
+       """.stripMargin)
+
+      // 1. SET new mutable Hudi config -> hoodie.properties updated
+      spark.sql(s"alter table $tableName set TBLPROPERTIES ('hoodie.keep.max.commits' = '50')")
+      val tableConfig1 = createMetaClient(spark, tablePath).getTableConfig
+      assertResult("50")(tableConfig1.getString("hoodie.keep.max.commits"))
+
+      // 2. SET existing mutable Hudi config to a different value -> hoodie.properties actually changes
+      spark.sql(s"alter table $tableName set TBLPROPERTIES ('hoodie.clean.commits.retained' = '5')")
+      val tableConfig2 = createMetaClient(spark, tablePath).getTableConfig
+      assertResult("5")(tableConfig2.getString("hoodie.clean.commits.retained"))
+
+      // 3. SET normal Spark property -> catalog only
+      spark.sql(s"alter table $tableName set TBLPROPERTIES ('spark.custom.property' = 'value1')")
+      val catalogTable3 = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName))
+      assertResult("value1")(catalogTable3.properties("spark.custom.property"))
+      val tableConfig3 = createMetaClient(spark, tablePath).getTableConfig
+      assertFalse(tableConfig3.getProps.containsKey("spark.custom.property"))
+
+      // 4. UNSET mutable Hudi config -> removed from hoodie.properties
+      spark.sql(s"alter table $tableName unset TBLPROPERTIES ('hoodie.clean.commits.retained')")
+      val tableConfig4 = createMetaClient(spark, tablePath).getTableConfig
+      assertFalse(tableConfig4.getProps.containsKey("hoodie.clean.commits.retained"))
+
+      // 5. UNSET normal Spark property -> removed from catalog
+      spark.sql(s"alter table $tableName unset TBLPROPERTIES ('spark.custom.property')")
+      val catalogTable5 = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName))
+      assertFalse(catalogTable5.properties.contains("spark.custom.property"))
+
+      // 6. changing immutable Hudi config -> rejected
+      checkExceptionContain(s"alter table $tableName set TBLPROPERTIES ('type' = 'mor')")(
+        "Cannot change immutable table config"
+      )
+      checkExceptionContain(s"alter table $tableName set TBLPROPERTIES ('primaryKey' = 'name')")(
+        "Cannot change immutable table config"
+      )
+
+      // 7. unsetting immutable Hudi config -> rejected
+      checkExceptionContain(s"alter table $tableName unset TBLPROPERTIES ('type')")(
+        "Cannot unset immutable table property"
+      )
+      checkExceptionContain(s"alter table $tableName unset TBLPROPERTIES ('primaryKey')")(
+        "Cannot unset immutable table property"
+      )
+    }
+  }
 }

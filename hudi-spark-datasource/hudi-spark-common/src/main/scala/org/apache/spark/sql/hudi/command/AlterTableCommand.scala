@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.table.HoodieSparkTable
 
@@ -223,6 +224,33 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
    * Hudi's SQL aliases and datasource options are converted to the canonical keys stored in
    * hoodie.properties before validation and persistence.
    */
+  private val protectedTableConfigs = Set(
+    HoodieTableConfig.NAME.key,
+    HoodieTableConfig.TYPE.key,
+    HoodieTableConfig.VERSION.key,
+    HoodieTableConfig.INITIAL_VERSION.key,
+    HoodieTableConfig.PRECOMBINE_FIELD.key,
+    HoodieTableConfig.LOG_FILE_FORMAT.key,
+    HoodieTableConfig.RECORDKEY_FIELDS.key,
+    HoodieTableConfig.PARTITION_FIELDS.key,
+    HoodieTableConfig.ORDERING_FIELDS.key,
+    HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key,
+    HoodieTableConfig.KEY_GENERATOR_TYPE.key,
+    HoodieTableConfig.RECORD_MERGE_MODE.key,
+    HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key,
+    HoodieTableConfig.PAYLOAD_CLASS_NAME.key,
+    HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key,
+    HoodieTableConfig.TABLE_CHECKSUM.key,
+    HoodieTableConfig.CREATE_SCHEMA.key,
+    HoodieTableConfig.POPULATE_META_FIELDS.key,
+    HoodieTableConfig.META_FIELDS_MODE.key,
+    HoodieTableConfig.BOOTSTRAP_BASE_PATH.key,
+    HoodieTableConfig.DATABASE_NAME.key,
+    HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key,
+    HoodieTableConfig.TABLE_STORAGE_LAYOUT.key,
+    HoodieTableConfig.TABLE_FORMAT.key
+  )
+
   private def updateHoodieTableConfigs(sparkSession: SparkSession, properties: Map[String, String]): Unit = {
     val tableConfigs = HoodieOptionConfig.mapSqlOptionsToTableConfigs(
       HoodieOptionConfig.extractHoodieOptions(properties))
@@ -230,10 +258,16 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     if (tableConfigs.nonEmpty) {
       val metaClient = getMetaClient(sparkSession)
 
-      HoodieWriterUtils.validateTableConfig(
-        sparkSession,
-        tableConfigs,
-        metaClient.getTableConfig)
+      tableConfigs.foreach { case (key, value) =>
+        if (protectedTableConfigs.contains(key)) {
+          val existingValue = metaClient.getTableConfig.getString(key)
+          if (existingValue == null || existingValue != value) {
+            throw new HoodieException(
+              s"Cannot change immutable table config: $key"
+            )
+          }
+        }
+      }
 
       HoodieTableConfig.update(
         metaClient.getStorage,
@@ -241,12 +275,20 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
         TypedProperties.fromMap(tableConfigs.asJava))
     }
   }
+
   private def deleteHoodieTableConfigs(sparkSession: SparkSession, propertyKeys: Seq[String]): Unit = {
     val tableConfigs = HoodieOptionConfig.mapSqlOptionsToTableConfigs(
       HoodieOptionConfig.extractHoodieOptions(propertyKeys.map(_ -> "").toMap))
 
     if (tableConfigs.nonEmpty) {
       val metaClient = getMetaClient(sparkSession)
+
+      tableConfigs.keys.foreach { key =>
+        if (protectedTableConfigs.contains(key)) {
+          throw new HoodieException(s"Cannot unset immutable table property: $key")
+        }
+      }
+
       HoodieTableConfig.delete(
         metaClient.getStorage,
         metaClient.getMetaPath,
