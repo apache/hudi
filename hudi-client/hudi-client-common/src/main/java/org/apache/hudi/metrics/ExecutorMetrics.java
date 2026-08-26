@@ -42,8 +42,9 @@ public class ExecutorMetrics {
 
   /**
    * Reports each enabled group's counters and releases them, so the next commit reports only its own
-   * work. Called once the commit has landed, so a rolled-back commit neither publishes its counters nor
-   * loses them: they stay in the registry for the retry.
+   * work. Called once the commit has landed, so a commit that never lands publishes nothing. Its counters
+   * are not carried forward either on the Spark DataSource path, where {@code Metrics.shutdown()} clears
+   * every registry after each write.
    *
    * <p>Release subtracts what was reported rather than clearing, so a straggler task whose update lands
    * mid-publish carries into the next commit instead of being dropped. An all-zero registry is skipped.
