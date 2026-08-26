@@ -683,6 +683,111 @@ Rule engine mapping from consumer-read-pattern answer to Hudi query type:
 
 Query type is derived, not asked.
 
+## Catalog / metastore sync
+
+Derived from **which engines query the table**, not from a preference. A Hudi table on storage
+is invisible to Trino, Athena, Presto, Redshift Spectrum, BigQuery, or a Hive-based reader
+until it is registered somewhere those engines look. Spark and Flink can read a Hudi table by
+path with no catalog at all, so a Spark-only pipeline may legitimately need none.
+
+**Ask what reads the table, then derive.** Never ask "do you want Hive sync?" — that is a Hudi
+question. Ask which query engines and BI tools consume the table, which is a workload fact.
+
+### Step 1 — is a catalog needed at all?
+
+| Consumers | Catalog needed |
+|---|---|
+| Spark or Flink only, reading by path | **No.** Emit nothing. Say so explicitly rather than leaving it unstated. |
+| Spark SQL with a managed catalog, or anything Hive-based | **Yes** — HMS |
+| Trino, Presto, Athena, Redshift Spectrum | **Yes** — HMS, or Glue on AWS |
+| BigQuery | **Yes** — BigQuery sync (separate mechanism) |
+| A data-discovery tool (DataHub and similar) | **Optional, and additive** — see Step 4 |
+
+Sync is off by default. Nothing below is emitted unless a consumer requires it.
+
+### Step 2 — which catalog
+
+**HMS is the common answer, and Glue is the common answer on AWS.** Lead with those two;
+treat everything else as reached only when the user names it.
+
+| Catalog | Sync tool class | When |
+|---|---|---|
+| **Hive Metastore** | `org.apache.hudi.hive.HiveSyncTool` (default — no tool class config needed) | The default. Any Hive-based or Trino/Presto reader. |
+| **AWS Glue Data Catalog** | `org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool` | AWS environments, especially with Athena or EMR. Piggybacks on the Hive sync configs. |
+| **BigQuery** | `org.apache.hudi.gcp.bigquery.BigQuerySyncTool` | GCP, BigQuery as the query engine. Own config namespace, own constraints — see Step 3. |
+| **DataHub** | `org.apache.hudi.sync.datahub.DataHubSyncTool` | Discovery and governance only. **Not a query path** — see Step 4. |
+| **Polaris** | via `spark.sql.catalog.<name>=org.apache.polaris.spark.SparkCatalog` | Only when the user already runs Polaris. Since Hudi 1.1.1 / Polaris 1.3.0, and Polaris is incubating — newer than the rest, so say so. |
+
+Multiple sync tools can run together — comma-separate them in
+`hoodie.meta.sync.client.tool.class`. That is the normal shape for "HMS for queries, DataHub
+for discovery."
+
+### Step 3 — the constraints worth stating before they bite
+
+**HMS sync mode.** Three modes; `hms` talks Thrift to the metastore directly and is the one to
+recommend. `jdbc` goes through HiveServer2. `hiveql` executes DDL as HQL and is the weakest
+option — the docs themselves note it is mostly for DML rather than DDL. Recommend `hms` unless
+the user's environment forces otherwise.
+
+**Partition extractor must match the partitioning.** This is the most common way a sync
+succeeds and then produces a table nobody can query correctly:
+
+| Table partitioning | Extractor |
+|---|---|
+| Unpartitioned | `org.apache.hudi.hive.NonPartitionedExtractor` (inferred from partition-field config) |
+| Hive-style (`col=value`) | `org.apache.hudi.hive.HiveStylePartitionValueExtractor` (inferred when hive-style partitioning is on) |
+| One or more plain partition fields | `org.apache.hudi.hive.MultiPartKeysValueExtractor` (default) |
+| `TimestampBasedKeyGenerator` producing `yyyy/MM/dd` | `org.apache.hudi.hive.SinglePartPartitionValueExtractor` — extracts one `yyyy-MM-dd` value rather than three |
+
+Most cases are inferred. The one that is not, and that the rubric must catch, is the
+timestamp-based `yyyy/MM/dd` case → warnings.md → `PARTITION_EXTRACTOR_MISMATCH`.
+
+**MOR syncs two tables, not one.** A MOR table registers as `<table>_ro` (read-optimized, base
+files only) and `<table>_rt` (real-time, merges log files). Consumers must know which one to
+query: `_ro` is cheaper and staler, `_rt` is current and slower. If the design is MOR and a
+catalog is in play, name both in the ADR — a consumer pointed at the wrong suffix sees either
+stale data or unexpected latency, with no error either way.
+
+**BigQuery is read-optimized in practice.** The sync tool accepts both COW and MOR, but its
+manifest lists **base files only** — so a MOR table syncs successfully and BigQuery then reads
+it without merging log files. That is read-optimized semantics, not a failure, and it is worth
+stating plainly rather than letting a user infer snapshot freshness they will not get. BigQuery
+sync also requires hive-style partitioning
+(`hoodie.datasource.write.hive_style_partitioning=true`), and the manifest-based path
+(`hoodie.gcp.bigquery.sync.use_bq_manifest_file=true`) is preferred over the legacy
+view-over-files approach on both cost and performance.
+
+**Glue versions on every commit by default.** `hoodie.datasource.meta_sync.condition.sync`
+defaults to `false`, so every commit writes a new catalog version. At a 15-minute cadence that
+is ~96 versions a day for a table whose schema never changed. Set it to `true` to sync only on
+schema or partition change → warnings.md → `GLUE_SYNC_VERSION_CHURN`.
+
+**Sync failure is not write failure, by default.** The write commits and the catalog silently
+falls behind, so readers see a stale schema with nothing failing. Treat catalog staleness as a
+thing to monitor, not something the writer will report — this belongs in the ADR's operational
+playbook.
+
+### Step 4 — DataHub is not a query path
+
+`DataHubSyncTool` pushes metadata to DataHub over REST for discovery, lineage, and governance.
+It does **not** register the table anywhere a query engine will find it. A user who says "we
+use DataHub as our catalog" and needs Trino to query the table needs **both** DataHub and HMS.
+Say this explicitly — the word "catalog" covers both meanings and conflating them produces a
+table that is documented but unqueryable.
+
+### Bundles — the failure mode is a runtime ClassNotFoundException
+
+Each non-HMS sync tool lives in its own module, so the sync class is absent unless the matching
+bundle is on the classpath of the writing job. Correct config plus a missing bundle fails at
+the first commit, not at submit time:
+
+| Sync | Bundle |
+|---|---|
+| HMS | In the Spark bundle already |
+| Glue | `hudi-aws-bundle` |
+| BigQuery | `hudi-gcp-bundle` |
+| DataHub | `hudi-datahub-sync-bundle` |
+
 ## Key generator
 
 | Answer shape | Key generator |

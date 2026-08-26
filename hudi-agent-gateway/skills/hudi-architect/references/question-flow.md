@@ -380,6 +380,61 @@ Then proceed to the final revisit gate as normal.
 
 Rule engine maps answers to Hudi query types internally. See decision-tables.md → read-behavior.
 
+### Q2.1b — Query engines (drives catalog sync)
+
+Pairs with Q2.1 and shares its screen. Q2.1 establishes *how* consumers read; this establishes
+*what* reads. A Hudi table on storage is invisible to Trino, Athena, Presto, or BigQuery until
+it is registered in a catalog those engines look at — and Spark and Flink can read by path with
+no catalog at all, so this genuinely changes the emitted config.
+
+**Never ask "do you want Hive sync?"** — that is a Hudi question. Ask what queries the table.
+
+> "Which engines and tools will query this table?"
+>
+> - **Spark and/or Flink only** — reading the table directly.
+> - **Trino, Presto, or Athena**
+> - **BigQuery**
+> - **A mix, or something else** — tell me which.
+
+Multi-select where the widget supports it; a table read by both Spark jobs and Athena is the
+common case, not an edge case.
+
+**Routing** (full derivation in decision-tables.md → Catalog / metastore sync):
+
+- **Spark/Flink only** → **no catalog sync**. Emit nothing, and say so explicitly: "nothing to
+  register — Spark and Flink read the table by path." Silence here reads as an omission.
+- **Trino / Presto / Athena, or anything Hive-based** → HMS, or **Glue if the environment is
+  AWS**. Do not ask which; derive it from the storage path and any AWS signals already
+  collected, then state the choice.
+- **BigQuery** → BigQuery sync, and surface its constraints at that moment: hive-style
+  partitioning is required, and the manifest lists base files only, so a MOR table is read
+  **read-optimized** rather than as a snapshot.
+- **Spark SQL with a managed catalog** → HMS.
+
+**Then ask what they already run, before naming a catalog.** Same shape as the lock-provider
+question (Q1.7b Step A) and for the same reason — most orgs have this decided:
+
+> "Do you already have a metastore or catalog your platform uses?"
+>
+> - **Hive Metastore**
+> - **AWS Glue**
+> - **Something else** — tell me which.
+> - **Nothing yet**
+
+An existing catalog is the answer; do not argue for a different one. The database and table
+name are then a batched free-text follow-up alongside the other names Q2.6 collects.
+
+**If the design is MOR and a catalog is in play**, state that sync registers **two** tables
+(`_ro` base-files-only and `_rt` log-merging) and ask nothing — it is a fact to record in the
+ADR, not a decision. Consumers pointed at the wrong suffix get stale data or unexpected
+latency, with no error either way.
+
+**Discovery tools are additive, not alternatives.** If the user names DataHub or a similar
+governance catalog, confirm whether a *query* engine also needs the table: DataHub sync
+publishes metadata over REST and does not register the table anywhere an engine will find it.
+Both tools can run together via a comma-separated
+`hoodie.meta.sync.client.tool.class`.
+
 ### Q2.2 — Table size
 
 > "What's the current table size, and what do you expect over the next 2-3 years?"

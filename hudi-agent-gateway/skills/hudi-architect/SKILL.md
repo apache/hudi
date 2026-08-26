@@ -109,6 +109,10 @@ Internal labels for these four tiers: `EXPLORATION`, `PROTOTYPING`, `PRODUCTIONI
 - **Ordering / precombine field** (mutable workloads) — decides which version wins when two updates for the same key land in one batch.
 - **Partition column name**, when the user opts into partitioning.
 - **Source record format** (Kafka + HoodieStreamer) — derives the source class and schema provider.
+- **Which engines query the table** (Rounds 2+) — a Hudi table is invisible to Trino, Athena, or
+  BigQuery until it is registered in a catalog, and Spark/Flink need none. There is no safe
+  default: guessing "no catalog" ships an unqueryable table, guessing "HMS" invents
+  infrastructure.
 - **Whether anything else writes the table** (every tier but EXPLORATION) — assuming a single
   writer when there is a second is a silent-corruption path that produces no error and no log
   line. Costs one question about a fact the user already knows.

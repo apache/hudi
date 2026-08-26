@@ -613,6 +613,138 @@ and record the latency tradeoff in the ADR.
 | `hoodie.write.lock.app_id` | Identifies the lock holder for debugging. Environment-specific, not a design decision. |
 | `hoodie.write.lock.dynamodb.endpoint_url` | Local-development override for pointing at a DynamoDB emulator. |
 
+## Catalog / metastore sync
+
+Off by default — emit nothing unless a consumer needs it. Derivation and constraints are in
+decision-tables.md → Catalog / metastore sync. Spark- or Flink-only pipelines reading by path
+need none.
+
+### Hive Metastore (the default)
+
+```
+hoodie.datasource.meta.sync.enable=true
+hoodie.datasource.hive_sync.mode=hms
+hoodie.datasource.hive_sync.metastore.uris=thrift://<host>:9083
+hoodie.datasource.hive_sync.database=<db>
+hoodie.datasource.hive_sync.table=<table>
+hoodie.datasource.hive_sync.partition_fields=<partition column(s), comma-separated>
+```
+
+No `hoodie.meta.sync.client.tool.class` — `HiveSyncTool` is the default. The partition
+extractor is inferred for the common cases; set
+`hoodie.datasource.hive_sync.partition_extractor_class` explicitly only for the timestamp-based
+`yyyy/MM/dd` case (see decision-tables.md, and warnings.md →
+`PARTITION_EXTRACTOR_MISMATCH`).
+
+Omit `partition_fields` entirely for an unpartitioned table — it is what tells Hudi to use the
+non-partitioned extractor.
+
+**In Spark SQL with a Hive catalog** (`spark.sql.catalogImplementation=hive`), add:
+
+```
+hoodie.datasource.hive_sync.use_spark_catalog=true
+```
+
+That uses Spark's own catalog client and avoids the classloader conflicts otherwise seen in
+Hive-on-Spark setups.
+
+`hive-site.xml` must be on the classpath (and under `$SPARK_HOME/conf` for spark-shell or
+spark-sql). Only set `username` / `password` / `jdbcurl` when the mode is `jdbc`.
+
+### AWS Glue Data Catalog
+
+Reuses every Hive sync config above — only the tool class changes.
+
+```
+hoodie.datasource.meta.sync.enable=true
+hoodie.meta.sync.client.tool.class=org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool
+hoodie.datasource.hive_sync.database=<glue database>
+hoodie.datasource.hive_sync.table=<table>
+hoodie.datasource.hive_sync.partition_fields=<partition column(s)>
+# Sync only on schema or partition change. Default is false, which writes a new
+# Glue catalog version on EVERY commit.
+hoodie.datasource.meta_sync.condition.sync=true
+```
+
+`hudi-aws-bundle` must be on the classpath of every writing job. No metastore URI — the tool
+talks to Glue directly, and the AWS region comes from the environment.
+
+Optional, for large partitioned tables where Glue partition reads become the bottleneck:
+
+```
+hoodie.datasource.meta.sync.glue.partition_index_fields.enable=true
+hoodie.datasource.meta.sync.glue.partition_index_fields=<subset of partition fields>
+```
+
+The Glue read/write parallelism keys
+(`...glue.all_partitions_read_parallelism`, `...glue.changed_partitions_read_parallelism`,
+`...glue.partition_change_parallelism`) have working defaults — tune on observed sync latency,
+not at design time.
+
+### BigQuery
+
+Separate config namespace, and different constraints — read decision-tables.md before emitting.
+
+```
+hoodie.datasource.meta.sync.enable=true
+hoodie.meta.sync.client.tool.class=org.apache.hudi.gcp.bigquery.BigQuerySyncTool
+hoodie.gcp.bigquery.sync.project_id=<gcp project>
+hoodie.gcp.bigquery.sync.dataset_name=<dataset>
+hoodie.gcp.bigquery.sync.dataset_location=<region>
+hoodie.gcp.bigquery.sync.table_name=<table>
+hoodie.gcp.bigquery.sync.source_uri=gs://<bucket>/<path>/dt=*
+hoodie.gcp.bigquery.sync.source_uri_prefix=gs://<bucket>/<path>/
+# Manifest-based sync — preferred over the legacy view-over-files approach
+hoodie.gcp.bigquery.sync.use_bq_manifest_file=true
+# BigQuery sync requires hive-style partitioning
+hoodie.datasource.write.hive_style_partitioning=true
+```
+
+There is **no** `hoodie.gcp.bigquery.sync.base_path` — published docs list one, but the table
+location comes from the standard base-path config. `hudi-gcp-bundle` on the classpath.
+
+Optional: `hoodie.gcp.bigquery.sync.require_partition_filter=true` forces queries to filter on
+a partition column, which prevents accidental full scans;
+`hoodie.gcp.bigquery.sync.billing.project.id` when billing differs from the data project.
+
+### DataHub (discovery, not queries)
+
+Additive — pair it with HMS or Glue, never instead of one, when a query engine is involved.
+
+```
+hoodie.datasource.meta.sync.enable=true
+hoodie.meta.sync.client.tool.class=org.apache.hudi.hive.HiveSyncTool,org.apache.hudi.sync.datahub.DataHubSyncTool
+hoodie.meta.sync.datahub.emitter.server=http://<datahub-gms-host>:8080
+hoodie.meta.sync.datahub.emitter.token=<token>
+```
+
+`hudi-datahub-sync-bundle` on the classpath. For a custom emitter or dataset URN, see
+`hoodie.meta.sync.datahub.emitter.supplier.class` and
+`hoodie.meta.sync.datahub.dataset.identifier.class`.
+
+### Polaris
+
+Configured as a Spark catalog rather than through the sync-tool mechanism. Only when the user
+already runs Polaris — it is newer than the other options (Hudi 1.1.1 / Polaris 1.3.0, and
+Polaris is incubating).
+
+```
+--conf spark.sql.catalog.<catalog name>=org.apache.polaris.spark.SparkCatalog
+```
+
+Hudi detects the Polaris catalog and delegates table registration to it; the default is already
+`org.apache.polaris.spark.SparkCatalog`, so `hoodie.spark.polaris.catalog.class` needs setting
+only for a custom implementation.
+
+### MOR registers two tables
+
+A MOR table with catalog sync produces `<table>_ro` (base files only — cheaper, staler) and
+`<table>_rt` (merges log files — current, slower). Name **both** in the ADR and say which
+consumers should use which; pointing a consumer at the wrong suffix gives stale data or
+unexpected latency with no error either way. `--skip-ro-suffix` on the standalone sync tool
+suppresses the `_ro` suffix, which exists for backward compatibility and should not be a
+default choice.
+
 ## Sample bundles per archetype
 
 ### Immutable event stream (EVENT-shape) — Kafka source, small records

@@ -14,3 +14,8 @@ hoodie.streamer.schemaprovider.class
 # Not a key: the extractor picks up the bare `hoodie.streamer.schemaprovider.`
 # PREFIX mention in prose ("all property keys use the ... prefix").
 hoodie.streamer.schemaprovider
+
+# Mentioned only in negation prose: config-templates.md states this key DOES NOT
+# EXIST (published BigQuery docs list it; the table location comes from the
+# standard base-path config instead). The mention warns users away from it.
+hoodie.gcp.bigquery.sync.base_path
