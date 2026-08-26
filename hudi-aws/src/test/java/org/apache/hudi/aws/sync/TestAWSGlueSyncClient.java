@@ -25,6 +25,8 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.SchemaDifference;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
@@ -48,6 +50,7 @@ import software.amazon.awssdk.services.glue.model.BatchCreatePartitionResponse;
 import software.amazon.awssdk.services.glue.model.BatchDeletePartitionRequest;
 import software.amazon.awssdk.services.glue.model.BatchDeletePartitionResponse;
 import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionRequest;
+import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionRequestEntry;
 import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionResponse;
 import software.amazon.awssdk.services.glue.model.Column;
 import software.amazon.awssdk.services.glue.model.CreateDatabaseRequest;
@@ -908,5 +911,54 @@ class TestAWSGlueSyncClient {
         .table(table)
         .build();
     return CompletableFuture.completedFuture(response);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"2024-01-15", "datestr=2024-01-15", "2024/01/15"})
+  void testUpdateTableSchema_cascadePreservesGlueRecordedPartitionLocation(String partitionDir) {
+    String tableName = GlueTestUtil.TABLE_NAME;
+    String basePath = GlueTestUtil.getHiveSyncConfig().getString(META_SYNC_BASE_PATH);
+    String partitionLocation = new StoragePath(basePath, partitionDir).toString();
+
+    Table table = Table.builder()
+        .name(tableName)
+        .databaseName(GlueTestUtil.DB_NAME)
+        .storageDescriptor(StorageDescriptor.builder()
+            .location(basePath)
+            .columns(Column.builder().name("name").type("string").build())
+            .build())
+        .partitionKeys(Column.builder().name("datestr").type("string").build())
+        .build();
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().table(table).build()));
+    when(mockAwsGlue.updateTable(any(UpdateTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
+
+    software.amazon.awssdk.services.glue.model.Partition gluePartition =
+        software.amazon.awssdk.services.glue.model.Partition.builder()
+            .values("2024-01-15")
+            .storageDescriptor(StorageDescriptor.builder().location(partitionLocation).build())
+            .build();
+    when(mockAwsGlue.getPartitions(any(GetPartitionsRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(
+            GetPartitionsResponse.builder().partitions(gluePartition).nextToken(null).build()));
+
+    ArgumentCaptor<BatchUpdatePartitionRequest> captor = ArgumentCaptor.forClass(BatchUpdatePartitionRequest.class);
+    when(mockAwsGlue.batchUpdatePartition(captor.capture()))
+        .thenReturn(CompletableFuture.completedFuture(BatchUpdatePartitionResponse.builder().build()));
+
+    HoodieSchema schema = GlueTestUtil.getSimpleSchema();
+    SchemaDifference schemaDiff = SchemaDifference.newBuilder(schema, new HashMap<>())
+        .updateTableColumn("name", "string")
+        .build();
+
+    awsGlueSyncClient.updateTableSchema(tableName, schema, schemaDiff);
+
+    List<BatchUpdatePartitionRequestEntry> entries = captor.getValue().entries();
+    assertEquals(1, entries.size());
+    assertEquals(partitionLocation, entries.get(0).partitionInput().storageDescriptor().location());
+    assertEquals(Collections.singletonList("2024-01-15"), entries.get(0).partitionValueList());
+    assertEquals(table.storageDescriptor().columns(),
+        entries.get(0).partitionInput().storageDescriptor().columns());
   }
 }

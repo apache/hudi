@@ -103,6 +103,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
@@ -148,6 +149,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
    */
   private static final String ENABLE_MDT_LISTING = "hudi.metadata-listing-enabled";
   private static final String GLUE_TABLE_ARN_FORMAT = "arn:aws:glue:%s:%s:table/%s/%s";
+  private static final String UPDATE_PARTITIONS = "update partitions to";
+  private static final String CASCADE_COLUMNS_TO_PARTITIONS = "cascade columns to partitions of";
   private static final String GLUE_DATABASE_ARN_FORMAT = "arn:aws:glue:%s:%s:database/%s";
   @Getter
   private final String databaseName;
@@ -377,34 +380,62 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         return;
       }
       Table table = getTable(awsGlue, databaseName, tableName);
-      parallelizeChange(changedPartitions, this.changeParallelism, partitions -> this.updatePartitionsToTableInternal(table, partitions), MAX_PARTITIONS_PER_CHANGE_REQUEST);
+      parallelizeChange(changedPartitions, this.changeParallelism,
+          batch -> this.updatePartitionsInternal(table, () -> partitionsFromStoragePaths(batch), UPDATE_PARTITIONS), MAX_PARTITIONS_PER_CHANGE_REQUEST);
     } finally {
       log.info("Updated {} partitions to table {} in {} ms", changedPartitions.size(), tableId(this.databaseName, tableName), timer.endTimer());
     }
   }
 
-  private void updatePartitionsToTableInternal(Table table, List<String> changedPartitions) {
+  /** Builds Partitions whose location is derived from the storage path, not read back from the catalog. */
+  private List<Partition> partitionsFromStoragePaths(List<String> storagePartitionPaths) {
+    return storagePartitionPaths.stream()
+        .map(p -> new Partition(
+            partitionValueExtractor.extractPartitionValuesInPath(p),
+            FSUtils.constructAbsolutePath(s3aToS3(getBasePath()), p).toString()))
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Propagates the table's columns onto every partition, reusing each partition's recorded location:
+   * a location derived from partition values can miss the real layout and point at a prefix with no data.
+   */
+  private void cascadeColumnsToPartitions(String tableName, List<Partition> partitions) {
+    HoodieTimer timer = HoodieTimer.start();
     try {
+      if (partitions.isEmpty()) {
+        log.info("No partitions to cascade columns to for {}", tableId(this.databaseName, tableName));
+        return;
+      }
+      Table table = getTable(awsGlue, databaseName, tableName);
+      parallelizeChange(partitions, this.changeParallelism,
+          batch -> this.updatePartitionsInternal(table, () -> batch, CASCADE_COLUMNS_TO_PARTITIONS), MAX_PARTITIONS_PER_CHANGE_REQUEST);
+    } finally {
+      log.info("Cascaded columns to {} partitions of table {} in {} ms", partitions.size(), tableId(this.databaseName, tableName), timer.endTimer());
+    }
+  }
+
+  /** Partitions are supplied lazily so a failure deriving them is wrapped here rather than escaping unwrapped. */
+  private void updatePartitionsInternal(Table table, Supplier<List<Partition>> partitionsSupplier, String context) {
+    try {
+      List<Partition> partitions = partitionsSupplier.get();
       StorageDescriptor sd = table.storageDescriptor();
-      List<BatchUpdatePartitionRequestEntry> updatePartitionEntries = changedPartitions.stream().map(partition -> {
-        String fullPartitionPath = FSUtils.constructAbsolutePath(s3aToS3(getBasePath()), partition).toString();
-        List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-        StorageDescriptor partitionSD = sd.copy(copySd -> copySd.location(fullPartitionPath));
+      List<BatchUpdatePartitionRequestEntry> updatePartitionEntries = partitions.stream().map(partition -> {
+        List<String> partitionValues = partition.getValues();
+        StorageDescriptor partitionSD = sd.copy(copySd -> copySd.location(partition.getStorageLocation()));
         PartitionInput partitionInput = PartitionInput.builder().values(partitionValues).storageDescriptor(partitionSD).build();
         return BatchUpdatePartitionRequestEntry.builder().partitionInput(partitionInput).partitionValueList(partitionValues).build();
       }).collect(Collectors.toList());
 
       BatchUpdatePartitionRequest request = BatchUpdatePartitionRequest.builder().catalogId(catalogId)
               .databaseName(databaseName).tableName(table.name()).entries(updatePartitionEntries).build();
-      CompletableFuture<BatchUpdatePartitionResponse> future = awsGlue.batchUpdatePartition(request);
-
-      BatchUpdatePartitionResponse response = future.get();
+      BatchUpdatePartitionResponse response = awsGlue.batchUpdatePartition(request).get();
       if (CollectionUtils.nonEmpty(response.errors())) {
-        throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, table.name())
+        throw new HoodieGlueSyncException("Fail to " + context + " " + tableId(databaseName, table.name())
             + " with error(s): " + response.errors());
       }
     } catch (Exception e) {
-      throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, table.name()), e);
+      throw new HoodieGlueSyncException("Fail to " + context + " " + tableId(databaseName, table.name()), e);
     }
   }
 
@@ -595,24 +626,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       // TODO: skip cascading when new fields in structs are added to the schema in last position
       boolean cascade = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).size() > 0 && !schemaDiff.getUpdateColumnTypes().isEmpty();
       if (cascade) {
-        log.info("Cascading column changes to partitions");
-        List<String> allPartitions = getAllPartitions(tableName).stream()
-            .map(partition -> getStringFromPartition(table.partitionKeys(), partition.getValues()))
-            .collect(Collectors.toList());
-        updatePartitionsToTable(tableName, allPartitions);
+        cascadeColumnsToPartitions(tableName, getAllPartitions(tableName));
       }
       awsGlue.updateTable(request).get();
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update definition for table " + tableId(databaseName, tableName), e);
     }
-  }
-
-  private String getStringFromPartition(List<Column> partitionKeys, List<String> values) {
-    ArrayList<String> partitionValues = new ArrayList<>();
-    for (int i = 0; i < partitionKeys.size(); i++) {
-      partitionValues.add(String.format("%s=%s", partitionKeys.get(i).name(), values.get(i)));
-    }
-    return partitionValues.stream().collect(Collectors.joining("/"));
   }
 
   @Override
