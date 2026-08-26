@@ -13,18 +13,9 @@
  */
 package io.trino.plugin.hudi;
 
-import io.trino.filesystem.local.LocalInputFile;
 import io.trino.metastore.HiveType;
-import io.trino.parquet.ParquetReaderOptions;
-import io.trino.plugin.base.metrics.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.HiveColumnProjectionInfo;
-import io.trino.plugin.hive.parquet.ParquetReaderConfig;
-import io.trino.plugin.hudi.file.HudiBaseFile;
-import io.trino.spi.SplitWeight;
-import io.trino.spi.connector.ColumnHandle;
-import io.trino.spi.connector.ConnectorPageSource;
-import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.Range;
@@ -34,43 +25,30 @@ import io.trino.spi.type.BigintType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.testing.MaterializedResult;
-import io.trino.testing.TestingConnectorSession;
-import org.apache.parquet.conf.PlainParquetConfiguration;
-import org.apache.parquet.example.data.Group;
-import org.apache.parquet.example.data.simple.SimpleGroupFactory;
-import org.apache.parquet.hadoop.ParquetFileReader;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.example.ExampleParquetWriter;
-import org.apache.parquet.io.LocalOutputFile;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Types;
-import org.joda.time.DateTimeZone;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalLong;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 
 import static io.trino.plugin.hive.HiveColumnHandle.createBaseColumn;
-import static io.trino.plugin.hudi.HudiPageSourceProvider.createPageSource;
 import static io.trino.plugin.hudi.HudiPageSourceProvider.remapColumnIndicesToPhysical;
 import static io.trino.plugin.hudi.HudiPageSourceProvider.remapPredicateColumnIndicesToPhysical;
+import static io.trino.plugin.hudi.TestingBaseFilePageSource.dynamicFilterOn;
+import static io.trino.plugin.hudi.TestingBaseFilePageSource.writeBaseFile;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.VarcharType.VARCHAR;
-import static io.trino.testing.MaterializedResult.materializeSourceDataStream;
 import static java.lang.Integer.parseInt;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
@@ -113,35 +91,22 @@ class TestHudiPageSourceProviderTest
     private static Path baseFile;
 
     @BeforeAll
-    static void writeBaseFile()
+    static void writeFixture()
             throws IOException
     {
-        MessageType schema = hudiFileSchema(DATA_COLUMN_COUNT);
         baseFile = tempDir.resolve("base_file.parquet");
-        SimpleGroupFactory groupFactory = new SimpleGroupFactory(schema);
-        try (ParquetWriter<Group> writer = ExampleParquetWriter.builder(new LocalOutputFile(baseFile))
-                .withType(schema)
-                .withConf(new PlainParquetConfiguration())
-                .withRowGroupSize(1024L)
-                .withPageSize(512)
-                .build()) {
-            for (int row = 0; row < ROW_COUNT; row++) {
-                Group group = groupFactory.newGroup();
-                for (String metaColumn : HOODIE_META_COLUMNS) {
-                    group.append(metaColumn, metaColumn + "_" + row);
-                }
-                for (int column = 0; column < DATA_COLUMN_COUNT; column++) {
-                    String columnName = "c" + column;
-                    group.append(columnName, columnName.equals(PREDICATE_COLUMN) ? row : row % 10);
-                }
-                writer.write(group);
+        int rowGroups = writeBaseFile(baseFile, hudiFileSchema(DATA_COLUMN_COUNT), ROW_COUNT, (group, row) -> {
+            for (String metaColumn : HOODIE_META_COLUMNS) {
+                group.append(metaColumn, metaColumn + "_" + row);
             }
-        }
-        // The writer flushes a row group whenever the buffered size is over withRowGroupSize, checked every
-        // parquet.page.size.row.check.min records (100 by default), which is what actually splits this file.
-        // Assert the outcome rather than the knobs: with a single row group there would be nothing to prune,
-        // and every test below would pass without proving anything.
-        assertThat(rowGroupCount(baseFile)).as("row groups written").isGreaterThan(1);
+            for (int column = 0; column < DATA_COLUMN_COUNT; column++) {
+                String columnName = "c" + column;
+                group.append(columnName, columnName.equals(PREDICATE_COLUMN) ? row : row % 10);
+            }
+        });
+        // Assert the outcome rather than the writer knobs: with a single row group there would be nothing to prune,
+        // and every reading test below would pass without proving anything.
+        assertThat(rowGroups).as("row groups written").isGreaterThan(1);
     }
 
     @Test
@@ -579,10 +544,6 @@ class TestHudiPageSourceProviderTest
                 .isEqualTo(byName.getMaterializedRows());
     }
 
-    /**
-     * Reads the whole base file through the page source the connector builds for a split with no log files, which
-     * is the only path on which it enables predicate pushdown.
-     */
     private static MaterializedResult read(
             List<HiveColumnHandle> projection,
             TupleDomain<HiveColumnHandle> predicate,
@@ -590,38 +551,7 @@ class TestHudiPageSourceProviderTest
             DynamicFilter dynamicFilter)
             throws Exception
     {
-        long fileSize = Files.size(baseFile);
-        HudiSplit split = new HudiSplit(
-                new HudiBaseFile(baseFile.toString(), baseFile.getFileName().toString(), fileSize, 0, 0, fileSize),
-                List.of(),
-                "000",
-                predicate,
-                List.of(),
-                SplitWeight.standard());
-        HudiSessionProperties sessionProperties = new HudiSessionProperties(
-                new HudiConfig().setUseParquetColumnNames(useParquetColumnNames),
-                new ParquetReaderConfig());
-        ConnectorSession session = TestingConnectorSession.builder()
-                .setPropertyMetadata(sessionProperties.getSessionProperties())
-                .build();
-
-        List<Type> types = projection.stream().map(HiveColumnHandle::getType).toList();
-        try (ConnectorPageSource pageSource = createPageSource(
-                session,
-                projection,
-                split,
-                new LocalInputFile(baseFile.toFile()),
-                baseFile.toString(),
-                0L,
-                fileSize,
-                OptionalLong.of(fileSize),
-                new FileFormatDataSourceStats(),
-                ParquetReaderOptions.builder().build(),
-                DateTimeZone.UTC,
-                dynamicFilter,
-                true)) {
-            return materializeSourceDataStream(session, pageSource, types).toTestTypes();
-        }
+        return TestingBaseFilePageSource.read(baseFile, projection, predicate, useParquetColumnNames, dynamicFilter);
     }
 
     /**
@@ -687,42 +617,6 @@ class TestHudiPageSourceProviderTest
                 Domain.create(ValueSet.ofRanges(Range.greaterThan(INTEGER, THRESHOLD)), false)));
     }
 
-    private static DynamicFilter dynamicFilterOn(TupleDomain<HiveColumnHandle> predicate)
-    {
-        return new DynamicFilter()
-        {
-            @Override
-            public Set<ColumnHandle> getColumnsCovered()
-            {
-                return Set.copyOf(predicate.getDomains().orElseThrow().keySet());
-            }
-
-            @Override
-            public CompletableFuture<?> isBlocked()
-            {
-                return CompletableFuture.completedFuture(null);
-            }
-
-            @Override
-            public boolean isComplete()
-            {
-                return true;
-            }
-
-            @Override
-            public boolean isAwaitable()
-            {
-                return false;
-            }
-
-            @Override
-            public TupleDomain<ColumnHandle> getCurrentPredicate()
-            {
-                return predicate.transformKeys(ColumnHandle.class::cast);
-            }
-        };
-    }
-
     private static long matchingRowCount(MaterializedResult result, List<HiveColumnHandle> projection, String columnName)
     {
         int fieldIndex = projection.indexOf(dataColumn(columnName));
@@ -730,14 +624,6 @@ class TestHudiPageSourceProviderTest
                 .map(row -> row.getField(fieldIndex))
                 .filter(value -> value != null && ((Number) value).longValue() > THRESHOLD)
                 .count();
-    }
-
-    private static int rowGroupCount(Path path)
-            throws IOException
-    {
-        try (ParquetFileReader reader = ParquetFileReader.open(new org.apache.parquet.io.LocalInputFile(path))) {
-            return reader.getRowGroups().size();
-        }
     }
 
     /**
