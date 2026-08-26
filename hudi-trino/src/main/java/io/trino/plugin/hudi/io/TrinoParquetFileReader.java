@@ -141,8 +141,8 @@ public class TrinoParquetFileReader
             throws IOException
     {
         // Timeline files are never schema-evolved, so no column can have been renamed under them
-        Schema schema = requestedSchema != null ? requestedSchema.toAvroSchema() : avroSchema;
-        ParquetIndexedRecordIterator iterator = new ParquetIndexedRecordIterator(schema);
+        Schema projectedSchema = requestedSchema != null ? requestedSchema.toAvroSchema() : avroSchema;
+        ParquetIndexedRecordIterator iterator = new ParquetIndexedRecordIterator(projectedSchema);
         synchronized (openIterators) {
             openIterators.add(iterator);
         }
@@ -236,10 +236,10 @@ public class TrinoParquetFileReader
         return new Schema.Parser().parse(avroSchemaStr);
     }
 
-    private static List<Column> buildTrinoColumns(Schema readerSchema, MessageColumnIO messageColumnIO)
+    private static List<Column> buildTrinoColumns(Schema projectedSchema, MessageColumnIO messageColumnIO)
     {
         ImmutableList.Builder<Column> columnsBuilder = ImmutableList.builder();
-        for (Schema.Field field : readerSchema.getFields()) {
+        for (Schema.Field field : projectedSchema.getFields()) {
             Type trinoType = avroTypeToTrinoType(field.schema());
             Field parquetField = constructField(trinoType, lookupColumnByName(messageColumnIO, field.name()))
                     .orElseThrow(() -> new TrinoException(HUDI_SCHEMA_ERROR, "Could not find column: " + field.name()));
@@ -248,10 +248,10 @@ public class TrinoParquetFileReader
         return columnsBuilder.build();
     }
 
-    private static List<HiveColumnHandle> buildColumnHandles(Schema readerSchema)
+    private static List<HiveColumnHandle> buildColumnHandles(Schema projectedSchema)
     {
         List<HiveColumnHandle> columnHandles = new ArrayList<>();
-        List<Schema.Field> fields = readerSchema.getFields();
+        List<Schema.Field> fields = projectedSchema.getFields();
         for (int i = 0; i < fields.size(); i++) {
             Schema.Field field = fields.get(i);
             Type trinoType = avroTypeToTrinoType(field.schema());
@@ -302,9 +302,9 @@ public class TrinoParquetFileReader
      * and that is what hudi-common casts to when it reads the {@code metadata} and {@code plan} columns of an
      * LSM instant, so those values have to be converted before the record leaves this reader.
      */
-    private static int[] binaryFieldPositions(Schema readerSchema)
+    private static int[] binaryFieldPositions(Schema projectedSchema)
     {
-        return readerSchema.getFields().stream()
+        return projectedSchema.getFields().stream()
                 .filter(field -> avroTypeToTrinoType(field.schema()).equals(VARBINARY))
                 .mapToInt(Schema.Field::pos)
                 .toArray();
@@ -332,16 +332,16 @@ public class TrinoParquetFileReader
         private boolean exhausted;
         private boolean closed;
 
-        ParquetIndexedRecordIterator(Schema readerSchema)
+        ParquetIndexedRecordIterator(Schema projectedSchema)
                 throws IOException
         {
-            List<HiveColumnHandle> columnHandles = buildColumnHandles(readerSchema);
-            this.parquetReader = createParquetReader(columnHandles, readerSchema);
+            List<HiveColumnHandle> columnHandles = buildColumnHandles(projectedSchema);
+            this.parquetReader = createParquetReader(columnHandles, projectedSchema);
             // Null prefilled values: PrefilledColumnValues answers partition and hidden metadata columns of a
             // split, of which a timeline read has neither, and serialize() only ever reads page values. There
             // is no split here to build one from -- create(HudiSplit) is its only factory.
-            this.avroSerializer = new HudiAvroSerializer(columnHandles, null, readerSchema);
-            this.binaryFieldPositions = binaryFieldPositions(readerSchema);
+            this.avroSerializer = new HudiAvroSerializer(columnHandles, null, projectedSchema);
+            this.binaryFieldPositions = binaryFieldPositions(projectedSchema);
         }
 
         @Override
@@ -394,7 +394,7 @@ public class TrinoParquetFileReader
             }
         }
 
-        private ParquetReader createParquetReader(List<HiveColumnHandle> columnHandles, Schema readerSchema)
+        private ParquetReader createParquetReader(List<HiveColumnHandle> columnHandles, Schema projectedSchema)
                 throws IOException
         {
             AggregatedMemoryContext memoryContext = newSimpleAggregatedMemoryContext();
@@ -404,7 +404,7 @@ public class TrinoParquetFileReader
                 MessageType fileSchema = fileMetaData.getSchema();
                 MessageType requestedSchema = getParquetMessageType(columnHandles, true, fileSchema)
                         .orElse(new MessageType(fileSchema.getName(), ImmutableList.of()));
-                List<Column> columns = buildTrinoColumns(readerSchema, getColumnIO(fileSchema, requestedSchema));
+                List<Column> columns = buildTrinoColumns(projectedSchema, getColumnIO(fileSchema, requestedSchema));
 
                 Map<List<String>, ColumnDescriptor> descriptorsByPath = getDescriptors(fileSchema, requestedSchema);
                 TupleDomain<ColumnDescriptor> tupleDomain = TupleDomain.all();
@@ -450,7 +450,7 @@ public class TrinoParquetFileReader
                 throws IOException
         {
             SourcePage sourcePage = parquetReader.nextPage();
-            // Once the reader has handed out its last page it must never be asked again: a nextBatch() past
+            // Once the reader has handed out its last page it must never be asked again: a nextPage() past
             // the end of the row groups throws IndexOutOfBoundsException instead of returning null a second time
             exhausted = sourcePage == null;
             currentPage = exhausted ? null : sourcePage.getPage();

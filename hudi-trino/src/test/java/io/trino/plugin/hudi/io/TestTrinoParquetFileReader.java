@@ -85,14 +85,16 @@ class TestTrinoParquetFileReader
     }
 
     @ParameterizedTest
-    @EnumSource(value = HoodieArchivedTimeline.LoadMode.class, names = {"TIME", "FULL"})
+    @EnumSource(value = HoodieArchivedTimeline.LoadMode.class, names = {"TIME", "METADATA", "PLAN", "FULL"})
     void testProjectedReadUsesRequestedSchema(HoodieArchivedTimeline.LoadMode loadMode)
             throws Exception
     {
-        // The projections ArchivedTimelineLoaderV2 requests: TIME when it only needs instant times, FULL when it needs
-        // the payloads too. FULL is the interesting one -- its read schema orders plan before metadata, the reverse of
-        // the file's metadata, plan, so a passing read proves columns are mapped by name and not by position, and it is
-        // the only projection that materializes the bytes columns the SqlVarbinary -> ByteBuffer conversion exists for
+        // The projections the archived-timeline readers request. TIME is what CompletionTimeQueryViewV2 asks for when
+        // it only needs instant times; METADATA and PLAN are what ArchivedTimelineV2 asks for when it needs a payload,
+        // and it casts that bytes column to ByteBuffer -- the SqlVarbinary -> ByteBuffer conversion exists for those
+        // two. FULL is requested only by EightToSevenDowngradeHandler, but it is the one projection that orders plan
+        // before metadata, the reverse of the file's metadata, plan, so a passing FULL read proves columns are mapped
+        // by name and not by position
         Schema projectedAvroSchema = LSMTimeline.getReadSchema(loadMode);
         HoodieSchema tableSchema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
         HoodieSchema projectedSchema = HoodieSchema.fromAvroSchema(projectedAvroSchema);
@@ -112,15 +114,18 @@ class TestTrinoParquetFileReader
             assertThat(records.get(1).get(instantTimePos).toString()).isEqualTo("20250918121958100");
             assertThat(records.get(1).get(completionTimePos).toString()).isEqualTo("20250918121959081");
 
+            // All four instants of the fixture are commits: every row has metadata bytes and a null plan. METADATA and
+            // PLAN each carry only their own bytes column and FULL carries both, so the two are checked independently
             if (projectedAvroSchema.getField("metadata") != null) {
                 int metadataPos = projectedAvroSchema.getField("metadata").pos();
-                int planPos = projectedAvroSchema.getField("plan").pos();
-                // All four instants of the fixture are commits: every row has metadata bytes and a null plan
                 assertThat(records).allSatisfy(record -> {
                     assertThat(record.get(metadataPos)).isInstanceOf(ByteBuffer.class);
                     assertThat(((ByteBuffer) record.get(metadataPos)).remaining()).isGreaterThan(0);
-                    assertThat(record.get(planPos)).isNull();
                 });
+            }
+            if (projectedAvroSchema.getField("plan") != null) {
+                int planPos = projectedAvroSchema.getField("plan").pos();
+                assertThat(records).allSatisfy(record -> assertThat(record.get(planPos)).isNull());
             }
         }
     }
