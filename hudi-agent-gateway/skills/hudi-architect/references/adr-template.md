@@ -88,6 +88,10 @@ services:
   compaction: async in-process, every 5 delta commits
   clustering: OFF (revisit if fragmentation grows)
 metadata_table: enabled
+catalog_sync: none                  # or: hms / glue / bigquery (+ datahub)
+# when synced, also record:
+#   database + table registered
+#   for MOR: both <table>_ro and <table>_rt, and which consumers use which
 concurrency: SINGLE_WRITER          # or OPTIMISTIC_CONCURRENCY_CONTROL / NON_BLOCKING_CONCURRENCY_CONTROL
 # when multi-writer, also record:
 #   writers: <inventory>
@@ -215,6 +219,7 @@ Practical guidance for running this table:
 - Active timeline entry count (must stay under ~5000).
 - Small-file ratio.
 - Cleaner + archival activity.
+- **Catalog sync only:** sync errors. A failed sync does not fail the write, so the catalog falls behind silently and readers see a stale schema or missing partitions with nothing in the writer's logs.
 - **Multi-writer only:** lock acquisition failures and commit-conflict retries. A rising conflict rate means the writers are contending on the same file groups — a partitioning or key-space question, not a lock-tuning one.
 
 **Multi-writer operating rules** (include only when the design is OCC or NBCC):

@@ -217,6 +217,51 @@ Emit the concrete OCC block from config-templates.md → Concurrency for the dep
 
 **When fires:** at concurrency derivation, once the operation type per writer is known. Not a hard block — many multi-writer deployments have disjoint key spaces by construction — but it must be answered rather than assumed.
 
+### PARTITION_EXTRACTOR_MISMATCH
+
+**Triggered when:** catalog sync is enabled AND the key generator is `TimestampBasedKeyGenerator` producing a `yyyy/MM/dd`-style partition path.
+
+**Message:**
+> "Your partition paths look like `2026/08/25` — three path segments from one logical date. The default partition extractor reads those as three separate partition values, so the catalog gets a table partitioned by three columns instead of one date. Queries filtering on a date then don't prune correctly. Set `hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.SinglePartPartitionValueExtractor`, which turns the path back into a single `2026-08-25` value."
+
+**When fires:** at catalog-sync derivation, once the key generator and partition scheme are known. Not a hard block, but it must reach the emitted config — this is a sync that *succeeds* and then produces a table nobody can query correctly, which is worse than a failure.
+
+### GLUE_SYNC_VERSION_CHURN
+
+**Triggered when:** the Glue sync tool is selected AND commit cadence is hourly or faster.
+
+**Message:**
+> "Glue sync writes a new catalog version on every commit by default. At your cadence that's roughly `<commits/day>` versions a day for a table whose schema mostly isn't changing. Setting `hoodie.datasource.meta_sync.condition.sync=true` syncs only when the schema or partitions actually change, which is what you want for a steady pipeline."
+
+**When fires:** immediately on selecting Glue, with the commits-per-day figure computed from the answered cadence rather than left abstract. Not a hard block.
+
+### CATALOG_SYNC_SILENT_STALENESS
+
+**Triggered when:** any catalog sync is enabled.
+
+**Message:**
+> "One operational note: a sync failure doesn't fail the write. The commit succeeds and the catalog quietly falls behind, so readers see a stale schema — or miss new partitions — with nothing in the writer's logs pointing at it. Worth an alert on sync errors, and worth knowing that 'the table looks wrong in Athena' usually means the catalog, not the data."
+
+**When fires:** once, at catalog-sync derivation. Informational — it belongs in the ADR's operational playbook rather than the dialogue's critical path.
+
+### BIGQUERY_MOR_READ_OPTIMIZED
+
+**Triggered when:** BigQuery sync is selected AND the table type is MERGE_ON_READ.
+
+**Message:**
+> "BigQuery sync will accept this MOR table, but its manifest lists base files only — so BigQuery won't merge your log files, and queries there see read-optimized data rather than a current snapshot. Updates land in logs and only become visible to BigQuery after compaction. If BigQuery consumers need current data, either shorten the compaction interval or reconsider MOR for this table. Spark and Flink readers are unaffected."
+
+**When fires:** at catalog-sync derivation. Not a hard block — read-optimized is a legitimate choice — but it must be an explicit one, since nothing errors and the data merely looks stale.
+
+### CATALOG_BUNDLE_REQUIRED
+
+**Triggered when:** a sync tool outside the Spark bundle is selected — Glue, BigQuery, or DataHub.
+
+**Message:**
+> "`<sync tool>` lives in its own module, so `<bundle>` has to be on the classpath of every job that writes this table. The config is correct without it, which is the problem: the job submits fine and then fails at the first commit with a ClassNotFoundException on the sync class."
+
+**When fires:** on sync-tool selection. Must appear in the ADR's pre-launch checklist, not only in dialogue. Bundle mapping is in decision-tables.md → Catalog / metastore sync.
+
 ### THREE_CONCURRENT_SERVICES
 
 **Triggered when:** writer is HoodieStreamer continuous AND table type is MOR AND clustering enabled.
