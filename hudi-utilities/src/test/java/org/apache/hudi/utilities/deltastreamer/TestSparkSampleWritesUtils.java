@@ -29,6 +29,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.streamer.SparkSampleWritesUtils;
@@ -118,6 +119,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
     assertTrue(writeConfigOpt.isPresent());
     assertEquals(337.0, writeConfigOpt.get().getCopyOnWriteRecordSizeEstimate(), 10.0);
     assertSampleWritesNonPartitioned();
+    assertSampleWritesShadowTableVersion(tableVersion);
   }
 
   @Test
@@ -169,6 +171,27 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
       assertTrue(partitionDirs.isEmpty(),
           "Sample-writes run at " + run.getPath() + " should have no source partition subdirectories, but found: "
               + partitionDirs);
+    }
+  }
+
+  /**
+   * Fails if any sample-writes shadow table on disk was not created at the expected table version,
+   * i.e. verifies the configured write version was routed into the shadow table instead of
+   * defaulting to the current version.
+   */
+  private void assertSampleWritesShadowTableVersion(HoodieTableVersion expected) throws IOException {
+    Path sampleWritesPath = new Path(basePath(), SAMPLE_WRITES_FOLDER_PATH);
+    FileSystem fs = sampleWritesPath.getFileSystem(jsc().hadoopConfiguration());
+    assertTrue(fs.exists(sampleWritesPath), "Sample-writes folder should exist after a sample write.");
+    FileStatus[] runs = fs.listStatus(sampleWritesPath);
+    assertTrue(runs.length > 0, "Sample-writes folder should contain at least one run.");
+    for (FileStatus run : runs) {
+      HoodieTableMetaClient sampleMetaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc().hadoopConfiguration()))
+          .setBasePath(run.getPath().toString())
+          .build();
+      assertEquals(expected, sampleMetaClient.getTableConfig().getTableVersion(),
+          "Sample-writes shadow table at " + run.getPath() + " should be created at the configured write version.");
     }
   }
 }
