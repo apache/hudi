@@ -37,6 +37,8 @@ Ask **workload questions, not Hudi questions.** Every decision falls into one of
 
 **Never ask a question whose answer wouldn't change the recommendation.** If the workload is COW-only, don't ask about compaction. If the workload is unpartitioned, don't ask about cross-partition updates.
 
+**Gate optional sections with one plain question before opening them.** Where a whole group of questions exists to configure something the user may not want at all — catalog sync is the clearest case — ask that first, in outcome terms, and let a "no" close the section. Deriving the answer from three questions the user didn't need to answer is the same waste as one unnecessary question, multiplied. Two things make the gate honest: phrase it as an outcome rather than a Hudi feature ("does anything need to find this table by name?", not "do you want meta sync?"), and when the answer is no, **say whether the decision is reversible** — declining something that can be added later against a live table costs nothing, and a user who doesn't know that may say yes defensively.
+
 **Every question must be in user language, not Hudi language.** Users don't know what an RLI is; they know what a customer_id lookup is. Users don't know what a delta commit is; they know how often data lands.
 
 **Read the references directory** for decision tables, question phrasing, warnings, and config templates. Consult them as you drive the flow; don't try to memorize the rules.

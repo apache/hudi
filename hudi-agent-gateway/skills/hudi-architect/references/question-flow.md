@@ -380,9 +380,57 @@ Then proceed to the final revisit gate as normal.
 
 Rule engine maps answers to Hudi query types internally. See decision-tables.md → read-behavior.
 
-### Q2.1a — Storage scheme (asked BEFORE engines)
+### Q2.1a — Catalog sync gate (ask FIRST, before storage or engines)
 
-**This must precede Q2.1b, not share its screen.** Storage constrains which catalogs and engines
+**This is the gate for the whole catalog section.** Plenty of tables need no catalog at all — a
+Spark-only pipeline, an intermediate table in a chain, a table whose consumers are all jobs
+reading by path. Deriving that from an engine list means the user answers two or three questions
+before anyone establishes they wanted sync in the first place. Ask once, up front, and let a
+"no" close the section.
+
+**Do not ask "do you want meta sync?"** — that is Hudi vocabulary for a thing the user may not
+have a name for. Ask about the outcome: whether anything needs to *find* this table by name.
+
+> "Does this table need to show up in a catalog — something like Hive Metastore, AWS Glue, or
+> BigQuery — so SQL engines and BI tools can find it by name?
+>
+> Spark and Flink don't need this; they read the table straight from its path. It matters when
+> something like Trino, Athena, or a BI tool has to discover the table."
+>
+> - **Yes — SQL engines or BI tools will query it**
+> - **No — only Spark/Flink jobs read it, by path**
+> - **Not sure** — I'll ask what queries it and derive the answer.
+> - **Not now, maybe later** — skip it; I'll note how to add it without a rewrite.
+
+**Routing:**
+
+- **"Yes"** → continue to Q2.1b (storage) and Q2.1c (engines).
+- **"No"** → **close the section.** Emit no sync config. Say so as a decision rather than
+  silently moving on: "No catalog sync then — Spark and Flink find the table by path." Record it
+  in the ADR as a confirmed fact, not an assumption, and note that sync can be added later
+  against a live table with no rewrite (see below).
+- **"Not sure"** → this is the one case where deriving is right. Go to Q2.1b/Q2.1c and let the
+  engine list answer it; a user who names Athena has answered "yes" without knowing the term.
+- **"Not now, maybe later"** → same as "no" for config purposes, but record a revisit condition
+  rather than a plain fact.
+
+**Say this whenever the answer is no or deferred, because it changes how much the decision
+matters:** catalog sync is **not durable**. Unlike partitioning or table type, it can be turned
+on later against an existing table — run the standalone sync tool once to register it, then add
+the properties so subsequent commits keep it current. Nothing is rewritten. A user hesitating
+because this feels like a one-way door should be told plainly that it isn't.
+
+The one wrinkle worth mentioning at that moment: BigQuery sync requires hive-style partitioning,
+which **is** fixed at table creation. So a table that might later be queried from BigQuery should
+set `hoodie.datasource.write.hive_style_partitioning=true` now even with no sync configured —
+that costs nothing today and preserves the option. Mention it only on GCS or when the user hints
+at a future BigQuery consumer; it is noise otherwise.
+
+### Q2.1b — Storage scheme (asked BEFORE engines)
+
+Reached only when Q2.1a said yes or not-sure.
+
+**This must precede Q2.1c, not share its screen.** Storage constrains which catalogs and engines
 are even possible, so asking them together lets an impossible combination through: Athena and
 Glue are AWS-only and cannot touch a table on GCS, while BigQuery is GCP-only. A live run
 produced exactly that contradiction — GCS storage plus Athena — because the two were asked
@@ -397,11 +445,12 @@ side by side. Gate first, then offer only what the gate permits.
 
 Often already known from a base path the user has given; skip the question when it is. The
 answer also feeds the lock-provider derivation (Q1.7b) and `FILESYSTEM_LOCK_UNSAFE`, so capture
-it once and reuse it.
+it once and reuse it — including when Q2.1a closed the catalog section, since locking still
+needs it.
 
-### Q2.1b — Query engines (drives catalog sync)
+### Q2.1c — Query engines (drives catalog choice)
 
-Follows Q2.1a. Q2.1 establishes *how* consumers read; this establishes *what* reads. A Hudi
+Follows Q2.1b. Q2.1 establishes *how* consumers read; this establishes *what* reads. A Hudi
 table on storage is invisible to Trino, Athena, Presto, or BigQuery until it is registered in a
 catalog those engines look at — and Spark and Flink can read by path with no catalog at all, so
 this genuinely changes the emitted config.
@@ -428,17 +477,18 @@ storage:
 
 **Keep Athena separate from Trino/Presto.** They need the same *kind* of registration, so
 grouping them is tempting — but Athena is AWS-only and Trino runs anywhere. Bundling them lets a
-GCS-plus-Athena answer through unchallenged, which is precisely the contradiction Q2.1a exists
+GCS-plus-Athena answer through unchallenged, which is precisely the contradiction Q2.1b exists
 to prevent.
 
 Multi-select where the widget supports it; a table read by both Spark jobs and Athena is the
 common case, not an edge case.
 
-**Delivery:** Q2.1a and Q2.1b **must not share a screen** — Q2.1a gates Q2.1b's option set, and a
+**Delivery:** Q2.1b and Q2.1c **must not share a screen** — Q2.1b gates Q2.1c's option set, and a
 widget's options are fixed when it renders, so a same-screen pairing cannot filter on the answer
-beside it. Q2.1a may share a screen with Q2.1 (read pattern), which it does not gate. This is the
-mirror of the Q1.4/Q1.5 rule: never split a gate from what it gates, and never *merge* a gate with
-what it gates either.
+beside it. Q2.1a (the gate) may share a screen with Q2.1 (read pattern), which it does not gate —
+and pairing them is good, since "how do consumers read this?" and "does anything need to find it
+by name?" are the same conversation. This is the mirror of the Q1.4/Q1.5 rule: never split a gate
+from what it gates, and never *merge* a gate with a question whose options it narrows.
 
 **If a contradiction still arrives** — the user names an engine the storage cannot serve — do not
 silently pick one. Name the conflict and ask which they meant: "Athena is AWS-only and can't read
@@ -450,7 +500,7 @@ different catalogs, so guessing produces a wrong bundle rather than an imprecise
 - **Spark/Flink only** → **no catalog sync**. Emit nothing, and say so explicitly: "nothing to
   register — Spark and Flink read the table by path." Silence here reads as an omission.
 - **Athena** → **Glue**, necessarily. Athena reads through Glue; it is not a preference.
-- **Trino / Presto, or anything Hive-based** → Glue when Q2.1a said S3, HMS otherwise. Do not ask
+- **Trino / Presto, or anything Hive-based** → Glue when Q2.1b said S3, HMS otherwise. Do not ask
   which; derive it from the storage answer and state the choice. When Athena and Trino both
   appear, one Glue catalog serves both — say so, because standing up an HMS alongside Glue is a
   second thing to operate for no gain.
