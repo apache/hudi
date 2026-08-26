@@ -109,8 +109,10 @@ fi
 
 # Select hadoop-aws/aws-sdk versions from the Hadoop line each Spark distribution bundles:
 # the jars land on Spark's classpath next to its own hadoop-client, not the cluster Hadoop.
-# hadoop-aws 3.4.x is built against AWS SDK v2 (software.amazon.awssdk:bundle); 3.3.x uses
+# hadoop-aws 3.4+ is built against AWS SDK v2 (software.amazon.awssdk:bundle); 3.3.x uses
 # SDK v1 (com.amazonaws:aws-java-sdk-bundle). spark_base picks the artifact from the SDK major.
+# The opt-in analytics stream type of hadoop-aws 3.4.2+ also needs analyticsaccelerator-s3,
+# not shipped here.
 SPARK_MAJOR_MINOR=$(echo "$SPARK_VERSION" | cut -d. -f1,2)
 case "$SPARK_MAJOR_MINOR" in
   4.0)
@@ -118,11 +120,22 @@ case "$SPARK_MAJOR_MINOR" in
     HADOOP_AWS_VERSION="3.4.1"
     AWS_SDK_VERSION="2.24.6"
     ;;
-  4.*)
-    # Spark 4.1.x bundles Hadoop 3.4.2; newer 4.x lines land here until mapped. The opt-in
-    # analytics stream type of hadoop-aws 3.4.2 also needs analyticsaccelerator-s3, not shipped here.
+  4.1)
+    # Spark 4.1.x bundles Hadoop 3.4.2
     HADOOP_AWS_VERSION="3.4.2"
     AWS_SDK_VERSION="2.29.52"
+    ;;
+  4.2)
+    # Spark 4.2.x bundles Hadoop 3.5.0
+    HADOOP_AWS_VERSION="3.5.0"
+    AWS_SDK_VERSION="2.35.4"
+    ;;
+  4.*)
+    # Unmapped 4.x line: fall back to the newest mapped pairing and say so, rather than
+    # silently shipping hadoop-aws from an older Hadoop line than the one Spark bundles.
+    echo "Warning: no hadoop-aws mapping for Spark ${SPARK_VERSION}; using the Spark 4.2 pairing" >&2
+    HADOOP_AWS_VERSION="3.5.0"
+    AWS_SDK_VERSION="2.35.4"
     ;;
   *)
     # Spark 3.x bundles Hadoop 3.3.x

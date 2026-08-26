@@ -45,8 +45,8 @@ invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=jav
 
 `spark_base` additionally takes `HADOOP_AWS_VERSION` and `AWS_SDK_VERSION` for the S3A jars it adds to the Spark
 classpath. `build_docker_images.sh` derives both from `--spark-version`, matching the Hadoop line each Spark
-distribution bundles: Spark 4.0.x gets `hadoop-aws` 3.4.1 and Spark 4.1.x gets 3.4.2, both with the AWS SDK v2
-bundle; Spark 3.x gets 3.3.4 with the SDK v1 bundle.
+distribution bundles: Spark 4.0.x gets `hadoop-aws` 3.4.1, Spark 4.1.x gets 3.4.2 and Spark 4.2.x gets 3.5.0, all
+with the AWS SDK v2 bundle; Spark 3.x gets 3.3.4 with the SDK v1 bundle.
 
 ### Docker compose config for the Demo - `/compose`
 
