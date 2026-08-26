@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.io.SeekableDataInputStream
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 
-import org.apache.spark.TaskContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Dataset, Row}
@@ -89,8 +88,9 @@ import scala.collection.mutable.ArrayBuffer
  *   <li>Tune maxGapBytes based on your data access patterns</li>
  * </ul>
  *
- * @param resolveStorage Supplies the HoodieStorage for a blob reference. The caller owns the
- *                       returned storage and its lifetime.
+ * @param resolveStorage Supplies the HoodieStorage for a blob reference. A HoodieStorage is bound
+ *                       to the filesystem of the path it is built with, and a reference is only
+ *                       known once its row arrives, so this is called per read rather than once.
  * @param maxGapBytes    Maximum gap between ranges to consider for batching (default: 4KB)
  * @param lookaheadRows  Number of rows to buffer for batch detection (default: 50)
  */
@@ -489,31 +489,6 @@ class BatchedBlobReader(
  *
  * @tparam R Row type (Row or InternalRow)
  */
-/**
- * The HoodieStorage a partition's blob references live on, resolved from the first reference read.
- *
- * A HoodieStorage is bound to the filesystem of the path it is built with, and a blob reference is
- * an absolute path that is only known once its row arrives, so the storage cannot be built before
- * the partition is consumed. All references a reader sees are assumed to be on one filesystem.
- */
-private[blob] class PartitionStorage(storageConf: StorageConfiguration[_]) extends AutoCloseable {
-
-  private var storage: HoodieStorage = _
-
-  def resolve(path: StoragePath): HoodieStorage = {
-    if (storage == null) {
-      storage = HoodieStorageUtils.getStorage(path, storageConf)
-    }
-    storage
-  }
-
-  override def close(): Unit = {
-    if (storage != null) {
-      storage.close()
-    }
-  }
-}
-
 private[blob] trait RowAccessor[R] {
   def getStruct(row: R, structColIdx: Int, numFields: Int): R
   def getString(struct: R, fieldIdx: Int): String
@@ -718,9 +693,9 @@ object BatchedBlobReader {
 
     // Apply mapPartitions
     val result = df.mapPartitions { partition =>
-      // Create storage and reader for this partition
-      val storage = new PartitionStorage(broadcastConf.value)
-      val reader = new BatchedBlobReader(storage.resolve, maxGapBytes, lookaheadSize)
+      // Create reader for this partition
+      val reader = new BatchedBlobReader(
+        HoodieStorageUtils.getStorage(_, broadcastConf.value), maxGapBytes, lookaheadSize)
 
       // Import implicit instances for Row
       import RowAccessor.rowAccessor
@@ -728,7 +703,6 @@ object BatchedBlobReader {
 
       // Process partition
       val iter = reader.processPartition[Row](partition, structColIdx, outputSchema)
-      TaskContext.get().addTaskCompletionListener[Unit](_ => storage.close())
       iter
     } (sparkAdapter.getCatalystExpressionUtils.getEncoder(outputSchema))
 
@@ -778,16 +752,14 @@ object BatchedBlobReader {
 
     // Process partitions using InternalRow type classes
     rdd.mapPartitions { partition =>
-      val storage = new PartitionStorage(broadcastConf.value)
-
-      val reader = new BatchedBlobReader(storage.resolve, maxGapBytes, lookaheadSize)
+      val reader = new BatchedBlobReader(
+        HoodieStorageUtils.getStorage(_, broadcastConf.value), maxGapBytes, lookaheadSize)
 
       // Import implicit instances for InternalRow
       import RowAccessor.internalRowAccessor
       import RowBuilder.internalRowBuilder
 
       val iter = reader.processPartition[InternalRow](partition, structColIdx, outputSchema)
-      TaskContext.get().addTaskCompletionListener[Unit](_ => storage.close())
       iter
     }
   }

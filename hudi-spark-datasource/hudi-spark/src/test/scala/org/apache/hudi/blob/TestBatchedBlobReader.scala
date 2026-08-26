@@ -506,6 +506,35 @@ class TestBatchedBlobReader extends HoodieClientTestBase {
   }
 
   /**
+   * One partition referencing two buckets on the same scheme. Hadoop keys its filesystem cache by
+   * scheme and authority and FileSystem.checkPath validates both, so a reader that resolved storage
+   * once would serve the second bucket through the first bucket's handle and fail with
+   * Wrong FS: s3a://bucket-b/..., expected: s3a://bucket-a.
+   */
+  @Test
+  def testReferencesInTwoBucketsInOnePartition(): Unit = {
+    val firstPath = createTestFile(tempDir, "two-bucket-first.bin", 1000)
+    val secondPath = createTestFile(tempDir, "two-bucket-second.bin", 1000)
+    val inputDF = sparkSession.createDataFrame(Seq(
+      ("a", s"s3a://bucket-a$firstPath", 0L, 100L),
+      ("b", s"s3a://bucket-b$secondPath", 0L, 100L)
+    )).toDF("bucket", "external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
+      .select("bucket", "data")
+      .coalesce(1)
+
+    val results = BatchedBlobReader.readBatched(inputDF, nonLocalSchemeStorageConf).orderBy("bucket").collect()
+
+    assertEquals(2, results.length)
+    assertEquals(Seq("a", "b"), results.map(_.getAs[String]("bucket")).toSeq)
+    results.foreach { row =>
+      val data = row.getAs[Array[Byte]]("data")
+      assertEquals(100, data.length)
+      assertBytesContent(data)
+    }
+  }
+
+  /**
    * Harness sanity, so none of the tests above can pass for the wrong reason: the borrowed schemes
    * must reach the local file the test wrote, and must not be silently rewritten to {@code file}.
    */
