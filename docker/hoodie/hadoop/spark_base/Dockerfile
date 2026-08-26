@@ -66,9 +66,21 @@ ENV SPARK_BLOCKMGR_PORT=5003
 EXPOSE $SPARK_DRIVER_PORT $SPARK_UI_PORT $SPARK_BLOCKMGR_PORT
 
 # Without this spark-shell fails - Download if it is not already there in $SPARK_INSTALL
+# hadoop-aws 3.4+ is built against AWS SDK v2 (software.amazon.awssdk:bundle); older releases
+# use SDK v1 (com.amazonaws:aws-java-sdk-bundle). The artifact is picked from the SDK major version.
+# hadoop-aws 3.4.2+ also needs analyticsaccelerator-s3 for its analytics input stream, which 3.5.0
+# made the default; pass the version hadoop-project declares, or leave it empty to skip the jar.
 ARG HADOOP_AWS_VERSION=3.3.4
 ARG AWS_SDK_VERSION=1.12.734
+ARG ANALYTICS_ACCELERATOR_VERSION=""
 RUN wget -nc -q -O "${SPARK_INSTALL}/jars/jersey-bundle-1.19.4.jar" "https://repo1.maven.org/maven2/com/sun/jersey/jersey-bundle/1.19.4/jersey-bundle-1.19.4.jar" && \
     wget -O "${SPARK_INSTALL}/jars/hadoop-aws-${HADOOP_AWS_VERSION}.jar" https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_AWS_VERSION}/hadoop-aws-${HADOOP_AWS_VERSION}.jar && \
-    wget -O "${SPARK_INSTALL}/jars/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar" https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar
+    if [ "${AWS_SDK_VERSION%%.*}" -ge 2 ]; then \
+      wget -O "${SPARK_INSTALL}/jars/bundle-${AWS_SDK_VERSION}.jar" https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/${AWS_SDK_VERSION}/bundle-${AWS_SDK_VERSION}.jar; \
+    else \
+      wget -O "${SPARK_INSTALL}/jars/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar" https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar; \
+    fi && \
+    if [ -n "${ANALYTICS_ACCELERATOR_VERSION}" ]; then \
+      wget -O "${SPARK_INSTALL}/jars/analyticsaccelerator-s3-${ANALYTICS_ACCELERATOR_VERSION}.jar" https://repo1.maven.org/maven2/software/amazon/s3/analyticsaccelerator/analyticsaccelerator-s3/${ANALYTICS_ACCELERATOR_VERSION}/analyticsaccelerator-s3-${ANALYTICS_ACCELERATOR_VERSION}.jar; \
+    fi
 
