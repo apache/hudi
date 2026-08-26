@@ -32,6 +32,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.NonLocalSchemeLocalFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -39,8 +40,6 @@ import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,7 +48,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashSet;
@@ -69,7 +67,7 @@ import static org.mockito.Mockito.when;
  * Covers {@link RollbackHelperV1} on a table whose base path is NOT on the local filesystem.
  *
  * <p>Every other rollback test runs the table under a local {@code file://} base path, where the
- * default storage URI of {@link HoodieStorageUtils#DEFAULT_URI} happens to be the correct
+ * default storage URI of {@link HoodieTestUtils#DEFAULT_URI} happens to be the correct
  * filesystem. That is precisely why a filesystem-resolution defect could survive unnoticed in this
  * class. These tests put the table under an object-store scheme instead, which is how the defect
  * shows up in production as {@code IllegalArgumentException: Wrong FS: s3a://..., expected:
@@ -87,55 +85,6 @@ class TestRollbackHelperV1 extends HoodieRollbackTestBase {
   private static final String BUCKET = "test-bucket";
   private static final byte[] LOG_FILE_CONTENT =
       "not a real log block, only bytes to size".getBytes(StandardCharsets.UTF_8);
-
-  /**
-   * The local filesystem exposed under a scheme other than {@code file}, so a test can tell apart
-   * storage resolved from a path (correct) and storage resolved from the default URI (wrong), the
-   * way s3a and gs do in production without needing a remote object store.
-   *
-   * <p>{@link RawLocalFileSystem#pathToFile} keeps only the path component of a URI, so a
-   * {@code <scheme>://<bucket>/tmp/x} path reads and writes the local file {@code /tmp/x}. What the
-   * subclass changes is only the identity the filesystem reports, which is what
-   * {@link FileSystem#checkPath} validates every path against.
-   */
-  public static class NonLocalSchemeLocalFileSystem extends RawLocalFileSystem {
-    /**
-     * Answer for {@link #getUri()} until {@link #initialize} supplies the real one. The superclass
-     * constructor calls {@code getUri()}, which runs before any instance field of this subclass is
-     * assigned, so the fallback has to be a static.
-     */
-    private static final URI UNINITIALIZED_URI = URI.create(SCHEME + ":///");
-
-    private URI uri;
-
-    @Override
-    public void initialize(URI name, Configuration conf) throws IOException {
-      super.initialize(name, conf);
-      this.uri = URI.create(name.getScheme() + "://"
-          + (name.getAuthority() == null ? "" : name.getAuthority()));
-      setWorkingDirectory(new Path(this.uri.toString() + Path.SEPARATOR));
-    }
-
-    @Override
-    public URI getUri() {
-      return uri == null ? UNINITIALIZED_URI : uri;
-    }
-
-    @Override
-    public String getScheme() {
-      return getUri().getScheme();
-    }
-
-    /**
-     * The superclass qualifies the process working directory against {@link #getUri()} from its own
-     * constructor. Skip that: this filesystem does not know its real URI yet, and every path these
-     * tests use is absolute, so the working directory is never consulted.
-     */
-    @Override
-    protected Path getInitialWorkingDirectory() {
-      return new Path(System.getProperty("user.dir"));
-    }
-  }
 
   @Override
   protected StoragePath createBasePath() {
@@ -181,9 +130,9 @@ class TestRollbackHelperV1 extends HoodieRollbackTestBase {
     assertEquals(LOG_FILE_CONTENT.length, storage.getPathInfo(probe).getLength());
     assertTrue(storage.deleteFile(probe));
 
-    // The default-URI storage is bound to the local filesystem no matter what the configuration
-    // carries. This is the whole reason the path-aware overload has to be used.
-    assertEquals("file", HoodieStorageUtils.getStorage(storage.getConf()).getScheme());
+    // Storage built from the default URI is bound to the local filesystem no matter what the
+    // configuration carries, which is why the table's own path has to select it.
+    assertEquals("file", HoodieTestUtils.getLocalStorage(storage.getConf()).getScheme());
   }
 
   /**
@@ -308,7 +257,7 @@ class TestRollbackHelperV1 extends HoodieRollbackTestBase {
     assertTrue(found.get(0).isPresent());
     assertEquals(LOG_FILE_CONTENT.length, found.get(0).get().getLength());
 
-    HoodieStorage defaultUriStorage = HoodieStorageUtils.getStorage(storageConf);
+    HoodieStorage defaultUriStorage = HoodieTestUtils.getLocalStorage(storageConf);
     assertEquals("file", defaultUriStorage.getScheme());
     assertThrows(
         IllegalArgumentException.class,

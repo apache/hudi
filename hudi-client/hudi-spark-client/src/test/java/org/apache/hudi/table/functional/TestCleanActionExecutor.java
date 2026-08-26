@@ -62,6 +62,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getLocalStorage;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -93,7 +94,7 @@ public class TestCleanActionExecutor {
     when(mockHoodieTable.getMetaClient()).thenReturn(metaClient);
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
-    storage = spy(HoodieStorageUtils.getStorage(CONF));
+    storage = spy(getLocalStorage(CONF));
     when(metaClient.getStorage()).thenReturn(storage);
     when(mockHoodieTable.getStorage()).thenReturn(storage);
   }

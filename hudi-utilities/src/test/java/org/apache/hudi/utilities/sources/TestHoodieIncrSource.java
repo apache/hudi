@@ -53,7 +53,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
@@ -105,7 +104,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -175,7 +174,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(HoodieWriteConfig.newBuilder()
           .withProperties(writeConfig.getProps()).withMetricsConfig(HoodieMetricsConfig.newBuilder()
               .on(true).build()).build(),
-          HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+          getDefaultStorage());
 
       // Reset mock to clear any previous invocations
       // reset(metrics);

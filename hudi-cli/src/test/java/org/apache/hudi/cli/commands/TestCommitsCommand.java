@@ -49,7 +49,6 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import org.apache.hadoop.fs.Path;
@@ -170,7 +169,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   }
 
   private String generateExpectData(int records, Map<String, Integer[]> data) throws IOException {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(storageConf());
+    HoodieStorage storage = HoodieTestUtils.getLocalStorage(storageConf());
     List<String> partitionPaths =
         FSUtils.getAllPartitionFoldersThreeLevelsDown(storage, tablePath1);
 

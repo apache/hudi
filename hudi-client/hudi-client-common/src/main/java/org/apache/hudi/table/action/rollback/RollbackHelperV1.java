@@ -503,9 +503,6 @@ public class RollbackHelperV1 extends RollbackHelper {
 
             // fetch file sizes.
             StoragePath fullPartitionPath = StringUtils.isNullOrEmpty(partition) ? new StoragePath(basePathStr) : new StoragePath(basePathStr, partition);
-            // Resolve storage from the partition path, not the no-path overload: the latter binds to
-            // HoodieStorageUtils.DEFAULT_URI ("file:///"), so listing an s3a/gs partition on an executor
-            // throws "Wrong FS ... expected: file:///" and the rollback can never complete.
             HoodieStorage storage = HoodieStorageUtils.getStorage(fullPartitionPath, storageConfiguration);
             List<Option<StoragePathInfo>> storagePathInfoOpts = getPathInfoUnderPartition(storage,
                 fullPartitionPath, new HashSet<>(missingLogFiles), true);
