@@ -130,17 +130,18 @@ case "$SPARK_MAJOR_MINOR" in
     HADOOP_AWS_VERSION="3.5.0"
     AWS_SDK_VERSION="2.35.4"
     ;;
-  4.*)
-    # Unmapped 4.x line: fall back to the newest mapped pairing and say so, rather than
-    # silently shipping hadoop-aws from an older Hadoop line than the one Spark bundles.
-    echo "Warning: no hadoop-aws mapping for Spark ${SPARK_VERSION}; using the Spark 4.2 pairing" >&2
-    HADOOP_AWS_VERSION="3.5.0"
-    AWS_SDK_VERSION="2.35.4"
-    ;;
   *)
-    # Spark 3.x bundles Hadoop 3.3.x
-    HADOOP_AWS_VERSION="3.3.4"
-    AWS_SDK_VERSION="1.12.734"
+    if [ "$SPARK_MAJOR" -ge 4 ]; then
+      # Unmapped 4+ line (4.3, 5.x, ...): fall back to the newest mapped pairing and say so,
+      # rather than silently shipping hadoop-aws from an older Hadoop line than Spark bundles.
+      echo "Warning: no hadoop-aws mapping for Spark ${SPARK_VERSION}; using the Spark 4.2 pairing" >&2
+      HADOOP_AWS_VERSION="3.5.0"
+      AWS_SDK_VERSION="2.35.4"
+    else
+      # Spark 3.x bundles Hadoop 3.3.x
+      HADOOP_AWS_VERSION="3.3.4"
+      AWS_SDK_VERSION="1.12.734"
+    fi
     ;;
 esac
 

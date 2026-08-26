@@ -47,9 +47,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -yq update \
     && mkdir /hadoop-data
 
 COPY --from=hadoop-builder /opt/hadoop-${HADOOP_VERSION} /opt/hadoop-${HADOOP_VERSION}
-# Hadoop 3.4.x ships mapred-site.xml directly; older releases only ship the .template.
-RUN ln -s /opt/hadoop-${HADOOP_VERSION}/etc/hadoop /etc/hadoop \
-    && if [ -f /etc/hadoop/mapred-site.xml.template ]; then cp /etc/hadoop/mapred-site.xml.template /etc/hadoop/mapred-site.xml; fi
+RUN ln -s /opt/hadoop-${HADOOP_VERSION}/etc/hadoop /etc/hadoop
 
 ENV HADOOP_PREFIX=/opt/hadoop-${HADOOP_VERSION}
 ENV HADOOP_CONF_DIR=/etc/hadoop
