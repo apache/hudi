@@ -89,9 +89,13 @@ public class SparkSampleWritesUtils {
       throws IOException {
     String uniqueId = UUID.randomUUID().toString();
     final String sampleWritesBasePath = getSampleWritesBasePath(jsc, writeConfig, uniqueId);
+    // Propagate the user's configured write table version to the sample-writes shadow table so its
+    // on-disk layout matches the version the inherited write config (and the SparkRDDWriteClient
+    // below) operates with.
     HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(String.format("%s_samples_%s", writeConfig.getTableName(), uniqueId))
+        .setTableVersion(writeConfig.getWriteVersion())
         .setCDCEnabled(false)
         .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), sampleWritesBasePath);
     TypedProperties props = writeConfig.getProps();
@@ -103,6 +107,7 @@ public class SparkSampleWritesUtils {
         .withSchemaEvolutionEnable(false)
         .withBulkInsertParallelism(1)
         .withPath(sampleWritesBasePath)
+        .withWriteTableVersion(writeConfig.getWriteVersion().versionCode())
         .build();
     Pair<Boolean, String> emptyRes = Pair.of(false, null);
     try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
