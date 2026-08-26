@@ -121,6 +121,10 @@ public class TrinoParquetFileReader
         try {
             this.fileLength = inputFile.length();
             this.parquetMetadata = readParquetMetadata();
+            // The footer's row-group metadata is parsed lazily, so getBlocks() can fail the way readFooter does
+            this.totalRecords = parquetMetadata.getBlocks().stream()
+                    .mapToLong(BlockMetadata::rowCount)
+                    .sum();
         }
         catch (IOException e) {
             // Failing to open the file surfaces the way a failing read does: a corrupt footer as HUDI_BAD_DATA,
@@ -129,9 +133,6 @@ public class TrinoParquetFileReader
         }
         Schema avroSchema = extractAvroSchema(parquetMetadata.getFileMetaData());
         this.hoodieSchema = HoodieSchema.fromAvroSchema(avroSchema);
-        this.totalRecords = parquetMetadata.getBlocks().stream()
-                .mapToLong(BlockMetadata::rowCount)
-                .sum();
     }
 
     @Override
