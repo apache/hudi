@@ -276,8 +276,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
       commit(table, commitActionType, instantTime, metadata, tableWriteStats, skipStreamingWritesToMetadataTable);
       log.info("Committed {}", instantTime);
-      // The commit landed, so the executor counters it accounts for can be reported and released. On
-      // failure they stay in the registry for the retry.
+      // The commit landed, so the executor counters it accounts for can be reported and released. A
+      // commit that never lands publishes nothing; its counters are not carried forward either, because
+      // Metrics.shutdown() clears every registry after each write on the DataSource path.
       ExecutorMetrics.publishAndRelease(config, metrics);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
