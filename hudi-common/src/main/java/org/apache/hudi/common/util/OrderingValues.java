@@ -117,4 +117,20 @@ public class OrderingValues {
   public static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
     return orderingValue == null || OrderingValues.isDefault(orderingValue);
   }
+
+  /**
+   * Returns whether {@code baseOrderingValue} strictly outranks {@code incomingOrderingValue} under
+   * event-time ordering. Evaluates to {@code false}, deferring to natural order so the incoming
+   * record wins, when either value is a commit-time ordering value (a {@code null} or the default
+   * sentinel) or the two values are of different classes. This keeps callers from comparing
+   * mismatched types through {@link Comparable#compareTo}, which throws {@link ClassCastException}
+   * (for example when a null ordering field is represented as the {@code int} default while its
+   * counterpart holds a {@code Long}).
+   */
+  public static boolean isBaseOrderingHigher(Comparable baseOrderingValue, Comparable incomingOrderingValue) {
+    return !isCommitTimeOrderingValue(incomingOrderingValue)
+        && !isCommitTimeOrderingValue(baseOrderingValue)
+        && isSameClass(baseOrderingValue, incomingOrderingValue)
+        && baseOrderingValue.compareTo(incomingOrderingValue) > 0;
+  }
 }

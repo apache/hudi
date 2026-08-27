@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.util.RowDataQueryContexts;
 
 import org.apache.flink.table.data.GenericRowData;
@@ -91,7 +92,7 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
       BufferedRecord<T> newer,
       RecordContext<T> recordContext,
       TypedProperties props) throws IOException {
-    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
+    if (OrderingValues.isBaseOrderingHigher(older.getOrderingValue(), newer.getOrderingValue())) {
       if (older.isDelete() || newer.isDelete()) {
         return older;
       } else {
