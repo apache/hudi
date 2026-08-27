@@ -29,7 +29,6 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.HoodieVectorUtils
-import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator, Pair => HPair}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader, VectorConversionUtils}
@@ -117,7 +116,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       case _ => false
     }))
     // getRecordMerger() is a Lombok getter over a field initialized to null (not Option.empty());
-    // it stays null until setRecordMerger() runs during reader init, so the null guard is required.
+    // it stays null until HoodieReaderContext.initRecordMerger runs (HoodieFileGroupReader calls it
+    // from its constructor), so the null guard is required.
     val merger = getRecordMerger()
     val isPayloadBased = merger != null && merger.isPresent && merger.get.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID
     hasVariantProjection && !isPayloadBased
