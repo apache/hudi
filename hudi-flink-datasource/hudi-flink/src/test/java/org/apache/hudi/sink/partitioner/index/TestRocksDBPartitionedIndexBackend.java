@@ -18,14 +18,21 @@
 
 package org.apache.hudi.sink.partitioner.index;
 
+import org.apache.hudi.common.util.collection.RocksDBDAO;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -89,5 +96,67 @@ public class TestRocksDBPartitionedIndexBackend {
       // Deleting an already-absent partition should be a no-op, not an error.
       backend.deletePartition("par1");
     }
+  }
+
+  @Test
+  void testListRegisteredPartitionsReturnsAllRegisteredPartitions() throws Exception {
+    try (RocksDBPartitionedIndexBackend backend = new RocksDBPartitionedIndexBackend(tempFile.getAbsolutePath())) {
+      backend.update("par1", "key1", "file1");
+      backend.update("par2", "key1", "file2");
+      backend.update("par3", "key1", "file3");
+
+      List<String> registered = backend.listRegisteredPartitions();
+      assertEquals(3, registered.size());
+      assertTrue(registered.containsAll(Arrays.asList("par1", "par2", "par3")));
+    }
+  }
+
+  @Test
+  void testUpdateOverwritesExistingValueForSameKey() throws Exception {
+    try (RocksDBPartitionedIndexBackend backend = new RocksDBPartitionedIndexBackend(tempFile.getAbsolutePath())) {
+      backend.update("par1", "key1", "file1");
+      backend.update("par1", "key1", "file2");
+
+      assertEquals("file2", backend.get("par1", "key1"));
+    }
+  }
+
+  @Test
+  void testPartitionNotVisibleToGetUntilFullyRegistered() throws Exception {
+    try (RocksDBPartitionedIndexBackend backend = new RocksDBPartitionedIndexBackend(tempFile.getAbsolutePath())) {
+      RocksDBDAO dao = getRocksDBDAO(backend);
+      String columnFamily = partitionColumnFamily("par1");
+      dao.addColumnFamily(columnFamily);
+      dao.put(columnFamily, "key1", "file1");
+
+      // The column family has data, but the partition has not been registered yet, so it must stay invisible.
+      assertFalse(backend.isPartitionRegistered("par1"));
+      assertNull(backend.get("par1", "key1"));
+
+      backend.update("par1", "key1", "file1");
+      assertTrue(backend.isPartitionRegistered("par1"));
+      assertEquals("file1", backend.get("par1", "key1"));
+    }
+  }
+
+  @Test
+  void testOperationsAfterCloseThrow() throws Exception {
+    RocksDBPartitionedIndexBackend backend = new RocksDBPartitionedIndexBackend(tempFile.getAbsolutePath());
+    backend.update("par1", "key1", "file1");
+    backend.close();
+
+    assertThrows(IllegalArgumentException.class, () -> backend.get("par1", "key1"));
+  }
+
+  private static RocksDBDAO getRocksDBDAO(RocksDBPartitionedIndexBackend backend) throws Exception {
+    Field field = RocksDBPartitionedIndexBackend.class.getDeclaredField("rocksDBDAO");
+    field.setAccessible(true);
+    return (RocksDBDAO) field.get(backend);
+  }
+
+  private static String partitionColumnFamily(String partitionPath) throws Exception {
+    Method method = RocksDBPartitionedIndexBackend.class.getDeclaredMethod("partitionColumnFamily", String.class);
+    method.setAccessible(true);
+    return (String) method.invoke(null, partitionPath);
   }
 }
