@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.LSMTimeline;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.parquet.io.ParquetDecodingException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -43,6 +44,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
+import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CURSOR_ERROR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -56,6 +58,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TestTrinoParquetFileReader
 {
     private static final String ARCHIVED_TIMELINE_PARQUET_FILE = "archived_timeline.parquet";
+    // The fixture's first page is the only data page of instantTime: 25 bytes of thrift-compact PageHeader from
+    // byte 4 (type, sizes, crc, then the DataPageHeader whose encoding field is the byte at 22), then the payload.
+    // Thrift compact writes the encoding enum as a zigzag varint: PLAIN (0) is 0x00, RLE_DICTIONARY (8) is 0x10
+    private static final int INSTANT_TIME_PAGE_ENCODING_OFFSET = 22;
+    private static final byte PLAIN_ENCODING = 0x00;
+    private static final byte RLE_DICTIONARY_ENCODING = 0x10;
 
     @Test
     void testReadArchivedTimelineFile()
@@ -189,6 +197,34 @@ class TestTrinoParquetFileReader
                 .hasCauseInstanceOf(ParquetCorruptionException.class)
                 .extracting(e -> ((TrinoException) e).getErrorCode())
                 .isEqualTo(HUDI_BAD_DATA.toErrorCode());
+    }
+
+    @Test
+    void testCorruptDataPageFailsWithCursorError(@TempDir Path tempDir)
+            throws Exception
+    {
+        // A data page that fails to decode is reported the way a failed footer read is: as a TrinoException with the
+        // failure as its cause. Trino decodes a page eagerly and reports a corrupt one with a ParquetDecodingException,
+        // which is unchecked, so left raw it would pass through hudi-common untouched and reach the engine as an
+        // internal error instead of HUDI_CURSOR_ERROR. The footer is intact, so the reader still opens and the failure
+        // surfaces from hasNext(). Switching the page's encoding from PLAIN to RLE_DICTIONARY makes it claim a
+        // dictionary the column chunk does not carry, which is what the column reader rejects
+        byte[] bytes = Resources.toByteArray(Resources.getResource(ARCHIVED_TIMELINE_PARQUET_FILE));
+        assertThat(bytes[INSTANT_TIME_PAGE_ENCODING_OFFSET]).isEqualTo(PLAIN_ENCODING);
+        bytes[INSTANT_TIME_PAGE_ENCODING_OFFSET] = RLE_DICTIONARY_ENCODING;
+        Path corruptFile = tempDir.resolve("corrupt_page.parquet");
+        Files.write(corruptFile, bytes);
+        StoragePath path = new StoragePath(corruptFile.toFile().toURI().toString());
+
+        HoodieSchema tableSchema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
+        try (TrinoParquetFileReader reader = new TrinoParquetFileReader(localStorage(), path);
+                ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(tableSchema, tableSchema)) {
+            assertThatThrownBy(iterator::hasNext)
+                    .isInstanceOf(TrinoException.class)
+                    .hasCauseInstanceOf(ParquetDecodingException.class)
+                    .extracting(e -> ((TrinoException) e).getErrorCode())
+                    .isEqualTo(HUDI_CURSOR_ERROR.toErrorCode());
+        }
     }
 
     @Test

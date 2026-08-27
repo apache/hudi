@@ -335,7 +335,10 @@ public class TrinoParquetFileReader
                 loadNextPage();
                 return !exhausted;
             }
-            catch (IOException e) {
+            catch (IOException | RuntimeException e) {
+                // loadNextPage() decodes the page eagerly, and a data page that fails to decode surfaces as a
+                // ParquetDecodingException, which is unchecked: ParquetReader routes only the IOExceptions of a
+                // page read through the exception transform it is handed
                 throw handleException(path, e);
             }
         }
