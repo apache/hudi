@@ -19,14 +19,17 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceUtils, DataSourceWriteOptions}
 import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.clustering.plan.strategy.SparkSingleFileSortPlanStrategy
+import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.fs.{FileNameParser, FSUtils}
-import org.apache.hudi.common.model.{HoodieBaseFile, HoodieConsistentHashingMetadata, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.model.{HoodieBaseFile, HoodieConsistentHashingMetadata, HoodieRecord, HoodieRecordPayload,
+  HoodieReplaceCommitMetadata, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.{BulkInsertSortMode, RowCustomColumnsSortPartitioner}
 import org.apache.hudi.index.HoodieIndex
@@ -226,6 +229,91 @@ class TestLSMDataSource extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
+  @MethodSource(Array("clusteringParams"))
+  def testSortAndSizeClustering(
+      tableType: HoodieTableType,
+      enableRowWriter: Boolean): Unit = {
+    val tablePath = s"${basePath}_${tableType.name.toLowerCase}_lsm_clustering_$enableRowWriter"
+    val options = clusteringOptions(baseOptions(tableType) +
+      (DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> enableRowWriter.toString))
+    val initial = rows(Seq(
+      ("😀-cluster-p1", "v1", 1L, FirstPartition),
+      ("Ａ-cluster-p1", "v1", 1L, FirstPartition),
+      ("middle-cluster-p1", "v1", 1L, FirstPartition),
+      ("😀-cluster-p2", "v1", 1L, SecondPartition),
+      ("Ａ-cluster-p2", "v1", 1L, SecondPartition)))
+
+    write(initial, tablePath, options, WriteOperationType.BULK_INSERT, SaveMode.Overwrite)
+    write(rows(Seq(
+      ("😀-cluster-p1", "v2", 2L, FirstPartition),
+      ("Ａ-cluster-p1", "v2", 2L, FirstPartition))),
+      tablePath, options, WriteOperationType.UPSERT)
+
+    val clusteringInstant = runClustering(tablePath, options)
+    val clusteredFiles = latestBaseFiles(tablePath)
+    assertFalse(clusteredFiles.isEmpty)
+    assertTrue(clusteredFiles.forall(_.getCommitTime == clusteringInstant))
+    assertLatestBaseFilesSorted(tablePath, WriteOperationType.CLUSTER)
+    assertFalse(replacedFileIds(tablePath, clusteringInstant).isEmpty)
+    assertSnapshot(tablePath, Map(
+      "😀-cluster-p1" -> "v2",
+      "Ａ-cluster-p1" -> "v2",
+      "middle-cluster-p1" -> "v1",
+      "😀-cluster-p2" -> "v1",
+      "Ａ-cluster-p2" -> "v1"))
+
+    write(rows(Seq(("middle-cluster-p1", "v3", 3L, FirstPartition))),
+      tablePath, options, WriteOperationType.UPSERT)
+    assertSnapshot(tablePath, Map(
+      "😀-cluster-p1" -> "v2",
+      "Ａ-cluster-p1" -> "v2",
+      "middle-cluster-p1" -> "v3",
+      "😀-cluster-p2" -> "v1",
+      "Ａ-cluster-p2" -> "v1"))
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType], names = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testSingleFileRowClustering(tableType: HoodieTableType): Unit = {
+    val tablePath = s"${basePath}_${tableType.name.toLowerCase}_lsm_single_file_row"
+    val options = clusteringOptions(baseOptions(tableType) ++ Map(
+      DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> "true",
+      HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME.key -> classOf[SparkSingleFileSortPlanStrategy[_]].getName,
+      HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME.key -> classOf[SparkSingleFileSortExecutionStrategy[_]].getName))
+    val initial = rows(Seq(
+      ("😀-single-p1", "v1", 1L, FirstPartition),
+      ("Ａ-single-p1", "v1", 1L, FirstPartition),
+      ("middle-single-p1", "v1", 1L, FirstPartition),
+      ("😀-single-p2", "v1", 1L, SecondPartition),
+      ("Ａ-single-p2", "v1", 1L, SecondPartition)))
+
+    write(initial, tablePath, options, WriteOperationType.BULK_INSERT, SaveMode.Overwrite)
+    val originalFileIds = latestBaseFiles(tablePath).map(_.getFileId).toSet
+    val clusteringInstant = runClustering(tablePath, options)
+    val clusteredFiles = latestBaseFiles(tablePath)
+
+    assertFalse(clusteredFiles.isEmpty)
+    assertTrue(clusteredFiles.forall(_.getCommitTime == clusteringInstant))
+    assertLatestBaseFilesSorted(tablePath, WriteOperationType.CLUSTER)
+    assertEquals(originalFileIds, replacedFileIds(tablePath, clusteringInstant))
+    assertSnapshot(tablePath, Map(
+      "😀-single-p1" -> "v1",
+      "Ａ-single-p1" -> "v1",
+      "middle-single-p1" -> "v1",
+      "😀-single-p2" -> "v1",
+      "Ａ-single-p2" -> "v1"))
+
+    write(rows(Seq(("middle-single-p1", "v2", 2L, FirstPartition))),
+      tablePath, options, WriteOperationType.UPSERT)
+    assertSnapshot(tablePath, Map(
+      "😀-single-p1" -> "v1",
+      "Ａ-single-p1" -> "v1",
+      "middle-single-p1" -> "v2",
+      "😀-single-p2" -> "v1",
+      "Ａ-single-p2" -> "v1"))
+  }
+
+  @ParameterizedTest
   @EnumSource(value = classOf[BulkInsertSortMode], names = Array(
     "NONE", "PARTITION_PATH_REPARTITION"))
   def testBulkInsertRejectsNonSortingModes(sortMode: BulkInsertSortMode): Unit = {
@@ -378,6 +466,11 @@ class TestLSMDataSource extends SparkClientFunctionalTestHarness {
     "hoodie.upsert.shuffle.parallelism" -> "1",
     "hoodie.delete.shuffle.parallelism" -> "1")
 
+  private def clusteringOptions(options: Map[String, String]): Map[String, String] = options ++ Map(
+    HoodieClusteringConfig.PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED.key -> "true",
+    HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key -> Long.MaxValue.toString,
+    HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key -> Long.MaxValue.toString)
+
   private def rows(values: Seq[(String, String, Long, String)]): DataFrame = {
     val _spark = spark
     import _spark.implicits._
@@ -401,18 +494,40 @@ class TestLSMDataSource extends SparkClientFunctionalTestHarness {
       tablePath: String,
       options: Map[String, String])(
       operation: SparkRDDWriteClient[HoodieRecordPayload[Nothing]] => T): T = {
+    val clientOptions = options + (HoodieWriteConfig.AVRO_SCHEMA_STRING.key ->
+      new TableSchemaResolver(createMetaClient(tablePath)).getTableSchema(false).toString)
     val client = DataSourceUtils.createHoodieClient(
       spark.sparkContext,
       "",
       tablePath,
       options(HoodieWriteConfig.TBL_NAME.key),
-      options.asJava)
+      clientOptions.asJava)
       .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
     try {
       operation(client)
     } finally {
       client.close()
     }
+  }
+
+  private def runClustering(tablePath: String, options: Map[String, String]): String =
+    withWriteClient(tablePath, options) { client =>
+      val instant = client.scheduleClustering(Option.empty()).get()
+      client.cluster(instant, true)
+      instant
+    }
+
+  private def replacedFileIds(tablePath: String, instantTime: String): Set[String] = {
+    clusteringMetadata(tablePath, instantTime)
+      .getPartitionToReplaceFileIds.values().asScala.flatMap(_.asScala).toSet
+  }
+
+  private def clusteringMetadata(tablePath: String, instantTime: String): HoodieReplaceCommitMetadata = {
+    val metaClient = createMetaClient(tablePath)
+    val instant = metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.getInstants.asScala
+      .find(_.requestedTime() == instantTime)
+      .getOrElse(throw new AssertionError(s"No completed clustering instant $instantTime"))
+    metaClient.getActiveTimeline.readReplaceCommitMetadata(instant)
   }
 
   private def assertChangedFilesSorted(
@@ -536,6 +651,13 @@ class TestLSMDataSource extends SparkClientFunctionalTestHarness {
 }
 
 object TestLSMDataSource {
+
+  def clusteringParams(): java.util.stream.Stream[Arguments] =
+    java.util.stream.Stream.of(
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, Boolean.box(false)),
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, Boolean.box(true)),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, Boolean.box(false)),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, Boolean.box(true)))
 
   def bucketBulkInsertParams(): java.util.stream.Stream[Arguments] =
     java.util.stream.Stream.of(

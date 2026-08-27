@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.client.ClusteringIdentityTestExecutionStrategy;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
@@ -36,7 +37,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -142,6 +145,54 @@ public class TestHoodieClientOnLsmStorage extends HoodieClientTestBase {
           .filter(candidate -> candidate.requestedTime().equals(instantTime))
           .findFirst()
           .orElseThrow(() -> new AssertionError("No instant " + instantTime));
+      assertEquals(HoodieInstant.State.REQUESTED, instant.getState());
+    }
+  }
+
+  @Test
+  void testRejectsUnknownClusteringStrategyBeforeInflight() throws IOException {
+    LsmTableTestContext testContext = createTestContext(HoodieTableType.COPY_ON_WRITE);
+    testContext.writeConfig.setValue(
+        HoodieClusteringConfig.PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED, "true");
+    try (SparkRDDWriteClient client = getHoodieWriteClient(testContext.writeConfig)) {
+      bootstrapTable(testContext, client);
+      Option clusteringInstantOption = client.scheduleClustering(Option.empty());
+      assertTrue(clusteringInstantOption.isPresent());
+      String clusteringInstant = (String) clusteringInstantOption.get();
+      testContext.writeConfig.setValue(
+          HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME,
+          ClusteringIdentityTestExecutionStrategy.class.getName());
+
+      HoodieClusteringException exception = assertThrows(
+          HoodieClusteringException.class, () -> client.cluster(clusteringInstant, true));
+      assertTrue(exception.getMessage().contains("record-key ordering cannot be verified"));
+
+      HoodieInstant instant = testContext.metaClient.reloadActiveTimeline().getInstants().stream()
+          .filter(candidate -> candidate.requestedTime().equals(clusteringInstant))
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("No instant " + clusteringInstant));
+      assertEquals(HoodieInstant.State.REQUESTED, instant.getState());
+    }
+  }
+
+  @Test
+  void testRejectsCustomClusteringSortBeforeInflight() throws IOException {
+    LsmTableTestContext testContext = createTestContext(HoodieTableType.COPY_ON_WRITE);
+    testContext.writeConfig.setValue(
+        HoodieClusteringConfig.PLAN_STRATEGY_SINGLE_GROUP_CLUSTERING_ENABLED, "true");
+    testContext.writeConfig.setValue(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS, "begin_lat");
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(testContext.writeConfig)) {
+      bootstrapTable(testContext, client);
+      Option clusteringInstantOption = client.scheduleClustering(Option.empty());
+      assertTrue(clusteringInstantOption.isPresent());
+      String clusteringInstant = (String) clusteringInstantOption.get();
+
+      assertThrows(HoodieClusteringException.class, () -> client.cluster(clusteringInstant, true));
+      HoodieInstant instant = testContext.metaClient.reloadActiveTimeline().getInstants().stream()
+          .filter(candidate -> candidate.requestedTime().equals(clusteringInstant))
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("No instant " + clusteringInstant));
       assertEquals(HoodieInstant.State.REQUESTED, instant.getState());
     }
   }

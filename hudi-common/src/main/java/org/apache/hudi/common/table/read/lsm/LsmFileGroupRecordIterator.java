@@ -39,16 +39,15 @@ import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.LoserTree;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -91,7 +90,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   private final boolean readBaseFile;
   private final BufferedRecordMerger<T> bufferedRecordMerger;
   private final UpdateProcessor<T> updateProcessor;
-  private final LoserTree<T> readers;
+  private final LoserTree<BufferedRecord<T>> readers;
   private final int spillThreshold;
   private final String spillBasePath;
   private BufferedRecord<T> nextRecord;
@@ -141,7 +140,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
         readerContext, readerContext.getMergeMode(), false, readerContext.getRecordMerger(),
         readerSchema, readerContext.getPayloadClasses(props), props, metaClient.getTableConfig().getPartialUpdateMode());
     this.updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDeletes(), fileGroupUpdateCallback, props);
-    this.readers = new LoserTree<>(initializeReaders());
+    this.readers = new LoserTree<>(initializeReaders(), BufferedRecord::getRecordKey);
   }
 
   /**
@@ -151,8 +150,8 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
    * the same key. It is assigned before spill selection so direct and spilled iterators remain
    * semantically identical during the loser-tree merge.
    */
-  private List<SortedRunReader<T>> initializeReaders() throws IOException {
-    List<SortedRunReader<T>> sortedRunReaders = new ArrayList<>();
+  private List<LoserTree.SortedRunReader<BufferedRecord<T>>> initializeReaders() throws IOException {
+    List<LoserTree.SortedRunReader<BufferedRecord<T>>> sortedRunReaders = new ArrayList<>();
     int mergeOrder = 0;
     if (readBaseFile) {
       addReader(sortedRunReaders, mergeOrder++, LsmFileIterators.createBaseFileIterator(
@@ -242,8 +241,11 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   /**
    * Adds a reader to the merge only when the underlying sorted run contains at least one record.
    */
-  private void addReader(List<SortedRunReader<T>> sortedRunReaders, int mergeOrder, ClosableIterator<BufferedRecord<T>> iterator) {
-    SortedRunReader<T> sortedRunReader = new SortedRunReader<>(mergeOrder, iterator);
+  private void addReader(List<LoserTree.SortedRunReader<BufferedRecord<T>>> sortedRunReaders,
+                         int mergeOrder,
+                         ClosableIterator<BufferedRecord<T>> iterator) {
+    LoserTree.SortedRunReader<BufferedRecord<T>> sortedRunReader =
+        new LoserTree.SortedRunReader<>(mergeOrder, iterator);
     if (sortedRunReader.advance()) {
       sortedRunReaders.add(sortedRunReader);
     } else {
@@ -372,158 +374,4 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     readers.close();
   }
 
-  /**
-   * Loser-tree state machine for k-way merging. Each leaf keeps one active record from
-   * one sorted input stream; {@code tree[0]} stores the current champion and internal
-   * nodes store the loser from the corresponding tournament match.
-   */
-  @VisibleForTesting
-  static class LoserTree<T> {
-    private final List<SortedRunReader<T>> leaves;
-    private final int leafBase;
-    private final int[] tree;
-    private final int[] winners;
-
-    LoserTree(List<SortedRunReader<T>> leaves) {
-      this.leaves = leaves;
-      this.leafBase = nextPowerOfTwo(Math.max(1, leaves.size()));
-      this.tree = new int[leafBase];
-      this.winners = new int[leafBase << 1];
-      Arrays.fill(tree, -1);
-      Arrays.fill(winners, -1);
-      build();
-    }
-
-    private void build() {
-      for (int i = 0; i < leaves.size(); i++) {
-        winners[leafBase + i] = leaves.get(i).current == null ? -1 : i;
-      }
-      if (leafBase == 1) {
-        tree[0] = winners[leafBase];
-      } else {
-        for (int node = leafBase - 1; node > 0; node--) {
-          replay(node);
-        }
-      }
-    }
-
-    boolean isEmpty() {
-      return tree[0] < 0;
-    }
-
-    BufferedRecord<T> peekWinner() {
-      int winnerIndex = tree[0];
-      return winnerIndex < 0 ? null : leaves.get(winnerIndex).current;
-    }
-
-    int peekWinnerMergeOrder() {
-      int winnerIndex = tree[0];
-      return winnerIndex < 0 ? -1 : leaves.get(winnerIndex).mergeOrder;
-    }
-
-    BufferedRecord<T> popWinner() {
-      int winnerIndex = tree[0];
-      SortedRunReader<T> winner = leaves.get(winnerIndex);
-      BufferedRecord<T> record = winner.current;
-      if (!winner.advance()) {
-        winner.close();
-      }
-      update(winnerIndex);
-      return record;
-    }
-
-    private void update(int leafIndex) {
-      winners[leafBase + leafIndex] = leaves.get(leafIndex).current == null ? -1 : leafIndex;
-      if (leafBase == 1) {
-        tree[0] = winners[leafBase];
-        return;
-      }
-      int node = (leafBase + leafIndex) >> 1;
-      while (node > 0) {
-        replay(node);
-        node >>= 1;
-      }
-    }
-
-    private void replay(int node) {
-      int left = winners[node << 1];
-      int right = winners[(node << 1) + 1];
-      if (left < 0 && right < 0) {
-        winners[node] = -1;
-        tree[node] = -1;
-      } else if (left < 0) {
-        winners[node] = right;
-        tree[node] = -1;
-      } else if (right < 0) {
-        winners[node] = left;
-        tree[node] = -1;
-      } else {
-        if (compare(left, right) <= 0) {
-          winners[node] = left;
-          tree[node] = right;
-        } else {
-          winners[node] = right;
-          tree[node] = left;
-        }
-      }
-      if (node == 1) {
-        tree[0] = winners[node];
-      }
-    }
-
-    private int compare(int leftIndex, int rightIndex) {
-      SortedRunReader<T> left = leaves.get(leftIndex);
-      SortedRunReader<T> right = leaves.get(rightIndex);
-      int keyCompare = StringUtils.compareUtf8Bytes(
-          left.current.getRecordKey(), right.current.getRecordKey());
-      if (keyCompare != 0) {
-        return keyCompare;
-      }
-      // Process older sources first so the regular merger sees later sources last.
-      // This preserves HoodieFileGroupReader tie semantics when ordering values are equal:
-      // base < older log instant/version < newer log instant/version.
-      return Integer.compare(left.mergeOrder, right.mergeOrder);
-    }
-
-    private void close() {
-      leaves.forEach(SortedRunReader::close);
-    }
-
-    private static int nextPowerOfTwo(int value) {
-      int result = 1;
-      while (result < value) {
-        result <<= 1;
-      }
-      return result;
-    }
-  }
-
-  @VisibleForTesting
-  static class SortedRunReader<T> {
-    private final int mergeOrder;
-    private final ClosableIterator<BufferedRecord<T>> iterator;
-    private BufferedRecord<T> current;
-    private boolean closed;
-
-    SortedRunReader(int mergeOrder, ClosableIterator<BufferedRecord<T>> iterator) {
-      this.mergeOrder = mergeOrder;
-      this.iterator = iterator;
-    }
-
-    boolean advance() {
-      if (iterator.hasNext()) {
-        current = iterator.next();
-        return true;
-      }
-      current = null;
-      return false;
-    }
-
-    void close() {
-      if (!closed) {
-        iterator.close();
-        closed = true;
-      }
-    }
-  }
 }

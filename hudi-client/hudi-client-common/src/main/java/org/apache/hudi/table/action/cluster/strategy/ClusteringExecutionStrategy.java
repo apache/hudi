@@ -36,6 +36,8 @@ import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
+import org.apache.hudi.common.table.read.lsm.HoodieLsmFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -142,10 +144,24 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     return fileSlice;
   }
 
-  protected static <R> HoodieFileGroupReader<R> getFileGroupReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, HoodieSchema readerSchema, Option<InternalSchema> internalSchemaOption,
-                                                                   ReaderContextFactory<R> readerContextFactory, String instantTime,
-                                                                   TypedProperties properties, boolean usePosition) {
+  protected static <R> HoodieRecordReader<R> getFileGroupReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, HoodieSchema readerSchema, Option<InternalSchema> internalSchemaOption,
+                                                                ReaderContextFactory<R> readerContextFactory, String instantTime,
+                                                                TypedProperties properties, boolean usePosition) {
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
+    if (metaClient.getTableConfig().isLSMTreeStorageLayout()) {
+      return HoodieLsmFileGroupReader.<R>builder()
+          .withReaderContext(readerContext)
+          .withHoodieTableMetaClient(metaClient)
+          .withLatestCommitTime(instantTime)
+          .withBaseFileOption(fileSlice.getBaseFile())
+          .withLogFiles(fileSlice.getLogFiles())
+          .withPartitionPath(fileSlice.getPartitionPath())
+          .withDataSchema(readerSchema)
+          .withRequestedSchema(readerSchema)
+          .withInternalSchemaOpt(internalSchemaOption)
+          .withProps(properties)
+          .build();
+    }
     return HoodieFileGroupReader.<R>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)

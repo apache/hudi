@@ -47,6 +47,7 @@ import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.LoserTree;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -180,12 +181,12 @@ class TestLsmFileGroupRecordIterator {
 
   @Test
   void testLoserTreeMergesByRecordKeyThenMergeOrder() {
-    List<LsmFileGroupRecordIterator.SortedRunReader<String>> readers = Arrays.asList(
+    List<LoserTree.SortedRunReader<BufferedRecord<String>>> readers = Arrays.asList(
         sortedRunReader(0, record("key1", "base-key1"), record("key3", "base-key3")),
         sortedRunReader(1, record("key1", "log1-key1"), record("key2", "log1-key2")),
         sortedRunReader(2, BufferedRecords.createDelete("key1", 3), record("key3", "log2-key3")));
 
-    LsmFileGroupRecordIterator.LoserTree<String> loserTree = new LsmFileGroupRecordIterator.LoserTree<>(readers);
+    LoserTree<BufferedRecord<String>> loserTree = new LoserTree<>(readers, BufferedRecord::getRecordKey);
 
     assertEquals(Arrays.asList(
         "key1:base-key1",
@@ -201,11 +202,12 @@ class TestLsmFileGroupRecordIterator {
     String fullWidthExclamationKey = "！";
     String emojiKey = "😀";
 
-    LsmFileGroupRecordIterator.LoserTree<String> loserTree =
-        new LsmFileGroupRecordIterator.LoserTree<>(
+    LoserTree<BufferedRecord<String>> loserTree =
+        new LoserTree<>(
             Arrays.asList(
                 sortedRunReader(0, record(fullWidthExclamationKey, "full-width-exclamation")),
-                sortedRunReader(1, record(emojiKey, "emoji"))));
+                sortedRunReader(1, record(emojiKey, "emoji"))),
+            BufferedRecord::getRecordKey);
     // UTF-16 orders the emoji first, while UTF-8 bytes order the full-width character first.
     assertEquals(Arrays.asList(
         fullWidthExclamationKey + ":full-width-exclamation",
@@ -318,10 +320,11 @@ class TestLsmFileGroupRecordIterator {
     assertEquals(Arrays.asList("a:log2-a", "c:stale-c"), logOnly);
   }
 
-  private static LsmFileGroupRecordIterator.SortedRunReader<String> sortedRunReader(int mergeOrder,
-                                                                                    BufferedRecord<String>... records) {
-    LsmFileGroupRecordIterator.SortedRunReader<String> reader = new LsmFileGroupRecordIterator.SortedRunReader<>(
-        mergeOrder, ClosableIterator.wrap(Arrays.asList(records).iterator()));
+  private static LoserTree.SortedRunReader<BufferedRecord<String>> sortedRunReader(
+      int mergeOrder, BufferedRecord<String>... records) {
+    LoserTree.SortedRunReader<BufferedRecord<String>> reader =
+        new LoserTree.SortedRunReader<>(
+            mergeOrder, ClosableIterator.wrap(Arrays.asList(records).iterator()));
     assertTrue(reader.advance());
     return reader;
   }
@@ -356,7 +359,7 @@ class TestLsmFileGroupRecordIterator {
     return new StoragePathInfo(new StoragePath(path), size, false, (short) 1, 1024, 0);
   }
 
-  private static List<String> drain(LsmFileGroupRecordIterator.LoserTree<String> loserTree) {
+  private static List<String> drain(LoserTree<BufferedRecord<String>> loserTree) {
     List<String> records = new ArrayList<>();
     while (!loserTree.isEmpty()) {
       BufferedRecord<String> record = loserTree.popWinner();
