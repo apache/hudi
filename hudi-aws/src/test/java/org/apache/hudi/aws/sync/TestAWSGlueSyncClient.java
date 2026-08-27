@@ -578,12 +578,19 @@ class TestAWSGlueSyncClient {
         .thenReturn(CompletableFuture.completedFuture(gt));
 
     BatchUpdatePartitionResponse ok = BatchUpdatePartitionResponse.builder().errors(Collections.emptyList()).build();
-    when(mockAwsGlue.batchUpdatePartition(any(BatchUpdatePartitionRequest.class)))
+    ArgumentCaptor<BatchUpdatePartitionRequest> captor = ArgumentCaptor.forClass(BatchUpdatePartitionRequest.class);
+    when(mockAwsGlue.batchUpdatePartition(captor.capture()))
         .thenReturn(CompletableFuture.completedFuture(ok));
 
     awsGlueSyncClient.updatePartitionsToTable(tableName, changed);
 
     verify(mockAwsGlue).batchUpdatePartition(any(BatchUpdatePartitionRequest.class));
+    List<BatchUpdatePartitionRequestEntry> entries = captor.getValue().entries();
+    assertEquals(1, entries.size());
+    String syncBasePath = GlueTestUtil.getHiveSyncConfig().getString(META_SYNC_BASE_PATH);
+    assertEquals(new StoragePath(syncBasePath, "2025/05/20").toString(),
+        entries.get(0).partitionInput().storageDescriptor().location());
+    assertEquals(Collections.singletonList("2025-05-20"), entries.get(0).partitionValueList());
   }
 
   @Test
