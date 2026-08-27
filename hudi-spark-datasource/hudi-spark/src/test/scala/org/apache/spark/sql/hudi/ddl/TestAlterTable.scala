@@ -533,6 +533,9 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
            | )
        """.stripMargin)
 
+      val metaClient = createMetaClient(spark, tablePath)
+      assertResult("10")(metaClient.getTableConfig.getString("hoodie.clean.commits.retained"))
+
       // 1. SET new mutable Hudi config -> hoodie.properties updated
       spark.sql(s"alter table $tableName set TBLPROPERTIES ('hoodie.keep.max.commits' = '50')")
       val tableConfig1 = createMetaClient(spark, tablePath).getTableConfig
