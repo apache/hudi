@@ -43,6 +43,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -60,34 +61,14 @@ class TestBucketStreamWriteMemoryExhaustion {
   @ParameterizedTest(name = "lsmTreeLayout={0}")
   @ValueSource(booleans = {false, true})
   void testRecoveryPreservesVariableLengthValuesAndReleasesPages(boolean lsmTreeLayout) throws Exception {
-    DataType dataType = DataTypes.ROW(
-        DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),
-        DataTypes.FIELD("payload", DataTypes.VARCHAR(Integer.MAX_VALUE)),
-        DataTypes.FIELD("attributes", DataTypes.MAP(DataTypes.VARCHAR(64), DataTypes.VARCHAR(64))),
-        DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)),
-        DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
-        .notNull();
+    DataType dataType = dataType();
     RowType rowType = (RowType) dataType.getLogicalType();
 
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), dataType);
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
-    conf.set(FlinkOptions.OPERATION, "upsert");
-    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
-    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
-    if (lsmTreeLayout) {
-      conf.setString(
-          HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
-          HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
-    }
-    // Leaves 1 MB for the shared RowData memory pool.
-    conf.set(FlinkOptions.WRITE_TASK_MAX_SIZE, 201.0);
-    conf.set(FlinkOptions.WRITE_MERGE_MAX_MEMORY, 100);
-    // Prevent batch-size based flushes so non-diverged mid-invocation flushes come from preemption.
-    conf.set(FlinkOptions.WRITE_BATCH_SIZE, 1024.0);
+    Configuration conf = writeConfig(dataType, 4, lsmTreeLayout);
 
     Map<String, String> expectedPayloads = new HashMap<>();
     Map<String, String> expectedAttributes = new HashMap<>();
-    List<RowData> rows = createRows(rowType, expectedPayloads, expectedAttributes);
+    List<RowData> rows = createRows(rowType, 40, expectedPayloads, expectedAttributes);
 
     TrackingBucketWriteFunctionWrapper pipeline =
         new TrackingBucketWriteFunctionWrapper(tempFile.getAbsolutePath(), conf);
@@ -119,31 +100,100 @@ class TestBucketStreamWriteMemoryExhaustion {
       handleWriteEvents(pipeline, recoveryFlushCount + 1);
       pipeline.checkpointComplete(1);
 
-      List<GenericRecord> actualRecords = TestData.readAllData(tempFile, rowType, 1);
-      assertEquals(rows.size(), actualRecords.size(), "memory exhaustion recovery must not lose or duplicate records");
-      for (GenericRecord actualRecord : actualRecords) {
-        String id = actualRecord.get("uuid").toString();
-        assertTrue(
-            actualRecord.get("payload").toString().equals(expectedPayloads.get(id)),
-            "variable-length payload should remain intact for " + id);
-        Map<?, ?> actualAttributes = (Map<?, ?>) actualRecord.get("attributes");
-        assertEquals(1, actualAttributes.size());
-        Map.Entry<?, ?> attribute = actualAttributes.entrySet().iterator().next();
-        assertEquals(
-            expectedAttributes.get(id),
-            attribute.getKey().toString() + "=" + attribute.getValue().toString());
-      }
+      assertWrittenRows(rowType, rows.size(), expectedPayloads, expectedAttributes);
     } finally {
       pipeline.close();
     }
   }
 
+  @ParameterizedTest(name = "lsmTreeLayout={0}")
+  @ValueSource(booleans = {false, true})
+  void testFlushesDivergedBucketWhenNoInactiveBucketCanBePreempted(boolean lsmTreeLayout)
+      throws Exception {
+    DataType dataType = dataType();
+    RowType rowType = (RowType) dataType.getLogicalType();
+    // A single bucket guarantees that memory reclamation cannot find an inactive victim while
+    // the current bucket is serializing a row.
+    Configuration conf = writeConfig(dataType, 1, lsmTreeLayout);
+
+    Map<String, String> expectedPayloads = new HashMap<>();
+    Map<String, String> expectedAttributes = new HashMap<>();
+    List<RowData> rows = createRows(rowType, 12, expectedPayloads, expectedAttributes);
+
+    TrackingBucketWriteFunctionWrapper pipeline =
+        new TrackingBucketWriteFunctionWrapper(tempFile.getAbsolutePath(), conf);
+    pipeline.openFunction();
+    int initialFreePages = pipeline.freePages();
+    try {
+      boolean flushedDivergedBucket = false;
+      for (RowData row : rows) {
+        int flushCountBeforeInvoke = pipeline.writeBatchCount();
+        pipeline.invoke(row);
+        List<FlushedBucket> invocationFlushes = pipeline.flushesFrom(flushCountBeforeInvoke);
+        if (!invocationFlushes.isEmpty()) {
+          assertTrue(
+              invocationFlushes.stream().allMatch(flushedBucket -> flushedBucket.diverged),
+              "without an inactive victim, recovery should only flush the diverged current bucket");
+          flushedDivergedBucket = true;
+        }
+      }
+
+      int recoveryFlushCount = pipeline.writeBatchCount();
+      assertTrue(
+          flushedDivergedBucket,
+          "memory exhaustion should flush the diverged bucket when no inactive victim exists");
+      pipeline.checkpointFunction(1);
+
+      assertEquals(
+          initialFreePages,
+          pipeline.freePages(),
+          "all pages should be returned after the checkpoint flush disposes every bucket");
+
+      handleWriteEvents(pipeline, recoveryFlushCount + 1);
+      pipeline.checkpointComplete(1);
+
+      assertWrittenRows(rowType, rows.size(), expectedPayloads, expectedAttributes);
+    } finally {
+      pipeline.close();
+    }
+  }
+
+  private static DataType dataType() {
+    return DataTypes.ROW(
+        DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),
+        DataTypes.FIELD("payload", DataTypes.VARCHAR(Integer.MAX_VALUE)),
+        DataTypes.FIELD("attributes", DataTypes.MAP(DataTypes.VARCHAR(64), DataTypes.VARCHAR(64))),
+        DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)),
+        DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+        .notNull();
+  }
+
+  private Configuration writeConfig(DataType dataType, int bucketCount, boolean lsmTreeLayout) {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), dataType);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.OPERATION, "upsert");
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, bucketCount);
+    if (lsmTreeLayout) {
+      conf.setString(
+          HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+          HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    }
+    // Leaves 1 MB for the shared RowData memory pool.
+    conf.set(FlinkOptions.WRITE_TASK_MAX_SIZE, 201.0);
+    conf.set(FlinkOptions.WRITE_MERGE_MAX_MEMORY, 100);
+    // Prevent batch-size based flushes so mid-invocation flushes come from memory exhaustion.
+    conf.set(FlinkOptions.WRITE_BATCH_SIZE, 1024.0);
+    return conf;
+  }
+
   private static List<RowData> createRows(
       RowType rowType,
+      int rowCount,
       Map<String, String> expectedPayloads,
       Map<String, String> expectedAttributes) {
     List<RowData> rows = new ArrayList<>();
-    for (int i = 0; i < 40; i++) {
+    for (int i = 0; i < rowCount; i++) {
       String id = "uuid-" + i;
       String payload = "payload-" + i + "-" + repeat((char) ('a' + i % 26), 256 * 1024);
       String attributeKey = "key-" + i;
@@ -162,6 +212,30 @@ class TestBucketStreamWriteMemoryExhaustion {
       expectedAttributes.put(id, attributeKey + "=" + attributeValue);
     }
     return rows;
+  }
+
+  private void assertWrittenRows(
+      RowType rowType,
+      int expectedRowCount,
+      Map<String, String> expectedPayloads,
+      Map<String, String> expectedAttributes) throws IOException {
+    List<GenericRecord> actualRecords = TestData.readAllData(tempFile, rowType, 1);
+    assertEquals(
+        expectedRowCount,
+        actualRecords.size(),
+        "memory exhaustion recovery must not lose or duplicate records");
+    for (GenericRecord actualRecord : actualRecords) {
+      String id = actualRecord.get("uuid").toString();
+      assertTrue(
+          actualRecord.get("payload").toString().equals(expectedPayloads.get(id)),
+          "variable-length payload should remain intact for " + id);
+      Map<?, ?> actualAttributes = (Map<?, ?>) actualRecord.get("attributes");
+      assertEquals(1, actualAttributes.size());
+      Map.Entry<?, ?> attribute = actualAttributes.entrySet().iterator().next();
+      assertEquals(
+          expectedAttributes.get(id),
+          attribute.getKey().toString() + "=" + attribute.getValue().toString());
+    }
   }
 
   private static void handleWriteEvents(

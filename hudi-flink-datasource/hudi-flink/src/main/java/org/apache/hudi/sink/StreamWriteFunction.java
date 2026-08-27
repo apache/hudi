@@ -388,12 +388,10 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     RowDataBucket failedBucket = this.buckets.get(bucketID);
 
     if (failedBucket == null) {
-      RowDataBucket bucketToFlush = findLargestNonEmptyBucketExcluding(bucketID);
-      if (bucketToFlush == null) {
+      if (!preemptMemory(bucketID)) {
         throw new HoodieException(
             "Not enough memory pages to create a RowData buffer and no non-empty bucket can be flushed");
       }
-      flushAndDisposeBucket(bucketToFlush);
       return;
     }
 
@@ -405,9 +403,11 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   }
 
   /**
-   * Flushes the largest inactive bucket to return its pages to the shared memory pool.
+   * Flushes the largest non-empty bucket other than the excluded bucket to return its pages to the
+   * shared memory pool.
    *
-   * <p>The excluded bucket is in the middle of serializing a row and must never be flushed here.
+   * <p>The excluded bucket is either in the middle of serializing a row or is about to retry buffer
+   * creation and must never be flushed here.
    */
   private boolean preemptMemory(String excludedBucketID) {
     RowDataBucket bucketToFlush = findLargestNonEmptyBucketExcluding(excludedBucketID);

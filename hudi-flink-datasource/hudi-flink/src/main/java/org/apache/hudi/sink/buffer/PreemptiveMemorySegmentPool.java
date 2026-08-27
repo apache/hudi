@@ -107,18 +107,10 @@ public class PreemptiveMemorySegmentPool implements MemorySegmentPool, Closeable
   @Override
   public MemorySegment nextSegment() {
     MemorySegment segment = delegate.nextSegment();
-    if (segment != null) {
+    // Reclamation requires an in-flight owner and is disabled while a reclamation callback is
+    // running to prevent recursively selecting a victim that has not yet been disposed.
+    if (segment != null || currentOwnerId == null || preempting) {
       return segment;
-    }
-    if (currentOwnerId == null) {
-      // No buffer is in the middle of serializing a row. In particular, buffer creation uses
-      // this path and lets StreamWriteFunction apply its creation-failure recovery.
-      return null;
-    }
-    if (preempting) {
-      // The callback may transitively request a page while its victim is still registered.
-      // Re-entering it could select and flush the same victim recursively.
-      return null;
     }
 
     preempting = true;
