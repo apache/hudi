@@ -134,13 +134,13 @@ public class TestHoodieMetadataWriteUtils {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp/base_path/")
         .withStorageConfig(HoodieStorageConfig.newBuilder()
-            .parquetCompressionCodec("zstd")
+            .parquetCompressionCodec("snappy")
             .build())
         .build();
 
     HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
         writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
-    assertEquals("zstd", metadataWriteConfig.getParquetCompressionCodec());
+    assertEquals("snappy", metadataWriteConfig.getParquetCompressionCodec());
   }
 
   @ParameterizedTest

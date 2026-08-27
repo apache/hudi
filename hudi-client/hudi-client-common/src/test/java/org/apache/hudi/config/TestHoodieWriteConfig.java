@@ -158,26 +158,27 @@ public class TestHoodieWriteConfig {
 
   @Test
   public void testDefaultParquetCompressionCodecAccordingToEngine() {
+    assertEquals("zstd", HoodieWriteConfig.getDefaultParquetCompressionCodec(EngineType.FLINK));
+    assertEquals("gzip", HoodieWriteConfig.getDefaultParquetCompressionCodec(EngineType.JAVA));
+
     HoodieWriteConfig flinkConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.FLINK)
         .withPath("/tmp")
-        .withStorageConfig(HoodieStorageConfig.newBuilder().withEngineType(EngineType.FLINK)
-            .parquetWriteLegacyFormat("false").build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build())
         .build();
     assertEquals("zstd", flinkConfig.getParquetCompressionCodec());
 
     HoodieWriteConfig javaConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath("/tmp")
-        .withStorageConfig(HoodieStorageConfig.newBuilder().withEngineType(EngineType.JAVA).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build())
         .build();
     assertEquals("gzip", javaConfig.getParquetCompressionCodec());
 
     javaConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath("/tmp")
-        .withStorageConfig(HoodieStorageConfig.newBuilder().withEngineType(EngineType.JAVA)
-            .parquetCompressionCodec("zstd").build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetCompressionCodec("zstd").build())
         .build();
     assertEquals("zstd", javaConfig.getParquetCompressionCodec());
 
@@ -186,8 +187,7 @@ public class TestHoodieWriteConfig {
     flinkConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.FLINK)
         .withPath("/tmp")
-        .withStorageConfig(HoodieStorageConfig.newBuilder().withEngineType(EngineType.FLINK)
-            .fromProperties(explicitCodec).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().fromProperties(explicitCodec).build())
         .build();
     assertEquals("gzip", flinkConfig.getParquetCompressionCodec());
   }

@@ -69,7 +69,8 @@
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
                   <resource>META-INF/LICENSE</resource>
-                  <file>target/classes/META-INF/LICENSE</file>
+                  <!-- zstd-jni does not include its BSD license as a JAR resource. -->
+                  <file>${project.basedir}/../../LICENSE</file>
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>

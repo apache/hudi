@@ -134,6 +134,10 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
     description = "Configurations that control write behavior on Hudi tables. These can be directly passed down from even "
         + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g Hudi Streamer).")
 public class HoodieWriteConfig extends HoodieConfig {
+
+  private static final String GZIP_COMPRESSION_CODEC = "gzip";
+  private static final String ZSTD_COMPRESSION_CODEC = "zstd";
+  private static final String MIN_SPARK_VERSION_WITH_ZSTD_DEFAULT = "3.5.0";
   private static final long serialVersionUID = 0L;
 
   // This is a constant as is should never be changed via config (will invalidate previous commits)
@@ -1419,7 +1423,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.metaserverConfig = HoodieMetaserverConfig.newBuilder().fromProperties(props).build();
     this.tableServiceManagerConfig = HoodieTableServiceManagerConfig.newBuilder().fromProperties(props).build();
     this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
-    this.storageConfig = HoodieStorageConfig.newBuilder().withEngineType(engineType).fromProperties(props).build();
+    this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
     this.timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().fromProperties(props)
         .withDefaultLockProvider(!isLockRequired()).build();
     this.indexingConfig = HoodieIndexingConfig.newBuilder().fromProperties(props).build();
@@ -1427,6 +1431,40 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static HoodieWriteConfig.Builder newBuilder() {
     return new Builder();
+  }
+
+  @VisibleForTesting
+  static String getDefaultParquetCompressionCodec(EngineType engineType) {
+    switch (engineType) {
+      case FLINK:
+        return ZSTD_COMPRESSION_CODEC;
+      case SPARK:
+        // Spark 3.5 and newer use ZSTD. Spark 3.3 and 3.4 retain GZIP because their
+        // non-vectorized file-group reader uses parquet-java 1.12.x and can leak off-heap
+        // memory when reading ZSTD files: https://issues.apache.org/jira/browse/PARQUET-2160.
+        Option<String> sparkVersion = getSparkRuntimeVersion();
+        return sparkVersion.isPresent()
+            && StringUtils.compareVersions(sparkVersion.get(), MIN_SPARK_VERSION_WITH_ZSTD_DEFAULT) >= 0
+            ? ZSTD_COMPRESSION_CODEC : GZIP_COMPRESSION_CODEC;
+      default:
+        // The Java client does not own its Parquet runtime: Parquet dependencies are provided by
+        // the embedding application, and older Parquet versions use Hadoop native ZSTD rather than
+        // zstd-jni. For example, the recommended Kafka HDFS Connector 10.1.0 uses Parquet 1.11.1,
+        // which risks leaking memory when reading ZSTD-compressed files. Keep GZIP as the portable
+        // default across supported Java deployments.
+        return GZIP_COMPRESSION_CODEC;
+    }
+  }
+
+  private static Option<String> getSparkRuntimeVersion() {
+    try {
+      Class<?> sparkPackageClass = Class.forName("org.apache.spark.package$");
+      Object sparkPackage = sparkPackageClass.getField("MODULE$").get(null);
+      return Option.of((String) sparkPackageClass.getMethod("SPARK_VERSION").invoke(sparkPackage));
+    } catch (ReflectiveOperationException | LinkageError e) {
+      log.debug("Unable to resolve the Spark runtime version; using the legacy Parquet compression codec default: {}", e.toString());
+      return Option.empty();
+    }
   }
 
   /**
@@ -3813,12 +3851,16 @@ public class HoodieWriteConfig extends HoodieConfig {
       }
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
+      // Resolve this engine-dependent default only after the final engine type is known. The
+      // property remains unset in a partial HoodieStorageConfig, so explicit values are preserved.
+      writeConfig.setDefaultValue(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME,
+          getDefaultParquetCompressionCodec(engineType));
       // Make sure the props is propagated
       writeConfig.setDefaultOnCondition(
           !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(
               writeConfig.getProps()).build());
-      writeConfig.setDefaultOnCondition(!isStorageConfigSet, HoodieStorageConfig.newBuilder().withEngineType(engineType)
-          .fromProperties(writeConfig.getProps()).build());
+      writeConfig.setDefaultOnCondition(!isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(
+          writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isCleanConfigSet,

@@ -224,7 +224,7 @@ public class FlinkWriteClients {
                         conf.get(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
                     ).build())
             .forTable(conf.get(FlinkOptions.TABLE_NAME))
-            .withStorageConfig(HoodieStorageConfig.newBuilder().withEngineType(EngineType.FLINK)
+            .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .logFileDataBlockMaxSize((long) conf.get(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
                 .logFileMaxSize(conf.get(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
                 .parquetBlockSize(conf.get(FlinkOptions.WRITE_PARQUET_BLOCK_SIZE) * 1024 * 1024)

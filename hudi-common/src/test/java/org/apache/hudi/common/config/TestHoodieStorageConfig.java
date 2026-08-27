@@ -20,7 +20,6 @@
 package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
-import org.apache.hudi.common.engine.EngineType;
 
 import org.junit.jupiter.api.Test;
 
@@ -81,26 +80,16 @@ public class TestHoodieStorageConfig {
   }
 
   @Test
-  void testParquetCompressionCodecDefaultAccordingToEngine() {
-    assertEquals("zstd", HoodieStorageConfig.getDefaultParquetCompressionCodec(EngineType.FLINK));
-    assertEquals("gzip", HoodieStorageConfig.getDefaultParquetCompressionCodec(EngineType.JAVA));
-    assertEquals("gzip", HoodieStorageConfig.getDefaultParquetCompressionCodec(EngineType.SPARK));
-
-    HoodieStorageConfig flinkStorageConfig = HoodieStorageConfig.newBuilder()
-        .withEngineType(EngineType.FLINK)
-        .build();
-    assertEquals("zstd", flinkStorageConfig.getString(PARQUET_COMPRESSION_CODEC_NAME));
-
-    HoodieStorageConfig javaStorageConfig = HoodieStorageConfig.newBuilder()
-        .withEngineType(EngineType.JAVA)
-        .build();
-    assertEquals("gzip", javaStorageConfig.getString(PARQUET_COMPRESSION_CODEC_NAME));
+  void testParquetCompressionCodecDefaultIsDeferred() {
+    HoodieStorageConfig defaultStorageConfig = HoodieStorageConfig.newBuilder().build();
+    assertFalse(defaultStorageConfig.contains(PARQUET_COMPRESSION_CODEC_NAME));
+    assertEquals("zstd", defaultStorageConfig.getStringOrDefault(PARQUET_COMPRESSION_CODEC_NAME));
 
     HoodieStorageConfig explicitStorageConfig = HoodieStorageConfig.newBuilder()
-        .withEngineType(EngineType.FLINK)
-        .parquetCompressionCodec("gzip")
+        .parquetCompressionCodec("zstd")
         .build();
-    assertEquals("gzip", explicitStorageConfig.getString(PARQUET_COMPRESSION_CODEC_NAME));
+    assertTrue(explicitStorageConfig.contains(PARQUET_COMPRESSION_CODEC_NAME));
+    assertEquals("zstd", explicitStorageConfig.getString(PARQUET_COMPRESSION_CODEC_NAME));
   }
 
   @Test

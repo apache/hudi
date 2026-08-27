@@ -23,7 +23,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -88,9 +87,7 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
       log.info("Required conditions for binary stream copy are currently not satisfied, falling back to default clustering behavior");
       // reset write config
       this.writeConfig = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps())
-          .withStorageConfig(HoodieStorageConfig.newBuilder().withEngineType(EngineType.SPARK)
-              .parquetCompressionCodec(writeConfig.getParquetCompressionCodec())
-              .parquetWriteLegacyFormat("false").build()).build();
+          .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build()).build();
       return super.performClustering(clusteringPlan, schema, instantTime);
     }
     log.info("Required conditions are currently satisfied, enabling the optimization of using binary stream copy ");
