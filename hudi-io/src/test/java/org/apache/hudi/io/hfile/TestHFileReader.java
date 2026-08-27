@@ -34,6 +34,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -73,6 +74,9 @@ public class TestHFileReader {
       + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-";
   private static final Function<Integer, String> LARGE_KEY_CREATOR = i -> LARGE_KEY_PREFIX + String.format("%09d", i);
   private static final int SEEK_TO_THROW_EXCEPTION = -3;
+  private static final byte KEY_BUFFER_PADDING = (byte) 0xFF;
+  private static final int KEY_BUFFER_PREFIX_PADDING = 7;
+  private static final int KEY_BUFFER_SUFFIX_PADDING = 5;
 
   static Stream<Arguments> testArgsReadHFilePointAndPrefixLookup() {
     return Stream.of(
@@ -898,6 +902,32 @@ public class TestHFileReader {
       reader.initializeMetadata();
       verifyHFileSeekToReads(reader, keyLookUpInfoList);
     }
+
+    try (HFileReader reader = new HFileReaderImpl(
+        new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(content)), content.length)) {
+      reader.initializeMetadata();
+      verifyHFileSeekToReads(reader, keyLookUpInfoList, TestHFileReader::serializedKeyAtNonZeroOffset);
+    }
+  }
+
+  private static Key serializedKeyAtNonZeroOffset(String content) {
+    byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    try (DataOutputStream outputStream = new DataOutputStream(baos)) {
+      outputStream.write(newPadding(KEY_BUFFER_PREFIX_PADDING));
+      HFileBlock.writeKey(outputStream, contentBytes, 0, contentBytes.length);
+      outputStream.write(newPadding(KEY_BUFFER_SUFFIX_PADDING));
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+    return new Key(baos.toByteArray(), KEY_BUFFER_PREFIX_PADDING,
+        HFileBlock.keyValueKeyLength(contentBytes.length));
+  }
+
+  private static byte[] newPadding(int length) {
+    byte[] padding = new byte[length];
+    Arrays.fill(padding, KEY_BUFFER_PADDING);
+    return padding;
   }
 
   public static byte[] readHFileFromResources(String filename) throws IOException {
@@ -1007,6 +1037,12 @@ public class TestHFileReader {
 
   private static void verifyHFileSeekToReads(HFileReader reader,
                                              List<KeyLookUpInfo> keyLookUpInfoList) throws IOException {
+    verifyHFileSeekToReads(reader, keyLookUpInfoList, UTF8StringKey::new);
+  }
+
+  private static void verifyHFileSeekToReads(HFileReader reader,
+                                             List<KeyLookUpInfo> keyLookUpInfoList,
+                                             Function<String, Key> lookUpKeyCreator) throws IOException {
     assertTrue(reader.seekTo());
 
     for (KeyLookUpInfo keyLookUpInfo : keyLookUpInfoList) {
@@ -1014,11 +1050,11 @@ public class TestHFileReader {
       if (expectedSeekToResult == SEEK_TO_THROW_EXCEPTION) {
         assertThrows(
             IllegalStateException.class,
-            () -> reader.seekTo(new UTF8StringKey(keyLookUpInfo.getLookUpKey())));
+            () -> reader.seekTo(lookUpKeyCreator.apply(keyLookUpInfo.getLookUpKey())));
       } else {
         assertEquals(
             expectedSeekToResult,
-            reader.seekTo(new UTF8StringKey(keyLookUpInfo.getLookUpKey())),
+            reader.seekTo(lookUpKeyCreator.apply(keyLookUpInfo.getLookUpKey())),
             String.format("Unexpected seekTo result for lookup key %s", keyLookUpInfo.getLookUpKey()));
       }
       switch (expectedSeekToResult) {
