@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.common.avro.AvroSchemaCache
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
-import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFormat
@@ -407,6 +407,12 @@ object HoodieSparkSqlTestBase {
     val metaClient = createMetaClient(spark, tablePath)
 
     metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getRight
+  }
+
+  def getLastReplaceCommitMetadata(spark: SparkSession, tablePath: String): HoodieReplaceCommitMetadata = {
+    val metaClient = createMetaClient(spark, tablePath)
+    val lastInstant = metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getLeft
+    metaClient.getActiveTimeline.readReplaceCommitMetadata(lastInstant)
   }
 
   def getLastCleanMetadata(spark: SparkSession, tablePath: String) = {
