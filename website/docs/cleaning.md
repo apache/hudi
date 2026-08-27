@@ -264,11 +264,15 @@ existing table without enabling it on the writer:
 
 ```
 spark-submit --master local \
-  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.2,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.2 \
-  --class org.apache.hudi.utilities.HoodieTTLJob `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
+  --class org.apache.hudi.utilities.HoodieTTLJob \
+  hudi-utilities-bundle_2.12-1.2.0.jar \
   --base-path file:///tmp/events_table \
   --hoodie-conf hoodie.partition.ttl.strategy.days.retain=30
 ```
+
+The utilities bundle is self-contained, so it is passed as the application jar and no `--packages` is needed. Download it
+from Maven Central, or build it locally and point at
+`packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-*.jar`.
 
 **From Spark SQL**, with the [`run_ttl`](procedures.md#run_ttl) procedure, which is the easiest way to try TTL on a table
 before committing to running it on every write:
@@ -295,7 +299,9 @@ retention policy on one partition before applying it everywhere.
 
 `hoodie.partition.ttl.strategy.stats.max.parallelism` bounds the parallelism used to collect each candidate partition's
 last commit time, defaulting to `200`; the effective value is the smaller of that and the candidate count. It matters
-mainly on that first run, where a table with many historical partitions may want a higher value.
+mainly on that first run, where a table with many historical partitions may want a higher value. This config is new in
+1.3.0, so it has no effect on earlier releases and does not yet appear in the generated
+[configuration reference](https://hudi.apache.org/docs/next/configurations/); the other six configs above do.
 
 ### Partition TTL configs
 
@@ -307,7 +313,7 @@ mainly on that first run, where a table with many historical partitions may want
 | `hoodie.partition.ttl.strategy.days.retain` | `-1` | Days to retain. Nothing expires while this is `0` or less |
 | `hoodie.partition.ttl.strategy.partition.selected` | none | Comma-separated partition paths to restrict TTL to |
 | `hoodie.partition.ttl.strategy.max.delete.partitions` | `1000` | Maximum partitions deleted in one run |
-| `hoodie.partition.ttl.strategy.stats.max.parallelism` | `200` | Parallelism for collecting candidate partition commit times |
+| `hoodie.partition.ttl.strategy.stats.max.parallelism` | `200` | Parallelism for collecting candidate partition commit times. Since 1.3.0 |
 
 ### A worked example
 
