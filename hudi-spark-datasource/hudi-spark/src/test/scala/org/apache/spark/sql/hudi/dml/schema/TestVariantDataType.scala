@@ -22,11 +22,14 @@ package org.apache.spark.sql.hudi.dml.schema
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
 import org.apache.hudi.common.avro.VariantShreddingRuntime
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.HoodieSchemaException
 import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.log.HoodieLogFormat
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.testutils.DataSourceTestUtils
@@ -129,6 +132,76 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         )
       })
     }
+  }
+
+  test("Test MOR Table with Variant Data Type and Avro log blocks") {
+    // Variant type is only supported in Spark 4.0+
+    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+
+    // On the current table version the append handle writes native parquet log files and ignores
+    // hoodie.logfile.data.block.format, so the AVRO leg of the MOR cases above never produces an
+    // avro data block. Pin a pre-native table version so the update below lands in a
+    // HoodieAvroDataBlock and the read goes through projectLogBlockRecords (Spark 4.1+ applies the
+    // PushVariantIntoScan rewrite there; Spark 4.0 reads the block unprojected).
+    withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  v variant,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.write.table.version = '9'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into $tableName
+           |values
+           |  (1, 'row1', parse_json('{"key": "value1", "num": 1}'), 1000),
+           |  (2, 'row2', parse_json('{"key": "value2", "list": [1, 2, 3]}'), 1000)
+         """.stripMargin)
+      checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "row1", "{\"key\":\"value1\",\"num\":1}", 1000),
+        Seq(2, "row2", "{\"key\":\"value2\",\"list\":[1,2,3]}", 1000)
+      )
+
+      // The update is what produces the log block; the insert above only wrote base files.
+      spark.sql(
+        s"""
+           |update $tableName
+           |set v = parse_json('{"updated": true, "new_field": 123}')
+           |where id = 1
+         """.stripMargin)
+
+      // Pin the log format. A table version that routed the update through the native log writer
+      // would turn this leg back into a parquet one and pass without touching projectLogBlockRecords.
+      val blockTypes = listLogBlockTypes(tablePath)
+      assert(blockTypes.contains(HoodieLogBlockType.AVRO_DATA_BLOCK),
+        s"expected an avro data block in the log files, found: $blockTypes")
+      assert(!blockTypes.contains(HoodieLogBlockType.PARQUET_DATA_BLOCK),
+        s"table version 9 with the avro block format must not write parquet data blocks, found: $blockTypes")
+
+      // Merged read: row 1 comes from the avro log block, row 2 from the parquet base file.
+      checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "row1", "{\"new_field\":123,\"updated\":true}", 1000),
+        Seq(2, "row2", "{\"key\":\"value2\",\"list\":[1,2,3]}", 1000)
+      )
+
+      spark.sql(s"delete from $tableName where id = 2")
+      checkAnswer(s"select id, name, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "row1", "{\"new_field\":123,\"updated\":true}", 1000)
+      )
+    })
   }
 
   test("Test Query Log Only MOR Table With VARIANT column triggers compaction") {
@@ -1528,6 +1601,31 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   /**
    * Lists data parquet files in the table directory, excluding Hudi metadata files.
    */
+  /**
+   * Block types of every log block in the table, read from the log files themselves. Tests that pin
+   * a log format assert on this rather than on file names: native logs carry a .log.parquet suffix,
+   * but an inline log file is named the same whether its data blocks are avro or parquet.
+   */
+  private def listLogBlockTypes(tablePath: String): Seq[HoodieLogBlockType] = {
+    val (metaClient, fsView) = getMetaClientAndFileSystemView(tablePath)
+    val schema = new TableSchemaResolver(metaClient).getTableSchema
+    val logFiles = fsView.getAllFileSlices("").iterator().asScala
+      .flatMap(slice => HoodieTestUtils.getLogFileListFromFileSlice(slice).asScala).toSeq
+    assert(logFiles.nonEmpty, "expected at least one log file")
+    logFiles.flatMap { path =>
+      val reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(path), schema)
+      try {
+        val types = scala.collection.mutable.ArrayBuffer[HoodieLogBlockType]()
+        while (reader.hasNext) {
+          types += reader.next().getBlockType
+        }
+        types.toSeq
+      } finally {
+        reader.close()
+      }
+    }
+  }
+
   private def listDataParquetFiles(tablePath: String): Seq[String] = {
     val conf = spark.sparkContext.hadoopConfiguration
     val fs = FileSystem.get(new HadoopPath(tablePath).toUri, conf)
