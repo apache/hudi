@@ -147,8 +147,14 @@ public class SparkRDDWriteClient<T> extends
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
       List<HoodieWriteStat> dataTableHoodieWriteStats = slimWriteStatsList.stream().filter(entry -> !entry.isMetadataTable()).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
       List<HoodieWriteStat> partialMetadataTableWriteStats = slimWriteStatsList.stream().filter(entry -> entry.isMetadataTable).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
-      return commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats), extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
-          false, Option.of(table));
+      boolean committed = commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats), extraMetadata, commitActionType, partitionToReplacedFileIds,
+          extraPreCommitFunc, false, Option.of(table));
+      if (committed) {
+        // The commit landed, so the counters the executors collected for it can be reported and
+        // released. A commit that never lands publishes nothing.
+        ExecutorMetrics.publishAndRelease(config, metrics);
+      }
+      return committed;
     } else {
       log.error("Exiting early due to errors with write operation ");
       return false;
@@ -168,15 +174,6 @@ public class SparkRDDWriteClient<T> extends
     } else {
       writeTableMetadata(table, instantTime, metadata);
     }
-  }
-
-  /**
-   * The commit landed, so the counters the executors collected for it can be reported and released.
-   * A commit that never lands publishes nothing.
-   */
-  @Override
-  protected void onCommitCompleted() {
-    ExecutorMetrics.publishAndRelease(config, metrics);
   }
 
   @Override
