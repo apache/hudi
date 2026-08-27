@@ -22,6 +22,7 @@ import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.hash.HashID;
@@ -61,7 +62,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -86,6 +86,8 @@ import static org.mockito.Mockito.mock;
 
 public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
   protected static final String TEST_TOPIC_PREFIX = "hoodie_avro_test_";
+
+  private static final String PHONE = "555-0100";
 
   protected static HoodieTestDataGenerator dataGen;
 
@@ -159,7 +161,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     }
   }
 
-  private void sendUserRecordsWithConfluentSerializer(String topic, String registryUrl, HoodieSchema schema, int count, String phone) {
+  private void sendUserRecordsWithConfluentSerializer(String topic, String registryUrl, HoodieSchema schema, int count) {
     Properties config = getProducerProperties();
     config.put("value.serializer", KafkaAvroSerializer.class.getName());
     config.put("schema.registry.url", registryUrl);
@@ -170,17 +172,12 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
             .set("name", "user" + i)
             .set("favorite_number", i)
             .set("favorite_color", "blue");
-        if (phone != null) {
-          builder.set("phone", phone);
+        // phone only exists in the evolved schema
+        if (schema.getField("phone").isPresent()) {
+          builder.set("phone", PHONE);
         }
         producer.send(new ProducerRecord<>(topic, "key", builder.build()));
       }
-    }
-  }
-
-  private HoodieSchema loadSchemaFromResource(String resourcePath) throws IOException {
-    try (InputStream schemaStream = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
-      return HoodieSchema.parse(schemaStream);
     }
   }
 
@@ -345,17 +342,19 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
   }
 
   /**
-   * Covers the per-fetch re-configure branch of {@link AvroKafkaSource#readFromCheckpoint}, which regressed twice
-   * (#10118 and #12111). When the source schema evolves between two fetches on the same source instance, the second
-   * batch must decode with the refreshed schema instead of the one the source was constructed with.
+   * Covers the per-fetch re-configure branch of {@link AvroKafkaSource#readFromCheckpoint}: #10118 made the source
+   * re-stamp the schema provider's current schema into the deserializer config before every read, and #12111 added the
+   * group.id rotation so Spark does not hand back a cached consumer whose deserializer still holds the old schema. When
+   * the source schema evolves between two fetches on the same source instance, the second batch must decode with the
+   * refreshed schema, including records that were still written under the old one.
    */
   @Test
-  void testSchemaDeserializerRefreshesSchemaBetweenFetches() throws IOException {
+  void testSchemaDeserializerRefreshesSchemaBetweenFetches() {
     final String topic = TEST_TOPIC_PREFIX + "testSchemaDeserializerRefresh";
     // a scope of its own keeps this test's registrations out of the registry shared by the other mock:// tests
     final String registryUrl = "mock://" + topic;
-    HoodieSchema simpleSchema = loadSchemaFromResource("schema/simple-test-with-default-value.avsc");
-    HoodieSchema evolvedSchema = loadSchemaFromResource("schema/evolved-test-with-default-value.avsc");
+    HoodieSchema simpleSchema = SchemaTestUtil.getSchemaFromResource(TestAvroKafkaSource.class, "/schema/simple-test-with-default-value.avsc");
+    HoodieSchema evolvedSchema = SchemaTestUtil.getSchemaFromResource(TestAvroKafkaSource.class, "/schema/evolved-test-with-default-value.avsc");
 
     HoodieSchema previousSchema = SchemaTestProvider.schemaToReturn.getAndSet(simpleSchema);
     try {
@@ -367,7 +366,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
       props.put("schema.registry.url", registryUrl);
       AvroKafkaSource avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), new SchemaTestProvider(props), metrics);
 
-      sendUserRecordsWithConfluentSerializer(topic, registryUrl, simpleSchema, 5, null);
+      sendUserRecordsWithConfluentSerializer(topic, registryUrl, simpleSchema, 5);
       InputBatch<JavaRDD<GenericRecord>> fetch1 = avroKafkaSource.fetchNext(Option.empty(), Long.MAX_VALUE);
       List<GenericRecord> firstBatch = fetch1.getBatch().get().collect();
       assertEquals(5, firstBatch.size());
@@ -376,21 +375,27 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
       }
       String groupIdAfterFirstFetch = avroKafkaSource.props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, "");
 
-      // evolve the source schema between fetches, as a continuous-mode streamer would see it
+      // evolve the source schema between fetches, as a continuous-mode streamer would see it; a producer that has not
+      // picked up the new schema yet keeps writing under the old one, so the refreshed reader schema has to resolve both
       SchemaTestProvider.schemaToReturn.set(evolvedSchema);
-      sendUserRecordsWithConfluentSerializer(topic, registryUrl, evolvedSchema, 5, "555-0100");
+      sendUserRecordsWithConfluentSerializer(topic, registryUrl, simpleSchema, 3);
+      sendUserRecordsWithConfluentSerializer(topic, registryUrl, evolvedSchema, 5);
 
       InputBatch<JavaRDD<GenericRecord>> fetch2 = avroKafkaSource.fetchNext(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
       List<GenericRecord> secondBatch = fetch2.getBatch().get().collect();
-      assertEquals(5, secondBatch.size());
+      assertEquals(8, secondBatch.size());
       for (GenericRecord record : secondBatch) {
         assertEquals(evolvedSchema.toAvroSchema(), record.getSchema());
-        assertEquals("555-0100", record.get("phone").toString());
       }
+      // the old-schema records pick up the evolved schema's default for phone
+      assertEquals(3, secondBatch.stream().filter(record -> record.get("phone") == null).count());
+      assertEquals(5, secondBatch.stream().filter(record -> PHONE.equals(String.valueOf(record.get("phone")))).count());
 
-      // pin the mechanism both past fixes introduced: the stamped reader schema and the group.id rotation
+      // pin both mechanisms: the reader schema #10118 re-stamps and the group.id rotation #12111 added
       assertEquals(evolvedSchema.toString(), avroKafkaSource.props.getString(KAFKA_VALUE_DESERIALIZER_SCHEMA.key()));
-      assertNotEquals(groupIdAfterFirstFetch, avroKafkaSource.props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, ""));
+      String evolvedSchemaHash = Base64.encode(HashID.hash(evolvedSchema.toString(), HashID.Size.BITS_128));
+      assertEquals(StringUtils.concatenateWithThreshold(groupIdAfterFirstFetch + "_", evolvedSchemaHash, GROUP_ID_MAX_BYTES_LENGTH),
+          avroKafkaSource.props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, ""));
     } finally {
       SchemaTestProvider.schemaToReturn.set(previousSchema);
       MockSchemaRegistry.dropScope(topic);
