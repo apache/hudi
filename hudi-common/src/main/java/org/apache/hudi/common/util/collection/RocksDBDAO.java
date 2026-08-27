@@ -470,6 +470,22 @@ public class RocksDBDAO {
   }
 
   /**
+   * Returns whether a column family with the given name currently exists.
+   *
+   * @param columnFamilyName Column family name
+   */
+  public boolean columnFamilyExists(String columnFamilyName) {
+    return managedDescriptorMap.containsKey(columnFamilyName);
+  }
+
+  /**
+   * Lists the names of all currently managed column families.
+   */
+  public List<String> listColumnFamilies() {
+    return new ArrayList<>(managedDescriptorMap.keySet());
+  }
+
+  /**
    * Retrieves a numeric property aggregated across all column families.
    */
   public synchronized long getLongProperty(String property) throws RocksDBException {
