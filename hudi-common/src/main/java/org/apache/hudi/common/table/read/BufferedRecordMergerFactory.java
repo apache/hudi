@@ -512,6 +512,16 @@ public class BufferedRecordMergerFactory {
       // The orderingVal is constant 0 (int) and not guaranteed to match the type of the old or new record's ordering value.
       return true;
     }
-    return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
+    Comparable oldOrderingVal = oldRecord.getOrderingValue();
+    Comparable newOrderingVal = newRecord.getOrderingValue();
+    // Checks the ordering value does not equal to 0
+    // because we use 0 as the default value which means natural order.
+    // OrderingValues#create coerces a null ordering field value to that default, so its class need
+    // not match the counterpart's real value and comparing the two directly would throw
+    // ClassCastException (e.g. Long.compareTo(Integer)).
+    boolean chooseOlder = !OrderingValues.isDefault(newOrderingVal)
+        && OrderingValues.isSameClass(oldOrderingVal, newOrderingVal)
+        && oldOrderingVal.compareTo(newOrderingVal) > 0;
+    return !chooseOlder;
   }
 }
