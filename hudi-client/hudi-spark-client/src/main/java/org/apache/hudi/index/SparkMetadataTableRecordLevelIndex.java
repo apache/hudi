@@ -35,6 +35,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metadata.BucketizedMetadataTableFileGroupIndexParser;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metrics.RecordIndexLookupMetrics;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaRDD;

@@ -21,7 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.config.HoodieIndexConfig
-import org.apache.hudi.metrics.{ExecutorMetricRegistry, MetricsReporterType, RecordIndexMetricNames}
+import org.apache.hudi.metrics.{MetricsReporterType, RecordIndexLookupMetrics}
 import org.apache.hudi.testutils.CapturingMetricsReporter
 
 import scala.collection.JavaConverters._
@@ -88,8 +88,8 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
    * base path, so building a handle here returns the same instance the write published into.
    */
   protected def rliCountersFromLatestCommit(): Map[String, String] = {
-    val marker = "." + ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricAction() +
-      "." + ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricQualifier() + "."
+    val marker = "." + RecordIndexLookupMetrics.METRIC_ACTION +
+      "." + RecordIndexLookupMetrics.METRIC_QUALIFIER + "."
     CapturingMetricsReporter.captured().asScala.toMap
       .collect { case (name, value) if name.contains(marker) =>
         name.substring(name.indexOf(marker) + marker.length) -> value.toString }
@@ -102,17 +102,17 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
 
   /** Asserts the core invariant and returns the looked-up count. */
   protected def assertSumInvariant(counters: Map[String, String]): Long = {
-    val lookedUp = counterOrZero(counters, RecordIndexMetricNames.KEY_COUNT)
-    val hits = counterOrZero(counters, RecordIndexMetricNames.KEY_HIT_COUNT)
-    val misses = counterOrZero(counters, RecordIndexMetricNames.KEY_MISS_COUNT)
+    val lookedUp = counterOrZero(counters, RecordIndexLookupMetrics.KEY_COUNT)
+    val hits = counterOrZero(counters, RecordIndexLookupMetrics.KEY_HIT_COUNT)
+    val misses = counterOrZero(counters, RecordIndexLookupMetrics.KEY_MISS_COUNT)
     org.junit.jupiter.api.Assertions.assertEquals(lookedUp, hits + misses,
       "hits + misses must account for every key looked up")
     // A lookup that happened must also report the time it took, or the timing metric is silently absent on
     // paths nobody checked. Zero is allowed: a shard read can round below a millisecond.
     if (lookedUp > 0) {
       org.junit.jupiter.api.Assertions.assertTrue(
-        counters.contains(RecordIndexMetricNames.LOOKUP_TIME),
-        s"looked up $lookedUp keys but reported no ${RecordIndexMetricNames.LOOKUP_TIME}; " +
+        counters.contains(RecordIndexLookupMetrics.LOOKUP_TIME),
+        s"looked up $lookedUp keys but reported no ${RecordIndexLookupMetrics.LOOKUP_TIME}; " +
           s"counters were ${counters.keys.toSeq.sorted.mkString(", ")}")
     }
     lookedUp
@@ -135,11 +135,11 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
     metaClient.reloadTableConfig()
     val key = org.apache.hudi.common.metrics.Registry.makeKey(
       metaClient.getTableConfig.getTableName,
-      ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.scopedName(basePath))
+      RecordIndexLookupMetrics.scopedName(basePath))
     val registry = org.apache.hudi.common.metrics.Registry.REGISTRY_MAP.get(key)
     assert(registry != null, s"expected a registry at $key; the seeding write should have created one")
-    registry.add(RecordIndexMetricNames.KEY_COUNT, keyCount)
-    registry.add(RecordIndexMetricNames.KEY_HIT_COUNT, keyCount)
+    registry.add(RecordIndexLookupMetrics.KEY_COUNT, keyCount)
+    registry.add(RecordIndexLookupMetrics.KEY_HIT_COUNT, keyCount)
   }
 
   protected def report(label: String, counters: Map[String, String]): Unit = {

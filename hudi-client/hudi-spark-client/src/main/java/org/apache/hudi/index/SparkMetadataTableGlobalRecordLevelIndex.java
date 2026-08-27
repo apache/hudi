@@ -40,6 +40,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metrics.RecordIndexLookupMetrics;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
@@ -204,8 +205,13 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
           hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
       try {
         List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
-        RecordIndexLookupMetrics.recordShardLookup(lookupMetrics, keysToLookup,
-            recordIndexInfo.stream().map(Pair::getKey).collect(Collectors.toSet()), shardTimer.endTimer());
+        // Guarded rather than null-checked inside the helper: the found set is O(hits) and Java
+        // evaluates it as an argument first, so an unguarded call would cost every shard that on
+        // the disabled path, which is the default.
+        if (lookupMetrics != null) {
+          RecordIndexLookupMetrics.recordShardLookup(lookupMetrics, keysToLookup,
+              recordIndexInfo.stream().map(Pair::getKey).collect(Collectors.toSet()), shardTimer.endTimer());
+        }
         return recordIndexInfo.stream()
             .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
       } finally {

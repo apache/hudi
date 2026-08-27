@@ -22,8 +22,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.metrics.ExecutorMetricRegistry;
-import org.apache.hudi.metrics.RecordIndexMetricNames;
+import org.apache.hudi.metrics.RecordIndexLookupMetrics;
 import org.apache.hudi.utilities.testutils.CapturingMetricsReporter;
 
 import org.junit.jupiter.api.Tag;
@@ -62,8 +61,8 @@ public class TestRliMetricsOnStreamerPath extends HoodieDeltaStreamerTestBase {
    * rather than {@code Metrics}, which is keyed by base path and cannot be addressed reliably from here.
    */
   private static Map<String, String> rliCountersOnLatestCommit(String tableBasePath) {
-    String marker = ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricAction()
-        + "." + ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricQualifier() + ".";
+    String marker = RecordIndexLookupMetrics.METRIC_ACTION
+        + "." + RecordIndexLookupMetrics.METRIC_QUALIFIER + ".";
     Map<String, String> rli = new HashMap<>();
     CapturingMetricsReporter.captured().forEach((name, value) -> {
       int at = name.indexOf(marker);
@@ -108,13 +107,13 @@ public class TestRliMetricsOnStreamerPath extends HoodieDeltaStreamerTestBase {
         "the commit-boundary drain must fire on the DeltaStreamer path; hudi-utilities never calls "
             + "Metrics.shutdownAllMetrics, so nothing else would publish these");
 
-    String lookedUp = RecordIndexMetricNames.KEY_COUNT;
+    String lookedUp = RecordIndexLookupMetrics.KEY_COUNT;
     assertTrue(counters.containsKey(lookedUp),
         "tag-location traffic must be attributed on the streamer path too; got " + counters.keySet());
 
     long records = Long.parseLong(counters.get(lookedUp));
-    long hits = Long.parseLong(counters.get(RecordIndexMetricNames.KEY_HIT_COUNT));
-    long misses = Long.parseLong(counters.get(RecordIndexMetricNames.KEY_MISS_COUNT));
+    long hits = Long.parseLong(counters.get(RecordIndexLookupMetrics.KEY_HIT_COUNT));
+    long misses = Long.parseLong(counters.get(RecordIndexLookupMetrics.KEY_MISS_COUNT));
     // Exact, not an invariant: misses is derived as records - hits at the emission site, so
     // records == hits + misses holds by construction and would survive a doubled count. The workload is
     // deterministic -- the first sync writes 1000 records, the second updates 500 and inserts 500.
@@ -123,7 +122,7 @@ public class TestRliMetricsOnStreamerPath extends HoodieDeltaStreamerTestBase {
     assertEquals(500L, misses, "the 500 fresh inserts missed");
     // Shard count is not pinned: it follows the index file-group layout, which differs between the
     // global and partitioned variants (10 and 3 on this workload).
-    assertTrue(Long.parseLong(counters.get(RecordIndexMetricNames.SHARDS_READ)) > 0,
+    assertTrue(Long.parseLong(counters.get(RecordIndexLookupMetrics.SHARDS_READ)) > 0,
         "at least one shard was read");
   }
 }

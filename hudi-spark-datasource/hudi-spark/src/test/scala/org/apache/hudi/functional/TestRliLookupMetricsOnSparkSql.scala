@@ -20,7 +20,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.config.HoodieIndexConfig
-import org.apache.hudi.metrics.RecordIndexMetricNames
+import org.apache.hudi.metrics.RecordIndexLookupMetrics
 import org.apache.hudi.testutils.CapturingMetricsReporter
 
 import org.apache.spark.sql.SaveMode
@@ -92,15 +92,15 @@ class TestRliLookupMetricsOnSparkSql extends RliLookupMetricsTestBase {
     assertTrue(counters.nonEmpty, "a non-prepped UPDATE must publish RLI counters at its commit")
     val lookedUp = assertSumInvariant(counters)
     assertEquals(numSeedRecords.toLong, lookedUp, "UPDATE with no predicate tags every row")
-    assertEquals(numSeedRecords.toString, counters(RecordIndexMetricNames.KEY_HIT_COUNT),
+    assertEquals(numSeedRecords.toString, counters(RecordIndexLookupMetrics.KEY_HIT_COUNT),
       "every row being updated already exists in the index")
     // A caller that looked something up stamps its whole counter set, zeros included, so the record on the
     // timeline is internally consistent. Dropping just the zero components would leave a commit reporting
     // hits and records_looked_up but no misses, forcing every consumer to treat absent as zero.
-    assertTrue(counters.contains(RecordIndexMetricNames.KEY_MISS_COUNT),
+    assertTrue(counters.contains(RecordIndexLookupMetrics.KEY_MISS_COUNT),
       "a caller that looked keys up reports its full counter set, including the zeros")
-    assertEquals("0", counters(RecordIndexMetricNames.KEY_MISS_COUNT), "no new keys are introduced")
-    assertTrue(counters(RecordIndexMetricNames.SHARDS_READ).toInt > 0, "at least one shard was read")
+    assertEquals("0", counters(RecordIndexLookupMetrics.KEY_MISS_COUNT), "no new keys are introduced")
+    assertTrue(counters(RecordIndexLookupMetrics.SHARDS_READ).toInt > 0, "at least one shard was read")
   }
 
   /** MERGE INTO is not a prepped write, so its keys are tagged and must be counted. */
@@ -126,7 +126,7 @@ class TestRliLookupMetricsOnSparkSql extends RliLookupMetricsTestBase {
     assertTrue(counters.nonEmpty, "a MERGE INTO must publish RLI counters at its commit")
     val lookedUp = assertSumInvariant(counters)
     assertEquals(numMerged.toLong, lookedUp, s"the merge tags its $numMerged matched keys")
-    assertEquals(numMerged.toString, counters(RecordIndexMetricNames.KEY_HIT_COUNT),
+    assertEquals(numMerged.toString, counters(RecordIndexLookupMetrics.KEY_HIT_COUNT),
       "every merged key already exists in the index")
   }
 }

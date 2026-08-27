@@ -28,16 +28,16 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
-import static org.apache.hudi.metrics.RecordIndexMetricNames.KEY_COUNT;
-import static org.apache.hudi.metrics.RecordIndexMetricNames.KEY_HIT_COUNT;
-import static org.apache.hudi.metrics.RecordIndexMetricNames.KEY_MISS_COUNT;
+import static org.apache.hudi.metrics.RecordIndexLookupMetrics.KEY_COUNT;
+import static org.apache.hudi.metrics.RecordIndexLookupMetrics.KEY_HIT_COUNT;
+import static org.apache.hudi.metrics.RecordIndexLookupMetrics.KEY_MISS_COUNT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Drain semantics for the record index lookup counters, at the level where they are decided. */
-public class TestRecordIndexMetricNames {
+public class TestRecordIndexLookupMetrics {
 
   private static final String TABLE = "drain_test_table";
   private static final String BASE_PATH = "file:/tmp/drain_test_table";
@@ -49,7 +49,7 @@ public class TestRecordIndexMetricNames {
 
   @AfterEach
   void clearProcessWideState() {
-    Registry.REGISTRY_MAP.keySet().removeIf(k -> k.contains(RecordIndexMetricNames.REGISTRY_NAME));
+    Registry.REGISTRY_MAP.keySet().removeIf(k -> k.contains(RecordIndexLookupMetrics.REGISTRY_NAME));
     if (hoodieMetrics != null && hoodieMetrics.getMetrics() != null) {
       hoodieMetrics.getMetrics().shutdown();
       hoodieMetrics = null;
@@ -76,13 +76,13 @@ public class TestRecordIndexMetricNames {
 
   private static String registryKey(HoodieWriteConfig config) {
     return Registry.makeKey(config.getTableName(),
-        ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.scopedName(config.getBasePath()));
+        RecordIndexLookupMetrics.scopedName(config.getBasePath()));
   }
 
   /** Distributed, not local: that is what {@code HoodieSparkEngineContext#getMetricRegistry} puts here. */
   private static Registry seedRegistry(HoodieWriteConfig config, long lookedUp, long hits, long misses) {
     Registry registry = new DistributedRegistry(
-        ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.scopedName(config.getBasePath()));
+        RecordIndexLookupMetrics.scopedName(config.getBasePath()));
     registry.add(LOOKED_UP_KEY, lookedUp);
     registry.add(KEY_HIT_COUNT, hits);
     registry.add(KEY_MISS_COUNT, misses);
@@ -93,8 +93,8 @@ public class TestRecordIndexMetricNames {
   /** Gauge name the reporter publishes a counter under. */
   private String gaugeName(HoodieMetrics metrics, String metric) {
     return metrics.getMetricsName(
-        ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricAction(),
-        ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricQualifier())
+        RecordIndexLookupMetrics.METRIC_ACTION,
+        RecordIndexLookupMetrics.METRIC_QUALIFIER)
         + "." + metric;
   }
 
@@ -110,7 +110,7 @@ public class TestRecordIndexMetricNames {
     seedRegistry(config, 10L, 7L, 3L);
     HoodieMetrics metrics = metricsFor(config);
 
-    ExecutorMetrics.publishAndRelease(config, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(config, metrics);
 
     assertEquals(10L, gauge(metrics, KEY_COUNT));
     assertEquals(7L, gauge(metrics, KEY_HIT_COUNT));
@@ -127,7 +127,7 @@ public class TestRecordIndexMetricNames {
     Registry registry = seedRegistry(config, 10L, 7L, 3L);
     HoodieMetrics metrics = metricsFor(config);
 
-    ExecutorMetrics.publishAndRelease(config, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(config, metrics);
 
     assertTrue(registry.getAllCounts(false).isEmpty(),
         "released counters must not linger, even at zero; got " + registry.getAllCounts(false));
@@ -145,7 +145,7 @@ public class TestRecordIndexMetricNames {
     HoodieMetrics metrics = metricsFor(config);
 
     registry.clear();
-    ExecutorMetrics.publishAndRelease(config, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(config, metrics);
 
     registry.getAllCounts(false).forEach((name, value) ->
         assertTrue(value >= 0L, "release must clamp at zero, found " + name + "=" + value));
@@ -160,7 +160,7 @@ public class TestRecordIndexMetricNames {
 
     // A straggler task's accumulator update, folded in before the drain reads.
     registry.add(LOOKED_UP_KEY, 4L);
-    ExecutorMetrics.publishAndRelease(config, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(config, metrics);
 
     assertTrue(registry.getAllCounts(false).isEmpty(),
         "a drain that reads and releases the same values leaves nothing behind");
@@ -176,7 +176,7 @@ public class TestRecordIndexMetricNames {
     seedRegistry(config, 10L, 7L, 3L);
     HoodieMetrics metrics = metricsFor(otherTable);
 
-    ExecutorMetrics.publishAndRelease(otherTable, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(otherTable, metrics);
 
     assertNull(gauge(metrics, KEY_COUNT),
         "a table at a different base path must not report another table's lookups");
@@ -189,7 +189,7 @@ public class TestRecordIndexMetricNames {
     Registry registry = seedRegistry(gatedOff, 10L, 7L, 3L);
     HoodieMetrics metrics = metricsFor(gatedOff);
 
-    ExecutorMetrics.publishAndRelease(gatedOff, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(gatedOff, metrics);
 
     assertNull(gauge(metrics, KEY_COUNT), "gate off: nothing reaches the reporter");
     assertFalse(registry.getAllCounts(false).isEmpty(),

@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.metrics.{ExecutorMetricRegistry, MetricsReporterType, RecordIndexMetricNames}
+import org.apache.hudi.metrics.{MetricsReporterType, RecordIndexLookupMetrics}
 import org.apache.hudi.testutils.CapturingMetricsReporter
 
 import org.apache.spark.sql.{Row, SaveMode}
@@ -83,8 +83,8 @@ class TestRliLookupMetricsMultiTable extends RecordLevelIndexTestBase {
    * so a leak between tables shows up as a count landing under the wrong name rather than going unseen.
    */
   private def countersOn(table: String): Map[String, String] = {
-    val prefix = s"$table.${ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricAction()}." +
-      s"${ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.metricQualifier()}."
+    val prefix = s"$table.${RecordIndexLookupMetrics.METRIC_ACTION}." +
+      s"${RecordIndexLookupMetrics.METRIC_QUALIFIER}."
     CapturingMetricsReporter.captured().asScala.toMap
       .collect { case (name, value) if name.startsWith(prefix) =>
         name.substring(prefix.length) -> value.toString }
@@ -123,18 +123,18 @@ class TestRliLookupMetricsMultiTable extends RecordLevelIndexTestBase {
     assertTrue(aCounters.nonEmpty, "table A must carry its own counters")
     assertTrue(bCounters.nonEmpty, "table B must carry its own counters")
 
-    assertEquals(12L, tagCount(aCounters, RecordIndexMetricNames.KEY_COUNT),
+    assertEquals(12L, tagCount(aCounters, RecordIndexLookupMetrics.KEY_COUNT),
       "table A's latest commit must report only its own 12 keys")
-    assertEquals(12L, tagCount(aCounters, RecordIndexMetricNames.KEY_HIT_COUNT),
+    assertEquals(12L, tagCount(aCounters, RecordIndexLookupMetrics.KEY_HIT_COUNT),
       "all 12 of A's keys already exist in A's index")
 
-    assertEquals(7L, tagCount(bCounters, RecordIndexMetricNames.KEY_COUNT),
+    assertEquals(7L, tagCount(bCounters, RecordIndexLookupMetrics.KEY_COUNT),
       "table B's latest commit must report only its own 7 keys, not A's interleaved 30 or 12")
-    assertEquals(7L, tagCount(bCounters, RecordIndexMetricNames.KEY_HIT_COUNT),
+    assertEquals(7L, tagCount(bCounters, RecordIndexLookupMetrics.KEY_HIT_COUNT),
       "all 7 of B's keys already exist in B's index")
 
-    assertEquals(0L, tagCount(aCounters, RecordIndexMetricNames.KEY_MISS_COUNT), "A upserted only existing keys")
-    assertEquals(0L, tagCount(bCounters, RecordIndexMetricNames.KEY_MISS_COUNT), "B upserted only existing keys")
+    assertEquals(0L, tagCount(aCounters, RecordIndexLookupMetrics.KEY_MISS_COUNT), "A upserted only existing keys")
+    assertEquals(0L, tagCount(bCounters, RecordIndexLookupMetrics.KEY_MISS_COUNT), "B upserted only existing keys")
   }
 
   /** A table written after another has finished must start from zero, not inherit a residue. */
@@ -142,14 +142,14 @@ class TestRliLookupMetricsMultiTable extends RecordLevelIndexTestBase {
   def testSecondTableStartsFromZero(): Unit = {
     write(tableA, INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite, 0, 60)
     write(tableA, UPSERT_OPERATION_OPT_VAL, SaveMode.Append, 0, 25)
-    assertEquals(25L, tagCount(countersOn(tableA), RecordIndexMetricNames.KEY_COUNT))
+    assertEquals(25L, tagCount(countersOn(tableA), RecordIndexLookupMetrics.KEY_COUNT))
 
     write(tableB, INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite, 0, 60)
     write(tableB, UPSERT_OPERATION_OPT_VAL, SaveMode.Append, 0, 9)
 
     val bCounters = countersOn(tableB)
     report(s"table B after A completed -- expected 9", bCounters)
-    assertEquals(9L, tagCount(bCounters, RecordIndexMetricNames.KEY_COUNT),
+    assertEquals(9L, tagCount(bCounters, RecordIndexLookupMetrics.KEY_COUNT),
       "a table written after another finished must not inherit its counters")
   }
 }

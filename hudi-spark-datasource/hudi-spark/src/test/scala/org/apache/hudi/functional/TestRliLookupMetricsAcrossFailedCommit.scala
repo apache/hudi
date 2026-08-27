@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HoodieOption}
 import org.apache.hudi.config.{HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieWriteConflictException
-import org.apache.hudi.metrics.RecordIndexMetricNames
+import org.apache.hudi.metrics.RecordIndexLookupMetrics
 import org.apache.hudi.testutils.CapturingMetricsReporter
 
 import org.apache.spark.sql.SaveMode

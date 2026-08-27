@@ -44,8 +44,8 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.metadata.StreamingMetadataWriteHandler;
 import org.apache.hudi.metrics.DistributedRegistryUtil;
-import org.apache.hudi.metrics.ExecutorMetrics;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.metrics.RecordIndexLookupMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -152,7 +152,7 @@ public class SparkRDDWriteClient<T> extends
       if (committed) {
         // The commit landed, so the counters the executors collected for it can be reported and
         // released. A commit that never lands publishes nothing.
-        ExecutorMetrics.publishAndRelease(config, metrics);
+        RecordIndexLookupMetrics.publishAndRelease(config, metrics);
       }
       return committed;
     } else {

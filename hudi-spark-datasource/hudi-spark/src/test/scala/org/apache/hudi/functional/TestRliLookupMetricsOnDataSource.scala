@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig
-import org.apache.hudi.metrics.RecordIndexMetricNames
+import org.apache.hudi.metrics.RecordIndexLookupMetrics
 import org.apache.hudi.testutils.CapturingMetricsReporter
 
 import org.apache.spark.sql.SaveMode
@@ -46,10 +46,10 @@ class TestRliLookupMetricsOnDataSource extends RliLookupMetricsTestBase {
     report(s"DataSource ($indexLabel) -- RLI counters on the commit", counters)
 
     assertTrue(counters.nonEmpty, "commit metadata must carry the RLI counters")
-    assertEquals(numUpdates.toString, counters(RecordIndexMetricNames.KEY_HIT_COUNT), "every updated key is a hit")
-    assertEquals("1", counters(RecordIndexMetricNames.KEY_MISS_COUNT), "the fresh insert is a miss")
+    assertEquals(numUpdates.toString, counters(RecordIndexLookupMetrics.KEY_HIT_COUNT), "every updated key is a hit")
+    assertEquals("1", counters(RecordIndexLookupMetrics.KEY_MISS_COUNT), "the fresh insert is a miss")
     assertEquals(numUpdates + 1L, assertSumInvariant(counters))
-    assertTrue(counters(RecordIndexMetricNames.SHARDS_READ).toInt > 0, "at least one shard was read")
+    assertTrue(counters(RecordIndexLookupMetrics.SHARDS_READ).toInt > 0, "at least one shard was read")
   }
 
   /** Each commit must report only its own work: the drain clears the registry as it publishes. */
@@ -60,7 +60,7 @@ class TestRliLookupMetricsOnDataSource extends RliLookupMetricsTestBase {
 
     val perCommit = (1 to 3).map { commit =>
       doWriteAndValidateDataAndRecordIndex(rliOpts, UPSERT_OPERATION_OPT_VAL, SaveMode.Append, validate = false, numUpdates = numUpdates)
-      val lookedUp = rliCountersFromLatestCommit().getOrElse(RecordIndexMetricNames.KEY_COUNT, "0")
+      val lookedUp = rliCountersFromLatestCommit().getOrElse(RecordIndexLookupMetrics.KEY_COUNT, "0")
       println(s"[per-commit] commit $commit ($indexLabel): records_looked_up=$lookedUp")
       lookedUp
     }

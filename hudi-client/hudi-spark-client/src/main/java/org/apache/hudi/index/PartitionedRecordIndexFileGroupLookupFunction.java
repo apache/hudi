@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metrics.RecordIndexLookupMetrics;
 
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 
@@ -83,8 +84,10 @@ public class PartitionedRecordIndexFileGroupLookupFunction
       Map<String, HoodieRecordGlobalLocation> recordIndexInfo = recordIndexData.collectAsList().stream()
           .collect(HashMap::new, (map, pair) -> map.put(pair.getKey(), pair.getValue()), HashMap::putAll);
       // recordIndexInfo is keyed by record key, so its key set is the found set with no extra allocation.
-      RecordIndexLookupMetrics.recordShardLookup(lookupMetrics, keysToLookup, recordIndexInfo.keySet(),
-          shardTimer.endTimer());
+      if (lookupMetrics != null) {
+        RecordIndexLookupMetrics.recordShardLookup(lookupMetrics, keysToLookup, recordIndexInfo.keySet(),
+            shardTimer.endTimer());
+      }
       return recordIndexInfo.entrySet().stream()
           .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
     } finally {
