@@ -44,7 +44,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{getLastCommitMetadata, getMetaClientAndFileSystemView}
 import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, LongType, MapType, MetadataBuilder, StringType, StructField, StructType}
 
 import scala.collection.JavaConverters._
