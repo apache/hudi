@@ -39,6 +39,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -102,6 +103,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -936,8 +938,16 @@ class TestAWSGlueSyncClient {
             .build())
         .partitionKeys(Column.builder().name("datestr").type("string").build())
         .build();
+    // the cascade re-reads the table after the schema update, so the second read carries the new columns
+    Table updatedTable = table.toBuilder()
+        .storageDescriptor(table.storageDescriptor().toBuilder()
+            .columns(Column.builder().name("id").type("int").build(),
+                Column.builder().name("name").type("string").build())
+            .build())
+        .build();
     when(mockAwsGlue.getTable(any(GetTableRequest.class)))
-        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().table(table).build()));
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().table(table).build()))
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().table(updatedTable).build()));
     when(mockAwsGlue.updateTable(any(UpdateTableRequest.class)))
         .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
 
@@ -965,7 +975,11 @@ class TestAWSGlueSyncClient {
     assertEquals(1, entries.size());
     assertEquals(partitionLocation, entries.get(0).partitionInput().storageDescriptor().location());
     assertEquals(Collections.singletonList("2024-01-15"), entries.get(0).partitionValueList());
-    assertEquals(table.storageDescriptor().columns(),
+    assertEquals(updatedTable.storageDescriptor().columns(),
         entries.get(0).partitionInput().storageDescriptor().columns());
+
+    InOrder inOrder = inOrder(mockAwsGlue);
+    inOrder.verify(mockAwsGlue).updateTable(any(UpdateTableRequest.class));
+    inOrder.verify(mockAwsGlue).batchUpdatePartition(any(BatchUpdatePartitionRequest.class));
   }
 }
