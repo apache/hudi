@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -66,6 +67,7 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTE
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES;
 import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
@@ -186,16 +188,14 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   }
 
   /**
-   * Test indexer for RLI and secondary index.
-   */
-  /**
-   * An indexing action builds the partition it names. With two secondary-index definitions registered and neither
-   * initialized (the shape of a table whose metadata table was rebuilt with its definitions intact), the action for
-   * one of them builds exactly that one, on storage and not only in the table config.
+   * An indexing action builds the partition it names. With two secondary-index and two expression-index definitions
+   * registered and none initialized (the shape of a table whose metadata table was rebuilt with its definitions
+   * intact), each action builds exactly the index it names, on storage and not only in the table config, until all
+   * four are built.
    */
   @Test
-  void testIndexerBuildsTheRequestedSecondaryIndexWhenSeveralAreUninitialized() {
-    String tableName = "indexer_test_two_si";
+  void testIndexerBuildsEachRequestedIndexAmongSeveralUninitialized() {
+    String tableName = "indexer_test_two_si_two_ei";
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withAsyncIndex(false).withMetadataIndexColumnStats(false).build();
     upsertToTable(metadataConfig, tableName);
@@ -203,22 +203,34 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         "streamer-config/indexer-record-index.properties");
 
     metaClient = reload(metaClient);
-    String requestedIndex = SECONDARY_INDEX.getPartitionPath() + "idx_rider";
-    String otherIndex = SECONDARY_INDEX.getPartitionPath() + "idx_driver";
-    metaClient.buildIndexDefinition(secondaryIndexDefinition(requestedIndex, "rider"));
-    metaClient.buildIndexDefinition(secondaryIndexDefinition(otherIndex, "driver"));
+    String riderSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_rider";
+    String driverSecondaryIndex = SECONDARY_INDEX.getPartitionPath() + "idx_driver";
+    String riderExpressionIndex = EXPRESSION_INDEX.getPartitionPath() + "idx_rider_expr";
+    String driverExpressionIndex = EXPRESSION_INDEX.getPartitionPath() + "idx_driver_expr";
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(riderSecondaryIndex, "rider"));
+    metaClient.buildIndexDefinition(secondaryIndexDefinition(driverSecondaryIndex, "driver"));
+    metaClient.buildIndexDefinition(expressionIndexDefinition(riderExpressionIndex, "rider"));
+    metaClient.buildIndexDefinition(expressionIndexDefinition(driverExpressionIndex, "driver"));
 
-    indexMetadataPartitionsAndAssert(requestedIndex, Arrays.asList(FILES, RECORD_INDEX), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+    indexMetadataPartitionsAndAssert(riderSecondaryIndex, Arrays.asList(FILES, RECORD_INDEX), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
         "streamer-config/indexer-secondary-index.properties");
+    assertIndexesNotBuilt(Arrays.asList(driverSecondaryIndex, riderExpressionIndex, driverExpressionIndex));
 
-    metaClient = reload(metaClient);
-    assertFalse(metaClient.getTableConfig().getMetadataPartitions().contains(otherIndex), "only the requested index may be built");
-    assertFalse(metadataPartitionExists(basePath(), context(), otherIndex), "the other index must be untouched on storage too");
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-        .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
-    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(
-        metadataMetaClient, Option.of(getFileSystemViewForMetadataTable(metadataMetaClient)), requestedIndex);
-    assertFalse(fileSlices.isEmpty(), "the requested index must have been built, not merely marked complete");
+    indexMetadataPartitionsAndAssert(driverSecondaryIndex, Arrays.asList(FILES, RECORD_INDEX), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-secondary-index.properties",
+        Arrays.asList("hoodie.index.name=idx_driver", "hoodie.metadata.index.secondary.column=driver"));
+    assertIndexesNotBuilt(Arrays.asList(riderExpressionIndex, driverExpressionIndex));
+
+    indexMetadataPartitionsAndAssert(riderExpressionIndex, Arrays.asList(FILES, RECORD_INDEX), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-expression-index.properties",
+        Arrays.asList("hoodie.index.name=idx_rider_expr", "hoodie.metadata.index.expression.column=rider"));
+    assertIndexesNotBuilt(Collections.singletonList(driverExpressionIndex));
+
+    indexMetadataPartitionsAndAssert(driverExpressionIndex, Arrays.asList(FILES, RECORD_INDEX), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
+        "streamer-config/indexer-expression-index.properties",
+        Arrays.asList("hoodie.index.name=idx_driver_expr", "hoodie.metadata.index.expression.column=driver"));
+
+    assertIndexesBuiltWithFileSlices(Arrays.asList(riderSecondaryIndex, driverSecondaryIndex, riderExpressionIndex, driverExpressionIndex));
   }
 
   private HoodieIndexDefinition secondaryIndexDefinition(String fullIndexName, String sourceField) {
@@ -231,6 +243,39 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         .build();
   }
 
+  private HoodieIndexDefinition expressionIndexDefinition(String fullIndexName, String sourceField) {
+    return HoodieIndexDefinition.newBuilder()
+        .withIndexName(fullIndexName)
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
+        .withIndexFunction(IDENTITY_TRANSFORM)
+        .withSourceFields(Collections.singletonList(sourceField))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), EXPRESSION_INDEX))
+        .build();
+  }
+
+  private void assertIndexesNotBuilt(List<String> indexPartitions) {
+    metaClient = reload(metaClient);
+    for (String indexPartition : indexPartitions) {
+      assertFalse(metaClient.getTableConfig().getMetadataPartitions().contains(indexPartition),
+          "only the requested index may be built, but the table config lists " + indexPartition);
+      assertFalse(metadataPartitionExists(basePath(), context(), indexPartition),
+          "only the requested index may be built, but storage holds " + indexPartition);
+    }
+  }
+
+  private void assertIndexesBuiltWithFileSlices(List<String> indexPartitions) {
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
+    Option<HoodieTableFileSystemView> fsView = Option.of(getFileSystemViewForMetadataTable(metadataMetaClient));
+    for (String indexPartition : indexPartitions) {
+      List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, fsView, indexPartition);
+      assertFalse(fileSlices.isEmpty(), indexPartition + " must have been built, not merely marked complete");
+    }
+  }
+
+  /**
+   * Test indexer for RLI and secondary index.
+   */
   @Test
   public void testIndexerForSecondaryIndex() {
     String tableName = "indexer_test_rli_si";
@@ -548,6 +593,10 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   }
 
   private void scheduleAndExecuteIndexing(MetadataPartitionType partitionTypeToIndex, String tableName, String propsFilePath) {
+    scheduleAndExecuteIndexing(partitionTypeToIndex, tableName, propsFilePath, Collections.emptyList());
+  }
+
+  private void scheduleAndExecuteIndexing(MetadataPartitionType partitionTypeToIndex, String tableName, String propsFilePath, List<String> extraConfigs) {
     HoodieIndexer.Config config = new HoodieIndexer.Config();
     String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource(propsFilePath)).getPath();
     config.basePath = basePath();
@@ -555,6 +604,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     config.indexTypes = partitionTypeToIndex.name();
     config.runningMode = SCHEDULE_AND_EXECUTE;
     config.propsFilePath = propsPath;
+    config.configs.addAll(extraConfigs);
     if (partitionTypeToIndex.getPartitionPath().equals(COLUMN_STATS.getPartitionPath())) {
       config.configs.add(HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.key() + "=" + colStatsFileGroupCount);
     }
@@ -568,7 +618,12 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
   private void indexMetadataPartitionsAndAssert(String indexPartitionPath, List<MetadataPartitionType> alreadyCompletedPartitions, List<MetadataPartitionType> nonExistentPartitions,
                                                 String tableName, String propsFilePath) {
-    scheduleAndExecuteIndexing(MetadataPartitionType.fromPartitionPath(indexPartitionPath), tableName, propsFilePath);
+    indexMetadataPartitionsAndAssert(indexPartitionPath, alreadyCompletedPartitions, nonExistentPartitions, tableName, propsFilePath, Collections.emptyList());
+  }
+
+  private void indexMetadataPartitionsAndAssert(String indexPartitionPath, List<MetadataPartitionType> alreadyCompletedPartitions, List<MetadataPartitionType> nonExistentPartitions,
+                                                String tableName, String propsFilePath, List<String> extraConfigs) {
+    scheduleAndExecuteIndexing(MetadataPartitionType.fromPartitionPath(indexPartitionPath), tableName, propsFilePath, extraConfigs);
 
     // validate table config
     metaClient.reloadTableConfig();
