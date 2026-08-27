@@ -65,9 +65,8 @@ object BucketPartitionUtils extends SparkAdapterSupport {
       // Scala derives the record-key ordering from HoodieUTF8String's Comparable implementation,
       // which uses binary UTF-8 ordering for both Spark 3 and Spark 4.
       val keyedRows = internalRows.keyBy(row => {
-        // InternalRow may reuse its mutable backing buffer, so keep an independent key for shuffle.
         val recordKey = utf8StringFactory.wrapUTF8String(
-          row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD).copy())
+          row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD))
         (getPartitionKey(row), recordKey)
       })
       // The record key participates only in sorting; bucket routing remains unchanged.
