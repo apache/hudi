@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.model.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metadata.index.model.IndexRestoreContext;
@@ -70,12 +71,12 @@ public abstract class BaseIndexer implements Indexer {
    * @param context                  the initialization context
    * @param uninitializedPartitions  the uninitialized partitions of this type, as the definition
    *                                 lookup reports them
-   * @param indexTypeName            the index type, for the messages
+   * @param indexType                the index type, for the messages
    * @return the partitions to initialize: exactly one, or none
    */
   protected Set<String> resolvePartitionsToInit(IndexInitializationContext context,
                                                 Set<String> uninitializedPartitions,
-                                                String indexTypeName) {
+                                                MetadataPartitionType indexType) {
     Option<String> requested = context.requestedIndexPartition();
     if (requested.isPresent()
         && dataTableMetaClient.getTableConfig().getMetadataPartitions().contains(requested.get())) {
@@ -94,11 +95,11 @@ public abstract class BaseIndexer implements Indexer {
     if (requested.isPresent()) {
       throw new HoodieMetadataException(String.format(
           "Cannot initialize requested metadata partition %s: it has no index definition and the uninitialized %s definitions are %s, "
-              + "so none can be inferred as the one meant", requested.get(), indexTypeName, uninitializedPartitions));
+              + "so none can be inferred as the one meant", requested.get(), indexType.name(), uninitializedPartitions));
     }
     if (uninitializedPartitions.size() > 1) {
       log.warn("Skipping {} initialization as only one {} bootstrap at a time is supported for now. Provided: {}",
-          indexTypeName, indexTypeName, uninitializedPartitions);
+          indexType.name(), indexType.name(), uninitializedPartitions);
     }
     return Collections.emptySet();
   }

@@ -91,7 +91,7 @@ public class ExpressionIndexer extends BaseIndexer {
   @Override
   public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
     Set<String> expressionIndexPartitionsToInit = resolvePartitionsToInit(context,
-        getExpressionIndexPartitionsToInit(EXPRESSION_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient), "expression index");
+        getExpressionIndexPartitionsToInit(EXPRESSION_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient), EXPRESSION_INDEX);
     if (expressionIndexPartitionsToInit.isEmpty()) {
       return Collections.emptyList();
     }

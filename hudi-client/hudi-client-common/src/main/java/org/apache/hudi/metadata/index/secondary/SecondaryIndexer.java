@@ -74,7 +74,7 @@ public class SecondaryIndexer extends BaseIndexer {
   @Override
   public List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException {
     Set<String> secondaryIndexPartitionsToInit = resolvePartitionsToInit(context,
-        getSecondaryIndexPartitionsToInit(SECONDARY_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient), "secondary index");
+        getSecondaryIndexPartitionsToInit(SECONDARY_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient), SECONDARY_INDEX);
     if (secondaryIndexPartitionsToInit.isEmpty()) {
       return Collections.emptyList();
     }

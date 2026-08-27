@@ -454,14 +454,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       String dataTableInstantTime,
       Map<String, List<FileInfo>> partitionToAllFilesMap,
       Lazy<List<FileSliceAndPartition>> lazyMergedFileSlices,
-      Option<String> requestedIndexPartition) throws IOException {
+      Option<String> requestedIndexPartitionOpt) throws IOException {
     // A requested partition initializes under a fresh solo-family instant, never the indexing
     // action's own instant. The action's completion applies its data commit to the metadata table
     // too, and finding that instant already completed there is treated as a partially applied
     // earlier commit: it is rolled back and re-applied, destroying the initialization records
     // while leaving the file groups. The solo family is the established shape for
     // metadata-table-only bootstrap commits and survives that reconciliation.
-    String instantTimeForPartition = requestedIndexPartition.isPresent()
+    String instantTimeForPartition = requestedIndexPartitionOpt.isPresent()
         ? generateUniqueSoloInstantTime() : generateUniqueInstantTime(dataTableInstantTime);
     // initialize metadata partitions
     List<IndexInitializationPlan> initializationList;
@@ -472,7 +472,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           partitionToAllFilesMap,
           lazyMergedFileSlices,
           Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient)),
-          requestedIndexPartition);
+          requestedIndexPartitionOpt);
       initializationList = indexer.buildInitialization(initializationContext);
       if (initializationList.isEmpty()) {
         LOG.info("Skip building {} index in metadata table", partitionType.getPartitionPath());
@@ -523,15 +523,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   protected abstract void updateColumnsToIndexWithColStats(List<String> columnsToIndex);
 
   /**
-   * Returns a unique timestamp to use for initializing a MDT partition.
-   * <p>
-   * Since commits are immutable, we should use unique timestamps to initialize each partition. For this, we will add a suffix to the given initializationTime
-   * until we find a unique timestamp.
-   *
-   * @param initializationTime Timestamp from dataset to use for initialization
-   * @return a unique timestamp for MDT
-   */
-  /**
    * The next unused instant in the solo-commit family, regardless of whether the initialization
    * time is an indexing commit — unlike {@link #generateUniqueInstantTime}, which reuses an
    * indexing instant as-is.
@@ -545,6 +536,15 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
   }
 
+  /**
+   * Returns a unique timestamp to use for initializing a MDT partition.
+   * <p>
+   * Since commits are immutable, we should use unique timestamps to initialize each partition. For this, we will add a suffix to the given initializationTime
+   * until we find a unique timestamp.
+   *
+   * @param initializationTime Timestamp from dataset to use for initialization
+   * @return a unique timestamp for MDT
+   */
   String generateUniqueInstantTime(String initializationTime) {
     // If it's initialized via Async indexer, we don't need to alter the init time.
     // otherwise yields the timestamp on the fly.
