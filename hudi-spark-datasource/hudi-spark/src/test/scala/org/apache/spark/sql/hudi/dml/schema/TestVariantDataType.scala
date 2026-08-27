@@ -1601,6 +1601,21 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
   /**
    * Lists data parquet files in the table directory, excluding Hudi metadata files.
    */
+  private def listDataParquetFiles(tablePath: String): Seq[String] = {
+    val conf = spark.sparkContext.hadoopConfiguration
+    val fs = FileSystem.get(new HadoopPath(tablePath).toUri, conf)
+    val iter = fs.listFiles(new HadoopPath(tablePath), true)
+    val files = scala.collection.mutable.ArrayBuffer[String]()
+    while (iter.hasNext) {
+      val file = iter.next()
+      val path = file.getPath.toString
+      if (path.endsWith(".parquet") && !path.contains(".hoodie")) {
+        files += path
+      }
+    }
+    files.toSeq
+  }
+
   /**
    * Block types of every log block in the table, read from the log files themselves. Tests that pin
    * a log format assert on this rather than on file names: native logs carry a .log.parquet suffix,
@@ -1624,21 +1639,6 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         reader.close()
       }
     }
-  }
-
-  private def listDataParquetFiles(tablePath: String): Seq[String] = {
-    val conf = spark.sparkContext.hadoopConfiguration
-    val fs = FileSystem.get(new HadoopPath(tablePath).toUri, conf)
-    val iter = fs.listFiles(new HadoopPath(tablePath), true)
-    val files = scala.collection.mutable.ArrayBuffer[String]()
-    while (iter.hasNext) {
-      val file = iter.next()
-      val path = file.getPath.toString
-      if (path.endsWith(".parquet") && !path.contains(".hoodie")) {
-        files += path
-      }
-    }
-    files.toSeq
   }
 
   /**
