@@ -61,6 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -208,12 +209,13 @@ class TestHiveHoodieReaderContext {
   }
 
   @Test
-  void getFileRecordIteratorFlagsOnlyColumnsHiveReads(@TempDir java.nio.file.Path tempDir) throws Exception {
-    // The required schema can be wider than the query: a CUSTOM merge (no merger overrides
-    // isProjectionCompatible) reads the whole table schema for merging, so `select id` reaches the
-    // context asking for the variant column too. What Hive hands back to the query is its read
-    // column names, so those decide: the full list `select *` carries fails, `select id` reads,
-    // and count(*), which names no column, reads.
+  void getFileRecordIteratorFailsOnShreddedVariantReadForMerging(@TempDir java.nio.file.Path tempDir) throws Exception {
+    // The required schema can be wider than the query: a CUSTOM merge whose merger is not
+    // projection compatible reads the whole table schema for merging, so `select id` reaches the
+    // context asking for the variant column too. Hive's read column names split the flagged
+    // columns: the ones Hive selected fail as Hive-visible nulls, the ones only merging needs fail
+    // as well, since setSchemas materializes them at {metadata, value} for the merger. count(*)
+    // names no column and its requested schema is empty, so nothing is flagged and it reads.
     StoragePath filePath = InputFormatTestUtil.writeVariantParquetFile(tempDir, "shredded.parquet", true);
     HoodieSchema tableSchema = tableSchemaWithVariant();
     HiveHoodieReaderContext readerContext = newReaderContext();
@@ -222,19 +224,24 @@ class TestHiveHoodieReaderContext {
         .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
 
     requestColumns("id", "v");
-    HoodieException failure = assertThrows(HoodieException.class, () ->
+    HoodieException hiveVisible = assertThrows(HoodieException.class, () ->
         readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
-    assertTrue(failure.getMessage().contains("'v'"),
-        "select * must still fail on the shredded variant column, got: " + failure.getMessage());
+    assertTrue(hiveVisible.getMessage().contains("'v'") && !hiveVisible.getMessage().contains("for merging"),
+        "select * must fail as a Hive-visible read of the shredded variant column, got: " + hiveVisible.getMessage());
 
     requestColumns("id");
-    assertDoesNotThrow(() ->
+    HoodieException mergeOnly = assertThrows(HoodieException.class, () ->
         readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
-    verify(readerCreator).getRecordReader(any(), any(), any());
+    assertTrue(mergeOnly.getMessage().contains("'v'") && mergeOnly.getMessage().contains("for merging"),
+        "A variant only the merge reads must fail as a merge read, got: " + mergeOnly.getMessage());
+    verify(readerCreator, never()).getRecordReader(any(), any(), any());
 
+    // count(*): Hive names no column, and createRequestedSchema turns that into an empty record.
     requestColumns();
+    HoodieSchema emptyRequested = HoodieSchema.createRecord("TestRecord", null, null, Collections.emptyList());
     assertDoesNotThrow(() ->
-        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, emptyRequested, storage));
+    verify(readerCreator).getRecordReader(any(), any(), any());
   }
 
   @Test

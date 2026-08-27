@@ -997,13 +997,24 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       assertResult("s.level")(lastPlanSortColumns())
       assertResult(3)(spark.sql(s"select * from $tableName").collect().length)
 
+      // ... and the check resolves names as the partitioners do, case-insensitively, so a
+      // differently cased path is the same column.
+      spark.sql(s"insert into $tableName select 4, 'a4', named_struct('level', 4, 'tags', map('k', 'v')), 1003")
+      spark.sql(s"call run_clustering(table => '$tableName', order => 'S.level')").collect()
+      assertResult("S.level")(lastPlanSortColumns())
+      assertResult(4)(spark.sql(s"select * from $tableName").collect().length)
+
       // ... while an unorderable leaf is rejected under its full path, up front, so no pending
       // plan is left behind, and a path that does not resolve is reported as missing.
-      spark.sql(s"insert into $tableName select 4, 'a4', named_struct('level', 4, 'tags', map('k', 'v')), 1003")
+      spark.sql(s"insert into $tableName select 5, 'a5', named_struct('level', 5, 'tags', map('k', 'v')), 1004")
       checkNestedExceptionContains(s"call run_clustering(table => '$tableName', order => 's.tags')")(
         "Sorting by column 's.tags' of type MAP is not supported")
       checkNestedExceptionContains(s"call run_clustering(table => '$tableName', order => 's.missing')")(
         "Order column not exist:s.missing")
+      // Only records are descended into: a map's parquet accessor levels are not a path the
+      // partitioners resolve, so the MAP is rejected under `s.tags` and nothing below it resolves.
+      checkNestedExceptionContains(s"call run_clustering(table => '$tableName', order => 's.tags.key_value.value')")(
+        "Order column not exist:s.tags.key_value.value")
       metaClient.reloadActiveTimeline()
       assertResult(0L)(ClusteringUtils.getAllPendingClusteringPlans(metaClient).count())
     }

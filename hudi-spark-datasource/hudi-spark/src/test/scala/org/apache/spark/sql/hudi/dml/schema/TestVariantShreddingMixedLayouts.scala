@@ -47,7 +47,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMeta
  *   log-block projection when payload classes are present (#18674), so that is a real,
  *   explicitly UNTESTED variant branch; PartialUpdateMode and the CUSTOM merge mode are
  *   likewise unreached (EVENT_TIME ordering is swept throughout, COMMIT_TIME in the one leg
- *   that drops preCombineField).
+ *   that sets hoodie.record.merge.mode).
  * - Multi-writer OCC: conflict resolution is key/instant based and never inspects layouts; the
  *   mixed-file outcomes it can produce are the same ones pinned here.
  */
@@ -364,13 +364,16 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
   test("COMMIT_TIME ordering lets a lower-ts update win across layouts, in the log merge and after compaction") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
-    // Every other table in the suite carries preCombineField = 'ts' and merges under EVENT_TIME
-    // ordering. Without it the table config resolves to COMMIT_TIME ordering, where the later commit
-    // wins whatever its ts: the update below carries a LOWER ts than the row it replaces and must
-    // still win - under EVENT_TIME the read would keep {"a":1}. Pinned once in the log merge over
-    // two layouts and again on the compacted base.
+    // Every table in the suite carries preCombineField = 'ts'; the others merge under EVENT_TIME
+    // ordering, this one sets hoodie.record.merge.mode to COMMIT_TIME_ORDERING, where the later
+    // commit wins whatever its ts: the update below carries a LOWER ts (500) than the row it
+    // replaces (1000) and must still win - under EVENT_TIME the read would keep {"a":1}. The
+    // ordering field has to stay: with none, getOrderingValue returns the same default for both
+    // records and both modes keep the newer one, so the leg would not discriminate. Pinned once
+    // in the log merge over two layouts and again on the compacted base.
     withVariantTable("commit-time ordering", "mor", props = Seq(
-      "hoodie.index.type = 'INMEMORY'", "hoodie.compact.inline = 'false'"), preCombine = false) {
+      "hoodie.index.type = 'INMEMORY'", "hoodie.compact.inline = 'false'",
+      "hoodie.record.merge.mode = 'COMMIT_TIME_ORDERING'")) {
       (tableName, tablePath, leg) =>
       withWriteLayout(Forced("a bigint")) {
         spark.sql(s"""insert into $tableName values (1, parse_json('{"a":1}'), 1000)""")

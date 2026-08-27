@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.{HoodieCLIUtils, HoodieFileIndex, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption, SortUtils}
@@ -250,33 +251,40 @@ class RunClusteringProcedure extends BaseProcedure
    * Validates the already-normalised (comma-separated, trimmed) order column list against the
    * table schema with its metadata fields, which is what the partitioners sort on at execution
    * time (the execution strategy adds them to the schema it hands the partitioners), so a
-   * `_hoodie_*` column is accepted. A dotted path names a nested field: the partitioners resolve
-   * it (getNestedFieldVal on the record path, Column(name) on the row path) but the shared
-   * check only walks top-level names, so it is resolved here and its leaf checked under the path.
+   * `_hoodie_*` column is accepted. Every column, top-level or dotted, is resolved by
+   * `resolveOrderColumn` against that schema the way the partitioners resolve it, and the leaf
+   * it lands on is checked for sortability.
    */
   private def validateOrderColumns(orderColumns: String, metaClient: HoodieTableMetaClient): Unit = {
     if (orderColumns == null) {
       throw new HoodieClusteringException("Order columns is null")
     }
 
-    val tableSchemaResolver = new TableSchemaResolver(metaClient)
-    val tableSchema = tableSchemaResolver.getTableSchema(true)
-    val fields = tableSchema.getFields.asScala.map(_.name().toLowerCase)
-    val (nestedColumns, topLevelColumns) = orderColumns.split(",").partition(_.contains("."))
-    topLevelColumns.foreach(col => {
-      if (!fields.contains(col.toLowerCase)) {
-        throw new HoodieClusteringException("Order column not exist:" + col)
+    val tableSchema = new TableSchemaResolver(metaClient).getTableSchema(true)
+    orderColumns.split(",").foreach { col =>
+      val leaf = resolveOrderColumn(tableSchema, col)
+        .getOrElse(throw new HoodieClusteringException("Order column not exist:" + col))
+      // The same validation the partitioners apply at execution time (see
+      // SortUtils.validateSortableColumns), surfaced here before the job is submitted.
+      SortUtils.validateSortableColumn(col, leaf)
+    }
+  }
+
+  /**
+   * Resolves a sort column the way the partitioners do, not as a parquet path: every dotted segment
+   * names a field of the enclosing record, matched exactly first and then case-insensitively (the
+   * row partitioner resolves `Column(name)` through Spark's analyzer, case-insensitive by default),
+   * and only a RECORD is descended into, so `s.tags` stops at the MAP for the sortability check and
+   * `s.tags.key_value.value` does not resolve. HoodieSchema.getNestedField does neither: it matches
+   * case-sensitively and walks the `.list.element` / `.key_value.value` accessor levels.
+   */
+  private def resolveOrderColumn(tableSchema: HoodieSchema, path: String): Option[HoodieSchema] = {
+    // The -1 keeps empty segments, so `s.` or `.s` fail to resolve instead of collapsing to `s`.
+    path.split("\\.", -1).foldLeft(Option(tableSchema)) { (enclosing, segment) =>
+      enclosing.map(_.getNonNullType).filter(_.getType == HoodieSchemaType.RECORD).flatMap { record =>
+        val fields = record.getFields.asScala
+        fields.find(_.name == segment).orElse(fields.find(_.name.equalsIgnoreCase(segment))).map(_.schema())
       }
-    })
-    // The same validation the partitioners apply at execution time (see
-    // SortUtils.validateSortableColumns), surfaced here before the job is submitted.
-    SortUtils.validateSortableColumns(topLevelColumns, tableSchema)
-    nestedColumns.foreach { col =>
-      val leaf = tableSchema.getNestedField(col)
-      if (!leaf.isPresent) {
-        throw new HoodieClusteringException("Order column not exist:" + col)
-      }
-      SortUtils.validateSortableColumn(col, leaf.get().getRight.schema())
     }
   }
 }

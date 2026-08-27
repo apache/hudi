@@ -52,16 +52,13 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
 
   /**
    * The `(id int, v variant, ts long)` table both suites use, with the knobs they vary.
-   * `preCombine = false` drops preCombineField, which resolves the table to COMMIT_TIME ordering.
    */
   protected def createVariantTable(tableName: String,
                                    tablePath: String,
                                    tableType: String,
                                    props: Seq[String] = Seq.empty,
-                                   extraCols: String = "",
-                                   preCombine: Boolean = true): Unit = {
+                                   extraCols: String = ""): Unit = {
     val extraColsDdl = if (extraCols.isEmpty) "" else s"$extraCols,"
-    val preCombineProp = if (preCombine) "preCombineField = 'ts'," else ""
     val extraProps = if (props.isEmpty) "" else props.mkString(",\n  ", ",\n  ", "")
     spark.sql(
       s"""
@@ -74,7 +71,7 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
          | location '$tablePath'
          | tblproperties (
          |  primaryKey = 'id',
-         |  $preCombineProp
+         |  preCombineField = 'ts',
          |  type = '$tableType'$extraProps
          | )
        """.stripMargin)
@@ -102,12 +99,10 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
                                     props: Seq[String] = Seq.empty,
                                     extraCols: String = "",
                                     recordTypes: Seq[HoodieRecordType] =
-                                      Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK),
-                                    preCombine: Boolean = true)
+                                      Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))
                                    (f: (String, String, String) => T): Unit = {
     withTableScaffold(label, recordTypes) { (tableName, tablePath) =>
-      createVariantTable(tableName, tablePath, tableType, props = props, extraCols = extraCols,
-        preCombine = preCombine)
+      createVariantTable(tableName, tablePath, tableType, props = props, extraCols = extraCols)
     }(f)
   }
 

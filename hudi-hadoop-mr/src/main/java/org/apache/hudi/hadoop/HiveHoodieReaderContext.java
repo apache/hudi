@@ -73,6 +73,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -160,14 +161,18 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // footer schema and anchored on the requested column being a variant, so plain user structs
     // of the same shape are left alone. toShreddedReadSchema recurses through structs, array
     // elements and map values, matching the row writer, which shreds nested variants too.
-    // Columns not requested stay readable: the flagged columns are checked against Hive's read
-    // column names, not requiredSchema, which can be wider than the query -- a CUSTOM merge reads
-    // the whole table schema for merging (no merger overrides isProjectionCompatible), so
-    // `select id` arrives here asking for the variant column too. Hive writes the full name list
-    // for `select *` and none for count(*). So does a read whose nested column paths
-    // (hive.io.file.readNestedColumn.paths) all miss the shredded group: Hive's parquet reader
-    // materializes only the paths it is given, and the mask rewrite below already handles the
-    // compacted projection such a read comes back in.
+    // The flagged columns are split by Hive's read column names on the outer conf, since the
+    // per-file copy below gets requiredSchema's names from setSchemas and cannot tell the two
+    // apart: a column Hive selected fails as Hive-visible nulls; a column only requiredSchema
+    // names is there for merging (a CUSTOM merge whose merger is not projection compatible reads
+    // the whole table schema; a merger can also list it as mandatory) and fails too, because the
+    // reader materializes it at {metadata, value} and the merger would consume the nulls. Hive
+    // writes the full name list for `select *` and none for count(*), whose requested schema is
+    // then empty (HoodieFileGroupReaderBasedRecordReader.createRequestedSchema), so nothing is
+    // flagged unless merging widens it. A read whose nested column paths
+    // (hive.io.file.readNestedColumn.paths) all miss the shredded group is not flagged either:
+    // Hive's parquet reader materializes only the paths it is given, and the mask rewrite below
+    // already handles the compacted projection such a read comes back in.
     if (isParquetOrOrc && requiredSchema.getType() == HoodieSchemaType.RECORD) {
       HoodieSchema shreddedReadSchema = VariantSchemaUtils.toShreddedReadSchema(requiredSchema, fileSchema);
       if (shreddedReadSchema != requiredSchema) {
@@ -177,17 +182,30 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         Set<String> requestedColumns = Arrays.stream(HoodieColumnProjectionUtils.getReadColumnNames(conf))
             .map(name -> name.trim().toLowerCase(Locale.ROOT))
             .collect(Collectors.toSet());
-        List<String> offendingColumns = HoodieColumnProjectionUtils.columnsReadingShreddedPaths(conf, shreddedPaths)
-            .stream()
-            .filter(requestedColumns::contains)
-            .collect(Collectors.toList());
-        if (!offendingColumns.isEmpty()) {
+        List<String> shreddedColumns = HoodieColumnProjectionUtils.columnsReadingShreddedPaths(conf, shreddedPaths);
+        Map<Boolean, List<String>> byHiveRequest = shreddedColumns.stream()
+            .collect(Collectors.partitioningBy(requestedColumns::contains));
+        List<String> hiveReads = byHiveRequest.get(true);
+        List<String> mergeOnly = byHiveRequest.get(false);
+        if (!hiveReads.isEmpty()) {
           throw new HoodieException(String.format(
               "Column(s) '%s' of %s hold a shredded variant (typed_value present); the Hive reader "
                   + "cannot reconstruct shredded variants. Read the table with Spark 4.1+, or "
                   + "rewrite it unshredded (e.g. cluster with "
                   + "hoodie.parquet.variant.write.shredding.enabled=false).",
-              String.join(", ", offendingColumns), filePath));
+              String.join(", ", hiveReads), filePath));
+        }
+        if (!mergeOnly.isEmpty()) {
+          Option<HoodieRecordMerger> merger = getRecordMerger();
+          String mergerName = merger != null && merger.isPresent()
+              ? "the record merger (" + merger.get().getClass().getName() + ")" : "the record merger";
+          throw new HoodieException(String.format(
+              "Column(s) '%s' of %s hold a shredded variant (typed_value present); the query does not select "
+                  + "them but %s reads them for merging (the required schema is wider than the query), and the "
+                  + "Hive reader cannot reconstruct shredded variants, so the merger would be handed nulls. Read "
+                  + "the table with Spark 4.1+, or rewrite it unshredded (e.g. cluster with "
+                  + "hoodie.parquet.variant.write.shredding.enabled=false).",
+              String.join(", ", mergeOnly), filePath, mergerName));
         }
       }
     }
