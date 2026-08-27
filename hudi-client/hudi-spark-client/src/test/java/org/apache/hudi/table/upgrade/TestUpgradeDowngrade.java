@@ -308,6 +308,53 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     assertEquals("timestamp", metaClient.getTableConfig().getPreCombineField());
   }
 
+  /** The ordering field can be nested under dot notation, e.g. a field of the trip schema's fare record. */
+  @Test
+  void testUpgradeOneToTwoRecordsNestedOrderingField() throws IOException {
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params);
+    params.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "fare.amount");
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(true).withRollbackUsingMarkers(false).withProps(params).build();
+    doInsert(getHoodieWriteClient(cfg));
+
+    downgradeTableConfigsFromTwoToOne(cfg);
+    assertNull(metaClient.getTableConfig().getPreCombineField());
+
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.TWO, null);
+
+    metaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf().newInstance()).setBasePath(cfg.getBasePath())
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
+    assertTableVersionOnDataAndMetadataTable(metaClient, HoodieTableVersion.TWO);
+    assertEquals("fare.amount", metaClient.getTableConfig().getPreCombineField());
+  }
+
+  /**
+   * A table that already recorded an ordering field before 0.8.0 stopped being the norm keeps the
+   * one it has, rather than having the writer's config written over it.
+   */
+  @Test
+  void testUpgradeOneToTwoKeepsRecordedOrderingField() throws IOException {
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params);
+    params.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "_row_key");
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(true).withRollbackUsingMarkers(false).withProps(params).build();
+    doInsert(getHoodieWriteClient(cfg));
+
+    downgradeTableConfigsFromTwoToOne(cfg, "timestamp");
+    assertEquals("timestamp", metaClient.getTableConfig().getPreCombineField());
+
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.TWO, null);
+
+    metaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf().newInstance()).setBasePath(cfg.getBasePath())
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
+    assertTableVersionOnDataAndMetadataTable(metaClient, HoodieTableVersion.TWO);
+    assertEquals("timestamp", metaClient.getTableConfig().getPreCombineField());
+  }
+
   /**
    * {@link HoodieWriteConfig#PRECOMBINE_FIELD_NAME} defaults to "ts", which every write config
    * materializes whether or not the user asked for it. Recording that default on a table without
@@ -538,6 +585,10 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   }
 
   private void downgradeTableConfigsFromTwoToOne(HoodieWriteConfig cfg) throws IOException {
+    downgradeTableConfigsFromTwoToOne(cfg, null);
+  }
+
+  private void downgradeTableConfigsFromTwoToOne(HoodieWriteConfig cfg, String orderingField) throws IOException {
     Properties properties = new Properties(cfg.getProps());
     properties.remove(HoodieTableConfig.RECORDKEY_FIELDS.key());
     properties.remove(HoodieTableConfig.PARTITION_FIELDS.key());
@@ -545,6 +596,9 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     properties.remove(BASE_FILE_FORMAT.key());
     properties.remove(HoodieTableConfig.PRECOMBINE_FIELD.key());
     properties.setProperty(HoodieTableConfig.VERSION.key(), "1");
+    if (orderingField != null) {
+      properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), orderingField);
+    }
 
     metaClient = HoodieTestUtils.init(storageConf, basePath, getTableType(), properties);
     // set hoodie.table.version to 1 in hoodie.properties file

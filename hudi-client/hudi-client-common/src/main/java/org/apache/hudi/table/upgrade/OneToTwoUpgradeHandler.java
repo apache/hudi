@@ -66,15 +66,21 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
    * - Spark SQL DML, the merge-on-read snapshot merge, Flink, and the ordering fields of later
    * table versions - then silently falls back to no ordering at all.
    *
-   * <p>The value comes from the write config, but is only recorded once it resolves against the
-   * schema. {@link HoodieWriteConfig#PRECOMBINE_FIELD_NAME} carries a default of "ts" that
-   * every write config materializes whether or not the user asked for it; recording that default on
-   * a table that has no such field would leave behind an ordering field no reader can resolve, and
-   * would make any later writer that configures a real ordering field fail table config validation
-   * with a config conflict. A field the schema cannot resolve is left unrecorded rather than
-   * recorded unverified.
+   * <p>Only a table that records no ordering field is filled in, and only as part of this upgrade,
+   * so a table that already carries one is left alone. The value comes from the write config, but
+   * is only recorded once it resolves against the schema.
+   * {@link HoodieWriteConfig#PRECOMBINE_FIELD_NAME} carries a default of "ts" that every write
+   * config materializes whether or not the user asked for it; recording that default on a table
+   * that has no such field would leave behind an ordering field no reader can resolve, and would
+   * make any later writer that configures a real ordering field fail table config validation with a
+   * config conflict. A field the schema cannot resolve is left unrecorded rather than recorded
+   * unverified.
    */
   private static Option<String> getPreCombineFieldToPersist(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+    if (StringUtils.nonEmpty(metaClient.getTableConfig().getPreCombineField())) {
+      // the table already records one, and the upgrade only fills in a missing ordering field
+      return Option.empty();
+    }
     String preCombineField = config.getPreCombineField();
     if (StringUtils.isNullOrEmpty(preCombineField)) {
       return Option.empty();
