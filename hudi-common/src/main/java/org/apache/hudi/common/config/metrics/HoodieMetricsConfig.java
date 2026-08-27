@@ -112,18 +112,14 @@ public class HoodieMetricsConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> RLI_LOOKUP_METRICS_ENABLE = ConfigProperty
       .key(METRIC_PREFIX + ".rli.lookup.enable")
       .defaultValue(false)
-      .withInferFunction(cfg -> {
-        if (cfg.contains(TURN_METRICS_ON)) {
-          return Option.of(cfg.getBoolean(TURN_METRICS_ON));
-        }
-        return Option.empty();
-      })
       .markAdvanced()
       .sinceVersion("1.3.0")
       .withDocumentation("Collect counters for the record level index lookup phase (records looked up, "
           + "hits, misses, shards read and time spent) and report them at each commit through the "
-          + "configured metrics reporter. Follows " + TURN_METRICS_ON.key() + " unless set explicitly, "
-          + "since with metrics off there is nowhere to report. Spark only: the record level index "
+          + "configured metrics reporter. Off unless set explicitly, including when " + TURN_METRICS_ON.key()
+          + " is on: collection registers a Spark accumulator per table and runs on every shard read, so "
+          + "it is opted into by name rather than inherited on upgrade. Requires " + TURN_METRICS_ON.key()
+          + " as well, since the reporter is the only destination. Spark only: the record level index "
           + "lookup is a Spark write-path concern, and other engines produce no counters. Counters are "
           + "aggregated per table per JVM rather than per writer, so two write clients on one table in "
           + "one process share them.");

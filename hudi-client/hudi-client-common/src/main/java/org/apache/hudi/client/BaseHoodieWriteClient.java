@@ -91,7 +91,6 @@ import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metrics.ExecutorMetrics;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -276,10 +275,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
       commit(table, commitActionType, instantTime, metadata, tableWriteStats, skipStreamingWritesToMetadataTable);
       log.info("Committed {}", instantTime);
-      // The commit landed, so the executor counters it accounts for can be reported and released. A
-      // commit that never lands publishes nothing; its counters are not carried forward either, because
-      // Metrics.shutdown() clears every registry after each write on the DataSource path.
-      ExecutorMetrics.publishAndRelease(config, metrics);
+      onCommitCompleted();
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
@@ -425,6 +421,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Any pre-commit actions like conflict resolution goes here.
    * @param metadata commit metadata for which pre commit is being invoked.
    */
+  /**
+   * Called once a commit has landed. Engines that collect metrics on workers publish them here; the
+   * default does nothing, since only Spark ships counters back to the driver for a write.
+   */
+  protected void onCommitCompleted() {
+  }
+
   protected void preCommit(HoodieCommitMetadata metadata) {
     // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
     // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload

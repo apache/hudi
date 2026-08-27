@@ -63,8 +63,11 @@ public class ExecutorMetrics {
       if (!group.isEnabled(config)) {
         continue;
       }
-      Registry registry = Registry.REGISTRY_MAP.get(
+      // Only the accumulator-backed registry aggregates from executors, so anything else collected
+      // nothing worth publishing.
+      Registry found = Registry.REGISTRY_MAP.get(
           Registry.makeKey(config.getTableName(), group.scopedName(config.getBasePath())));
+      DistributedRegistry registry = found instanceof DistributedRegistry ? (DistributedRegistry) found : null;
       Map<String, Long> counts =
           registry == null ? Collections.emptyMap() : new HashMap<>(registry.getAllCounts(false));
       if (counts.values().stream().allMatch(value -> value == 0L)) {

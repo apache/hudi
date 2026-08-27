@@ -44,6 +44,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.metadata.StreamingMetadataWriteHandler;
 import org.apache.hudi.metrics.DistributedRegistryUtil;
+import org.apache.hudi.metrics.ExecutorMetrics;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -167,6 +168,15 @@ public class SparkRDDWriteClient<T> extends
     } else {
       writeTableMetadata(table, instantTime, metadata);
     }
+  }
+
+  /**
+   * The commit landed, so the counters the executors collected for it can be reported and released.
+   * A commit that never lands publishes nothing.
+   */
+  @Override
+  protected void onCommitCompleted() {
+    ExecutorMetrics.publishAndRelease(config, metrics);
   }
 
   @Override

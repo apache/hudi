@@ -47,6 +47,7 @@ public class TestRliMetricsOnStreamerPath extends HoodieDeltaStreamerTestBase {
   private static void enableRecordIndex(HoodieDeltaStreamer.Config cfg, boolean partitioned) {
     cfg.configs.add(HoodieMetadataConfig.ENABLE.key() + "=true");
     cfg.configs.add(HoodieMetricsConfig.TURN_METRICS_ON.key() + "=true");
+    cfg.configs.add(HoodieMetricsConfig.RLI_LOOKUP_METRICS_ENABLE.key() + "=true");
     cfg.configs.add(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key() + "=INMEMORY");
     cfg.configs.add(HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME.key() + "="
         + CapturingMetricsReporter.class.getName());

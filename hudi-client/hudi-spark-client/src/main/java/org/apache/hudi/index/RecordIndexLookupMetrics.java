@@ -19,7 +19,6 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.metrics.NoOpRegistry;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -27,10 +26,7 @@ import org.apache.hudi.metrics.ExecutorMetricRegistry;
 import org.apache.hudi.metrics.RecordIndexMetricNames;
 
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 /** Executor-side emission for the record index lookup counters. */
@@ -40,32 +36,28 @@ public class RecordIndexLookupMetrics {
   }
 
   /**
-   * The registries a lookup task collects into, keyed by bare name. Includes every entry on
-   * {@link ExecutorMetricRegistry}. Delivery is by closure capture, which is deterministic; resolution is
-   * by name, which lets code below the write API take part without a signature change.
+   * The registry a lookup task collects into, or null when nothing should be collected. Captured in the
+   * lookup closure and passed to {@link #recordShardLookup}, so delivery is by closure capture rather
+   * than by name.
+   *
+   * <p>Requires the reporter to be on as well: with {@code hoodie.metrics.on} off there is nowhere to
+   * publish, and collecting would register an accumulator and scan every shard for nothing.
    */
-  public static Map<String, Registry> resolveBundle(HoodieEngineContext context, HoodieWriteConfig config) {
-    Map<String, Registry> bundle = new HashMap<>();
-    for (ExecutorMetricRegistry metricRegistry : ExecutorMetricRegistry.values()) {
-      if (!metricRegistry.isEnabled(config)) {
-        continue;
-      }
-      // TBL_NAME has no default and Builder.validate() only requires BASE_PATH, so a config built without
-      // forTable() reaches here with a null name. getMetricRegistry dereferences it immediately.
-      String tableName = config.getTableName();
-      if (tableName == null || tableName.isEmpty()) {
-        continue;
-      }
-      Registry registry = context.getMetricRegistry(tableName,
-          metricRegistry.scopedName(config.getBasePath()));
-      // Only the accumulator-backed registry aggregates back to the driver, so anything else is left out
-      // rather than bound: a bound LocalRegistry would collect on the executor and be dropped on the floor,
-      // whereas leaving it out makes the lookup resolve to a no-op that reports nothing.
-      if (registry instanceof DistributedRegistry) {
-        bundle.put(metricRegistry.registryName(), registry);
-      }
+  public static Registry resolveRegistry(HoodieEngineContext context, HoodieWriteConfig config) {
+    if (!config.isMetricsOn() || !ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.isEnabled(config)) {
+      return null;
     }
-    return bundle.isEmpty() ? Collections.emptyMap() : bundle;
+    // TBL_NAME has no default and Builder.validate() only requires BASE_PATH, so a config built without
+    // forTable() reaches here with a null name. getMetricRegistry dereferences it immediately.
+    String tableName = config.getTableName();
+    if (tableName == null || tableName.isEmpty()) {
+      return null;
+    }
+    Registry registry = context.getMetricRegistry(tableName,
+        ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.scopedName(config.getBasePath()));
+    // Only the accumulator-backed registry aggregates back to the driver. A LocalRegistry here would
+    // collect on the executor and be dropped on the floor, so report nothing instead.
+    return registry instanceof DistributedRegistry ? registry : null;
   }
 
   /**
@@ -73,19 +65,16 @@ public class RecordIndexLookupMetrics {
    * {@code hits + misses == records_looked_up} holds when a batch repeats a key. Membership is tested
    * against the found set, bounded by the hit count, not the asked-about set, bounded by shard size.
    *
+   * @param registry     where to collect, or null when collection is off
    * @param keysLookedUp every record key routed to this shard
    * @param foundKeys    the subset present in the index
    * @param elapsedMs    wall-clock spent reading this shard
    */
-  public static void recordShardLookup(Collection<String> keysLookedUp,
+  public static void recordShardLookup(Registry registry, Collection<String> keysLookedUp,
                                        Collection<String> foundKeys, long elapsedMs) {
-    if (keysLookedUp.isEmpty()) {
-      return;
-    }
-    Registry registry = Registry.getRegistry(RecordIndexMetricNames.REGISTRY_NAME);
-    // The query read path and the disabled path both resolve to a discarding registry. Return before the
-    // hit scan below, which is O(keys looked up), rather than computing counts nothing will read.
-    if (registry instanceof NoOpRegistry) {
+    // Return before the hit scan below, which is O(keys looked up), rather than computing counts
+    // nothing will read. The query read path passes null for the same reason.
+    if (registry == null || keysLookedUp.isEmpty()) {
       return;
     }
     Set<String> found = foundKeys instanceof Set ? (Set<String>) foundKeys : new HashSet<>(foundKeys);

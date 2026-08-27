@@ -23,8 +23,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.RecordContext;
-import org.apache.hudi.common.metrics.ExecutorMetricsContext;
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -39,8 +37,6 @@ import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
-
-import java.util.Map;
 
 public abstract class HoodieSparkTable<T>
     extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
@@ -146,19 +142,9 @@ public abstract class HoodieSparkTable<T>
     return Option.empty();
   }
 
-  /**
-   * Carries thread-local task state onto Hudi's writer pools. The metrics binding travels with the
-   * {@link TaskContext} for the same reason that does: {@code BoundedInMemoryExecutor} and
-   * {@code DisruptorExecutor} run on threads the task did not create. No unbind, since these pools are
-   * created and shut down per operation.
-   */
   @Override
   public Runnable getPreExecuteRunnable() {
     final TaskContext taskContext = TaskContext.get();
-    final Map<String, Registry> metricsBinding = ExecutorMetricsContext.capture();
-    return () -> {
-      TaskContext$.MODULE$.setTaskContext(taskContext);
-      ExecutorMetricsContext.bind(metricsBinding);
-    };
+    return () -> TaskContext$.MODULE$.setTaskContext(taskContext);
   }
 }

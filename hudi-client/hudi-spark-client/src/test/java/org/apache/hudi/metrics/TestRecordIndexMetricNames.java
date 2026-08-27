@@ -19,7 +19,6 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.common.metrics.LocalRegistry;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -80,8 +79,9 @@ public class TestRecordIndexMetricNames {
         ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.scopedName(config.getBasePath()));
   }
 
+  /** Distributed, not local: that is what {@code HoodieSparkEngineContext#getMetricRegistry} puts here. */
   private static Registry seedRegistry(HoodieWriteConfig config, long lookedUp, long hits, long misses) {
-    Registry registry = new LocalRegistry(
+    Registry registry = new DistributedRegistry(
         ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.scopedName(config.getBasePath()));
     registry.add(LOOKED_UP_KEY, lookedUp);
     registry.add(KEY_HIT_COUNT, hits);

@@ -211,7 +211,7 @@ public class TestDistributedRegistry {
   public void testReleaseOnExecutorIsIgnoredWithoutFailingTheJob() {
     // Given: a registry holding a known count
     String registryName = REGISTRY_NAME + "_testReleaseOnExecutor";
-    Registry registry = engineContext.getMetricRegistry("", registryName);
+    DistributedRegistry registry = (DistributedRegistry) engineContext.getMetricRegistry("", registryName);
     registry.add(METRIC_1, 5L);
 
     List<Integer> data = new ArrayList<>();

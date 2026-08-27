@@ -101,7 +101,6 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
    * the registry underneath a release; counters reaching zero are removed so a table that performed no
    * lookup is distinguishable from one that missed everything.
    */
-  @Override
   public void release(Map<String, Long> counts) {
     // Driver-only for the same reason as set(): clamping and eviction are order-dependent under merges.
     if (TaskContext.get() != null) {

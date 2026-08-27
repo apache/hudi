@@ -54,6 +54,8 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
    */
   protected def metricsOpts: Map[String, String] = Map(
     HoodieMetricsConfig.TURN_METRICS_ON.key -> "true",
+    // Explicit: collection is opted into by name, not inherited from metrics being on.
+    HoodieMetricsConfig.RLI_LOOKUP_METRICS_ENABLE.key -> "true",
     // The type still has to be set: it defaults to GRAPHITE, whose config builder NPEs without a prefix.
     // The factory prefers the class when one is given, so this only keeps the builder happy.
     HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key -> MetricsReporterType.INMEMORY.name(),

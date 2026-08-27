@@ -60,6 +60,7 @@ class TestRliLookupMetricsMultiTable extends RecordLevelIndexTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "2",
     "hoodie.write.lock.provider" -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
     HoodieMetricsConfig.TURN_METRICS_ON.key -> "true",
+    HoodieMetricsConfig.RLI_LOOKUP_METRICS_ENABLE.key -> "true",
     HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key -> MetricsReporterType.INMEMORY.name(),
     HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME.key -> classOf[CapturingMetricsReporter].getName,
     // Named explicitly rather than left to be inferred from the table name: it is what separates the
