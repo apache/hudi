@@ -149,9 +149,11 @@ public class SparkRDDWriteClient<T> extends
       List<HoodieWriteStat> partialMetadataTableWriteStats = slimWriteStatsList.stream().filter(entry -> entry.isMetadataTable).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
       boolean committed = commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats), extraMetadata, commitActionType, partitionToReplacedFileIds,
           extraPreCommitFunc, false, Option.of(table));
-      if (committed) {
-        // The commit landed, so the counters the executors collected for it can be reported and
-        // released. A commit that never lands publishes nothing.
+      // Publish only if this write tagged. requiresTagging is the same predicate BaseWriteHelper uses
+      // to decide whether to look up at all, so publishing mirrors collecting: an INSERT or a
+      // BULK_INSERT never collects, and must not publish counters an earlier write left behind.
+      if (committed && getOperationType() != null
+          && getIndex().requiresTagging(getOperationType())) {
         RecordIndexLookupMetrics.publishAndRelease(config, metrics);
       }
       return committed;
