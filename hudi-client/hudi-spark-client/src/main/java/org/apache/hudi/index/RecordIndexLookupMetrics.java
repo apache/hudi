@@ -57,7 +57,15 @@ public class RecordIndexLookupMetrics {
         ExecutorMetricRegistry.RECORD_INDEX_LOOKUP.scopedName(config.getBasePath()));
     // Only the accumulator-backed registry aggregates back to the driver. A LocalRegistry here would
     // collect on the executor and be dropped on the floor, so report nothing instead.
-    return registry instanceof DistributedRegistry ? registry : null;
+    if (!(registry instanceof DistributedRegistry)) {
+      return null;
+    }
+    // Runs on the driver before the closure ships, so anything held now predates this write. Publishing
+    // releases what it reports, which leaves a non-empty registry only after an attempt that never
+    // committed. Paths that tear metrics down between writes lose it anyway; Spark SQL DML and StreamSync
+    // do not, and this commit must not report work it did not do.
+    registry.clear();
+    return registry;
   }
 
   /**
