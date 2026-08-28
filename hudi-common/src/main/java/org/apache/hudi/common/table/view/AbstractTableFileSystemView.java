@@ -256,8 +256,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       }
       if (logFiles.containsKey(fileId)) {
         // this should work for both table versions >= 8 and lower.
-        logFiles.get(fileId).stream().sorted(HoodieLogFile.getLogFileComparator())
-            .forEach(logFile -> group.addLogFile(completionTimeQueryView, logFile));
+        group.addLogFiles(completionTimeQueryView, logFiles.get(fileId));
       }
       fileGroups.add(group);
     });

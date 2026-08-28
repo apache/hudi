@@ -86,7 +86,8 @@ public class TestHoodieFileGroup {
     for (int i = 0; i < 3; i++) {
       HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i + ".parquet");
       fileGroup.addBaseFile(baseFile);
-      fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(preTableVersion8 ? "001" : "00" + i, "data", i))));
+      addLogFile(fileGroup, queryView,
+          new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(preTableVersion8 ? "001" : "00" + i, "data", i))));
     }
 
     assertEquals(2, fileGroup.getAllFileSlices().count());
@@ -125,16 +126,22 @@ public class TestHoodieFileGroup {
     // when: building a file group with file slices like table version 6.
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "f1", activeTimeline);
 
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName("001", "f1", 0))));
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "001" : "002", "f1", 1))));
+    addLogFile(fileGroup, queryView,
+        new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName("001", "f1", 0))));
+    addLogFile(fileGroup, queryView,
+        new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "001" : "002", "f1", 1))));
 
     fileGroup.addBaseFile(new HoodieBaseFile(FileCreateUtilsLegacy.baseFileName("003", "f1")));
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "003" : "004", "f1", 0))));
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "003" : "005", "f1", 1))));
+    addLogFile(fileGroup, queryView,
+        new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "003" : "004", "f1", 0))));
+    addLogFile(fileGroup, queryView,
+        new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "003" : "005", "f1", 1))));
 
     fileGroup.addBaseFile(new HoodieBaseFile(FileCreateUtilsLegacy.baseFileName("006", "f1")));
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "006" : "007", "f1", 0))));
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "006" : "008", "f1", 1))));
+    addLogFile(fileGroup, queryView,
+        new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "006" : "007", "f1", 0))));
+    addLogFile(fileGroup, queryView,
+        new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "006" : "008", "f1", 1))));
 
     // then: assert that the file slices are in-tact.
     assertEquals(3, fileGroup.getAllFileSlices().count());
@@ -162,6 +169,31 @@ public class TestHoodieFileGroup {
   }
 
   @Test
+  public void testUncommittedFirstLogDoesNotAnchorCommittedLogs() {
+    MockHoodieTimeline activeTimeline = new MockHoodieTimeline(Stream.of(
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "000", "000"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "002", "004"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "003", "005")
+    ).collect(Collectors.toList()));
+    CompletionTimeQueryView queryView = getMockCompletionTimeQueryView(activeTimeline);
+    HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
+
+    fileGroup.addLogFiles(queryView, Stream.of("003", "001", "002")
+        .map(instant -> new HoodieLogFile(new StoragePath(getLogFileName(instant))))
+        .collect(Collectors.toList()));
+
+    assertEquals(
+        CollectionUtils.createImmutableList("002"),
+        fileGroup.getAllFileSlicesIncludingInflight().map(FileSlice::getBaseInstantTime).collect(Collectors.toList()));
+    assertEquals(CollectionUtils.createImmutableList("002"),
+        fileGroup.getAllFileSlices().map(FileSlice::getBaseInstantTime).collect(Collectors.toList()));
+    FileSlice committedSlice = fileGroup.getLatestFileSlice().get();
+    assertEquals(CollectionUtils.createImmutableList("001", "002", "003"),
+        committedSlice.getLogFiles().map(HoodieLogFile::getDeltaCommitTime).sorted().collect(Collectors.toList()));
+  }
+
+  @Test
   public void testGetBaseInstantTime() {
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(Stream.of(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001", "001"),
@@ -176,13 +208,13 @@ public class TestHoodieFileGroup {
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
 
     HoodieLogFile logFile1 = new HoodieLogFile(new StoragePath(getLogFileName("001")));
-    fileGroup.addLogFile(queryView, logFile1);
+    addLogFile(fileGroup, queryView, logFile1);
     assertThat("no base file in the file group, returns the delta commit instant itself",
         fileGroup.getBaseInstantTime(queryView, logFile1), is("001"));
     assertThat(collectFileSlices(fileGroup), is("001"));
 
     HoodieLogFile logFile2 = new HoodieLogFile(new StoragePath(getLogFileName("002")));
-    fileGroup.addLogFile(queryView, logFile2);
+    addLogFile(fileGroup, queryView, logFile2);
     assertThat("no base file in the file group, returns the earliest delta commit instant",
         fileGroup.getBaseInstantTime(queryView, logFile2), is("001"));
     assertThat(collectFileSlices(fileGroup), is("001"));
@@ -192,7 +224,7 @@ public class TestHoodieFileGroup {
         collectFileSlices(fileGroup), is("001,003"));
 
     HoodieLogFile logFile3 = new HoodieLogFile(new StoragePath(getLogFileName("004")));
-    fileGroup.addLogFile(queryView, logFile3);
+    addLogFile(fileGroup, queryView, logFile3);
     assertThat("Assign the log file to maximum base instant time that less than or equals its completion time",
         fileGroup.getBaseInstantTime(queryView, logFile2), is("003"));
     assertThat(collectFileSlices(fileGroup), is("001,003"));
@@ -217,11 +249,19 @@ public class TestHoodieFileGroup {
           String instantTime = invocationOnMock.getArgument(1);
           return Option.ofNullable(completionTimeMap.get(instantTime));
         });
+    when(queryView.isCompleted(any(String.class)))
+        .thenAnswer((InvocationOnMock invocationOnMock) -> completionTimeMap.containsKey(invocationOnMock.getArgument(0)));
     return queryView;
   }
 
   private static String collectFileSlices(HoodieFileGroup fileGroup) {
     return fileGroup.getAllFileSlices().map(FileSlice::getBaseInstantTime).sorted().collect(Collectors.joining(","));
+  }
+
+  private static void addLogFile(HoodieFileGroup fileGroup,
+                                 CompletionTimeQueryView completionTimeQueryView,
+                                 HoodieLogFile logFile) {
+    fileGroup.addLogFiles(completionTimeQueryView, CollectionUtils.createImmutableList(logFile));
   }
 
   private static String getLogFileName(String instantTime) {

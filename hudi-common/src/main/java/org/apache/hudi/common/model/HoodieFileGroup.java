@@ -32,6 +32,7 @@ import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
@@ -117,12 +118,34 @@ public class HoodieFileGroup implements Serializable {
    *
    * <p>CAUTION: the log file must be added in sequence of the delta commit time.
    */
-  public void addLogFile(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
+  private void addLogFile(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
     String baseInstantTime = getBaseInstantTime(completionTimeQueryView, logFile);
     if (!fileSlices.containsKey(baseInstantTime)) {
       fileSlices.put(baseInstantTime, new FileSlice(fileGroupId, baseInstantTime));
     }
     fileSlices.get(baseInstantTime).addLogFile(logFile);
+  }
+
+  /**
+   * Add log files into the group.
+   *
+   * <p>When the group has no existing slice, the first completed log establishes the initial slice before any logs
+   * are added. This allows an earlier pending log to follow the normal pending-log rule and attach to the latest slice,
+   * instead of creating an uncommitted slice that would also hide later committed logs.
+   */
+  public void addLogFiles(CompletionTimeQueryView completionTimeQueryView, List<HoodieLogFile> logFiles) {
+    if (fileSlices.isEmpty()) {
+      List<HoodieLogFile> sortedLogFiles = logFiles.stream()
+          .sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+      sortedLogFiles.stream()
+          .filter(logFile -> completionTimeQueryView.isCompleted(logFile.getDeltaCommitTime()))
+          .findFirst()
+          .ifPresent(logFile -> addNewFileSliceAtInstant(logFile.getDeltaCommitTime()));
+      sortedLogFiles.forEach(logFile -> addLogFile(completionTimeQueryView, logFile));
+    } else {
+      logFiles.stream().sorted(HoodieLogFile.getLogFileComparator())
+          .forEach(logFile -> addLogFile(completionTimeQueryView, logFile));
+    }
   }
 
   @VisibleForTesting
