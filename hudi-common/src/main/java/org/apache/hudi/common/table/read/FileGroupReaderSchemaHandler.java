@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
@@ -266,6 +267,16 @@ public class FileGroupReaderSchemaHandler<T> {
     if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
       List<String> preCombineFields = cfg.getOrderingFields();
       requiredFields.addAll(preCombineFields);
+    }
+    // Add the partial-update changed-columns field (drives the FILL_UNCHANGED merge) so column
+    // pruning keeps it in the read schema. Unlike IGNORE_DEFAULTS / FILL_UNAVAILABLE (which inspect
+    // the data columns' own values), FILL_UNCHANGED reads a separate list column to decide which
+    // columns the incoming record actually changed; without it every unchanged column would fall back
+    // to the incoming placeholder.
+    String changedColumnsField = cfg.getString(
+        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CHANGED_FIELDS);
+    if (!StringUtils.isNullOrEmpty(changedColumnsField) && tableSchema.getField(changedColumnsField).isPresent()) {
+      requiredFields.add(changedColumnsField);
     }
     // Add `HOODIE_IS_DELETED_FIELD` field if exists.
     if (hasBuiltInDelete) {
