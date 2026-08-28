@@ -34,6 +34,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
+import org.apache.hudi.sink.buffer.PreemptiveMemorySegmentPool;
 import org.apache.hudi.sink.buffer.RowDataBucket;
 import org.apache.hudi.sink.buffer.TotalSizeTracer;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
@@ -65,7 +66,6 @@ import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -147,7 +147,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    */
   protected transient FlinkStreamWriteMetrics writeMetrics;
 
-  protected transient MemorySegmentPool memorySegmentPool;
+  protected transient PreemptiveMemorySegmentPool preemptiveMemorySegmentPool;
 
   protected transient RecordConverter recordConverter;
 
@@ -209,7 +209,9 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   private void initBuffer() {
     this.buckets = new LinkedHashMap<>();
-    this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(config, OptionsResolver.getWriteBufferSizeInBytes(config));
+    MemorySegmentPool delegate = this.memorySegmentPoolFactory.createMemorySegmentPool(
+        config, OptionsResolver.getWriteBufferSizeInBytes(config));
+    this.preemptiveMemorySegmentPool = new PreemptiveMemorySegmentPool(delegate, this::preemptMemory);
   }
 
   private void initRecordKeySort() {
@@ -322,7 +324,12 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
               getBucketInfo(record),
               this.config.get(FlinkOptions.WRITE_BATCH_SIZE)));
 
-      return bucket.writeRow(record.getRowData());
+      this.preemptiveMemorySegmentPool.setCurrentOwner(bucketID);
+      try {
+        return bucket.writeRow(record.getRowData());
+      } finally {
+        this.preemptiveMemorySegmentPool.clearCurrentOwner();
+      }
     } catch (MemoryPagesExhaustedException e) {
       log.info("There are not enough free pages in the memory pool to create a buffer; flushing is required first.");
       return false;
@@ -379,45 +386,43 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     // A creation failure leaves no bucket in the map, while a write failure leaves the
     // diverged bucket in the map so that its committed records can be flushed and disposed.
     RowDataBucket failedBucket = this.buckets.get(bucketID);
-    RowDataBucket bucketToFlush = this.buckets.values().stream()
-        .filter(bucket -> !bucketID.equals(bucket.getBucketId()) && !bucket.isEmpty())
-        .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
-        .orElse(null);
 
     if (failedBucket == null) {
-      if (bucketToFlush == null) {
+      if (!preemptMemory(bucketID)) {
         throw new HoodieException(
             "Not enough memory pages to create a RowData buffer and no non-empty bucket can be flushed");
       }
-      flushAndDisposeBucket(bucketToFlush);
       return;
     }
 
     ValidationUtils.checkState(
         failedBucket.isDiverged(), "The failed RowData bucket has not diverged");
+    // Allocation failures during writeRow have already tried to preempt inactive buckets. The
+    // diverged bucket only needs to flush its committed rows and return its own pages before retry.
+    flushAndDisposeBucket(failedBucket);
+  }
 
-    RuntimeException failure = null;
-    if (bucketToFlush != null) {
-      try {
-        flushAndDisposeBucket(bucketToFlush);
-      } catch (RuntimeException e) {
-        failure = e;
-      }
+  /**
+   * Flushes the largest non-empty bucket other than the excluded bucket to return its pages to the
+   * shared memory pool.
+   *
+   * <p>The excluded bucket is either in the middle of serializing a row or is about to retry buffer
+   * creation and must never be flushed here.
+   */
+  private boolean preemptMemory(String excludedBucketID) {
+    RowDataBucket bucketToFlush = findLargestNonEmptyBucketExcluding(excludedBucketID);
+    if (bucketToFlush == null) {
+      return false;
     }
+    flushAndDisposeBucket(bucketToFlush);
+    return true;
+  }
 
-    try {
-      flushAndDisposeBucket(failedBucket);
-    } catch (RuntimeException e) {
-      if (failure == null) {
-        failure = e;
-      } else {
-        failure.addSuppressed(e);
-      }
-    }
-
-    if (failure != null) {
-      throw failure;
-    }
+  private RowDataBucket findLargestNonEmptyBucketExcluding(String excludedBucketID) {
+    return this.buckets.values().stream()
+        .filter(bucket -> !excludedBucketID.equals(bucket.getBucketId()) && !bucket.isEmpty())
+        .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
+        .orElse(null);
   }
 
   private void retryBufferRecord(
@@ -563,12 +568,12 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   private BinaryInMemorySortBuffer createDataBuffer() {
     if (recordKeyComputer == null) {
-      return BufferUtils.createBuffer(rowType, memorySegmentPool);
+      return BufferUtils.createBuffer(rowType, preemptiveMemorySegmentPool);
     }
     try {
       return BufferUtils.createBuffer(
           rowType,
-          memorySegmentPool,
+          preemptiveMemorySegmentPool,
           recordKeyComputer,
           recordKeyComparator);
     } catch (MemoryPagesExhaustedException e) {
@@ -621,8 +626,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     }
 
     try {
-      if (this.memorySegmentPool instanceof Closeable) {
-        ((Closeable) this.memorySegmentPool).close();
+      if (this.preemptiveMemorySegmentPool != null) {
+        this.preemptiveMemorySegmentPool.close();
       }
     } catch (Exception e) {
       closeFailure = addCloseFailure(closeFailure, e);
