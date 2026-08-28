@@ -72,9 +72,12 @@ public class VariantSchemaUtils {
    * open. Two distinct record types with a same-named variant member still land in distinct
    * namespaces, which is exactly Avro's own notion of identity.
    *
-   * <p>The records generated under the variant -- its {@code typed_value} record and the
-   * {@code {value, typed_value}} struct per DDL field -- carry this namespace too, so a DDL field
-   * name is free to match a user-declared record type in the table schema.
+   * <p>The records generated under the variant carry this namespace too, so a DDL field name is
+   * free to match a user-declared record type in the table schema: the {@code typed_value} record
+   * sits directly in it, and the {@code {value, typed_value}} struct per DDL field one level below
+   * that, under the {@code typed_value} record itself (see
+   * {@link HoodieSchema#createShreddedFieldStruct(String, String, HoodieSchema)} for why a DDL
+   * field spelled {@code typed_value} or {@code <column>_variant} needs the extra level).
    */
   private static final String FORCED_VARIANT_NAMESPACE = "hoodie.variant.forced";
 
@@ -234,6 +237,12 @@ public class VariantSchemaUtils {
    * {@code variantAllowed} is false once the walk has stepped through an array element or a map
    * value, where the DDL does not reach; it goes back to true for the members of any record found
    * there, so {@code array<struct<v variant>>} shreds while {@code array<variant>} does not.
+   *
+   * <p>A genuine multi-branch UNION is out of scope. {@code getNonNullType} only unwraps the
+   * nullable two-branch form, so anything else comes back a UNION, hits {@code default} and passes
+   * through untouched -- a variant inside it is never forced, at any depth below it.
+   * {@code HoodieAvroWriteSupport.buildShredder} has the same arm, so the schema splice and the
+   * value walk agree on what a union does; a future change to either has to move both.
    */
   private static HoodieSchema applyForcedShreddingAt(HoodieSchema schema,
                                                      Map<String, HoodieSchema> typedValueFields,

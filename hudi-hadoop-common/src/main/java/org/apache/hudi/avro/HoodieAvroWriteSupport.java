@@ -191,6 +191,12 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
    * {@code GenericData.getField}, so a {@code typed_value} spliced into a nested variant while the
    * record below stays the untransformed {@code {metadata, value}} would have parquet read index 2
    * off a 2-field record and fail the write.</p>
+   *
+   * <p>A genuine multi-branch union is out of scope, deliberately: {@code getNonNullType()} hands
+   * one back unchanged (it only unwraps the nullable {@code [null, X]} shape), so it lands in
+   * {@code default} and any variant inside it stays unshredded. The schema side agrees -
+   * {@code VariantSchemaUtils.applyForcedShreddingAt} has the same {@code default} arm - so the two
+   * cannot drift apart on their own; changing either one has to be a deliberate change to both.</p>
    */
   private static Shredder buildShredder(HoodieSchema effective) {
     HoodieSchema unwrapped = effective.getNonNullType();

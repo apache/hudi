@@ -407,7 +407,8 @@ class TestHoodieVariantReconstruction {
     @Override
     public GenericRecord shredVariantRecord(
         GenericRecord unshreddedVariant, Schema shreddedSchema, HoodieSchema.Variant variantSchema) {
-      throw new UnsupportedOperationException("Not used by the reconstruction test");
+      throw new UnsupportedOperationException("the reconstruction test only rebuilds; the shred-side "
+          + "stub is TestHoodieAvroWriteSupportShredding.StubShreddingProvider");
     }
 
     @Override

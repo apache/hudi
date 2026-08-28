@@ -24,9 +24,9 @@ import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 
 /**
  * The parquet layouts the shredded-variant guards are tested against, plus the LIST/MAP walking
- * rules production resolves them by, shared by the suites that cover them:
- * [[TestParquetSchemaEvolutionUtils]] here, TestSpark40HoodieParquetReadSupport in
- * hudi-spark4.0.x and VariantShreddingTestSupport in hudi-spark, both of which pull this module's
+ * rules production resolves them by. The layouts are shared by [[TestParquetSchemaEvolutionUtils]]
+ * here and TestSpark40HoodieParquetReadSupport in hudi-spark4.0.x; the walking rules are used by
+ * VariantShreddingTestSupport in hudi-spark. Both of those out-of-module suites pull this module's
  * test-jar. One definition per shape keeps the guards pinned against the same files.
  *
  * Only parquet types are named here, so the object stays usable from every Spark-version module.

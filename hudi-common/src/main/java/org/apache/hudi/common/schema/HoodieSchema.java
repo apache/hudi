@@ -977,10 +977,15 @@ public class HoodieSchema implements Serializable {
    * </pre></p>
    *
    * <p>The record is named after the shredded field, so a caller that generates it from a user
-   * schema has to put it in a namespace it owns: with a null namespace the struct's full name is
-   * the bare field name, which collides with a user-declared record type of that name and makes
-   * {@code Schema.toString()} -- what gets stamped into the parquet footer -- throw
-   * "Can't redefine" at file open.
+   * schema has to put it in a namespace it owns, and one strictly below the variant's own. With a
+   * null namespace the struct's full name is the bare field name, which collides with a
+   * user-declared record type of that name; in the variant's own namespace a field spelled
+   * {@code typed_value} or {@code <column>_variant} collides with the generated records that sit
+   * there. Either collision breaks {@code Schema.toString()} -- what gets stamped into the parquet
+   * footer: on avro 1.11 it throws "Can't redefine" at file open, and on avro 1.12 it emits the
+   * second definition as a bare reference to the first, i.e. writes a footer schema that parses
+   * back into something else. {@link #createVariantShreddedObject} therefore passes the full name
+   * of the enclosing {@code typed_value} record.
    *
    * @param fieldName the name for the record (used as the Avro record name)
    * @param namespace the namespace of the generated record (can be null)
@@ -1008,7 +1013,11 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Creates a shredded field struct in the default (null) namespace.
+   * Creates a shredded field struct in the default (null) namespace. For callers outside the
+   * shredding splice that have no namespace to give -- tests build a field struct standalone,
+   * where there is no surrounding schema for the bare name to collide with. Anything generating
+   * structs into a user schema owes them a namespace and must use
+   * {@link #createShreddedFieldStruct(String, String, HoodieSchema)}.
    *
    * @param fieldName the name for the record (used as the Avro record name)
    * @param fieldType the schema for the typed_value within this field
@@ -1073,10 +1082,16 @@ public class HoodieSchema implements Serializable {
     // Build typed_value fields, each wrapped in the spec-compliant {value, typed_value} struct
     List<HoodieSchemaField> typedValueFields = new ArrayList<>();
     for (Map.Entry<String, HoodieSchema> entry : shreddedFields.entrySet()) {
-      // The field structs go into the variant's own namespace, alongside the variant record and
-      // the typed_value record: their names come from the DDL/inferred field names, which are
-      // free to match a user-declared record type in the table schema.
-      HoodieSchema fieldStruct = createShreddedFieldStruct(entry.getKey(), namespace, entry.getValue());
+      // The field structs go one level below the variant, under the typed_value record that holds
+      // them, so their full name is <namespace>.typed_value.<field>. Their names come from the
+      // DDL/inferred field names, which are free to match a user-declared record type in the table
+      // schema -- and equally free to be spelled "typed_value" or "<column>_variant", the names of
+      // the two records generated in the variant's own namespace. Only a namespace below both
+      // keeps all three apart; see createShreddedFieldStruct for what a collision costs.
+      HoodieSchema fieldStruct = createShreddedFieldStruct(
+          entry.getKey(),
+          namespace == null ? null : namespace + "." + Variant.VARIANT_TYPED_VALUE_FIELD,
+          entry.getValue());
       typedValueFields.add(HoodieSchemaField.of(
           entry.getKey(),
           HoodieSchema.createNullable(fieldStruct),

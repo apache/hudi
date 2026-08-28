@@ -311,12 +311,21 @@ public class TestVariantSchemaUtils {
     // The records generated UNDER the variant are named after the DDL fields, so they have to
     // carry the Hudi-owned namespace as well: a user record type named like a DDL field ("k"
     // here) otherwise shares the bare name with the generated {value, typed_value} struct and
-    // serializing throws "Can't redefine: k".
+    // serializing throws "Can't redefine: k". The namespace has to be one level BELOW the variant
+    // too, since a DDL field is equally free to be spelled "typed_value" or "<column>_variant" --
+    // the names of the typed_value record and of the variant record generated for column "v".
+    Map<String, HoodieSchema> clashingDdl = new LinkedHashMap<>();
+    clashingDdl.put("k", HoodieSchema.create(HoodieSchemaType.STRING));
+    clashingDdl.put("typed_value", HoodieSchema.create(HoodieSchemaType.STRING));
+    clashingDdl.put("v_variant", HoodieSchema.create(HoodieSchemaType.STRING));
     HoodieSchema ddlNameClash = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
         HoodieSchemaField.of("k", HoodieSchemaTestUtils.createRecord("k",
             HoodieSchemaField.of("n", HoodieSchema.create(HoodieSchemaType.LONG)))),
         HoodieSchemaField.of("v", HoodieSchema.createVariant())));
-    HoodieSchema forcedClash = VariantSchemaUtils.applyForcedShredding(ddlNameClash, forcedDdl());
+    HoodieSchema forcedClash = VariantSchemaUtils.applyForcedShredding(ddlNameClash, clashingDdl);
+    // Equality, not just a successful parse: avro 1.11 throws "Can't redefine" on the clash while
+    // avro 1.12 emits the second definition as a bare reference to the first, which parses fine
+    // and yields a different schema.
     assertEquals(forcedClash.toAvroSchema(), new Schema.Parser().parse(forcedClash.toString()));
   }
 
@@ -347,11 +356,8 @@ public class TestVariantSchemaUtils {
             HoodieSchemaTestUtils.createPlainShreddedVariantRecord("map_v", typedValue))));
 
     HoodieSchema stripped = VariantSchemaUtils.stripVariantShreddingByShape(schema);
-    HoodieSchema v = stripped.getField("v").get().schema().getNonNullType();
-    assertEquals(2, v.getFields().size());
-    assertFalse(v.getField("typed_value").isPresent());
-    assertTrue(v.getField("metadata").isPresent());
-    assertTrue(v.getField("value").isPresent());
+    assertEquals(Arrays.asList("metadata", "value"),
+        fieldNames(stripped.getField("v").get().schema().getNonNullType()));
     HoodieSchema s = stripped.getField("s").get().schema();
     assertEquals(Arrays.asList("metadata", "value"), fieldNames(s.getField("inner").get().schema()));
     assertEquals(Arrays.asList("metadata", "value"), fieldNames(stripped.getField("items").get().schema().getElementType()));
@@ -374,6 +380,12 @@ public class TestVariantSchemaUtils {
     HoodieSchema userStructStripped = VariantSchemaUtils.stripVariantShreddingByShape(HoodieSchema.createRecord(
         "rec", null, null, Collections.singletonList(HoodieSchemaField.of("s", userStruct)))).getField("s").get().schema();
     assertEquals(Arrays.asList("metadata", "value"), fieldNames(userStructStripped));
+    // Same false positive one level down, since the walk recurses.
+    HoodieSchema nestedUserStructStripped = VariantSchemaUtils.stripVariantShreddingByShape(HoodieSchema.createRecord(
+        "rec", null, null, Collections.singletonList(HoodieSchemaField.of("outer",
+            HoodieSchemaTestUtils.createRecord("outer_rec", HoodieSchemaField.of("s", userStruct))))))
+        .getField("outer").get().schema().getField("s").get().schema();
+    assertEquals(Arrays.asList("metadata", "value"), fieldNames(nestedUserStructStripped));
   }
 
   @Test

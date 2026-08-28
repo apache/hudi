@@ -20,16 +20,22 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.avro.VariantShreddingProvider;
-import org.apache.hudi.common.config.HoodieParquetConfig;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter;
+import org.apache.hudi.core.io.storage.HoodieAvroFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -41,8 +47,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroSchemaConverterWithTimestampNTZ;
 import org.apache.parquet.hadoop.ParquetReader;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
@@ -55,6 +59,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -66,12 +71,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieAvroWriteSupportShredding {
 
   /** The variant value bytes {@link StubShreddingProvider} shreds; anything else stays a residual. */
   private static final byte[] TYPED_MARKER = "typed".getBytes(StandardCharsets.UTF_8);
+  /** The variant value bytes {@link StubShreddingProvider} declines outright, returning null. */
+  private static final byte[] DECLINE_MARKER = "decline".getBytes(StandardCharsets.UTF_8);
   private static final byte[] RESIDUAL_VALUE = "residual".getBytes(StandardCharsets.UTF_8);
   private static final byte[] VARIANT_METADATA = new byte[] {1, 0, 0};
   private static final String SHREDDED_LEAF = "shredded";
@@ -134,9 +142,10 @@ class TestHoodieAvroWriteSupportShredding {
    * was stored.
    *
    * <p>The positions come from the schema, which the test above pins; what the rows add are the
-   * cases the value walk itself can get wrong: the residual fallback, a null nullable struct, a null
-   * variant carried by an array element, a nested record whose fields arrive in a different order,
-   * and one that does not carry a field at all.</p>
+   * cases the value walk itself can get wrong: the residual fallback, a provider that declines a
+   * variant and hands back null, a null nullable struct, a null map value, a null variant carried by
+   * an array element, a nested record whose fields arrive in a different order, and one that does
+   * not carry a field at all.</p>
    */
   @Test
   void writesNestedVariantsShreddedAtEveryPositionTheEffectiveSchemaDeclares() throws Exception {
@@ -147,20 +156,21 @@ class TestHoodieAvroWriteSupportShredding {
     props.setProperty(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(),
         StubShreddingProvider.class.getName());
 
-    AvroSchemaConverterWithTimestampNTZ converter = new AvroSchemaConverterWithTimestampNTZ();
-    MessageType messageType = converter.convert(HoodieAvroWriteSupport.generateEffectiveSchema(table, props));
-    // The factory converts its own generateEffectiveSchema result into the MessageType while the
-    // write support recomputes the effective schema for the records it builds. A splice that minted
-    // different record names on the second call would write records against a file layout they do
-    // not match, so the two computations have to agree exactly.
-    assertEquals(messageType.toString(),
-        converter.convert(HoodieAvroWriteSupport.generateEffectiveSchema(table, props)).toString(),
+    // The writer factory converts its own generateEffectiveSchema result into the file's MessageType
+    // while the write support constructor recomputes the effective schema for the records it builds.
+    // Record names never reach the MessageType, so comparing two MessageTypes could not tell the two
+    // computations apart; the Avro schema string, which does carry the generated record names, is
+    // what has to be deterministic - records built against one set of names would not match a file
+    // laid out from another.
+    assertEquals(
+        HoodieAvroWriteSupport.generateEffectiveSchema(table, props).toAvroSchema().toString(),
+        HoodieAvroWriteSupport.generateEffectiveSchema(table, props).toAvroSchema().toString(),
         "generateEffectiveSchema must be deterministic for the same schema and properties");
 
     Schema tableAvro = table.toAvroSchema();
     Schema structAvro = nonNull(tableAvro.getField("s").schema());
     Schema itemAvro = tableAvro.getField("items").schema().getElementType();
-    Schema mapValueAvro = tableAvro.getField("m").schema().getValueType();
+    Schema mapValueAvro = nonNull(tableAvro.getField("m").schema().getValueType());
     Schema variantAvro = tableAvro.getField("v").schema();
     // Input records reach the writer untransformed and carry their own schema, so the same field
     // names in another order - and a record missing one entirely - have to resolve by name.
@@ -182,11 +192,14 @@ class TestHoodieAvroWriteSupportShredding {
             "m", Collections.singletonMap("a", recordOf(mapValueAvro, "v", variant(variantAvro, TYPED_MARKER))),
             "arr", Collections.singletonList(variant(variantAvro, TYPED_MARKER)),
             "v", variant(variantAvro, TYPED_MARKER)),
-        // The residual fallback at depth, and a null variant under an array element.
+        // The residual fallback at depth, a null variant under an array element, and a variant the
+        // provider declines at a nullable position.
         recordOf(tableAvro,
             "id", 1,
             "s", recordOf(structAvro, "inner", variant(variantAvro, RESIDUAL_VALUE), "n", 1),
-            "items", Collections.singletonList(recordOf(itemAvro, "v", null, "label", "no variant")),
+            "items", Arrays.asList(
+                recordOf(itemAvro, "v", null, "label", "no variant"),
+                recordOf(itemAvro, "v", variant(variantAvro, DECLINE_MARKER), "label", "declined")),
             "m", Collections.emptyMap(),
             "arr", Collections.emptyList(),
             "v", variant(variantAvro, TYPED_MARKER)),
@@ -213,9 +226,17 @@ class TestHoodieAvroWriteSupportShredding {
             "items", Collections.emptyList(),
             "m", Collections.emptyMap(),
             "arr", Collections.emptyList(),
+            "v", variant(variantAvro, TYPED_MARKER)),
+        // A null map value: like the null struct, there is no record below it to walk.
+        recordOf(tableAvro,
+            "id", 5,
+            "s", null,
+            "items", Collections.emptyList(),
+            "m", Collections.singletonMap("a", null),
+            "arr", Collections.emptyList(),
             "v", variant(variantAvro, TYPED_MARKER)));
 
-    List<GenericRecord> readBack = writeAndReadBack(table, props, messageType, rows);
+    List<GenericRecord> readBack = writeAndReadBack(table, props, "shredded.parquet", rows);
     assertEquals(rows.size(), readBack.size(), "every row must round trip");
 
     GenericRecord shredded = readBack.get(0);
@@ -227,7 +248,8 @@ class TestHoodieAvroWriteSupportShredding {
     assertTypedValue((GenericRecord) ((GenericRecord) items.get(1)).get("v"), "items[1].v");
     assertEquals("second", String.valueOf(((GenericRecord) items.get(1)).get("label")),
         "a non-variant sibling inside an array element must survive the rewrite");
-    assertTypedValue((GenericRecord) mapValue((Map<?, ?>) shredded.get("m"), "a").get("v"), "m[a].v");
+    assertTypedValue((GenericRecord) ((GenericRecord) mapValue((Map<?, ?>) shredded.get("m"), "a")).get("v"),
+        "m[a].v");
     assertTypedValue((GenericRecord) shredded.get("v"), "top-level v");
     // The bare array element is the one position the DDL leaves alone: the file declares no
     // typed_value column there at all, and the value has to arrive untouched.
@@ -240,8 +262,11 @@ class TestHoodieAvroWriteSupportShredding {
     GenericRecord residualInner = (GenericRecord) ((GenericRecord) residual.get("s")).get("inner");
     assertNull(residualInner.get("typed_value"), "a value the provider does not match must stay a residual");
     assertEquals(ByteBuffer.wrap(RESIDUAL_VALUE), residualInner.get("value"), "residual value at depth");
-    assertNull(((GenericRecord) ((List<?>) residual.get("items")).get(0)).get("v"),
+    List<?> residualItems = (List<?>) residual.get("items");
+    assertNull(((GenericRecord) residualItems.get(0)).get("v"),
         "a null variant under an array element must pass through as null");
+    assertNull(((GenericRecord) residualItems.get(1)).get("v"),
+        "a variant the provider declines must land as null at a nullable position");
 
     assertNull(readBack.get(2).get("s"), "a null nullable struct must pass through as null");
 
@@ -252,6 +277,60 @@ class TestHoodieAvroWriteSupportShredding {
     GenericRecord withoutN = (GenericRecord) readBack.get(4).get("s");
     assertTypedValue((GenericRecord) withoutN.get("inner"), "s.inner from an input record without n");
     assertNull(withoutN.get("n"), "a field the input does not carry must be left null");
+
+    assertNull(mapValue((Map<?, ?>) readBack.get(5).get("m"), "a"),
+        "a null map value must pass through as null");
+
+    // The same declined variant at a NON-nullable position is not a null the file can hold:
+    // rt_map_value_record.v is a required group, so parquet-avro fails the write outright rather
+    // than storing anything. Its own file, so the rows above stay unaffected.
+    GenericRecord declinedAtRequiredPosition = recordOf(tableAvro,
+        "id", 6,
+        "s", null,
+        "items", Collections.emptyList(),
+        "m", Collections.singletonMap("a",
+            recordOf(mapValueAvro, "v", variant(variantAvro, DECLINE_MARKER))),
+        "arr", Collections.emptyList(),
+        "v", variant(variantAvro, TYPED_MARKER));
+    Exception failure = assertThrows(Exception.class,
+        () -> writeAndReadBack(table, props, "declined.parquet",
+            Collections.singletonList(declinedAtRequiredPosition)),
+        "a declined variant at a required position must fail the write, not write a null");
+    assertTrue(messageChain(failure).contains("Null-value for required field"),
+        "expected parquet-avro's required-field failure, got: " + messageChain(failure));
+  }
+
+  /**
+   * The provider gate is keyed off the whole schema tree, not the root fields. A table whose only
+   * shredded variant sits below the top level needs a provider just as much as one shredded at the
+   * root, and having none configured has to fail at writer construction rather than NPE on the
+   * first record. Master only threw when a ROOT field was shredded, so a nested-only schema is
+   * exactly the failure mode this change introduces.
+   */
+  @Test
+  void nestedOnlyShreddedSchemaWithoutAProviderFailsAtConstruction() {
+    Map<String, HoodieSchema> ddlFields = new LinkedHashMap<>();
+    ddlFields.put("k", HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema table = HoodieSchema.createRecord(
+        "nested_only_record", "org.apache.hudi.test", null,
+        Collections.singletonList(HoodieSchemaField.of("s", HoodieSchema.createRecord(
+            "nested_only_s_record", "org.apache.hudi.test", null,
+            Collections.singletonList(HoodieSchemaField.of("inner",
+                HoodieSchema.createVariantShreddedObject(
+                    "inner_variant", "org.apache.hudi.test", null, ddlFields)))))));
+
+    // Shredding on, no forced DDL (the schema is already shredded) and no provider named: this
+    // module ships none, and the write support does not auto-detect - only the factory does.
+    Properties props = new Properties();
+    props.setProperty(HoodieStorageConfig.PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.key(), "true");
+    MessageType messageType = new AvroSchemaConverterWithTimestampNTZ()
+        .convert(HoodieAvroWriteSupport.generateEffectiveSchema(table, props));
+
+    HoodieException failure = assertThrows(HoodieException.class,
+        () -> new HoodieAvroWriteSupport(messageType, table, Option.empty(), props),
+        "a variant shredded only below the top level still needs a shredding provider");
+    assertTrue(failure.getMessage().contains("no VariantShreddingProvider"),
+        "expected the missing-provider message, got: " + failure.getMessage());
   }
 
   /**
@@ -265,9 +344,10 @@ class TestHoodieAvroWriteSupportShredding {
    * depth off the forced-shredding DDL, and a hand-authored write schema can put typed_value on a
    * bare array element or map value too, which no DDL forces. A clustering/compaction schema read
    * back from such a file carries typed_value below the top level, so every arm is pinned here.
-   * Only the top-level and nested-record arms are the fix: the array-element and map-value arms pin
+   * No arm here is evidence for this change. The top-level and nested-record arms are master's test
+   * verbatim, and master already recursed into records; the array-element and map-value arms pin
    * pre-existing behaviour of {@code VariantSchemaUtils#stripVariantShreddingAt} and pass on master
-   * too, so they are regression cover, not evidence for this change.
+   * too. The whole test is regression cover for the strip direction while the forced splice grows.
    */
   @Test
   void disablingShreddingStripsTypedValueAtEveryDepth() {
@@ -394,49 +474,63 @@ class TestHoodieAvroWriteSupportShredding {
 
   /**
    * The round-trip table schema: a variant under a nullable struct (next to a plain sibling), under
-   * a struct in an array and in a map, one directly under an array - the position the DDL leaves
-   * unshredded - and one at the top level as the control.
+   * a struct in an array and under a nullable struct in a map, one directly under an array - the
+   * position the DDL leaves unshredded - and one at the top level as the control.
    */
   private static HoodieSchema roundTripRecord() {
     HoodieSchema struct = HoodieSchema.createRecord("rt_s_record", "org.apache.hudi.test", null, Arrays.asList(
         HoodieSchemaField.of("inner", HoodieSchema.createVariant()),
         // Nullable so that an input record without it is legal rather than a broken write.
         HoodieSchemaField.of("n", HoodieSchema.createNullable(HoodieSchemaType.INT))));
-    // The sibling is not decoration: parquet-avro reads the 2-level list layout by guessing whether
-    // the repeated group is the element or a synthetic wrapper, and a single-field element record
-    // makes that guess ambiguous. A second field settles it, so the raw read below stays readable.
+    // The sibling is not decoration, and not a shredding concern. The Avro write path emits 2-level
+    // parquet lists (parquet-avro's default parquet.avro.write-old-list-structure=true; the row
+    // writer emits 3-level), and parquet-avro before 1.15 decides whether a single-field repeated
+    // group is the element or a synthetic wrapper with a check that is sensitive to the Avro record
+    // NAME (AvroRecordConverter#isElementType), which never matches the name Hudi gives the element
+    // record. So on the parquet-avro this module builds against (1.13.1) Hudi's own
+    // HoodieAvroParquetReader cannot read array<struct<single field>> at all, shredded or not; that
+    // is a reader limitation tracked as apache/hudi#19782, not a shredding bug. parquet 1.15+
+    // recognizes the group by its "array" name instead. The second field keeps this fixture clear
+    // of it.
     HoodieSchema itemStruct = HoodieSchema.createRecord("rt_item_record", "org.apache.hudi.test", null, Arrays.asList(
         HoodieSchemaField.of("v", HoodieSchema.createNullable(HoodieSchema.createVariant())),
         HoodieSchemaField.of("label", HoodieSchema.createNullable(HoodieSchemaType.STRING))));
+    // The struct is nullable below so a null map value is a legal row; the variant inside it is not,
+    // which makes it the required position a declined variant has to fail the write at.
     HoodieSchema mapValueStruct = HoodieSchema.createRecord("rt_map_value_record", "org.apache.hudi.test", null,
         Collections.singletonList(HoodieSchemaField.of("v", HoodieSchema.createVariant())));
     return HoodieSchema.createRecord("test_round_trip_record", "org.apache.hudi.test", null, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
         HoodieSchemaField.of("s", HoodieSchema.createNullable(struct)),
         HoodieSchemaField.of("items", HoodieSchema.createArray(itemStruct)),
-        HoodieSchemaField.of("m", HoodieSchema.createMap(mapValueStruct)),
+        HoodieSchemaField.of("m", HoodieSchema.createMap(HoodieSchema.createNullable(mapValueStruct))),
         HoodieSchemaField.of("arr", HoodieSchema.createArray(HoodieSchema.createVariant())),
         HoodieSchemaField.of("v", HoodieSchema.createVariant())));
   }
 
   /**
-   * Writes the rows through a real {@link HoodieAvroWriteSupport} and reads the file back raw. The
-   * read is deliberately not HoodieAvroParquetReader: that one rebuilds the variants through the
-   * provider, which would hide the typed_value columns under test. parquet-avro stores the write
-   * schema in the footer, so the records come back at the effective (shredded) schema.
+   * Writes the rows through the public writer factory and reads the file back raw. Going through
+   * {@link HoodieFileWriterFactory} rather than a hand-built write support is the point: it is the
+   * production route, and it owns both halves the round trip depends on - it carries the properties
+   * into {@link HoodieAvroWriteSupport#generateEffectiveSchema} and converts that same effective
+   * schema into the file's MessageType. {@link MetaFieldsMode#NONE} keeps the writer from adding the
+   * Hudi meta columns, so the file holds only the table's own.
+   *
+   * <p>The read is deliberately not HoodieAvroParquetReader: that one rebuilds the variants through
+   * the provider, which would hide the typed_value columns under test. parquet-avro stores the write
+   * schema in the footer, so the records come back at the effective (shredded) schema.</p>
    */
-  private List<GenericRecord> writeAndReadBack(HoodieSchema table, Properties props, MessageType messageType,
+  private List<GenericRecord> writeAndReadBack(HoodieSchema table, Properties props, String fileName,
                                                List<GenericRecord> rows) throws Exception {
     HoodieStorage storage = HoodieTestUtils.getStorage(tmpDir.toString());
-    StoragePath path = new StoragePath(tmpDir.resolve("shredded.parquet").toAbsolutePath().toString());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(messageType, table, Option.empty(), props);
-    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig = new HoodieParquetConfig<>(
-        writeSupport, CompressionCodecName.UNCOMPRESSED, ParquetWriter.DEFAULT_BLOCK_SIZE,
-        ParquetWriter.DEFAULT_PAGE_SIZE, 1024 * 1024 * 1024L, storage.getConf(), 0.1, true);
-    try (HoodieAvroParquetWriter writer = new HoodieAvroParquetWriter(
-        path, parquetConfig, "000", new LocalTaskContextSupplier(), MetaFieldsMode.NONE)) {
+    StoragePath path = new StoragePath(tmpDir.resolve(fileName).toAbsolutePath().toString());
+    HoodieConfig config = new HoodieConfig(TypedProperties.copy(props));
+    config.setValue(HoodieTableConfig.META_FIELDS_MODE, MetaFieldsMode.NONE.name());
+    try (HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
+        "000", path, storage, config, table, new LocalTaskContextSupplier(),
+        HoodieRecord.HoodieRecordType.AVRO)) {
       for (GenericRecord row : rows) {
-        writer.writeAvro(String.valueOf(row.get("id")), row);
+        ((HoodieAvroFileWriter) writer).writeAvro(String.valueOf(row.get("id")), row);
       }
     }
 
@@ -476,13 +570,27 @@ class TestHoodieAvroWriteSupportShredding {
     assertEquals(SHREDDED_LEAF, String.valueOf(ddlField.get("typed_value")), label + " typed_value leaf");
   }
 
-  /** parquet-avro hands map keys back as Utf8, which never equals a String key. */
-  private static GenericRecord mapValue(Map<?, ?> map, String key) {
-    return (GenericRecord) map.entrySet().stream()
+  /**
+   * The value under {@code key}, which may be null - the entry is looked up first so that a present
+   * key with a null value is distinguishable from a missing key. parquet-avro hands map keys back as
+   * Utf8, which never equals a String key.
+   */
+  private static Object mapValue(Map<?, ?> map, String key) {
+    return map.entrySet().stream()
         .filter(entry -> key.equals(String.valueOf(entry.getKey())))
-        .map(Map.Entry::getValue)
         .findFirst()
-        .orElseThrow(() -> new AssertionError("no entry " + key + " in " + map));
+        .orElseThrow(() -> new AssertionError("no entry " + key + " in " + map))
+        .getValue();
+  }
+
+  /** The whole cause chain rendered, so an assertion does not depend on which layer wraps a failure. */
+  private static String messageChain(Throwable throwable) {
+    StringBuilder chain = new StringBuilder();
+    for (Throwable current = throwable; current != null && current != current.getCause();
+         current = current.getCause()) {
+      chain.append(current).append('\n');
+    }
+    return chain.toString();
   }
 
   /** The non-null branch of a nullable Avro union, or the schema itself. */
@@ -516,22 +624,29 @@ class TestHoodieAvroWriteSupportShredding {
 
   /**
    * Stands in for the engine provider the write support loads reflectively, so the value walk can be
-   * driven without Spark on the classpath. The rule is deterministic and exercises both outcomes: a
-   * variant whose value bytes are {@link #TYPED_MARKER} shreds - every DDL field struct gets its
-   * typed_value leaf and the top-level residual goes null - and anything else keeps its value in the
-   * residual with typed_value left null. Must be public with a no-arg constructor for
-   * {@code ReflectionUtils.loadClass}.
+   * driven without Spark on the classpath. The rule is deterministic and exercises all three
+   * outcomes a real provider has: a variant whose value bytes are {@link #TYPED_MARKER} shreds -
+   * every DDL field struct gets its typed_value leaf and the top-level residual goes null;
+   * {@link #DECLINE_MARKER} returns null, which is what {@code Spark4VariantShreddingProvider} does
+   * for a variant whose value or metadata is null, and the caller writes that null straight into the
+   * record; anything else keeps its value in the residual with typed_value left null. Must be public
+   * with a no-arg constructor for {@code ReflectionUtils.loadClass}.
    */
   public static class StubShreddingProvider implements VariantShreddingProvider {
 
     @Override
     public GenericRecord shredVariantRecord(GenericRecord unshreddedVariant, Schema shreddedSchema,
                                             HoodieSchema.Variant variantSchema) {
+      ByteBuffer value = (ByteBuffer) unshreddedVariant.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD);
+      if (isMarker(value, DECLINE_MARKER)) {
+        // The real provider declines the same way (null value or metadata), and VariantShredder
+        // passes the null straight into the record it is building.
+        return null;
+      }
       GenericRecord shredded = new GenericData.Record(shreddedSchema);
       shredded.put(HoodieSchema.Variant.VARIANT_METADATA_FIELD,
           unshreddedVariant.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD));
-      ByteBuffer value = (ByteBuffer) unshreddedVariant.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD);
-      if (!isTypedMarker(value)) {
+      if (!isMarker(value, TYPED_MARKER)) {
         // The residual fallback: typed_value stays null and the binary is carried as-is.
         shredded.put(HoodieSchema.Variant.VARIANT_VALUE_FIELD, value);
         return shredded;
@@ -562,21 +677,19 @@ class TestHoodieAvroWriteSupportShredding {
       switch (leafSchema.getType()) {
         case STRING:
           return SHREDDED_LEAF;
-        case INT:
-          return 1;
         default:
           throw new UnsupportedOperationException("no stub value for " + leafSchema);
       }
     }
 
-    private static boolean isTypedMarker(ByteBuffer value) {
+    private static boolean isMarker(ByteBuffer value, byte[] marker) {
       if (value == null) {
         return false;
       }
       ByteBuffer copy = value.duplicate();
       byte[] bytes = new byte[copy.remaining()];
       copy.get(bytes);
-      return Arrays.equals(bytes, TYPED_MARKER);
+      return Arrays.equals(bytes, marker);
     }
   }
 }

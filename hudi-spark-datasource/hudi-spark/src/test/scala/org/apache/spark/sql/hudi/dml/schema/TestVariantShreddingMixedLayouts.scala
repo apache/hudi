@@ -817,6 +817,10 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     }
   }
 
+  // -----------------------------------------------------------------------------------------------
+  // F2. Vectorized read decision
+  // -----------------------------------------------------------------------------------------------
+
   test("supportBatch turns off vectorization for a variant at any depth") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
@@ -826,10 +830,11 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     // on, nested columns batch-readable, so a variant one struct, array or map deep used to reach
     // the vectorized reader even though a top-level one did not - while #18605's SIGBUS is in the
     // UnsafeRow encoding of the variant vectors RangePartitioner samples, and it samples WHOLE
-    // rows, which a nesting level does nothing to hide. That setting is off by default, so Spark's
-    // own nested gate hides the hole until a user turns it on: the shapes below are checked with
-    // it on, and with the vectorized reader itself on (the shared test session does not promise
-    // Spark's default), where the variant-free twins are vectorized and only the guard can say no.
+    // rows, which a nesting level does nothing to hide. That setting has defaulted to on since
+    // Spark 3.3.0, so the hole was reachable at stock settings and not only once a user opted in.
+    // The withSQLConf below turns it and the vectorized reader itself on as an explicit pin rather
+    // than as an opt-in - the shared test session does not promise Spark's defaults - so the
+    // variant-free twins are vectorized and only the guard can say no.
     //
     // Nothing below opens a table: supportBatch decides off the schema it is handed, so the
     // constructor arguments only have to be well-formed.
