@@ -58,6 +58,7 @@ import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
+import org.apache.hudi.execution.bulkinsert.SpatialCurveSortPartitionerBase;
 import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -204,12 +205,18 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
     return orderByColumnsOpt.map(orderByColumns -> {
       // The custom-columns partitioners re-validate in their constructors; this earlier check
-      // additionally covers the spatial-curve (ZORDER/HILBERT) partitioners below.
+      // additionally covers the spatial-curve (ZORDER/HILBERT) partitioners below, which hold no
+      // schema of their own. The spatial arm additionally requires a top-level name, see
+      // SpatialCurveSortPartitionerBase.validateOrderByColumns.
       SortUtils.validateSortableColumns(orderByColumns, schema);
       HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = getWriteConfig().getLayoutOptimizationStrategy();
       switch (layoutOptStrategy) {
         case ZORDER:
         case HILBERT:
+          // Both partitioners build the curve over a frame carrying the meta columns, so they are
+          // validated against the same schema the RDD one is handed below; addMetadataFields is
+          // idempotent, so it does not matter whether the caller resolved it with them or without.
+          SpatialCurveSortPartitionerBase.validateOrderByColumns(orderByColumns, HoodieSchemaUtils.addMetadataFields(schema), layoutOptStrategy);
           return isRowPartitioner
               ? new RowSpatialCurveSortPartitioner(getWriteConfig())
               : new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), orderByColumns, layoutOptStrategy,

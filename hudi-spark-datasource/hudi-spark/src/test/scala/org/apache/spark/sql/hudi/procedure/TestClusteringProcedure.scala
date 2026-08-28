@@ -1018,6 +1018,17 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       metaClient.reloadActiveTimeline()
       assertResult(0L)(ClusteringUtils.getAllPendingClusteringPlans(metaClient).count())
 
+      // A space-curve strategy narrows the rule: the linear partitioners sort a nested path, but
+      // the space-curve helpers look their columns up among the frame's top-level fields by exact
+      // name, so the procedure rejects the combination - up front still, once the write config has
+      // resolved the strategy, because a rejection at execution time would leave the plan pending.
+      spark.sql(s"insert into $tableName select 6, 'a6', named_struct('level', 6, 'tags', map('k', 'v')), 1005")
+      checkNestedExceptionContains(
+        s"call run_clustering(table => '$tableName', order => 's.level', order_strategy => 'z-order')")(
+        "Sort column 's.level' is not a top-level column")
+      metaClient.reloadActiveTimeline()
+      assertResult(0L)(ClusteringUtils.getAllPendingClusteringPlans(metaClient).count())
+
       // The config route has no procedure to check the column up front, so it is the partitioner
       // constructors and the execution strategy that reject it (SortUtils.validateSortableColumns),
       // now resolving the dotted path instead of skipping it and letting Spark's AnalysisException
@@ -1028,7 +1039,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         "hoodie.clustering.inline.max.commits" -> "1",
         sortColumnsKey -> "s.tags") {
         checkNestedExceptionContains(() => spark.sql(
-          s"insert into $tableName select 6, 'a6', named_struct('level', 6, 'tags', map('k', 'v')), 1005"))(
+          s"insert into $tableName select 7, 'a7', named_struct('level', 7, 'tags', map('k', 'v')), 1006"))(
           "Sorting by column 's.tags' of type MAP is not supported")
       }
     }
