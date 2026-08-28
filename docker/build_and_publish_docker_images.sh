@@ -366,7 +366,12 @@ push_images() {
   if [ "${FAILURE_COUNT}" -eq 0 ]; then
     echo "All images pushed successfully!"
   else
+    # Fail the script. Publishing overwrites the shared apachehudi/... repositories, so a partial
+    # push has to be distinguishable from a complete one by exit code alone: each docker push runs
+    # inside an if, which exempts it from set -e, so without this the script would report success
+    # after leaving the registry with some images at the new tag and some stale.
     echo "Some pushes failed. Review logs above."
+    return 1
   fi
 }
 

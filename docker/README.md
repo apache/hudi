@@ -40,7 +40,7 @@ Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `p
 `BASE_IMAGE_TAG` build arg, which `build_and_publish_docker_images.sh` sets automatically.
 
 `spark_base` additionally takes `HADOOP_AWS_VERSION`, `AWS_SDK_VERSION` and `ANALYTICS_ACCELERATOR_VERSION` for the
-S3A jars it adds to the Spark classpath. `build_docker_images.sh` derives all three from `--spark-version`, matching
+S3A jars it adds to the Spark classpath. `build_and_publish_docker_images.sh` derives all three from `--spark-version`, matching
 the Hadoop line each Spark distribution bundles: Spark 4.0.x gets `hadoop-aws` 3.4.1, Spark 4.1.x gets 3.4.2 and
 Spark 4.2.x gets 3.5.0, all with the AWS SDK v2 bundle; Spark 3.x gets 3.3.4 with the SDK v1 bundle. Spark 4.1.x and
 4.2.x also get `analyticsaccelerator-s3` (1.2.1 and 1.3.1), which backs the S3A analytics input stream that
