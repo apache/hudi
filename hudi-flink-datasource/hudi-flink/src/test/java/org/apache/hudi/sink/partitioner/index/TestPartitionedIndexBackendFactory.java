@@ -65,22 +65,22 @@ public class TestPartitionedIndexBackendFactory {
   }
 
   @Test
-  void testRocksDBBackendTypeReturnsRocksDBPartitionedIndexBackend() throws Exception {
+  void testRocksDBBackendTypeIsNotYetSelectableAndFallsBackToRecordLevelIndexBackend() throws Exception {
     conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
     conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BASE_PATH, tempFile.getAbsolutePath());
     try (PartitionedIndexBackend backend = PartitionedIndexBackendFactory.create(
         conf, false, (partitionPath, recordKey, fileId) -> true)) {
-      assertInstanceOf(RocksDBPartitionedIndexBackend.class, backend);
+      assertInstanceOf(RecordLevelIndexBackend.class, backend);
     }
   }
 
   @Test
-  void testRocksDBBackendTypeIsCaseInsensitive() throws Exception {
+  void testRocksDBBackendTypeIsCaseInsensitivelyNotYetSelectable() throws Exception {
     conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "RocksDB");
     conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BASE_PATH, tempFile.getAbsolutePath());
     try (PartitionedIndexBackend backend = PartitionedIndexBackendFactory.create(
         conf, false, (partitionPath, recordKey, fileId) -> true)) {
-      assertInstanceOf(RocksDBPartitionedIndexBackend.class, backend);
+      assertInstanceOf(RecordLevelIndexBackend.class, backend);
     }
   }
 

@@ -20,11 +20,13 @@ package org.apache.hudi.sink.partitioner.index;
 
 import org.apache.hudi.configuration.FlinkOptions;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 
 /**
  * Factory to create a {@link PartitionedIndexBackend} used by the dynamic bucket assign function.
  */
+@Slf4j
 public class PartitionedIndexBackendFactory {
   private static final String ROCKSDB_BACKEND_TYPE = "rocksdb";
 
@@ -47,7 +49,12 @@ public class PartitionedIndexBackendFactory {
     }
     String backendType = conf.get(FlinkOptions.INDEX_RLI_BACKEND_TYPE);
     if (ROCKSDB_BACKEND_TYPE.equalsIgnoreCase(backendType)) {
-      return new RocksDBPartitionedIndexBackend(conf.get(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BASE_PATH));
+      // TODO: RocksDBPartitionedIndexBackend does not yet bootstrap or fall back to the MDT-backed
+      // record level index, so on a non-empty table (or after a task/job restart) it would miss
+      // committed keys and mis-route them as inserts. Keep it unselectable until partition
+      // bootstrap / on-demand MDT loading is implemented.
+      log.warn("Backend type '{}' is not yet supported for selection; falling back to the metadata-table-backed "
+          + "record level index backend.", backendType);
     }
     return new RecordLevelIndexBackend(conf, bootstrapFilter);
   }
