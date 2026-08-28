@@ -29,7 +29,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.util.CommonClientUtils;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -40,7 +39,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.util.CommonClientUtils.areTableVersionsCompatible;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -117,44 +115,34 @@ class TestCommonClientUtils {
   }
 
   /**
-   * Every base file format must map to a log block type: a case missing from the
-   * {@code getLogBlockType} switch only surfaces as a {@code HoodieException} on the first MOR
-   * log write, which is what happened for VORTEX (apache/hudi#19252). Sweeps the enum (never a
-   * hardcoded list); HOODIE_LOG is the log format itself and can never be a base file format.
+   * Every base file format needs a case in the getLogBlockType switch; a missing one only surfaces as a
+   * HoodieException on the inline log write path (write version below TEN), which is how VORTEX shipped (#19252).
    */
-  // TODO: drop the VORTEX exclusion once apache/hudi#19252 adds the case (see testGetLogBlockTypeForVortex).
+  // TODO(#19252): drop the VORTEX exclusion once the VORTEX case lands in getLogBlockType.
   @ParameterizedTest
   @EnumSource(value = HoodieFileFormat.class, mode = EnumSource.Mode.EXCLUDE, names = {"HOODIE_LOG", "VORTEX"})
   void testGetLogBlockTypeMapsEveryBaseFileFormat(HoodieFileFormat format) {
-    assertNotNull(
-        CommonClientUtils.getLogBlockType(writeConfigWithoutExplicitLogFormat(), tableConfigWithBaseFormat(format)),
-        () -> "getLogBlockType must return a log block type for base file format " + format
-            + "; add the missing case to the switch in CommonClientUtils#getLogBlockType");
-  }
-
-  /**
-   * Same check as {@link #testGetLogBlockTypeMapsEveryBaseFileFormat} for VORTEX, asserting
-   * the mapping apache/hudi#19252 adds (VORTEX -> AVRO_DATA_BLOCK).
-   */
-  @Disabled("Depends on apache/hudi#19252: on current master getLogBlockType has no VORTEX case and throws "
-      + "HoodieException. Enable once #19252 is merged.")
-  @Test
-  void testGetLogBlockTypeForVortex() {
-    assertEquals(HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK,
-        CommonClientUtils.getLogBlockType(
-            writeConfigWithoutExplicitLogFormat(), tableConfigWithBaseFormat(HoodieFileFormat.VORTEX)));
-  }
-
-  private static HoodieWriteConfig writeConfigWithoutExplicitLogFormat() {
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(writeConfig.getLogDataBlockFormat()).thenReturn(Option.empty());
-    return writeConfig;
+    when(tableConfig.getBaseFileFormat()).thenReturn(format);
+
+    assertEquals(expectedLogBlockType(format), CommonClientUtils.getLogBlockType(writeConfig, tableConfig));
   }
 
-  private static HoodieTableConfig tableConfigWithBaseFormat(HoodieFileFormat format) {
-    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    when(tableConfig.getBaseFileFormat()).thenReturn(format);
-    return tableConfig;
+  private static HoodieLogBlock.HoodieLogBlockType expectedLogBlockType(HoodieFileFormat format) {
+    switch (format) {
+      case PARQUET:
+      case ORC:
+      case LANCE:
+      case VORTEX:
+        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+      case HFILE:
+        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
+      default:
+        throw new IllegalArgumentException("No expected log block type for " + format
+            + "; add it here and to CommonClientUtils#getLogBlockType");
+    }
   }
 
   @ParameterizedTest(name = "Table version {0} with write version {1} should be valid: {2}")
