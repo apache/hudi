@@ -72,6 +72,7 @@ public class TestHoodieAvroParquetConfigInjector {
 
     // Create config with the custom injector
     HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME, "zstd");
     config.setValue(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED, "true"); // Start with dictionary enabled
     config.setValue(HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS, DisableDictionaryInjector.class.getName());
 
@@ -150,6 +151,7 @@ public class TestHoodieAvroParquetConfigInjector {
 
     // Create config WITHOUT injector - should use default settings
     HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME, "zstd");
     config.setValue(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED, "true");
 
     // Create writer and write some data

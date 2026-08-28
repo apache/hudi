@@ -30,10 +30,8 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.Serializable;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.apache.hudi.common.util.ConfigUtils.getRawValueWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.loadGlobalProperties;
@@ -135,17 +133,6 @@ public class HoodieConfig implements Serializable {
   }
 
   protected void setDefaults(String configClassName) {
-    setDefaults(configClassName, Collections.emptySet());
-  }
-
-  /**
-   * Sets defaults declared by the given config class, except for properties whose defaults need
-   * to be resolved by a higher-level config with additional context.
-   *
-   * @param configClassName   config class declaring the properties
-   * @param excludedProperties properties to leave unset
-   */
-  protected void setDefaults(String configClassName, Set<ConfigProperty<?>> excludedProperties) {
     Class<?> configClass = ReflectionUtils.getClass(configClassName);
     Arrays.stream(configClass.getDeclaredFields())
         .filter(f -> Modifier.isStatic(f.getModifiers()))
@@ -153,8 +140,7 @@ public class HoodieConfig implements Serializable {
         .forEach(f -> {
           try {
             ConfigProperty<?> cfgProp = (ConfigProperty<?>) f.get("null");
-            if (!excludedProperties.contains(cfgProp)
-                && (cfgProp.hasDefaultValue() || cfgProp.hasInferFunction())) {
+            if (cfgProp.hasDefaultValue() || cfgProp.hasInferFunction()) {
               setDefaultValue(cfgProp);
             }
           } catch (IllegalAccessException e) {

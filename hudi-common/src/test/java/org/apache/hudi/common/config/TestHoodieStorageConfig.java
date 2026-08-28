@@ -82,8 +82,10 @@ public class TestHoodieStorageConfig {
   @Test
   void testParquetCompressionCodecDefaultIsDeferred() {
     HoodieStorageConfig defaultStorageConfig = HoodieStorageConfig.newBuilder().build();
+    assertFalse(PARQUET_COMPRESSION_CODEC_NAME.hasDefaultValue());
+    assertEquals("ZSTD for Flink and Spark 3.5 or newer; GZIP for Java and older Spark versions",
+        PARQUET_COMPRESSION_CODEC_NAME.getDocOnDefaultValue());
     assertFalse(defaultStorageConfig.contains(PARQUET_COMPRESSION_CODEC_NAME));
-    assertEquals("zstd", defaultStorageConfig.getStringOrDefault(PARQUET_COMPRESSION_CODEC_NAME));
 
     HoodieStorageConfig explicitStorageConfig = HoodieStorageConfig.newBuilder()
         .parquetCompressionCodec("zstd")

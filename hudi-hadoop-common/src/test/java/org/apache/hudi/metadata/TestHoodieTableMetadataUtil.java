@@ -22,7 +22,9 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
@@ -335,11 +337,16 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
                                        List<HoodieRecord> records,
                                        HoodieTableMetaClient metaClient,
                                        HoodieLocalEngineContext engineContext) throws IOException {
+    HoodieConfig writerConfig = new HoodieConfig();
+    writerConfig.getProps().putAll(metaClient.getTableConfig().getProps());
+    // This low-level test path bypasses HoodieWriteConfig, and does not contain codec configuration,
+    // so set the codec explicitly here.
+    writerConfig.setValue(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME, "zstd");
     HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
         instant,
         path,
         metaClient.getStorage(),
-        metaClient.getTableConfig(),
+        writerConfig,
         HOODIE_SCHEMA_WITH_METADATA_FIELDS,
         engineContext.getTaskContextSupplier(),
         HoodieRecord.HoodieRecordType.AVRO);

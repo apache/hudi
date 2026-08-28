@@ -25,7 +25,6 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Properties;
 
 /**
@@ -216,7 +215,7 @@ public class HoodieStorageConfig extends HoodieConfig {
   // Default compression codec for parquet
   public static final ConfigProperty<String> PARQUET_COMPRESSION_CODEC_NAME = ConfigProperty
       .key("hoodie.parquet.compression.codec")
-      .defaultValue("zstd")
+      .noDefaultValue("ZSTD for Flink and Spark 3.5 or newer; GZIP for Java and older Spark versions")
       .withDocumentation("Compression codec for Parquet base and native log files. The default is ZSTD for Flink "
           + "and Spark 3.5 or newer, and GZIP for Java and older Spark versions. Spark 3.3 and 3.4 use a "
           + "non-vectorized file-group reader affected by PARQUET-2160 when reading ZSTD files, which can leak "
@@ -537,7 +536,7 @@ public class HoodieStorageConfig extends HoodieConfig {
    * @deprecated Use {@link #PARQUET_COMPRESSION_CODEC_NAME} and its methods instead
    */
   @Deprecated
-  public static final String DEFAULT_PARQUET_COMPRESSION_CODEC = PARQUET_COMPRESSION_CODEC_NAME.defaultValue();
+  public static final String DEFAULT_PARQUET_COMPRESSION_CODEC = "zstd";
   /**
    * @deprecated Use {@link #HFILE_COMPRESSION_ALGORITHM_NAME} and its methods instead
    */
@@ -793,11 +792,7 @@ public class HoodieStorageConfig extends HoodieConfig {
     }
 
     public HoodieStorageConfig build() {
-      // The Parquet codec default depends on the write engine. Leave it unset here so that
-      // HoodieWriteConfig can resolve it after the final engine type is known. This also preserves
-      // whether callers explicitly configured the codec when a partial storage config is passed on.
-      storageConfig.setDefaults(HoodieStorageConfig.class.getName(),
-          Collections.singleton(PARQUET_COMPRESSION_CODEC_NAME));
+      storageConfig.setDefaults(HoodieStorageConfig.class.getName());
       return storageConfig;
     }
   }

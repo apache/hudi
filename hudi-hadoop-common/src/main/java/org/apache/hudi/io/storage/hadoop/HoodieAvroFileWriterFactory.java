@@ -117,7 +117,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
 
     HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(schema, hoodieConfig, storageConfiguration, enableBloomFilter(metaFieldsMode, hoodieConfig));
 
-    String compressionCodecName = hoodieConfig.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
+    String compressionCodecName = hoodieConfig.getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
     // Support PARQUET_COMPRESSION_CODEC_NAME is ""
     if (compressionCodecName.isEmpty()) {
       compressionCodecName = null;
