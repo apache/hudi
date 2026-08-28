@@ -43,7 +43,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{ArrayType, ByteType, DoubleType, FloatType, LongType, MetadataBuilder, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, ByteType, DataType, DoubleType, FloatType, LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
 import java.util.function.{Function => JFunction}
@@ -93,16 +93,31 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   private lazy val allFilters = filters ++ requiredFilters
 
   // For each field of `target`, replace its dataType with the matching field's projected
-  // variant struct from `source` (when present). Non-matching fields pass through. Why a parallel
-  // `sparkRequiredSchema` overlay exists at all is documented on that constructor parameter.
+  // variant struct from `source` (when present), recursing into struct members so a variant
+  // reached through a struct path is overlaid too. Fields are matched by name (findFieldByName);
+  // non-matching fields pass through. The recursion mirrors PushVariantIntoScan's
+  // VariantInRelation.rewriteType, which rewrites variants at the root of the relation output
+  // and below STRUCT paths only, so an array element or a map value is never overlaid here
+  // either (#19775). Why a parallel `sparkRequiredSchema` overlay exists at all is documented on
+  // that constructor parameter.
   private def overlayVariantProjections(target: StructType, source: StructType): StructType = {
     StructType(target.fields.map { f =>
-      SparkFileFormatInternalRowReaderContext.findFieldByName(source, f.name).map(_.dataType) match {
-        case Some(projStruct: StructType) if sparkAdapter.isVariantProjectionStruct(projStruct) =>
+      (f.dataType, SparkFileFormatInternalRowReaderContext.findFieldByName(source, f.name).map(_.dataType)) match {
+        case (_, Some(projStruct: StructType)) if sparkAdapter.isVariantProjectionStruct(projStruct) =>
           f.copy(dataType = projStruct)
+        case (targetStruct: StructType, Some(sourceStruct: StructType)) =>
+          f.copy(dataType = overlayVariantProjections(targetStruct, sourceStruct))
         case _ => f
       }
     })
+  }
+
+  // True when `dataType` is a variant projection struct or carries one below a struct path: the
+  // shapes PushVariantIntoScan produces, and exactly what overlayVariantProjections overlays.
+  private def containsVariantProjection(dataType: DataType): Boolean = dataType match {
+    case st: StructType =>
+      sparkAdapter.isVariantProjectionStruct(st) || st.fields.exists(f => containsVariantProjection(f.dataType))
+    case _ => false
   }
 
   // True only when there is a Spark 4.1 PushVariantIntoScan projection to apply AND the table is
@@ -111,10 +126,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   // VariantType, so a row already rewritten into the projected struct shape would be mis-decoded.
   // Single source of truth for both reader paths (parquet native projection + avro rewrite).
   private def shouldProjectVariants(): Boolean = {
-    val hasVariantProjection = sparkRequiredSchema.exists(_.fields.exists(_.dataType match {
-      case st: StructType => sparkAdapter.isVariantProjectionStruct(st)
-      case _ => false
-    }))
+    val hasVariantProjection =
+      sparkRequiredSchema.exists(_.fields.exists(f => containsVariantProjection(f.dataType)))
     // getRecordMerger() is a Lombok getter over a field initialized to null (not Option.empty());
     // it stays null until HoodieReaderContext.initRecordMerger runs (HoodieFileGroupReader calls it
     // from its constructor), so the null guard is required.
@@ -187,22 +200,25 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     }
 
     // Internal reads have no catalyst plan, so nothing rewrites VariantType fields the way
-    // PushVariantIntoScan does for user queries. Requesting native VariantType against a
-    // SHREDDED parquet base file clips the file group to {metadata, value} and reads
-    // value=null; write-side callers (compaction, clustering, merge) would then persist the
-    // nulls, silently losing the variant data (#19556). Query paths that build this context
-    // without sparkRequiredSchema hit the same null reads and take the same rewrite: CDC
-    // (CDCFileGroupIterator) under default configs, plus the legacy RDD paths (streaming
-    // source, MergeOnRead relations) only when hoodie.file.group.reader.enabled=false;
-    // batch incremental always scans through the file format with a catalyst schema.
-    // Request the full-variant projection shape
-    // instead and restore native VariantType after the scan. User-facing reads pass
-    // sparkRequiredSchema and are overlaid above. Only top-level variant fields are
-    // rewritten: no production write path shreds a nested variant today (a nested shredded
-    // write schema needs the test-only force config until shredding-schema inference
-    // lands), so the nested leg is deferred until such files can exist. Spark < 4.1 cannot
-    // reconstruct shredded values on read (SPARK-54410) and the adapter returns None;
-    // Spark 4.0 does write shredded files, so its pre-existing read-side gap stays as is.
+    // PushVariantIntoScan does for user queries. For parquet base files, request the same
+    // whole-variant shape that rewrite would (one child "0" at path "$") for each top-level
+    // variant column and restore native VariantType after the scan, so write-side callers
+    // (compaction, clustering, merge) and the query paths that build this context without
+    // sparkRequiredSchema (CDC under default configs; the streaming source only with
+    // hoodie.file.group.reader.enabled=false) read a SHREDDED file through the contract
+    // PushVariantIntoScan established (#19556, #19578). It is a contract, not a workaround for
+    // the reader: on Spark 4.1+ a native VariantType request is reconstructed from a shredded
+    // group at any depth (ParquetReadSupport.clipParquetType passes the leaf group through,
+    // ParquetToSparkSchemaConverter carries the catalyst target into struct members, list
+    // elements and map values, and ParquetRowConverter assembles it), which is why nested
+    // variants are read natively here and are not rewritten (#19775). What does read a
+    // shredded group as value=null is a request in the physical {metadata, value} shape,
+    // which only the schema-on-read internal-schema branch produces; the projection shape is
+    // what lets ParquetSchemaEvolutionUtils.validateNoShreddedVariants name this route there
+    // instead of failing inside the read. User-facing reads pass sparkRequiredSchema and are
+    // overlaid above. Spark < 4.1 cannot reconstruct shredded values on read (SPARK-54410)
+    // and the adapter returns None; Spark 4.0 does write shredded files, so its pre-existing
+    // read-side gap stays as is.
     val isParquetBaseFile = !isInlineLog && !FSUtils.isLogFile(filePath) &&
       HoodieFileFormat.fromFileExtension(filePath.getFileExtension) == HoodieFileFormat.PARQUET
     val (readStructTypeForScan, variantOrdinals) =
@@ -509,9 +525,10 @@ object SparkFileFormatInternalRowReaderContext {
   /**
    * Rewrites top-level VariantType fields of `structType` into the full-variant projection
    * shape (see SparkAdapter.buildFullVariantReadSchema) and returns it with the ordinals of
-   * the rewritten fields, or None when nothing rewrites (no variant fields, or no shredded
-   * read support on this Spark version). Shared by this context and direct base-file reads
-   * that bypass it (CDCFileGroupIterator's BASE_FILE_INSERT case).
+   * the rewritten fields, or None when nothing rewrites (no top-level variant field, or no
+   * shredded read support on this Spark version). Variants nested in structs, arrays and maps
+   * stay native and are reconstructed by the reader as they are. Shared by this context and
+   * direct base-file reads that bypass it (CDCFileGroupIterator's BASE_FILE_INSERT case).
    */
   private[hudi] def fullVariantReadSchemaWithOrdinals(structType: StructType): Option[(StructType, Set[Int])] = {
     SparkAdapterSupport.sparkAdapter.buildFullVariantReadSchema(structType).map { rewritten =>

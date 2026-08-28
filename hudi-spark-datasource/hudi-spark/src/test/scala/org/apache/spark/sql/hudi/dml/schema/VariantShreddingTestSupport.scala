@@ -21,8 +21,13 @@ package org.apache.spark.sql.hudi.dml.schema
 
 import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.log.HoodieLogFormat
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -37,7 +42,7 @@ import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, MessageType,
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{listElement, mapValue}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{getLastCommitMetadata, getMetaClientAndFileSystemView}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -108,14 +113,15 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   }
 
   /**
-   * Creates `(id int, s struct<inner: variant>, ts long)` and bulk-inserts row 1 through the row
-   * writer under a forced `k string` nested schema. Both forced hooks recurse into record members
-   * (the row writer's always did, the Avro write support's since the #19689 fix), so a nested
-   * variant shreds on either write path; inference alone stays top-level, and a variant that is
-   * directly an array element or a map value shreds only where the write schema already declares
-   * it. This row-writer seed is what the nested-shredding legs open on.
+   * The `(id int, s struct<inner: variant>, ts long)` table of the nested legs: the variant lives
+   * one struct member down and the table has NO top-level variant column. Same tblproperties
+   * rendering as [[createVariantTable]].
    */
-  private def createNestedVariantRowWriterTable(tableName: String, tablePath: String): Unit = {
+  protected def createNestedVariantTable(tableName: String,
+                                         tablePath: String,
+                                         tableType: String,
+                                         props: Seq[String] = Seq.empty): Unit = {
+    val extraProps = if (props.isEmpty) "" else props.mkString(",\n  ", ",\n  ", "")
     spark.sql(
       s"""
          |create table $tableName (
@@ -127,10 +133,22 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
          | tblproperties (
          |  primaryKey = 'id',
          |  preCombineField = 'ts',
-         |  type = 'cow',
-         |  hoodie.datasource.write.row.writer.enable = 'true'
+         |  type = '$tableType'$extraProps
          | )
        """.stripMargin)
+  }
+
+  /**
+   * Creates the nested table as a row-writer COW one and bulk-inserts row 1 through the row writer
+   * under a forced `k string` nested schema. Both forced hooks recurse into record members (the row
+   * writer's always did, the Avro write support's since the #19689 fix), so a nested variant shreds
+   * on either write path; inference alone stays top-level, and a variant that is directly an array
+   * element or a map value shreds only where the write schema already declares it. This row-writer
+   * seed is what the nested-shredding legs open on.
+   */
+  private def createNestedVariantRowWriterTable(tableName: String, tablePath: String): Unit = {
+    createNestedVariantTable(tableName, tablePath, "cow",
+      props = Seq("hoodie.datasource.write.row.writer.enable = 'true'"))
     withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
       withWriteLayout(Forced("k string")) {
         spark.sql(s"""insert into $tableName values (1, named_struct('inner', parse_json('{"k":"x1"}')), 1000)""")
@@ -147,6 +165,31 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
                                             Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))
                                          (f: (String, String, String) => T): Unit = {
     withTableScaffold(label, recordTypes)(createNestedVariantRowWriterTable)(f)
+  }
+
+  /**
+   * The nested-only twin of [[withVariantTable]]: [[createNestedVariantTable]] with the table type
+   * and tblproperties of the leg, and NO seed row, so the body owns every commit.
+   *
+   * The absence of a top-level variant is the point. Hudi's Spark-native internal read paths only
+   * rewrite TOP-LEVEL variant columns into the full-variant projection shape
+   * (SparkAdapter.buildFullVariantReadSchema, used by SparkFileFormatInternalRowReaderContext;
+   * Spark's own PushVariantIntoScan and the sparkRequiredSchema overlay that follows it do go on
+   * down struct paths, #19775), so on a table that also carried a `v` column those top-level
+   * switches would be on for the whole read and the nested path would never be pinned on its own.
+   * With no top-level variant the reader takes the plain native path - on the MOR RDD,
+   * HoodieMergeOnReadRDDV2.shouldRerouteVariantSplit is false as well - and these legs really do
+   * exercise the nested read.
+   */
+  protected def withNestedOnlyVariantTable[T](label: String,
+                                              tableType: String,
+                                              props: Seq[String] = Seq.empty,
+                                              recordTypes: Seq[HoodieRecordType] =
+                                                Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))
+                                             (f: (String, String, String) => T): Unit = {
+    withTableScaffold(label, recordTypes) { (tableName, tablePath) =>
+      createNestedVariantTable(tableName, tablePath, tableType, props = props)
+    }(f)
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -668,6 +711,31 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
       .getInstantsAsStream.iterator().asScala.count(_.getAction == "commit")
     assert(commits == expected,
       s"[$leg] expected $expected completed compaction commits, got $commits")
+  }
+
+  /**
+   * Block types of every log block in the table, read from the log files themselves. Tests that pin
+   * a log format assert on this rather than on file names: native logs carry a .log.parquet suffix,
+   * but an inline log file is named the same whether its data blocks are avro or parquet.
+   */
+  protected def listLogBlockTypes(tablePath: String): Seq[HoodieLogBlockType] = {
+    val (metaClient, fsView) = getMetaClientAndFileSystemView(tablePath)
+    val schema = new TableSchemaResolver(metaClient).getTableSchema
+    val logFiles = fsView.getAllFileSlices("").iterator().asScala
+      .flatMap(slice => HoodieTestUtils.getLogFileListFromFileSlice(slice).asScala).toSeq
+    assert(logFiles.nonEmpty, "expected at least one log file")
+    logFiles.flatMap { path =>
+      val reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(path), schema)
+      try {
+        val types = mutable.ArrayBuffer[HoodieLogBlockType]()
+        while (reader.hasNext) {
+          types += reader.next().getBlockType
+        }
+        types.toSeq
+      } finally {
+        reader.close()
+      }
+    }
   }
 
   /** The requested time of the latest completed commit-like instant, for time travel. */

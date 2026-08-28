@@ -20,11 +20,14 @@
 package org.apache.spark.sql.hudi.dml.schema
 
 import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter
 import org.apache.hudi.testutils.DataSourceTestUtils
 
+import org.apache.hadoop.fs.{Path => HadoopPath}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -82,6 +85,26 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
   private def runClustering(tableName: String, rowWriter: Boolean): Unit = {
     spark.sql(s"call run_clustering(table => '$tableName', " +
       s"options => 'hoodie.datasource.write.row.writer.enable=$rowWriter')")
+  }
+
+  /**
+   * Pins the layout of a NESTED variant column (a dotted path) in the base files written by one
+   * instant. [[variantFileLayouts]] and its derivatives resolve their column as a TOP-LEVEL footer
+   * field, so the nested path is walked here with [[variantGroupOf]] instead.
+   */
+  private def assertNestedBaseLayout(tablePath: String, instant: String, shredded: Boolean,
+                                     leg: String, column: String = "s.inner"): Unit = {
+    val files = listDataParquetFiles(tablePath).filter { file =>
+      val name = new HadoopPath(file).getName
+      FSUtils.isBaseFile(name) && FSUtils.getCommitTime(name) == instant
+    }
+    assert(files.nonEmpty, s"[$leg] expected at least one base file written by instant $instant")
+    files.foreach { file =>
+      val group = variantGroupOf(file, column)
+      val expected = if (shredded) "shredded" else "unshredded"
+      assert(group.containsField("typed_value") == shredded,
+        s"[$leg] base file of instant $instant should be $expected at $column: $file\n$group")
+    }
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -818,6 +841,268 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
     }
   }
 
+  test("MOR merge, compaction and clustering carry a nested-shredded base through the internal reader") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // The nested variant is the ONLY variant in the table, so no top-level rewrite carries it (see
+    // withNestedOnlyVariantTable): every read below has to resolve s.inner on its own - through the
+    // nested projection struct PushVariantIntoScan pushes into the scan for the user queries, and
+    // natively for the internal reads that have no catalyst schema (compaction, clustering, the
+    // legacy RDD) - which is what makes these paths say anything about nested shredding at all.
+    // The projected arm crashed the JVM before #19775 (the projection was applied at the top level
+    // only, so the merged row still held a raw variant where the plan read a struct).
+    val mergedRows = Seq(
+      Seq(1, """{"k":"n1"}"""), Seq(2, """{"k":"n2b"}"""), Seq(3, """{"k":"n3"}"""))
+    val finalRows = Seq(
+      Seq(1, """{"k":"n1"}"""), Seq(2, """{"k":"n2b"}"""), Seq(3, """{"k":"n3c"}"""))
+
+    Seq(true, false).foreach { rowWriter =>
+      // No INMEMORY index: the first insert creates a base file, the updates go to log files.
+      withNestedOnlyVariantTable(s"mor nested rowWriter=$rowWriter", "mor",
+        props = Seq("hoodie.compact.inline = 'false'"),
+        recordTypes = clusteringRecordTypes(rowWriter)) { (tableName, tablePath, leg) =>
+        val snapshotQuery = s"select id, cast(s.inner as string) from $tableName order by id"
+        val readOptimizedQuery = s"select id, cast(s.inner as string) from " +
+          s"hudi_query('$tableName', 'read_optimized') order by id"
+
+        withWriteLayout(Forced("k string")) {
+          spark.sql(s"insert into $tableName values " +
+            """(1, named_struct('inner', parse_json('{"k":"n1"}')), 1000), """ +
+            """(2, named_struct('inner', parse_json('{"k":"n2"}')), 1000), """ +
+            """(3, named_struct('inner', parse_json('{"k":"n3"}')), 1000)""")
+        }
+        val baseFiles = listDataParquetFiles(tablePath)
+        assert(baseFiles.size == 1, s"[$leg] expected one base file, got $baseFiles")
+        assertVariantLayout(tablePath, shredded = true, leg, column = "s.inner")
+        val innerGroup = variantGroupOf(baseFiles.head, "s.inner")
+        assert(getFieldAsGroup(innerGroup, "typed_value").containsField("k"),
+          s"[$leg] nested typed_value should carry k:\n$innerGroup")
+
+        // A nested-shredded native log on top of the nested-shredded base.
+        withWriteLayout(Forced("k string")) {
+          spark.sql(s"update $tableName set " +
+            """s = named_struct('inner', parse_json('{"k":"n2b"}')), ts = 1001 where id = 2""")
+        }
+        assert(listDataParquetFiles(tablePath).exists(_.endsWith(".log.parquet")),
+          s"[$leg] the update should have written a native parquet log file")
+
+        // The conf only says what the reader MAY do - supportBatch vetoes vectorization for a
+        // variant at any depth (pinned in F2) - so the sweep is the control if that guard is ever
+        // narrowed back to top-level columns.
+        Seq("true", "false").foreach { vectorizedReader =>
+          withSQLConf("spark.sql.parquet.enableVectorizedReader" -> vectorizedReader) {
+            checkAnswer(snapshotQuery)(mergedRows: _*)
+          }
+        }
+
+        // Not swept here: hoodie.file.group.reader.enabled=false, which no longer routes a batch
+        // read anywhere (only the streaming sources consult it). The legacy RDD path over a
+        // nested-shredded base - HoodieMergeOnReadRDDV2, whose shouldRerouteVariantSplit stays
+        // false without a top-level variant - is pinned by TestStreamingSource's legacy leg.
+
+        // Read-optimized serves the base file alone: id 2 is still the pre-update value.
+        checkAnswer(readOptimizedQuery)(
+          Seq(1, """{"k":"n1"}"""), Seq(2, """{"k":"n2"}"""), Seq(3, """{"k":"n3"}"""))
+
+        // Compaction merges the nested-shredded log onto the nested-shredded base and re-derives
+        // the layout from the forced DDL. On the AVRO record type that write goes through
+        // HoodieAvroWriteSupport, whose nested forced hook is #19689's parity fix.
+        withWriteLayout(Forced("k string")) {
+          runCompaction(tableName)
+        }
+        assertCompactionCount(tablePath, 1, leg)
+        assertNestedBaseLayout(tablePath, latestCompletedInstant(tablePath), shredded = true, leg)
+        checkAnswer(snapshotQuery)(mergedRows: _*)
+
+        // Unshredded round: the update and the compaction both run with shredding off, so
+        // typed_value has to be stripped at depth on the way out.
+        withWriteLayout(Unshredded) {
+          spark.sql(s"update $tableName set " +
+            """s = named_struct('inner', parse_json('{"k":"n3c"}')), ts = 1002 where id = 3""")
+          runCompaction(tableName)
+        }
+        assertCompactionCount(tablePath, 2, leg)
+        assertNestedBaseLayout(tablePath, latestCompletedInstant(tablePath), shredded = false, leg)
+        checkAnswer(snapshotQuery)(finalRows: _*)
+
+        // Clustering re-derives the nested layout from the forced DDL over that unshredded input:
+        // the row-writer path when rowWriter is true, the record writers otherwise.
+        withWriteLayout(Forced("k string")) {
+          runClustering(tableName, rowWriter)
+        }
+        val clusteringInstant = completedClusteringInstant(tablePath, leg)
+        assertNestedBaseLayout(tablePath, clusteringInstant, shredded = true, leg)
+        checkAnswer(snapshotQuery)(finalRows: _*)
+        checkAnswer(readOptimizedQuery)(finalRows: _*)
+      }
+    }
+  }
+
+  test("CDC images carry a nested-shredded variant") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // The nested twin of TestVariantDataType's CDC test. OP_KEY_ONLY reconstructs both images by
+    // reading the file slices; DATA_BEFORE_AFTER (the default) reads the update images from the cdc
+    // log instead. The insert leg takes BASE_FILE_INSERT in both modes, which reads the new base
+    // file directly rather than through the reader context.
+    Seq("OP_KEY_ONLY", "DATA_BEFORE_AFTER").foreach { loggingMode =>
+      // SPARK pinned: a cdc-enabled table always writes through FileGroupReaderBasedMergeHandle and
+      // the merger's record type picks that handle's reader context; AVRO would route the update's
+      // base-file read through HoodieAvroParquetReader, the separate defect tracked as #19567.
+      withNestedOnlyVariantTable(s"cdc nested $loggingMode", "cow", props = Seq(
+        "'hoodie.table.cdc.enabled' = 'true'",
+        s"'hoodie.table.cdc.supplemental.logging.mode' = '$loggingMode'",
+        "hoodie.index.type = 'INMEMORY'"),
+        recordTypes = Seq(HoodieRecordType.SPARK)) { (tableName, tablePath, leg) =>
+        withWriteLayout(Forced("k string")) {
+          spark.sql(s"insert into $tableName values " +
+            """(1, named_struct('inner', parse_json('{"k":"c1"}')), 1000)""")
+        }
+        assertVariantLayout(tablePath, shredded = true, leg, column = "s.inner")
+
+        withWriteLayout(Forced("k string")) {
+          spark.sql(s"update $tableName set " +
+            """s = named_struct('inner', parse_json('{"k":"c2"}')), ts = 1001 where id = 1""")
+        }
+        // Layout flip: the second update rewrites the file unshredded, so the images below span
+        // both physical slots.
+        withWriteLayout(Unshredded) {
+          spark.sql(s"update $tableName set " +
+            """s = named_struct('inner', parse_json('{"k":"c3"}')), ts = 1002 where id = 1""")
+        }
+        assertNestedBaseLayout(tablePath, latestCompletedInstant(tablePath), shredded = false, leg)
+
+        val cdc = spark.sql(s"select op, get_json_object(before, '$$.s.inner.k') as before_k, " +
+          s"get_json_object(after, '$$.s.inner.k') as after_k " +
+          s"from hudi_table_changes('$tableName', 'cdc', 'earliest')")
+        val insertRows = cdc.where("op = 'i'").collect()
+        assert(insertRows.length == 1, s"[$leg] expected exactly one insert cdc row")
+        assert(insertRows(0).getString(2) == "c1",
+          s"[$leg] insert after-image lost the nested variant payload: ${insertRows(0)}")
+
+        val updateRows = cdc.where("op = 'u'").orderBy("after_k").collect()
+        assert(updateRows.length == 2, s"[$leg] expected two update cdc rows")
+        assert(updateRows(0).getString(1) == "c1" && updateRows(0).getString(2) == "c2",
+          s"[$leg] first update images lost the nested variant payload: ${updateRows(0)}")
+        assert(updateRows(1).getString(1) == "c2" && updateRows(1).getString(2) == "c3",
+          s"[$leg] second (layout-flipped) update images lost the nested variant payload: ${updateRows(1)}")
+      }
+    }
+  }
+
+  test("variant_get projections and filters resolve a nested-shredded variant") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // The nested twin of the mixed-layout variant_get test above; SPARK pinned for the same reason.
+    // pushVariantIntoScan is swept because the two arms reach the file differently: on, Spark
+    // rewrites the s.inner struct path into its own projection struct and pushes it into the scan;
+    // off, the whole variant is read and variant_get evaluates on top of it.
+    def nestedRowsSql(lo: Int, hi: Int): String =
+      s"""select cast(id as int) as id,
+         | named_struct('inner', parse_json(concat('{"k":"x', id, '"}'))) as s,
+         | 1000L as ts from range($lo, $hi, 1, 1)""".stripMargin
+
+    Seq("true", "false").foreach { pushIntoScan =>
+      withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+        withNestedOnlyVariantTable(s"nested pushVariantIntoScan=$pushIntoScan", "cow",
+          props = Seq(NEW_FILE_GROUP_PER_COMMIT), recordTypes = Seq(HoodieRecordType.SPARK)) {
+          (tableName, tablePath, leg) =>
+          withWriteLayout(Forced("k string")) {
+            spark.sql(s"insert into $tableName ${nestedRowsSql(0, 5)}")
+          }
+          val shreddedInstant = latestCompletedInstant(tablePath)
+          withWriteLayout(Unshredded) {
+            spark.sql(s"insert into $tableName ${nestedRowsSql(5, 10)}")
+          }
+          val unshreddedInstant = latestCompletedInstant(tablePath)
+          // One file per commit (small.file.limit = 0) and one layout each, so $.k is typed in the
+          // first file and residual in the second: both slots answer the queries below.
+          assertNestedBaseLayout(tablePath, shreddedInstant, shredded = true, leg)
+          assertNestedBaseLayout(tablePath, unshreddedInstant, shredded = false, leg)
+
+          checkAnswer(s"select id, variant_get(s.inner, '$$.k', 'string') from $tableName order by id")(
+            (0 until 10).map(id => Seq(id, s"x$id")): _*)
+          // A filter served out of the residual file, and one out of the typed file.
+          checkAnswer(s"select id from $tableName where variant_get(s.inner, '$$.k', 'string') = 'x7'")(
+            Seq(7))
+          checkAnswer(s"select id from $tableName where variant_get(s.inner, '$$.k', 'string') = 'x2'")(
+            Seq(2))
+          checkAnswer(s"select count(*) from $tableName " +
+            s"where try_variant_get(s.inner, '$$.missing', 'string') is null")(Seq(10))
+          checkAnswer(s"select count(*) from $tableName where s.inner is null")(Seq(0))
+          checkAnswer(s"select id, cast(s.inner as string) from $tableName order by id")(
+            (0 until 10).map(id => Seq(id, s"""{"k":"x$id"}""")): _*)
+        }
+      }
+    }
+
+    // MOR: a nested-shredded base under an unshredded log update, so the merged read has to serve
+    // ids 0-2 from the base file and ids 3-4 from the log. Before #19775 the pushIntoScan=true arms
+    // here crashed the JVM (SIGSEGV/SIGBUS inside an unsafe copy stub, or a java.lang.InternalError
+    // about a fault in a recent unsafe memory access): the internal reader applied the
+    // PushVariantIntoScan projection to TOP-LEVEL fields only, so the merged row still held a raw
+    // VariantVal at s.inner while the plan read that memory as the projected struct s.inner.0.
+    def seedNestedMor(tableName: String, tablePath: String, leg: String): Unit = {
+      withWriteLayout(Forced("k string")) {
+        spark.sql(s"insert into $tableName ${nestedRowsSql(0, 5)}")
+      }
+      assertNestedBaseLayout(tablePath, latestCompletedInstant(tablePath), shredded = true, leg)
+      withWriteLayout(Unshredded) {
+        spark.sql(s"update $tableName set " +
+          """s = named_struct('inner', parse_json(concat('{"k":"y', id, '"}'))), ts = 1001 """ +
+          "where id >= 3")
+      }
+    }
+    def assertNestedMorReads(tableName: String, leg: String): Unit = {
+      def merged(id: Int): String = if (id < 3) s"x$id" else s"y$id"
+      checkAnswer(s"select id, variant_get(s.inner, '$$.k', 'string') from $tableName order by id")(
+        (0 until 5).map(id => Seq(id, merged(id))): _*)
+      // A filter served out of the log row, then one out of the base row.
+      checkAnswer(s"select id from $tableName where variant_get(s.inner, '$$.k', 'string') = 'y4'")(
+        Seq(4))
+      checkAnswer(s"select id from $tableName where variant_get(s.inner, '$$.k', 'string') = 'x1'")(
+        Seq(1))
+      checkAnswer(s"select id, cast(s.inner as string) from $tableName order by id")(
+        (0 until 5).map(id => Seq(id, s"""{"k":"${merged(id)}"}""")): _*)
+      // The whole struct: no extraction, so nothing is rewritten even with pushVariantIntoScan on,
+      // and the merge is read through a plain native VariantType at depth.
+      val wholeStruct = spark.sql(s"select id, s from $tableName order by id").collect()
+      assert(wholeStruct.length == 5, s"[$leg] whole-struct read should return 5 rows")
+      assert(wholeStruct.forall(!_.isNullAt(1)), s"[$leg] whole-struct read nulled out s")
+    }
+
+    Seq("true", "false").foreach { pushIntoScan =>
+      withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan) {
+        // Parquet log files: the log block is read by HoodieSparkParquetReader.getUnsafeRowIterator
+        // with the projected struct threaded into the requested schema.
+        withNestedOnlyVariantTable(s"nested mor pushVariantIntoScan=$pushIntoScan", "mor",
+          props = Seq("hoodie.compact.inline = 'false'"), recordTypes = Seq(HoodieRecordType.SPARK)) {
+          (tableName, tablePath, leg) =>
+          seedNestedMor(tableName, tablePath, leg)
+          assert(listDataParquetFiles(tablePath).exists(_.endsWith(".log.parquet")),
+            s"[$leg] the update should have written a native parquet log file")
+          assertNestedMorReads(tableName, leg)
+        }
+
+        // Avro data blocks: the other projection site, HoodieReaderContext.projectLogBlockRecords.
+        // On the current table version the append handle writes native parquet log files whatever
+        // the block format says, so this leg only exists on a pre-native table version.
+        withNestedOnlyVariantTable(s"nested mor avro blocks pushVariantIntoScan=$pushIntoScan", "mor",
+          props = Seq("hoodie.compact.inline = 'false'",
+            "hoodie.write.table.version = '9'",
+            "hoodie.logfile.data.block.format = 'avro'"),
+          recordTypes = Seq(HoodieRecordType.AVRO)) { (tableName, tablePath, leg) =>
+          seedNestedMor(tableName, tablePath, leg)
+          val blockTypes = listLogBlockTypes(tablePath)
+          assert(blockTypes.contains(HoodieLogBlockType.AVRO_DATA_BLOCK),
+            s"[$leg] expected an avro data block in the log files, found: $blockTypes")
+          assert(!blockTypes.contains(HoodieLogBlockType.PARQUET_DATA_BLOCK),
+            s"[$leg] this leg must not write parquet data blocks, found: $blockTypes")
+          assertNestedMorReads(tableName, leg)
+        }
+      }
+    }
+  }
   // -----------------------------------------------------------------------------------------------
   // F2. Vectorized read decision
   // -----------------------------------------------------------------------------------------------

@@ -378,12 +378,12 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
           val pf = sparkPartitionedFileUtils.createPartitionedFile(
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
-          // This read bypasses SparkFileFormatInternalRowReaderContext, so it needs the same
-          // full-variant treatment that context applies: requesting native VariantType against
-          // a SHREDDED base file clips the shredded group to {metadata, value} and reads
-          // value=null, which would surface as null variants in the insert after-images
-          // (#19556 family, #19578). The restore projection reuses one output buffer, hence
-          // the copy before buffering.
+          // This read bypasses SparkFileFormatInternalRowReaderContext, so it makes the same
+          // whole-variant request that context makes for top-level variant columns of a parquet
+          // base file and restores native VariantType afterwards (#19578); a variant nested in a
+          // struct, array or map stays native and the reader reconstructs it, shredded or not
+          // (#19775). The restore projection reuses one output buffer, hence the copy before
+          // buffering.
           val baseRows = SparkFileFormatInternalRowReaderContext
             .fullVariantReadSchemaWithOrdinals(originTableSchema.structTypeSchema) match {
             case Some((rewritten, ordinals)) =>

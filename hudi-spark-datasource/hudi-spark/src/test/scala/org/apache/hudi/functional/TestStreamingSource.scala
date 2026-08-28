@@ -30,6 +30,9 @@ import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSER
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.util.JavaConversions
 
+import org.apache.hadoop.fs.Path
+import org.apache.parquet.hadoop.ParquetFileReader
+import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.spark.sql.{DataFrame, Row, SaveMode}
 import org.apache.spark.sql.streaming.StreamTest
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -386,7 +389,9 @@ class TestStreamingSource extends StreamTest {
     // HoodieMergeOnReadRDDV2, the only user-facing path reading shredded variant base files
     // without a catalyst schema. The first stream covers the base-only split (first batch, the
     // branch this fix re-routes) and the log-only split (second batch); the second stream covers
-    // the merged base + log split.
+    // the merged base + log split. The table carries a second variant one struct member down:
+    // the forced DDL shreds it too, but only a TOP-LEVEL variant column re-routes a split or gets
+    // the full-variant projection shape, so s.inner is read natively on every split (#19775).
     assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
 
     withTempDir { inputDir =>
@@ -426,7 +431,7 @@ class TestStreamingSource extends StreamTest {
         // force the legacy (non file-group-reader) incremental relation path
         .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key, "false")
         .load(tablePath)
-        .selectExpr("id", "cast(v as string) as v", "ts")
+        .selectExpr("id", "cast(v as string) as v", "cast(s.inner as string) as inner", "ts")
 
       // The legacy branch of getBatch materializes the micro batch from an RDD via
       // internalCreateDataFrame, so the physical plan is a "Scan ExistingRDD"; this fails if the
@@ -441,8 +446,26 @@ class TestStreamingSource extends StreamTest {
         true
       }
 
-      addVariantData("""select 1 as id, parse_json('{"key":"v1"}') as v, 1000L as ts""", compact = false)
-      addVariantData("""select 2 as id, parse_json('{"key":"v2"}') as v, 1000L as ts""", compact = true)
+      addVariantData("""select 1 as id, parse_json('{"key":"v1"}') as v,
+                       | named_struct('inner', parse_json('{"key":"n1"}')) as s, 1000L as ts""".stripMargin, compact = false)
+      addVariantData("""select 2 as id, parse_json('{"key":"v2"}') as v,
+                       | named_struct('inner', parse_json('{"key":"n2"}')) as s, 1000L as ts""".stripMargin, compact = true)
+      // Pin that the compacted base file is shredded at both depths: without it the streams below
+      // would pass just the same over an unshredded base and pin nothing about shredded reads.
+      val conf = spark.sessionState.newHadoopConf()
+      val baseFiles = new Path(tablePath).getFileSystem(conf).listStatus(new Path(tablePath))
+        .map(_.getPath).filter(_.getName.endsWith(".parquet"))
+      assertTrue(baseFiles.nonEmpty, "expected a compacted base file under " + tablePath)
+      baseFiles.foreach { file =>
+        val reader = ParquetFileReader.open(HadoopInputFile.fromPath(file, conf))
+        val footer = try reader.getFooter.getFileMetaData.getSchema finally reader.close()
+        // getFieldIndex + getType(int): the String overload of getType is ambiguous from Scala.
+        val v = footer.getType(footer.getFieldIndex("v")).asGroupType()
+        val s = footer.getType(footer.getFieldIndex("s")).asGroupType()
+        val inner = s.getType(s.getFieldIndex("inner")).asGroupType()
+        assertTrue(v.containsField("typed_value"), "v must be shredded in " + file + ":\n" + footer)
+        assertTrue(inner.containsField("typed_value"), "s.inner must be shredded in " + file + ":\n" + footer)
+      }
 
       testStream(variantStreamDf())(
         // Base-only split: this batch spans both deltacommits and the compaction commit, whose
@@ -450,7 +473,9 @@ class TestStreamingSource extends StreamTest {
         // the branch the fix re-routes to the file group reader.
         AssertOnQuery { q => q.processAllAvailable(); true },
         assertLegacyRddPlan,
-        CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1\"}", 1000L), Row(2, "{\"key\":\"v2\"}", 1000L)),
+        CheckAnswerRows(Seq(
+          Row(1, "{\"key\":\"v1\"}", "{\"key\":\"n1\"}", 1000L),
+          Row(2, "{\"key\":\"v2\"}", "{\"key\":\"n2\"}", 1000L)),
           lastOnly = true, isSorted = false),
         StopStream,
 
@@ -458,12 +483,15 @@ class TestStreamingSource extends StreamTest {
         // span's affected files alone, and this span covers only the update deltacommit, so the
         // slice is the appended log file with no base file.
         AssertOnQuery { _ =>
-          addVariantData("""select 1 as id, parse_json('{"key":"v1-updated"}') as v, 1001L as ts""", compact = false)
+          addVariantData("""select 1 as id, parse_json('{"key":"v1-updated"}') as v,
+                           | named_struct('inner', parse_json('{"key":"n1-updated"}')) as s, 1001L as ts""".stripMargin,
+            compact = false)
           true
         },
         StartStream(),
         AssertOnQuery { q => q.processAllAvailable(); true },
-        CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1-updated\"}", 1001L)), lastOnly = true, isSorted = false)
+        CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1-updated\"}", "{\"key\":\"n1-updated\"}", 1001L)),
+          lastOnly = true, isSorted = false)
       )
 
       // Merged split: a fresh testStream over a fresh streaming DataFrame gets its own
@@ -474,7 +502,9 @@ class TestStreamingSource extends StreamTest {
       testStream(variantStreamDf())(
         AssertOnQuery { q => q.processAllAvailable(); true },
         assertLegacyRddPlan,
-        CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1-updated\"}", 1001L), Row(2, "{\"key\":\"v2\"}", 1000L)),
+        CheckAnswerRows(Seq(
+          Row(1, "{\"key\":\"v1-updated\"}", "{\"key\":\"n1-updated\"}", 1001L),
+          Row(2, "{\"key\":\"v2\"}", "{\"key\":\"n2\"}", 1000L)),
           lastOnly = true, isSorted = false)
       )
     }
