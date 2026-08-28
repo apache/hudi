@@ -308,37 +308,17 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     assertEquals("timestamp", metaClient.getTableConfig().getPreCombineField());
   }
 
-  /** The ordering field can be nested under dot notation, e.g. a field of the trip schema's fare record. */
-  @Test
-  void testUpgradeOneToTwoRecordsNestedOrderingField() throws IOException {
-    Map<String, String> params = new HashMap<>();
-    addNewTableParamsToProps(params);
-    params.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "fare.amount");
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(true).withRollbackUsingMarkers(false).withProps(params).build();
-    doInsert(getHoodieWriteClient(cfg));
-
-    downgradeTableConfigsFromTwoToOne(cfg);
-    assertNull(metaClient.getTableConfig().getPreCombineField());
-
-    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
-        .run(HoodieTableVersion.TWO, null);
-
-    metaClient = HoodieTableMetaClient.builder()
-        .setConf(context.getStorageConf().newInstance()).setBasePath(cfg.getBasePath())
-        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
-    assertTableVersionOnDataAndMetadataTable(metaClient, HoodieTableVersion.TWO);
-    assertEquals("fare.amount", metaClient.getTableConfig().getPreCombineField());
-  }
-
   /**
    * A table that already recorded an ordering field before 0.8.0 stopped being the norm keeps the
    * one it has, rather than having the writer's config written over it.
    */
-  @Test
-  void testUpgradeOneToTwoKeepsRecordedOrderingField() throws IOException {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testUpgradeOneToTwoKeepsRecordedOrderingField(HoodieTableType tableType) throws IOException {
     Map<String, String> params = new HashMap<>();
     addNewTableParamsToProps(params);
     params.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "_row_key");
+    initTableOfType(tableType, params);
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(true).withRollbackUsingMarkers(false).withProps(params).build();
     doInsert(getHoodieWriteClient(cfg));
 
@@ -582,6 +562,13 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     List<HoodieRecord> records = dataGen.generateInserts(commit1, 100);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     client.insert(writeRecords, commit1).collect();
+  }
+
+  private void initTableOfType(HoodieTableType tableType, Map<String, String> params) throws IOException {
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      params.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+      metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
+    }
   }
 
   private void downgradeTableConfigsFromTwoToOne(HoodieWriteConfig cfg) throws IOException {

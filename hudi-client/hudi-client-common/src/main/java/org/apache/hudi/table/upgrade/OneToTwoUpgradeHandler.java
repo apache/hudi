@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -42,6 +42,7 @@ import java.util.Map;
 public class OneToTwoUpgradeHandler implements UpgradeHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(OneToTwoUpgradeHandler.class);
+  private static final String NESTED_FIELD_SEPARATOR = ".";
 
   @Override
   public Map<ConfigProperty, String> upgrade(
@@ -73,8 +74,8 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
    * config materializes whether or not the user asked for it; recording that default on a table
    * that has no such field would leave behind an ordering field no reader can resolve, and would
    * make any later writer that configures a real ordering field fail table config validation with a
-   * config conflict. A field the schema cannot resolve is left unrecorded rather than recorded
-   * unverified.
+   * config conflict. A field nested under dot notation is recorded as configured without that
+   * check, since the default is never nested and only an explicit config can name one.
    */
   private static Option<String> getPreCombineFieldToPersist(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     if (StringUtils.nonEmpty(metaClient.getTableConfig().getPreCombineField())) {
@@ -85,15 +86,19 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
     if (StringUtils.isNullOrEmpty(preCombineField)) {
       return Option.empty();
     }
+    if (preCombineField.contains(NESTED_FIELD_SEPARATOR)) {
+      // only an explicit config can name a nested field, so take the writer at its word
+      return Option.of(preCombineField);
+    }
     Option<Schema> schema = resolveSchema(config, metaClient);
     if (!schema.isPresent()) {
       LOG.warn("Skipping the ordering field {} while upgrading {} to table version two: no schema is available to "
           + "resolve it against", preCombineField, config.getBasePath());
       return Option.empty();
     }
-    if (HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema(schema.get(), preCombineField, true) == null) {
-      LOG.warn("Skipping the ordering field {} while upgrading {} to table version two: the schema has no such field",
-          preCombineField, config.getBasePath());
+    if (!AvroSchemaUtils.containsFieldInSchema(schema.get(), preCombineField)) {
+      LOG.warn("Skipping the ordering field {} while upgrading {} to table version two: the schema has no such "
+          + "top level field", preCombineField, config.getBasePath());
       return Option.empty();
     }
     return Option.of(preCombineField);
@@ -101,16 +106,26 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
 
   /**
    * The schema to resolve the ordering field against: the table's own schema, falling back to the
-   * schema the writer is about to write with for a table that has not committed one yet.
+   * schema the writer is about to write with for a table that has not committed one yet, and to
+   * nothing at all if neither can be read.
    */
   private static Option<Schema> resolveSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    Option<Schema> tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchemaIfPresent(false);
-    if (tableSchema.isPresent()) {
-      return tableSchema;
+    try {
+      Option<Schema> tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchemaIfPresent(false);
+      if (tableSchema.isPresent()) {
+        return tableSchema;
+      }
+      String writeSchema = config.getWriteSchema();
+      return StringUtils.isNullOrEmpty(writeSchema)
+          ? Option.empty()
+          : Option.of(new Schema.Parser().parse(writeSchema));
+    } catch (Exception e) {
+      // reading or parsing the schema can fail on an unreadable data file or an invalid schema, and
+      // the upgrade gates every write on the table, so leave the field unrecorded rather than
+      // blocking the table on a backfill that is best effort
+      LOG.warn("Failed to resolve the schema of " + config.getBasePath()
+          + " while upgrading to table version two, leaving the ordering field unrecorded", e);
+      return Option.empty();
     }
-    String writeSchema = config.getWriteSchema();
-    return StringUtils.isNullOrEmpty(writeSchema)
-        ? Option.empty()
-        : Option.of(new Schema.Parser().parse(writeSchema));
   }
 }

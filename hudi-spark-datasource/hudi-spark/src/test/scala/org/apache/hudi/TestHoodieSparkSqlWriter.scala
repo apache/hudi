@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
@@ -57,6 +57,56 @@ import scala.collection.JavaConverters._
  * The reason is in a saved value in the heap of static {@link org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.lastInstantTime}.
  */
 class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
+
+  case class OrderedRecord(uuid: String, version: Long, ts: Long, value: String)
+
+  /**
+   * The ordering field the version 1 to 2 upgrade records is what a later writer that configures
+   * none has to go on. Without it that writer falls back to the "ts" default, which orders by the
+   * wrong column here, so an older record overwrites a newer one.
+   */
+  @Test
+  def testUpgradeFromTableVersionOneRestoresOrderingOnUpdates(): Unit = {
+    val writeParams = Map("path" -> tempBasePath,
+      HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "uuid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName,
+      DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName)
+    val orderingParams = writeParams + (DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "version")
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, orderingParams,
+      orderedRecordFrame("key1", version = 2, ts = 1, value = "new"))
+
+    // a table written before 0.8.0 records no ordering field
+    dropRecordedOrderingFieldAndSetVersionOne()
+
+    // the write that performs the upgrade records the ordering field it merges on
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, orderingParams,
+      orderedRecordFrame("key2", version = 1, ts = 1, value = "other"))
+    assertEquals("version", createMetaClient(spark, tempBasePath).getTableConfig.getPreCombineField)
+
+    // a later writer that configures none resolves it from the table config, so the record with the
+    // lower version loses the merge even though its "ts" is higher
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams,
+      orderedRecordFrame("key1", version = 1, ts = 5, value = "old"))
+    assertEquals("new", readValueOf("key1"))
+  }
+
+  private def orderedRecordFrame(uuid: String, version: Long, ts: Long, value: String): DataFrame =
+    spark.createDataFrame(Seq(OrderedRecord(uuid, version, ts, value)))
+
+  private def dropRecordedOrderingFieldAndSetVersionOne(): Unit = {
+    val metaClient = createMetaClient(spark, tempBasePath)
+    HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath,
+      Collections.singleton(HoodieTableConfig.PRECOMBINE_FIELD.key))
+    val versionProps = new java.util.Properties()
+    versionProps.setProperty(HoodieTableConfig.VERSION.key, "1")
+    HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPath, versionProps)
+  }
+
+  private def readValueOf(uuid: String): String =
+    spark.read.format("hudi").load(tempBasePath).where(s"uuid = '$uuid'")
+      .select("value").collect().head.getString(0)
 
   /**
    * Local utility method for performing bulk insert  tests.

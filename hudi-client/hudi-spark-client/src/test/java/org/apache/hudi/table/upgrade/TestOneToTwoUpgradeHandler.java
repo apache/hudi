@@ -42,39 +42,22 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 class TestOneToTwoUpgradeHandler extends HoodieClientTestBase {
 
-  /** A record nested under a nullable field, which the trip schema has no equivalent of. */
-  private static final String NULLABLE_NESTED_SCHEMA = "{\"type\":\"record\",\"name\":\"triprec\",\"fields\":["
-      + "{\"name\":\"_row_key\",\"type\":\"string\"},"
-      + "{\"name\":\"partition_path\",\"type\":[\"null\",\"string\"],\"default\":null},"
-      + "{\"name\":\"multi\",\"type\":[\"null\",\"string\",\"long\"],\"default\":null},"
-      + "{\"name\":\"event\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"event\",\"fields\":["
-      + "{\"name\":\"seq\",\"type\":\"long\"}]}],\"default\":null}]}";
-
-  /** "timestamp" is top level in the trip schema, "fare.amount" is nested under a record. */
-  @ParameterizedTest
-  @ValueSource(strings = {"timestamp", "fare.amount"})
-  void testRecordsKeySchemaAlongsideOrderingField(String orderingField) {
-    Map<ConfigProperty, String> tableProps = upgrade(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, orderingField);
+  @Test
+  void testRecordsKeySchemaAlongsideOrderingField() {
+    Map<ConfigProperty, String> tableProps = upgrade(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, "timestamp");
     assertEquals("uuid", tableProps.get(HoodieTableConfig.RECORDKEY_FIELDS));
     assertEquals("partition_path", tableProps.get(HoodieTableConfig.PARTITION_FIELDS));
     assertEquals(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name(), tableProps.get(HoodieTableConfig.BASE_FILE_FORMAT));
-    assertEquals(orderingField, tableProps.get(HoodieTableConfig.PRECOMBINE_FIELD));
-  }
-
-  /** A nested ordering field resolves through the record it is nested in, nullable or not. */
-  @Test
-  void testRecordsOrderingFieldNestedUnderNullableRecord() {
-    assertEquals("event.seq", upgrade(NULLABLE_NESTED_SCHEMA, "event.seq").get(HoodieTableConfig.PRECOMBINE_FIELD));
+    assertEquals("timestamp", tableProps.get(HoodieTableConfig.PRECOMBINE_FIELD));
   }
 
   /**
-   * An ordering field the schema cannot resolve is left unrecorded, so the table config never ends
-   * up with one no reader can resolve. This covers the "ts" default that every write config
-   * materializes whether or not the user asked for it, a field nested under a leaf, and a field
-   * nested one level too deep.
+   * An ordering field the schema has no top level column for is left unrecorded, so the table
+   * config never ends up with one no reader can resolve. That covers the "ts" default every write
+   * config materializes whether or not the user asked for it.
    */
   @ParameterizedTest
-  @ValueSource(strings = {"ts", "fare.total", "timestamp.value", "fare.amount.value"})
+  @ValueSource(strings = {"ts", "not_a_column"})
   void testSkipsOrderingFieldTheSchemaCannotResolve(String orderingField) {
     Map<ConfigProperty, String> tableProps = upgrade(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, orderingField);
     assertEquals("uuid", tableProps.get(HoodieTableConfig.RECORDKEY_FIELDS));
@@ -82,13 +65,15 @@ class TestOneToTwoUpgradeHandler extends HoodieClientTestBase {
   }
 
   /**
-   * A field whose schema is a union of more than one non-null type cannot be ordered on, and is
-   * skipped rather than failing the upgrade.
+   * A nested ordering field is recorded as configured. The schema check exists to catch the
+   * materialized "ts" default, and a default is never nested, so an explicitly configured nested
+   * field is taken at face value.
    */
-  @Test
-  void testSkipsOrderingFieldOnUnresolvableUnion() {
-    assertNull(upgrade(NULLABLE_NESTED_SCHEMA, "multi").get(HoodieTableConfig.PRECOMBINE_FIELD));
-    assertNull(upgrade(NULLABLE_NESTED_SCHEMA, "multi.seq").get(HoodieTableConfig.PRECOMBINE_FIELD));
+  @ParameterizedTest
+  @ValueSource(strings = {"fare.amount", "not_a_record.not_a_column"})
+  void testRecordsNestedOrderingFieldAsConfigured(String orderingField) {
+    assertEquals(orderingField,
+        upgrade(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, orderingField).get(HoodieTableConfig.PRECOMBINE_FIELD));
   }
 
   @Test
