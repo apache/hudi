@@ -21,6 +21,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -39,6 +41,7 @@ import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.metadata.stats.ValueMetadata;
 import org.apache.hudi.metadata.stats.ValueType;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.extern.slf4j.Slf4j;
@@ -93,6 +96,32 @@ import static org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_
  */
 @Slf4j
 public class ParquetUtils extends FileFormatUtils {
+
+  private static final String PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL = "parquet.compression.codec.zstd.level";
+
+  /**
+   * Returns a storage configuration with the native Parquet log ZSTD compression level applied.
+   * The input configuration is copied only when its ZSTD level is absent or differs from the native log level,
+   * so base file writers and other users of the shared configuration are not affected.
+   */
+  public static <T> StorageConfiguration<T> applyNativeLogZstdCompressionLevel(
+      StoragePath path, StorageConfiguration<T> storageConf, HoodieConfig hoodieConfig) {
+    if (!FSUtils.isNativeLogFile(path.getName())) {
+      return storageConf;
+    }
+
+    int nativeLogZstdLevel =
+        hoodieConfig.getIntOrDefault(HoodieStorageConfig.LOGFILE_PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL);
+    Option<String> globalZstdLevel = storageConf.getString(PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL);
+    if (globalZstdLevel.isPresent() && nativeLogZstdLevel == Integer.parseInt(globalZstdLevel.get())) {
+      return storageConf;
+    }
+
+    StorageConfiguration<T> nativeLogStorageConf = storageConf.newInstance();
+    nativeLogStorageConf.set(
+        PARQUET_COMPRESSION_CODEC_ZSTD_LEVEL, String.valueOf(nativeLogZstdLevel));
+    return nativeLogStorageConf;
+  }
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
