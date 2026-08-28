@@ -17,26 +17,26 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSchemaConversionUtils, ScalaAssertionSupport, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSchemaConversionUtils, ScalaAssertionSupport, SparkAdapterSupport}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.common.config.RecordMergeMode
+import org.apache.hudi.common.config.{HoodieCommonConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.util.Option
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.functional.TestBasicSchemaEvolution.{dropColumn, injectColumnAt}
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
 
 import org.apache.hadoop.fs.FileSystem
-import org.apache.spark.sql.{functions, Row, SaveMode, SparkSession, SparkSessionExtensions}
+import org.apache.spark.sql.{functions, DataFrame, Row, SaveMode, SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
 import java.util.function.Consumer
 
@@ -74,8 +74,6 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     initTestDataGenerator()
     initHoodieStorage()
   }
-
-  // TODO add test-case for upcasting
 
   @ParameterizedTest
   @CsvSource(value = Array(
@@ -381,6 +379,177 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
 
 
     // TODO add test w/ overlapping updates
+  }
+
+  private def schemaOnReadOpts(tableType: HoodieTableType): Map[String, String] = commonOpts ++ Map(
+    DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
+    HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true",
+    // HoodieSparkSqlWriter turns inline compaction on for batch MOR writes; keep commit 2 in a log file
+    HoodieCompactionConfig.INLINE_COMPACT.key -> "false")
+
+  /**
+   * Add-column evolution under schema-on-read, read through the file-group reader. Commit 2 only
+   * touches partition p1: on COW that rewrites the p1 file group with the new column while the p2
+   * base file keeps the old schema; on MOR p1 gains a log file and the base files of both partitions
+   * keep the old schema. The snapshot read must therefore fill `bonus` with null for rows served from
+   * an old-schema base file, and a pushed-down filter over `bonus` must be dropped for a file that
+   * lacks the column (InternalSchemaUtils.reBuildFilterName's "added column" branch). The incremental
+   * read after the evolution must return exactly the commit-2 records with their `bonus` values.
+   */
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testSchemaOnReadAddColumnSnapshotAndIncrementalRead(tableType: HoodieTableType): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val opts = schemaOnReadOpts(tableType)
+
+    // commit 1: ages 10..17, even ids in p1, odd ids in p2
+    val v1 = (0 until 8).map(i => (s"id$i", s"n$i", 10 + i, 1L, if (i % 2 == 0) "p1" else "p2"))
+      .toDF("_row_key", "name", "age", "timestamp", "partition")
+    v1.write.format("hudi")
+      .options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val firstCompletion = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+
+    // commit 2, p1 only: update id2 and insert id8, both carrying the new nullable `bonus` column
+    val v2 = Seq[(String, String, Int, Long, String, scala.Option[Double])](
+      ("id2", "n2u", 12, 2L, "p1", Some(100.0d)),
+      ("id8", "n8", 20, 2L, "p1", Some(300.0d)))
+      .toDF("_row_key", "name", "age", "timestamp", "partition", "bonus")
+    v2.write.format("hudi")
+      .options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val snapshot = spark.read.format("hudi")
+      .option(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key, "true")
+      .load(basePath)
+    assertEquals(DoubleType, snapshot.schema("bonus").dataType)
+    assertEquals(9, snapshot.count())
+    assertEquals(2, snapshot.filter("bonus is not null").count())
+    // ages are now {10..17, 20}
+    assertEquals(7, snapshot.filter("age >= 12").count())
+    assertEquals(2, snapshot.filter("age >= 12 AND bonus is not null").count())
+    // the `bonus` predicate is evaluated against p2's file, which does not contain the column
+    assertEquals(0, snapshot.filter("partition = 'p2' AND bonus is not null").count())
+    assertEquals(4, snapshot.filter("partition = 'p2' AND bonus is null").count())
+
+    val byId = snapshot.select("_row_key", "name", "age", "bonus").collect().map(r => r.getString(0) -> r).toMap
+    assertEquals("n2u", byId("id2").getString(1))
+    assertEquals(100.0d, byId("id2").getDouble(3))
+    // id1 is served from the untouched p2 base file that lacks `bonus`; id0 from the rewritten p1
+    // file group (COW) or the merged p1 base+log slice (MOR)
+    assertEquals(11, byId("id1").getInt(2))
+    assertTrue(byId("id1").isNullAt(3))
+    assertTrue(byId("id0").isNullAt(3))
+
+    val incremental = spark.read.format("hudi")
+      .option(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key, "true")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.START_COMMIT.key, firstCompletion)
+      .load(basePath)
+    val incRows = incremental.select("_row_key", "bonus").collect().map(r => r.getString(0) -> r.getDouble(1)).toMap
+    assertEquals(Map("id2" -> 100.0d, "id8" -> 300.0d), incRows)
+  }
+
+  /**
+   * int->long promotion under schema-on-read on a MOR table. Commit 2 only touches p1, so the read
+   * spans a base-only int file (p2) and an int base file merged with a long log file (p1). The
+   * top-level `age` promotion is atomic and is read with the vectorized parquet reader on. When the
+   * same promotion is applied inside the `nested` struct the changed top-level column is no longer
+   * atomic: ParquetSchemaEvolutionUtils.getHadoopConfClone must reject it fast on the base slice
+   * instead of returning corrupt columns, and the workaround it advertises (disabling the vectorized
+   * reader) must actually widen `nested.a` across both shapes. COW is covered by
+   * TestLegacyParquetReadPath#testCowSnapshotReadWithNestedTypeChange.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testSchemaOnReadTypePromotionOnMorBaseAndLogMerge(promoteNested: Boolean): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val opts = schemaOnReadOpts(HoodieTableType.MERGE_ON_READ)
+    val widenedBase = 10000000000L
+    // id4's `nested.a` only leaves the int range in the promoting arm
+    val expectedNestedA4 = if (promoteNested) widenedBase + 4 else 4L
+
+    // commit 1: `age` and `nested.a` are int; even ids in p1, odd ids in p2
+    val v1 = (0 until 6).map(i => (s"id$i", s"n$i", 10 + i, i, s"v$i", 1L, if (i % 2 == 0) "p1" else "p2"))
+      .toDF("_row_key", "name", "age", "a", "b", "timestamp", "partition")
+      .withColumn("nested", functions.struct(functions.col("a"), functions.col("b")))
+      .drop("a", "b")
+    v1.write.format("hudi")
+      .options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // commit 2, p1 only: `age` is long now; `nested.a` is promoted to long only in the second arm
+    val v2Raw = Seq(
+      ("id2", "n2u", 12L, 2L, "v2u", 2L, "p1"),
+      ("id4", "n4u", widenedBase + 14, expectedNestedA4, "v4u", 2L, "p1"),
+      ("id6", "n6", 42L, 6L, "v6", 2L, "p1"))
+      .toDF("_row_key", "name", "age", "a", "b", "timestamp", "partition")
+    val v2 = (if (promoteNested) v2Raw else v2Raw.withColumn("a", functions.col("a").cast(IntegerType)))
+      .withColumn("nested", functions.struct(functions.col("a"), functions.col("b")))
+      .drop("a", "b")
+    v2.write.format("hudi")
+      .options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    def loadSnapshot(): DataFrame = spark.read.format("hudi")
+      .option(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key, "true")
+      .load(basePath)
+
+    def assertPromotedRows(df: DataFrame): Unit = {
+      assertEquals(7, df.count())
+      val byId = df.selectExpr("_row_key", "name", "age", "cast(nested.a as long)", "nested.b").collect()
+        .map(r => r.getString(0) -> (r.getString(1), r.getLong(2), r.getLong(3), r.getString(4))).toMap
+      // id1: untouched p2 base file, int on disk, widened on read
+      assertEquals(("n1", 11L, 1L, "v1"), byId("id1"))
+      // id0: p1 int base file merged with the p1 log file, record itself untouched
+      assertEquals(("n0", 10L, 0L, "v0"), byId("id0"))
+      // id4: updated in the log with values outside the int range
+      assertEquals(("n4u", widenedBase + 14, expectedNestedA4, "v4u"), byId("id4"))
+      assertEquals(("n6", 42L, 6L, "v6"), byId("id6"))
+      // filters over the promoted columns across int and long files: ages {10, 11, 12, 13, widened+14, 15, 42}
+      assertEquals(2, df.filter("age > 40").count())
+      assertEquals(1, df.filter("age > 1000000000").count())
+      assertEquals(if (promoteNested) 1 else 0, df.filter("nested.a > 1000000000").count())
+    }
+
+    if (!promoteNested) {
+      val snapshot = loadSnapshot()
+      assertEquals(LongType, snapshot.schema("age").dataType)
+      assertEquals(IntegerType, snapshot.schema("nested").dataType.asInstanceOf[StructType]("a").dataType)
+      assertPromotedRows(snapshot)
+    } else {
+      // the non-atomic type change must fail fast in vectorized mode rather than return corrupt columns.
+      // `nested` has to be projected for the guard to engage: a bare count() prunes it away and passes.
+      val thrown = assertThrows(classOf[Throwable]) {
+        loadSnapshot().select("_row_key", "nested").collect()
+      }
+      val causes = Iterator.iterate(thrown: Throwable)(_.getCause).takeWhile(_ != null).take(10).toSeq
+      assertTrue(causes.exists(c => c.isInstanceOf[IllegalArgumentException]
+        && String.valueOf(c.getMessage).contains("cannot be read in vectorized mode")),
+        s"Expected the non-atomic type-change rejection but got: $thrown")
+
+      val vectorizedKey = "spark.sql.parquet.enableVectorizedReader"
+      val previous = spark.conf.get(vectorizedKey, "true")
+      spark.conf.set(vectorizedKey, "false")
+      try {
+        val snapshot = loadSnapshot()
+        assertEquals(LongType, snapshot.schema("age").dataType)
+        assertEquals(LongType, snapshot.schema("nested").dataType.asInstanceOf[StructType]("a").dataType)
+        assertPromotedRows(snapshot)
+      } finally {
+        spark.conf.set(vectorizedKey, previous)
+      }
+    }
   }
 }
 
