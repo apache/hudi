@@ -18,12 +18,16 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.metrics.RecordIndexLookupMetrics
 import org.apache.hudi.testutils.CapturingMetricsReporter
 
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+
+import scala.collection.JavaConverters._
 
 /** Record level index lookup counters on the Spark DataSource write path. */
 @Tag("functional")
@@ -93,6 +97,52 @@ class TestRliLookupMetricsOnDataSource extends RliLookupMetricsTestBase {
     report(s"DataSource ($indexLabel) -- insert after a drained upsert, expecting nothing", counters)
     assertTrue(counters.isEmpty,
       s"a commit that looked nothing up must publish no counters of its own; got $counters")
+  }
+
+  /**
+   * INSERT with drop-dups resolves duplicates through a record index lookup before the write, and that
+   * lookup runs on the committing client's engine context. Its counters must therefore reach the reporter
+   * at the INSERT's commit. Regression guard: dedup used to run on a throwaway context (built inside
+   * `DataSourceUtils`) whose registry `postCommit` never drained, so the INSERT published nothing.
+   */
+  @Test
+  def testInsertDropDupsPublishesDedupLookupCounters(): Unit = {
+    val numSeed = 100
+    val numReoffered = 40 // existing keys offered again -> dropped as duplicates -> hits
+    val numFresh = 15 // brand-new keys -> kept -> misses
+
+    // Seed the table so the record index has keys to hit.
+    val seedBatch = doWriteAndValidateDataAndRecordIndex(rliOpts, INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite,
+      validate = false, numInserts = numSeed)
+
+    // A batch mixing already-present keys with new ones, so both hits and misses are exercised.
+    val freshBatch = recordsToStrings(dataGen.generateInsertsAsPerSchema(
+      getInstantTime(), numFresh, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)).asScala
+    val freshDf = spark.read.json(spark.sparkContext.parallelize(freshBatch.toSeq, 2))
+    val insertBatch = seedBatch.limit(numReoffered).unionByName(freshDf)
+
+    // Isolate the INSERT under test from the seed's emissions.
+    CapturingMetricsReporter.reset()
+
+    insertBatch.write.format("hudi")
+      .options(rliOpts)
+      .option(OPERATION.key, INSERT_OPERATION_OPT_VAL)
+      .option(INSERT_DROP_DUPS.key, "true")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val counters = rliCountersFromLatestCommit()
+    report(s"DataSource INSERT drop-dups ($indexLabel)", counters)
+
+    assertTrue(counters.nonEmpty,
+      "INSERT with drop-dups resolves duplicates via an RLI lookup; its counters must reach the reporter")
+    assertEquals(numReoffered.toString, counters(RecordIndexLookupMetrics.KEY_HIT_COUNT),
+      "the re-offered keys already exist in the index")
+    assertEquals(numFresh.toString, counters(RecordIndexLookupMetrics.KEY_MISS_COUNT),
+      "the brand-new keys are misses")
+    assertEquals((numReoffered + numFresh).toLong, assertSumInvariant(counters),
+      "the dedup lookup examines every incoming record")
+    assertTrue(counters(RecordIndexLookupMetrics.SHARDS_READ).toInt > 0, "at least one shard was read")
   }
 
 }

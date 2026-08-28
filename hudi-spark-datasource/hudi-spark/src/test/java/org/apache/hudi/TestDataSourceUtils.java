@@ -64,7 +64,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -315,7 +314,6 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
   void testDeduplicationAgainstRecordsAlreadyInTable() throws IOException {
     initResources();
     HoodieWriteConfig config = getConfig();
-    config.getProps().setProperty("path", config.getBasePath());
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = writeClient.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
@@ -324,10 +322,11 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
       writeClient.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       assertNoWriteErrors(statusList);
 
-      Map<String, String> parameters = config.getProps().entrySet().stream().collect(Collectors.toMap(entry -> entry.getKey().toString(), entry -> entry.getValue().toString()));
       List<HoodieRecord> newRecords = dataGen.generateInserts(newCommitTime, 10);
       List<HoodieRecord> inputRecords = Stream.concat(records.subList(0, 10).stream(), newRecords.stream()).collect(Collectors.toList());
-      List<HoodieRecord> output = DataSourceUtils.resolveDuplicates(jsc, jsc.parallelize(inputRecords, 1), parameters, false).collect();
+      // Deduplicate against the committing client's engine context and config, the same wiring the
+      // Spark SQL writer uses so the record index lookup registry is owned by the draining context.
+      List<HoodieRecord> output = DataSourceUtils.handleDuplicates(context, jsc.parallelize(inputRecords, 1), config, false).collect();
       Set<String> expectedRecordKeys = newRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet());
       assertEquals(expectedRecordKeys, output.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet()));
     }
