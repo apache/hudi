@@ -29,9 +29,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
- * Tests default behavior of the abstract {@link SchemaProvider} used by Hudi Streamer.
+ * Tests the default behavior of the CLI bootstrap {@link SchemaProvider} ({@code org.apache.hudi.cli}), which is
+ * distinct from the Hudi Streamer one ({@code org.apache.hudi.utilities.schema.SchemaProvider}). Its only production
+ * consumer is {@link BootstrapExecutorUtils}, which calls the legacy {@link SchemaProvider#getTargetSchema()}; the
+ * {@link HoodieSchema} accessors and the fallback in {@link SchemaProvider#getTargetHoodieSchema()} have no
+ * production caller and are pinned here directly.
  */
-public class TestSchemaProvider {
+public class TestCliSchemaProvider {
 
   private static final String SCHEMA_STR =
       "{\"type\":\"record\",\"name\":\"r\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"}]}";

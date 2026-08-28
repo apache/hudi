@@ -19,16 +19,36 @@ package org.apache.spark.sql.hudi.procedure
 
 import org.apache.spark.sql.hudi.command.procedures.ProcedureParameter
 import org.apache.spark.sql.types.DataTypes
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNull, assertTrue}
 import org.scalatest.funsuite.AnyFunSuite
 
 /**
- * Unit tests for ProcedureParameterImpl.equals. The implementation used to call this == other for
- * the identity check, which dispatches straight back into equals and recurses until it overflows
- * the stack, and it cast the argument before the null/type guard, so a foreign argument threw
- * ClassCastException. Both are self-contained checks, so no Spark session is needed.
+ * Unit tests for ProcedureParameterImpl: the ProcedureParameter factories, equals, hashCode and
+ * toString. equals used to call this == other for the identity check, which dispatches straight
+ * back into equals and recurses until it overflows the stack, and it cast the argument before the
+ * null/type guard, so a foreign argument threw ClassCastException. All checks are self-contained,
+ * so no Spark session is needed.
  */
 class TestProcedureParameterImpl extends AnyFunSuite {
+
+  test("Test ProcedureParameter factories populate every field") {
+    val required = ProcedureParameter.required(0, "path", DataTypes.StringType)
+    assertEquals(0, required.index)
+    assertEquals("path", required.name)
+    assertEquals(DataTypes.StringType, required.dataType)
+    assertTrue(required.required)
+    assertNull(required.default)
+
+    val optional = ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10)
+    assertEquals(2, optional.index)
+    assertEquals("limit", optional.name)
+    assertEquals(DataTypes.IntegerType, optional.dataType)
+    assertFalse(optional.required)
+    assertEquals(10, optional.default)
+
+    // The default value itself defaults to null.
+    assertNull(ProcedureParameter.optional(3, "filter", DataTypes.StringType).default)
+  }
 
   test("Test ProcedureParameterImpl equals identity, foreign types and null") {
     val param = ProcedureParameter.optional(0, "table", DataTypes.StringType, "default")
@@ -59,5 +79,16 @@ class TestProcedureParameterImpl extends AnyFunSuite {
     assertNotEquals(optional, ProcedureParameter.optional(1, "dry_run", DataTypes.StringType, true))
     assertNotEquals(optional, ProcedureParameter.optional(1, "dry_run", DataTypes.BooleanType, false))
     assertNotEquals(optional, ProcedureParameter.required(1, "dry_run", DataTypes.BooleanType))
+
+    // hashCode is derived from the same fields, so a differing index also changes the hash;
+    // without this a constant hashCode would satisfy the equal-hash assertions above.
+    assertNotEquals(optional.hashCode(),
+      ProcedureParameter.optional(2, "dry_run", DataTypes.BooleanType, true).hashCode())
+  }
+
+  test("Test ProcedureParameterImpl toString includes every field") {
+    val param = ProcedureParameter.optional(1, "col", DataTypes.StringType, "def")
+    assertEquals("ProcedureParameter(index='1',name='col', type=StringType, required=false, default=def)",
+      param.toString)
   }
 }

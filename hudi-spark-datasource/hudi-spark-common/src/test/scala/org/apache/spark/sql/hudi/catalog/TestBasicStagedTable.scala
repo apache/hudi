@@ -19,15 +19,45 @@ package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hudi.exception.HoodieException
 
-import org.apache.spark.sql.connector.catalog.{Identifier, SupportsWrite, Table, TableCatalog}
+import org.apache.spark.sql.connector.catalog.{Identifier, SupportsWrite, Table, TableCapability, TableCatalog}
+import org.apache.spark.sql.connector.expressions.{Expressions, Transform}
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, WriteBuilder}
-import org.junit.jupiter.api.Assertions.{assertSame, assertThrows, assertTrue}
+import org.apache.spark.sql.types.{DataTypes, StructType}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertSame, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.{mock, when}
+import org.mockito.Mockito.{mock, never, verify, when}
 
 class TestBasicStagedTable {
 
   private val ident = Identifier.of(Array("db"), "tbl")
+
+  @Test
+  def testDelegatesMetadataToUnderlyingTableAndLifecycleToCatalog(): Unit = {
+    val table = mock(classOf[Table])
+    val catalog = mock(classOf[TableCatalog])
+    val schema = new StructType().add("id", DataTypes.IntegerType)
+    val partitioning = Array[Transform](Expressions.identity("id"))
+    val capabilities = java.util.EnumSet.of(TableCapability.BATCH_WRITE)
+    val properties = java.util.Collections.singletonMap("k", "v")
+    when(table.schema()).thenReturn(schema)
+    when(table.partitioning()).thenReturn(partitioning)
+    when(table.capabilities()).thenReturn(capabilities)
+    when(table.properties()).thenReturn(properties)
+
+    val staged = BasicStagedTable(ident, table, catalog)
+
+    assertEquals("tbl", staged.name())
+    assertSame(schema, staged.schema())
+    assertSame(partitioning, staged.partitioning())
+    assertSame(capabilities, staged.capabilities())
+    assertSame(properties, staged.properties())
+
+    // Committing leaves the catalog alone; aborting drops the staged table through it.
+    staged.commitStagedChanges()
+    verify(catalog, never()).dropTable(ident)
+    staged.abortStagedChanges()
+    verify(catalog).dropTable(ident)
+  }
 
   @Test
   def testNewWriteBuilderDelegatesToWritableTable(): Unit = {
