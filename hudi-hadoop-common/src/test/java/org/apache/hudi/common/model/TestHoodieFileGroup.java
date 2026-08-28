@@ -162,6 +162,30 @@ public class TestHoodieFileGroup {
   }
 
   @Test
+  public void testCommittedLogsMakeSliceWithUncommittedBaseInstantVisible() {
+    MockHoodieTimeline activeTimeline = new MockHoodieTimeline(Stream.of(
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "000", "000"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "002", "004"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "003", "005")
+    ).collect(Collectors.toList()));
+    CompletionTimeQueryView queryView = getMockCompletionTimeQueryView(activeTimeline);
+    HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
+
+    Stream.of("001", "002", "003")
+        .map(instant -> new HoodieLogFile(new StoragePath(getLogFileName(instant))))
+        .forEach(logFile -> fileGroup.addLogFile(queryView, logFile));
+
+    assertEquals(CollectionUtils.createImmutableList("001"),
+        fileGroup.getAllFileSlicesIncludingInflight().map(FileSlice::getBaseInstantTime).collect(Collectors.toList()));
+    assertEquals(CollectionUtils.createImmutableList("001"),
+        fileGroup.getAllFileSlices().map(FileSlice::getBaseInstantTime).collect(Collectors.toList()));
+    assertEquals(CollectionUtils.createImmutableList("001", "002", "003"),
+        fileGroup.getLatestFileSlice().get().getLogFiles()
+            .map(HoodieLogFile::getDeltaCommitTime).sorted().collect(Collectors.toList()));
+  }
+
+  @Test
   public void testGetBaseInstantTime() {
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(Stream.of(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001", "001"),
