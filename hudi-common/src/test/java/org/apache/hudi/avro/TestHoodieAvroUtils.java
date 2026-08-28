@@ -143,6 +143,7 @@ public class TestHoodieAvroUtils {
 
   private static String SCHEMA_WITH_UNIQUELY_NAMED_NESTED_FIELD = "{\"type\":\"record\",\"name\":\"parent\",\"fields\":["
       + "{\"name\":\"top\",\"type\":\"string\"},"
+      + "{\"name\":\"multi\",\"type\":[\"null\",\"string\",\"long\"],\"default\":null},"
       + "{\"name\":\"child\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"child\",\"fields\":["
       + "{\"name\":\"seq\",\"type\":\"long\"}]}],\"default\":null}]}";
 
@@ -474,6 +475,9 @@ public class TestHoodieAvroUtils {
     assertNull(getNestedFieldSchemaFromWriteSchema(schema, "missing", true));
     // "top" is a leaf, so nothing can be nested under it
     assertNull(getNestedFieldSchemaFromWriteSchema(schema, "top.seq", true));
+    // a union of more than one non-null type cannot be resolved to a single schema
+    assertNull(getNestedFieldSchemaFromWriteSchema(schema, "multi", true));
+    assertNull(getNestedFieldSchemaFromWriteSchema(schema, "multi.seq", true));
     assertThrows(HoodieException.class, () -> getNestedFieldSchemaFromWriteSchema(schema, "child.missing"));
   }
 

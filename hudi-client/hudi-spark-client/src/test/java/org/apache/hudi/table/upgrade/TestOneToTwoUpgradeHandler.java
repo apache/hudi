@@ -46,6 +46,7 @@ class TestOneToTwoUpgradeHandler extends HoodieClientTestBase {
   private static final String NULLABLE_NESTED_SCHEMA = "{\"type\":\"record\",\"name\":\"triprec\",\"fields\":["
       + "{\"name\":\"_row_key\",\"type\":\"string\"},"
       + "{\"name\":\"partition_path\",\"type\":[\"null\",\"string\"],\"default\":null},"
+      + "{\"name\":\"multi\",\"type\":[\"null\",\"string\",\"long\"],\"default\":null},"
       + "{\"name\":\"event\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"event\",\"fields\":["
       + "{\"name\":\"seq\",\"type\":\"long\"}]}],\"default\":null}]}";
 
@@ -78,6 +79,16 @@ class TestOneToTwoUpgradeHandler extends HoodieClientTestBase {
     Map<ConfigProperty, String> tableProps = upgrade(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, orderingField);
     assertEquals("uuid", tableProps.get(HoodieTableConfig.RECORDKEY_FIELDS));
     assertNull(tableProps.get(HoodieTableConfig.PRECOMBINE_FIELD));
+  }
+
+  /**
+   * A field whose schema is a union of more than one non-null type cannot be ordered on, and is
+   * skipped rather than failing the upgrade.
+   */
+  @Test
+  void testSkipsOrderingFieldOnUnresolvableUnion() {
+    assertNull(upgrade(NULLABLE_NESTED_SCHEMA, "multi").get(HoodieTableConfig.PRECOMBINE_FIELD));
+    assertNull(upgrade(NULLABLE_NESTED_SCHEMA, "multi.seq").get(HoodieTableConfig.PRECOMBINE_FIELD));
   }
 
   @Test

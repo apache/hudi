@@ -765,12 +765,17 @@ public class HoodieAvroUtils {
    *
    * @param writeSchema          - write schema of the record
    * @param fieldName            - name of the field, which can be nested, denoted by dot notation. e.g: a.b.c
-   * @param returnNullIfNotFound - whether to return null rather than throw when the field is absent
+   * @param returnNullIfNotFound - whether to return null rather than throw when the field cannot be
+   *                             resolved, which covers a field the schema does not have and a path
+   *                             through a union of more than one non-null type
    * @return the schema of the field, with a nullable union resolved to its non-null type
    */
   public static Schema getNestedFieldSchemaFromWriteSchema(Schema writeSchema, String fieldName, boolean returnNullIfNotFound) {
     Schema currentSchema = writeSchema;
     for (String part : fieldName.split("\\.")) {
+      if (returnNullIfNotFound && !isResolvableSchema(currentSchema)) {
+        return null;
+      }
       Schema recordSchema = getNonNullTypeFromUnion(currentSchema);
       Schema.Field field = recordSchema.getType() == Schema.Type.RECORD ? recordSchema.getField(part) : null;
       if (field == null) {
@@ -781,7 +786,19 @@ public class HoodieAvroUtils {
       }
       currentSchema = field.schema();
     }
+    if (returnNullIfNotFound && !isResolvableSchema(currentSchema)) {
+      return null;
+    }
     return getNonNullTypeFromUnion(currentSchema);
+  }
+
+  /**
+   * Whether {@link AvroSchemaUtils#getNonNullTypeFromUnion} can decompose the schema, which it can
+   * for anything but a union of more than one non-null type.
+   */
+  private static boolean isResolvableSchema(Schema schema) {
+    return schema.getType() != Schema.Type.UNION
+        || (schema.getTypes().size() == 2 && schema.getTypes().stream().anyMatch(it -> it.getType() == Schema.Type.NULL));
   }
 
   /**
