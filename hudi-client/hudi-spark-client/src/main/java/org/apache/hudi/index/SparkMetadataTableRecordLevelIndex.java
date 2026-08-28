@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Either;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -80,7 +81,7 @@ public class SparkMetadataTableRecordLevelIndex extends SparkMetadataTableGlobal
         .map(t -> t._2);
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
     // Lookup the keys in the record index. Resolved on the driver so the closure carries it to executors.
-    Registry lookupMetrics = RecordIndexLookupMetrics.resolveRegistry(context, hoodieTable.getConfig());
+    Option<Registry> lookupMetrics = RecordIndexLookupMetrics.resolveRegistry(context, hoodieTable.getConfig());
     return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(
         new PartitionedRecordIndexFileGroupLookupFunction(hoodieTable.getTableMetadata(), lookupMetrics)));
   }

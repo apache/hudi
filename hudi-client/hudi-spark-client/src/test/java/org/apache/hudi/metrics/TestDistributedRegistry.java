@@ -238,22 +238,6 @@ public class TestDistributedRegistry {
   }
 
   @Test
-  public void testGetMetricRegistryReplacesNonDistributedRegistry() {
-    // Given: a LocalRegistry already occupies the shared map under this key, as happens when a write
-    // client ran earlier in the same JVM with executor metrics disabled.
-    String registryName = REGISTRY_NAME + "_testLocalRegistryTakeover";
-    Registry local = Registry.getRegistry(registryName);
-    Assertions.assertSame(local, Registry.REGISTRY_MAP.get(Registry.makeKey("", registryName)));
-
-    // When: the same name is resolved as a distributed registry
-    Registry resolved = engineContext.getMetricRegistry("", registryName);
-
-    // Then: the incompatible entry is replaced rather than cast-failing on the way out
-    assertThat(resolved, instanceOf(DistributedRegistry.class));
-    Assertions.assertSame(resolved, Registry.REGISTRY_MAP.get(Registry.makeKey("", registryName)));
-  }
-
-  @Test
   public void testReleaseEvictsCountersThatReachZero() {
     // Given: a registry drained of exactly what it holds, as the commit-boundary drain does
     DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testRelease");

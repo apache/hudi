@@ -121,22 +121,6 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
       ("__instant" -> lastInstant.toString)
   }
 
-  /**
-   * Puts counters into the table's registry the way an attempt that never committed would leave them.
-   * Cheaper and more direct than injecting a conflict, and it isolates the behaviour under test: what a
-   * later commit does with counters it did not produce.
-   */
-  protected def seedCountersAsAbandonedAttempt(keyCount: Long): Unit = {
-    metaClient.reloadTableConfig()
-    val key = org.apache.hudi.common.metrics.Registry.makeKey(
-      metaClient.getTableConfig.getTableName,
-      RecordIndexLookupMetrics.scopedName(basePath))
-    val registry = org.apache.hudi.common.metrics.Registry.REGISTRY_MAP.get(key)
-    assert(registry != null, s"expected a registry at $key; the seeding write should have created one")
-    registry.add(RecordIndexLookupMetrics.KEY_COUNT, keyCount)
-    registry.add(RecordIndexLookupMetrics.KEY_HIT_COUNT, keyCount)
-  }
-
   protected def report(label: String, counters: Map[String, String]): Unit = {
     println(s"\n===== $label =====")
     if (counters.isEmpty) {

@@ -46,8 +46,6 @@ public class TestDistributedRegistryUnderTaskRetry {
       jsc.stop();
       jsc = null;
     }
-    HoodieSparkEngineContext.removeMetricRegistry("", "retryRegistry");
-    HoodieSparkEngineContext.removeMetricRegistry("", "recomputeRegistry");
   }
 
   /** {@code local[n, maxFailures]} -- the second number is what makes Spark re-attempt a failed task. */
@@ -76,7 +74,7 @@ public class TestDistributedRegistryUnderTaskRetry {
   public void testFailedAttemptDoesNotInflateCounts() {
     jsc = retryingContext("rli-retry-failed-attempt");
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(jsc);
-    Registry registry = context.getMetricRegistry("", "retryRegistry");
+    Registry registry = context.getOrCreateOwnedRegistry("retryRegistry", "retryRegistry");
 
     int numPartitions = 4;
     int perPartition = 25;
@@ -116,7 +114,7 @@ public class TestDistributedRegistryUnderTaskRetry {
   public void testRepeatedEvaluationDoubleCounts() {
     jsc = retryingContext("rli-retry-recompute");
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(jsc);
-    Registry registry = context.getMetricRegistry("", "recomputeRegistry");
+    Registry registry = context.getOrCreateOwnedRegistry("recomputeRegistry", "recomputeRegistry");
 
     int numPartitions = 4;
     int perPartition = 25;

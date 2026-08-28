@@ -47,16 +47,16 @@ public class PartitionedRecordIndexFileGroupLookupFunction
     implements PairFlatMapFunction<Iterator<Pair<String, String>>, String, HoodieRecordGlobalLocation> {
 
   private final HoodieTableMetadata metadataTable;
-  // Null when no counters should be collected; see RecordIndexLookupMetrics#resolveRegistry.
-  private final Registry lookupMetrics;
+  /** Empty when no counters should be collected; see RecordIndexLookupMetrics#resolveRegistry. */
+  private final Option<Registry> lookupMetrics;
 
   /** Uninstrumented, for the query-side read path. */
   public PartitionedRecordIndexFileGroupLookupFunction(HoodieTableMetadata metadataTable) {
-    this(metadataTable, null);
+    this(metadataTable, Option.empty());
   }
 
   public PartitionedRecordIndexFileGroupLookupFunction(HoodieTableMetadata metadataTable,
-                                                       Registry lookupMetrics) {
+                                                       Option<Registry> lookupMetrics) {
     this.metadataTable = metadataTable;
     this.lookupMetrics = lookupMetrics;
   }
@@ -77,16 +77,17 @@ public class PartitionedRecordIndexFileGroupLookupFunction
       return Collections.emptyIterator();
     }
 
-    HoodieTimer shardTimer = HoodieTimer.start();
+    // Started only when collecting: an unused timer is an allocation per shard on the disabled path.
+    HoodieTimer shardTimer = lookupMetrics.isPresent() ? HoodieTimer.start() : null;
     HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
         metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup), Option.of(partitionName));
     try {
       Map<String, HoodieRecordGlobalLocation> recordIndexInfo = recordIndexData.collectAsList().stream()
           .collect(HashMap::new, (map, pair) -> map.put(pair.getKey(), pair.getValue()), HashMap::putAll);
       // recordIndexInfo is keyed by record key, so its key set is the found set with no extra allocation.
-      if (lookupMetrics != null) {
-        RecordIndexLookupMetrics.recordShardLookup(lookupMetrics, keysToLookup, recordIndexInfo.keySet(),
-            shardTimer.endTimer());
+      if (lookupMetrics.isPresent()) {
+        RecordIndexLookupMetrics.recordShardLookup(lookupMetrics.get(), keysToLookup,
+            recordIndexInfo.keySet(), shardTimer.endTimer());
       }
       return recordIndexInfo.entrySet().stream()
           .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();

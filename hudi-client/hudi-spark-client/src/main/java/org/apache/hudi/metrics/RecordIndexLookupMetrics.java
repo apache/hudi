@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.Option;
@@ -27,11 +28,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -49,7 +46,7 @@ public class RecordIndexLookupMetrics {
 
   private static final Logger LOG = LoggerFactory.getLogger(RecordIndexLookupMetrics.class);
 
-  /** The registry name. Scoping for the driver-side key is applied by {@link #scopedName}. */
+  /** The registry name, as reported. Keying is done by {@link #registryKey}. */
   public static final String REGISTRY_NAME = "HoodieRecordIndexLookup";
 
   /** Reporter naming, as passed to {@code HoodieMetrics.getMetricsName}. */
@@ -83,28 +80,17 @@ public class RecordIndexLookupMetrics {
    * <p>Requires the reporter to be on as well: with {@code hoodie.metrics.on} off there is nowhere to
    * publish, and collecting would register an accumulator and scan every shard for nothing.
    */
-  public static Registry resolveRegistry(HoodieEngineContext context, HoodieWriteConfig config) {
-    if (!config.isMetricsOn() || !config.isRecordIndexLookupMetricsEnabled()) {
-      return null;
+  public static Option<Registry> resolveRegistry(HoodieEngineContext context, HoodieWriteConfig config) {
+    if (!config.isMetricsOn() || !config.isRecordIndexLookupMetricsEnabled()
+        || !(context instanceof HoodieSparkEngineContext)) {
+      return Option.empty();
     }
-    // TBL_NAME has no default and Builder.validate() only requires BASE_PATH, so a config built without
-    // forTable() reaches here with a null name. getMetricRegistry dereferences it immediately.
-    String tableName = config.getTableName();
-    if (tableName == null || tableName.isEmpty()) {
-      return null;
-    }
-    Registry registry = context.getMetricRegistry(tableName, scopedName(config.getBasePath()));
-    // Only the accumulator-backed registry aggregates back to the driver. A LocalRegistry here would
-    // collect on the executor and be dropped on the floor, so report nothing instead.
-    if (!(registry instanceof DistributedRegistry)) {
-      return null;
-    }
-    // Runs on the driver before the closure ships, so anything held now predates this write. Publishing
-    // releases what it reports, which leaves a non-empty registry only after an attempt that never
-    // committed. Paths that tear metrics down between writes lose it anyway; Spark SQL DML and StreamSync
-    // do not, and this commit must not report work it did not do.
+    DistributedRegistry registry = ((HoodieSparkEngineContext) context)
+        .getOrCreateOwnedRegistry(registryKey(config.getBasePath()), REGISTRY_NAME);
+    // Anything held predates this write: the drain removes the entry as it publishes, so a surviving
+    // one belongs to an attempt that never committed.
     registry.clear();
-    return registry;
+    return Option.of(registry);
   }
 
   /**
@@ -143,29 +129,41 @@ public class RecordIndexLookupMetrics {
    * <p>Release subtracts what was reported rather than clearing, so a straggler task whose update lands
    * mid-publish carries into the next commit instead of being dropped. An all-zero registry is skipped.
    */
-  public static void publishAndRelease(HoodieWriteConfig config, HoodieMetrics hoodieMetrics) {
+  public static void publishAndRelease(HoodieEngineContext context, HoodieWriteConfig config,
+                                       HoodieMetrics hoodieMetrics) {
     try {
-      publish(config, hoodieMetrics);
+      publish(context, config, hoodieMetrics);
     } catch (Exception e) {
       // This runs after the commit has landed. Reporting is not worth failing a completed write over.
       LOG.warn("Failed to publish record index lookup metrics; the commit is unaffected.", e);
     }
   }
 
-  private static void publish(HoodieWriteConfig config, HoodieMetrics hoodieMetrics) {
-    if (!config.isRecordIndexLookupMetricsEnabled() || config.getTableName() == null) {
+  private static void publish(HoodieEngineContext context, HoodieWriteConfig config,
+                              HoodieMetrics hoodieMetrics) {
+    if (!config.isRecordIndexLookupMetricsEnabled()) {
+      // Callers gate before reaching here, so this is a wiring mistake rather than normal flow.
+      LOG.warn("Record index lookup metrics drain reached with the feature disabled; nothing published.");
       return;
     }
-    // Only the accumulator-backed registry aggregates from executors, so anything else collected
-    // nothing worth publishing.
-    Registry found = Registry.REGISTRY_MAP.get(
-        Registry.makeKey(config.getTableName(), scopedName(config.getBasePath())));
-    DistributedRegistry registry = found instanceof DistributedRegistry ? (DistributedRegistry) found : null;
-    Map<String, Long> counts =
-        registry == null ? Collections.emptyMap() : new HashMap<>(registry.getAllCounts(false));
+    if (!(context instanceof HoodieSparkEngineContext)) {
+      return;
+    }
+    // Removing is what makes attribution work. An entry exists only because a lookup on this write
+    // created it, so its absence means this write looked nothing up and has nothing of its own to
+    // report -- which is the case an operation type cannot tell apart, since an insert that drops
+    // duplicates tags through SparkRDDReadClient without requiring tagging.
+    Option<DistributedRegistry> taken =
+        ((HoodieSparkEngineContext) context).removeOwnedRegistry(registryKey(config.getBasePath()));
+    if (!taken.isPresent()) {
+      zeroPreviouslyReported(hoodieMetrics);
+      return;
+    }
+    DistributedRegistry registry = taken.get();
+    Map<String, Long> counts = new HashMap<>(registry.getAllCounts(false));
     if (counts.values().stream().allMatch(value -> value == 0L)) {
-      // Nothing was collected. Gauges hold their last value until overwritten, so leaving them alone
-      // would have a reporter re-emit the previous commit's numbers for this one. Zero them instead.
+      // Gauges hold their last value until overwritten, so leaving them alone would have a reporter
+      // re-emit the previous commit's numbers for this one. Zero them instead.
       zeroPreviouslyReported(hoodieMetrics);
       return;
     }
@@ -204,29 +202,17 @@ public class RecordIndexLookupMetrics {
   }
 
   /**
-   * Driver-side {@code REGISTRY_MAP} key. Table name alone is not an identity: two tables can share one
-   * and would then share a registry. Executors hold the registry itself, by closure capture.
+   * Key for this table's registry inside the owning context. The base path is normalized rather than used
+   * raw because one table is spelled more than one way: Spark SQL builds its config from the catalog
+   * location ({@code file:///data/t}) while the DataSource passes the bare path ({@code /data/t}), and
+   * the two must resolve to one entry. The authority is kept so {@code s3://a/t} and {@code s3://b/t}
+   * stay distinct.
    *
-   * <p>The digest takes 48 bits of SHA-256 over the authority and path rather than the raw string,
-   * because one table is spelled more than one way: Spark SQL builds its config from the catalog
-   * location ({@code file:///data/t}) while the DataSource passes the bare path ({@code /data/t}).
-   * Digesting the raw string gives those two different keys, so the executors register under one and
-   * the commit-boundary drain looks under the other and finds nothing. The authority is kept so that
-   * {@code s3://a/t} and {@code s3://b/t} stay distinct.
+   * <p>No digest: this key never leaves the context and never becomes part of a metric name.
    */
-  public static String scopedName(String basePath) {
+  static String registryKey(String basePath) {
     StoragePath path = new StoragePath(basePath);
     String authority = path.toUri().getAuthority();
-    String normalized = (authority == null ? "" : authority) + path.getPathWithoutSchemeAndAuthority();
-    try {
-      byte[] hash = MessageDigest.getInstance("SHA-256").digest(normalized.getBytes(StandardCharsets.UTF_8));
-      StringBuilder hex = new StringBuilder(12);
-      for (int i = 0; i < 6; i++) {
-        hex.append(String.format("%02x", hash[i]));
-      }
-      return REGISTRY_NAME + "." + hex;
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException("SHA-256 is required of every Java platform", e);
-    }
+    return (authority == null ? "" : authority) + path.getPathWithoutSchemeAndAuthority();
   }
 }

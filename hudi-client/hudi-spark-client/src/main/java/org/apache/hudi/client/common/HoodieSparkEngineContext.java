@@ -38,7 +38,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.data.HoodieJavaPairRDD;
@@ -279,50 +278,46 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     return javaSparkContext.sc().applicationId();
   }
 
-  /**
-   * Drops a registry from both process-wide maps. Only for tests that create their own SparkContexts:
-   * without it they leave accumulators bound to stopped contexts behind for whatever runs next in the
-   * same JVM.
-   */
-  @VisibleForTesting
-  public static void removeMetricRegistry(String tableName, String registryName) {
-    String prefixedName = tableName.isEmpty() ? registryName : tableName + "." + registryName;
-    DISTRIBUTED_REGISTRY_MAP.remove(prefixedName);
-    Registry.REGISTRY_MAP.remove(Registry.makeKey(tableName, registryName));
-    // setRegistries also indexes under the empty table name, so evicting only the table-scoped key leaves
-    // the accumulator reachable under ::<table>.<registry>.
-    Registry.REGISTRY_MAP.remove(Registry.makeKey("", prefixedName));
-  }
-
   @Override
   public Registry getMetricRegistry(String tableName, String registryName) {
     final String prefixedName = tableName.isEmpty() ? registryName : tableName + "." + registryName;
-    // Both maps are process-wide statics that outlive any SparkContext, so the staleness check and the
-    // recreation have to be atomic: otherwise one caller can evict the registry another caller just
-    // created, leaving two live accumulators for one metric name while reporting only ever reads the
-    // one still in the map.
-    return DISTRIBUTED_REGISTRY_MAP.compute(prefixedName, (key, cached) -> {
-      if (cached instanceof DistributedRegistry && ((DistributedRegistry) cached).isRegisteredWith(javaSparkContext)) {
-        return cached;
-      }
-      // Nothing usable cached, or the cached accumulator is bound to a SparkContext that is no longer
-      // live (a restart in the same JVM: shells, notebooks, Spark Connect). Drop the shared-map entry
-      // first, since getRegistryOfClass() would otherwise hand back that same stale instance.
-      final String sharedKey = Registry.makeKey(tableName, registryName);
-      Registry.REGISTRY_MAP.remove(sharedKey);
+    return DISTRIBUTED_REGISTRY_MAP.computeIfAbsent(prefixedName, key -> {
       Registry registry = Registry.getRegistryOfClass(tableName, registryName, DistributedRegistry.class.getName());
-      if (!(registry instanceof DistributedRegistry)) {
-        // Another thread inserted a different implementation under this key between the remove and the
-        // create above; getRegistryOfClass() only logs that mismatch and returns what it found. The
-        // shared map is a discovery index, and only the accumulator-backed registry aggregates from
-        // executors, so replace the entry rather than handing back one that silently collects nothing.
-        DistributedRegistry replacement = new DistributedRegistry(prefixedName);
-        Registry.REGISTRY_MAP.put(sharedKey, replacement);
-        registry = replacement;
-      }
       ((DistributedRegistry) registry).register(javaSparkContext);
       return registry;
     });
+  }
+
+  /**
+   * Accumulator-backed registries owned by this context rather than by the process, keyed by table base
+   * path. Unlike {@link #getMetricRegistry}, these are never published into {@code Registry.REGISTRY_MAP}:
+   * the code that collects into them holds the registry by closure capture and never resolves it by name,
+   * so a process-wide index buys nothing and costs a shared lifetime.
+   *
+   * <p>Ownership is what makes the counters attributable. The entry exists only between the lookup that
+   * created it and the commit that drains it, so its presence is the record that this write looked
+   * something up.
+   */
+  private final Map<String, DistributedRegistry> ownedRegistries = new ConcurrentHashMap<>();
+
+  /**
+   * The registry a write collects into, created and registered with this context's {@code SparkContext}
+   * on first use. Callers drain it with {@link #removeOwnedRegistry}.
+   */
+  public DistributedRegistry getOrCreateOwnedRegistry(String key, String registryName) {
+    return ownedRegistries.computeIfAbsent(key, k -> {
+      DistributedRegistry registry = new DistributedRegistry(registryName);
+      registry.register(javaSparkContext);
+      return registry;
+    });
+  }
+
+  /**
+   * Removes and returns the registry for a key, or empty when this context never created one. Empty is
+   * how a write that performed no lookup is distinguished from one that did.
+   */
+  public Option<DistributedRegistry> removeOwnedRegistry(String key) {
+    return Option.ofNullable(ownedRegistries.remove(key));
   }
 
   /**

@@ -18,12 +18,17 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 
+import org.apache.spark.api.java.JavaSparkContext;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -46,10 +51,28 @@ public class TestRecordIndexLookupMetrics {
   private static final String LOOKED_UP_KEY = KEY_COUNT;
 
   private HoodieMetrics hoodieMetrics;
+  private static JavaSparkContext jsc;
+  private static HoodieSparkEngineContext context;
+
+  @BeforeAll
+  static void startContext() {
+    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("drain-test"));
+    context = new HoodieSparkEngineContext(jsc);
+  }
+
+  @AfterAll
+  static void stopContext() {
+    if (jsc != null) {
+      jsc.stop();
+      jsc = null;
+    }
+  }
 
   @AfterEach
-  void clearProcessWideState() {
-    Registry.REGISTRY_MAP.keySet().removeIf(k -> k.contains(RecordIndexLookupMetrics.REGISTRY_NAME));
+  void clearOwnedRegistries() {
+    // Registries live on the context now, so draining what a test left is all the cleanup there is.
+    context.removeOwnedRegistry(RecordIndexLookupMetrics.registryKey(BASE_PATH));
+    context.removeOwnedRegistry(RecordIndexLookupMetrics.registryKey(OTHER_BASE_PATH));
     if (hoodieMetrics != null && hoodieMetrics.getMetrics() != null) {
       hoodieMetrics.getMetrics().shutdown();
       hoodieMetrics = null;
@@ -74,19 +97,13 @@ public class TestRecordIndexLookupMetrics {
     return hoodieMetrics;
   }
 
-  private static String registryKey(HoodieWriteConfig config) {
-    return Registry.makeKey(config.getTableName(),
-        RecordIndexLookupMetrics.scopedName(config.getBasePath()));
-  }
-
-  /** Distributed, not local: that is what {@code HoodieSparkEngineContext#getMetricRegistry} puts here. */
+  /** Creates the entry the way a lookup does, then fills it as the executors would. */
   private static Registry seedRegistry(HoodieWriteConfig config, long lookedUp, long hits, long misses) {
-    Registry registry = new DistributedRegistry(
-        RecordIndexLookupMetrics.scopedName(config.getBasePath()));
+    Registry registry = context.getOrCreateOwnedRegistry(
+        RecordIndexLookupMetrics.registryKey(config.getBasePath()), RecordIndexLookupMetrics.REGISTRY_NAME);
     registry.add(LOOKED_UP_KEY, lookedUp);
     registry.add(KEY_HIT_COUNT, hits);
     registry.add(KEY_MISS_COUNT, misses);
-    Registry.REGISTRY_MAP.put(registryKey(config), registry);
     return registry;
   }
 
@@ -110,7 +127,7 @@ public class TestRecordIndexLookupMetrics {
     seedRegistry(config, 10L, 7L, 3L);
     HoodieMetrics metrics = metricsFor(config);
 
-    RecordIndexLookupMetrics.publishAndRelease(config, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(context, config, metrics);
 
     assertEquals(10L, gauge(metrics, KEY_COUNT));
     assertEquals(7L, gauge(metrics, KEY_HIT_COUNT));
@@ -127,7 +144,7 @@ public class TestRecordIndexLookupMetrics {
     Registry registry = seedRegistry(config, 10L, 7L, 3L);
     HoodieMetrics metrics = metricsFor(config);
 
-    RecordIndexLookupMetrics.publishAndRelease(config, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(context, config, metrics);
 
     assertTrue(registry.getAllCounts(false).isEmpty(),
         "released counters must not linger, even at zero; got " + registry.getAllCounts(false));
@@ -145,7 +162,7 @@ public class TestRecordIndexLookupMetrics {
     HoodieMetrics metrics = metricsFor(config);
 
     registry.clear();
-    RecordIndexLookupMetrics.publishAndRelease(config, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(context, config, metrics);
 
     registry.getAllCounts(false).forEach((name, value) ->
         assertTrue(value >= 0L, "release must clamp at zero, found " + name + "=" + value));
@@ -160,7 +177,7 @@ public class TestRecordIndexLookupMetrics {
 
     // A straggler task's accumulator update, folded in before the drain reads.
     registry.add(LOOKED_UP_KEY, 4L);
-    RecordIndexLookupMetrics.publishAndRelease(config, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(context, config, metrics);
 
     assertTrue(registry.getAllCounts(false).isEmpty(),
         "a drain that reads and releases the same values leaves nothing behind");
@@ -176,7 +193,7 @@ public class TestRecordIndexLookupMetrics {
     seedRegistry(config, 10L, 7L, 3L);
     HoodieMetrics metrics = metricsFor(otherTable);
 
-    RecordIndexLookupMetrics.publishAndRelease(otherTable, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(context, otherTable, metrics);
 
     assertNull(gauge(metrics, KEY_COUNT),
         "a table at a different base path must not report another table's lookups");
@@ -189,7 +206,7 @@ public class TestRecordIndexLookupMetrics {
     Registry registry = seedRegistry(gatedOff, 10L, 7L, 3L);
     HoodieMetrics metrics = metricsFor(gatedOff);
 
-    RecordIndexLookupMetrics.publishAndRelease(gatedOff, metrics);
+    RecordIndexLookupMetrics.publishAndRelease(context, gatedOff, metrics);
 
     assertNull(gauge(metrics, KEY_COUNT), "gate off: nothing reaches the reporter");
     assertFalse(registry.getAllCounts(false).isEmpty(),

@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -133,7 +134,7 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
 
     // Resolved on the driver so the closure carries it to executors.
-    Registry lookupMetrics = RecordIndexLookupMetrics.resolveRegistry(context, hoodieTable.getConfig());
+    Option<Registry> lookupMetrics = RecordIndexLookupMetrics.resolveRegistry(context, hoodieTable.getConfig());
     return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(
         new RecordIndexFileGroupLookupFunction(hoodieTable, lookupMetrics)));
   }
@@ -186,10 +187,10 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
    */
   private static class RecordIndexFileGroupLookupFunction implements PairFlatMapFunction<Iterator<String>, String, HoodieRecordGlobalLocation> {
     private final HoodieTable hoodieTable;
-    // Null when no counters should be collected; see RecordIndexLookupMetrics#resolveRegistry.
-    private final Registry lookupMetrics;
+    /** Empty when no counters should be collected; see RecordIndexLookupMetrics#resolveRegistry. */
+    private final Option<Registry> lookupMetrics;
 
-    public RecordIndexFileGroupLookupFunction(HoodieTable hoodieTable, Registry lookupMetrics) {
+    public RecordIndexFileGroupLookupFunction(HoodieTable hoodieTable, Option<Registry> lookupMetrics) {
       this.hoodieTable = hoodieTable;
       this.lookupMetrics = lookupMetrics;
     }
@@ -199,17 +200,17 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
       List<String> keysToLookup = new ArrayList<>();
       recordKeyIterator.forEachRemaining(keysToLookup::add);
 
-      HoodieTimer shardTimer = HoodieTimer.start();
+      // Started only when collecting: an unused timer is an allocation per shard on the disabled path.
+      HoodieTimer shardTimer = lookupMetrics.isPresent() ? HoodieTimer.start() : null;
       // recordIndexInfo object only contains records that are present in record_index.
       HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
           hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
       try {
         List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
-        // Guarded rather than null-checked inside the helper: the found set is O(hits) and Java
-        // evaluates it as an argument first, so an unguarded call would cost every shard that on
-        // the disabled path, which is the default.
-        if (lookupMetrics != null) {
-          RecordIndexLookupMetrics.recordShardLookup(lookupMetrics, keysToLookup,
+        // Guarded rather than checked inside the helper: the found set is O(hits) and Java evaluates it
+        // as an argument first, so an unguarded call would cost every shard that on the disabled path.
+        if (lookupMetrics.isPresent()) {
+          RecordIndexLookupMetrics.recordShardLookup(lookupMetrics.get(), keysToLookup,
               recordIndexInfo.stream().map(Pair::getKey).collect(Collectors.toSet()), shardTimer.endTimer());
         }
         return recordIndexInfo.stream()

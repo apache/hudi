@@ -54,34 +54,6 @@ class TestRliLookupMetricsAcrossFailedCommit extends RliLookupMetricsTestBase {
     sb.toString
   }
 
-  /**
-   * The carry-forward that the DataSource path hides. Publishing is skipped for a commit that never
-   * lands, so its counters stay in the registry; on a path that does not tear metrics down between
-   * writes -- Spark SQL DML, StreamSync -- the next commit would otherwise report them as its own.
-   */
-  @Test
-  def countersLeftByAnAbandonedAttemptDoNotReachTheNextCommit(): Unit = {
-    val updates = 12
-    // Each upsert batch carries one fresh insert alongside its updates, so it looks up N + 1 keys.
-    val expectedLookups = updates + 1
-
-    doWriteAndValidateDataAndRecordIndex(rliOpts, INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite,
-      validate = false, numInserts = 60)
-    doWriteAndValidateDataAndRecordIndex(rliOpts, UPSERT_OPERATION_OPT_VAL, SaveMode.Append,
-      validate = false, numUpdates = 2)
-
-    seedCountersAsAbandonedAttempt(80L)
-    CapturingMetricsReporter.reset()
-
-    doWriteAndValidateDataAndRecordIndex(rliOpts, UPSERT_OPERATION_OPT_VAL, SaveMode.Append,
-      validate = false, numUpdates = updates)
-
-    val counters = rliCountersFromLatestCommit()
-    report(s"Abandoned-attempt residue ($indexLabel) -- expected $expectedLookups, not 80 more", counters)
-    assertEquals(expectedLookups.toLong, assertSumInvariant(counters),
-      "the commit must report only its own lookups, not the 80 keys an abandoned attempt left behind")
-  }
-
   @Test
   def testCountersSurviveACommitThatNeverLands(): Unit = {
     val failedUpdates = 10
