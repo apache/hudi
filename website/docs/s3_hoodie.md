@@ -2,7 +2,7 @@
 title: AWS S3 
 keywords: [ hudi, hive, aws, s3, spark, presto]
 summary: In this page, we go over how to configure Hudi with S3 filesystem.
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2026-08-28T12:03:07+08:00
 ---
 In this page, we explain how to get your Hudi spark job to store into AWS S3.
 
@@ -60,6 +60,8 @@ Alternatively, add the required configs in your core-site.xml from where Hudi ca
     <value>S3SignerType</value>
   </property>
 ```
+
+Because Hudi reads and writes through the Hadoop S3A connector, these same `fs.s3a.*` settings target Amazon S3 as well as other S3-compatible object stores such as Backblaze B2, Cloudflare R2, and MinIO. For a non-AWS provider, set `fs.s3a.endpoint` to that provider's endpoint (for example `https://your-s3-endpoint.example.com`) and keep `fs.s3a.path.style.access` set to `true` when the provider requires path-style addressing.
 
 
 Utilities such as hudi-cli or Hudi Streamer tool, can pick up s3 creds via environmental variable prefixed with `HOODIE_ENV_`. For e.g below is a bash snippet to setup
