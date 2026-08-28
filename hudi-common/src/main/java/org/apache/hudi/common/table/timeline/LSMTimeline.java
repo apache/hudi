@@ -109,8 +109,7 @@ public class LSMTimeline {
 
   private static final String VERSION_FILE_NAME = "_version_";    // _version_
   private static final String MANIFEST_FILE_PREFIX = "manifest_"; // manifest_[N]
-
-  private static final String TEMP_FILE_SUFFIX = ".tmp";
+  private static final Pattern MANIFEST_FILE_PATTERN = Pattern.compile("^" + MANIFEST_FILE_PREFIX + "(\\d+)$");
 
   private static final Pattern ARCHIVE_FILE_PATTERN =
       Pattern.compile("^(\\d+)_(\\d+)_(\\d)\\.parquet");
@@ -241,7 +240,11 @@ public class LSMTimeline {
    * Parse the snapshot version from the manifest file name.
    */
   public static int getManifestVersion(String fileName) {
-    return Integer.parseInt(fileName.split("_")[1]);
+    Matcher fileMatcher = MANIFEST_FILE_PATTERN.matcher(fileName);
+    if (fileMatcher.matches()) {
+      return Integer.parseInt(fileMatcher.group(1));
+    }
+    throw new HoodieException("Unexpected manifest file name: " + fileName);
   }
 
   /**
@@ -297,6 +300,6 @@ public class LSMTimeline {
    * Returns a path filter for the manifest files.
    */
   public static StoragePathFilter getManifestFilePathFilter() {
-    return path -> path.getName().startsWith(MANIFEST_FILE_PREFIX) && !path.getName().endsWith(TEMP_FILE_SUFFIX);
+    return path -> MANIFEST_FILE_PATTERN.matcher(path.getName()).matches();
   }
 }

@@ -61,7 +61,6 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THA
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
- * TODO: [HUDI-8294]
  * A validator with spark-submit to ensure there are no dangling data files in the data table.
  * No data files found for commits prior to active timeline.
  * No extra data files found for completed commits more than whats present in commit metadata.
@@ -76,7 +75,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  * --master spark://xxxx:7077 \
  * --driver-memory 1g \
  * --executor-memory 1g \
- * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.3.0-SNAPSHOT.jar \
  * --base-path basePath
  * ```
  *
@@ -91,7 +90,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  * --master spark://xxxx:7077 \
  * --driver-memory 1g \
  * --executor-memory 1g \
- * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.3.0-SNAPSHOT.jar \
  * --base-path basePath
  * --continuous \
  * --min-validate-interval-seconds 60

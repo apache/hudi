@@ -42,7 +42,6 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
-import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,7 +51,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -70,15 +68,16 @@ public class TestHoodieNativeLogFormatWriter {
 
     assertEquals("001", parsedHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
     assertEquals(Arrays.asList(2L, 7L),
-        toList(LogReaderUtils.decodeRecordPositionsHeader(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS))));
+        LogReaderUtils.decodeRecordPositionsLongList(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS)));
   }
 
   @Test
-  public void testSkipsOutOfOrderRecordPositions() throws Exception {
+  public void testAddsOutOfOrderRecordPositionsToDataLogFooter() throws Exception {
     Map<HeaderMetadataType, String> parsedHeader = writeDataLogFooterWithPositions(7L, 2L);
 
-    assertFalse(parsedHeader.containsKey(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
-    assertFalse(parsedHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS));
+    assertEquals("001", parsedHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
+    assertEquals(Arrays.asList(7L, 2L),
+        LogReaderUtils.decodeRecordPositionsLongList(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS)));
   }
 
   @Test
@@ -90,11 +89,12 @@ public class TestHoodieNativeLogFormatWriter {
   }
 
   @Test
-  public void testSkipsDuplicateRecordPositions() throws Exception {
+  public void testAddsDuplicateRecordPositionsToDataLogFooter() throws Exception {
     Map<HeaderMetadataType, String> parsedHeader = writeDataLogFooterWithPositions(7L, 7L);
 
-    assertNull(parsedHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
-    assertFalse(parsedHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS));
+    assertEquals("001", parsedHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
+    assertEquals(Arrays.asList(7L, 7L),
+        LogReaderUtils.decodeRecordPositionsLongList(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS)));
   }
 
   @Test
@@ -103,7 +103,7 @@ public class TestHoodieNativeLogFormatWriter {
 
     assertEquals("001", parsedHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS));
     assertEquals(Arrays.asList(7L),
-        toList(LogReaderUtils.decodeRecordPositionsHeader(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS))));
+        LogReaderUtils.decodeRecordPositionsLongList(parsedHeader.get(HeaderMetadataType.RECORD_POSITIONS)));
   }
 
   @Test
@@ -125,6 +125,87 @@ public class TestHoodieNativeLogFormatWriter {
     writeDeleteLogFooterWithPositions(Option.empty(), record, schema, new ArrayList<>());
 
     verify(record, never()).getOrderingValue(eq(schema), any(), any());
+  }
+
+  @Test
+  public void testSkipsUnsupportedDataFileFormatMetadata() throws Exception {
+    Option<Object> metadata = writeDataLogAndGetFormatMetadata(
+        true, null, new UnsupportedOperationException("unsupported"));
+
+    assertFalse(metadata.isPresent());
+  }
+
+  @Test
+  public void testRetainsSupportedDataFileFormatMetadata() throws Exception {
+    Object expectedMetadata = new Object();
+
+    Option<Object> metadata = writeDataLogAndGetFormatMetadata(true, expectedMetadata, null);
+
+    assertEquals(expectedMetadata, metadata.get());
+  }
+
+  @Test
+  public void testSkipsDataFileFormatMetadataWhenColumnStatsDisabled() throws Exception {
+    Option<Object> metadata = writeDataLogAndGetFormatMetadata(
+        false, null, new AssertionError("metadata should not be requested"));
+
+    assertFalse(metadata.isPresent());
+  }
+
+  private static Option<Object> writeDataLogAndGetFormatMetadata(
+      boolean columnStatsEnabled, Object formatMetadata, Throwable metadataFailure) throws Exception {
+    String instantTime = "100";
+    HoodieStorage storage = mock(HoodieStorage.class);
+    HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+    HoodieSchema schema = mock(HoodieSchema.class);
+    HoodieRecordMerger merger = mock(HoodieRecordMerger.class);
+    HoodieFileWriter fileWriter = mock(HoodieFileWriter.class);
+    StoragePath parentPath = new StoragePath("/tmp/partition");
+
+    when(config.getProps()).thenReturn(new TypedProperties());
+    when(config.getRecordMerger()).thenReturn(merger);
+    when(config.isMetadataColumnStatsIndexEnabled()).thenReturn(columnStatsEnabled);
+    when(merger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
+    when(storage.exists(any(StoragePath.class))).thenReturn(false);
+    when(storage.getPathInfo(any(StoragePath.class))).thenAnswer(invocation ->
+        new StoragePathInfo(invocation.getArgument(0), 1L, false, (short) 1, 1L, 1L));
+    if (metadataFailure != null) {
+      when(fileWriter.getFileFormatMetadata()).thenThrow(metadataFailure);
+    } else {
+      when(fileWriter.getFileFormatMetadata()).thenReturn(formatMetadata);
+    }
+
+    try (MockedStatic<HoodieFileWriterFactory> writerFactory = mockStatic(HoodieFileWriterFactory.class)) {
+      writerFactory.when(() -> HoodieFileWriterFactory.getFileWriter(
+              eq(instantTime), any(StoragePath.class), eq(storage), eq(config), eq(schema),
+              any(TaskContextSupplier.class), eq(HoodieRecord.HoodieRecordType.AVRO)))
+          .thenReturn(fileWriter);
+
+      HoodieNativeLogFormatWriter writer = new HoodieNativeLogFormatWriter(
+          4096,
+          storage,
+          parentPath,
+          "file-1",
+          instantTime,
+          1,
+          "1-0-1",
+          1024L,
+          new LogFileCreationCallback() {
+          },
+          HoodieTableVersion.current(),
+          config,
+          HoodieFileFormat.PARQUET,
+          schema,
+          mock(TaskContextSupplier.class),
+          mock(RecordContext.class),
+          new ArrayList<>(),
+          Option.empty());
+
+      writer.appendRecord(recordWithPosition("key-1", 1L, schema),
+          schema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      writer.flushAppend(new HashMap<>());
+      return writer.getLastDataFileFormatMetadata();
+    }
   }
 
   private static Map<HeaderMetadataType, String> writeDataLogFooterWithPositions(long... positions) throws Exception {
@@ -262,11 +343,5 @@ public class TestHoodieNativeLogFormatWriter {
     when(record.getCurrentPosition()).thenReturn(position);
     when(record.getOrderingValue(eq(schema), any(), any())).thenReturn(OrderingValues.getDefault());
     return record;
-  }
-
-  private static List<Long> toList(Roaring64NavigableMap positions) {
-    List<Long> values = new ArrayList<>();
-    positions.iterator().forEachRemaining(values::add);
-    return values;
   }
 }

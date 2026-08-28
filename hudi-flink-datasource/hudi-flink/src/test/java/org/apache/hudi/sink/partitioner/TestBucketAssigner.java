@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -476,6 +477,7 @@ public class TestBucketAssigner {
     morConf.setString(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), "1024");
     morConf.setString(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "1");
     morConf.setString(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key(), "0.5");
+    morConf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.NINE.versionCode());
     StreamerUtil.initTableIfNotExists(morConf);
     TestData.writeData(TestData.DATA_SET_INSERT, morConf);
 
@@ -507,6 +509,7 @@ public class TestBucketAssigner {
     morConf.setString(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "1");
     morConf.setString(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key(), "0.5");
     morConf.setString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
+    morConf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.NINE.versionCode());
     StreamerUtil.initTableIfNotExists(morConf);
     TestData.writeData(TestData.DATA_SET_INSERT, morConf);
 
@@ -525,6 +528,37 @@ public class TestBucketAssigner {
     assertThat("Average record size from parquet log blocks should not be corrected again",
         writeProfile.getAvgSize(), is(expectedAvgSize));
     assertThat("Records per bucket should use the uncorrected parquet log block average record size",
+        writeProfile.getRecordsPerBucket(), is(morWriteConfig.getParquetMaxFileSize() / expectedAvgSize));
+  }
+
+  @Test
+  public void testDeltaWriteProfileRecordsPerBucketSkipsCompressionRatioForNativeLogs() throws Exception {
+    File morPath = new File(tempFile, "mor_native_logs");
+    Configuration morConf = TestConfigurations.getDefaultConf(morPath.getAbsolutePath());
+    morConf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    morConf.set(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE, 1);
+    morConf.setString(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), "1024");
+    morConf.setString(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "1");
+    morConf.setString(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key(), "0.5");
+    morConf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.TEN.versionCode());
+    StreamerUtil.initTableIfNotExists(morConf);
+    TestData.writeData(TestData.DATA_SET_INSERT, morConf);
+
+    HoodieWriteConfig morWriteConfig = FlinkWriteClients.getHoodieClientConfig(morConf);
+    HoodieFlinkEngineContext morContext = new HoodieFlinkEngineContext(
+        HadoopFSUtils.getStorageConf(HadoopConfigurations.getHadoopConf(morConf)),
+        new FlinkTaskContextSupplier(null));
+
+    DeltaWriteProfile writeProfile = new DeltaWriteProfile(morWriteConfig, morContext);
+    String latestInstant = getLastCompleteInstant(writeProfile);
+    HoodieCommitMetadata commitMetadata = writeProfile.getMetadataCache().get(latestInstant);
+    assertNotNull(commitMetadata);
+    long expectedAvgSize = (long) Math.ceil(
+        1.0 * commitMetadata.fetchTotalBytesWritten() / commitMetadata.fetchTotalRecordsWritten());
+
+    assertThat("Average record size from native logs should not be corrected again",
+        writeProfile.getAvgSize(), is(expectedAvgSize));
+    assertThat("Records per bucket should use the uncorrected native log average record size",
         writeProfile.getRecordsPerBucket(), is(morWriteConfig.getParquetMaxFileSize() / expectedAvgSize));
   }
 

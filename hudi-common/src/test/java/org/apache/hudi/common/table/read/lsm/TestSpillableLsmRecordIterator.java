@@ -78,6 +78,42 @@ class TestSpillableLsmRecordIterator {
     assertSame(closeFailure, exception.getCause().getSuppressed()[0]);
   }
 
+  @Test
+  void testEmptySpillAndIdempotentClose() throws IOException {
+    SpillableLsmRecordIterator<String> iterator = new SpillableLsmRecordIterator<>(
+        ClosableIterator.wrap(java.util.Collections.emptyIterator()), new DefaultSerializer<>(), null, tempDir.toString());
+
+    assertFalse(iterator.hasNext());
+    assertThrows(java.util.NoSuchElementException.class, iterator::next);
+    iterator.close();
+    iterator.close();
+    assertEquals(0, spillFileCount());
+  }
+
+  @Test
+  void testMissingSpillFileIsReportedAsReadFailure() throws IOException {
+    SpillableLsmRecordIterator<String> iterator = new SpillableLsmRecordIterator<>(
+        ClosableIterator.wrap(java.util.Collections.singletonList(
+            new BufferedRecord<String>("key", 1, null, null, null)).iterator()),
+        new DefaultSerializer<>(), null, tempDir.toString());
+    Path spillFile;
+    try (Stream<Path> paths = Files.list(tempDir)) {
+      spillFile = paths.findFirst().get();
+    }
+    Files.delete(spillFile);
+
+    assertThrows(HoodieIOException.class, iterator::hasNext);
+    iterator.close();
+  }
+
+  @Test
+  void testSuccessfulSpillPropagatesSourceCloseFailure() {
+    RuntimeException closeFailure = new RuntimeException("source close failed");
+
+    assertSame(closeFailure, assertThrows(RuntimeException.class, () -> new SpillableLsmRecordIterator<>(
+        closeFailingIterator(closeFailure), new DefaultSerializer<>(), null, tempDir.toString())));
+  }
+
   private long spillFileCount() throws IOException {
     try (Stream<Path> paths = Files.list(tempDir)) {
       return paths.count();

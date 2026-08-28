@@ -46,7 +46,6 @@ import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 
 import java.io.ByteArrayOutputStream;
@@ -170,11 +169,10 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
       return LocalDate.ofEpochDay(((Integer) fieldValue).longValue());
     } else if (schemaType == HoodieSchemaType.TIMESTAMP && keepConsistentLogicalTimestamp) {
       HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) fieldSchema;
-      TimestampData ts = (TimestampData) fieldValue;
       if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) {
-        return ts.getMillisecond();
+        return fieldValue;
       } else if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MICROS) {
-        return ts.getMillisecond() / 1000;
+        return ((Long) fieldValue) / 1000;
       }
     } else if (schemaType == HoodieSchemaType.DECIMAL) {
       return ((DecimalData) fieldValue).toBigDecimal();

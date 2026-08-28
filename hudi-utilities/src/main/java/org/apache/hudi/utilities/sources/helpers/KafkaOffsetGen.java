@@ -346,7 +346,7 @@ public class KafkaOffsetGen {
     }
     return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents, minPartitions);
   }
-  
+
   /**
    * Fetch partition infos for given topic.
    *
@@ -459,28 +459,58 @@ public class KafkaOffsetGen {
    * 1. input: timestamp, etc.
    * 2. output: topicName,partition_num_0:100,partition_num_1:101,partition_num_2:102.
    *
+   * <p>For each partition, {@link KafkaConsumer#offsetsForTimes} returns the offset of the first
+   * record whose timestamp is >= {@code timestamp}. If a partition has no such record (either
+   * because all records predate {@code timestamp}, the partition is empty, or the messages use a
+   * pre-0.10.0 format that has no timestamp), {@code offsetsForTimes} returns {@code null} for
+   * that partition. In that case, we fall back to the partition's end offset rather than the
+   * beginning offset: since no record satisfies the requested timestamp, the correct starting
+   * point is the tip of the partition. Falling back to the beginning offset would re-consume the
+   * entire partition, which contradicts the semantics of a timestamp-based checkpoint.
+   *
    * @param consumer
    * @param topicName
    * @param timestamp
    * @return
    */
-  private Option<String> getOffsetsByTimestamp(KafkaConsumer consumer, List<PartitionInfo> partitionInfoList, Set<TopicPartition> topicPartitions,
-                                               String topicName, Long timestamp) {
+  @VisibleForTesting
+  Option<String> getOffsetsByTimestamp(KafkaConsumer consumer, List<PartitionInfo> partitionInfoList, Set<TopicPartition> topicPartitions,
+                                       String topicName, Long timestamp) {
 
     Map<TopicPartition, Long> topicPartitionsTimestamp = partitionInfoList.stream()
                                                     .map(x -> new TopicPartition(x.topic(), x.partition()))
                                                     .collect(Collectors.toMap(Function.identity(), x -> timestamp));
 
-    Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
+    // Fetch end offsets BEFORE offsetsForTimes to close the window where a record appended
+    // between the two calls would be permanently skipped. With this order, if offsetsForTimes
+    // returns null for a partition, we fall back to the end offset captured at T1; any record
+    // written after T1 will be picked up in the next batch (at-least-once semantics).
+    Map<TopicPartition, Long> endOffsets = consumer.endOffsets(topicPartitions);
     Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = consumer.offsetsForTimes(topicPartitionsTimestamp);
 
+    // Track partitions with no offset at/after the requested timestamp so we can surface them
+    // as a WARN. Without this, callers whose messages use a pre-0.10.0 format (which always
+    // returns null here) would silently skip to the tip of every partition with no signal.
+    Map<TopicPartition, Long> fallbackToEndOffsets = new HashMap<>();
     StringBuilder sb = new StringBuilder(topicName);
     for (Map.Entry<TopicPartition, OffsetAndTimestamp> map : offsetAndTimestamp.entrySet()) {
       if (map.getValue() != null) {
         sb.append(",").append(map.getKey().partition()).append(":").append(map.getValue().offset());
       } else {
-        sb.append(",").append(map.getKey().partition()).append(":").append(earliestOffsets.get(map.getKey()));
+        // No record in this partition has a timestamp >= the requested one. Fall back to the
+        // end offset captured before offsetsForTimes to guarantee at-least-once: any record
+        // written after we snapshot endOffsets will be re-consumed next batch, never skipped.
+        Long endOffset = endOffsets.get(map.getKey());
+        fallbackToEndOffsets.put(map.getKey(), endOffset);
+        sb.append(",").append(map.getKey().partition()).append(":").append(endOffset);
       }
+    }
+    if (!fallbackToEndOffsets.isEmpty()) {
+      log.warn("No offset was found at/after timestamp {} for partitions; falling back to their "
+              + "end offsets. This can happen when all records in the partition predate the requested "
+              + "timestamp, when the partition is empty, or when messages use a pre-0.10.0 format "
+              + "without a timestamp. Fallback offsets: {}",
+          timestamp, fallbackToEndOffsets);
     }
     return Option.of(sb.toString());
   }

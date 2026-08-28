@@ -28,7 +28,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.stream.Stream;
 
-import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.getUnescapedSecondaryKeyPrefixFromSecondaryIndexKey;
+import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.getEscapedSecondaryKeyPrefixFromSecondaryIndexKey;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -132,15 +132,15 @@ public class TestSecondaryIndexKeyUtils {
     assertEquals("ab", SecondaryIndexKeyUtils.unescapeSpecialChars("\\a\\b"));
   }
 
-  // Test getUnescapedSecondaryKeyFromSecondaryIndexKey exhaustively
+  // Test getEscapedSecondaryKeyFromSecondaryIndexKey exhaustively
   @ParameterizedTest(name = "Get unescaped secondary key: input='{0}', expected='{1}'")
-  @MethodSource("getUnescapedSecondaryKeyTestCases")
+  @MethodSource("getEscapedSecondaryKeyTestCases")
   public void testGetUnescapedSecondaryKeyFromSecondaryIndexKey(String encodedKey, String expectedSecondaryKey) {
-    String actualSecondaryKey = SecondaryIndexKeyUtils.getUnescapedSecondaryKeyFromSecondaryIndexKey(encodedKey);
+    String actualSecondaryKey = SecondaryIndexKeyUtils.getEscapedSecondaryKeyFromSecondaryIndexKey(encodedKey);
     assertEquals(expectedSecondaryKey, actualSecondaryKey);
   }
 
-  private static Stream<Arguments> getUnescapedSecondaryKeyTestCases() {
+  private static Stream<Arguments> getEscapedSecondaryKeyTestCases() {
     return Stream.of(
         // Simple cases
         Arguments.of("key$value", "key"),
@@ -206,7 +206,7 @@ public class TestSecondaryIndexKeyUtils {
     // Construct the key used by the writer path
     String constructedKey = SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey);
     // The key used by the reader path and the key used by the writer path have the following invariant.
-    assertEquals(new SecondaryIndexPrefixRawKey(secondaryKey).encode(), getUnescapedSecondaryKeyPrefixFromSecondaryIndexKey(constructedKey));
+    assertEquals(new SecondaryIndexPrefixRawKey(secondaryKey).encode(), getEscapedSecondaryKeyPrefixFromSecondaryIndexKey(constructedKey));
     
     // Extract both parts
     String extractedSecondary = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(constructedKey);

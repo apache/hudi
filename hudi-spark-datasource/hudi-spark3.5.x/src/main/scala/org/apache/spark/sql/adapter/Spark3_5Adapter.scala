@@ -181,6 +181,15 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
     Some(new SparkLanceReaderBase(vectorized))
   }
 
+  override def createVortexFileReader(vectorized: Boolean,
+                                      sqlConf: SQLConf,
+                                      options: Map[String, String],
+                                      hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
+    // Vortex requires Java 17 (vortex-jni ships Java 17 bytecode) and is wired only through the
+    // Spark 4.x adapters. Spark 3.5 runs on Java 11, where SparkVortexReaderBase is not compiled.
+    None
+  }
+
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
     jssc.sc.stop(exitCode)
   }

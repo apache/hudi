@@ -195,9 +195,8 @@ public class ITTestHoodieFlinkCompactor {
     }
   }
 
-  // todo: enable test for downgrade after this issue solved: https://github.com/apache/hudi/issues/19090
   @ParameterizedTest
-  @ValueSource(booleans = {true})
+  @ValueSource(booleans = {true, false})
   void testHoodieFlinkCompactorWithUpgradeAndDowngrade(boolean upgrade) throws Exception {
     // Create hoodie table and insert into data.
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
@@ -210,6 +209,10 @@ public class ITTestHoodieFlinkCompactor {
     options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
     options.put(FlinkOptions.ORDERING_FIELDS.key(), "ts");
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+    // Table version SIX predates LSM storage layout. Keep this upgrade/downgrade compatibility
+    // test on the default layout so changing the table version does not create an invalid LSM + v6 table.
+    options.put(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
     tableEnv.executeSql(TestSQL.INSERT_T1).await();
@@ -268,7 +271,7 @@ public class ITTestHoodieFlinkCompactor {
       // Mark instant as compaction inflight
       metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
 
-      conf.set(FlinkOptions.WRITE_TABLE_VERSION, upgrade ? HoodieTableVersion.EIGHT.versionCode() : HoodieTableVersion.SIX.versionCode());
+      conf.set(FlinkOptions.WRITE_TABLE_VERSION, upgrade ? HoodieTableVersion.current().versionCode() : HoodieTableVersion.SIX.versionCode());
       env.addSource(new CompactionPlanSourceFunction(Collections.singletonList(Pair.of(compactionInstantTime, compactionPlan)), conf))
           .name("compaction_source")
           .uid("uid_compaction_source")

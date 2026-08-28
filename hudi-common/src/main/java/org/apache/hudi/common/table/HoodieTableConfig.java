@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -238,7 +239,8 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.log.file.format")
       .defaultValue(HoodieFileFormat.HOODIE_LOG)
       .withAlternatives("hoodie.table.rt.file.format")
-      .withDocumentation("Log format used for the delta logs.");
+      .withDocumentation("Log format used for legacy inline log files. This setting does not apply to native log files, "
+          + "which always use the effective base file format.");
 
   public static final ConfigProperty<String> TABLE_STORAGE_LAYOUT = ConfigProperty
       .key("hoodie.table.storage.layout")
@@ -327,11 +329,38 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Base path of the dataset that needs to be bootstrapped as a Hudi table");
 
+  /**
+   * @deprecated since 1.3.0, use {@link #META_FIELDS_MODE} instead. {@code true} maps to
+   * {@link MetaFieldsMode#ALL} and {@code false} maps to {@link MetaFieldsMode#NONE}. This property
+   * is still honored for tables written before {@code hoodie.meta.fields.mode} existed, but it is
+   * consulted only when the mode property is absent.
+   */
+  @Deprecated
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key("hoodie.populate.meta.fields")
       .defaultValue(true)
-      .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
+      .deprecatedAfter("1.2.0")
+      .withDocumentation("Deprecated — use hoodie.meta.fields.mode instead (true maps to ALL, false maps to NONE). "
+          + "When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
+
+  // NOTE: deliberately carries no sinceVersion. validateConfigVersion() silently *removes* any
+  // property whose sinceVersion exceeds the table's version (see the props.remove call in
+  // dropInvalidConfigs), so declaring one here would strip the mode from every table below that
+  // version on load -- reverting it to ALL without a word. Meta-field population is not a v10
+  // concept: a table as old as v6 can carry a selective mode, set at creation or through the
+  // hudi-cli, and 1.x supports writing to those tables. v6 is the floor only because that is the
+  // oldest version 1.x can write. Anything that keys meta-field behavior on table version rather
+  // than on this property will therefore be wrong for those tables.
+  public static final ConfigProperty<String> META_FIELDS_MODE = ConfigProperty
+      .key("hoodie.meta.fields.mode")
+      .noDefaultValue()
+      .withDocumentation("Which Hudi meta columns are physically populated on disk. Allowed values are "
+          + "ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY and COMMIT_TIME_AND_FILE_NAME. This supersedes the "
+          + "deprecated hoodie.populate.meta.fields boolean, which is consulted only when this property is unset "
+          + "(true maps to ALL, false maps to NONE). Supported on any table version 1.x can write, not just the "
+          + "latest. Set only at table creation, via the hudi-cli, or during table upgrade — the property is "
+          + "immutable at runtime because it is a physical-storage decision baked into files at write time.");
 
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
@@ -651,6 +680,12 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
 
+      MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(hoodieConfig);
+      if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+        hoodieConfig.setValue(POPULATE_META_FIELDS,
+            Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
+      }
+
       dropInvalidConfigs(hoodieConfig);
       storeProperties(hoodieConfig.getProps(), outputStream, propertyPath);
     }
@@ -736,6 +771,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static Option<String[]> getPartitionFields(HoodieConfig config) {
     if (contains(PARTITION_FIELDS, config)) {
       return Option.of(Arrays.stream(config.getString(PARTITION_FIELDS).split(BaseKeyGenerator.FIELD_SEPARATOR))
+          .map(String::trim)
           .filter(p -> !p.isEmpty())
           .map(p -> getPartitionFieldWithoutKeyGenPartitionType(p, config))
           .collect(Collectors.toList()).toArray(new String[] {}));
@@ -1229,9 +1265,46 @@ public class HoodieTableConfig extends HoodieConfig {
 
   /**
    * @returns true is meta fields need to be populated. else returns false.
+   *
+   * <p>Derived from {@link #getMetaFieldsMode()} so that call sites still written against the
+   * deprecated boolean observe the same answer as the enum: only {@link MetaFieldsMode#ALL}
+   * populates every meta column. Selective modes report {@code false} here, which keeps
+   * key-dependent machinery (bloom filters, record-level index) correctly disabled.
    */
   public boolean populateMetaFields() {
-    return Boolean.parseBoolean(getStringOrDefault(POPULATE_META_FIELDS));
+    return getMetaFieldsMode().toLegacyPopulateMetaFields();
+  }
+
+  /**
+   * @return the configured {@link MetaFieldsMode}, falling back to the deprecated
+   * {@link #POPULATE_META_FIELDS} setting for legacy tables. This method is side-effect free and
+   * never returns {@code null}.
+   */
+  public MetaFieldsMode getMetaFieldsMode() {
+    return MetaFieldsMode.resolve(this);
+  }
+
+  /**
+   * @return true when the {@code _hoodie_commit_time} meta column is physically populated on disk.
+   */
+  public boolean isCommitTimePopulated() {
+    return getMetaFieldsMode().isCommitTimePopulated();
+  }
+
+  /**
+   * @return true when the {@code _hoodie_file_name} meta column is physically populated on disk.
+   */
+  public boolean isFileNamePopulated() {
+    return getMetaFieldsMode().isFileNamePopulated();
+  }
+
+  /**
+   * @return true when the {@code _hoodie_record_key} meta column is physically populated on disk.
+   * Only {@link MetaFieldsMode#ALL} populates the record-key column; every selective mode leaves
+   * it null.
+   */
+  public boolean isRecordKeyPopulated() {
+    return getMetaFieldsMode().isRecordKeyPopulated();
   }
 
   /**
@@ -1406,14 +1479,20 @@ public class HoodieTableConfig extends HoodieConfig {
     return Option.empty();
   }
 
-  public Map<String, String> getTableMergeProperties() {
+  /**
+   * Returns the record-merge properties for this table, deriving the pre-v9 delete markers from the
+   * given effective payload class rather than the one persisted in this table config. Callers on the
+   * write path pass the write-config payload class ({@code hoodie.datasource.write.payload.class}),
+   * which for a pre-v9 table may be the only place the payload class is set.
+   */
+  public Map<String, String> getTableMergeProperties(String payloadClass) {
     Map<String, String> configs = ConfigUtils.extractWithPrefix(this.props, RECORD_MERGE_PROPERTY_PREFIX);
     if (getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
       // Convert legacy payload properties do delete key and delete marker properties
-      if (getPayloadClass().equals(AWSDmsAvroPayload.class.getName())) {
+      if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
         configs.put(DELETE_KEY, OP_FIELD);
         configs.put(DELETE_MARKER, DELETE_OPERATION_VALUE);
-      } else if (getPayloadClass().equals(MySqlDebeziumAvroPayload.class.getName()) || getPayloadClass().equals(PostgresDebeziumAvroPayload.class.getName())) {
+      } else if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName()) || payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
         configs.put(DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
         configs.put(DELETE_MARKER, DebeziumConstants.DELETE_OP);
       }

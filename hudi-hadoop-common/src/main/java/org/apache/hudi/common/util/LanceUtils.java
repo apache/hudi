@@ -52,30 +52,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class LanceUtils extends FileFormatUtils {
-
-  @Override
-  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
-    return fetchRecordKeysWithPositions(storage, filePath, Option.empty(), Option.empty());
-  }
-
-  @Override
-  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
-                                                                               StoragePath filePath,
-                                                                               Option<BaseKeyGenerator> keyGeneratorOpt,
-                                                                               Option<String> partitionPath) {
-    AtomicLong position = new AtomicLong(0);
-    return new CloseableMappingIterator<>(
-        getHoodieKeyIterator(storage, filePath, keyGeneratorOpt, partitionPath),
-        key -> Pair.of(key, position.getAndIncrement()));
-  }
-
-  @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
-    return getHoodieKeyIterator(storage, filePath, Option.empty(), Option.empty());
-  }
 
   @Override
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage,

@@ -42,7 +42,9 @@ public class MultiPartKeysValueExtractor implements PartitionValueExtractor {
     String[] splits = partitionPath.split("/");
     return Arrays.stream(splits).map(s -> {
       if (s.contains("=")) {
-        String[] moreSplit = s.split("=");
+        // Split on the first '=' only so partition values that themselves contain '='
+        // (e.g. base64 padding like "col=YWJj==") are preserved instead of being rejected or truncated.
+        String[] moreSplit = s.split("=", 2);
         ValidationUtils.checkArgument(moreSplit.length == 2, "Partition Field (" + s + ") not in expected format");
         return moreSplit[1];
       }

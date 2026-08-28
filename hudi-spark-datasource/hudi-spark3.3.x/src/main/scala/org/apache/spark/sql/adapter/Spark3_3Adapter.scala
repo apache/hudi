@@ -165,6 +165,13 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     None
   }
 
+  override def createVortexFileReader(vectorized: Boolean,
+                                      sqlConf: SQLConf,
+                                      options: Map[String, String],
+                                      hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
+    None
+  }
+
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
     jssc.stop()
   }

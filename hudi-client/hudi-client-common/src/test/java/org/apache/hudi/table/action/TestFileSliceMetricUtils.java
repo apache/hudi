@@ -87,7 +87,7 @@ public class TestFileSliceMetricUtils {
   }
 
   private FileSlice buildFileSlice(long baseFileLen, List<Long> logFileLens) {
-    final String baseFilePath = ".b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1";
+    final String baseFilePath = "b5068208-e1a4-11e6-bf01-fe55135034f3_1-0-1_20170101134598.parquet";
     FileSlice slice = new FileSlice("partition_0",
         InProcessTimeGenerator.createNewInstantTime(),
         UUID.randomUUID().toString());

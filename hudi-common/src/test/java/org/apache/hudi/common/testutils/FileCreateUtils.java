@@ -110,7 +110,7 @@ public class FileCreateUtils extends FileCreateUtilsBase {
   }
 
   public static String logFileMarkerFileName(String instantTime, String fileId, IOType ioType, String fileExtension, int logVersion) {
-    return markerFileName(FSUtils.makeLogFileName(fileId, fileExtension, instantTime, logVersion, WRITE_TOKEN), ioType);
+    return markerFileName(FSUtils.makeInlineLogFileName(fileId, fileExtension, instantTime, logVersion, WRITE_TOKEN), ioType);
   }
 
   private static void deleteMetaFile(HoodieTableMetaClient metaClient, String instantTime, String suffix,
@@ -421,7 +421,7 @@ public class FileCreateUtils extends FileCreateUtilsBase {
   public static String createMarkerFile(HoodieTableMetaClient metaClient, String partitionPath, String instantTime, String fileId, IOType ioType)
       throws IOException {
     if (IOType.APPEND == ioType) {
-      String logFileName = FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime, HoodieLogFile.LOGFILE_BASE_VERSION, WRITE_TOKEN);
+      String logFileName = FSUtils.makeInlineLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime, HoodieLogFile.LOGFILE_BASE_VERSION, WRITE_TOKEN);
       String markerFileName = markerFileName(logFileName, ioType);
       return createMarkerFile(metaClient, partitionPath, instantTime, markerFileName);
     }

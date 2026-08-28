@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.StreamingMetadataWriteHandler;
 import org.apache.hudi.table.HoodieTable;
@@ -85,6 +86,27 @@ public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
   }
 
   /**
+   * Start only the metadata table heartbeat for an existing streaming write instant.
+   *
+   * <p>This is used by coordinator recommit where the metadata table instant and
+   * the streaming index files may already exist and must not be rolled back.
+   *
+   * @param instantTime The instant time
+   * @param table       The hoodie table
+   */
+  public void startHeartbeat(String instantTime, HoodieTable table) {
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table);
+    ValidationUtils.checkState(metadataWriterOpt.isPresent(),
+        "Should not be reachable. Metadata Writer should have been instantiated by now");
+    ValidationUtils.checkState(metadataWriterOpt.get() instanceof FlinkHoodieBackedTableMetadataWriter,
+        "Flink streaming metadata writes expect a Flink metadata writer");
+    FlinkHoodieBackedTableMetadataWriter metadataWriter = (FlinkHoodieBackedTableMetadataWriter) metadataWriterOpt.get();
+    if (metadataWriter.getWriteClient().getConfig().getFailedWritesCleanPolicy().isLazy()) {
+      metadataWriter.getWriteClient().getHeartbeatClient().start(instantTime);
+    }
+  }
+
+  /**
    * Clean resources after streaming write to the metadata table in index write function or stop
    * heartbeat for instant in the coordinator. This method removes the metadata writer associated
    * with the given instant time from the internal map and closes it if it exists.
@@ -94,11 +116,13 @@ public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
   public void cleanResources(String instantTime) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = this.metadataWriterMap.remove(instantTime);
     if (metadataWriterOpt == null || metadataWriterOpt.isEmpty()) {
-      log.warn("Metadata writer for {} has not been initialized, no need to stop heartbeat.", instantTime);
+      log.debug("Metadata writer for {} has already been closed, skip closing.", instantTime);
       return;
     }
-    try {
-      metadataWriterOpt.get().close();
+    try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+      if (metadataWriter instanceof FlinkHoodieBackedTableMetadataWriter) {
+        ((FlinkHoodieBackedTableMetadataWriter) metadataWriter).getWriteClient().getHeartbeatClient().stop(instantTime);
+      }
     } catch (Exception e) {
       throw new HoodieException("Failed to close the metadata writer for instant: " + instantTime, e);
     }

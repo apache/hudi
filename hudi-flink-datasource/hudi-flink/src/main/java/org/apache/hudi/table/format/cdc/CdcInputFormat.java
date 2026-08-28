@@ -26,7 +26,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -47,6 +47,8 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.util.List;
 import java.util.function.Function;
+
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
 
 /**
  * The base InputFormat class to read Hoodie data set as change logs.
@@ -157,11 +159,16 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         String logFilepath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
         MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(tablePath, logFilepath, maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getSplitRecordIterator(split);
-        return new CdcIterators.DataLogFileIterator(
-            maxCompactionMemoryInBytes, imageManager, fileSplit,
-            HoodieSchema.parse(tableState.getTableSchema()),
-            tableState.getRequiredRowType(), tableState.getRequiredPositions(),
-            recordIterator, metaClient, imageManager.getWriteConfig());
+        try {
+          return new CdcIterators.DataLogFileIterator(
+              maxCompactionMemoryInBytes, imageManager, fileSplit,
+              HoodieSchema.parse(tableState.getTableSchema()),
+              tableState.getRequiredRowType(), tableState.getRequiredPositions(),
+              recordIterator, metaClient, imageManager.getWriteConfig());
+        } catch (IOException | RuntimeException | Error e) {
+          closeSuppressing(recordIterator, e);
+          throw e;
+        }
       case REPLACE_COMMIT:
         return new CdcIterators.ReplaceCommitIterator(
             tablePath, tableState.getRequiredRowType(), tableState.getRequiredPositions(),
@@ -172,7 +179,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
   }
 
   /**
-   * Get a {@link HoodieRecord} iterator using {@link HoodieFileGroupReader}.
+   * Get a {@link HoodieRecord} iterator using a {@link HoodieRecordReader}.
    *
    * @param split input split
    *
@@ -181,9 +188,9 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
   private ClosableIterator<HoodieRecord<RowData>> getSplitRecordIterator(MergeOnReadInputSplit split) throws IOException {
     final HoodieSchema schema = HoodieSchemaCache.intern(
         HoodieSchema.parse(tableState.getTableSchema()));
-    HoodieFileGroupReader<RowData> fileGroupReader =
-        createFileGroupReader(split, schema, schema, FlinkOptions.REALTIME_PAYLOAD_COMBINE, true);
-    return fileGroupReader.getClosableHoodieRecordIterator();
+    HoodieRecordReader<RowData> recordReader =
+        createRecordReader(split, schema, schema, FlinkOptions.REALTIME_PAYLOAD_COMBINE, true);
+    return recordReader.getClosableHoodieRecordIterator();
   }
 
   /**

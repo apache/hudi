@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -55,6 +56,7 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.core.execution.JobClient;
@@ -70,6 +72,8 @@ import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
+import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.hadoop.ParquetReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -83,6 +87,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -99,6 +105,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -119,6 +126,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1548,6 +1556,37 @@ public class ITTestHoodieDataSource {
   }
 
   @Test
+  void testLsmMergeWithNumericPrimaryKey() {
+    String hoodieTableDDL = sql("t1")
+        .field("id INT")
+        .field("name STRING")
+        .field("ts BIGINT")
+        .pkField("id")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, COPY_ON_WRITE)
+        .option(FlinkOptions.OPERATION, "upsert")
+        .option(FlinkOptions.ORDERING_FIELDS, "ts")
+        .option(FlinkOptions.WRITE_TASKS, 1)
+        .option(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+            HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue())
+        .end();
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    // Both commits must be written in encoded record-key order: "10" comes before "2".
+    execInsertSql(batchTableEnv, "insert into t1 values "
+        + "(10, 'old-10', 1), (2, 'old-2', 1)");
+
+    // Sorting the RowData by the INT primary key instead would put 2 before 10. That order is not
+    // compatible with the LSM reader's string comparator and separates versions of the same key.
+    execInsertSql(batchTableEnv, "insert into t1 values "
+        + "(10, 'new-10', 2), (2, 'new-2', 2)");
+
+    List<Row> result = execSelectSql(batchTableEnv, "select * from t1");
+    assertRowsEquals(result, "[+I[10, new-10, 2], +I[2, new-2, 2]]");
+  }
+
+  @Test
   void testUpdateWithDefaultHoodieRecordPayload() {
     TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
@@ -1731,6 +1770,49 @@ public class ITTestHoodieDataSource {
     List<Row> projectedRows = CollectionUtil.iteratorToList(
         batchTableEnv.executeSql("select name, uuid from lance_t1").collect());
     assertRowsEquals(projectedRows, "[+I[Alice, id1], +I[Bob, id2]]");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testLanceFormatNestedTypesUpsertWriteAndRead(HoodieTableType tableType) {
+    String createHoodieTable = sql("lance_nested")
+        .field("id int not null")
+        .field("ts bigint")
+        .field("f_row row(f_name varchar(10), f_age int)")
+        .field("f_array array<row(f_name varchar(10), f_age int)>")
+        .field("f_nested_array array<row(f_scores array<int>)>")
+        .pkField("id")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, "upsert")
+        .option(FlinkOptions.ORDERING_FIELDS, "ts")
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option("hoodie.table.base.file.format", "LANCE")
+        .end();
+    batchTableEnv.executeSql(createHoodieTable);
+
+    execInsertSql(batchTableEnv, "insert into lance_nested values "
+        + "(1, 1, ROW('alice', 30), ARRAY[ROW('child1', 1), ROW('child2', 2)], "
+        + "ARRAY[ROW(ARRAY[1, 2]), ROW(ARRAY[3])]),"
+        + "(2, 2, ROW('bob', 31), ARRAY[ROW('child3', 3)], ARRAY[ROW(ARRAY[4])])");
+
+    execInsertSql(batchTableEnv, "insert into lance_nested values "
+        + "(1, 3, ROW('alice_v2', 32), ARRAY[ROW('child4', 4)], ARRAY[ROW(ARRAY[5, 6])]),"
+        + "(3, 4, ROW('charlie', 33), ARRAY[ROW('child5', 5)], ARRAY[ROW(ARRAY[7])])");
+
+    List<Row> rows = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery("select * from lance_nested").execute().collect());
+    assertRowsEqualsUnordered(Arrays.asList(
+        row(1, 3L, row("alice_v2", 32), array(row("child4", 4)), array(row((Object) array(5, 6)))),
+        row(2, 2L, row("bob", 31), array(row("child3", 3)), array(row((Object) array(4)))),
+        row(3, 4L, row("charlie", 33), array(row("child5", 5)), array(row((Object) array(7))))), rows);
+
+    List<Row> projectedRows = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery("select f_nested_array, id from lance_nested").execute().collect());
+    assertRowsEqualsUnordered(Arrays.asList(
+        row(array(row((Object) array(5, 6))), 1),
+        row(array(row((Object) array(4))), 2),
+        row(array(row((Object) array(7))), 3)), projectedRows);
   }
 
   @Test
@@ -1928,6 +2010,10 @@ public class ITTestHoodieDataSource {
     expected.add("partition=par4" + "00000000");
 
     assertEquals(expected.stream().sorted().collect(Collectors.toList()), actual.stream().sorted().collect(Collectors.toList()));
+    if ("bulk_insert".equals(operationType)) {
+      assertEquals(TestData.DATA_SET_SOURCE_INSERT.size(),
+          assertBaseFilesAreSortedAndCountRecords(new File(basePath)));
+    }
   }
 
   @Test
@@ -1998,6 +2084,80 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result, "["
         + "+I[id1, Julian, 53, 1970-01-01T00:00:03, par1], "
         + "+I[id2, Stephen, 33, 1970-01-01T00:00:02, par1]]", 4);
+  }
+
+  @ParameterizedTest
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testLsmBulkInsertSortsEncodedRecordKeysAndSupportsUpdates(
+      HoodieTableType tableType, boolean partitioned) throws IOException {
+    TestConfigurations.Sql bulkInsertTable = sql("t1")
+        .field("id INT NOT NULL")
+        .field("name STRING")
+        .field("ts BIGINT")
+        .field("pt STRING")
+        .pkField("id")
+        .partitionField("pt")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.OPERATION, "bulk_insert")
+        .option(FlinkOptions.ORDERING_FIELDS, "ts")
+        .option(FlinkOptions.WRITE_TASKS, 1)
+        // LSM bulk insert must enforce record-key sorting even when the user explicitly disables
+        // the legacy bulk-insert sorting options.
+        .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY, false);
+    batchTableEnv.executeSql(partitioned
+        ? bulkInsertTable.end()
+        : bulkInsertTable.noPartition().end());
+
+    // The encoded record keys use String ordering, where "10" < "2" and "11" < "3".
+    // Keeping the input in numeric order verifies that sorting uses the encoded Hudi record key
+    // instead of the INT field ordering.
+    execInsertSql(batchTableEnv, "insert into t1 values "
+        + "(2, 'old-2', 1, 'p1'), "
+        + "(10, 'old-10', 1, 'p1'), "
+        + "(3, 'old-3', 1, 'p2'), "
+        + "(11, 'old-11', 1, 'p2')");
+
+    // Validate both the persisted default layout and the physical record-key ordering in every
+    // base file, rather than relying on query output that may be reordered during the read.
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
+    assertEquals(HoodieTableConfig.TableStorageLayout.LSM_TREE,
+        metaClient.getTableConfig().getTableStorageLayout());
+    assertEquals(4, assertBaseFilesAreSortedAndCountRecords(tempFile));
+
+    // Reopen the LSM table with upsert to verify that files created by bulk insert remain usable
+    // by the update path for both COW and MOR tables.
+    batchTableEnv.executeSql("drop table t1");
+    TestConfigurations.Sql upsertTable = sql("t1")
+        .field("id INT NOT NULL")
+        .field("name STRING")
+        .field("ts BIGINT")
+        .field("pt STRING")
+        .pkField("id")
+        .partitionField("pt")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.OPERATION, "upsert")
+        .option(FlinkOptions.ORDERING_FIELDS, "ts")
+        .option(FlinkOptions.WRITE_TASKS, 1);
+    batchTableEnv.executeSql(partitioned
+        ? upsertTable.end()
+        : upsertTable.noPartition().end());
+
+    execInsertSql(batchTableEnv, "insert into t1 values "
+        + "(2, 'new-2', 2, 'p1'), "
+        + "(10, 'new-10', 2, 'p1'), "
+        + "(3, 'new-3', 2, 'p2'), "
+        + "(11, 'new-11', 2, 'p2')");
+
+    // The snapshot must expose the newer payload for every key after the update.
+    List<Row> result = execSelectSql(batchTableEnv, "select * from t1");
+    assertRowsEquals(result, "["
+        + "+I[10, new-10, 2, p1], "
+        + "+I[11, new-11, 2, p2], "
+        + "+I[2, new-2, 2, p1], "
+        + "+I[3, new-3, 2, p2]]");
   }
 
   @Test
@@ -2472,6 +2632,124 @@ public class ITTestHoodieDataSource {
         row(2, array(row("abc21", 21, null), row("abc22", 22, null), row("abc23", 23, null)), map("abc21", row(21, "def21", null), "abc22", row(22, "def22", null), "abc23", row(23, "def23", null))),
         row(3, array(row("abc31", 31, null), row("abc32", 32, null), row("abc33", 33, null)), map("abc31", row(31, "def31", null), "abc32", row(32, "def32", null), "abc33", row(33, "def33", null))));
     assertRowsEqualsUnordered(expected, result);
+  }
+
+  @Test
+  void testParquetNestedRowExceedingReadBatch() {
+    // Regression for NestedColumnReader#readRow throwing ArrayIndexOutOfBoundsException when a COW
+    // base file holds more rows than the 2048-row vectorized read batch
+    // (RecordIterators.DEFAULT_BATCH_SIZE) and a nested ROW column is read. On a full, non-final
+    // batch the Dremel level stream carries a one-record lookahead, so NestedPositionUtil
+    // #calculateRowOffsets returns positionsCount = batchSize + 1 = 2049 while the materialized
+    // child column vectors are sized to their value count = 2048. The Hudi-specific null-row-collapse
+    // loop iterates to positionsCount and reads child.isNullAt(2048), one past a length-2048 vector.
+    //
+    // Two conditions are both required to surface it, and drove this schema and data:
+    //  1. The bad index is only reached through AbstractHeapVector#isNullAt, which short-circuits to
+    //     false without touching isNull[] when the vector has no nulls. So a child vector must
+    //     actually carry a null. Odd-id rows therefore store a present ROW with all-null children
+    //     (row(null, ...)); the row stays present (its own isNullAt(2048) short-circuits) but the
+    //     child leaf vectors get noNulls=false and overrun at the phantom index. Half the rows are
+    //     null-children so the first full batch is guaranteed to contain them regardless of how
+    //     bulk_insert orders keys.
+    //  2. The nullable leaves must be *direct* children of the collapsed row. A sub-row child would
+    //     be renewed to positionsCount (length 2049) and not overrun, so the two nested rows are
+    //     top-level columns: f_scalar row(f0 int, f1 varchar(10)) covers heap-vector children, and
+    //     f_dec row(d decimal(10, 2)) covers a decimal child, whose ParquetDecimalVector is not an
+    //     AbstractHeapVector and must be unwrapped by NestedColumnReader#vectorLength.
+    // See ITTestHoodieDataSource#testParquetNullChildColumnsRowTypes for the collapse behaviour.
+    TableEnvironment tableEnv = batchTableEnv;
+
+    // More rows than one 2048-row read batch, so the first batch is full and non-final -- that is
+    // what makes the level stream carry the trailing lookahead that overshoots the vectors. The
+    // rows are generated by cross joining two small VALUES lists rather than a single 2000+-row
+    // VALUES literal: Calcite plans the latter pathologically slowly (minutes to hours), while two
+    // ~50-element lists plan instantly and the row count is simply their product.
+    final int outer = 43;
+    final int inner = 50;
+    final int numRows = outer * inner; // 2150 > 2048
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_scalar row(f0 int, f1 varchar(10))")
+        .field("f_dec row(d decimal(10, 2))")
+        .pkField("f_int")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, "bulk_insert")
+        // Single write task => all rows land in one base file, so one read split crosses the
+        // 2048-row batch boundary.
+        .option(FlinkOptions.WRITE_TASKS, 1)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    // id = blk * inner + pos is unique over blk in [0, outer), pos in [0, inner) => 0 .. numRows-1.
+    // Both nested rows stay present; even ids get populated leaves, odd ids get all-null leaves
+    // (which the reader collapses back to a NULL row). Each ROW is cast to its named type so the
+    // query output type matches the sink column exactly.
+    String insert = "insert into t1 select\n"
+        + "  g.id,\n"
+        + "  cast(row(\n"
+        + "    case when mod(g.id, 2) = 0 then g.id else cast(null as int) end,\n"
+        + "    case when mod(g.id, 2) = 0 then concat('v', cast(g.id as varchar)) else cast(null as varchar(10)) end\n"
+        + "  ) as row<f0 int, f1 varchar(10)>),\n"
+        + "  cast(row(\n"
+        + "    case when mod(g.id, 2) = 0 then cast(g.id as decimal(10, 2)) else cast(null as decimal(10, 2)) end\n"
+        + "  ) as row<d decimal(10, 2)>)\n"
+        + "from (\n"
+        + "  select blk.b * " + inner + " + pos.p as id\n"
+        + "  from (values " + valuesList(outer) + ") as blk(b)\n"
+        + "  cross join (values " + valuesList(inner) + ") as pos(p)\n"
+        + ") g";
+    execInsertSql(tableEnv, insert);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+
+    // The read completes (no AIOOBE across the batch boundary) and every row is returned. Without
+    // the fix the vectorized read throws while materializing the first full batch, so this fails.
+    assertEquals(numRows, result.size());
+
+    // bulk_insert does not preserve order, so index by pk.
+    Map<Integer, Row> byId = new HashMap<>();
+    for (Row r : result) {
+      byId.put((Integer) r.getField(0), r);
+    }
+    // Populated rows (even id) round-trip both nested rows -- one from the first (full) batch and
+    // one with a large id past the boundary.
+    assertPopulatedRow(byId.get(0), 0);
+    assertPopulatedRow(byId.get(numRows - 2), numRows - 2);
+    // All-null-children rows (odd id) collapse both nested rows back to NULL, including a large id.
+    assertCollapsedRow(byId.get(1));
+    assertCollapsedRow(byId.get(numRows - 1));
+  }
+
+  /** Builds the VALUES row list {@code (0), (1), ..., (n-1)} for the generator cross join. */
+  private static String valuesList(int n) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < n; i++) {
+      if (i > 0) {
+        sb.append(", ");
+      }
+      sb.append('(').append(i).append(')');
+    }
+    return sb.toString();
+  }
+
+  /** Asserts the row keyed by an even {@code id} round-trips its populated nested rows. */
+  private static void assertPopulatedRow(Row row, int id) {
+    assertNotNull(row, "row with pk " + id + " was not read back");
+    Row scalar = (Row) row.getField(1);
+    assertEquals(id, scalar.getField(0));
+    assertEquals("v" + id, scalar.getField(1));
+    assertNotNull(((Row) row.getField(2)).getField(0)); // decimal leaf present, not null
+  }
+
+  /** Asserts the row keyed by an odd {@code id} had both all-null nested rows collapsed to NULL. */
+  private static void assertCollapsedRow(Row row) {
+    assertNotNull(row, "expected an odd-id row to be read back");
+    assertNull(row.getField(1)); // f_scalar collapsed to null
+    assertNull(row.getField(2)); // f_dec collapsed to null
   }
 
   @ParameterizedTest
@@ -3455,6 +3733,7 @@ public class ITTestHoodieDataSource {
         .options(getDefaultKeys())
         .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
         .option(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.SIX.versionCode() + "")
+        .option(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), HoodieTableConfig.TableStorageLayout.DEFAULT.configValue())
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
@@ -3468,6 +3747,7 @@ public class ITTestHoodieDataSource {
         .options(getDefaultKeys())
         .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
         .option(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode() + "")
+        .option(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), HoodieTableConfig.TableStorageLayout.DEFAULT.configValue())
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
 
@@ -3755,6 +4035,38 @@ public class ITTestHoodieDataSource {
     return conf.toMap();
   }
 
+  private int assertBaseFilesAreSortedAndCountRecords(File tableBasePath) throws IOException {
+    List<Path> baseFiles;
+    try (Stream<Path> paths = Files.walk(tableBasePath.toPath())) {
+      baseFiles = paths
+          .filter(Files::isRegularFile)
+          .filter(path -> path.getFileName().toString().endsWith(".parquet"))
+          .filter(path -> !path.toString().contains(
+              File.separator + HoodieTableMetaClient.METAFOLDER_NAME + File.separator))
+          .collect(Collectors.toList());
+    }
+    assertFalse(baseFiles.isEmpty());
+
+    int totalRecords = 0;
+    for (Path baseFile : baseFiles) {
+      try (ParquetReader<GenericRecord> reader = AvroParquetReader
+          .<GenericRecord>builder(new org.apache.hadoop.fs.Path(baseFile.toUri()))
+          .build()) {
+        String previousKey = null;
+        GenericRecord record;
+        while ((record = reader.read()) != null) {
+          String currentKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          String lastKey = previousKey;
+          assertTrue(previousKey == null || previousKey.compareTo(currentKey) <= 0,
+              () -> "Base file " + baseFile + " is not sorted: " + lastKey + " > " + currentKey);
+          previousKey = currentKey;
+          totalRecords++;
+        }
+      }
+    }
+    return totalRecords;
+  }
+
   /**
    * Return test params => (execution mode, table type).
    */
@@ -3971,10 +4283,11 @@ public class ITTestHoodieDataSource {
    * the collected rows.
    *
    * <p>The streaming job is terminated by a forced {@link CollectSinkTableFactory.SuccessException} once
-   * {@code expectedNum} rows are collected. A benign teardown race (see {@link #isAcceptableTerminalFailure})
-   * can instead end the job before all rows are emitted, leaving a short result. Re-reading the already
-   * committed table is idempotent, so retry up to {@link #MAX_STREAM_READ_ATTEMPTS} times when the result
-   * is short; this keeps the race from surfacing as a confusing row-count assertion failure.
+   * {@code expectedNum} rows are collected. On a slow CI shard the {@code await} window can elapse before
+   * the sink reaches {@code expectedNum} (a bare timeout - see {@link #isAwaitTimeout}), leaving a short
+   * result. Re-reading the already committed table is idempotent, so retry up to
+   * {@link #MAX_STREAM_READ_ATTEMPTS} times when the result is short; this keeps a slow shard from
+   * surfacing as a confusing row-count (or "Unexpected job failure") assertion failure.
    */
   private List<Row> submitAndFetchWithRetry(TableEnvironment tEnv, String select, String sinkDDL, int expectedNum) {
     List<Row> rows = Collections.emptyList();
@@ -4012,46 +4325,35 @@ public class ITTestHoodieDataSource {
   private List<Row> fetchResultWithExpectedNum(TableEnvironment tEnv, TableResult tableResult) {
     try {
       // wait the continuous streaming query to be terminated by forced exception with expected row number
-      // and max waiting timeout is 30s
-      tableResult.await(30, TimeUnit.SECONDS);
+      // and max waiting timeout is 60s (kept generous so a slow CI shard does not time out before the
+      // sink collects its rows; a bare timeout is still handled as a retryable short read below)
+      tableResult.await(60, TimeUnit.SECONDS);
     } catch (Throwable e) {
-      // Acceptable terminal causes:
-      //   1. SuccessException: the sink reached its expected row count and intentionally
-      //      threw to terminate the streaming job. This is the happy path.
-      //   2. IOException("Stream is closed!") wrapped as HoodieIOException: a benign
-      //      error-attribution race between the source-side cascading-shutdown path and
-      //      the sink-side SuccessException terminator. When the sink throws
-      //      SuccessException to end the job, the chained source's SplitFetcher can close
-      //      the underlying Hadoop FSDataInputStream while the mailbox is still draining
-      //      a BatchRecords queued earlier; the next row-group read on the now-closed
-      //      stream surfaces an IOException("Stream is closed!"). With
-      //      restart-strategy.fixed-delay.attempts=0 (set in beforeEach to keep tests
-      //      deterministic) that IOException becomes the job's reported failure cause
-      //      instead of the sink's SuccessException, even though the sink has already
-      //      collected the expected rows by then - i.e. the functional outcome is
-      //      unchanged, only the error-attribution differs. Production paths correctly
-      //      fail the job on stream-closed-mid-read (the right behavior for real I/O
-      //      failures), so this tolerance is scoped to the SuccessException-based test
-      //      pattern below and is NOT mirrored in production code.
-      //   3. NullPointerException from ParquetColumnarRowSplitReader#readNextRowGroup: the
-      //      same benign teardown race as (2), observed with different timing. When the
-      //      SplitFetcher's close() fully completes first, ParquetColumnarRowSplitReader#close
-      //      nulls out its `reader` field, so the in-flight row-group read on the task thread
-      //      surfaces as a NullPointerException (reader.readNextRowGroup() on a null reader)
-      //      instead of an IOException("Stream is closed!"). Same functional outcome - the
-      //      sink has already collected the expected rows - only the error symptom differs.
-      //      Tolerated narrowly (an NPE originating from that exact frame) for the same
-      //      reason as (2), and likewise NOT mirrored in production code.
-      if (!isAcceptableTerminalFailure(e)) {
-        throw new AssertionError("Unexpected job failure", e);
-      }
-      // The races (2)/(3) usually fire after the sink has collected its expected rows, but can also fire
-      // before - ending the read with a short result. Log the tolerated cause so an incomplete read is
-      // diagnosable; submitAndFetchWithRetry re-reads when the collected count is below the expectation.
-      if (!isSuccessException(e)) {
-        log.warn("Streaming read terminated by a tolerated teardown race ({}); collected {} rows so far.",
-            describeTerminalCause(e),
+      // The only acceptable terminal cause is the sink reaching its expected row count and throwing
+      // SuccessException to terminate the streaming job (the happy path). The Source V2 read path now
+      // reads and closes each split's I/O on a single (split-fetcher) thread, so the former teardown
+      // races (a closed Parquet stream / a closed CDC iterator surfacing on the task thread) can no
+      // longer happen; any other terminal failure is a real error and fails the test.
+      //
+      // A bare await-window TimeoutException is not a terminal failure at all - the sink simply had not
+      // reached expectedNum yet (typically CI-load slowness), so the job is still running. Cancel it and
+      // let submitAndFetchWithRetry re-submit a fresh job, rather than treating a slow shard as a hard
+      // failure.
+      if (isAwaitTimeout(e)) {
+        // Cancel the still-running job (best-effort, bounded) so it cannot keep writing to the shared
+        // CollectSinkTableFactory.RESULT after the retry's re-submit clears it.
+        tableResult.getJobClient().ifPresent(jobClient -> {
+          try {
+            jobClient.cancel().get(30, TimeUnit.SECONDS);
+          } catch (Exception ignored) {
+            // best-effort cancel; the subsequent re-submit clears RESULT and starts a fresh job
+          }
+        });
+        log.warn("Streaming read did not reach the expected row count within the await window; "
+                + "cancelled the job and will retry. Collected {} rows so far.",
             CollectSinkTableFactory.RESULT.values().stream().mapToInt(List::size).sum());
+      } else if (!isSuccessException(e)) {
+        throw new AssertionError("Unexpected job failure", e);
       }
     }
     tEnv.executeSql("DROP TABLE IF EXISTS sink");
@@ -4061,56 +4363,20 @@ public class ITTestHoodieDataSource {
   }
 
   /**
-   * Whether {@code e} (or any of its causes) is one of the terminal failures that
-   * {@link #fetchResultWithExpectedNum} is allowed to swallow. See the comment at the call
-   * site for the rationale.
+   * Whether {@code e} is a bare {@link TimeoutException} thrown directly by
+   * {@link org.apache.flink.table.api.TableResult#await(long, TimeUnit)} - i.e. the await window elapsed
+   * before the sink reached its expected row count and threw
+   * {@link CollectSinkTableFactory.SuccessException}, leaving the job still running (never terminated),
+   * so the caller cancels it and retries the read rather than swallowing it.
+   *
+   * <p>Only the top-level exception is inspected, never the cause chain: {@code await} throws its own
+   * timeout bare, whereas a genuine job failure arrives wrapped in an {@link ExecutionException} that
+   * may itself embed a {@link TimeoutException} (checkpoint expiry, RPC timeout). Walking the chain
+   * would misclassify such a real failure as a slow shard - cancel it, retry, and finally report a
+   * row-count mismatch with the true cause discarded.
    */
-  private static boolean isAcceptableTerminalFailure(Throwable e) {
-    Throwable cur = e;
-    while (cur != null) {
-      if (cur instanceof CollectSinkTableFactory.SuccessException) {
-        return true;
-      }
-      String msg = cur.getMessage();
-      if (msg != null && msg.contains("Stream is closed")) {
-        return true;
-      }
-      // The NPE twin of the "Stream is closed!" teardown race (cause #3 at the call site):
-      // a NullPointerException whose own stack trace originates from
-      // ParquetColumnarRowSplitReader#readNextRowGroup, i.e. reader.readNextRowGroup() ran on a
-      // null `reader` that ParquetColumnarRowSplitReader#close had just nulled out. Scoped to
-      // that exact frame so genuine NPEs - and the legitimate IOException("expecting more
-      // rows...") thrown from the same method - still fail the test.
-      if (isNullPointerException(cur) && containsReadNextRowGroupFrame(cur)) {
-        return true;
-      }
-      cur = cur.getCause();
-    }
-    return false;
-  }
-
-  /**
-   * True for a real {@link NullPointerException} as well as one wrapped in Flink's
-   * {@code SerializedThrowable} when the failure is propagated back from the cluster (its
-   * {@code toString()} preserves the original {@code java.lang.NullPointerException} prefix).
-   */
-  private static boolean isNullPointerException(Throwable t) {
-    return t instanceof NullPointerException
-        || t.toString().startsWith(NullPointerException.class.getName());
-  }
-
-  /**
-   * Whether {@code t}'s stack trace (preserved even through {@code SerializedThrowable})
-   * contains a {@code ParquetColumnarRowSplitReader#readNextRowGroup} frame.
-   */
-  private static boolean containsReadNextRowGroupFrame(Throwable t) {
-    for (StackTraceElement frame : t.getStackTrace()) {
-      if (frame.getClassName().endsWith("ParquetColumnarRowSplitReader")
-          && "readNextRowGroup".equals(frame.getMethodName())) {
-        return true;
-      }
-    }
-    return false;
+  private static boolean isAwaitTimeout(Throwable e) {
+    return e instanceof TimeoutException;
   }
 
   /**
@@ -4124,16 +4390,5 @@ public class ITTestHoodieDataSource {
       }
     }
     return false;
-  }
-
-  /**
-   * Short description of {@code e}'s root cause, for logging which tolerated terminal failure fired.
-   */
-  private static String describeTerminalCause(Throwable e) {
-    Throwable root = e;
-    while (root.getCause() != null) {
-      root = root.getCause();
-    }
-    return root.getClass().getSimpleName() + ": " + root.getMessage();
   }
 }

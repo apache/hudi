@@ -46,6 +46,32 @@ import scala.util.Using
 class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   val sqlTempTable = "tbl"
 
+  /**
+   * Whether the record level index exercised by the tests is partitioned. Overridden by
+   * [[TestRecordLevelIndexWithSQL]] to run the same coverage against a partitioned RLI.
+   */
+  protected def isPartitionedRli: Boolean = false
+
+  /** Write options selecting a global vs partitioned record level index. */
+  protected def rliEnableOpts: Map[String, String] =
+    if (isPartitionedRli) {
+      Map(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false",
+        HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true")
+    } else {
+      Map(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
+        HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false")
+    }
+
+  /** The create-table DDL option that enables a global vs partitioned record level index. */
+  protected def rliEnableDDLOpts: String =
+    if (isPartitionedRli) {
+      s"${HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key} = 'true'"
+    } else {
+      // "hoodie.metadata.record.index.enable" is the backward-compatible alternative key for
+      // GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP; used here intentionally to also exercise that alias.
+      "hoodie.metadata.record.index.enable = 'true'"
+    }
+
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testRLICreationUsingSQL(isPartitioned: Boolean): Unit = {
@@ -73,7 +99,7 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
   def testRLIWithSQL(tableType: String): Unit = {
-    val hudiOpts = commonOpts ++ Map(
+    val hudiOpts = commonOpts ++ rliEnableOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       "hoodie.metadata.index.column.stats.enable" -> "false",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
@@ -166,24 +192,33 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     verifyPruningFileCount(hudiOpts, dataFilter, numFiles, shouldPrune)
   }
 
-  private def attribute(partition: String): AttributeReference = {
+  protected def attribute(partition: String): AttributeReference = {
     AttributeReference(partition, StringType, true)()
   }
 
-  private def literal(value: String): Literal = {
+  protected def literal(value: String): Literal = {
     Literal.create(value)
   }
 
-  private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int, shouldPrune: Boolean): Unit = {
-    verifyPruningFileCount(opts, dataFilter, numFiles, HoodieTableMetaClient.reload(metaClient), shouldPrune)
+  protected def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int, shouldPrune: Boolean): Unit = {
+    verifyPruningFileCount(opts, Seq(dataFilter), Seq.empty, numFiles, HoodieTableMetaClient.reload(metaClient), shouldPrune)
   }
 
-  private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int, metaClient: HoodieTableMetaClient, shouldPrune: Boolean): Unit = {
+  protected def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int, metaClient: HoodieTableMetaClient, shouldPrune: Boolean): Unit = {
+    verifyPruningFileCount(opts, Seq(dataFilter), Seq.empty, numFiles, metaClient, shouldPrune)
+  }
+
+  protected def verifyPruningFileCount(opts: Map[String, String],
+                                       dataFilters: Seq[Expression],
+                                       partitionFilters: Seq[Expression],
+                                       numFiles: Int,
+                                       metaClient: HoodieTableMetaClient,
+                                       shouldPrune: Boolean): Unit = {
     // with data skipping
     val commonOpts = opts + ("path" -> metaClient.getBasePath.toString)
     this.metaClient = HoodieTableMetaClient.reload(metaClient)
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
-    val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
+    val filteredPartitionDirectories = fileIndex.listFiles(partitionFilters, dataFilters)
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
     if (shouldPrune) {
       assertEquals(numFiles, filteredFilesCount)
@@ -193,7 +228,7 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
 
     // with no data skipping
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
-    val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
+    val filesCountWithNoSkipping = fileIndex.listFiles(partitionFilters, dataFilters).flatMap(s => s.files).size
     if (!shouldPrune) {
       assertEquals(filteredFilesCount, filesCountWithNoSkipping)
     }
@@ -222,7 +257,7 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().fromProperties(props).build())
   }
 
-  private def createTempTable(hudiOpts: Map[String, String]): Unit = {
+  protected def createTempTable(hudiOpts: Map[String, String]): Unit = {
     val readDf = spark.read.format("hudi").options(hudiOpts).load(basePath)
     readDf.registerTempTable(sqlTempTable)
   }
@@ -246,7 +281,7 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
          | options (
          |  primaryKey ='$recordKeyFields',
          |  hoodie.metadata.enable = 'true',
-         |  hoodie.metadata.record.index.enable = 'true',
+         |  $rliEnableDDLOpts,
          |  hoodie.datasource.write.recordkey.field = '$recordKeyFields',
          |  hoodie.enable.data.skipping = 'true'
          | )
@@ -263,7 +298,7 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testPrunedStoragePaths(includeLogFiles: Boolean): Unit = {
-    val hudiOpts = commonOpts ++ metadataOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ")
+    val hudiOpts = commonOpts ++ metadataOpts ++ rliEnableOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ")
     val df = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
@@ -292,7 +327,7 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
 
     val recordKey: String = df.filter("partition = '" + selectedPartition + "'").limit(1).collect().apply(0).getAs("_row_key")
     val dataFilter = EqualTo(attribute("_row_key"), Literal(recordKey))
-    val rliIndexSupport = new RecordLevelIndexSupport(spark, getConfig.getMetadataConfig, metaClient)
+    val rliIndexSupport = RecordLevelIndexSupport.create(spark, getConfig.getMetadataConfig, metaClient)
     val fileNames = rliIndexSupport.computeCandidateFileNames(fileIndex, Seq(dataFilter), null, prunedPaths, false)
     assertEquals(if (includeLogFiles) 2 else 1, fileNames.get.size)
   }
@@ -323,7 +358,7 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
          | options (
          |  primaryKey ='$recordKeyFields',
          |  hoodie.metadata.enable = 'true',
-         |  hoodie.metadata.record.index.enable = 'true',
+         |  $rliEnableDDLOpts,
          |  hoodie.datasource.write.recordkey.field = '$recordKeyFields',
          |  hoodie.enable.data.skipping = 'true',
          |  hoodie.metadata.index.column.stats.enable = 'false'
@@ -371,7 +406,7 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
          | options (
          |  primaryKey = '$recordKeyFields',
          |  hoodie.metadata.enable = 'true',
-         |  hoodie.metadata.record.index.enable = 'true',
+         |  $rliEnableDDLOpts,
          |  hoodie.datasource.write.recordkey.field = '$recordKeyFields',
          |  hoodie.enable.data.skipping = 'true',
          |  hoodie.metadata.index.column.stats.enable = 'false'

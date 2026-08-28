@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.config.HoodieStorageConfig
+import org.apache.hudi.common.config.{HoodieConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFileGroupId, HoodieLogFile}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
@@ -28,8 +28,11 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.PartitionedFileUtil
 import org.apache.spark.sql.execution.datasources.FilePartition
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+
+import scala.collection.JavaConverters._
 
 class TestPartitionDirectoryConverter extends SparkAdapterSupport {
 
@@ -49,6 +52,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val options = Map(
       s"${HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key()}" -> logFraction.toString
     )
+    val config = new HoodieConfig(TypedProperties.fromMap(options.asJava))
     // There are 4 cases for file slices:
     // 1. base file only
     // 2. log files only
@@ -81,13 +85,32 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val partitionValues = Seq("2025-01-01")
 
     val partitionedFiles = slices.flatMap(slice => {
-      val dir = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(InternalRow.fromSeq(partitionValues), slice, options)
+      val dir = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(InternalRow.fromSeq(partitionValues), slice, config)
       sparkAdapter.splitFiles(spark, dir, false, maxSplitSize)
     })
 
     val tasks = sparkAdapter.getFilePartitions(spark, partitionedFiles, maxSplitSize)
     verifyBalanceByNum(tasks, totalRecordNum, logFraction)
     spark.stop()
+  }
+
+  @Test
+  def testConvertNativeLogFileSliceToPartitionDirectory(): Unit = {
+    val logFraction = 0.1
+    val options = Map(
+      s"${HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key()}" -> logFraction.toString
+    )
+    val config = new HoodieConfig(TypedProperties.fromMap(options.asJava))
+    val fileId = "native-log-file"
+    val recordCount = 300
+    val nativeLogFile = buildNativeHoodieLogFile(fileId, recordCount)
+    val slice = new FileSlice(new HoodieFileGroupId(partitionPath, fileId), baseInstant)
+    slice.addLogFile(nativeLogFile)
+
+    assert(nativeLogFile.isNativeLogFile)
+    val directory = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(
+      InternalRow.fromSeq(Seq("2025-01-01")), slice, config)
+    assert(directory.files.head.getLen == recordCount * fixedSizePerRecordWithParquetFormat)
   }
 
   private def verifyBalanceByNum(tasks: Seq[FilePartition], totalRecordNum: Int, logFraction: Double): Unit = {
@@ -157,6 +180,13 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
   private def buildHoodieLogFile(fileId: String, recordsNum: Int, sizePerLogRecord: Long, index: Int): HoodieLogFile = {
     val path = new StoragePath(s".${fileId}_20250101010101.log.${index}_0-0-0")
     val fileLen = recordsNum * sizePerLogRecord
+    val info = new StoragePathInfo(path, fileLen, false, 1, blockSize, System.currentTimeMillis())
+    new HoodieLogFile(info)
+  }
+
+  private def buildNativeHoodieLogFile(fileId: String, recordsNum: Int): HoodieLogFile = {
+    val path = new StoragePath(s"${fileId}_0-0-0_${baseInstant}_1.log.parquet")
+    val fileLen = recordsNum * fixedSizePerRecordWithParquetFormat
     val info = new StoragePathInfo(path, fileLen, false, 1, blockSize, System.currentTimeMillis())
     new HoodieLogFile(info)
   }

@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.avro.VariantShreddingProvider;
+import org.apache.hudi.common.avro.VariantShreddingRuntime;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -35,8 +36,9 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Reconstructs unshredded variants when reading an already-shredded base file on the Avro
@@ -53,23 +55,14 @@ import java.util.List;
 final class HoodieVariantReconstruction {
 
   private final HoodieSchema intermediateSchema;
-  private final Schema outputAvroSchema;
   private final VariantShreddingProvider provider;
-  // Indexed by field position in the (requested == output) record. For target fields, the file's
-  // shredded sub-schema and the unshredded target sub-schema for rebuild; null for non-targets.
-  private final boolean[] isTarget;
-  private final Schema[] shreddedSubSchemas;
-  private final Schema[] unshreddedSubSchemas;
+  private final Rebuilder rootRebuilder;
 
-  private HoodieVariantReconstruction(HoodieSchema intermediateSchema, Schema outputAvroSchema,
-                                VariantShreddingProvider provider, boolean[] isTarget,
-                                Schema[] shreddedSubSchemas, Schema[] unshreddedSubSchemas) {
+  private HoodieVariantReconstruction(HoodieSchema intermediateSchema,
+                                      VariantShreddingProvider provider, Rebuilder rootRebuilder) {
     this.intermediateSchema = intermediateSchema;
-    this.outputAvroSchema = outputAvroSchema;
     this.provider = provider;
-    this.isTarget = isTarget;
-    this.shreddedSubSchemas = shreddedSubSchemas;
-    this.unshreddedSubSchemas = unshreddedSubSchemas;
+    this.rootRebuilder = rootRebuilder;
   }
 
   /**
@@ -91,26 +84,10 @@ final class HoodieVariantReconstruction {
       return null;
     }
 
-    List<HoodieSchemaField> requestedFields = requestedSchema.getFields();
-    List<HoodieSchemaField> intermediateFields = new ArrayList<>();
-    boolean[] isTarget = new boolean[requestedFields.size()];
-    boolean anyTarget = false;
-    for (int i = 0; i < requestedFields.size(); i++) {
-      HoodieSchemaField requestedField = requestedFields.get(i);
-      Option<HoodieSchemaField> fileField = fileSchema.getField(requestedField.name());
-      if (fileField.isPresent() && isShreddedVariant(fileField.get().schema())) {
-        isTarget[i] = true;
-        anyTarget = true;
-        // Read this column in its on-disk shredded shape.
-        intermediateFields.add(requestedField.withSchema(fileField.get().schema()));
-      } else {
-        // Copy non-target fields too (withSchema makes a fresh Avro Field): reusing the requested
-        // field's Avro Field, already bound to the requested record, would fail Schema.setFields with
-        // "Field already used" when building the intermediate record below.
-        intermediateFields.add(requestedField.withSchema(requestedField.schema()));
-      }
-    }
-    if (!anyTarget) {
+    // Records leave this reader unshredded; output field order matches the requested/intermediate order.
+    HoodieSchema outputSchema = VariantSchemaUtils.stripVariantShredding(requestedSchema);
+    Rebuilder rootRebuilder = buildRebuilder(outputSchema, fileSchema);
+    if (rootRebuilder == null) {
       // No shredded variant columns in the file: nothing to reconstruct, regardless of the flag.
       return null;
     }
@@ -134,25 +111,8 @@ final class HoodieVariantReconstruction {
           + " or add a provider implementation (e.g. the Spark variant module) to the classpath.");
     }
 
-    HoodieSchema intermediateSchema = HoodieSchema.createRecord(
-        requestedSchema.getAvroSchema().getName(),
-        requestedSchema.getAvroSchema().getNamespace(),
-        requestedSchema.getAvroSchema().getDoc(),
-        intermediateFields);
-    // Records leave this reader unshredded; output field order matches the requested/intermediate order.
-    HoodieSchema outputSchema = VariantSchemaUtils.stripVariantShredding(requestedSchema);
-
-    Schema[] shreddedSubSchemas = new Schema[requestedFields.size()];
-    Schema[] unshreddedSubSchemas = new Schema[requestedFields.size()];
-    for (int i = 0; i < requestedFields.size(); i++) {
-      if (isTarget[i]) {
-        shreddedSubSchemas[i] = unwrapNullable(fileSchema.getField(requestedFields.get(i).name()).get().schema()).getAvroSchema();
-        unshreddedSubSchemas[i] = unwrapNullable(outputSchema.getFields().get(i).schema()).getAvroSchema();
-      }
-    }
-
-    return new HoodieVariantReconstruction(intermediateSchema, outputSchema.toAvroSchema(), provider,
-        isTarget, shreddedSubSchemas, unshreddedSubSchemas);
+    return new HoodieVariantReconstruction(
+        VariantSchemaUtils.toShreddedReadSchema(requestedSchema, fileSchema), provider, rootRebuilder);
   }
 
   /**
@@ -160,34 +120,156 @@ final class HoodieVariantReconstruction {
    * a record conforming to the unshredded output schema.
    */
   IndexedRecord reconstruct(IndexedRecord in) {
-    GenericRecord out = new GenericData.Record(outputAvroSchema);
-    for (int i = 0; i < isTarget.length; i++) {
-      Object value = in.get(i);
-      if (isTarget[i] && value instanceof GenericRecord) {
-        out.put(i, provider.rebuildVariantRecord((GenericRecord) value, shreddedSubSchemas[i], unshreddedSubSchemas[i]));
-      } else {
-        // Non-variant column, or a null variant column: pass through unchanged.
-        out.put(i, value);
-      }
+    return (IndexedRecord) rootRebuilder.rebuild(in, provider);
+  }
+
+  /**
+   * Plans the rebuild for one schema position, or returns {@code null} when nothing below it is a
+   * shredded variant and the value can be passed through untouched. The walk is driven by the
+   * output (requested) side because that is the shape the record read from parquet has; the file
+   * side is matched into it by field name. Detection is anchored by the requested side because the
+   * file schema usually comes from converting the parquet footer MessageType, which loses the
+   * variant logical type; see VariantSchemaUtils.isShreddedVariantTarget (#19567). Records, array
+   * elements and map values are all descended into, matching what the row writer can emit; see
+   * {@code VariantSchemaUtils.swapShreddedVariantFields} for what actually produces a nested
+   * shredded file today (the row path shreds at depth off the forced-shredding property; the AVRO
+   * path needs a hand-authored write schema).
+   */
+  private static Rebuilder buildRebuilder(HoodieSchema outputSchema, HoodieSchema fileSchema) {
+    if (VariantSchemaUtils.isShreddedVariantTarget(fileSchema, outputSchema)) {
+      return new VariantRebuilder(fileSchema.getNonNullType().getAvroSchema(),
+          outputSchema.getNonNullType().getAvroSchema());
     }
-    return out;
+    HoodieSchema output = outputSchema.getNonNullType();
+    HoodieSchema file = fileSchema.getNonNullType();
+    if (output.getType() != file.getType()) {
+      return null;
+    }
+    switch (output.getType()) {
+      case RECORD: {
+        List<HoodieSchemaField> outputFields = output.getFields();
+        Rebuilder[] fieldRebuilders = new Rebuilder[outputFields.size()];
+        boolean anyTarget = false;
+        for (int i = 0; i < outputFields.size(); i++) {
+          HoodieSchemaField outputField = outputFields.get(i);
+          Option<HoodieSchemaField> fileField = file.getField(outputField.name());
+          fieldRebuilders[i] = fileField.isPresent()
+              ? buildRebuilder(outputField.schema(), fileField.get().schema())
+              : null;
+          anyTarget |= fieldRebuilders[i] != null;
+        }
+        return anyTarget ? new RecordRebuilder(output.getAvroSchema(), fieldRebuilders) : null;
+      }
+      case ARRAY: {
+        Rebuilder elementRebuilder = buildRebuilder(output.getElementType(), file.getElementType());
+        return elementRebuilder == null ? null : new ArrayRebuilder(output.getAvroSchema(), elementRebuilder);
+      }
+      case MAP: {
+        Rebuilder valueRebuilder = buildRebuilder(output.getValueType(), file.getValueType());
+        return valueRebuilder == null ? null : new MapRebuilder(valueRebuilder);
+      }
+      default:
+        return null;
+    }
   }
 
-  private static boolean isShreddedVariant(HoodieSchema schema) {
-    HoodieSchema unwrapped = unwrapNullable(schema);
-    return unwrapped.getType() == HoodieSchemaType.VARIANT
-        && ((HoodieSchema.Variant) unwrapped).isShredded();
+  /** Rebuilds one value read at the file's shape into its unshredded output shape. */
+  private interface Rebuilder {
+    Object rebuild(Object value, VariantShreddingProvider provider);
   }
 
-  private static HoodieSchema unwrapNullable(HoodieSchema schema) {
-    return schema.isNullable() ? schema.getNonNullType() : schema;
+  private static final class VariantRebuilder implements Rebuilder {
+    private final Schema shreddedSchema;
+    private final Schema unshreddedSchema;
+
+    private VariantRebuilder(Schema shreddedSchema, Schema unshreddedSchema) {
+      this.shreddedSchema = shreddedSchema;
+      this.unshreddedSchema = unshreddedSchema;
+    }
+
+    @Override
+    public Object rebuild(Object value, VariantShreddingProvider provider) {
+      // A null variant passes through unchanged.
+      return value instanceof GenericRecord
+          ? provider.rebuildVariantRecord((GenericRecord) value, shreddedSchema, unshreddedSchema)
+          : value;
+    }
+  }
+
+  private static final class RecordRebuilder implements Rebuilder {
+    private final Schema outputSchema;
+    // Indexed by field position in the (output == intermediate) record; null for non-targets.
+    private final Rebuilder[] fieldRebuilders;
+
+    private RecordRebuilder(Schema outputSchema, Rebuilder[] fieldRebuilders) {
+      this.outputSchema = outputSchema;
+      this.fieldRebuilders = fieldRebuilders;
+    }
+
+    @Override
+    public Object rebuild(Object value, VariantShreddingProvider provider) {
+      if (!(value instanceof IndexedRecord)) {
+        return value;
+      }
+      IndexedRecord in = (IndexedRecord) value;
+      GenericRecord out = new GenericData.Record(outputSchema);
+      for (int i = 0; i < fieldRebuilders.length; i++) {
+        Object fieldValue = in.get(i);
+        out.put(i, fieldRebuilders[i] == null ? fieldValue : fieldRebuilders[i].rebuild(fieldValue, provider));
+      }
+      return out;
+    }
+  }
+
+  private static final class ArrayRebuilder implements Rebuilder {
+    private final Schema outputSchema;
+    private final Rebuilder elementRebuilder;
+
+    private ArrayRebuilder(Schema outputSchema, Rebuilder elementRebuilder) {
+      this.outputSchema = outputSchema;
+      this.elementRebuilder = elementRebuilder;
+    }
+
+    @Override
+    public Object rebuild(Object value, VariantShreddingProvider provider) {
+      if (!(value instanceof List)) {
+        return value;
+      }
+      List<?> in = (List<?>) value;
+      GenericData.Array<Object> out = new GenericData.Array<>(in.size(), outputSchema);
+      for (Object element : in) {
+        out.add(elementRebuilder.rebuild(element, provider));
+      }
+      return out;
+    }
+  }
+
+  private static final class MapRebuilder implements Rebuilder {
+    private final Rebuilder valueRebuilder;
+
+    private MapRebuilder(Rebuilder valueRebuilder) {
+      this.valueRebuilder = valueRebuilder;
+    }
+
+    @Override
+    public Object rebuild(Object value, VariantShreddingProvider provider) {
+      if (!(value instanceof Map)) {
+        return value;
+      }
+      Map<?, ?> in = (Map<?, ?>) value;
+      Map<Object, Object> out = new LinkedHashMap<>(in.size());
+      for (Map.Entry<?, ?> entry : in.entrySet()) {
+        out.put(entry.getKey(), valueRebuilder.rebuild(entry.getValue(), provider));
+      }
+      return out;
+    }
   }
 
   private static VariantShreddingProvider loadProvider(HoodieStorage storage) {
     String providerClass = storage.getConf()
         .getString(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key()).orElse(null);
     if (providerClass == null || providerClass.isEmpty()) {
-      providerClass = VariantShreddingProvider.detectProviderClassOnClasspath();
+      providerClass = VariantShreddingRuntime.getProviderClass().orElse(null);
     }
     return providerClass == null ? null : (VariantShreddingProvider) ReflectionUtils.loadClass(providerClass);
   }

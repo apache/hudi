@@ -116,7 +116,7 @@ public class HoodieTestCommitGenerator {
   }
 
   public static String getLogFilename(String instantTime, String fileId) {
-    return FSUtils.makeLogFileName(
+    return FSUtils.makeInlineLogFileName(
         fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), instantTime, 1, LOG_FILE_WRITE_TOKEN);
   }
 

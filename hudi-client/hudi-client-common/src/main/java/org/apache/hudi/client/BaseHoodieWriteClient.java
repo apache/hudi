@@ -24,12 +24,9 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.callback.HoodieCommitCallbackFactory;
-import org.apache.hudi.callback.HoodieWriteCommitCallback;
-import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.heartbeat.HeartbeatUtils;
+import org.apache.hudi.client.heartbeat.WriterHeartbeatUtils;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.TransactionUtils;
 import org.apache.hudi.client.validator.PreWriteValidatorUtils;
@@ -45,6 +42,7 @@ import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -57,6 +55,7 @@ import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
 import org.apache.hudi.common.schema.internal.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -88,7 +87,7 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.metadata.HoodieColumnStatsIndexUtils;
+import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -148,7 +147,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   @Getter
   @Setter
   private transient WriteOperationType operationType;
-  private transient HoodieWriteCommitCallback commitCallback;
 
   protected transient Timer.Context writeTimer = null;
 
@@ -267,7 +265,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
             CommitUtils.buildMetadata(tableWriteStats.getDataTableWriteStats(), partitionToReplaceFileIds,
                 extraMetadata, operationType, config.getWriteSchema(), commitActionType));
     HoodieInstant inflightInstant = table.getMetaClient().createNewInstant(State.INFLIGHT, commitActionType, instantTime);
-    HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
+    WriterHeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
     this.txnManager.beginStateChange(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
@@ -289,7 +287,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     boolean postCommitStatus = true;
     HoodieTimer postCommitTimer = HoodieTimer.start();
     try {
-      postCommit(table, metadata, instantTime, extraMetadata);
+      postCommit(table, metadata, instantTime, commitActionType, extraMetadata);
       mayBeCleanAndArchive(table);
       runTableServicesInline(table, metadata, extraMetadata);
     } catch (Exception e) {
@@ -305,15 +303,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     emitCommitMetrics(instantTime, metadata, commitActionType);
-
-    // callback if needed.
-    if (config.writeCommitCallbackOn()) {
-      if (null == commitCallback) {
-        commitCallback = HoodieCommitCallbackFactory.create(config);
-      }
-      commitCallback.call(new HoodieWriteCommitCallbackMessage(
-          instantTime, config.getTableName(), config.getBasePath(), tableWriteStats.getDataTableWriteStats(), Option.of(commitActionType), extraMetadata));
-    }
     return true;
   }
 
@@ -339,7 +328,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         completedInstant -> table.getMetaClient().getTableFormat().commit(metadata, completedInstant, getEngineContext(), table.getMetaClient(), table.getViewManager())
     );
     // update cols to Index as applicable
-    HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, commitActionType,
+    HoodieMetadataWriteUtils.updateColsToIndex(table, config, metadata, commitActionType,
         (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
           updateColumnsToIndexWithColStats(metaClient, columnsToIndex);
           return null;
@@ -371,7 +360,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
             SerDeHelper.parseSchemas(historySchemaStr));
       }
-      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(schema, internalSchema, config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
+      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(schema, internalSchema,
+          config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS),
+          SchemaChangeUtils.parseTimestampLogicalTypeOverrides(
+              config.getStringOrDefault(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES)));
       if (evolvedSchema.equals(internalSchema)) {
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
         //TODO save history schema by metaTable
@@ -641,7 +633,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       boolean postCommitStatus = true;
       HoodieTimer postCommitTimer = HoodieTimer.start();
       try {
-        postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
+        String commitActionType = CommitUtils.getCommitActionType(operationType, hoodieTable.getMetaClient().getTableType());
+        postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime,
+            commitActionType, Option.empty());
         mayBeCleanAndArchive(hoodieTable);
       } catch (Exception e) {
         postCommitStatus = false;
@@ -668,8 +662,37 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime   Instant Time
    * @param extraMetadata Additional Metadata passed by user
    */
-  protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
+  protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime, String commitActionType, Option<Map<String, String>> extraMetadata) {
     try {
+      context.setJobStatus(this.getClass().getSimpleName(), "Cleaning up marker directories for commit " + instantTime + " in table "
+          + config.getTableName());
+      // Delete the marker directory for the instant.
+      WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      metrics.updateTableServiceInstantMetrics(table.getActiveTimeline());
+      // Fire write commit callback if a callback class is registered. postCommit() is reached
+      // by both auto-commit and explicit-commit paths; compaction and clustering have their own
+      // explicit fireCommitCallbackIfNecessary call sites in BaseHoodieTableServiceClient.
+      List<HoodieWriteStat> stats = metadata.getWriteStats();
+      fireCommitCallbackIfNecessary(instantTime, commitActionType, stats,
+          table::getBaseFileOnlyView, extraMetadata);
+    } finally {
+      this.heartbeatClient.stop(instantTime);
+    }
+  }
+
+  /**
+   * Performs post-commit cleanup when the instant is already completed and commit metadata is not
+   * available to invoke the regular post-commit hook. This can happen while recovering a streaming
+   * metadata-table write after failover. The table is recreated from the write configuration so its
+   * marker directory can still be removed, and the heartbeat is always stopped even if marker cleanup
+   * fails.
+   *
+   * @param instantTime the completed instant to clean up
+   */
+  public void postCommit(String instantTime) {
+    try {
+      HoodieTable table = createTable(config);
       context.setJobStatus(this.getClass().getSimpleName(), "Cleaning up marker directories for commit " + instantTime + " in table "
           + config.getTableName());
       // Delete the marker directory for the instant.
@@ -1521,13 +1544,47 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return true;
   }
 
+  /**
+   * Pure validation: this method reads both configs and throws, and never modifies either.
+   *
+   * <p>Nothing reconciles the write config against the table beforehand. That is deliberate: the mode
+   * is read further down the write path by handles and writer factories, some of which hold no table
+   * config at all, so the write config has to be correct on its own rather than corrected on the way
+   * in. This gate is what makes that true, by refusing writes whose meta-field settings do not already
+   * agree with the table.
+   */
   public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
-    // Once meta fields are disabled, it cant be re-enabled for a given table.
-    if (!tableConfig.populateMetaFields() && writeConfig.populateMetaFields()) {
-      throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
+    // Meta-field population is physical, so a writer must not disagree with the table about which
+    // meta columns hold values. Compare the full enum rather than the legacy booleans: those collapse
+    // every selective mode to false, so a writer claiming COMMIT_TIME_ONLY against a NONE table would
+    // slip through and advertise commit times that were never written.
+    //
+    // hoodie.meta.fields.mode is a table property, changeable only via hudi-cli or an upgrade -- never
+    // as a side effect of a write.
+    MetaFieldsMode tableMetaFieldsMode = tableConfig.getMetaFieldsMode();
+
+    // The writer's resolved mode must equal the table's. Both directions are wrong, for different
+    // reasons: widening would leave earlier commits missing a column later ones have, and readers
+    // cannot tell the two apart; narrowing would leave rows the table still advertises as populated,
+    // which incremental queries then silently skip. Only hudi-cli or an upgrade may change the mode.
+    //
+    // HoodieWriteConfig normalizes legacy input into hoodie.meta.fields.mode as its last defaulting
+    // step. Consequently this comparison has one source of truth on both sides, including when the
+    // caller supplied only the deprecated boolean or no meta-field option at all.
+    MetaFieldsMode writeMetaFieldsMode = writeConfig.getMetaFieldsMode();
+    if (writeMetaFieldsMode != tableMetaFieldsMode) {
+      throw new HoodieException(String.format(
+          "%s mismatch: table is %s but the writer requests %s. Meta columns are physical, so the writer must "
+              + "match the table%s. Set %s=%s on the writer, or change the table's mode through "
+              + "hudi-cli.",
+          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode, writeMetaFieldsMode,
+          writeMetaFieldsMode.isWiderThan(tableMetaFieldsMode)
+              ? " -- enabling a column now would leave earlier commits without it"
+              : " -- writing fewer of them leaves rows the table still advertises as populated",
+          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode));
     }
 
     // Meta fields can be disabled only when either {@code SimpleKeyGenerator}, {@code ComplexKeyGenerator},
@@ -1539,6 +1596,23 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
       if (!KeyGeneratorType.isKeyGenValidForDisabledMetaFields(keyGenClass)) {
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
+      }
+    }
+
+    // A bloom index needs the record key on disk. Without it the writer never builds a bloom filter
+    // (enableBloomFilter is gated on the same flag), so the reader finds no filter in the footer,
+    // HoodieKeyLookupHandle#getBloomFilter returns null, and addKey NPEs on the first upsert. Reject
+    // the combination here rather than let it fail mid-write with an unattributable
+    // NullPointerException.
+    if (!tableConfig.isRecordKeyPopulated()) {
+      HoodieIndex.IndexType indexType = writeConfig.getIndexType();
+      if (indexType == HoodieIndex.IndexType.BLOOM || indexType == HoodieIndex.IndexType.GLOBAL_BLOOM) {
+        throw new HoodieException(String.format(
+            "%s index requires the %s meta column, which %s=%s does not populate. The bloom filter is "
+                + "never written, so lookups would fail on the first upsert. Use SIMPLE, GLOBAL_SIMPLE, "
+                + "BUCKET or RECORD_INDEX instead, or use a mode that populates the record key.",
+            indexType, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+            HoodieTableConfig.META_FIELDS_MODE.key(), tableConfig.getMetaFieldsMode()));
       }
     }
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)

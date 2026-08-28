@@ -166,6 +166,14 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
     Some(new SparkLanceReaderBase(vectorized))
   }
 
+  override def createVortexFileReader(vectorized: Boolean,
+                                      sqlConf: SQLConf,
+                                      options: Map[String, String],
+                                      hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
+    // Vortex Spark connector artifact is not available for Spark 3.4.
+    None
+  }
+
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
     jssc.sc.stop(exitCode)
   }

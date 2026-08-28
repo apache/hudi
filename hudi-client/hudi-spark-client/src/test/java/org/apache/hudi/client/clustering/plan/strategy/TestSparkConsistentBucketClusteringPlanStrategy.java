@@ -188,7 +188,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
     String fileId = FSUtils.createNewFileId(fileIdPfx, 0);
     FileSlice fs = new FileSlice("partition", "001", fileId);
     if (baseFileSize > 0) {
-      HoodieBaseFile f = new HoodieBaseFile(fileId);
+      HoodieBaseFile f = new HoodieBaseFile(FSUtils.makeBaseFileName("001", "1-0-1", fileId, ".parquet"));
       f.setFileSize(baseFileSize);
       fs.setBaseFile(f);
     }

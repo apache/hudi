@@ -38,6 +38,8 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
     "mor,current,false",
     "cow,8,true",
     "mor,8,true",
+    "cow,9,true",
+    "mor,9,true",
     "cow,6,true",
     "cow,6,false",
     "mor,6,true",
@@ -63,10 +65,10 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
     } else {
       ""
     }
-    val writeTableVersionClause = tableVersion.toInt match {
-      case 6 => s"hoodie.write.table.version = $tableVersion,"
-      case 8 => s"hoodie.write.table.version = $tableVersion,"
-      case _ => ""
+    val writeTableVersionClause = if (tableVersion.toInt < HoodieTableVersion.current().versionCode()) {
+      s"hoodie.write.table.version = $tableVersion,"
+    } else {
+      ""
     }
     val expectedMergeConfigs: Map[String, String] = tableVersion.toInt match {
       case 6 =>

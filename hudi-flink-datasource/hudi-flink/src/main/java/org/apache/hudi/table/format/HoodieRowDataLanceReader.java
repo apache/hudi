@@ -34,7 +34,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
-import org.apache.hudi.io.storage.row.HoodieFlinkLanceArrowUtils;
+import org.apache.hudi.io.storage.row.lance.HoodieFlinkLanceArrowUtils;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.HoodieSchemaConverter;

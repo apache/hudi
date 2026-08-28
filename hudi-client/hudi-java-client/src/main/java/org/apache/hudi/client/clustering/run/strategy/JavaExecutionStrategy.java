@@ -38,7 +38,7 @@ import org.apache.hudi.common.util.collection.LazyConcatenatingIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.JavaBulkInsertInternalPartitionerFactory;
 import org.apache.hudi.execution.bulkinsert.JavaCustomColumnsSortPartitioner;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -139,7 +139,7 @@ public abstract class JavaExecutionStrategy<T>
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream().map(ClusteringOperation::create).collect(Collectors.toList());
     HoodieWriteConfig config = getWriteConfig();
     List<HoodieRecord<T>> records = new ArrayList<>();
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new JavaTaskContextSupplier(), config);
+    long maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(new JavaTaskContextSupplier(), config);
     log.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
 
     List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>(clusteringOps.size());

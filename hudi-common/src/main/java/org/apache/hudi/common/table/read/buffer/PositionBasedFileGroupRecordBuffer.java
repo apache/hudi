@@ -42,13 +42,11 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 
 import lombok.extern.slf4j.Slf4j;
-import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -124,9 +122,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           partialUpdateModeOpt);
     }
 
-    Pair<Function<T, T>, HoodieSchema> projectedTransformer = getProjectedTransformer(dataBlock);
+    Pair<Function<T, T>, HoodieSchema> schemaTransformer = getSchemaTransformerWithEvolvedSchema(dataBlock);
 
-    HoodieSchema schema = HoodieSchemaCache.intern(projectedTransformer.getRight());
+    HoodieSchema schema = HoodieSchemaCache.intern(schemaTransformer.getRight());
 
     // TODO: Return an iterator that can generate sequence number with the record.
     //       Then we can hide this logic into data block.
@@ -142,9 +140,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         }
 
         long recordPosition = recordPositions.get(recordIndex++);
-        T projectedNextRecord = projectedTransformer.getLeft().apply(nextRecord);
-        boolean isDelete = readerContext.getRecordContext().isDeleteRecord(projectedNextRecord, deleteContext);
-        BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(projectedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
+        T transformedNextRecord = schemaTransformer.getLeft().apply(nextRecord);
+        boolean isDelete = readerContext.getRecordContext().isDeleteRecord(transformedNextRecord, deleteContext);
+        BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(transformedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, recordPosition);
       }
       if (recordIndex != recordPositions.size()) {
@@ -170,7 +168,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         records.remove(position);
       } else {
         //if it's a delete record and the key is null, then we need to still use positions
-        //this happens when we read the positions using logBlock.getRecordPositions()
+        //this happens when we read the positions using logBlock.getRecordPositionList()
         //instead of reading the delete records themselves
         needToDoHybridStrategy = true;
       }
@@ -296,8 +294,6 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
    */
   protected static List<Long> extractRecordPositions(HoodieLogBlock logBlock,
                                                      String baseFileInstantTime) throws IOException {
-    List<Long> blockPositions = new ArrayList<>();
-
     String blockBaseFileInstantTime = logBlock.getBaseFileInstantTimeOfPositions();
     if (StringUtils.isNullOrEmpty(blockBaseFileInstantTime) || !baseFileInstantTime.equals(blockBaseFileInstantTime)) {
       log.debug("The record positions cannot be used because the base file instant time "
@@ -306,19 +302,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           blockBaseFileInstantTime, baseFileInstantTime);
       return null;
     }
-    Roaring64NavigableMap positions = logBlock.getRecordPositions();
-    if (positions == null || positions.isEmpty()) {
-      log.info("No record position info is found when attempting to do position based merge.");
-      return null;
-    }
-
-    Iterator<Long> iterator = positions.iterator();
-    while (iterator.hasNext()) {
-      blockPositions.add(iterator.next());
-    }
-
+    List<Long> blockPositions = logBlock.getRecordPositionList();
     if (blockPositions.isEmpty()) {
-      log.info("No positions are extracted.");
+      log.info("No record position info is found when attempting to do position based merge.");
       return null;
     }
 

@@ -182,6 +182,6 @@ public class BindVisitor implements ExpressionVisitor<Expression>  {
       return Predicates.contains(left, right);
     }
 
-    throw new IllegalArgumentException("The expression " + this + "cannot be visited as predicate");
+    throw new IllegalArgumentException("The expression " + predicate + " cannot be visited as predicate");
   }
 }

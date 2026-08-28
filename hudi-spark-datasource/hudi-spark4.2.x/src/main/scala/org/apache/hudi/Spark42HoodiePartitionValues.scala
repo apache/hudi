@@ -20,7 +20,7 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.unsafe.types.{GeographyVal, GeometryVal}
+import org.apache.spark.unsafe.types.BinaryView
 
 case class Spark42HoodiePartitionValues(override val values: InternalRow)
   extends Spark4HoodiePartitionValues(values) {
@@ -29,11 +29,7 @@ case class Spark42HoodiePartitionValues(override val values: InternalRow)
     Spark42HoodiePartitionValues(values.copy())
   }
 
-  override def getGeography(ordinal: Int): GeographyVal = {
-    values.getGeography(ordinal)
-  }
-
-  override def getGeometry(ordinal: Int): GeometryVal = {
-    values.getGeometry(ordinal)
+  override def getBinaryView(ordinal: Int): BinaryView = {
+    values.getBinaryView(ordinal)
   }
 }

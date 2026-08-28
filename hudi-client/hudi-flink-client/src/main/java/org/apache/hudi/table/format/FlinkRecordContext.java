@@ -174,11 +174,15 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public RowData seal(RowData rowData) {
+  public RowData seal(HoodieSchema schema, RowData rowData) {
+    if (rowData instanceof GenericRowData) {
+      return rowData;
+    }
     if (rowData instanceof BinaryRowData) {
       return ((BinaryRowData) rowData).copy();
     }
-    return rowData;
+    RowDataSerializer rowDataSerializer = RowDataQueryContexts.getRowDataSerializer(schema);
+    return rowDataSerializer.copy(rowData);
   }
 
   @Override

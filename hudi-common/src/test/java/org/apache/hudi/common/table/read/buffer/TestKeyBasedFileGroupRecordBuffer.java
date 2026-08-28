@@ -28,10 +28,10 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
@@ -43,6 +43,9 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.Serializable;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -51,6 +54,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -74,6 +78,32 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
   private final IndexedRecord testRecord6 = createTestRecord("6", 1, 5L);
   private final IndexedRecord testRecord6DeleteByCustomMarker = createTestRecord("6", 3, 2L);
   private final IndexedRecord testRecord7 = createTestRecord("7", 1, 5L);
+
+  /**
+   * Asserts that {@code processNextDataRecord} and {@code isPartialMergingEnabled} keep their
+   * {@code final} modifier, so a subclass cannot substitute its own implementation of either.
+   *
+   * <p>That is the entire guarantee, and it is deliberately narrow. It does <em>not</em> mean all buffer
+   * mutations go through {@code processNextDataRecord}: {@code records} and {@code enablePartialMerging}
+   * are {@code protected}, and {@code PositionBasedFileGroupRecordBuffer} legitimately writes to
+   * {@code records} directly when it re-keys entries in its key-based fallback and when it overwrites
+   * delete markers under commit-time ordering, as well as overriding block processing. Those paths must
+   * not merge, so routing them through this method would be wrong.
+   *
+   * <p>The modifier itself is compiler-enforced; this test exists only to catch it being dropped.
+   */
+  @Test
+  void sealedMethodsCannotBeOverridden() throws NoSuchMethodException {
+    assertMethodIsFinal(KeyBasedFileGroupRecordBuffer.class
+        .getDeclaredMethod("processNextDataRecord", BufferedRecord.class, Serializable.class));
+    assertMethodIsFinal(KeyBasedFileGroupRecordBuffer.class.getDeclaredMethod("isPartialMergingEnabled"));
+  }
+
+  private static void assertMethodIsFinal(Method method) {
+    assertTrue(Modifier.isFinal(method.getModifiers()),
+        () -> String.format("%s#%s must remain final so subclasses cannot override it",
+            method.getDeclaringClass().getSimpleName(), method.getName()));
+  }
 
   @Test
   void readWithEventTimeOrdering() throws IOException {
@@ -154,7 +184,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
-        properties, mock(HoodieTableMetaClient.class));
+        properties, createMockMetaClient(tableConfig));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate, testRecord7));
     inputRecords.addAll(convertToHoodieRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), false));
@@ -222,7 +252,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
-        properties, mock(HoodieTableMetaClient.class));
+        properties, createMockMetaClient(tableConfig));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
         testRecord4EarlierUpdate, testRecord7));
@@ -302,7 +332,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
-        properties, mock(HoodieTableMetaClient.class));
+        properties, createMockMetaClient(tableConfig));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate));
     inputRecords.addAll(convertToHoodieRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
@@ -377,7 +407,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
-        properties, mock(HoodieTableMetaClient.class));
+        properties, createMockMetaClient(tableConfig));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate));
     inputRecords.addAll(convertToHoodieRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));

@@ -73,17 +73,4 @@ public class TestTableServiceUtils {
       assertFalse(TableServiceUtils.isStale(startTimeMs, maxProcessingTimeMs, currentTimeMs));
     }
   }
-
-  @Test
-  public void testIsStaleWithCurrentTime() {
-    // Test the method that uses System.currentTimeMillis()
-    long maxProcessingTimeMs = 60000L; // 1 minute
-    // Using a start time far in the past should be stale
-    long pastStartTime = System.currentTimeMillis() - 120000L; // 2 minutes ago
-    assertTrue(TableServiceUtils.isStale(pastStartTime, maxProcessingTimeMs));
-
-    // Using a start time very recently should not be stale
-    long recentStartTime = System.currentTimeMillis() - 10000L; // 10 seconds ago
-    assertFalse(TableServiceUtils.isStale(recentStartTime, maxProcessingTimeMs));
-  }
 }

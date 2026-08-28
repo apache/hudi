@@ -58,6 +58,10 @@ public class CheckpointUtils {
     HOODIE_INCREMENTAL_SOURCES = Collections.unmodifiableSet(hoodieIncSource);
   }
 
+  public static final String RESET_CHECKPOINT_V2_SEPARATOR = ":";
+  public static final String REQUEST_TIME_PREFIX = "resumeFromInstantRequestTime";
+  public static final String COMPLETION_TIME_PREFIX = "resumeFromInstantCompletionTime";
+
   public static Checkpoint getCheckpoint(HoodieCommitMetadata commitMetadata) {
     if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2))
         || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_RESET_KEY_V2))) {
@@ -149,5 +153,48 @@ public class CheckpointUtils {
     }
     throw new UnsupportedOperationException("Unsupported checkpoint type: " + checkpoint.getClass());
 
+  }
+
+  /**
+   * For hoodie incremental source ingestion, if the target table is version 8 or higher, the checkpoint
+   * key set by streamer config can be in either of the following format:
+   * - resumeFromInstantRequestTime:[checkpoint value based on request time]
+   * - resumeFromInstantCompletionTime:[checkpoint value based on completion time]
+   *
+   * StreamerCheckpointV2FromCfgCkp class itself captured the fact that this is version 8 and higher, plus
+   * the checkpoint source is from streamer config override.
+   *
+   * When the checkpoint is consumed by individual data sources, we need to convert them to either vanilla
+   * checkpoint v1 (request time based) or checkpoint v2 (completion time based).
+   */
+  public static Checkpoint resolveToActualCheckpointVersion(UnresolvedStreamerCheckpointBasedOnCfg checkpoint) {
+    String[] parts = extractKeyValues(checkpoint);
+    switch (parts[0]) {
+      case REQUEST_TIME_PREFIX: {
+        return new StreamerCheckpointV1(checkpoint).setCheckpointKey(parts[1]);
+      }
+      case COMPLETION_TIME_PREFIX: {
+        return new StreamerCheckpointV2(checkpoint).setCheckpointKey(parts[1]);
+      }
+      default:
+        throw new IllegalArgumentException("Unknown event ordering mode " + parts[0]);
+    }
+  }
+
+  private static String[] extractKeyValues(UnresolvedStreamerCheckpointBasedOnCfg checkpoint) {
+    String checkpointKey = checkpoint.getCheckpointKey();
+    String[] parts = checkpointKey.split(RESET_CHECKPOINT_V2_SEPARATOR);
+    if (parts.length != 2
+        || (
+          !parts[0].trim().equals(REQUEST_TIME_PREFIX)
+          && !parts[0].trim().equals(COMPLETION_TIME_PREFIX)
+        )) {
+      throw new IllegalArgumentException(
+          "Illegal checkpoint key override `" + checkpointKey + "`. Valid format is either `resumeFromInstantRequestTime:<checkpoint value>` or "
+          + "`resumeFromInstantCompletionTime:<checkpoint value>`.");
+    }
+    parts[0] = parts[0].trim();
+    parts[1] = parts[1].trim();
+    return parts;
   }
 }

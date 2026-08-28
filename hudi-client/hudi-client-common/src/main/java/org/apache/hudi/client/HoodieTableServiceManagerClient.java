@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RetryHelper;
@@ -34,6 +35,7 @@ import org.apache.http.client.utils.URIBuilder;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -78,6 +80,7 @@ public class HoodieTableServiceManagerClient {
   private final String basePath;
   private final String dbName;
   private final String tableName;
+  private final Charset responseCharset;
 
   public HoodieTableServiceManagerClient(HoodieTableMetaClient metaClient, HoodieTableServiceManagerConfig config) {
     this.basePath = metaClient.getBasePath().toString();
@@ -86,6 +89,8 @@ public class HoodieTableServiceManagerClient {
     this.uri = config.getTableServiceManagerURIs();
     this.config = config;
     this.metaClient = metaClient;
+    this.responseCharset = Charset.forName(
+        config.getStringOrDefault(FileSystemViewStorageConfig.REMOTE_RESPONSE_CHARSET));
   }
 
   private String executeRequest(String requestPath, Map<String, String> queryParameters) throws IOException {
@@ -99,7 +104,7 @@ public class HoodieTableServiceManagerClient {
     int connectionRetryDelay = config.getConnectionRetryDelay();
 
     RetryHelper<String, IOException> retryHelper = new RetryHelper<>(connectionRetryDelay, requestRetryLimit, connectionRetryDelay, RETRY_EXCEPTIONS);
-    return retryHelper.tryWith(() -> Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute().returnContent().asString()).start();
+    return retryHelper.tryWith(() -> Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute().returnContent().asString(responseCharset)).start();
   }
 
   private Map<String, String> getParamsWithAdditionalParams(String[] paramNames, String[] paramVals) {

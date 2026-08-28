@@ -56,6 +56,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -659,15 +660,29 @@ public class TimelineUtils {
    *         {@link HoodieCommitMetadata}; {@link Option#empty()} if no matching instant is found
    * @throws IOException if reading commit metadata fails
    */
-  @SuppressWarnings("unchecked")
   public static Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(
       HoodieTimeline timeline, String... checkpointKeys) throws IOException {
-    return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
+    return findLatestInCommitMetadata(timeline, (instant, commitMetadata) -> {
+      boolean hasCheckpointMetadata = Arrays.stream(checkpointKeys)
+          .anyMatch(key -> !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(key)));
+      return hasCheckpointMetadata ? Option.of(Pair.of(instant.toString(), commitMetadata)) : Option.empty();
+    });
+  }
+
+  /**
+   * Scans the timeline's instants in reverse order, reading each instant's commit metadata,
+   * and returns the first non-empty result of the extractor.
+   *
+   * @param timeline  timeline whose instants are scanned (callers filter as needed)
+   * @param extractor extracts a result from an instant and its commit metadata; return
+   *                  {@link Option#empty()} to continue scanning
+   * @return first non-empty extraction in reverse instant order; empty if none matches
+   */
+  public static <T> Option<T> findLatestInCommitMetadata(
+      HoodieTimeline timeline, BiFunction<HoodieInstant, HoodieCommitMetadata, Option<T>> extractor) {
+    return timeline.getReverseOrderedInstants().map(instant -> {
       try {
-        HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
-        boolean hasCheckpointMetadata = Arrays.stream(checkpointKeys)
-            .anyMatch(key -> !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(key)));
-        return hasCheckpointMetadata ? Option.of(Pair.of(instant.toString(), commitMetadata)) : Option.empty();
+        return extractor.apply(instant, timeline.readCommitMetadata(instant));
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
       }

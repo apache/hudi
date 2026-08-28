@@ -30,6 +30,7 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
@@ -695,5 +696,96 @@ public class TestHoodieSparkLanceWriter {
         HoodieNotSupportedException.class,
         () -> HoodieSparkLanceWriter.validateNoVariantColumns(record));
     assertTrue(ex.getMessage().contains("payload"), "Error should name the field: " + ex.getMessage());
+  }
+
+  // ----- INLINE blob descriptor-leak guard tests -----
+
+  /**
+   * Builds a two-column schema (id INT + a canonical BLOB column) so the writer recognizes the
+   * second column as a blob via the {@code hudi_type=BLOB} field metadata. The struct layout is
+   * the canonical one produced by {@link org.apache.spark.sql.types.BlobType}: type, data,
+   * reference.
+   */
+  private StructType createBlobSchema() {
+    StructType blobStruct = (StructType) org.apache.spark.sql.types.BlobType.dataType();
+    Metadata blobMetadata = new MetadataBuilder()
+        .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())
+        .build();
+    return new StructType()
+        .add(new StructField("id", DataTypes.IntegerType, false, Metadata.empty()))
+        .add(new StructField("payload", blobStruct, true, blobMetadata));
+  }
+
+  /**
+   * Builds the reference sub-struct {external_path, offset, length, managed}.
+   */
+  private InternalRow blobReference(String externalPath, Long offset, Long length, boolean managed) {
+    return new GenericInternalRow(new Object[] {
+        externalPath == null ? null : UTF8String.fromString(externalPath),
+        offset,
+        length,
+        managed
+    });
+  }
+
+  /**
+   * Writing an INLINE blob with null {@code data} but a non-null {@code reference} is the
+   * descriptor-leak shape: it means an internal write-side read handed the writer a DESCRIPTOR row
+   * (reference populated, bytes dropped) instead of CONTENT. The writer must reject it with a
+   * {@link HoodieException} that points at {@code hoodie.read.blob.inline.mode}, rather than
+   * silently persisting a blob with no bytes (#19232).
+   */
+  @Test
+  public void testWriteInlineBlobWithNullDataAndReference_throws() {
+    StructType schema = createBlobSchema();
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_blob_descriptor_leak.lance");
+
+    InternalRow reference = blobReference("s3://bucket/blob.bin", 0L, 1024L, false);
+    InternalRow blob = new GenericInternalRow(new Object[] {
+        UTF8String.fromString(HoodieSchema.Blob.INLINE), // type = INLINE
+        null,                                            // data = null (leaked)
+        reference                                        // reference = non-null (leaked)
+    });
+    InternalRow row = new GenericInternalRow(new Object[] {1, blob});
+
+    HoodieException ex = assertThrows(HoodieException.class, () -> {
+      try (HoodieSparkLanceWriter writer = HoodieSparkLanceWriter.builder()
+          .file(path).sparkSchema(schema).instantTime(instantTime).taskContextSupplier(taskContextSupplier)
+          .storage(storage).bloomFilterOpt(Option.of(simpleBloomFilter)).build()) {
+        writer.writeRow("key1", row);
+      }
+    });
+    assertTrue(ex.getMessage() != null && ex.getMessage().contains("hoodie.read.blob.inline.mode"),
+        "Descriptor-leak guard must reference hoodie.read.blob.inline.mode: " + ex.getMessage());
+  }
+
+  /**
+   * An INLINE blob with null {@code data} AND null {@code reference} is a legitimate null inline
+   * payload, not a descriptor leak. The writer must accept it and close cleanly.
+   */
+  @Test
+  public void testWriteInlineBlobWithNullDataAndNullReference_succeeds() throws Exception {
+    StructType schema = createBlobSchema();
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_blob_null_inline.lance");
+
+    InternalRow blob = new GenericInternalRow(new Object[] {
+        UTF8String.fromString(HoodieSchema.Blob.INLINE), // type = INLINE
+        null,                                            // data = null (legit null payload)
+        null                                             // reference = null
+    });
+    InternalRow row = new GenericInternalRow(new Object[] {1, blob});
+
+    try (HoodieSparkLanceWriter writer = HoodieSparkLanceWriter.builder()
+        .file(path).sparkSchema(schema).instantTime(instantTime).taskContextSupplier(taskContextSupplier)
+        .storage(storage).bloomFilterOpt(Option.of(simpleBloomFilter)).build()) {
+      writer.writeRow("key1", row);
+    }
+
+    assertTrue(storage.exists(path), "Lance file with a null INLINE payload should be written");
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "testWriteInlineBlobWithNullDataAndNullReference", TEST_LANCE_DATA_ALLOCATOR_SIZE);
+         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
+      assertEquals(1, reader.numRows(), "The single null-payload row should be written");
+    }
   }
 }

@@ -22,7 +22,6 @@ package org.apache.hudi.common.util;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 
-import static org.apache.hudi.common.util.HadoopConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.HadoopConfigUtils.getRawValueWithAltKeys;
 import static org.apache.hudi.common.util.TestConfigUtils.TEST_BOOLEAN_CONFIG_PROPERTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,22 +41,5 @@ public class TestHadoopConfigUtils {
     conf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
     assertEquals(Option.of(String.valueOf(setValue)),
         getRawValueWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
-  }
-
-  @Test
-  public void testGetBooleanWithAltKeysFromHadoopConf() {
-    Configuration conf = new Configuration();
-    assertEquals(Boolean.parseBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.defaultValue()),
-        getBooleanWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
-
-    boolean setValue = !Boolean.parseBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.defaultValue());
-    conf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.key(), setValue);
-    assertEquals(setValue,
-        getBooleanWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
-
-    conf = new Configuration();
-    conf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
-    assertEquals(setValue,
-        getBooleanWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
   }
 }

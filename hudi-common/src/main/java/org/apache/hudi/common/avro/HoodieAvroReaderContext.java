@@ -133,7 +133,16 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       HoodieTableConfig tableConfig,
       String payloadClassName,
       TypedProperties props) {
-    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName, new HoodieConfig(props));
+    this(storageConfiguration, tableConfig, Option.empty(), payloadClassName, props);
+  }
+
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      String payloadClassName,
+      TypedProperties props) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, Option.empty(), Collections.emptyMap(), payloadClassName, new HoodieConfig(props));
   }
 
   private HoodieAvroReaderContext(

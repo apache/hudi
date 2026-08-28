@@ -18,8 +18,10 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import lombok.Getter;
@@ -34,8 +36,6 @@ import lombok.ToString;
 public class HoodieBaseFile extends BaseFile {
 
   private static final long serialVersionUID = 1L;
-  private static final char UNDERSCORE = '_';
-  private static final char DOT = '.';
   private final String fileId;
   private final String commitTime;
 
@@ -95,35 +95,15 @@ public class HoodieBaseFile extends BaseFile {
    * @return String array of size 2 with fileId as the first and commitTime as the second element.
    */
   private static String[] getFileIdAndCommitTimeFromFileName(String fileName) {
-    return ExternalFilePathUtil.isExternallyCreatedFile(fileName) ? handleExternallyGeneratedFile(fileName) : handleHudiGeneratedFile(fileName);
-  }
-
-  private static String[] handleHudiGeneratedFile(String fileName) {
-    String[] values = new String[2];
-    short underscoreCount = 0;
-    short lastUnderscoreIndex = 0;
-    for (int i = 0; i < fileName.length(); i++) {
-      char c = fileName.charAt(i);
-      if (c == UNDERSCORE) {
-        if (underscoreCount == 0) {
-          values[0] = fileName.substring(0, i);
-        }
-        lastUnderscoreIndex = (short) i;
-        underscoreCount++;
-      } else if (c == DOT) {
-        if (underscoreCount == 2) {
-          values[1] = fileName.substring(lastUnderscoreIndex + 1, i);
-          return values;
-        }
-      }
+    Option<FileNameParser.BaseFileName> parsedBaseFileName = FileNameParser.parseBaseFile(fileName);
+    if (!parsedBaseFileName.isPresent()) {
+      throw new InvalidHoodiePathException(fileName, "BaseFile");
     }
-    // case where there is no '.' in file name (no file suffix like .parquet)
-    values[1] = fileName.substring(lastUnderscoreIndex + 1);
-    return values;
-  }
 
-  private static String[] handleExternallyGeneratedFile(String fileName) {
-    return ExternalFilePathUtil.parseFileIdAndCommitTimeFromExternalFile(fileName);
+    return new String[] {
+        parsedBaseFileName.get().getFileId(),
+        parsedBaseFileName.get().getCommitTime()
+    };
   }
 
   public void setBootstrapBaseFile(BaseFile bootstrapBaseFile) {

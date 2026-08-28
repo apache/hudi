@@ -45,6 +45,7 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.lance.SparkLanceReaderBase
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark42LegacyHoodieParquetFileFormat, Spark42ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.execution.datasources.vortex.SparkVortexReaderBase
 import org.apache.spark.sql.execution.streaming.runtime.MemoryStream
 import org.apache.spark.sql.hudi.{HoodieMemoryStream, SparkAdapter}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
@@ -196,6 +197,13 @@ class Spark4_2Adapter extends BaseSpark4Adapter {
     Some(new SparkLanceReaderBase(vectorized))
   }
 
+  override def createVortexFileReader(vectorized: Boolean,
+                                      sqlConf: SQLConf,
+                                      options: Map[String, String],
+                                      hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
+    Some(new SparkVortexReaderBase(vectorized))
+  }
+
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
     jssc.sc.stop(exitCode)
   }
@@ -227,6 +235,11 @@ class Spark4_2Adapter extends BaseSpark4Adapter {
   override def isVariantProjectionStruct(structType: StructType): Boolean = {
     VariantMetadata.isVariantStruct(structType)
   }
+
+  // Spark 4.2 reconstructs shredded variants on read (SPARK-54410), so opt in to the
+  // shared rewrite; Spark 4.0 stays on the default None.
+  override def buildFullVariantReadSchema(schema: StructType): Option[StructType] =
+    rewriteTopLevelVariantsForFullRead(schema)
 
   override def buildVariantProjector(sparkDataSchema: StructType,
                                      sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = {
@@ -272,7 +285,7 @@ class Spark4_2Adapter extends BaseSpark4Adapter {
 
   // Apply LogicalTypeAnnotation.variantType((byte) 1) to the variant group, matching parquet 1.16+'s
   // SparkToParquetSchemaConverter convention.
-  override protected def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = {
+  override def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = {
     builder.as(LogicalTypeAnnotation.variantType(1.toByte))
   }
 

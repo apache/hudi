@@ -106,7 +106,7 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
     hoodieHeartbeatClient.start(instantTime1);
     hoodieHeartbeatClient.stop(instantTime1);
     assertFalse(
-        HeartbeatUtils.deleteHeartbeatFile(metaClient.getStorage(), basePath, instantTime2));
+        WriterHeartbeatUtils.deleteHeartbeatFile(metaClient.getStorage(), basePath, instantTime2));
   }
 
   @Test

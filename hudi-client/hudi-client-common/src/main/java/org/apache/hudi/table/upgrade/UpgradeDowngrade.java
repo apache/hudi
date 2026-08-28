@@ -62,6 +62,7 @@ public class UpgradeDowngrade {
   ));
 
   private static final Set<Pair<Integer, Integer>> DOWNGRADE_HANDLERS_REQUIRING_ROLLBACK_ANDCOMPACT = new HashSet<>(Arrays.asList(
+      Pair.of(10, 9), // TenToNineDowngradeHandler
       Pair.of(8, 7), // EightToSevenDowngradeHandler
       Pair.of(9, 8), // NineToEightDowngradeHandler
       Pair.of(6, 5)  // SixToFiveDowngradeHandler
@@ -328,6 +329,8 @@ public class UpgradeDowngrade {
       return new EightToSevenDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.NINE && toVersion == HoodieTableVersion.EIGHT) {
       return new NineToEightDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.TEN && toVersion == HoodieTableVersion.NINE) {
+      return new TenToNineDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
     }

@@ -811,6 +811,108 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     }
   }
 
+  /**
+   * Tests that when a zero-size base file is skipped during MDT bootstrap, a subsequent upsert
+   * still succeeds and produces consistent data. Because the skipped file group is absent from MDT,
+   * the upsert treats those records as new inserts and writes them to a new file group. The test
+   * verifies the final record count and that every RLI entry points to a real, readable file.
+   */
+  @Test
+  def testUpsertAfterSkippingZeroSizeFileOnInitialize(): Unit = {
+    // Use a single-partition data generator so all inserts land in one parquet file.
+    val singlePartitionDataGen = HoodieTestDataGenerator.createTestGeneratorFirstPartition()
+    val singlePartition = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH
+    val insertedRecords = 10
+    val inserts = singlePartitionDataGen.generateInserts("001", insertedRecords)
+    val insertDf = toDataset(spark, inserts)
+
+    val baseOptions = Map(
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      RECORDKEY_FIELD.key -> "_row_key",
+      PARTITIONPATH_FIELD.key -> "partition_path",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieCompactionConfig.INLINE_COMPACT.key() -> "false")
+
+    insertDf.write.format("hudi")
+      .options(baseOptions)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    assertEquals(insertedRecords, spark.read.format("hudi").load(basePath).count())
+
+    // Confirm there is exactly one parquet base file in the single partition.
+    val partitionPath = new StoragePath(basePath, singlePartition)
+    val baseFilesBeforeCorruption = storage.listDirectEntries(partitionPath).asScala
+      .filter(_.getPath.getName.endsWith(".parquet"))
+      .toSeq
+    assertEquals(1, baseFilesBeforeCorruption.size, "Expected exactly one parquet file in the single partition")
+    val zeroSizeFileId = FSUtils.getFileId(baseFilesBeforeCorruption.head.getPath.getName)
+
+    // Replace the only base file with an empty (zero-size) file.
+    replaceOneBaseFileWithEmpty(Seq(singlePartition))
+
+    // Delete MDT to force a full rebootstrap.
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    HoodieTableMetadataUtil.deleteMetadataTable(metaClient, context, false)
+    assertFalse(storage.exists(new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))),
+      "Metadata table should be absent before rebootstrap")
+
+    // The upsert triggers MDT rebootstrap (since MDT was deleted). Skip config is set so
+    // the zero-size file is skipped during bootstrap. Because RLI has no entries for these
+    // records (they were in the skipped file), the upsert treats them as new inserts.
+    // Use global RLI so that the MDT bootstraps at least minFileGroupCount (10) file groups
+    // for record_index even when all data files were skipped as zero-size.
+    metaClient.reloadActiveTimeline()
+    val latestSchema = new TableSchemaResolver(metaClient).getTableSchemaFromLatestCommit(false).get().toString
+    val optionsWithSkip = baseOptions ++ Map(
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
+      HoodieIndexConfig.INDEX_TYPE.key() -> "GLOBAL_RECORD_LEVEL_INDEX",
+      HoodieMetadataConfig.SKIP_ZERO_SIZE_FILES_ON_INITIALIZE.key() -> "true",
+      HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> latestSchema)
+
+    // Reuse the same 10 records for the upsert. Since RLI has no entries for these record keys
+    // (the original file was zero-size and skipped during bootstrap), the upsert treats them as
+    // new inserts and writes them to a brand-new file group — NOT the zero-size one.
+    val upsertDf = toDataset(spark, inserts)
+    // Upsert should succeed — any exception here fails the test.
+    upsertDf.write.format("hudi")
+      .options(optionsWithSkip)
+      .option(DataSourceWriteOptions.OPERATION.key(), UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Data consistency check: all 10 records must be readable in the new file group.
+    // (The zero-size base file contributes 0 readable records; the new file group has 10.)
+    val readDf = spark.read.format("hudi").load(basePath)
+    assertEquals(insertedRecords, readDf.count(),
+      "All records should be readable after upsert into a new file group")
+
+    // RLI consistency check: every live record must be indexed at the location where it actually lives.
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val writeConfig = getWriteConfig(optionsWithSkip)
+    val postUpsertMetadata = metadataWriter(writeConfig).getTableMetadata.asInstanceOf[HoodieBackedTableMetadata]
+
+    // MDT files partition must not track the zero-size file group.
+    val allMdtFiles = getFilesInAllPartitions(postUpsertMetadata)
+    assertFalse(allMdtFiles.exists(_.getPath.getName.contains(zeroSizeFileId)),
+      s"MDT should not contain the zero-size file group $zeroSizeFileId after bootstrap with skip enabled")
+
+    // Global RLI: look up all record keys without a partition hint.
+    val recordKeys = inserts.asScala.map(_.getRecordKey).asJava.stream().collect(Collectors.toList())
+    val postUpsertLocations = readRecordIndex(postUpsertMetadata, recordKeys, HOption.empty())
+    assertEquals(insertedRecords, postUpsertLocations.size,
+      "All upserted records should have an RLI entry after upsert")
+    val df = readDf.collect()
+    validateDFWithLocations(df, postUpsertLocations, singlePartition)
+
+    // The zero-size file group must not have been selected as the write target — its file ID
+    // should not appear in any of the post-upsert RLI locations.
+    assertFalse(postUpsertLocations.values.exists(_.getFileId == zeroSizeFileId),
+      "The zero-size file group should not have been picked as a write target during upsert")
+  }
+
   private def replaceOneBaseFileWithEmpty(partitionPaths: Seq[String]): String = {
     val candidateBaseFile = partitionPaths.view.flatMap { partition =>
       storage.listDirectEntries(new StoragePath(basePath, partition)).asScala

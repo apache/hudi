@@ -991,7 +991,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public InternalRow seal(InternalRow record) {
+    public InternalRow seal(HoodieSchema schema, InternalRow record) {
       return null;
     }
 

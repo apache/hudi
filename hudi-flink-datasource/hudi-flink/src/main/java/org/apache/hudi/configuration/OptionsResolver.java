@@ -71,7 +71,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_MA
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP;
 import static org.apache.hudi.common.table.HoodieTableConfig.TableStorageLayout.LSM_TREE;
-import static org.apache.hudi.metadata.HoodieBackedTableMetadataWriter.RECORD_INDEX_AVERAGE_RECORD_SIZE;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
 /**
  * Tool helping to resolve the flink options {@link FlinkOptions}.
@@ -164,12 +164,24 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns the configured table storage layout.
+   *
+   * <p>Insert operations preserve duplicate record keys and therefore default to the regular
+   * storage layout. Other operations use Flink's LSM tree default.
+   */
+  public static HoodieTableConfig.TableStorageLayout getTableStorageLayout(Configuration conf) {
+    return HoodieTableConfig.TableStorageLayout.fromConfigValue(conf.getString(
+        HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        isInsertOperation(conf)
+            ? HoodieTableConfig.TableStorageLayout.DEFAULT.configValue()
+            : HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue()));
+  }
+
+  /**
    * Returns whether the table uses LSM tree storage layout.
    */
   public static boolean isLsmTreeStorageLayout(Configuration conf) {
-    return HoodieTableConfig.TableStorageLayout.fromConfigValue(conf.getString(
-        HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
-        HoodieTableConfig.TABLE_STORAGE_LAYOUT.defaultValue())) == LSM_TREE;
+    return getTableStorageLayout(conf) == LSM_TREE;
   }
 
   /**

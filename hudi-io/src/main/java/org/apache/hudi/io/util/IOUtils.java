@@ -20,11 +20,9 @@
 package org.apache.hudi.io.util;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
@@ -148,42 +146,6 @@ public class IOUtils {
    */
   public static boolean isNegativeVarLong(byte value) {
     return value < -120 || (value >= -112 && value < 0);
-  }
-
-  /**
-   * Encodes an integer using Hadoop-compatible variable-length encoding
-   * (WritableUtils VarInt format) and returns the encoded bytes.
-   *
-   * <p>For values between -112 and 127 (inclusive), a single byte is used.
-   * For other values, the first byte indicates the number of following bytes
-   * and the sign, followed by the value in big-endian order.
-   *
-   * @param value the integer value to encode.
-   * @return the encoded byte array.
-   */
-  public static byte[] writeVarInt(int value) {
-    if (value >= -112 && value <= 127) {
-      return new byte[] {(byte) value};
-    }
-    long longValue = value;
-    int len = -112;
-    if (longValue < 0) {
-      longValue ^= -1L;
-      len = -120;
-    }
-    long tmp = longValue;
-    while (tmp != 0) {
-      tmp >>= 8;
-      len--;
-    }
-    int numBytes = (len < -120) ? -(len + 120) : -(len + 112);
-    byte[] result = new byte[1 + numBytes];
-    result[0] = (byte) len;
-    for (int idx = 0; idx < numBytes; idx++) {
-      int shiftBits = (numBytes - idx - 1) * 8;
-      result[1 + idx] = (byte) ((longValue >> shiftBits) & 0xFF);
-    }
-    return result;
   }
 
   /**
@@ -350,20 +312,6 @@ public class IOUtils {
       totalBytesRead += bytesRead;
     }
     return totalBytesRead;
-  }
-
-  public static byte[] readAsByteArray(InputStream input, int outputSize) throws IOException {
-    ByteArrayOutputStream bos = new ByteArrayOutputStream(outputSize);
-    copy(input, bos);
-    return bos.toByteArray();
-  }
-
-  public static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {
-    byte[] buffer = new byte[1024];
-    int len;
-    while ((len = inputStream.read(buffer)) != -1) {
-      outputStream.write(buffer, 0, len);
-    }
   }
 
   /**

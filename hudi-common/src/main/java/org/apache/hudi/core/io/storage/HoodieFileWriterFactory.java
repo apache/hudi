@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -37,6 +38,7 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+import static org.apache.hudi.common.model.HoodieFileFormat.VORTEX;
 
 public class HoodieFileWriterFactory {
   protected final HoodieStorage storage;
@@ -74,6 +76,9 @@ public class HoodieFileWriterFactory {
     }
     if (LANCE.getFileExtension().equals(extension)) {
       return newLanceFileWriter(instantTime, path, config, schema, taskContextSupplier);
+    }
+    if (VORTEX.getFileExtension().equals(extension)) {
+      return newVortexFileWriter(instantTime, path, config, schema, taskContextSupplier);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -117,6 +122,12 @@ public class HoodieFileWriterFactory {
     throw new UnsupportedOperationException(HoodieFileFormat.LANCE_UNSUPPORTED_ERROR_MSG);
   }
 
+  protected HoodieFileWriter newVortexFileWriter(
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
+      TaskContextSupplier taskContextSupplier) throws IOException {
+    throw new UnsupportedOperationException(HoodieFileFormat.VORTEX_SPARK_ONLY_ERROR_MSG);
+  }
+
   public static BloomFilter createBloomFilter(HoodieConfig config) {
     return BloomFilterFactory.createBloomFilter(
         config.getIntOrDefault(HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE),
@@ -128,8 +139,9 @@ public class HoodieFileWriterFactory {
   /**
    * Check if need to enable bloom filter.
    */
-  public static boolean enableBloomFilter(boolean populateMetaFields, HoodieConfig config) {
-    return populateMetaFields && (config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED)
+  public static boolean enableBloomFilter(MetaFieldsMode metaFieldsMode, HoodieConfig config) {
+    return metaFieldsMode.isRecordKeyPopulated()
+        && (config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED)
         // HoodieIndexConfig is located in the package hudi-client-common, and the package hudi-client-common depends on the package hudi-common,
         // so the class HoodieIndexConfig cannot be accessed in hudi-common, otherwise there will be a circular dependency problem
         || (config.contains("hoodie.index.type") && config.getString("hoodie.index.type").contains("BLOOM")));

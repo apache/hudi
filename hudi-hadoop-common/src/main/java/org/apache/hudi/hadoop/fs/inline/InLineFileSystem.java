@@ -34,6 +34,7 @@ import org.apache.hadoop.util.Progressable;
 import java.io.IOException;
 import java.net.URI;
 
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
@@ -93,11 +94,11 @@ public class InLineFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path inlinePath, int bufferSize) throws IOException {
-    Path outerPath = HadoopInLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
+    Path outerPath = getOuterFilePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FSDataInputStream outerStream = outerFs.open(outerPath, bufferSize);
     StoragePath inlineStoragePath = convertToStoragePath(inlinePath);
-    return new InLineFsDataInputStream(HadoopInLineFSUtils.startOffset(inlineStoragePath), outerStream, HadoopInLineFSUtils.length(inlineStoragePath));
+    return new InLineFsDataInputStream(InLineFSUtils.startOffset(inlineStoragePath), outerStream, InLineFSUtils.length(inlineStoragePath));
   }
 
   @Override
@@ -111,10 +112,10 @@ public class InLineFileSystem extends FileSystem {
 
   @Override
   public FileStatus getFileStatus(Path inlinePath) throws IOException {
-    Path outerPath = HadoopInLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
+    Path outerPath = getOuterFilePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FileStatus status = outerFs.getFileStatus(outerPath);
-    FileStatus toReturn = new FileStatus(HadoopInLineFSUtils.length(convertToStoragePath(inlinePath)), status.isDirectory(), status.getReplication(), status.getBlockSize(),
+    FileStatus toReturn = new FileStatus(InLineFSUtils.length(convertToStoragePath(inlinePath)), status.isDirectory(), status.getReplication(), status.getBlockSize(),
         status.getModificationTime(), status.getAccessTime(), status.getPermission(), status.getOwner(),
         status.getGroup(), inlinePath);
     return toReturn;
@@ -159,5 +160,9 @@ public class InLineFileSystem extends FileSystem {
   @Override
   public boolean mkdirs(Path path, FsPermission fsPermission) throws IOException {
     throw new UnsupportedOperationException("Can't set working directory");
+  }
+
+  private static Path getOuterFilePath(Path inlineFSPath) {
+    return convertToHadoopPath(InLineFSUtils.getOuterFilePathFromInlinePath(convertToStoragePath(inlineFSPath)));
   }
 }

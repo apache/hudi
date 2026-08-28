@@ -23,26 +23,48 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
+import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.util.HoodieSchemaConverter;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.types.AtomicDataType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -284,7 +306,8 @@ public class TestHoodieSplitReaderFunction {
 
   @Test
   public void testReadMethodSignature() {
-    // Verify that the read method returns CloseableIterator
+    // Verify the reader function constructs via its public signature (the read path is driven
+    // through open/readBatch on the split-fetcher thread).
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             conf,
@@ -443,5 +466,153 @@ public class TestHoodieSplitReaderFunction {
             "AVRO_PAYLOAD", Collections.emptyList(), false);
 
     assertNotNull(function);
+  }
+
+  // -------------------------------------------------------------------------
+  //  createRecordIterator — file-group reader cleanup when iterator init fails
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void testCreateRecordIteratorClosesReaderWhenInitFails() throws Exception {
+    // getClosableIterator() runs initRecordIterators(), which can open the reader's I/O resources and
+    // then throw. The reader is only a local in createRecordIterator, so the failure path must close
+    // it (nothing else would), preserving the original failure as the cause.
+    HoodieFileGroupReader<RowData> reader = mockReader();
+    IOException initFailure = new IOException("init failed");
+    when(reader.getClosableIterator()).thenThrow(initFailure);
+
+    HoodieSplitReaderFunction function = readerFunctionReturning(reader);
+    HoodieSourceSplit split = createSplit();
+
+    try (MockedStatic<StreamerUtil> mockedStreamerUtil = mockStatic(StreamerUtil.class)) {
+      mockedStreamerUtil.when(() -> StreamerUtil.metaClientForReader(any(), any()))
+          .thenReturn(mockMetaClient);
+
+      HoodieIOException thrown =
+          assertThrows(HoodieIOException.class, () -> function.createRecordIterator(split));
+      assertSame(initFailure, thrown.getCause(), "the original init failure must be the cause");
+    }
+    verify(reader, times(1)).close();
+  }
+
+  @Test
+  public void testCreateRecordIteratorSuppressesCloseError() throws Exception {
+    // A close() failure on the cleanup path must not mask the init failure: it is attached as a
+    // suppressed exception on the original.
+    HoodieFileGroupReader<RowData> reader = mockReader();
+    IOException initFailure = new IOException("init failed");
+    IOException closeFailure = new IOException("close failed");
+    when(reader.getClosableIterator()).thenThrow(initFailure);
+    doThrow(closeFailure).when(reader).close();
+
+    HoodieSplitReaderFunction function = readerFunctionReturning(reader);
+    HoodieSourceSplit split = createSplit();
+
+    try (MockedStatic<StreamerUtil> mockedStreamerUtil = mockStatic(StreamerUtil.class)) {
+      mockedStreamerUtil.when(() -> StreamerUtil.metaClientForReader(any(), any()))
+          .thenReturn(mockMetaClient);
+
+      HoodieIOException thrown =
+          assertThrows(HoodieIOException.class, () -> function.createRecordIterator(split));
+      assertSame(initFailure, thrown.getCause());
+      assertEquals(1, initFailure.getSuppressed().length, "close failure must be suppressed, not lost");
+      assertSame(closeFailure, initFailure.getSuppressed()[0]);
+    }
+  }
+
+  @Test
+  public void testCreateRecordIteratorReturnsInitializedIterator() throws Exception {
+    HoodieFileGroupReader<RowData> reader = mockReader();
+    @SuppressWarnings("unchecked")
+    ClosableIterator<RowData> iterator = mock(ClosableIterator.class);
+    when(reader.getClosableIterator()).thenReturn(iterator);
+
+    HoodieSplitReaderFunction function = readerFunctionReturning(reader);
+    try (MockedStatic<StreamerUtil> mockedStreamerUtil = mockStatic(StreamerUtil.class)) {
+      mockedStreamerUtil.when(() -> StreamerUtil.metaClientForReader(any(), any()))
+          .thenReturn(mockMetaClient);
+      assertSame(iterator, function.createRecordIterator(createSplit()));
+    }
+    verify(reader, never()).close();
+  }
+
+  @Test
+  public void testCreateRecordIteratorClosesReaderOnRuntimeFailure() throws Exception {
+    HoodieFileGroupReader<RowData> reader = mockReader();
+    IllegalStateException failure = new IllegalStateException("init failed");
+    when(reader.getClosableIterator()).thenThrow(failure);
+
+    HoodieSplitReaderFunction function = readerFunctionReturning(reader);
+    try (MockedStatic<StreamerUtil> mockedStreamerUtil = mockStatic(StreamerUtil.class)) {
+      mockedStreamerUtil.when(() -> StreamerUtil.metaClientForReader(any(), any()))
+          .thenReturn(mockMetaClient);
+      assertSame(failure, assertThrows(
+          IllegalStateException.class, () -> function.createRecordIterator(createSplit())));
+    }
+    verify(reader).close();
+  }
+
+  @Test
+  public void testProducedRowTypeUsesRequiredSchema() {
+    HoodieSchema required = HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE);
+    class ExposedReaderFunction extends HoodieSplitReaderFunction {
+      ExposedReaderFunction() {
+        super(TestHoodieSplitReaderFunction.this.conf,
+            required, required,
+            mockInternalSchemaManager, "AVRO_PAYLOAD", Collections.emptyList(), false);
+      }
+
+      RowType getProducedRowType() {
+        return producedRowType();
+      }
+    }
+
+    assertEquals(HoodieSchemaConverter.convertToRowType(required),
+        new ExposedReaderFunction().getProducedRowType());
+  }
+
+  @Test
+  public void testCreateRecordReaderBuildsFileSlice() {
+    HoodieRecordReader<RowData> reader = mock(HoodieRecordReader.class);
+    HoodieSplitReaderFunction function = new HoodieSplitReaderFunction(
+        conf,
+        HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE),
+        HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE),
+        mockInternalSchemaManager,
+        "AVRO_PAYLOAD",
+        Collections.emptyList(),
+        false);
+
+    try (MockedStatic<FormatUtils> mockedFormatUtils = mockStatic(FormatUtils.class)) {
+      mockedFormatUtils.when(() -> FormatUtils.createRecordReader(
+          any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(),
+          any(), any())).thenReturn(reader);
+      HoodieSourceSplit split = new HoodieSourceSplit(
+          1, null, Option.of(Collections.emptyList()), "/tbl", "/part",
+          "read_optimized", "19700101000000000", "file1", Option.empty());
+      assertSame(reader, function.createRecordReader(split, mockMetaClient));
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static HoodieFileGroupReader<RowData> mockReader() {
+    return mock(HoodieFileGroupReader.class);
+  }
+
+  private HoodieSplitReaderFunction readerFunctionReturning(HoodieFileGroupReader<RowData> reader) {
+    return new HoodieSplitReaderFunction(
+        conf, tableSchema, requiredSchema, mockInternalSchemaManager,
+        "AVRO_PAYLOAD", Collections.emptyList(), false) {
+      @Override
+      protected HoodieRecordReader<RowData> createRecordReader(HoodieSourceSplit split, HoodieTableMetaClient metaClient) {
+        return reader;
+      }
+    };
+  }
+
+  private static HoodieSourceSplit createSplit() {
+    return new HoodieSourceSplit(
+        1, "base", Option.of(Collections.emptyList()), "/tbl", "/part",
+        "read_optimized", "19700101000000000", "file1", Option.empty());
   }
 }

@@ -206,11 +206,11 @@ class TestTableSchemaResolver {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     // create 3 base files and 2 log files
     HoodieWriteStat baseFileWriteStat = buildWriteStat("partition1/baseFile1.parquet", 10, 100);
-    HoodieWriteStat logFileWriteStat = buildWriteStat("partition1/" + FSUtils.makeLogFileName("001", ".log", "100", 2, "1-0-1"), 0, 10);
+    HoodieWriteStat logFileWriteStat = buildWriteStat("partition1/" + FSUtils.makeInlineLogFileName("001", ".log", "100", 2, "1-0-1"), 0, 10);
     // we don't expect any interactions with this write stat since the code should exit as soon as a valid schema is found
     HoodieWriteStat baseFileWriteStat2 = mock(HoodieWriteStat.class);
     // files that only have deletes will be skipped
-    HoodieWriteStat logFileWithOnlyDeletes = buildWriteStat("partition1/" + FSUtils.makeLogFileName("002", ".log", "100", 2, "1-0-1"), 0, 0);
+    HoodieWriteStat logFileWithOnlyDeletes = buildWriteStat("partition1/" + FSUtils.makeInlineLogFileName("002", ".log", "100", 2, "1-0-1"), 0, 0);
     HoodieWriteStat baseFileWithOnlyDeletes = buildWriteStat("partition2/baseFile2.parquet", 0, 0);
 
     commitMetadata.addWriteStat("partition1", baseFileWriteStat);

@@ -19,21 +19,28 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.source.enumerator.HoodieSplitEnumeratorState;
+import org.apache.hudi.source.enumerator.HoodieStaticSplitEnumerator;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.reader.HoodieRecordEmitter;
 import org.apache.hudi.source.reader.function.HoodieSplitReaderFunction;
+import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplitComparator;
+import org.apache.hudi.source.split.SerializableComparator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.InternalSchemaManager;
@@ -43,6 +50,8 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.api.connector.source.Boundedness;
+import org.apache.flink.api.connector.source.SplitEnumerator;
+import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
@@ -66,8 +75,12 @@ import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Test cases for {@link HoodieSource}.
@@ -418,6 +431,50 @@ public class TestHoodieSource {
     assertNotNull(splits, "Incremental splits with pruner should not be null");
   }
 
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testConstructorRejectsNullCollaborators() {
+    HoodieScanContext scanContext = mock(HoodieScanContext.class);
+    SerializableSupplier<SplitReaderFunction<RowData>> readerSupplier = mock(SerializableSupplier.class);
+    SerializableComparator<HoodieSourceSplit> comparator = mock(SerializableComparator.class);
+    HoodieTableMetaClient client = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    HoodieRecordEmitter<RowData> emitter = mock(HoodieRecordEmitter.class);
+    when(client.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getTableName()).thenReturn("test_table");
+
+    assertThrows(IllegalArgumentException.class,
+        () -> new HoodieSource<>(null, readerSupplier, comparator, client, emitter));
+    assertThrows(IllegalArgumentException.class,
+        () -> new HoodieSource<>(scanContext, null, comparator, client, emitter));
+    assertThrows(IllegalArgumentException.class,
+        () -> new HoodieSource<>(scanContext, readerSupplier, null, client, emitter));
+    assertThrows(IllegalArgumentException.class,
+        () -> new HoodieSource<>(scanContext, readerSupplier, comparator, null, emitter));
+    assertThrows(IllegalArgumentException.class,
+        () -> new HoodieSource<>(scanContext, readerSupplier, comparator, client, null));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testCreateAndRestoreStaticEnumerator() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    SplitEnumeratorContext<HoodieSourceSplit> context = mock(SplitEnumeratorContext.class);
+    when(context.currentParallelism()).thenReturn(1);
+
+    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> created =
+        source.createEnumerator(context);
+    HoodieSplitEnumeratorState state = new HoodieSplitEnumeratorState(
+        Collections.emptyList(), Option.empty(), Option.empty());
+    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> restored =
+        source.restoreEnumerator(context, state);
+
+    assertInstanceOf(HoodieStaticSplitEnumerator.class, created);
+    assertInstanceOf(HoodieStaticSplitEnumerator.class, restored);
+  }
+
   // Helper methods
 
   private HoodieSource<RowData> createHoodieSource(Configuration conf, HoodieTableMetaClient metaClient) {
@@ -465,18 +522,18 @@ public class TestHoodieSource {
         .build();
     HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
     HadoopStorageConfiguration hadoopConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
-    HoodieSplitReaderFunction splitReaderFunction = new HoodieSplitReaderFunction(
-        conf,
-        schema, // schema will be resolved from table
-        schema, // required schema
-        InternalSchemaManager.get(hadoopConf, this.metaClient),
-        conf.get(FlinkOptions.MERGE_TYPE),
-        Collections.emptyList(),
-            false);
+    InternalSchemaManager internalSchemaManager = InternalSchemaManager.get(hadoopConf, this.metaClient);
 
     return new HoodieSource<>(
         scanContext,
-        splitReaderFunction,
+        () -> new HoodieSplitReaderFunction(
+            conf,
+            schema, // schema will be resolved from table
+            schema, // required schema
+            internalSchemaManager,
+            conf.get(FlinkOptions.MERGE_TYPE),
+            Collections.emptyList(),
+            false),
         new HoodieSourceSplitComparator(),
         metaClient,
         new HoodieRecordEmitter<>());

@@ -20,8 +20,9 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
-import org.apache.hudi.io.util.IOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -149,6 +150,24 @@ public abstract class TestHoodieStorageBase {
     assertTrue(storage.createDirectory(path4));
     validatePathInfo(storage, path4, EMPTY_BYTES, true);
     assertTrue(storage.createDirectory(path4));
+  }
+
+  @Test
+  public void testImmutableFileIsNotPublishedOnWriteFailure() throws IOException {
+    HoodieStorage storage = getStorage();
+    StoragePath directory = new StoragePath(getTempDir(), "testImmutableFileWriteFailure");
+    StoragePath path = new StoragePath(directory, "1.file");
+    storage.createDirectory(directory);
+
+    HoodieIOException exception = assertThrows(HoodieIOException.class,
+        () -> storage.createImmutableFileInPath(path, Option.of(outputStream -> {
+          outputStream.write(42);
+          throw new IOException("write failure");
+        })));
+
+    assertEquals("write failure", exception.getCause().getMessage());
+    assertFalse(storage.exists(path));
+    assertTrue(storage.listDirectEntries(directory).isEmpty());
   }
 
   @Test
@@ -406,7 +425,7 @@ public abstract class TestHoodieStorageBase {
     if (!isDirectory) {
       assertEquals(data.length, pathInfo.getLength());
       try (InputStream stream = storage.open(path)) {
-        assertArrayEquals(data, IOUtils.readAsByteArray(stream, data.length));
+        assertArrayEquals(data, FileIOUtils.readAsByteArray(stream, data.length));
       }
     }
     assertTrue(pathInfo.getModificationTime() > 0);

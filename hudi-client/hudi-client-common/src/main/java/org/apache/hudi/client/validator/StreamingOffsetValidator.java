@@ -21,8 +21,8 @@ package org.apache.hudi.client.validator;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.util.CheckpointUtils;
-import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
+import org.apache.hudi.common.util.KafkaCheckpointUtils;
+import org.apache.hudi.common.util.KafkaCheckpointUtils.CheckpointFormat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig.ValidationFailurePolicy;
@@ -133,7 +133,7 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     String currentCheckpoint = currentCheckpointOpt.get();
 
     // Validate current checkpoint format
-    if (!CheckpointUtils.isValidCheckpointFormat(checkpointFormat, currentCheckpoint)) {
+    if (!KafkaCheckpointUtils.isValidCheckpointFormat(checkpointFormat, currentCheckpoint)) {
       log.warn("Current checkpoint has invalid format: {}. Skipping validation.", currentCheckpoint);
       return;
     }
@@ -148,7 +148,7 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     String previousCheckpoint = previousCheckpointOpt.get();
 
     // Validate previous checkpoint format
-    if (!CheckpointUtils.isValidCheckpointFormat(checkpointFormat, previousCheckpoint)) {
+    if (!KafkaCheckpointUtils.isValidCheckpointFormat(checkpointFormat, previousCheckpoint)) {
       log.warn("Previous checkpoint has invalid format: {}. Skipping validation.", previousCheckpoint);
       return;
     }
@@ -156,7 +156,7 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     // Calculate offset difference using format-specific logic.
     // Note: calculateOffsetDifference always returns >= 0 because negative per-partition
     // diffs (offset resets) are handled internally by using the current offset.
-    long offsetDifference = CheckpointUtils.calculateOffsetDifference(
+    long offsetDifference = KafkaCheckpointUtils.calculateOffsetDifference(
         checkpointFormat, previousCheckpoint, currentCheckpoint);
 
     // Get actual new record count from write stats.

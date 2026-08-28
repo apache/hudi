@@ -31,7 +31,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -43,7 +43,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieClusteringException;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.metrics.FlinkClusteringMetrics;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
@@ -87,7 +87,6 @@ import org.apache.flink.table.types.logical.RowType;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -229,52 +228,57 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
   private void doClustering(String instantTime, List<ClusteringOperation> clusteringOperations) throws Exception {
     clusteringMetrics.startClustering();
-    BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
+    try (BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
         instantTime, this.taskID, RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()),
-        RuntimeContextUtils.getAttemptNumber(getRuntimeContext()), this.rowType, true);
+        RuntimeContextUtils.getAttemptNumber(getRuntimeContext()), this.rowType, true)) {
+      ClosableIterator<RowData> iterator;
+      if (clusteringOperations.stream().anyMatch(operation -> CollectionUtils.nonEmpty(operation.getDeltaFilePaths()))) {
+        // if there are log files, we read all records into memory for a file group and apply updates.
+        iterator = readRecordsForGroupWithLogs(clusteringOperations, instantTime);
+      } else {
+        // We want to optimize reading records for case there are no log files.
+        iterator = readRecordsForGroupBaseFiles(clusteringOperations);
+      }
 
-    Iterator<RowData> iterator;
-    if (clusteringOperations.stream().anyMatch(operation -> CollectionUtils.nonEmpty(operation.getDeltaFilePaths()))) {
-      // if there are log files, we read all records into memory for a file group and apply updates.
-      iterator = readRecordsForGroupWithLogs(clusteringOperations, instantTime);
-    } else {
-      // We want to optimize reading records for case there are no log files.
-      iterator = readRecordsForGroupBaseFiles(clusteringOperations);
+      try (ClosableIterator<RowData> closeableIterator = iterator) {
+        if (this.sortClusteringEnabled) {
+          RowDataSerializer rowDataSerializer = new RowDataSerializer(rowType);
+          BinaryExternalSorter sorter = initSorter();
+          try {
+            while (closeableIterator.hasNext()) {
+              RowData rowData = closeableIterator.next();
+              BinaryRowData binaryRowData = rowDataSerializer.toBinaryRow(rowData).copy();
+              sorter.write(binaryRowData);
+            }
+
+            BinaryRowData row = binarySerializer.createInstance();
+            while ((row = sorter.getIterator().next(row)) != null) {
+              writerHelper.write(row);
+            }
+          } finally {
+            sorter.close();
+          }
+        } else {
+          while (closeableIterator.hasNext()) {
+            writerHelper.write(closeableIterator.next());
+          }
+        }
+      }
+
+      List<WriteStatus> writeStatuses = writerHelper.getWriteStatuses(this.taskID);
+      clusteringMetrics.endClustering();
+      collector.collect(new ClusteringCommitEvent(instantTime, getFileIds(clusteringOperations), writeStatuses, this.taskID));
     }
-
-    if (this.sortClusteringEnabled) {
-      RowDataSerializer rowDataSerializer = new RowDataSerializer(rowType);
-      BinaryExternalSorter sorter = initSorter();
-      while (iterator.hasNext()) {
-        RowData rowData = iterator.next();
-        BinaryRowData binaryRowData = rowDataSerializer.toBinaryRow(rowData).copy();
-        sorter.write(binaryRowData);
-      }
-
-      BinaryRowData row = binarySerializer.createInstance();
-      while ((row = sorter.getIterator().next(row)) != null) {
-        writerHelper.write(row);
-      }
-      sorter.close();
-    } else {
-      while (iterator.hasNext()) {
-        writerHelper.write(iterator.next());
-      }
-    }
-
-    List<WriteStatus> writeStatuses = writerHelper.getWriteStatuses(this.taskID);
-    clusteringMetrics.endClustering();
-    collector.collect(new ClusteringCommitEvent(instantTime, getFileIds(clusteringOperations), writeStatuses, this.taskID));
-    writerHelper.close();
   }
 
   /**
    * Read records from baseFiles, apply updates and convert to Iterator.
    */
   @SuppressWarnings("unchecked")
-  private Iterator<RowData> readRecordsForGroupWithLogs(List<ClusteringOperation> clusteringOps, String instantTime) {
+  private ClosableIterator<RowData> readRecordsForGroupWithLogs(
+      List<ClusteringOperation> clusteringOps, String instantTime) {
     List<ClosableIterator<RowData>> recordIterators = new ArrayList<>();
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new FlinkTaskContextSupplier(null), writeConfig);
+    long maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(new FlinkTaskContextSupplier(null), writeConfig);
     log.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
 
     for (ClusteringOperation clusteringOp : clusteringOps) {
@@ -296,15 +300,15 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
         Option.ofNullable(clusterOperation.getDataFilePath()).map(HoodieBaseFile::new).orElse(null),
         clusterOperation.getDeltaFilePaths().stream().map(HoodieLogFile::new).collect(Collectors.toList()));
 
-    HoodieFileGroupReader<RowData> fileGroupReader = FormatUtils.createFileGroupReader(table.getMetaClient(), writeConfig, InternalSchemaManager.DISABLED,
+    HoodieRecordReader<RowData> recordReader = FormatUtils.createRecordReader(table.getMetaClient(), writeConfig, InternalSchemaManager.DISABLED,
         fileSlice, schema, readerSchema, instantTime, FlinkOptions.REALTIME_PAYLOAD_COMBINE, false, Collections.emptyList(), Option.empty());
-    return fileGroupReader.getClosableIterator();
+    return recordReader.getClosableIterator();
   }
 
   /**
    * Read records from baseFiles and get iterator.
    */
-  private Iterator<RowData> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
+  private ClosableIterator<RowData> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
     List<ClosableIterator<RowData>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
       try {
         HoodieFileReaderFactory fileReaderFactory = HoodieIOFactory.getIOFactory(table.getStorage())

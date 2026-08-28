@@ -459,6 +459,7 @@ object ColumnStatIndexTestBase {
 
   def testMetadataColumnStatsIndexParams(testV6: Boolean): java.util.stream.Stream[Arguments] = {
     val currentVersionCode = HoodieTableVersion.current().versionCode()
+    val v9VersionCode = HoodieTableVersion.NINE.versionCode()
     java.util.stream.Stream.of(
       HoodieTableType.values().toStream.flatMap { tableType =>
         val v6Seq = if (testV6) {
@@ -473,6 +474,8 @@ object ColumnStatIndexTestBase {
         v6Seq ++ Seq(
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 8)),
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = 8)),
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = v9VersionCode)),
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = v9VersionCode)),
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = currentVersionCode)),
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = currentVersionCode))
         )
@@ -491,6 +494,7 @@ object ColumnStatIndexTestBase {
 
   def testMetadataColumnStatsIndexParamsInMemory(testV6: Boolean): java.util.stream.Stream[Arguments] = {
     val currentVersionCode = HoodieTableVersion.current().versionCode()
+    val v9VersionCode = HoodieTableVersion.NINE.versionCode()
     java.util.stream.Stream.of(
       HoodieTableType.values().toStream.flatMap { tableType =>
         val v6Seq = if (testV6) {
@@ -501,6 +505,7 @@ object ColumnStatIndexTestBase {
 
         v6Seq ++ Seq(
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 8)),
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = v9VersionCode)),
           Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = currentVersionCode))
         )
       }: _*
@@ -519,6 +524,7 @@ object ColumnStatIndexTestBase {
 
   def testMetadataColumnStatsIndexParamsForMOR(testV6: Boolean): java.util.stream.Stream[Arguments] = {
     val currentVersionCode = HoodieTableVersion.current().versionCode()
+    val v9VersionCode = HoodieTableVersion.NINE.versionCode()
     java.util.stream.Stream.of(
       (if (testV6) Seq(
         Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = 6)),
@@ -526,6 +532,8 @@ object ColumnStatIndexTestBase {
       ) else Seq.empty) ++ Seq(
         Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = 8)),
         Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = 8)),
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = v9VersionCode)),
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = v9VersionCode)),
         Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = currentVersionCode)),
         Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = currentVersionCode))
       ): _*
@@ -544,6 +552,7 @@ object ColumnStatIndexTestBase {
 
   def testTableTypePartitionTypeParams(testV6: Boolean): java.util.stream.Stream[Arguments] = {
     val currentVersionCode = HoodieTableVersion.current().versionCode().toString
+    val v9VersionCode = HoodieTableVersion.NINE.versionCode().toString
     val v6Seq = if (testV6) {
       Seq(
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8", "6"),
@@ -562,6 +571,12 @@ object ColumnStatIndexTestBase {
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "", "8"),
         Arguments.arguments(HoodieTableType.MERGE_ON_READ, "c8", "8"),
         Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", "8"),
+
+        // Table version 9
+        Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8", v9VersionCode),
+        Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "", v9VersionCode),
+        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "c8", v9VersionCode),
+        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", v9VersionCode),
 
         // Table version current
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8", currentVersionCode),

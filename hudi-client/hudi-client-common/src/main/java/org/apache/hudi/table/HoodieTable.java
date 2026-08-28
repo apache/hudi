@@ -35,6 +35,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
@@ -81,7 +82,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.metadata.HoodieColumnStatsIndexUtils;
+import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -1144,7 +1145,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     if (!config.isAutoDeleteMdtPartitionsEnabled()) {
       return;
     }
-    Stream.of(MetadataPartitionType.getValidValues()).forEach(partitionType -> {
+    Stream.of(MetadataPartitionType.getValidValues(metaClient.getTableConfig().getTableVersion())).forEach(partitionType -> {
       if (shouldDeleteMetadataPartition(partitionType)) {
         try {
           log.info("Deleting metadata partition because it is disabled in writer: {}", partitionType.name());
@@ -1153,7 +1154,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           }
           if (partitionType == MetadataPartitionType.COLUMN_STATS) {
             // delete index definition as well
-            HoodieColumnStatsIndexUtils.deleteColumnStatsIndexDefinition(getMetaClient());
+            HoodieMetadataWriteUtils.deleteColumnStatsIndexDefinition(getMetaClient());
           }
           clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
         } catch (HoodieMetadataException e) {
@@ -1280,5 +1281,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     // question: should we just return null when context is serialized as null? the mismatch reader context would throw anyway.
     return (ReaderContextFactory<T>) getContext().getReaderContextFactoryForWrite(metaClient, config.getRecordMerger().getRecordType(),
         config.getProps());
+  }
+
+  /**
+   * Returns the record context used by the write path.
+   */
+  public RecordContext<?> getRecordContextForWrite() {
+    return getReaderContextFactoryForWrite().getContext().getRecordContext();
   }
 }

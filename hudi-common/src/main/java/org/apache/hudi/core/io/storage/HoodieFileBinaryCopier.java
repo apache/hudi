@@ -18,6 +18,7 @@
 
 package org.apache.hudi.core.io.storage;
 
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.parquet.schema.MessageType;
@@ -34,6 +35,18 @@ import java.util.List;
 public interface HoodieFileBinaryCopier {
 
   long binaryCopy(List<StoragePath> inputFilePaths, List<StoragePath> outputFilePath, MessageType writeSchema, boolean schemaEvolutionEnabled) throws IOException;
+
+  /**
+   * Tell the copier which meta columns this table populates.
+   *
+   * <p>Binary copy rewrites {@code _hoodie_file_name} to the output file name. That is correct for a
+   * table that populates the column and wrong for one that does not, which would otherwise come out of
+   * clustering carrying a file name it never advertised. Implementations that do not rewrite meta
+   * columns can ignore this.
+   */
+  default void setMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
+    // no-op by default
+  }
 
   void close() throws IOException;
 }

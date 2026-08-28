@@ -156,7 +156,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
-  public ArrayWritable seal(ArrayWritable record) {
+  public ArrayWritable seal(HoodieSchema schema, ArrayWritable record) {
     return new ArrayWritable(Writable.class, Arrays.copyOf(record.get(), record.get().length));
   }
 

@@ -53,8 +53,8 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
-import static org.apache.hudi.common.table.checkpoint.HoodieIncrSourceCheckpointValUtils.REQUEST_TIME_PREFIX;
-import static org.apache.hudi.common.table.checkpoint.HoodieIncrSourceCheckpointValUtils.RESET_CHECKPOINT_V2_SEPARATOR;
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.REQUEST_TIME_PREFIX;
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.RESET_CHECKPOINT_V2_SEPARATOR;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;

@@ -150,7 +150,7 @@ public class TestAverageRecordSizeEstimator {
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName, BASE_FILE_EXTENSION);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
-    return FSUtils.makeLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
+    return FSUtils.makeInlineLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
   }
 
   private static Stream<Arguments> testCases() {

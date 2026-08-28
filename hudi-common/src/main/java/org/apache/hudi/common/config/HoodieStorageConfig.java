@@ -132,6 +132,43 @@ public class HoodieStorageConfig extends HoodieConfig {
       .sinceVersion("1.3.0")
       .withDocumentation("Control whether to write bloom filter or not to HFile.");
 
+  public static final ConfigProperty<String> VORTEX_MAX_FILE_SIZE = ConfigProperty
+      .key("hoodie.vortex.max.file.size")
+      .defaultValue(String.valueOf(120 * 1024 * 1024))
+      .markAdvanced()
+      .withDocumentation("Target file size in bytes for Vortex base files.");
+
+  public static final ConfigProperty<String> VORTEX_WRITE_ALLOCATOR_SIZE_BYTES = ConfigProperty
+      .key("hoodie.vortex.write.allocator.size.bytes")
+      .defaultValue(String.valueOf(256 * 1024 * 1024))
+      .markAdvanced()
+      .withDocumentation("Maximum size in bytes of the Arrow child allocator used by the Vortex "
+          + "writer for buffering in-flight batch data. Must be large enough that the Arrow "
+          + "buffer's power-of-2 doubling growth never requests a buffer exceeding this cap, "
+          + "otherwise writes fail with OutOfMemoryException.");
+
+  public static final ConfigProperty<String> VORTEX_WRITE_FLUSH_BYTE_WATERMARK = ConfigProperty
+      .key("hoodie.vortex.write.flush.byte.watermark")
+      .defaultValue(String.valueOf(96 * 1024 * 1024))
+      .markAdvanced()
+      .withDocumentation("Byte-size watermark on the Vortex writer's in-flight Arrow buffers; "
+          + "the writer flushes the current batch when the sum of FieldVector buffer sizes "
+          + "reaches this value, in addition to the row-count batch threshold.");
+
+  public static final ConfigProperty<String> VORTEX_READ_ALLOCATOR_SIZE_BYTES = ConfigProperty
+      .key("hoodie.vortex.read.allocator.size.bytes")
+      .defaultValue(String.valueOf(256 * 1024 * 1024))
+      .markAdvanced()
+      .withDocumentation("Maximum size in bytes of the Arrow child allocator used by the Vortex "
+          + "reader for per-read data buffers.");
+
+  public static final ConfigProperty<String> VORTEX_READ_METADATA_ALLOCATOR_SIZE_BYTES = ConfigProperty
+      .key("hoodie.vortex.read.metadata.allocator.size.bytes")
+      .defaultValue(String.valueOf(8 * 1024 * 1024))
+      .markAdvanced()
+      .withDocumentation("Maximum size in bytes of the Arrow child allocator used by the Vortex "
+          + "reader for footer/metadata operations (schema, bloom filter).");
+
   public static final ConfigProperty<Boolean> HFILE_WRITER_TO_ALLOW_DUPLICATES = ConfigProperty
       .key("hoodie.hfile.writes.allow.duplicates")
       .defaultValue(false)
@@ -260,6 +297,25 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "used to shred variant values at write time in the Avro record path. "
           + "The provider parses variant binary data and populates typed_value columns. "
           + "When not set, the provider is auto-detected from the classpath.");
+
+  public static final ConfigProperty<Boolean> PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED = ConfigProperty
+      .key("hoodie.parquet.variant.shredding.schema.inference.enabled")
+      .defaultValue(false)
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled, the shredding schema for variant columns without an explicit "
+          + "typed_value in the write schema is inferred automatically per parquet file from a sample of "
+          + "the records written to that file, mirroring Spark 4.1's "
+          + "spark.sql.variant.inferShreddingSchema. Requires Spark 4.1+ on the writer classpath; "
+          + "writes stay unshredded otherwise (Spark 4.0, Flink, Java engines). Applies to every "
+          + "parquet file the writer produces: base files and, on table version 10+, the native "
+          + "parquet log files of MOR tables (each infers its own schema). Data blocks inside "
+          + "Avro-format log files, whether Avro or parquet (hoodie.logfile.data.block.format), stay "
+          + "unshredded and shred at compaction. Up to 4096 records or 64MB are buffered per "
+          + "open file writer before the writer is created, on top of parquet's own row-group "
+          + "buffer, so size executor memory for concurrently open handles accordingly. Ignored when "
+          + "hoodie.parquet.variant.force.shredding.schema.for.test is set, when write shredding "
+          + "is disabled, or when the table has a schema-on-read internal schema "
+          + "(hoodie.internal.schema).");
 
   public static final ConfigProperty<Boolean> WRITE_UTC_TIMEZONE = ConfigProperty
       .key("hoodie.parquet.write.utc-timezone.enabled")
@@ -612,6 +668,11 @@ public class HoodieStorageConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder parquetVariantShreddingSchemaInferenceEnabled(boolean enabled) {
+      storageConfig.setValue(PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
     public Builder hfileCompressionAlgorithm(String hfileCompressionAlgorithm) {
       storageConfig.setValue(HFILE_COMPRESSION_ALGORITHM_NAME, hfileCompressionAlgorithm);
       return this;
@@ -629,6 +690,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder lanceMaxFileSize(long maxFileSize) {
       storageConfig.setValue(LANCE_MAX_FILE_SIZE, String.valueOf(maxFileSize));
+      return this;
+    }
+
+    public Builder vortexMaxFileSize(long maxFileSize) {
+      storageConfig.setValue(VORTEX_MAX_FILE_SIZE, String.valueOf(maxFileSize));
       return this;
     }
 

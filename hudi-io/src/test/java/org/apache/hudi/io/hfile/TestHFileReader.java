@@ -39,12 +39,12 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.io.hfile.HFileByteUtils.getValue;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_BLOCK_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_FILE_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_EOF;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_IN_RANGE;
-import static org.apache.hudi.io.hfile.HFileUtils.getValue;
 import static org.apache.hudi.io.util.FileIOUtils.readAsByteArray;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

@@ -129,6 +129,7 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
             default:
               throw new IllegalStateException("Unexpected value: " + instant.getAction());
           }
+          currentCaughtupInstant = instantTime;
         } catch (IOException e) {
           throw new HoodieIndexException(String.format("Could not update metadata partition for instant: %s", instant), e);
         } finally {
@@ -136,6 +137,11 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
         }
       }
     }
+  }
+
+  @Override
+  public String getCurrentCaughtupInstant() {
+    return currentCaughtupInstant;
   }
 
   /**

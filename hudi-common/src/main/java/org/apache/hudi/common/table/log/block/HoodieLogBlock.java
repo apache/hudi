@@ -44,6 +44,8 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +56,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -142,11 +145,31 @@ public abstract class HoodieLogBlock {
    * {@link Roaring64NavigableMap} bitmap.
    * @throws IOException upon I/O error.
    */
-  public Roaring64NavigableMap getRecordPositions() throws IOException {
+  private Roaring64NavigableMap getRecordPositions() throws IOException {
     if (!logBlockHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS)) {
       return new Roaring64NavigableMap();
     }
     return LogReaderUtils.decodeRecordPositionsHeader(logBlockHeader.get(HeaderMetadataType.RECORD_POSITIONS));
+  }
+
+  /**
+   * @return record positions aligned with the block record iterator order.
+   * @throws IOException upon I/O error.
+   */
+  public List<Long> getRecordPositionList() throws IOException {
+    List<Long> positions = new ArrayList<>();
+    getRecordPositions().iterator().forEachRemaining(positions::add);
+    return positions;
+  }
+
+  /**
+   * Decodes ordered record positions stored for native log blocks.
+   */
+  protected static List<Long> decodeOrderedRecordPositionList(Map<HeaderMetadataType, String> logBlockHeader) throws IOException {
+    if (!logBlockHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS)) {
+      return Collections.emptyList();
+    }
+    return LogReaderUtils.decodeRecordPositionsLongList(logBlockHeader.get(HeaderMetadataType.RECORD_POSITIONS));
   }
 
   /**
@@ -446,7 +469,10 @@ public abstract class HoodieLogBlock {
         int metadataEntrySize = dis.readInt();
         byte[] metadataEntry = new byte[metadataEntrySize];
         dis.readFully(metadataEntry, 0, metadataEntrySize);
-        metadata.put(typeMapper.apply(metadataEntryIndex), new String(metadataEntry));
+        // Must match getLogMetadataBytes(), which writes these values as UTF-8. Decoding with the
+        // platform default charset corrupts non-ASCII values: loudly for a schema name, which Avro
+        // then rejects, and silently for a doc, a default or a prop.
+        metadata.put(typeMapper.apply(metadataEntryIndex), fromUTF8Bytes(metadataEntry));
         metadataCount--;
       }
       return metadata;

@@ -130,6 +130,27 @@ public abstract class SchemaHandlerTestBase {
     }
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
     assertFalse(readerContext.getNeedsBootstrapMerge());
+
+    //read subset of columns with a nested-narrowed field, the shape Spark's nested schema pruning
+    //requests: "fare" keeps only its "amount" leaf. Skipped for a projection-incompatible custom
+    //merger: that branch returns the full data schema before looking at the requested schema, so
+    //the flat-projection assertion above already covers it
+    if (!(mergeMode == CUSTOM && !isProjectionCompatible)) {
+      requestedSchema = narrowFareToAmountOnly(generateProjectionSchema("begin_lat", "fare", "rider"));
+      schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, supportsParquetRowIndex);
+      if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
+        expectedRequiredSchema = narrowFareToAmountOnly(generateProjectionSchema(hasBuiltInDelete, "begin_lat", "fare", "rider", "_hoodie_record_key", "timestamp"));
+      } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
+        expectedRequiredSchema = narrowFareToAmountOnly(generateProjectionSchema(hasBuiltInDelete, "begin_lat", "fare", "rider", "_hoodie_record_key"));
+      } else {
+        expectedRequiredSchema = narrowFareToAmountOnly(generateProjectionSchema("begin_lat", "fare", "rider", "begin_lon", "_hoodie_record_key", "timestamp"));
+      }
+      if (supportsParquetRowIndex && mergeUseRecordPosition) {
+        expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
+      }
+      assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
+      assertFalse(readerContext.getNeedsBootstrapMerge());
+    }
   }
 
   public void testMorBootstrap(RecordMergeMode mergeMode,
@@ -255,7 +276,7 @@ public abstract class SchemaHandlerTestBase {
     assertEquals(expectedBootstrapFields.getRight(), bootstrapFields.getRight());
   }
 
-  private static void setupMORTable(RecordMergeMode mergeMode, boolean hasPrecombine, HoodieTableConfig hoodieTableConfig) {
+  static void setupMORTable(RecordMergeMode mergeMode, boolean hasPrecombine, HoodieTableConfig hoodieTableConfig) {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
@@ -271,7 +292,7 @@ public abstract class SchemaHandlerTestBase {
     }
   }
 
-  private static HoodieRecordMerger mockRecordMerger(boolean isProjectionCompatible, String[] mandatoryFields) throws IOException {
+  static HoodieRecordMerger mockRecordMerger(boolean isProjectionCompatible, String[] mandatoryFields) throws IOException {
     HoodieRecordMerger merger = mock(HoodieRecordMerger.class);
     when(merger.isProjectionCompatible()).thenReturn(isProjectionCompatible);
     when(merger.merge(any(), any(), any(), any())).thenReturn(null);
@@ -303,6 +324,26 @@ public abstract class SchemaHandlerTestBase {
       fieldList.add("_hoodie_is_deleted");
     }
     return HoodieSchemaUtils.generateProjectionSchema(DATA_SCHEMA, fieldList);
+  }
+
+  /**
+   * Rebuilds the given projection schema, narrowing its "fare" record down to the "amount" leaf to
+   * mimic the schema shape Spark's nested schema pruning requests.
+   */
+  static HoodieSchema narrowFareToAmountOnly(HoodieSchema projectionSchema) {
+    List<HoodieSchemaField> fields = new ArrayList<>(projectionSchema.getFields().size());
+    for (HoodieSchemaField field : projectionSchema.getFields()) {
+      if (field.name().equals("fare")) {
+        HoodieSchema fare = field.schema();
+        HoodieSchema narrowedFare = HoodieSchema.createRecord(fare.getName(), fare.getNamespace().orElse(null), fare.getDoc().orElse(null),
+            Collections.singletonList(HoodieSchemaUtils.createNewSchemaField(fare.getField("amount").get())));
+        fields.add(HoodieSchemaUtils.createNewSchemaField(field.name(), narrowedFare, field.doc().orElse(null), field.defaultVal().orElse(null)));
+      } else {
+        fields.add(HoodieSchemaUtils.createNewSchemaField(field));
+      }
+    }
+    return HoodieSchema.createRecord(projectionSchema.getName(), projectionSchema.getNamespace().orElse(null),
+        projectionSchema.getDoc().orElse(null), fields);
   }
 
   HoodieSchemaField getField(String fieldName) {
@@ -364,7 +405,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public String seal(String record) {
+        public String seal(HoodieSchema schema, String record) {
           return "";
         }
 

@@ -132,6 +132,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     if (filePath.toString().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
       throw new UnsupportedOperationException(HoodieFileFormat.LANCE_UNSUPPORTED_ERROR_MSG);
     }
+    if (filePath.toString().endsWith(HoodieFileFormat.VORTEX.getFileExtension())) {
+      throw new UnsupportedOperationException(HoodieFileFormat.VORTEX_SPARK_ONLY_ERROR_MSG);
+    }
     // mdt file schema irregular and does not work with this logic. Also, log file evolution is handled inside the log block
     boolean isParquetOrOrc = filePath.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension())
         || filePath.getFileExtension().equals(HoodieFileFormat.ORC.getFileExtension());

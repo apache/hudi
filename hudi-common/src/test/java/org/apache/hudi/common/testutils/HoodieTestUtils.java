@@ -92,7 +92,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
-import static org.apache.hudi.common.util.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -107,6 +106,11 @@ public class HoodieTestUtils {
   public static final int DEFAULT_LOG_VERSION = 1;
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
   public static final String HADOOP_STORAGE_CONF = "org.apache.hudi.storage.hadoop.HadoopStorageConfiguration";
+  /**
+   * Base URI for storage that a test does not care about the location of. Test-only: production
+   * code has no default filesystem, it resolves storage from the path it is about to touch.
+   */
+  public static final String DEFAULT_URI = "file:///";
   public static final InstantGenerator INSTANT_GENERATOR = new DefaultInstantGenerator();
   public static final TimelineFactory TIMELINE_FACTORY = new DefaultTimelineFactory();
   public static final InstantFileNameGenerator INSTANT_FILE_NAME_GENERATOR = new DefaultInstantFileNameGenerator();
@@ -146,6 +150,16 @@ public class HoodieTestUtils {
     return getStorage(DEFAULT_URI);
   }
 
+  /**
+   * Storage on the local filesystem, carrying the given configuration.
+   *
+   * <p>Use when a test has a configuration to preserve but no path to resolve from. Prefer
+   * {@link #getStorage(StoragePath)} whenever a path is available.
+   */
+  public static HoodieStorage getLocalStorage(StorageConfiguration<?> conf) {
+    return HoodieStorageUtils.getStorage(DEFAULT_URI, conf);
+  }
+
   public static HoodieStorage getStorage(String path) {
     return HoodieStorageUtils.getStorage(path, getDefaultStorageConf());
   }
@@ -161,7 +175,7 @@ public class HoodieTestUtils {
   public static List<StoragePath> listNativeLogFiles(HoodieStorage storage, String basePath) throws IOException {
     return storage.listFiles(new StoragePath(basePath)).stream()
         .map(StoragePathInfo::getPath)
-        .filter(path -> FSUtils.matchNativeLogFile(path.getName()).isPresent())
+        .filter(path -> FSUtils.isNativeLogFile(path.getName()))
         .collect(Collectors.toList());
   }
 

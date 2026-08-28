@@ -476,8 +476,13 @@ public class StreamSync implements Serializable, Closeable {
         .setPartitionFields(partitionColumns)
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
         .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
-        .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
-            HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
+        // null when unstated: TableBuilder rejects a boolean that contradicts an explicit
+        // meta.fields.mode, so handing it the `true` default would turn a plain
+        // hoodie.meta.fields.mode=COMMIT_TIME_ONLY run into a spurious conflict.
+        .setPopulateMetaFields(props.containsKey(HoodieTableConfig.POPULATE_META_FIELDS.key())
+            ? props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key()) : null)
+        .setMetaFieldsModeFromString(props.getString(HoodieTableConfig.META_FIELDS_MODE.key(),
+            null))
         .setKeyGeneratorClassProp(keyGenClassName)
         .setPartitionValueExtractorClass(partitionValueExtractorClassName)
         .setOrderingFields(cfg.sourceOrderingFields)
@@ -1293,6 +1298,12 @@ public class StreamSync implements Serializable, Closeable {
     }
 
     if (metaClient != null) {
+      // NOTE: hoodie.meta.fields.mode is deliberately *not* folded in here. It is a table property, and
+      // BaseHoodieWriteClient#validateAgainstTableProperties owns the rule for every engine: a writer
+      // that states neither meta-field property inherits the table's mode, and one that states either is
+      // compared and rejected on mismatch. Inheriting here as well would pre-empt that comparison — a
+      // restart passing only hoodie.populate.meta.fields would silently adopt the table's mode instead
+      // of being told its setting conflicts.
       HoodieTableConfig tableConfig = metaClient.getTableConfig();
       // After upgrade to table version 9 with MySqlDebeziumAvroPayload, ordering fields are changed from
       // `_event_seq` to `_event_bin_file,_event_pos`. The logic here ensures that deltastreamer config is updated

@@ -108,3 +108,36 @@ Published Artifacts
 - `merge_jacoco_job_files.sh`: merges multiple JaCoCo execution data files from multiple Azure pipeline jobs.
 - `generate_jacoco_coverage_report.sh`: generates the JaCoCo code coverage report by taking the execution data file,
   source files and class files.
+
+## Per-PR coverage on Codecov
+
+In addition to the aggregated Azure report described above, coverage is uploaded to
+[Codecov](https://app.codecov.io/gh/apache/hudi) on every pull request and every commit to master.
+This is the canonical per-PR view.
+
+- Each test job in `.github/workflows/bot.yml` runs with the JaCoCo agent, builds a merged report
+  via `scripts/jacoco/generate_merged_coverage_report.sh`, and uploads `jacoco-report.xml` to
+  Codecov under a flag (`spark-java-tests`, `spark-scala-tests`, `utilities`,
+  `common-and-other-modules`, `spark-client-hadoop-common`, `hadoop-mr-java-client`,
+  `integration-tests`).
+- `.codecov.yml` configures reporting: `ignore` drops non-production code (examples, packaging,
+  the integration-test harness, an incubating module); `component_management` reports coverage per
+  ownership area (hudi-common, hudi-client, hudi-spark-datasource, hudi-flink, ...); and
+  `flag_management` carries a flag's coverage forward when its job is skipped by the path filter,
+  so a partial run does not report a false drop.
+- Generated code (Thrift, Protobuf, ANTLR) has no source committed to git, so it never appears
+  in the Codecov report and needs no exclusion. The one committed generated path, the Avro model
+  classes, is still ignored defensively in `.codecov.yml`.
+- Codecov posts a summary comment on each PR with the project, per-component, and per-patch
+  coverage delta. Statuses are informational (they do not fail the build); to gate a component
+  against regression later, remove `informational` and set a `target`/`threshold` for it.
+
+To read coverage for a single module locally, run its tests with the JaCoCo agent and open the
+generated `target/site/jacoco*/index.html`, for example:
+
+```bash
+mvn test -pl hudi-common -Punit-tests
+```
+
+Instruction coverage is the headline metric; branch coverage (also in the report) shows whether
+both sides of each conditional are exercised, which is what catches untested error and config paths.

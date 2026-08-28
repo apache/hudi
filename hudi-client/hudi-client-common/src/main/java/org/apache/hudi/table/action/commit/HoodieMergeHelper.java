@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
 import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
 import org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -82,7 +84,16 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieFileReader bootstrapFileReader = null;
 
     HoodieSchema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
-    HoodieSchema readerSchema = baseFileReader.getSchema();
+    // A shredded variant column loses its logical type through the parquet footer, so the base
+    // file's schema surfaces it as a plain {metadata, value, typed_value} record. Align such
+    // columns to the writer's variant form once, here, because every downstream use of the reader
+    // schema needs the aligned form: the strict-projection check below (RECORD vs VARIANT can
+    // never pass), and - whichever branch it lands on - the schema the reader is handed, since
+    // HoodieVariantReconstruction anchors on the requested column being a variant. Read at the raw
+    // footer schema instead and reconstruction stays disengaged, so the rewrite below copies
+    // {metadata, value} by name and silently drops typed_value (#19567). Returns the file schema
+    // untouched when no column has the shredded shape, so non-variant tables are unaffected.
+    HoodieSchema readerSchema = VariantSchemaUtils.alignShreddedVariants(baseFileReader.getSchema(), writerSchema);
 
     // In case Advanced Schema Evolution is enabled we might need to rewrite currently
     // persisted records to adhere to an evolved schema
@@ -171,7 +182,9 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
       // check implicitly add columns, and position reorder(spark sql may change cols order)
       InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema,
-          querySchemaOpt.get(), writeConfig.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
+          querySchemaOpt.get(), writeConfig.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS),
+          SchemaChangeUtils.parseTimestampLogicalTypeOverrides(
+              writeConfig.getStringOrDefault(HoodieCommonConfig.TIMESTAMP_LOGICAL_TYPE_OVERRIDES)));
       long commitInstantTime = Long.parseLong(baseFile.getCommitTime());
       InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, metaClient);
       if (fileSchema.isEmptySchema() && writeConfig.getBoolean(HoodieCommonConfig.RECONCILE_SCHEMA)) {

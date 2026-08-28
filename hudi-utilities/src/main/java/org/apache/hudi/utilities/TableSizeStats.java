@@ -68,7 +68,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * TODO: [HUDI-8294]
  * This class provides file size updates for the latest files that hudi is consuming. These stats are at table level by default, but
  * specifying --enable-partition-stats will also show stats at the partition level. If a start date (--start-date parameter) and/or
  * end date (--end-date parameter) are specified, stats are based on files that were modified in the half-open interval
@@ -92,7 +91,7 @@ import java.util.stream.Collectors;
  * Sample spark-submit command:
  * ./bin/spark-submit \
  * --class org.apache.hudi.utilities.TableSizeStats \
- * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.14.0-SNAPSHOT.jar \
+ * $HUDI_DIR/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.3.0-SNAPSHOT.jar \
  * --base-path <base-path> \
  * --num-days <number-of-days>
  */

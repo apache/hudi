@@ -31,63 +31,68 @@ import org.apache.hudi.common.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.common.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.common.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.common.config.metrics.HoodieMetricsPrometheusConfig;
-import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieListData;
-import org.apache.hudi.common.data.HoodiePairData;
-import org.apache.hudi.common.engine.EngineType;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
+import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.SpillableMapBasedFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
-import org.apache.hudi.common.util.Lazy;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
+import org.apache.hudi.util.CommonClientUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -100,19 +105,10 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.model.LogExtensions.DATA_LOG_EXTENSION;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToBloomFilterRecords;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToColumnStatsRecords;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToFilesPartitionRecords;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.generateColumnStatsKeys;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getColumnsToIndex;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.translateWriteStatToFileStats;
 
 /**
@@ -135,6 +131,67 @@ public class HoodieMetadataWriteUtils {
   // ever. Hence, we use a very large basefile size in metadata table. The actual size of the HFiles created will
   // eventually depend on the number of file groups selected for each partition (See estimateFileGroupCount function)
   private static final long MDT_MAX_HFILE_SIZE_BYTES = 10 * 1024 * 1024 * 1024L; // 10GB
+
+  /**
+   * Creates the initial empty log file for a metadata table file group so that the file group can be discovered by
+   * the file-system view before any records are written to it. Native log format uses a zero-record HFile containing
+   * the instant time and writer schema in its footer, while legacy inline log format uses an empty delete block.
+   *
+   * @param storage storage used to create the log file
+   * @param parentPath metadata partition containing the file group
+   * @param fileGroupFileId file ID of the metadata table file group
+   * @param instantTime instant time used as the base commit time of the log file
+   * @param taskContextSupplier task context supplier used by the native file writer
+   * @param writeConfig metadata table write configuration
+   */
+  static void createEmptyFileGroupLogFile(HoodieStorage storage,
+                                          StoragePath parentPath,
+                                          String fileGroupFileId,
+                                          String instantTime,
+                                          TaskContextSupplier taskContextSupplier,
+                                          HoodieWriteConfig writeConfig) throws IOException, InterruptedException {
+    if (CommonClientUtils.shouldWriteNativeLogs(writeConfig)) {
+      HoodieSchema writeSchema = HoodieSchemaUtils.createHoodieWriteSchema(
+          writeConfig.getWriteSchema(), writeConfig.allowOperationMetadataField());
+      StoragePath nativeLogPath = new StoragePath(parentPath, FSUtils.makeNativeLogFileName(
+          fileGroupFileId,
+          HoodieLogFormat.DEFAULT_WRITE_TOKEN,
+          instantTime,
+          HoodieLogFile.LOGFILE_BASE_VERSION,
+          DATA_LOG_EXTENSION,
+          HoodieFileFormat.HFILE));
+      Map<HeaderMetadataType, String> footerHeader = new HashMap<>();
+      footerHeader.put(HeaderMetadataType.INSTANT_TIME, instantTime);
+      footerHeader.put(HeaderMetadataType.SCHEMA, writeSchema.toString());
+      try (HoodieFileWriter<?> writer = HoodieFileWriterFactory.getFileWriter(
+          instantTime,
+          nativeLogPath,
+          storage,
+          writeConfig,
+          writeSchema,
+          taskContextSupplier,
+          HoodieRecord.HoodieRecordType.AVRO)) {
+        writer.addFooterMetadata(NativeLogFooterMetadata.toFooterMetadata(footerHeader));
+      }
+    } else {
+      Map<HeaderMetadataType, String> blockHeader = Collections.singletonMap(HeaderMetadataType.INSTANT_TIME, instantTime);
+      HoodieDeleteBlock block = new HoodieDeleteBlock(Collections.emptyList(), blockHeader);
+      try (HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+          .withParentPath(parentPath)
+          .withLogFileId(fileGroupFileId)
+          .withInstantTime(instantTime)
+          .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
+          .withFileSize(0L)
+          .withSizeThreshold(writeConfig.getLogFileMaxSize())
+          .withStorage(storage)
+          .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+          .withTableVersion(writeConfig.getWriteVersion())
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+          .build()) {
+        writer.appendBlock(block);
+      }
+    }
+  }
 
   /**
    * Create a {@code HoodieWriteConfig} to use for the Metadata Table.
@@ -391,158 +448,6 @@ public class HoodieMetadataWriteUtils {
     return metadataWriteConfig;
   }
 
-  /**
-   * Convert commit action to metadata records for the enabled partition types.
-   *
-   * @param context                     - Engine context to use
-   * @param dataWriteConfig             - Hudi configs
-   * @param commitMetadata              - Commit action metadata
-   * @param instantTime                 - Action instant time
-   * @param dataMetaClient              - HoodieTableMetaClient for data
-   * @param tableMetadata
-   * @param metadataConfig              - HoodieMetadataConfig
-   * @param enabledPartitionTypes       - Set of enabled MDT partitions to update
-   * @param bloomFilterType             - Type of generated bloom filter records
-   * @param bloomIndexParallelism       - Parallelism for bloom filter record generation
-   * @return Map of partition to metadata records for the commit action
-   */
-  public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext context, HoodieWriteConfig dataWriteConfig, HoodieCommitMetadata commitMetadata,
-                                                                               String instantTime, HoodieTableMetaClient dataMetaClient, HoodieTableMetadata tableMetadata,
-                                                                               HoodieMetadataConfig metadataConfig, Set<String> enabledPartitionTypes, String bloomFilterType,
-                                                                               int bloomIndexParallelism, int writesFileIdEncoding, EngineType engineType,
-                                                                               Option<HoodieRecord.HoodieRecordType> recordTypeOpt) {
-    final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
-    final HoodieData<HoodieRecord> filesPartitionRecordsRDD = context.parallelize(
-        convertMetadataToFilesPartitionRecords(commitMetadata, instantTime), 1);
-    partitionToRecordsMap.put(MetadataPartitionType.FILES.getPartitionPath(), filesPartitionRecordsRDD);
-
-    if (enabledPartitionTypes.contains(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath())) {
-      final HoodieData<HoodieRecord> metadataBloomFilterRecords = convertMetadataToBloomFilterRecords(
-          context, dataWriteConfig, commitMetadata, instantTime, dataMetaClient, bloomFilterType, bloomIndexParallelism);
-      partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath(), metadataBloomFilterRecords);
-    }
-
-    if (enabledPartitionTypes.contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
-      final HoodieData<HoodieRecord> metadataColumnStatsRDD = convertMetadataToColumnStatsRecords(commitMetadata, context,
-          dataMetaClient, metadataConfig, recordTypeOpt);
-      partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
-    }
-    if (enabledPartitionTypes.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath())) {
-      checkState(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient),
-          "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
-      // Generate Hoodie Pair data of partition name and list of column range metadata for all the files in that partition
-      boolean isDeletePartition = commitMetadata.getOperationType().equals(WriteOperationType.DELETE_PARTITION);
-      final HoodieData<HoodieRecord> partitionStatsRDD = convertMetadataToPartitionStatRecords(
-          commitMetadata, instantTime, context, dataWriteConfig, dataMetaClient, tableMetadata, metadataConfig, recordTypeOpt, isDeletePartition);
-      partitionToRecordsMap.put(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), partitionStatsRDD);
-    }
-    if (enabledPartitionTypes.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
-      partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), convertMetadataToRecordIndexRecords(context, commitMetadata, metadataConfig,
-          dataMetaClient, writesFileIdEncoding, instantTime, engineType));
-    }
-    return partitionToRecordsMap;
-  }
-
-  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatRecords(HoodieCommitMetadata commitMetadata, String instantTime,
-                                                                               HoodieEngineContext engineContext, HoodieWriteConfig dataWriteConfig,
-                                                                               HoodieTableMetaClient dataMetaClient,
-                                                                               HoodieTableMetadata tableMetadata, HoodieMetadataConfig metadataConfig,
-                                                                               Option<HoodieRecord.HoodieRecordType> recordTypeOpt, boolean isDeletePartition) {
-    try {
-      Option<HoodieSchema> writerSchema =
-          Option.ofNullable(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
-              .flatMap(writerSchemaStr ->
-                  isNullOrEmpty(writerSchemaStr)
-                      ? Option.empty()
-                      : Option.of(HoodieSchema.parse(writerSchemaStr)));
-      HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
-      Option<HoodieSchema> tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? HoodieSchemaUtils.addMetadataFields(schema) : schema);
-
-      if (tableSchema.isEmpty()) {
-        return engineContext.emptyHoodieData();
-      }
-      HoodieIndexVersion partitionStatsIndexVersion = existingIndexVersionOrDefault(PARTITION_NAME_PARTITION_STATS, dataMetaClient);
-      Lazy<Option<HoodieSchema>> writerSchemaOpt = Lazy.eagerly(tableSchema);
-      Map<String, HoodieSchema> columnsToIndexSchemaMap = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig, writerSchemaOpt, false, recordTypeOpt, partitionStatsIndexVersion);
-      if (columnsToIndexSchemaMap.isEmpty()) {
-        return engineContext.emptyHoodieData();
-      }
-
-      // if this is DELETE_PARTITION, then create delete metadata payload for all columns for partition_stats
-      if (isDeletePartition) {
-        HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;
-        Map<String, List<String>> partitionToReplaceFileIds = replaceCommitMetadata.getPartitionToReplaceFileIds();
-        List<String> partitionsToDelete = new ArrayList<>(partitionToReplaceFileIds.keySet());
-        if (partitionToReplaceFileIds.isEmpty()) {
-          return engineContext.emptyHoodieData();
-        }
-        return engineContext.parallelize(partitionsToDelete, partitionsToDelete.size()).flatMap(partition -> {
-          Stream<HoodieRecord> columnRangeMetadata = columnsToIndexSchemaMap.keySet().stream()
-              .flatMap(column -> HoodieMetadataPayload.createPartitionStatsRecords(
-                  partition,
-                  Collections.singletonList(HoodieColumnRangeMetadata.stub("", column, partitionStatsIndexVersion)),
-                  true, true, Option.empty()));
-          return columnRangeMetadata.iterator();
-        });
-      }
-
-      // In this function we fetch column range metadata for all new files part of commit metadata along with all the other files
-      // of the affected partitions. The column range metadata is grouped by partition name to generate HoodiePairData of partition name
-      // and list of column range metadata for that partition files. This pair data is then used to generate partition stat records.
-      List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
-          .flatMap(Collection::stream).collect(Collectors.toList());
-      if (allWriteStats.isEmpty()) {
-        return engineContext.emptyHoodieData();
-      }
-
-      List<String> colsToIndex = new ArrayList<>(columnsToIndexSchemaMap.keySet());
-      log.debug("Indexing following columns for partition stats index: {}", columnsToIndexSchemaMap.keySet());
-      // Group by partitionPath and then gather write stats lists,
-      // where each inner list contains HoodieWriteStat objects that have the same partitionPath.
-      List<List<HoodieWriteStat>> partitionedWriteStats = new ArrayList<>(allWriteStats.stream()
-          .collect(Collectors.groupingBy(HoodieWriteStat::getPartitionPath))
-          .values());
-      Map<String, Set<String>> fileGroupIdsToReplaceMap = (commitMetadata instanceof HoodieReplaceCommitMetadata)
-          ? ((HoodieReplaceCommitMetadata) commitMetadata).getPartitionToReplaceFileIds()
-          .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> new HashSet<>(e.getValue())))
-          : Collections.emptyMap();
-
-      int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
-      String maxInstantTime = getMaxInstantTime(dataMetaClient, instantTime);
-      HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata =
-          engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
-            final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
-            checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
-
-            // Collect column metadata for each file part of the latest merged file slice before the current instant time
-            List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
-                .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
-            // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
-            Set<String> filesToFetchColumnStats = getFilesToFetchColumnStats(partitionedWriteStat, dataMetaClient, tableMetadata, dataWriteConfig, partitionName, maxInstantTime,
-                instantTime, fileGroupIdsToReplaceMap, colsToIndex, partitionStatsIndexVersion);
-            // Fetch metadata table COLUMN_STATS partition records for the above files
-            List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
-                .getRecordsByKeyPrefixes(
-                    HoodieListData.lazy(generateColumnStatsKeys(colsToIndex, partitionName)),
-                    MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
-                // schema and properties are ignored in getInsertValue, so simply pass as null
-                .map(record -> ((HoodieMetadataPayload) record.getData()).getColumnStatMetadata())
-                .filter(Option::isPresent)
-                .map(colStatsOpt -> colStatsOpt.get())
-                .filter(stats -> filesToFetchColumnStats.contains(stats.getFileName()))
-                .map(HoodieColumnRangeMetadata::fromColumnStats).collectAsList();
-            // fileColumnMetadata already contains stats for the files from the current inflight commit.
-            // Here it adds the stats for the committed files part of the latest merged file slices
-            fileColumnMetadata.addAll(partitionColumnMetadata);
-            return Pair.of(partitionName, fileColumnMetadata);
-          });
-
-      return convertMetadataToPartitionStatsRecords(columnRangeMetadata, dataMetaClient, columnsToIndexSchemaMap, partitionStatsIndexVersion);
-    } catch (Exception e) {
-      throw new HoodieException("Failed to generate column stats records for metadata table", e);
-    }
-  }
-
   private static StoragePathInfo getBaseFileStoragePathInfo(HoodieBaseFile baseFile) {
     StoragePathInfo pathInfo = baseFile.getPathInfo();
     if (pathInfo != null) {
@@ -613,5 +518,44 @@ public class HoodieMetadataWriteUtils {
             fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
         .filter(e -> Objects.nonNull(e) && !filesWithColumnStats.contains(e) && !fileGroupIdsToReplace.contains(e))
         .collect(Collectors.toSet());
+  }
+
+  /**
+   * Updates the list of columns to index with col stats partition in MDT.
+   * @param dataTable {@link HoodieTable} of interest.
+   * @param config {@link HoodieWriteConfig} of interest.
+   * @param commitMetadata commit metadata of interest.
+   * @param commitActionType commit action type to include interested actions.
+   * @param updateColStatsFunc function to assist with updating columns to index.
+   */
+  @VisibleForTesting
+  public static void updateColsToIndex(HoodieTable dataTable,
+                                       HoodieWriteConfig config,
+                                       HoodieCommitMetadata commitMetadata,
+                                       String commitActionType,
+                                       Functions.Function2<HoodieTableMetaClient, List<String>, Void> updateColStatsFunc) {
+    if (config.isMetadataTableEnabled()                            // this is a data table
+        && config.getMetadataConfig().isColumnStatsIndexEnabled()  // the col_stats is enabled
+        && ActionType.isCommitActionType(commitActionType)) {      // with interested actions
+      dataTable.getMetaClient().reloadTableConfig();
+      try {
+        // update data table's table config for list of columns indexed.
+        List<String> columnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig(),
+            Option.of(config.getRecordMerger().getRecordType())).keySet());
+        // if col stats is getting updated, lets also update list of columns indexed if changed.
+        updateColStatsFunc.apply(dataTable.getMetaClient(), columnsToIndex);
+      } catch (Exception e) {
+        throw new HoodieException("Updating data table config to latest set of columns indexed with col stats failed ", e);
+      }
+    }
+  }
+
+  /**
+   * Deletes col stats index definition for the given table of interest.
+   * @param dataTableMetaClient {@link HoodieTableMetaClient} instance for the data table.
+   */
+  @VisibleForTesting
+  public static void deleteColumnStatsIndexDefinition(HoodieTableMetaClient dataTableMetaClient) {
+    dataTableMetaClient.deleteIndexDefinition(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
   }
 }

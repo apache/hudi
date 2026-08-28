@@ -19,6 +19,8 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
@@ -26,14 +28,16 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.hadoop.fs.inline.HadoopInLineFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -45,7 +49,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -69,6 +75,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests file system utils.
@@ -173,8 +181,13 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName, HoodieCommonTestHarness.BASE_FILE_EXTENSION);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
     // test log file name
-    fullFileName = FSUtils.makeLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
+    fullFileName = FSUtils.makeInlineLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
+
+    assertEquals(instantTime, FSUtils.getCommitTime(fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime));
+
+    String externalFileName = ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker("file_1.parquet", instantTime);
+    assertEquals(instantTime, FSUtils.getCommitTime(externalFileName));
   }
 
   @Test
@@ -183,6 +196,75 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName, HoodieCommonTestHarness.BASE_FILE_EXTENSION);
     assertEquals(fileName, FSUtils.getFileId(fullFileName));
+  }
+
+  @Test
+  public void testIsBaseFile() {
+    String baseFileName = FSUtils.makeBaseFileName("20240706120100123", TEST_WRITE_TOKEN, UUID.randomUUID().toString(), ".parquet");
+    assertTrue(FSUtils.isBaseFile(baseFileName));
+    assertTrue(FSUtils.isBaseFile("foo_20240101.parquet"));
+    assertTrue(FSUtils.isBaseFile("a_b_xyz.parquet"));
+    assertTrue(FSUtils.isBaseFile(ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker("file_1.parquet", "20240706120100123")));
+  }
+
+  @Test
+  public void testFileNameParser() {
+    String fileId = UUID.randomUUID().toString();
+    String baseFileName = FSUtils.makeBaseFileName("20240706120100123", TEST_WRITE_TOKEN, fileId, ".parquet");
+    FileNameParser.BaseFileName parsedBaseFileName = FileNameParser.parseBaseFile(baseFileName).get();
+    assertEquals(fileId, parsedBaseFileName.getFileId());
+    assertEquals(TEST_WRITE_TOKEN, parsedBaseFileName.getWriteToken());
+    assertEquals("20240706120100123", parsedBaseFileName.getCommitTime());
+    assertEquals(".parquet", parsedBaseFileName.getFileExtension());
+
+    FileNameParser.BaseFileName parsedBaseFileNameWithoutExtension =
+        FileNameParser.parseBaseFile(fileId + "_" + TEST_WRITE_TOKEN + "_20240706120100123").get();
+    assertEquals(fileId, parsedBaseFileNameWithoutExtension.getFileId());
+    assertEquals(TEST_WRITE_TOKEN, parsedBaseFileNameWithoutExtension.getWriteToken());
+    assertEquals("20240706120100123", parsedBaseFileNameWithoutExtension.getCommitTime());
+    assertEquals("", parsedBaseFileNameWithoutExtension.getFileExtension());
+
+    FileNameParser.BaseFileName parsedLegacyBaseFileName = FileNameParser.parseBaseFile("file_1.parquet").get();
+    assertEquals("file", parsedLegacyBaseFileName.getFileId());
+    assertEquals("", parsedLegacyBaseFileName.getWriteToken());
+    assertEquals("1", parsedLegacyBaseFileName.getCommitTime());
+    assertEquals(".parquet", parsedLegacyBaseFileName.getFileExtension());
+
+    FileNameParser.BaseFileName parsedExternalBaseFileName = FileNameParser.parseBaseFile(
+        ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker("file_1.parquet", "20240706120100123")).get();
+    assertEquals("file_1.parquet", parsedExternalBaseFileName.getFileId());
+    assertEquals("", parsedExternalBaseFileName.getWriteToken());
+    assertEquals("20240706120100123", parsedExternalBaseFileName.getCommitTime());
+    assertEquals(".parquet", parsedExternalBaseFileName.getFileExtension());
+
+    String logFileName = FSUtils.makeInlineLogFileName(fileId, ".log", "20240706120100123", 2, TEST_WRITE_TOKEN)
+        + HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
+    FileNameParser.LogFileName parsedLogFileName = FileNameParser.parseLogFile(logFileName).get();
+    assertEquals(fileId, parsedLogFileName.getFileId());
+    assertEquals("20240706120100123", parsedLogFileName.getDeltaCommitTime());
+    assertEquals(2, parsedLogFileName.getLogVersion());
+    assertEquals(TEST_WRITE_TOKEN, parsedLogFileName.getWriteToken());
+    assertEquals(1, parsedLogFileName.getTaskPartitionId());
+    assertEquals(0, parsedLogFileName.getStageId());
+    assertEquals(1, parsedLogFileName.getTaskAttemptId());
+    assertEquals("log", parsedLogFileName.getFileExtension());
+    assertEquals(HoodieCDCUtils.CDC_LOGFILE_SUFFIX, parsedLogFileName.getSuffix());
+    assertTrue(parsedLogFileName.isCDCLogFile());
+    assertFalse(parsedLogFileName.isNativeLogFile());
+
+    String nativeLogFileName = FSUtils.makeNativeLogFileName(fileId, TEST_WRITE_TOKEN, "20240706120100123",
+        3, "deletes", HoodieFileFormat.PARQUET);
+    FileNameParser.LogFileName parsedNativeLogFileName = FileNameParser.parseLogFile(nativeLogFileName).get();
+    assertEquals(fileId, parsedNativeLogFileName.getFileId());
+    assertEquals("20240706120100123", parsedNativeLogFileName.getDeltaCommitTime());
+    assertEquals(3, parsedNativeLogFileName.getLogVersion());
+    assertEquals(TEST_WRITE_TOKEN, parsedNativeLogFileName.getWriteToken());
+    assertEquals("deletes", parsedNativeLogFileName.getFileExtension());
+    assertEquals("parquet", parsedNativeLogFileName.getSuffix());
+    assertTrue(parsedNativeLogFileName.isNativeLogFile());
+
+    assertEquals(fileId, FileNameParser.getFileIdPfxFromFileId(fileId + "-4"));
+    assertThrows(HoodieValidationException.class, () -> FileNameParser.getFileIdPfxFromFileId("fileIdWithoutNumericSuffix"));
   }
 
   @Test
@@ -244,9 +326,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     // Check if log file names are parsable by FSUtils method
     String partitionPath = "2019/01/01/";
     String fileName = UUID.randomUUID().toString();
-    String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1");
+    String logFile = FSUtils.makeInlineLogFileName(fileName, ".log", "100", 2, "1-0-1");
     StoragePath rlPath = new StoragePath(new StoragePath(partitionPath), logFile);
-    StoragePath inlineFsPath = HadoopInLineFSUtils.getInlineFilePath(
+    StoragePath inlineFsPath = InLineFSUtils.getInlineFilePath(
         new StoragePath(rlPath.toUri()), "file", 0, 100);
     assertTrue(FSUtils.isLogFile(rlPath));
     assertTrue(FSUtils.isLogFile(inlineFsPath));
@@ -266,7 +348,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testCdcLogFileName() {
     String partitionPath = "2022/11/04/";
     String fileName = UUID.randomUUID().toString();
-    String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
+    String logFile = FSUtils.makeInlineLogFileName(fileName, ".log", "100", 2, "1-0-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
     StoragePath path = new StoragePath(new StoragePath(partitionPath), logFile);
 
     assertTrue(FSUtils.isLogFile(path));
@@ -305,7 +387,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testArchiveLogFileName() {
     String partitionPath = "2022/11/04/";
     String fileName = "commits";
-    String logFile = FSUtils.makeLogFileName(fileName, ".archive", "", 2, "1-0-1");
+    String logFile = FSUtils.makeInlineLogFileName(fileName, ".archive", "", 2, "1-0-1");
     StoragePath path = new StoragePath(new StoragePath(partitionPath), logFile);
 
     assertFalse(FSUtils.isLogFile(path));
@@ -339,12 +421,12 @@ public class TestFSUtils extends HoodieCommonTestHarness {
    */
   @Test
   public void testLogFilesComparison() {
-    String log1Ver0W0 = FSUtils.makeLogFileName("file1", ".log", "1", 0, "0-0-1");
-    String log1Ver0W1 = FSUtils.makeLogFileName("file1", ".log", "1", 0, "1-1-1");
-    String log1Ver1W0 = FSUtils.makeLogFileName("file1", ".log", "1", 1, "0-0-1");
-    String log1Ver1W1 = FSUtils.makeLogFileName("file1", ".log", "1", 1, "1-1-1");
-    String log1base2W0 = FSUtils.makeLogFileName("file1", ".log", "2", 0, "0-0-1");
-    String log1base2W1 = FSUtils.makeLogFileName("file1", ".log", "2", 0, "1-1-1");
+    String log1Ver0W0 = FSUtils.makeInlineLogFileName("file1", ".log", "1", 0, "0-0-1");
+    String log1Ver0W1 = FSUtils.makeInlineLogFileName("file1", ".log", "1", 0, "1-1-1");
+    String log1Ver1W0 = FSUtils.makeInlineLogFileName("file1", ".log", "1", 1, "0-0-1");
+    String log1Ver1W1 = FSUtils.makeInlineLogFileName("file1", ".log", "1", 1, "1-1-1");
+    String log1base2W0 = FSUtils.makeInlineLogFileName("file1", ".log", "2", 0, "0-0-1");
+    String log1base2W1 = FSUtils.makeInlineLogFileName("file1", ".log", "2", 0, "1-1-1");
 
     List<HoodieLogFile> logFiles =
         Stream.of(log1Ver1W1, log1base2W0, log1base2W1, log1Ver1W0, log1Ver0W1, log1Ver0W0)
@@ -359,11 +441,11 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testLogFilesComparisonWithCDCFile() {
-    HoodieLogFile log1 = new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName("file1", ".log", "1", 0, "0-0-1")));
-    HoodieLogFile log2 = new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName("file1", ".log", "2", 0, "0-0-1")));
-    HoodieLogFile log3 = new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName("file1", ".log", "2", 1, "0-0-1")));
-    HoodieLogFile log4 = new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName("file1", ".log", "2", 1, "1-1-1")));
-    HoodieLogFile log5 = new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName("file1", ".log", "2", 1, "1-1-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX));
+    HoodieLogFile log1 = new HoodieLogFile(new StoragePath(FSUtils.makeInlineLogFileName("file1", ".log", "1", 0, "0-0-1")));
+    HoodieLogFile log2 = new HoodieLogFile(new StoragePath(FSUtils.makeInlineLogFileName("file1", ".log", "2", 0, "0-0-1")));
+    HoodieLogFile log3 = new HoodieLogFile(new StoragePath(FSUtils.makeInlineLogFileName("file1", ".log", "2", 1, "0-0-1")));
+    HoodieLogFile log4 = new HoodieLogFile(new StoragePath(FSUtils.makeInlineLogFileName("file1", ".log", "2", 1, "1-1-1")));
+    HoodieLogFile log5 = new HoodieLogFile(new StoragePath(FSUtils.makeInlineLogFileName("file1", ".log", "2", 1, "1-1-1") + HoodieCDCUtils.CDC_LOGFILE_SUFFIX));
 
     TreeSet<HoodieLogFile> logFilesSet = new TreeSet<>(HoodieLogFile.getLogFileComparator());
     logFilesSet.add(log1);
@@ -400,7 +482,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(instantTime, FSUtils.getCommitTime(dataFileName));
     assertEquals(fileId, FSUtils.getFileId(dataFileName));
 
-    String logFileName = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, version, writeToken);
+    String logFileName = FSUtils.makeInlineLogFileName(fileId, LOG_EXTENSION, instantTime, version, writeToken);
     assertTrue(FSUtils.isLogFile(new StoragePath(logFileName)));
     assertEquals(instantTime, FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(logFileName)));
     assertEquals(fileId, FSUtils.getFileIdFromLogPath(new StoragePath(logFileName)));
@@ -410,11 +492,11 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     // create three versions of log file
     java.nio.file.Path partitionPath = Paths.get(basePath, partitionStr);
     Files.createDirectories(partitionPath);
-    String log1 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 1, writeToken);
+    String log1 = FSUtils.makeInlineLogFileName(fileId, LOG_EXTENSION, instantTime, 1, writeToken);
     Files.createFile(partitionPath.resolve(log1));
-    String log2 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 2, writeToken);
+    String log2 = FSUtils.makeInlineLogFileName(fileId, LOG_EXTENSION, instantTime, 2, writeToken);
     Files.createFile(partitionPath.resolve(log2));
-    String log3 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 3, writeToken);
+    String log3 = FSUtils.makeInlineLogFileName(fileId, LOG_EXTENSION, instantTime, 3, writeToken);
     Files.createFile(partitionPath.resolve(log3));
 
     assertEquals(3, (int) FSUtils.getLatestLogVersion(
@@ -710,12 +792,120 @@ public class TestFSUtils extends HoodieCommonTestHarness {
       "gs://my-bucket/path/to/s3a://object",
       "gs://my-bucket s3a://my-object",
   })
-  
   void testUriDoesNotChange(String uri) {
     assertEquals(uri, FSUtils.s3aToS3(uri));
   }
 
+  static Stream<Arguments> normalizeBasePathForLockingCases() {
+    return Stream.of(
+        // Canonical form strips all trailing slashes (none is appended).
+        Arguments.of("s3://my-bucket/path", "s3://my-bucket/path"),
+        Arguments.of("s3://my-bucket/path/", "s3://my-bucket/path"),
+        Arguments.of("s3://my-bucket/path///", "s3://my-bucket/path"),
+        // s3a:// is normalized to s3:// (delegates to s3aToS3), case-insensitively.
+        Arguments.of("s3a://my-bucket/path", "s3://my-bucket/path"),
+        Arguments.of("S3A://my-bucket/path/", "s3://my-bucket/path"),
+        // Whitespace surrounding the path is stripped.
+        Arguments.of("  s3://my-bucket/path  ", "s3://my-bucket/path"),
+        Arguments.of("\ts3a://my-bucket/path/\n", "s3://my-bucket/path"),
+        // Whitespace BETWEEN the path and its trailing slashes must be stripped too. Trimming
+        // first and stripping slashes afterwards leaves "s3://my-bucket/path " here, which
+        // hashes to a different lock than the canonical form and is not idempotent.
+        Arguments.of("s3://my-bucket/path /", "s3://my-bucket/path"),
+        Arguments.of("s3://my-bucket/path // ", "s3://my-bucket/path"),
+        // Non-S3 schemes pass through (still get trailing-slash stripping).
+        Arguments.of("gs://my-bucket/path", "gs://my-bucket/path"),
+        Arguments.of("gs://my-bucket/path//", "gs://my-bucket/path"),
+        // Inner consecutive slashes are intentionally NOT touched (could be a real S3 key).
+        Arguments.of("s3://my-bucket//inner/path", "s3://my-bucket//inner/path"),
+        // S3 object keys are allowed to end with ':' - a final-segment colon must NOT be
+        // mis-classified as the "scheme-only" case. The trailing ':' is part of the key and
+        // is preserved after any trailing slashes are stripped.
+        Arguments.of("s3://my-bucket/foo:", "s3://my-bucket/foo:"),
+        Arguments.of("s3://my-bucket/foo:/", "s3://my-bucket/foo:"),
+        Arguments.of("s3://my-bucket/foo:bar:/", "s3://my-bucket/foo:bar:"),
+        Arguments.of("s3a://my-bucket/foo:///", "s3://my-bucket/foo:"));
+  }
+
+  /**
+   * Every benign formatting variant of one table's base path must canonicalize to the same
+   * string, since implicit lock providers hash this to pick a lock row / znode.
+   */
+  @ParameterizedTest
+  @MethodSource("normalizeBasePathForLockingCases")
+  void testNormalizeBasePathForLocking(String input, String expected) {
+    assertEquals(expected, FSUtils.normalizeBasePathForLocking(input));
+  }
+
+  @Test
+  void testNormalizeBasePathForLockingPreservesUnusualCharacters() {
+    // URL-unsafe and equals/colon/plus/hash/ampersand/space characters pass through unchanged
+    // except for the trailing-slash and s3a-scheme rules. Hudi does not re-encode paths
+    // internally so the lock key must be byte-stable across these characters.
+    assertEquals(
+        "s3://my-bucket/datalake/db=foo:bar/dt=2024-01-01T00:00:00+05:30/region=us east/category=a&b=c/vehicle#1/file",
+        FSUtils.normalizeBasePathForLocking(
+            "s3a://my-bucket/datalake/db=foo:bar/dt=2024-01-01T00:00:00+05:30/region=us east/category=a&b=c/vehicle#1/file"));
+  }
+
+  /**
+   * The canonical form must be a fixed point. Both implicit lock providers document that this
+   * helper is idempotent and pass already-normalized values back through it.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "s3://my-bucket/path",
+      "s3://my-bucket/path/",
+      "  s3://my-bucket/path  ",
+      "s3://my-bucket/path /",
+      "s3://my-bucket/path /// ",
+      // Control characters that String#trim strips but Character#isWhitespace does not. The
+      // strip loop has to use the same rule as trim, or these reopen the non-idempotence.
+      "s3://my-bucket/path\u0001/",
+      "s3://my-bucket/path\u001b//",
+      "\u0002s3a://my-bucket/path\u0008/",
+      "s3a://my-bucket/path//",
+      "s3://my-bucket//inner/path/",
+      "s3://my-bucket/foo:/",
+      "gs://my-bucket/path//",
+  })
+  void testNormalizeBasePathForLockingIsIdempotent(String input) {
+    String once = FSUtils.normalizeBasePathForLocking(input);
+    assertEquals(once, FSUtils.normalizeBasePathForLocking(once));
+  }
+
+  @Test
+  void testNormalizeBasePathForLockingRejectsNull() {
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking(null));
+  }
+
+  /**
+   * Empty, all-slash and scheme-only inputs are rejected - stripping leaves nothing meaningful
+   * to lock against, and hashing them would collapse unrelated tables onto one lock.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "", "   ", "/", "///", " / ",
+      // Scheme roots are rejected for every scheme, not just s3. These previously hashed to a
+      // working lock key, so this is a behaviour change, not just tightened validation.
+      "s3://", "s3:///", "s3a://", "s3a:///", "file:/", "file://", "file:///", "hdfs:/", "gs:///",
+  })
+  void testNormalizeBasePathForLockingRejectsUnlockablePaths(String basePath) {
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking(basePath));
+  }
+
   private StoragePath getHoodieTempDir() {
     return new StoragePath(baseUri.toString(), ".hoodie/.temp");
+  }
+
+  /**
+   * makeWriteToken(TaskContextSupplier) falls back to the default token when the
+   * task context is unavailable.
+   */
+  @Test
+  public void testMakeWriteTokenOnError() {
+    TaskContextSupplier taskContextSupplier = mock(TaskContextSupplier.class);
+    when(taskContextSupplier.getPartitionIdSupplier()).thenThrow(new RuntimeException("generated under testing"));
+    assertEquals("0-0-0", FSUtils.makeWriteToken(taskContextSupplier));
   }
 }

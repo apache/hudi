@@ -18,10 +18,13 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -61,7 +64,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
-import java.util.regex.Matcher;
 import java.util.stream.Stream;
 
 /**
@@ -114,7 +116,13 @@ public class TableSchemaResolver {
   }
 
   private Option<HoodieSchema> getTableSchemaFromDataFileInternal() {
-    return getTableParquetSchemaFromDataFile();
+    // typed_value is a per-file physical layout (possibly inferred per file) and is stripped
+    // from the resolved table schema. Footer-derived schemas lose the variant logical type, so
+    // variant columns are also stripped by shape; that fallback walks top-level fields only, so
+    // a nested variant the row writer shredded at depth can still surface here.
+    return getTableParquetSchemaFromDataFile()
+        .map(VariantSchemaUtils::stripVariantShredding)
+        .map(VariantSchemaUtils::stripVariantShreddingByShape);
   }
 
   /**
@@ -124,7 +132,11 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public HoodieSchema getTableSchema() throws Exception {
-    return getTableSchema(metaClient.getTableConfig().populateMetaFields());
+    // Include meta fields whenever the table's meta-fields mode populates any of them. Under
+    // selective modes (COMMIT_TIME_ONLY / FILE_NAME_ONLY / COMMIT_TIME_AND_FILE_NAME) the meta
+    // columns exist as physical nullable Parquet columns even though populateMetaFields() is false,
+    // and read paths (e.g. incremental relations) must see them in the projected schema.
+    return getTableSchema(metaClient.getTableConfig().getMetaFieldsMode() != MetaFieldsMode.NONE);
   }
 
   /**
@@ -148,7 +160,8 @@ public class TableSchemaResolver {
         .filterCompletedInstants()
         .findInstantsBeforeOrEquals(timestamp)
         .lastInstant();
-    return getTableSchemaInternal(metaClient.getTableConfig().populateMetaFields(), instant)
+    return getTableSchemaInternal(
+        metaClient.getTableConfig().getMetaFieldsMode() != MetaFieldsMode.NONE, instant)
         .orElseThrow(schemaNotFoundError());
   }
 
@@ -287,9 +300,9 @@ public class TableSchemaResolver {
    * @return
    */
   public static HoodieSchema readSchemaFromLogFile(HoodieTableMetaClient metaClient, StoragePath path) throws IOException {
-    Option<Matcher> nativeLogMatcherOpt = FSUtils.matchNativeLogFile(path.getName());
-    if (nativeLogMatcherOpt.isPresent()) {
-      return NativeLogFooterMetadata.readSchemaFromNativeLogFile(metaClient.getStorage(), path, nativeLogMatcherOpt.get());
+    Option<FileNameParser.LogFileName> nativeLogFileName = FileNameParser.parseNativeLogFile(path.getName());
+    if (nativeLogFileName.isPresent()) {
+      return NativeLogFooterMetadata.readSchemaFromNativeLogFile(metaClient.getStorage(), path, nativeLogFileName.get());
     }
 
     // We only need to read the schema from the log block header,

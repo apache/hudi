@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -53,6 +54,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 
@@ -139,7 +141,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     hoodieTestTable = hoodieTestTable.addCommit(instant1);
     String instant2 = "20230918121110000";
     hoodieTestTable = hoodieTestTable.addCommit(instant2);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+    List<FileSliceAndPartition> partitionFileSlicePairs = new ArrayList<>();
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
       try {
@@ -165,8 +167,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             engineContext);
         HoodieBaseFile baseFile2 = new HoodieBaseFile(hoodieTestTable.getBaseFilePath(p, fileId2).toString());
         fileSlice2.setBaseFile(baseFile2);
-        partitionFileSlicePairs.add(Pair.of(p, fileSlice1));
-        partitionFileSlicePairs.add(Pair.of(p, fileSlice2));
+        partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice1));
+        partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice2));
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -248,7 +250,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     hoodieTestTable = hoodieTestTable.addCommit(instant1, Option.of(commitMetadata));
     String instant2 = "20230918121110000";
     hoodieTestTable = hoodieTestTable.addCommit(instant2);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+    List<FileSliceAndPartition> partitionFileSlicePairs = new ArrayList<>();
     List<String> columnsToIndex = Arrays.asList("rider", "driver");
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
@@ -269,10 +271,10 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         writeLogFiles(new StoragePath(metaClient.getBasePath(), p), HOODIE_SCHEMA, HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS,
             dataGen.generateInsertsForPartition(instant2, 10, p), 1, metaClient.getStorage(), new Properties(), fileId1, instant2);
         fileSlice2.addLogFile(new HoodieLogFile(storagePath2.toUri().toString()));
-        partitionFileSlicePairs.add(Pair.of(p, fileSlice1));
-        partitionFileSlicePairs.add(Pair.of(p, fileSlice2));
+        partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice1));
+        partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice2));
         // NOTE: we need to set table config as we are not using write client explicitly and these configs are needed for log record reader
-        metaClient.getTableConfig().setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+        metaClient.getTableConfig().setValue(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
         metaClient.getTableConfig().setValue(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
         metaClient.getTableConfig().setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
         List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataLogFile = HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(
@@ -558,7 +560,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             Lazy.eagerly(Option.of(HOODIE_SCHEMA_WITH_METADATA_FIELDS)), false, V1).keySet()));
 
     //test with meta cols disabled
-    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .build();

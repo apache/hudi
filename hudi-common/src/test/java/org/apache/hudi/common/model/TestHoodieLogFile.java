@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -110,6 +111,16 @@ public class TestHoodieLogFile {
   }
 
   @Test
+  void inlineLogFileDetectionOnlyMatchesInlineLogs() {
+    assertTrue(FileNameParser.parseInlineLogFile(pathStr).isPresent());
+    assertFalse(FileNameParser.parseInlineLogFile(nativeLogPath(LogExtensions.DATA_LOG_EXTENSION, 2)).isPresent());
+    assertFalse(FileNameParser.parseInlineLogFile(fileId + "_1-0-1_100.parquet").isPresent());
+    assertTrue(FSUtils.isInlineLogFile(new StoragePath(pathStr)));
+    assertFalse(FSUtils.isInlineLogFile(new StoragePath(nativeLogPath(LogExtensions.DATA_LOG_EXTENSION, 2))));
+    assertFalse(FSUtils.isInlineLogFile(new StoragePath(fileId + "_1-0-1_100.parquet")));
+  }
+
+  @Test
   void createFromNativeDeleteParquetLogFile() {
     String nativeDeleteLogPathStr = "file:///tmp/hoodie/2021/01/01/"
         + "136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_20250409161256974_3.deletes.parquet";
@@ -146,6 +157,7 @@ public class TestHoodieLogFile {
     assertEquals("parquet", hoodieLogFile.getSuffix());
     assertEquals("cdc", FSUtils.getFileExtensionFromLog(nativeCdcLogPath));
     assertTrue(hoodieLogFile.isCDC());
+    assertTrue(FSUtils.isNativeCDCLogFile(nativeCdcLogPathStr));
     assertTrue(FSUtils.isCDCLogFile(nativeCdcLogPathStr));
   }
 
@@ -185,6 +197,7 @@ public class TestHoodieLogFile {
     assertEquals("cdc", hoodieLogFile.getFileExtension());
     assertEquals("lance", hoodieLogFile.getSuffix());
     assertTrue(hoodieLogFile.isCDC());
+    assertTrue(FSUtils.isNativeCDCLogFile(nativeCdcLogPathStr));
     assertTrue(FSUtils.isCDCLogFile(nativeCdcLogPathStr));
   }
 
@@ -205,6 +218,7 @@ public class TestHoodieLogFile {
     assertEquals("1-0-1", hoodieLogFile.getLogWriteToken());
     assertEquals("log", hoodieLogFile.getFileExtension());
     assertEquals("custom", hoodieLogFile.getSuffix());
+    assertFalse(FSUtils.isNativeCDCLogFile(nativeLogPathStr));
     assertFalse(FSUtils.isCDCLogFile(nativeLogPathStr));
   }
 
@@ -235,7 +249,7 @@ public class TestHoodieLogFile {
     logFiles.sort(HoodieLogFile.getLogFileComparator());
 
     assertEquals(Arrays.asList(logFile, deleteFile, cdcFile), logFiles);
-    assertFalse(FSUtils.matchNativeLogFile(nativeLogPath(LogExtensions.ARCHIVE_LOG_EXTENSION, 8)).isPresent());
+    assertFalse(FSUtils.isNativeLogFile(nativeLogPath(LogExtensions.ARCHIVE_LOG_EXTENSION, 8)));
   }
 
   private String nativeLogPath(String extension, int version) {

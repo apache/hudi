@@ -15,68 +15,135 @@
 
 # For more configuration details:
 # https://docs.codecov.io/docs/codecov-yaml
-
-# Check if this file is valid by running in bash:
+#
+# Validate this file:
 # curl -X POST --data-binary @.codecov.yml https://codecov.io/validate
+
+codecov:
+  # Wait for the parallel test jobs to finish uploading before evaluating status
+  # and posting the PR comment, so a partial upload does not report a false drop.
+  notify:
+    wait_for_ci: true
 
 coverage:
   precision: 2
   round: down
   range: "50...100"
+  status:
+    # Statuses are informational for now: they surface the delta on each PR but do
+    # not fail the build. Flip a component to blocking (drop `informational`, set a
+    # `target`/`threshold`) once its coverage has climbed, so the initiative does
+    # not gate unrelated PRs mid-flight.
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
 
-# Ignoring Paths
-# --------------
-# which folders/files to ignore
+# Generated code (Avro/Thrift/Protobuf/ANTLR) is produced at build time, has no
+# source in git, and is therefore already absent from the Codecov report; it needs
+# no entry here. Likewise, modules whose CI jobs do not upload a JaCoCo report
+# (e.g. hudi-trino-plugin) never reach Codecov, so they are intentionally absent
+# from both the ignore list and component_management below. The paths below are
+# non-generated code that should not count.
 ignore:
-  - "hudi-common/src/main/java/org/apache/hudi/avro/model/*"
-  - "hudi-common/src/main/java/org/apache/hudi/avro/MercifulJsonConverter.java"
-  - "hudi-common/src/main/java/org/apache/hudi/common/HoodieJsonPayload"
+  # Generated Avro model classes (kept for safety in case sources are ever committed).
+  - "hudi-common/src/main/java/org/apache/hudi/avro/model/**"
+  # Example and quickstart applications are illustrative, not production.
+  - "hudi-examples/**"
+  # Integration-test harness (test DAGs, fixtures, generators), not production behavior.
+  - "hudi-integ-test/**"
+  # Packaging and bundle shims: assembly config, no testable logic.
+  - "packaging/**"
+  # Vendored copy of Spark's HadoopFSUtils; owned upstream, not Hudi logic.
+  - "hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/spark/HoodieHadoopFSUtils.scala"
+  # Metaserver is an incubating component with no shipped coverage. Remove this line
+  # if it is taken into scope for the coverage initiative.
+  - "hudi-platform-service/**"
+  # Standalone main()-style tools and legacy JSON/payload helpers carried over from the
+  # previous config; these are exercised by integration tests, not unit tests. Kept
+  # excluded for consistency (entries for since-deleted or now-tested classes have been
+  # dropped, e.g. MercifulJsonConverter, which now has TestMercifulJsonConverter).
+  - "hudi-common/src/main/java/org/apache/hudi/common/HoodieJsonPayload.java"
   - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCleaner.java"
   - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCompactionAdminTool.java"
   - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCompactor.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieSnapshotCopier.java"
   - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieWithTimelineServer.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/UpgradePayloadFromUberToApache.java"
   - "hudi-utilities/src/main/java/org/apache/hudi/utilities/perf/TimelineServerPerf.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HDFSParquetImporter.java"
   - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HiveIncrementalPuller.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/adhoc/UpgradePayloadFromUberToApache.java"
-  - "hudi-client/src/main/java/org/apache/hudi/metrics/JmxMetricsReporter.java"
-  - "hudi-client/src/main/java/org/apache/hudi/metrics/JmxReporterServer.java"
-  - "hudi-client/src/main/java/org/apache/hudi/metrics/MetricsGraphiteReporter.java"
-  - "hudi-hadoop-mr/src/main/java/com/uber/hoodie/hadoop/HoodieInputFormat.java"
-  - "hudi-hadoop-mr/src/main/java/com/uber/hoodie/hadoop/realtime/HoodieRealtimeInputFormat.java"
 
-comment: false
+# Post a coverage summary on every PR so reviewers can see the per-component and
+# per-patch delta (used to enforce the coverage-quality bar for the initiative).
+comment:
+  layout: "condensed_header, diff, components, flags, files"
+  behavior: default
+  require_changes: false
 
-flags:
-  hudicli:
-    paths:
-      - hudi-cli/src/main/
-  hudiclient:
-    paths:
-      - hudi-client/src/main/
-  hudicommon:
-    paths:
-      - hudi-common/src/main/
-  hudiexamples:
-    paths:
-      - hudi-examples/src/main/
-  hudihadoopmr:
-    paths:
-      - hudi-hadoop-mr/src/main/
-  hudihivesync:
-    paths:
-      - hudi-hive-sync/src/main/
-  hudiintegtest:
-    paths:
-      - hudi-integ-test/src/main/
-  hudispark:
-    paths:
-      - hudi-spark/src/main/
-  huditimelineservice:
-    paths:
-      - hudi-timeline-service/src/main/
-  hudiutilities:
-    paths:
-      - hudi-utilities/src/main/
+# Carry the last known coverage forward for a flag when its CI job is skipped by the
+# path filter on a given PR, so a partial run does not zero out that flag's coverage.
+# Flags uploaded by .github/workflows/bot.yml: spark-client-hadoop-common, utilities,
+# common-and-other-modules, spark-java-tests, spark-scala-tests, hadoop-mr-java-client,
+# integration-tests.
+flag_management:
+  default_rules:
+    carryforward: true
+
+# Per-ownership-area coverage, so each coverage subtask can read its own number on
+# every PR. Paths align with the module layout and the ENG-44401 subtask breakdown.
+component_management:
+  individual_components:
+    - component_id: hudi-common
+      name: hudi-common
+      paths:
+        - "hudi-common/**"
+    - component_id: hudi-client
+      name: hudi-client
+      paths:
+        - "hudi-client/hudi-client-common/**"
+        - "hudi-client/hudi-spark-client/**"
+        - "hudi-client/hudi-java-client/**"
+    - component_id: hudi-flink
+      name: hudi-flink
+      paths:
+        - "hudi-flink-datasource/**"
+        - "hudi-client/hudi-flink-client/**"
+    - component_id: hudi-spark-datasource
+      name: hudi-spark-datasource
+      paths:
+        - "hudi-spark-datasource/**"
+    - component_id: hudi-utilities
+      name: hudi-utilities
+      paths:
+        - "hudi-utilities/**"
+    - component_id: hudi-cli
+      name: hudi-cli
+      paths:
+        - "hudi-cli/**"
+    - component_id: hudi-hadoop
+      name: hudi-hadoop
+      paths:
+        - "hudi-hadoop-common/**"
+        - "hudi-hadoop-mr/**"
+    - component_id: hudi-sync
+      name: hudi-sync
+      paths:
+        - "hudi-sync/**"
+    - component_id: hudi-io
+      name: hudi-io
+      paths:
+        - "hudi-io/**"
+    - component_id: hudi-timeline-service
+      name: hudi-timeline-service
+      paths:
+        - "hudi-timeline-service/**"
+    - component_id: hudi-cloud
+      name: hudi-cloud
+      paths:
+        - "hudi-aws/**"
+        - "hudi-gcp/**"
+        - "hudi-azure/**"
+    - component_id: hudi-kafka-connect
+      name: hudi-kafka-connect
+      paths:
+        - "hudi-kafka-connect/**"

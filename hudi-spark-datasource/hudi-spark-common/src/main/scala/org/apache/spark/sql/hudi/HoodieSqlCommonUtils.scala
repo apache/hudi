@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstantTimeGenerator, Hoodie
 import org.apache.hudi.common.table.timeline.TimelineUtils.parseDateFromInstantTime
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.storage.{HoodieStorage, StoragePath, StoragePathInfo}
 import org.apache.hudi.util.SparkConfigUtils
 
@@ -406,15 +407,44 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   private def makePartitionPath(partitionFields: Seq[String],
                                 normalizedSpecs: Map[String, String],
                                 enableEncodeUrl: Boolean,
-                                enableHiveStylePartitioning: Boolean): String = {
+                                enableHiveStylePartitioning: Boolean,
+                                slashSeparatedDatePartitioning: Boolean): String = {
+    // NOTE: Slash-separated date partitioning only kicks in for a table partitioned by a single
+    //       (date) column, mirroring the guard in [[KeyGenUtils#getRecordPartitionPath]] that drives
+    //       the write path -- these commands have to name the very same directory the writer created.
+    //       Hive-style partitioning is excluded because the config documents the two as mutually
+    //       exclusive, and the write paths do not agree on what the combination should produce
+    //       (tracked in HUDI issue #19669), so there is no single directory to name here
+    val useSlashSeparatedDates =
+      slashSeparatedDatePartitioning && !enableHiveStylePartitioning && partitionFields.length == 1
     partitionFields.map { partitionColumn =>
       val encodedPartitionValue = if (enableEncodeUrl) {
         PartitionPathEncodeUtils.escapePathName(normalizedSpecs(partitionColumn))
       } else {
         normalizedSpecs(partitionColumn)
       }
-      if (enableHiveStylePartitioning) s"$partitionColumn=$encodedPartitionValue" else encodedPartitionValue
+      if (enableHiveStylePartitioning) {
+        s"$partitionColumn=$encodedPartitionValue"
+      } else if (useSlashSeparatedDates) {
+        toSlashSeparatedDate(encodedPartitionValue)
+      } else {
+        encodedPartitionValue
+      }
     }.mkString("/")
+  }
+
+  /**
+   * Turns a `yyyy-MM-dd` formatted partition value into the `yyyy/MM/dd` directory structure
+   * requested by `hoodie.datasource.write.slash.separated.date.partitioning`, mirroring the
+   * substitution the write path performs in `KeyGenUtils#getRecordPartitionPath`.
+   *
+   * The path-breaking values the writer refuses to slash are refused here for the same reasons, by
+   * asking [[KeyGenUtils#hasPathBreakingDash]] rather than restating the rule: these commands have
+   * to name the directory the writer created, so the two have to agree on every value, not just on
+   * the dates. See that method for what each excluded case does to the path.
+   */
+  private def toSlashSeparatedDate(partitionValue: String): String = {
+    if (KeyGenUtils.hasPathBreakingDash(partitionValue)) partitionValue else partitionValue.replace('-', '/')
   }
 
   def makePartitionPath(hoodieCatalogTable: HoodieCatalogTable,
@@ -422,8 +452,10 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     val tableConfig = hoodieCatalogTable.tableConfig
     val enableHiveStylePartitioning =  java.lang.Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable)
     val enableEncodeUrl = java.lang.Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning)
+    val slashSeparatedDatePartitioning = tableConfig.getSlashSeparatedDatePartitioning
 
-    makePartitionPath(hoodieCatalogTable.partitionFields, normalizedSpecs, enableEncodeUrl, enableHiveStylePartitioning)
+    makePartitionPath(hoodieCatalogTable.partitionFields, normalizedSpecs, enableEncodeUrl,
+      enableHiveStylePartitioning, slashSeparatedDatePartitioning)
   }
 
   private def validateInstant(queryInstant: String): Unit = {

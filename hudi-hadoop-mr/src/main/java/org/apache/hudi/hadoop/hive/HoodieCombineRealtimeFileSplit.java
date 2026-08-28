@@ -18,8 +18,8 @@
 
 package org.apache.hudi.hadoop.hive;
 
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.collection.ArrayUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 
@@ -53,9 +53,9 @@ public class HoodieCombineRealtimeFileSplit extends CombineFileSplit {
     super(jobConf, realtimeFileSplits.stream().map(p ->
             p.getPath()).collect(Collectors.toList()).toArray(new
             Path[realtimeFileSplits.size()]),
-        ArrayUtils.toPrimitive(realtimeFileSplits.stream().map(p -> p.getStart())
+        CollectionUtils.toPrimitive(realtimeFileSplits.stream().map(p -> p.getStart())
             .collect(Collectors.toList()).toArray(new Long[realtimeFileSplits.size()])),
-        ArrayUtils.toPrimitive(realtimeFileSplits.stream().map(p -> p.getLength())
+        CollectionUtils.toPrimitive(realtimeFileSplits.stream().map(p -> p.getLength())
             .collect(Collectors.toList()).toArray(new Long[realtimeFileSplits.size()])),
         realtimeFileSplits.stream().map(p -> {
           try {

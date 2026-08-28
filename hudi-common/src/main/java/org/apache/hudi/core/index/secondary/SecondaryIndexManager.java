@@ -80,7 +80,7 @@ public class SecondaryIndexManager {
       boolean ignoreIfExists,
       LinkedHashMap<String, Map<String, String>> columns,
       Map<String, String> options) {
-    Option<List<HoodieSecondaryIndex>> secondaryIndexes = SecondaryIndexUtils.getSecondaryIndexes(metaClient);
+    Option<List<HoodieSecondaryIndex>> secondaryIndexes = SecondaryIndexDefinitionUtils.getSecondaryIndexes(metaClient);
     Set<String> colNames = columns.keySet();
     HoodieSchema schema;
     try {
@@ -120,7 +120,7 @@ public class SecondaryIndexManager {
     // Persistence secondary indexes' metadata to hoodie.properties file
     Properties updatedProps = new Properties();
     updatedProps.put(HoodieTableConfig.SECONDARY_INDEXES_METADATA.key(),
-        SecondaryIndexUtils.toJsonString(newSecondaryIndexes));
+        SecondaryIndexDefinitionUtils.toJsonString(newSecondaryIndexes));
     HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProps);
 
     log.info("Success to add secondary index metadata: {}", secondaryIndexToAdd);
@@ -136,7 +136,7 @@ public class SecondaryIndexManager {
    * @param ignoreIfNotExists Whether ignore drop if the specific secondary index no exists
    */
   public void drop(HoodieTableMetaClient metaClient, String indexName, boolean ignoreIfNotExists) {
-    Option<List<HoodieSecondaryIndex>> secondaryIndexes = SecondaryIndexUtils.getSecondaryIndexes(metaClient);
+    Option<List<HoodieSecondaryIndex>> secondaryIndexes = SecondaryIndexDefinitionUtils.getSecondaryIndexes(metaClient);
     if (!indexExists(secondaryIndexes, indexName, Option.empty(), Option.empty())) {
       if (ignoreIfNotExists) {
         return;
@@ -152,7 +152,7 @@ public class SecondaryIndexManager {
     if (CollectionUtils.nonEmpty(secondaryIndexesToKeep)) {
       Properties updatedProps = new Properties();
       updatedProps.put(HoodieTableConfig.SECONDARY_INDEXES_METADATA.key(),
-          SecondaryIndexUtils.toJsonString(secondaryIndexesToKeep));
+          SecondaryIndexDefinitionUtils.toJsonString(secondaryIndexesToKeep));
       HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProps);
     } else {
       HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
@@ -171,7 +171,7 @@ public class SecondaryIndexManager {
    * @return Indexes in this table
    */
   public Option<List<HoodieSecondaryIndex>> show(HoodieTableMetaClient metaClient) {
-    return SecondaryIndexUtils.getSecondaryIndexes(metaClient);
+    return SecondaryIndexDefinitionUtils.getSecondaryIndexes(metaClient);
   }
 
   /**

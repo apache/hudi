@@ -27,6 +27,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -175,22 +176,13 @@ public class CommitUtils {
    */
   public static Option<String> getValidCheckpointForCurrentWriter(HoodieTimeline timeline, String checkpointKey,
                                                                   String keyToLookup) {
-    return (Option<String>) timeline.getWriteTimeline().filterCompletedInstants().getReverseOrderedInstants()
-        .map(instant -> {
-          try {
-            HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
-            // process commits only with checkpoint entries
-            String checkpointValue = commitMetadata.getMetadata(checkpointKey);
-            if (StringUtils.nonEmpty(checkpointValue)) {
-              // return if checkpoint for "keyForLookup" exists.
-              return readCheckpointValue(checkpointValue, keyToLookup);
-            } else {
-              return Option.empty();
-            }
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
-          }
-        }).filter(Option::isPresent).findFirst().orElse(Option.empty());
+    return TimelineUtils.findLatestInCommitMetadata(timeline.getWriteTimeline().filterCompletedInstants(),
+        (instant, commitMetadata) -> {
+          // process commits only with checkpoint entries
+          String checkpointValue = commitMetadata.getMetadata(checkpointKey);
+          // return if checkpoint for "keyForLookup" exists.
+          return StringUtils.nonEmpty(checkpointValue) ? readCheckpointValue(checkpointValue, keyToLookup) : Option.empty();
+        });
   }
 
   public static Option<String> readCheckpointValue(String value, String id) {

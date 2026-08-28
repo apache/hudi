@@ -22,13 +22,11 @@ package org.apache.hudi.common.table.read.lsm;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.schema.HoodieSchemas;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -41,14 +39,12 @@ import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -57,14 +53,11 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.config.HoodieReaderConfig.LSM_SORT_MERGE_SPILL_THRESHOLD;
-import static org.apache.hudi.common.schema.HoodieSchemaCompatibility.areSchemasProjectionEquivalent;
 import static org.apache.hudi.io.util.FileIOUtils.getDefaultSpillableMapBasePath;
 
 /**
@@ -89,12 +82,13 @@ import static org.apache.hudi.io.util.FileIOUtils.getDefaultSpillableMapBasePath
 public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {
 
   private final HoodieReaderContext<T> readerContext;
+  private final HoodieTableMetaClient metaClient;
   private final HoodieStorage storage;
   private final InputSplit inputSplit;
   private final HoodieSchema readerSchema;
   private final List<String> orderingFieldNames;
   private final TypedProperties props;
-  private final boolean includeBaseFile;
+  private final boolean readBaseFile;
   private final BufferedRecordMerger<T> bufferedRecordMerger;
   private final UpdateProcessor<T> updateProcessor;
   private final LoserTree<T> readers;
@@ -134,18 +128,19 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
                                     Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback,
                                     boolean includeBaseFile) throws IOException {
     this.readerContext = readerContext;
+    this.metaClient = metaClient;
     this.storage = storage;
     this.inputSplit = inputSplit;
     this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
     this.orderingFieldNames = orderingFieldNames;
     this.props = props;
-    this.includeBaseFile = includeBaseFile;
+    this.readBaseFile = includeBaseFile && inputSplit.getBaseFileOption().isPresent();
+    this.spillThreshold = Math.max(0, props.getInteger(LSM_SORT_MERGE_SPILL_THRESHOLD.key(), LSM_SORT_MERGE_SPILL_THRESHOLD.defaultValue()));
+    this.spillBasePath = props.getString(SPILLABLE_MAP_BASE_PATH.key(), getDefaultSpillableMapBasePath());
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext, readerContext.getMergeMode(), false, readerContext.getRecordMerger(),
         readerSchema, readerContext.getPayloadClasses(props), props, metaClient.getTableConfig().getPartialUpdateMode());
     this.updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDeletes(), fileGroupUpdateCallback, props);
-    this.spillThreshold = Math.max(0, props.getInteger(LSM_SORT_MERGE_SPILL_THRESHOLD.key(), LSM_SORT_MERGE_SPILL_THRESHOLD.defaultValue()));
-    this.spillBasePath = props.getString(SPILLABLE_MAP_BASE_PATH.key(), getDefaultSpillableMapBasePath());
     this.readers = new LoserTree<>(initializeReaders());
   }
 
@@ -159,9 +154,10 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   private List<SortedRunReader<T>> initializeReaders() throws IOException {
     List<SortedRunReader<T>> sortedRunReaders = new ArrayList<>();
     int mergeOrder = 0;
-    boolean hasBaseFileReader = includeBaseFile && inputSplit.getBaseFileOption().isPresent();
-    if (hasBaseFileReader) {
-      addReader(sortedRunReaders, mergeOrder++, createBaseFileIterator(inputSplit.getBaseFileOption().get()));
+    if (readBaseFile) {
+      addReader(sortedRunReaders, mergeOrder++, LsmFileIterators.createBaseFileIterator(
+          readerContext, storage, inputSplit.getBaseFileOption().get(),
+          inputSplit.getStart(), inputSplit.getLength(), orderingFieldNames, false));
     }
 
     if (inputSplit.hasRecordIterator()) {
@@ -174,9 +170,10 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
         logReaderSpecs.add(new LogReaderSpec(mergeOrder++, logFile));
       }
     }
-    Set<Integer> directLogMergeOrders = selectDirectLogMergeOrders(logReaderSpecs, hasBaseFileReader);
+    Set<Integer> directLogMergeOrders = selectDirectLogMergeOrders(logReaderSpecs, readBaseFile);
     for (LogReaderSpec spec : logReaderSpecs) {
-      ClosableIterator<BufferedRecord<T>> iterator = createFileIterator(spec.logFile.getPathInfo(), spec.logFile.getPath(), spec.logFile.getFileSize());
+      ClosableIterator<BufferedRecord<T>> iterator = LsmFileIterators.createLogFileIterator(
+          readerContext, metaClient, storage, spec.logFile, orderingFieldNames);
       addReader(sortedRunReaders, spec.mergeOrder, maybeSpillIterator(directLogMergeOrders.contains(spec.mergeOrder), iterator));
     }
     return sortedRunReaders;
@@ -255,18 +252,6 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   }
 
   /**
-   * Creates the L1/base sorted-run iterator.
-   */
-  private ClosableIterator<BufferedRecord<T>> createBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
-    if (baseFile.getBootstrapBaseFile().isPresent()) {
-      // Bootstrap base files require joining the skeleton file with the external data file.
-      // Keep that path on HoodieFileGroupReader until the LSM reader implements the same merge.
-      throw new UnsupportedOperationException("LSM file group reader does not support bootstrap base files");
-    }
-    return createFileIterator(baseFile.getPathInfo(), baseFile.getStoragePath(), baseFile.getFileSize());
-  }
-
-  /**
    * Creates a sorted-run iterator from incoming write records.
    */
   private ClosableIterator<BufferedRecord<T>> createRecordIterator(Iterator<HoodieRecord> recordIterator) {
@@ -301,95 +286,20 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     return HoodieSchemaUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
   }
 
-  /**
-   * Creates a sorted-run iterator for a parquet data file or a native parquet log file.
-   *
-   * <p>Native delete logs use a specialized schema and are routed through
-   * {@link #createNativeDeleteLogIterator(StoragePathInfo, StoragePath, long)}.
-   */
-  private ClosableIterator<BufferedRecord<T>> createFileIterator(StoragePathInfo pathInfo,
-                                                                 StoragePath path,
-                                                                 long fileSize) throws IOException {
-    StoragePath storagePath = pathInfo != null ? pathInfo.getPath() : path;
-    if (FSUtils.isNativeDeleteLogFile(storagePath.getName())) {
-      return createNativeDeleteLogIterator(pathInfo, storagePath, fileSize);
-    }
-    Pair<HoodieSchema, Map<String, String>> requiredSchemaAndRenamedColumns =
-        readerContext.getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(storagePath);
-    HoodieSchema fileRequiredSchema = requiredSchemaAndRenamedColumns.getLeft();
-    ClosableIterator<T> recordIterator;
-    if (pathInfo != null) {
-      recordIterator = readerContext.getFileRecordIterator(
-          pathInfo, 0, pathInfo.getLength(), readerContext.getSchemaHandler().getTableSchema(), fileRequiredSchema, storage);
-    } else {
-      long length = fileSize >= 0 ? fileSize : storage.getPathInfo(storagePath).getLength();
-      recordIterator = readerContext.getFileRecordIterator(
-          storagePath, 0, length, readerContext.getSchemaHandler().getTableSchema(), fileRequiredSchema, storage);
-    }
-    if (!areSchemasProjectionEquivalent(fileRequiredSchema, readerSchema) || !requiredSchemaAndRenamedColumns.getRight().isEmpty()) {
-      UnaryOperator<T> projector = readerContext.getRecordContext()
-          .projectRecord(fileRequiredSchema, readerSchema, requiredSchemaAndRenamedColumns.getRight());
-      recordIterator = new CloseableMappingIterator<>(recordIterator, projector);
-    }
-    if (readerContext.getInstantRange().isPresent()) {
-      recordIterator = readerContext.applyInstantRangeFilter(recordIterator);
-    }
-    return new CloseableMappingIterator<>(recordIterator, record -> BufferedRecords.fromEngineRecord(
-        readerContext.getRecordContext().seal(record),
-        readerSchema,
-        readerContext.getRecordContext(),
-        orderingFieldNames,
-        readerContext.getRecordContext().isDeleteRecord(record, readerContext.getSchemaHandler().getDeleteContext().withReaderSchema(readerSchema))));
-  }
-
-  /**
-   * Creates delete records from an RFC-103 native delete log.
-   *
-   * <p>The delete log schema intentionally contains only the record key and ordering fields;
-   * partition path and full data columns are not read for delete-only logs.
-   */
-  private ClosableIterator<BufferedRecord<T>> createNativeDeleteLogIterator(StoragePathInfo pathInfo,
-                                                                            StoragePath storagePath,
-                                                                            long fileSize) throws IOException {
-    HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(
-        readerContext.getSchemaHandler().getTableSchema(), orderingFieldNames);
-    ClosableIterator<T> recordIterator;
-    if (pathInfo != null) {
-      recordIterator = readerContext.getFileRecordIterator(
-          pathInfo, 0, pathInfo.getLength(), deleteLogSchema, deleteLogSchema, storage);
-    } else {
-      long length = fileSize >= 0 ? fileSize : storage.getPathInfo(storagePath).getLength();
-      recordIterator = readerContext.getFileRecordIterator(
-          storagePath, 0, length, deleteLogSchema, deleteLogSchema, storage);
-    }
-    return new CloseableMappingIterator<>(recordIterator, record -> {
-      return createNativeDeleteRecord(readerContext, record, deleteLogSchema, orderingFieldNames);
-    });
-  }
-
-  @VisibleForTesting
-  static <T> BufferedRecord<T> createNativeDeleteRecord(HoodieReaderContext<T> readerContext,
-                                                        T record,
-                                                        HoodieSchema deleteLogSchema,
-                                                        List<String> orderingFieldNames) {
-    Object recordKey = readerContext.getRecordContext()
-        .getValue(record, deleteLogSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    // Preserve the delete log's ordering value so event-time/custom merge modes can compare
-    // deletes against data records instead of treating every native delete as commit-time ordered.
-    Comparable orderingValue =
-        readerContext.getRecordContext().getOrderingValue(record, deleteLogSchema, orderingFieldNames);
-    return BufferedRecords.createDelete(recordKey.toString(), orderingValue);
-  }
-
   @Override
   public boolean hasNext() {
     if (nextRecord != null) {
       return true;
     }
     while (!readers.isEmpty()) {
-      BufferedRecord<T> mergedRecord = nextMergedRecord();
-      nextRecord = updateProcessor.processUpdate(
-          mergedRecord.getRecordKey(), null, mergedRecord, mergedRecord.isDelete());
+      MergeResult<T> records = nextMergedRecord();
+      BufferedRecord<T> mergedRecord = records.mergedRecord;
+      // Match HoodieFileGroupReader: untouched base records bypass update processing. processUpdate
+      // is reserved for base records with a matching log record and records found only in logs.
+      nextRecord = records.hasLogRecord
+          ? updateProcessor.processUpdate(
+              mergedRecord.getRecordKey(), records.baseRecord, mergedRecord, mergedRecord.isDelete())
+          : mergedRecord;
       if (nextRecord != null) {
         return true;
       }
@@ -400,14 +310,37 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
   /**
    * Pops and merges all currently visible versions for the next record key.
    */
-  private BufferedRecord<T> nextMergedRecord() {
-    BufferedRecord<T> firstRecord = readers.peekWinner();
-    String recordKey = firstRecord.getRecordKey();
-    BufferedRecord<T> mergedRecord = null;
+  private MergeResult<T> nextMergedRecord() {
+    boolean firstRecordIsFromBase = readBaseFile && readers.peekWinnerMergeOrder() == 0;
+    BufferedRecord<T> mergedRecord = readers.popWinner();
+    String recordKey = mergedRecord.getRecordKey();
+    BufferedRecord<T> baseRecord = firstRecordIsFromBase ? mergedRecord : null;
+    boolean hasLogRecord = !firstRecordIsFromBase;
     while (!readers.isEmpty() && recordKey.equals(readers.peekWinner().getRecordKey())) {
+      hasLogRecord = true;
       mergedRecord = merge(mergedRecord, readers.popWinner());
     }
-    return mergedRecord;
+    return new MergeResult<>(baseRecord, mergedRecord, hasLogRecord);
+  }
+
+  /**
+   * Result of merging all records with the same key across the sorted runs.
+   */
+  private static class MergeResult<T> {
+    // The original base record, or null when the key does not exist in the base file.
+    private final BufferedRecord<T> baseRecord;
+    // The record produced after merging all visible versions of the key.
+    private final BufferedRecord<T> mergedRecord;
+    // Whether any version came from a log file and therefore requires update processing.
+    private final boolean hasLogRecord;
+
+    private MergeResult(BufferedRecord<T> baseRecord,
+                        BufferedRecord<T> mergedRecord,
+                        boolean hasLogRecord) {
+      this.baseRecord = baseRecord;
+      this.mergedRecord = mergedRecord;
+      this.hasLogRecord = hasLogRecord;
+    }
   }
 
   /**
@@ -483,6 +416,11 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
       return winnerIndex < 0 ? null : leaves.get(winnerIndex).current;
     }
 
+    int peekWinnerMergeOrder() {
+      int winnerIndex = tree[0];
+      return winnerIndex < 0 ? -1 : leaves.get(winnerIndex).mergeOrder;
+    }
+
     BufferedRecord<T> popWinner() {
       int winnerIndex = tree[0];
       SortedRunReader<T> winner = leaves.get(winnerIndex);
@@ -536,7 +474,8 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     private int compare(int leftIndex, int rightIndex) {
       SortedRunReader<T> left = leaves.get(leftIndex);
       SortedRunReader<T> right = leaves.get(rightIndex);
-      int keyCompare = left.current.getRecordKey().compareTo(right.current.getRecordKey());
+      int keyCompare = StringUtils.compareUtf8Bytes(
+          left.current.getRecordKey(), right.current.getRecordKey());
       if (keyCompare != 0) {
         return keyCompare;
       }

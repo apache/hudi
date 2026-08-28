@@ -185,7 +185,7 @@ public interface HoodieLogFormat {
 
       // Initialise logFile
       StoragePath logPath = new StoragePath(parentPath,
-          FSUtils.makeLogFileName(this.logFileId, this.fileExtension, this.instantTime, this.logVersion, this.logWriteToken));
+          FSUtils.makeInlineLogFileName(this.logFileId, this.fileExtension, this.instantTime, this.logVersion, this.logWriteToken));
       log.info("HoodieLogFile on path {}", logPath);
       this.logFile = new HoodieLogFile(logPath, this.fileSize);
     }
@@ -250,7 +250,7 @@ public interface HoodieLogFormat {
   static HoodieLogFormat.Reader newReader(HoodieTableMetaClient metaClient, HoodieLogFile logFile,
                                           HoodieSchema readerSchema, boolean reverseReader) throws IOException {
     HoodieStorage storage = metaClient.getStorage();
-    if (FSUtils.matchNativeLogFile(logFile.getFileName()).isPresent()) {
+    if (FSUtils.isNativeLogFile(logFile.getFileName())) {
       StoragePath logFileParent = logFile.getPath().getParent();
       return new HoodieNativeLogFileReader(
           storage,

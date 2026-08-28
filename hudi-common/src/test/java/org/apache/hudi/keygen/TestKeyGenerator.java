@@ -37,21 +37,28 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class TestKeyGenerator {
   private static Stream<Arguments> testKeyConstruction() {
     return Stream.of(
-        Arguments.of(new String[] {"key1"}, Collections.singletonList("value1"), "key1:value1"),
-        Arguments.of(new String[]{"key1", "key2"}, Arrays.asList("value1", "value2"), "key1:value1,key2:value2"),
-        Arguments.of(new String[]{"key1", "key2"}, Arrays.asList("value1", ""), "key1:value1,key2:__empty__"),
-        Arguments.of(new String[]{"key1", "key2"}, Arrays.asList(null, "value2"), "key1:__null__,key2:value2"));
+        Arguments.of(new String[] {"key1"}, Collections.singletonList("value1"), "key1:value1", "value1"),
+        Arguments.of(new String[] {"key1", "key2"}, Arrays.asList("value1", "value2"),
+            "key1:value1,key2:value2", "value1,key2:value2"),
+        Arguments.of(new String[] {"key1", "key2"}, Arrays.asList("value1", ""),
+            "key1:value1,key2:__empty__", "value1,key2:__empty__"),
+        Arguments.of(new String[] {"key1", "key2"}, Arrays.asList(null, "value2"),
+            "key1:__null__,key2:value2", "__null__,key2:value2"));
   }
 
   @ParameterizedTest
   @MethodSource
-  void testKeyConstruction(String[] keys, List<String> values, String expected) {
+  void testKeyConstruction(String[] keys, List<String> values, String expected, String expectedWithoutFirstFieldPrefix) {
     assertEquals(expected, KeyGenerator.constructRecordKey(keys, (key, index) -> values.get(index)));
+    assertEquals(expectedWithoutFirstFieldPrefix,
+        KeyGenerator.constructRecordKeyForComparison(keys, (key, index) -> values.get(index)));
   }
 
   @Test
   void testKeyConstructionWithOnlyNulls() {
     assertThrows(HoodieKeyException.class, () -> KeyGenerator.constructRecordKey(new String[]{"key1"}, (key, index) -> null));
     assertThrows(HoodieKeyException.class, () -> KeyGenerator.constructRecordKey(new String[]{"key1", "key2"}, (key, index) -> null));
+    assertThrows(HoodieKeyException.class,
+        () -> KeyGenerator.constructRecordKeyForComparison(new String[] {"key1", "key2"}, (key, index) -> null));
   }
 }

@@ -45,6 +45,7 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.lance.SparkLanceReaderBase
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetReadSupport, ParquetFileFormat, Spark40HoodieParquetReadSupport, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.execution.datasources.vortex.SparkVortexReaderBase
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.hudi.HoodieMemoryStream
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
@@ -203,6 +204,13 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
                                      options: Map[String, String],
                                      hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
     Some(new SparkLanceReaderBase(vectorized))
+  }
+
+  override def createVortexFileReader(vectorized: Boolean,
+                                      sqlConf: SQLConf,
+                                      options: Map[String, String],
+                                      hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
+    Some(new SparkVortexReaderBase(vectorized))
   }
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {

@@ -33,6 +33,7 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+import static org.apache.hudi.common.model.HoodieFileFormat.VORTEX;
 
 /**
  * Factory methods to create Hudi file reader.
@@ -58,6 +59,9 @@ public class HoodieFileReaderFactory {
     if (LANCE.getFileExtension().equals(extension)) {
       return getFileReader(hoodieConfig, path, LANCE, Option.empty());
     }
+    if (VORTEX.getFileExtension().equals(extension)) {
+      return getFileReader(hoodieConfig, path, VORTEX, Option.empty());
+    }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
@@ -77,6 +81,8 @@ public class HoodieFileReaderFactory {
         return newOrcFileReader(path);
       case LANCE:
         return newLanceFileReader(hoodieConfig, path);
+      case VORTEX:
+        return newVortexFileReader(hoodieConfig, path);
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }
@@ -135,6 +141,10 @@ public class HoodieFileReaderFactory {
 
   protected HoodieFileReader newLanceFileReader(HoodieConfig hoodieConfig, StoragePath path) {
     throw new UnsupportedOperationException(HoodieFileFormat.LANCE_UNSUPPORTED_ERROR_MSG);
+  }
+
+  protected HoodieFileReader newVortexFileReader(HoodieConfig hoodieConfig, StoragePath path) {
+    throw new UnsupportedOperationException(HoodieFileFormat.VORTEX_SPARK_ONLY_ERROR_MSG);
   }
 
   public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader,

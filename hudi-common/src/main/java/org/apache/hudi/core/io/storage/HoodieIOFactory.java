@@ -114,6 +114,8 @@ public abstract class HoodieIOFactory {
       return getFileFormatUtils(HoodieFileFormat.HFILE);
     } else if (path.getFileExtension().equals(HoodieFileFormat.LANCE.getFileExtension())) {
       return getFileFormatUtils(HoodieFileFormat.LANCE);
+    } else if (path.getFileExtension().equals(HoodieFileFormat.VORTEX.getFileExtension())) {
+      return getFileFormatUtils(HoodieFileFormat.VORTEX);
     }
     throw new UnsupportedOperationException("The format for file " + path + " is not supported yet.");
   }

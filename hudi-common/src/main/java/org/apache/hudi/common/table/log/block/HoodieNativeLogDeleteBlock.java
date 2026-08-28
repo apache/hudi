@@ -76,6 +76,11 @@ public class HoodieNativeLogDeleteBlock extends HoodieDeleteBlock {
   }
 
   @Override
+  public List<Long> getRecordPositionList() throws IOException {
+    return decodeOrderedRecordPositionList(getLogBlockHeader());
+  }
+
+  @Override
   public DeleteRecord[] getRecordsToDelete() {
     if (recordsToDelete == null) {
       recordsToDelete = readRecordsToDelete();

@@ -23,6 +23,7 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -89,6 +90,10 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
     // Broadcast: Configuration.
     Configuration configs = getHadoopConfiguration(jsc.hadoopConfiguration());
     schemaEvolutionConfigs.forEach(configs::set);
+    // Internal write-side reads (compaction, clustering, merge) must materialize INLINE blob bytes
+    // so they can be rewritten into the new base file. DESCRIPTOR is a query-only optimization; if
+    // it leaked onto this path the rewrite would persist null blob data and silently drop the bytes.
+    configs.set(HoodieReaderConfig.BLOB_INLINE_READ_MODE.key(), HoodieReaderConfig.BLOB_INLINE_READ_MODE_CONTENT);
     configs.set(SQLConf.PARQUET_OUTPUT_TIMESTAMP_TYPE().key(), sqlConf.getConfString(SQLConf.PARQUET_OUTPUT_TIMESTAMP_TYPE().key()));
     configs.set(SQLConf.PARQUET_WRITE_LEGACY_FORMAT().key(), sqlConf.getConfString(SQLConf.PARQUET_WRITE_LEGACY_FORMAT().key()));
     configurationBroadcast = jsc.broadcast(new SerializableConfiguration(configs));
@@ -97,13 +102,17 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
       SparkColumnarFileReader parquetFileReader = sparkAdapter.createParquetFileReader(false, sqlConf, options, configs);
       SparkColumnarFileReader orcFileReader = getOrcFileReader(resolver, sqlConf, options, configs, sparkAdapter);
       SparkColumnarFileReader lanceFileReader = sparkAdapter.createLanceFileReader(false, sqlConf, options, configs).getOrElse(null);
-      baseFileReaderBroadcast = jsc.broadcast(new MultipleColumnarFileFormatReader(parquetFileReader, orcFileReader, lanceFileReader));
+      SparkColumnarFileReader vortexFileReader = sparkAdapter.createVortexFileReader(false, sqlConf, options, configs).getOrElse(null);
+      baseFileReaderBroadcast = jsc.broadcast(new MultipleColumnarFileFormatReader(parquetFileReader, orcFileReader, lanceFileReader, vortexFileReader));
     } else if (metaClient.getTableConfig().getBaseFileFormat() == HoodieFileFormat.ORC) {
       SparkColumnarFileReader orcFileReader = getOrcFileReader(resolver, sqlConf, options, configs, sparkAdapter);
       baseFileReaderBroadcast = jsc.broadcast(orcFileReader);
     } else if (metaClient.getTableConfig().getBaseFileFormat() == HoodieFileFormat.LANCE) {
       baseFileReaderBroadcast = jsc.broadcast(
           sparkAdapter.createLanceFileReader(false, sqlConf, options, configs).getOrElse(null));
+    } else if (metaClient.getTableConfig().getBaseFileFormat() == HoodieFileFormat.VORTEX) {
+      baseFileReaderBroadcast = jsc.broadcast(
+          sparkAdapter.createVortexFileReader(false, sqlConf, options, configs).getOrElse(null));
     } else {
       baseFileReaderBroadcast = jsc.broadcast(
           sparkAdapter.createParquetFileReader(false, sqlConf, options, configs));
