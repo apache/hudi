@@ -283,8 +283,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     final String prefixedName = tableName.isEmpty() ? registryName : tableName + "." + registryName;
     return DISTRIBUTED_REGISTRY_MAP.computeIfAbsent(prefixedName, key -> {
       Registry registry = Registry.getRegistryOfClass(tableName, registryName, DistributedRegistry.class.getName());
-      ((DistributedRegistry) registry).register(javaSparkContext);
-      return registry;
+      return ((DistributedRegistry) registry).register(javaSparkContext);
     });
   }
 

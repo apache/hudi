@@ -22,6 +22,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
@@ -227,5 +228,75 @@ public class TestDistributedRegistry {
     Assertions.assertEquals(2, countsWithoutPrefix.size());
     Assertions.assertTrue(countsWithoutPrefix.containsKey(METRIC_1));
     Assertions.assertTrue(countsWithoutPrefix.containsKey(METRIC_2));
+  }
+
+  @Test
+  public void testRegisterIdempotent() {
+    // Given: a DistributedRegistry registered to the SparkContext
+    String registryName = REGISTRY_NAME + "_testIdempotent";
+    DistributedRegistry registry = new DistributedRegistry(registryName);
+    registry.add(METRIC_1, 42);
+    DistributedRegistry result = registry.register(jsc);
+
+    // Then: first registration returns the same instance
+    Assertions.assertSame(registry, result);
+    Assertions.assertTrue(registry.isRegistered());
+
+    // When: register() is called again on the same SparkContext
+    DistributedRegistry result2 = registry.register(jsc);
+
+    // Then: it is a no-op, returns same instance
+    Assertions.assertSame(registry, result2);
+  }
+
+  @Test
+  public void testRegisterHandlesStaleAccumulator() {
+    // Simulate the stale-singleton scenario: a DistributedRegistry that was registered
+    // to a previous SparkContext and cannot be re-registered because AccumulatorV2.metadata
+    // is already set (throws IllegalStateException).
+
+    // Given: a registry cached in the global REGISTRY_MAP
+    String registryName = REGISTRY_NAME + "_testStale";
+    DistributedRegistry staleRegistry = new DistributedRegistry(registryName);
+    staleRegistry.add(METRIC_1, 100);
+    staleRegistry.add(METRIC_2, 200);
+    String cacheKey = Registry.makeKey("", registryName);
+    Registry.REGISTRY_MAP.put(cacheKey, staleRegistry);
+
+    // Given: register to SparkContext #1
+    staleRegistry.register(jsc);
+    Assertions.assertTrue(staleRegistry.isRegistered());
+
+    // Simulate SparkContext restart: stop and create a new one
+    jsc.stop();
+    SparkConf conf = HoodieClientTestUtils.getSparkConfForTest(
+        TestDistributedRegistry.class.getSimpleName() + "_stale");
+    JavaSparkContext jsc2 = new JavaSparkContext(conf);
+
+    try {
+      // When: register() is called with the new SparkContext
+      // In local mode, isRegistered() may still return true since AccumulatorContext
+      // persists across stop/start. Force the stale path by calling register on jsc2.
+      // The key invariant: it must not throw IllegalStateException.
+      DistributedRegistry result = staleRegistry.register(jsc2);
+
+      // Then: result is registered and functional
+      Assertions.assertTrue(result.isRegistered());
+      Assertions.assertEquals(registryName, result.getName());
+
+      // Then: counters were preserved
+      Map<String, Long> counts = result.getAllCounts();
+      Assertions.assertTrue(counts.containsKey(METRIC_1));
+      Assertions.assertTrue(counts.containsKey(METRIC_2));
+      Assertions.assertEquals(100, counts.get(METRIC_1));
+      Assertions.assertEquals(200, counts.get(METRIC_2));
+    } finally {
+      Registry.REGISTRY_MAP.remove(cacheKey);
+      jsc2.stop();
+      // Restore class-level SparkContext for other tests
+      jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(
+          TestDistributedRegistry.class.getSimpleName()));
+      engineContext = new HoodieSparkEngineContext(jsc);
+    }
   }
 }

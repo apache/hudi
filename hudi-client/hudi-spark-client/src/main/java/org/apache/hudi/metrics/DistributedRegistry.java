@@ -45,9 +45,27 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
     return name;
   }
 
-  public void register(JavaSparkContext jsc) {
-    if (!isRegistered()) {
+  public DistributedRegistry register(JavaSparkContext jsc) {
+    if (isRegistered()) {
+      return this;
+    }
+    try {
       jsc.sc().register(this);
+      return this;
+    } catch (IllegalStateException e) {
+      // Stale singleton: was registered to a previous SparkContext that no longer exists.
+      // AccumulatorV2.metadata is non-null (so register() rejects it) but isRegistered()
+      // returned false (the id is not in the current AccumulatorContext).
+      // Create a fresh accumulator, register it, and swap it into the registry cache.
+      DistributedRegistry fresh = new DistributedRegistry(this.name);
+      fresh.counters.putAll(this.counters);
+      jsc.sc().register(fresh);
+      Registry.REGISTRY_MAP.forEach((key, registry) -> {
+        if (registry == this) {
+          Registry.REGISTRY_MAP.put(key, fresh);
+        }
+      });
+      return fresh;
     }
   }
 
