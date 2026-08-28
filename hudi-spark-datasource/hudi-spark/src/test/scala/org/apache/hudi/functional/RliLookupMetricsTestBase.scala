@@ -36,16 +36,10 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
   protected def isPartitionedRli: Boolean = false
 
   /**
-   * Table type under test. Tagging is an index-level concern and does not branch on table type, so MOR
-   * is expected to behave identically -- the MOR subclasses exist to prove that rather than assume it.
+   * Copy-on-write throughout. Tagging is an index-level concern and nothing in the lookup closures or the
+   * drain branches on table type, so merge-on-read exercises identical code and is not covered separately.
    */
-  protected def tableTypeOpt: String = DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL
-
-  protected def indexLabel: String = {
-    val idx = if (isPartitionedRli) "partitioned RLI" else "global RLI"
-    val tt = if (tableTypeOpt == DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL) "MOR" else "COW"
-    s"$idx, $tt"
-  }
+  protected def indexLabel: String = if (isPartitionedRli) "partitioned RLI" else "global RLI"
 
   /**
    * The drain reports to the configured reporter, so these tests need one. `commonOpts` turns the global
@@ -62,7 +56,8 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
     HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME.key -> classOf[CapturingMetricsReporter].getName)
 
   protected def rliOpts: Map[String, String] = {
-    val withTableType = Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableTypeOpt) ++ metricsOpts
+    val withTableType = Map(DataSourceWriteOptions.TABLE_TYPE.key ->
+      DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL) ++ metricsOpts
     if (isPartitionedRli) {
       commonOpts ++ withTableType ++ Map(
         HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false",

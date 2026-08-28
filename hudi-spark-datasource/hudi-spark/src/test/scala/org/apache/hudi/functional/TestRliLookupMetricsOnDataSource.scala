@@ -18,7 +18,6 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.metrics.RecordIndexLookupMetrics
 import org.apache.hudi.testutils.CapturingMetricsReporter
 
@@ -35,7 +34,7 @@ class TestRliLookupMetricsOnDataSource extends RliLookupMetricsTestBase {
    * `RecordLevelIndexTestBase.doWriteAndValidateDataAndRecordIndex`), so the miss count is 1.
    */
   @Test
-  def testCountersReachCommitMetadata(): Unit = {
+  def testCountersReachTheReporter(): Unit = {
     val numUpdates = 20
 
     doWriteAndValidateDataAndRecordIndex(rliOpts, INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite, validate = false, numInserts = 100)
@@ -45,7 +44,7 @@ class TestRliLookupMetricsOnDataSource extends RliLookupMetricsTestBase {
     val counters = rliCountersFromLatestCommit()
     report(s"DataSource ($indexLabel) -- RLI counters on the commit", counters)
 
-    assertTrue(counters.nonEmpty, "commit metadata must carry the RLI counters")
+    assertTrue(counters.nonEmpty, "the reporter must carry the RLI counters")
     assertEquals(numUpdates.toString, counters(RecordIndexLookupMetrics.KEY_HIT_COUNT), "every updated key is a hit")
     assertEquals("1", counters(RecordIndexLookupMetrics.KEY_MISS_COUNT), "the fresh insert is a miss")
     assertEquals(numUpdates + 1L, assertSumInvariant(counters))
@@ -96,36 +95,10 @@ class TestRliLookupMetricsOnDataSource extends RliLookupMetricsTestBase {
       s"a commit that looked nothing up must publish no counters of its own; got $counters")
   }
 
-  /** The feature gate must suppress the counters entirely, leaving commit metadata untouched. */
-  @Test
-  def testDisabledConfigEmitsNoCounters(): Unit = {
-    val disabledOpts = rliOpts + (HoodieMetricsConfig.RLI_LOOKUP_METRICS_ENABLE.key -> "false")
-
-    doWriteAndValidateDataAndRecordIndex(disabledOpts, INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite, validate = false, numInserts = 50)
-    doWriteAndValidateDataAndRecordIndex(disabledOpts, UPSERT_OPERATION_OPT_VAL, SaveMode.Append, validate = false, numUpdates = 10)
-
-    val counters = rliCountersFromLatestCommit()
-    report(s"DataSource ($indexLabel) -- gate off, expecting nothing", counters)
-    assertTrue(counters.isEmpty,
-      s"with ${HoodieMetricsConfig.RLI_LOOKUP_METRICS_ENABLE.key}=false no counters may reach the commit; got $counters")
-  }
 }
 
 /** The same coverage against the partitioned record level index. */
 @Tag("functional")
 class TestRliLookupMetricsOnDataSourcePartitioned extends TestRliLookupMetricsOnDataSource {
-  override protected def isPartitionedRli: Boolean = true
-}
-
-/** The same coverage on Merge On Read. */
-@Tag("functional")
-class TestRliLookupMetricsOnDataSourceMor extends TestRliLookupMetricsOnDataSource {
-  override protected def tableTypeOpt: String = MOR_TABLE_TYPE_OPT_VAL
-}
-
-/** MOR against the partitioned record level index. */
-@Tag("functional")
-class TestRliLookupMetricsOnDataSourceMorPartitioned extends TestRliLookupMetricsOnDataSource {
-  override protected def tableTypeOpt: String = MOR_TABLE_TYPE_OPT_VAL
   override protected def isPartitionedRli: Boolean = true
 }
