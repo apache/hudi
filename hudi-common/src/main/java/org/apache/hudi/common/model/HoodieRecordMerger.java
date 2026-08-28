@@ -219,16 +219,12 @@ public interface HoodieRecordMerger extends Serializable {
   static <T> Comparable maxOrderingValue(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
     Comparable oldOrderingVal = oldRecord.getOrderingValue();
     Comparable newOrderingVal = newRecord.getOrderingValue();
-    // A commit-time ordering value (null or the default sentinel) ranks lowest, so the counterpart
-    // is the max. Different classes are not comparable through compareTo, so fall back to the base
-    // value rather than risk a ClassCastException.
-    if (OrderingValues.isNullOrDefault(oldOrderingVal)) {
-      return newOrderingVal;
-    }
-    if (OrderingValues.isNullOrDefault(newOrderingVal)
-        || !OrderingValues.isSameClass(oldOrderingVal, newOrderingVal)) {
+    // A null or default (commit-time) new ordering value ranks lowest, so the old value is the max.
+    // Otherwise isBaseOrderingHigher picks the higher of the two and surfaces a mismatched-class
+    // comparison rather than risking a ClassCastException.
+    if (OrderingValues.isNullOrDefault(newOrderingVal)) {
       return oldOrderingVal;
     }
-    return oldOrderingVal.compareTo(newOrderingVal) > 0 ? oldOrderingVal : newOrderingVal;
+    return OrderingValues.isBaseOrderingHigher(oldOrderingVal, newOrderingVal) ? oldOrderingVal : newOrderingVal;
   }
 }
