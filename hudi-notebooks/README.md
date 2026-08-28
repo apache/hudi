@@ -93,18 +93,20 @@ provider's endpoint and credentials:
   <name>fs.s3a.endpoint</name>
   <!-- Amazon S3: https://s3.<region>.amazonaws.com
        any other provider: its S3 endpoint URL -->
-  <value>https://<s3-endpoint></value>
+  <value>https://your-s3-endpoint.example.com</value>
 </property>
 <property>
   <name>fs.s3a.access.key</name>
-  <value><access-key></value>
+  <value>ACCESS_KEY</value>
 </property>
 <property>
   <name>fs.s3a.secret.key</name>
-  <value><secret-key></value>
+  <value>SECRET_KEY</value>
 </property>
 <property>
   <name>fs.s3a.path.style.access</name>
+  <!-- MinIO and most other providers need path-style addressing;
+       leave this out for Amazon S3 -->
   <value>true</value>
 </property>
 ```
