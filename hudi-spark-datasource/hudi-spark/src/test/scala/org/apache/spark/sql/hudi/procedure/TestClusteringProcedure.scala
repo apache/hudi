@@ -1017,6 +1017,20 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         "Order column not exist:s.tags.key_value.value")
       metaClient.reloadActiveTimeline()
       assertResult(0L)(ClusteringUtils.getAllPendingClusteringPlans(metaClient).count())
+
+      // The config route has no procedure to check the column up front, so it is the partitioner
+      // constructors and the execution strategy that reject it (SortUtils.validateSortableColumns),
+      // now resolving the dotted path instead of skipping it and letting Spark's AnalysisException
+      // surface without naming the column. This leg runs last because a rejection at execution
+      // time leaves the plan it failed on pending.
+      withSQLConf(
+        "hoodie.clustering.inline" -> "true",
+        "hoodie.clustering.inline.max.commits" -> "1",
+        sortColumnsKey -> "s.tags") {
+        checkNestedExceptionContains(() => spark.sql(
+          s"insert into $tableName select 6, 'a6', named_struct('level', 6, 'tags', map('k', 'v')), 1005"))(
+          "Sorting by column 's.tags' of type MAP is not supported")
+      }
     }
   }
 

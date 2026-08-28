@@ -123,6 +123,21 @@ public class TestSortUtils {
     assertTrue(upperCaseFailure.getMessage().contains("Sorting by column 'V'"),
         "The error must name the column as configured, got: " + upperCaseFailure.getMessage());
 
+    // A dotted path resolves segment by segment and is checked at the leaf it lands on, so a sort
+    // column set in the config reaches the same rejection the procedure gives it instead of being
+    // skipped here and dying in the write job. The leaf is the MAP itself, so it reads like a
+    // top-level offender: there is no nested member to point at.
+    HoodieException nestedPathFailure = assertThrows(HoodieException.class,
+        () -> SortUtils.validateSortableColumns(new String[] {"s.m"}, schema));
+    assertTrue(nestedPathFailure.getMessage().contains("Sorting by column 's.m' of type MAP"),
+        "The error must name the dotted path, got: " + nestedPathFailure.getMessage());
+    assertFalse(nestedPathFailure.getMessage().contains("it holds a"),
+        "A leaf MAP must not be reported as holding one, got: " + nestedPathFailure.getMessage());
+    HoodieException nestedUpperCaseFailure = assertThrows(HoodieException.class,
+        () -> SortUtils.validateSortableColumns(new String[] {"S.M"}, schema));
+    assertTrue(nestedUpperCaseFailure.getMessage().contains("Sorting by column 'S.M'"),
+        "The error must name the path as configured, got: " + nestedUpperCaseFailure.getMessage());
+
     // BLOB is a struct of atomics in Spark and VECTOR an array of floats: both are orderable, and
     // rejecting them would be a new restriction on a path this check does not otherwise touch.
     assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[] {"blob"}, schema));
@@ -134,6 +149,27 @@ public class TestSortUtils {
     assertDoesNotThrow(() -> SortUtils.validateSortableColumns((String[]) null, schema));
     assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[0], schema));
     assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[] {"v"}, (HoodieSchema) null));
+    // Only a record is descended into and empty segments are kept, so a member the struct does not
+    // have, a path through a MAP or a VARIANT, and a leading or trailing dot are all left alone too.
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[] {"s.missing"}, schema));
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[] {"m.key_value.value"}, schema));
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[] {"v.metadata"}, schema));
+    assertDoesNotThrow(() -> SortUtils.validateSortableColumns(new String[] {"s.", ".s"}, schema));
+  }
+
+  @Test
+  void testResolveSortColumnPrefersAnExactMatchOverACaseInsensitiveOne() {
+    // Spark's analyzer is case-insensitive by default but still takes an exactly matching field
+    // first, so a record holding both `Id` and `id` resolves each name to its own leaf rather than
+    // to whichever field comes first.
+    HoodieSchema schema = HoodieSchema.createRecord("case_rec", null, null, Arrays.asList(
+        HoodieSchemaField.of("Id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG))));
+    assertEquals(HoodieSchemaType.STRING, SortUtils.resolveSortColumn(schema, "Id").get().getType());
+    assertEquals(HoodieSchemaType.LONG, SortUtils.resolveSortColumn(schema, "id").get().getType());
+    // Nothing to resolve against, or nothing to resolve: no leaf, and the caller decides.
+    assertFalse(SortUtils.resolveSortColumn(null, "id").isPresent());
+    assertFalse(SortUtils.resolveSortColumn(schema, null).isPresent());
   }
 
   @ParameterizedTest

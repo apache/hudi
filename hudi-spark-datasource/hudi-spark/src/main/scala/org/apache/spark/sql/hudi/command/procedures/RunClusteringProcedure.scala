@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.{HoodieCLIUtils, HoodieFileIndex, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption, SortUtils}
@@ -251,9 +250,10 @@ class RunClusteringProcedure extends BaseProcedure
    * Validates the already-normalised (comma-separated, trimmed) order column list against the
    * table schema with its metadata fields, which is what the partitioners sort on at execution
    * time (the execution strategy adds them to the schema it hands the partitioners), so a
-   * `_hoodie_*` column is accepted. Every column, top-level or dotted, is resolved by
-   * `resolveOrderColumn` against that schema the way the partitioners resolve it, and the leaf
-   * it lands on is checked for sortability.
+   * `_hoodie_*` column is accepted. Every column, top-level or dotted, goes through
+   * `SortUtils.resolveSortColumn`, the same resolver the partitioners are validated with, so a
+   * dotted path resolves here exactly as it does there, and the leaf it lands on is checked for
+   * sortability.
    */
   private def validateOrderColumns(orderColumns: String, metaClient: HoodieTableMetaClient): Unit = {
     if (orderColumns == null) {
@@ -262,29 +262,13 @@ class RunClusteringProcedure extends BaseProcedure
 
     val tableSchema = new TableSchemaResolver(metaClient).getTableSchema(true)
     orderColumns.split(",").foreach { col =>
-      val leaf = resolveOrderColumn(tableSchema, col)
-        .getOrElse(throw new HoodieClusteringException("Order column not exist:" + col))
+      val leaf = SortUtils.resolveSortColumn(tableSchema, col)
+      if (!leaf.isPresent) {
+        throw new HoodieClusteringException("Order column not exist:" + col)
+      }
       // The same validation the partitioners apply at execution time (see
       // SortUtils.validateSortableColumns), surfaced here before the job is submitted.
-      SortUtils.validateSortableColumn(col, leaf)
-    }
-  }
-
-  /**
-   * Resolves a sort column the way the partitioners do, not as a parquet path: every dotted segment
-   * names a field of the enclosing record, matched exactly first and then case-insensitively (the
-   * row partitioner resolves `Column(name)` through Spark's analyzer, case-insensitive by default),
-   * and only a RECORD is descended into, so `s.tags` stops at the MAP for the sortability check and
-   * `s.tags.key_value.value` does not resolve. HoodieSchema.getNestedField does neither: it matches
-   * case-sensitively and walks the `.list.element` / `.key_value.value` accessor levels.
-   */
-  private def resolveOrderColumn(tableSchema: HoodieSchema, path: String): Option[HoodieSchema] = {
-    // The -1 keeps empty segments, so `s.` or `.s` fail to resolve instead of collapsing to `s`.
-    path.split("\\.", -1).foldLeft(Option(tableSchema)) { (enclosing, segment) =>
-      enclosing.map(_.getNonNullType).filter(_.getType == HoodieSchemaType.RECORD).flatMap { record =>
-        val fields = record.getFields.asScala
-        fields.find(_.name == segment).orElse(fields.find(_.name.equalsIgnoreCase(segment))).map(_.schema())
-      }
+      SortUtils.validateSortableColumn(col, leaf.get)
     }
   }
 }

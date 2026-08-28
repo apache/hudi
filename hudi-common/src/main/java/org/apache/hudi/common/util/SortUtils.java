@@ -27,10 +27,7 @@ import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
-import java.util.Locale;
-import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Utility functions used by BULK_INSERT practitioners while sorting records.
@@ -48,8 +45,11 @@ public class SortUtils {
    * this check the failure surfaces deep in the write job (an AnalysisException from the row
    * partitioner, a ClassCastException from the record-based one) without naming the column.
    *
-   * <p>Matching is case-insensitive, mirroring Spark's column resolution. Names absent from the
-   * schema (nested paths, meta columns on a data-only schema) are left for the caller to handle.
+   * <p>Every column, top-level or dotted, is resolved by
+   * {@link #resolveSortColumn(HoodieSchema, String)} and checked at the leaf it lands on, so
+   * matching is case-insensitive, mirroring Spark's column resolution. A name that does not
+   * resolve - a field the schema does not have, a path through a non-record, a meta column on a
+   * data-only schema - is left for the caller to handle.
    *
    * @param sortColumns the configured sort columns, may be null or empty
    * @param schema      schema of the data, with or without metadata fields
@@ -59,21 +59,61 @@ public class SortUtils {
         || schema == null || schema.getType() != HoodieSchemaType.RECORD) {
       return;
     }
-    Map<String, HoodieSchemaField> fieldsByLowerName = schema.getFields().stream()
-        .collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT), Function.identity(), (first, second) -> first));
     for (String sortColumn : sortColumns) {
       String columnName = sortColumn.trim();
-      HoodieSchemaField field = fieldsByLowerName.get(columnName.toLowerCase(Locale.ROOT));
-      if (field == null) {
-        continue;
+      Option<HoodieSchema> leaf = resolveSortColumn(schema, columnName);
+      if (leaf.isPresent()) {
+        validateSortableColumn(columnName, leaf.get());
       }
-      validateSortableColumn(columnName, field.schema());
     }
   }
 
   /**
-   * The check behind {@link #validateSortableColumns(String[], HoodieSchema)} for one column whose
-   * schema the caller has already resolved, such as a nested path the array overload leaves alone.
+   * Resolves a sort column the way the partitioners do, not as a parquet path: every dotted segment
+   * names a field of the enclosing record, matched exactly first and then case-insensitively (the
+   * row partitioner resolves {@code Column(name)} through Spark's analyzer, case-insensitive by
+   * default), and only a RECORD is descended into, so {@code s.tags} stops at the MAP for the
+   * sortability check and {@code s.tags.key_value.value} does not resolve. HoodieSchema's
+   * getNestedField does neither: it matches case-sensitively and walks the {@code .list.element} /
+   * {@code .key_value.value} accessor levels.
+   *
+   * @param schema the record the column is resolved against, with or without metadata fields
+   * @param path   the sort column as configured, top-level or dotted
+   * @return schema of the leaf the path lands on, or empty when it does not resolve
+   */
+  public static Option<HoodieSchema> resolveSortColumn(HoodieSchema schema, String path) {
+    if (schema == null || StringUtils.isNullOrEmpty(path)) {
+      return Option.empty();
+    }
+    HoodieSchema resolved = schema;
+    // The -1 keeps empty segments, so `s.` or `.s` fail to resolve instead of collapsing to `s`.
+    for (String segment : path.split("\\.", -1)) {
+      HoodieSchema enclosing = resolved.getNonNullType();
+      if (enclosing.getType() != HoodieSchemaType.RECORD) {
+        return Option.empty();
+      }
+      HoodieSchema match = null;
+      for (HoodieSchemaField field : enclosing.getFields()) {
+        if (field.name().equals(segment)) {
+          match = field.schema();
+          break;
+        }
+        if (match == null && field.name().equalsIgnoreCase(segment)) {
+          match = field.schema();
+        }
+      }
+      if (match == null) {
+        return Option.empty();
+      }
+      resolved = match;
+    }
+    return Option.of(resolved);
+  }
+
+  /**
+   * The check behind {@link #validateSortableColumns(String[], HoodieSchema)} for a caller that
+   * already holds the leaf - after {@link #resolveSortColumn(HoodieSchema, String)}, say - and
+   * wants the error reported under the name it uses for the column.
    *
    * @param columnName   the column as the caller names it, so a nested path reads as one in the error
    * @param columnSchema schema of the column's value, nullable or not

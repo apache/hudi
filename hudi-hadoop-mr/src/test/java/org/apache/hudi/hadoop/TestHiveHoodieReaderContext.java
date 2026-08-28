@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -62,6 +64,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -214,8 +217,12 @@ class TestHiveHoodieReaderContext {
     // projection compatible reads the whole table schema for merging, so `select id` reaches the
     // context asking for the variant column too. Hive's read column names split the flagged
     // columns: the ones Hive selected fail as Hive-visible nulls, the ones only merging needs fail
-    // as well, since setSchemas materializes them at {metadata, value} for the merger. count(*)
-    // names no column and its requested schema is empty, so nothing is flagged and it reads.
+    // as well, since setSchemas materializes them at {metadata, value} for the merger. count(*) is
+    // the same merge-only read once the schema is widened -- it names no column either -- and it
+    // fails unless the read skips merging, where no merger runs and the nulls are projected away
+    // before Hive sees them. The count(*) whose requested schema really is empty short-circuits out
+    // of the guard on schema identity, which the sibling
+    // getFileRecordIteratorFailsFastOnShreddedVariantColumn pins.
     StoragePath filePath = InputFormatTestUtil.writeVariantParquetFile(tempDir, "shredded.parquet", true);
     HoodieSchema tableSchema = tableSchemaWithVariant();
     HiveHoodieReaderContext readerContext = newReaderContext();
@@ -236,12 +243,45 @@ class TestHiveHoodieReaderContext {
         "A variant only the merge reads must fail as a merge read, got: " + mergeOnly.getMessage());
     verify(readerCreator, never()).getRecordReader(any(), any(), any());
 
-    // count(*): Hive names no column, and createRequestedSchema turns that into an empty record.
+    // count(*): Hive names no column at all, so a widened required schema puts the variant in the
+    // merge-only bucket too.
     requestColumns();
-    HoodieSchema emptyRequested = HoodieSchema.createRecord("TestRecord", null, null, Collections.emptyList());
-    assertDoesNotThrow(() ->
-        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, emptyRequested, storage));
-    verify(readerCreator).getRecordReader(any(), any(), any());
+    HoodieException countStar = assertThrows(HoodieException.class, () ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    assertTrue(countStar.getMessage().contains("'v'") && countStar.getMessage().contains("for merging"),
+        "count(*) over a widened required schema must fail as a merge read, got: " + countStar.getMessage());
+    verify(readerCreator, never()).getRecordReader(any(), any(), any());
+
+    // Skipping the merge makes that same read harmless: the buffer never merges, so the nulls the
+    // widened schema materializes are projected away before Hive sees them. Both spellings the
+    // record reader honours have to gate it, and the newer key wins when they disagree.
+    Configuration conf = storageConfiguration.unwrapAs(Configuration.class);
+    try {
+      conf.set(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
+      assertDoesNotThrow(() ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+
+      conf.unset(HoodieReaderConfig.MERGE_TYPE.key());
+      conf.set(HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP, "true");
+      assertDoesNotThrow(() ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+      verify(readerCreator, times(2)).getRecordReader(any(), any(), any());
+
+      conf.set(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE);
+      HoodieException mergeTypeWins = assertThrows(HoodieException.class, () ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+      assertTrue(mergeTypeWins.getMessage().contains("for merging"),
+          "hoodie.datasource.merge.type must win over hoodie.realtime.merge.skip, got: " + mergeTypeWins.getMessage());
+
+      // Only the merge-only bucket is gated: a column Hive selected still returns nulls to Hive.
+      conf.set(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
+      requestColumns("id", "v");
+      assertThrows(HoodieException.class, () ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    } finally {
+      conf.unset(HoodieReaderConfig.MERGE_TYPE.key());
+      conf.unset(HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP);
+    }
   }
 
   @Test

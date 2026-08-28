@@ -78,7 +78,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_TYPE;
+import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_SKIP_MERGE;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.DEFAULT_REALTIME_SKIP_MERGE;
+import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP;
 
 /**
  * {@link HoodieReaderContext} for Hive-specific {@link HoodieFileGroupReaderBasedRecordReader}.
@@ -166,10 +170,12 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // apart: a column Hive selected fails as Hive-visible nulls; a column only requiredSchema
     // names is there for merging (a CUSTOM merge whose merger is not projection compatible reads
     // the whole table schema; a merger can also list it as mandatory) and fails too, because the
-    // reader materializes it at {metadata, value} and the merger would consume the nulls. Hive
-    // writes the full name list for `select *` and none for count(*), whose requested schema is
-    // then empty (HoodieFileGroupReaderBasedRecordReader.createRequestedSchema), so nothing is
-    // flagged unless merging widens it. A read whose nested column paths
+    // reader materializes it at {metadata, value} and the merger would consume the nulls -- unless
+    // the read skips merging, in which case no merger runs at all and the merge-only bucket is
+    // harmless (see isSkipMerge). Hive writes the full name list for `select *` and none for
+    // count(*), whose requested schema is then empty
+    // (HoodieFileGroupReaderBasedRecordReader.createRequestedSchema), so nothing is flagged unless
+    // merging widens it. A read whose nested column paths
     // (hive.io.file.readNestedColumn.paths) all miss the shredded group is not flagged either:
     // Hive's parquet reader materializes only the paths it is given, and the mask rewrite below
     // already handles the compacted projection such a read comes back in.
@@ -195,7 +201,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
                   + "hoodie.parquet.variant.write.shredding.enabled=false).",
               String.join(", ", hiveReads), filePath));
         }
-        if (!mergeOnly.isEmpty()) {
+        if (!mergeOnly.isEmpty() && !isSkipMerge(conf)) {
           Option<HoodieRecordMerger> merger = getRecordMerger();
           String mergerName = merger != null && merger.isPresent()
               ? "the record merger (" + merger.get().getClass().getName() + ")" : "the record merger";
@@ -250,6 +256,28 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // Parquet reader compacted nested-column projection.
     return new CloseableMappingIterator<>(recordIterator,
         record -> HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(record, modifiedDataSchema, requiredSchema, Collections.emptyMap(), physicalMask));
+  }
+
+  /**
+   * Whether this read skips merging, derived the way {@link HoodieFileGroupReaderBasedRecordReader}
+   * derives it for the file group reader: {@code hoodie.datasource.merge.type} wins when the job
+   * sets it, and the legacy {@code hoodie.realtime.merge.skip} flag only fills it in otherwise.
+   *
+   * <p>A skip-merge read builds an UnmergedFileGroupRecordBuffer, whose processNextDataRecord is a
+   * no-op, so no merger ever reads the columns the required schema carries beyond the query.
+   * generateRequiredSchema still widens to the whole table schema on a CUSTOM merge and this reader
+   * still materializes the shredded variant as nulls, but nothing consumes them and the file group
+   * reader's output converter projects the record back to the requested schema before
+   * {@link HoodieFileGroupReaderBasedRecordReader} hands it to Hive, so the merge-only bucket must
+   * not fail such a read. The Hive-visible bucket is unaffected: those columns leave the reader
+   * either way.
+   */
+  private static boolean isSkipMerge(Configuration conf) {
+    String mergeType = conf.get(MERGE_TYPE.key());
+    if (mergeType != null) {
+      return REALTIME_SKIP_MERGE.equalsIgnoreCase(mergeType.trim());
+    }
+    return Boolean.parseBoolean(conf.get(REALTIME_SKIP_MERGE_PROP, DEFAULT_REALTIME_SKIP_MERGE));
   }
 
   /**
