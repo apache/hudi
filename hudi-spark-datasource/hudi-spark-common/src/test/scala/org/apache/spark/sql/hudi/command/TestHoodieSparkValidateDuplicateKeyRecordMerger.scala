@@ -27,7 +27,7 @@ class TestHoodieSparkValidateDuplicateKeyRecordMerger {
   @Test
   def testMergingStrategyAndPreCombiningMode(): Unit = {
     val merger = new HoodieSparkValidateDuplicateKeyRecordMerger
-    // No in-repo code path instantiates this merger (see the class doc), but a table may load it through
+    // No in-repo code path has ever instantiated this merger (see the class doc), but a table may load it through
     // HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES; the id then selects the merger and is persisted as the table's
     // merge strategy id, so pin the literal: a change to the constant would break those tables.
     assertEquals("fb092649-0fdc-4c14-9113-acde3034a6c4", merger.getMergingStrategy)

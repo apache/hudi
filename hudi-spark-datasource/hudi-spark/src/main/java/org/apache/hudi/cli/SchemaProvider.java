@@ -30,8 +30,9 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.Serializable;
 
 /**
- * Class to provide schema for reading data and also writing into a Hoodie table,
- * used by Hudi Streamer (runs over Spark).
+ * Class to provide the schema for the CLI bootstrap path ({@link BootstrapExecutorUtils}, which loads the
+ * configured implementation by class name); distinct from the Hudi Streamer provider in
+ * {@code org.apache.hudi.utilities.schema}.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public abstract class SchemaProvider implements Serializable {

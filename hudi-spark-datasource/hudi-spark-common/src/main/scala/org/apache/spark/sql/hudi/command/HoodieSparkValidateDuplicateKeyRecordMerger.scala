@@ -31,8 +31,9 @@ import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMe
  * Merger that rejects every merge with a [[HoodieDuplicateKeyException]], for INSERT statements that must fail on a
  * duplicate key rather than drop or update it.
  *
- * No in-repo code path instantiates it since #12588 removed its wiring together with `ValidateDuplicateKeyPayload`
- * (the strict-insert duplicate check now lives in `DataSourceUtils.shouldIncludeRecord`). It stays loadable through
+ * Never wired in-repo: from its introduction in #7345 it appeared in production sources only as a TODO in
+ * `ProvidesHoodieConfig`, beside the `ValidateDuplicateKeyPayload` selection that #12588 deleted (the strict-insert
+ * duplicate check lives in `DataSourceUtils.shouldIncludeRecord`). It stays loadable through
  * `HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES`, where it is selected by [[STRATEGY_ID]], which such tables then
  * persist as their merge strategy id.
  */
