@@ -19,14 +19,17 @@
 
 package org.apache.spark.sql.hudi.dml.schema
 
-import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport}
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter
 import org.apache.hudi.testutils.DataSourceTestUtils
 
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
+import org.apache.spark.sql.types.{IntegerType, StructField, StructType}
 
 /**
  * Mixed-layout variant shredding matrix: files with DIFFERENT typed_value layouts in one table,
@@ -740,9 +743,9 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
   test("Row-writer forced shredding of a nested variant reads back and merges") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 
-    // The bulk-insert row writer is the only production writer that shreds a NESTED variant
-    // (the forced hook of the AVRO write support is top-level only, and #18961's inference
-    // never shreds nested columns).
+    // Both forced hooks shred a NESTED variant - the row writer's and, since #19689, the AVRO
+    // write support's - so this leg is about the row-writer seed and what the merge below does to
+    // it; #18961's inference never shreds nested columns either way.
     withNestedVariantTable("nested forced shredding") { (tableName, tablePath, leg) =>
       val files = listDataParquetFiles(tablePath)
       assert(files.size == 1, s"[$leg] expected one base file, got $files")
@@ -751,14 +754,16 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       assert(getFieldAsGroup(innerGroup, "typed_value").containsField("k"),
         s"[$leg] nested typed_value should carry k:\n$innerGroup")
 
-      // #18605 history: the batch-disabling guards in HoodieFileGroupReaderBasedFileFormat are
-      // top-level-only, so a NESTED variant still reaches the vectorized reader. The session conf
-      // does pick the reader - HoodieFileGroupReaderBasedFileFormat.supportBatch reads
-      // sparkSession.sessionState.conf and ParquetUtils.isBatchReadSupportedForSchema gates on
+      // #18605 history: the batch-disabling guards in HoodieFileGroupReaderBasedFileFormat were
+      // top-level-only, so a NESTED variant reached the vectorized reader; they recurse since
+      // #19689 (pinned by the supportBatch test below), which lands this sweep row-based either
+      // way. It stays because it is what goes red first if the guard is ever narrowed again: the
+      // session conf is what picks the reader whenever supportBatch does not veto it (supportBatch
+      // reads sparkSession.sessionState.conf and isBatchReadSupportedForSchema gates on
       // spark.sql.parquet.enableVectorizedReader, and only afterwards does
-      // buildReaderWithPartitionValues write that decision back into the conf - so sweep it and
-      // pin both readers. Every nested-variant read bug so far (HUDI-7190, HUDI-8803, #18605) is
-      // vectorized-only, which leaves the row-based leg as the control.
+      // buildReaderWithPartitionValues write that decision back into the conf). Every
+      // nested-variant read bug so far (HUDI-7190, HUDI-8803, #18605) is vectorized-only, which
+      // leaves the row-based leg as the control.
       Seq("true", "false").foreach { vectorizedReader =>
         withSQLConf("spark.sql.parquet.enableVectorizedReader" -> vectorizedReader) {
           checkAnswer(s"select id, cast(s.inner as string) from $tableName")(
@@ -773,10 +778,103 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         spark.sql(s"""insert into $tableName values (2, named_struct('inner', parse_json('{"k":"x2"}')), 1000)""")
       }
       assertSingleFileGroup(tablePath, leg)
+      // The merge rewrote the whole file group under the INCOMING layout, so the layout below is
+      // the record writer's, not the row writer's seed. On the AVRO leg that write goes through
+      // HoodieAvroWriteSupport, whose forced hook now reaches the nested member; before #19689 it
+      // silently rewrote s.inner unshredded and nothing here noticed.
+      assertVariantLayout(tablePath, shredded = true, leg, column = "s.inner")
       checkAnswer(s"select id, cast(s.inner as string) from $tableName order by id")(
         Seq(1, """{"k":"x1"}"""),
         Seq(2, """{"k":"x2"}""")
       )
+    }
+  }
+
+  test("Both record types force-shred a nested variant through the record writer") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // A plain insert, so the write goes through the record writers rather than the row writer: the
+    // AVRO leg is HoodieAvroWriteSupport end to end, the SPARK leg HoodieRowParquetWriteSupport,
+    // and #19689 is what made their forced hooks agree. The DDL reaches a variant that is a record
+    // MEMBER at any depth - s.inner, and the inner of the struct element of items - but never one
+    // that is directly a collection element, which is why arr stays unshredded on both paths.
+    withVariantTable("record-writer nested forced shredding", "cow",
+      extraCols = "s struct<inner: variant>, items array<struct<inner: variant>>, arr array<variant>") {
+      (tableName, tablePath, leg) =>
+      withWriteLayout(Forced("k string")) {
+        spark.sql(
+          s"""insert into $tableName values (1, parse_json('{"k":"top"}'),
+             | named_struct('inner', parse_json('{"k":"nested"}')),
+             | array(named_struct('inner', parse_json('{"k":"element"}'))),
+             | array(parse_json('{"k":"bare"}')), 1000)""".stripMargin)
+      }
+
+      val files = listDataParquetFiles(tablePath)
+      assert(files.size == 1, s"[$leg] expected one base file, got $files")
+      Seq("s.inner", "items.inner").foreach { column =>
+        assertVariantLayout(tablePath, shredded = true, leg, column = column)
+        val group = variantGroupOf(files.head, column)
+        assert(getFieldAsGroup(group, "typed_value").containsField("k"),
+          s"[$leg] typed_value of $column should carry k:\n$group")
+      }
+      assertVariantLayout(tablePath, shredded = false, leg, column = "arr")
+
+      checkAnswer(s"select id, cast(v as string), cast(s.inner as string), " +
+        s"cast(items[0].inner as string), cast(arr[0] as string) from $tableName")(
+        Seq(1, """{"k":"top"}""", """{"k":"nested"}""", """{"k":"element"}""", """{"k":"bare"}""")
+      )
+    }
+  }
+
+  test("supportBatch turns off vectorization for a variant at any depth") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // The read legs above sweep spark.sql.parquet.enableVectorizedReader, which only says what the
+    // reader MAY do; this pins the decision itself. Spark's ParquetUtils.isBatchReadSupported
+    // calls VariantType atomic and, once spark.sql.parquet.enableNestedColumnVectorizedReader is
+    // on, nested columns batch-readable, so a variant one struct, array or map deep used to reach
+    // the vectorized reader even though a top-level one did not - while #18605's SIGBUS is in the
+    // UnsafeRow encoding of the variant vectors RangePartitioner samples, and it samples WHOLE
+    // rows, which a nesting level does nothing to hide. That setting is off by default, so Spark's
+    // own nested gate hides the hole until a user turns it on: the shapes below are checked with
+    // it on, and with the vectorized reader itself on (the shared test session does not promise
+    // Spark's default), where the variant-free twins are vectorized and only the guard can say no.
+    //
+    // Nothing below opens a table: supportBatch decides off the schema it is handed, so the
+    // constructor arguments only have to be well-formed.
+    val unusedSchema = StructType.fromDDL("id int, ts long")
+    val format = new HoodieFileGroupReaderBasedFileFormat(
+      "unused", HoodieTableSchema(unusedSchema,
+        HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(unusedSchema, "unused", "hoodie.test")),
+      "unused", "000", Seq.empty, isMOR = false, isBootstrap = false, isIncremental = false,
+      "", shouldUseRecordPosition = false, Seq.empty, isMultipleBaseFileFormatsEnabled = false,
+      HoodieFileFormat.PARQUET)
+
+    withSQLConf(
+      "spark.sql.parquet.enableVectorizedReader" -> "true",
+      "spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+      // Each shape is asserted against its own variant-free twin, so a schema that lost vectorization
+      // for some other reason cannot pass as the variant guard doing its job.
+      def shapes(elementType: String): Seq[String] = Seq(
+        s"id int, s struct<inner: $elementType>",
+        s"id int, arr array<$elementType>",
+        s"id int, m map<string, $elementType>")
+
+      shapes("string").zip(shapes("variant")).foreach { case (control, nested) =>
+        assert(format.supportBatch(spark, StructType.fromDDL(control)),
+          s"the variant-free $control must stay vectorized")
+        assert(!format.supportBatch(spark, StructType.fromDDL(nested)),
+          s"$nested must fall back to row-based reads")
+      }
+
+      // And the same for the other arm, PushVariantIntoScan's projection struct one level down.
+      val projection = SparkAdapterSupport.sparkAdapter.buildFullVariantReadSchema(StructType.fromDDL("v variant"))
+      assert(projection.isDefined, "Spark 4.1+ must rewrite a top-level variant for a full read")
+      val nestedProjection = StructType(Array(
+        StructField("id", IntegerType),
+        StructField("s", projection.get.fields.head.dataType)))
+      assert(!format.supportBatch(spark, nestedProjection),
+        "a nested variant projection struct must fall back to row-based reads")
     }
   }
 
@@ -1056,7 +1154,9 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
 
     // Inference is top-level only (VariantSchemaUtils.getInferableVariantColumns), so the nested
     // variant keeps the plain {metadata, value} shape in the very file where the top-level one
-    // shredded. Only the forced hook shreds below the top level, and only through the row writer.
+    // shredded. Only the forced hooks shred below the top level - both of them, into record
+    // members at any depth; a variant that is directly a collection element needs a write schema
+    // that already declares it.
     val nestedSourceSql = s"select cast(id as int) as id, parse_json(${ObjA.jsonExpr}) as v, " +
       s"named_struct('inner', parse_json(${ObjA.jsonExpr})) as s, 1000L as ts from range(0, 4, 1, 1)"
 
@@ -1076,8 +1176,8 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       assertNestedUnshredded(tableName, tablePath, leg)
     }
 
-    // The row writer is the one production writer that CAN shred a nested variant; under
-    // inference it must not, because inference never asks it to.
+    // The row writer shreds a nested variant when the forced DDL asks it to; under inference it
+    // must not, because inference never asks.
     withVariantTable("nested inference row writer", "cow", props = Seq(NEW_FILE_GROUP_PER_COMMIT),
       extraCols = "s struct<inner: variant>", recordTypes = Seq(HoodieRecordType.SPARK)) {
       (tableName, tablePath, leg) =>

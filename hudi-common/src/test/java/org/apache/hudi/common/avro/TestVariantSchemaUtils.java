@@ -26,11 +26,13 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaTestUtils;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 
+import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -50,6 +52,24 @@ public class TestVariantSchemaUtils {
         HoodieSchemaField.of("v2", HoodieSchema.createVariant("v2_variant", null, null)),
         HoodieSchemaField.of("shredded", HoodieSchema.createVariantShredded(
             "pre_shredded", null, null, HoodieSchema.create(HoodieSchemaType.LONG)))));
+  }
+
+  /** The parsed form of a {@code hoodie.parquet.variant.force.shredding.schema.for.test} DDL. */
+  private static Map<String, HoodieSchema> forcedDdl() {
+    Map<String, HoodieSchema> ddl = new LinkedHashMap<>();
+    ddl.put("k", HoodieSchema.create(HoodieSchemaType.STRING));
+    return ddl;
+  }
+
+  /** Asserts that {@code schema} is a variant shredded on exactly the {@link #forcedDdl} fields. */
+  private static void assertShreddedOnDdl(HoodieSchema schema) {
+    HoodieSchema.Variant variant = (HoodieSchema.Variant) schema;
+    assertTrue(variant.isShredded());
+    assertEquals(Collections.singletonList("k"), fieldNames(variant.getTypedValueField().get().getNonNullType()));
+  }
+
+  private static List<String> fieldNames(HoodieSchema record) {
+    return record.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList());
   }
 
   private static HoodieConfig inferenceEnabledConfig() {
@@ -96,9 +116,10 @@ public class TestVariantSchemaUtils {
 
   @Test
   public void testGetInferableVariantColumnsIsTopLevelOnly() {
-    // Inference never shreds a nested variant (struct member, array element, map value): the
-    // footer-fallback strip and the write supports' hooks share that top-level scope, so a
-    // recursive walk here would shred what nothing else accounts for.
+    // Inference is top-level by design and is now the only hook that is: the footer-fallback
+    // strip and both write supports' forced-DDL hooks recurse into record members at any depth
+    // (VariantSchemaUtils.applyForcedShredding), so a nested variant here is a scope decision
+    // about per-file inference, not a consistency gap with the rest of the shredding code.
     HoodieSchema schema = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
         HoodieSchemaField.of("top", HoodieSchema.createVariant()),
         HoodieSchemaField.of("s", HoodieSchema.createRecord("s_rec", "ns", null,
@@ -195,6 +216,95 @@ public class TestVariantSchemaUtils {
   }
 
   @Test
+  public void testApplyForcedShreddingReachesRecordMembersAtAnyDepth() {
+    HoodieSchema schema = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("pre", HoodieSchema.createVariantShredded(
+            "pre_shredded", null, null, HoodieSchema.create(HoodieSchemaType.LONG))),
+        HoodieSchemaField.of("s", HoodieSchemaTestUtils.createRecord("s_rec",
+            HoodieSchemaField.of("inner", HoodieSchema.createNullable(HoodieSchema.createVariant()),
+                null, HoodieSchema.NULL_VALUE))),
+        HoodieSchemaTestUtils.createArrayField("items", HoodieSchemaTestUtils.createRecord("item_rec",
+            HoodieSchemaField.of("v", HoodieSchema.createVariant("item_variant", null, null)))),
+        HoodieSchemaTestUtils.createMapField("m", HoodieSchemaTestUtils.createRecord("map_rec",
+            HoodieSchemaField.of("v", HoodieSchema.createVariant("map_variant", null, null)))),
+        HoodieSchemaTestUtils.createArrayField("arr", HoodieSchema.createVariant("arr_variant", null, null)),
+        HoodieSchemaTestUtils.createMapField("mv", HoodieSchema.createVariant("mv_variant", null, null))));
+
+    HoodieSchema forced = VariantSchemaUtils.applyForcedShredding(schema, forcedDdl());
+
+    // Every variant that is a record member is forced, at any depth and through collections, and
+    // the DDL overrides a variant that was already shredded on something else.
+    assertShreddedOnDdl(forced.getField("pre").get().schema());
+    HoodieSchema inner = forced.getField("s").get().schema().getField("inner").get().schema();
+    assertTrue(inner.isNullable(), "nullability is preserved around the spliced variant");
+    assertShreddedOnDdl(inner.getNonNullType());
+    assertShreddedOnDdl(forced.getField("items").get().schema().getElementType().getField("v").get().schema());
+    assertShreddedOnDdl(forced.getField("m").get().schema().getValueType().getField("v").get().schema());
+
+    // A variant that is DIRECTLY an array element or a map value is not forced, matching
+    // HoodieRowParquetWriteSupport.processNestedDataType: its collection arms shred only a
+    // typed_value the write schema itself declares.
+    assertFalse(((HoodieSchema.Variant) forced.getField("arr").get().schema().getElementType()).isShredded());
+    assertFalse(((HoodieSchema.Variant) forced.getField("mv").get().schema().getValueType()).isShredded());
+    assertEquals(HoodieSchemaType.STRING, forced.getField("id").get().schema().getType());
+
+    // The strip is the inverse at every depth.
+    HoodieSchema stripped = VariantSchemaUtils.stripVariantShredding(forced);
+    assertFalse(((HoodieSchema.Variant) stripped.getField("s").get().schema()
+        .getField("inner").get().schema().getNonNullType()).isShredded());
+    assertFalse(((HoodieSchema.Variant) stripped.getField("items").get().schema()
+        .getElementType().getField("v").get().schema()).isShredded());
+  }
+
+  @Test
+  public void testApplyForcedShreddingIdentityWhenNothingMatches() {
+    HoodieSchema noVariants = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaTestUtils.createArrayField("a", HoodieSchema.create(HoodieSchemaType.LONG)),
+        HoodieSchemaField.of("s", HoodieSchemaTestUtils.createRecord("s_rec",
+            HoodieSchemaField.of("n", HoodieSchema.create(HoodieSchemaType.LONG))))));
+    assertSame(noVariants, VariantSchemaUtils.applyForcedShredding(noVariants, forcedDdl()));
+    // An empty DDL is a no-op (no forced config set), and a non-record schema has no member to
+    // splice into.
+    HoodieSchema withVariants = schemaWithVariants();
+    assertSame(withVariants, VariantSchemaUtils.applyForcedShredding(withVariants, Collections.emptyMap()));
+    HoodieSchema bareVariant = HoodieSchema.createVariant();
+    assertSame(bareVariant, VariantSchemaUtils.applyForcedShredding(bareVariant, forcedDdl()));
+  }
+
+  @Test
+  public void testApplyForcedShreddingNamesVariantsPerEnclosingRecordType() {
+    // One record type used under two fields is rebuilt once per position. Avro's Schema.toString,
+    // which is what lands in the parquet footer as parquet.avro.schema, throws "Can't redefine"
+    // for two non-equal definitions sharing a full name and emits equal ones as a name reference,
+    // so the two rebuilds have to come out EQUAL. Naming the generated record after the enclosing
+    // record TYPE does that; a dotted path (a.v against b.v) would not.
+    HoodieSchema reused = HoodieSchemaTestUtils.createRecord("reused",
+        HoodieSchemaField.of("v", HoodieSchema.createVariant()));
+    HoodieSchema schema = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
+        HoodieSchemaField.of("a", reused),
+        HoodieSchemaField.of("b", reused)));
+
+    HoodieSchema forced = VariantSchemaUtils.applyForcedShredding(schema, forcedDdl());
+    assertEquals(forced.getField("a").get().schema(), forced.getField("b").get().schema());
+    // Round-trips through the footer's serialized form rather than throwing "Can't redefine".
+    assertEquals(forced.toAvroSchema(), new Schema.Parser().parse(forced.toString()));
+
+    // Two DIFFERENT record types with a same-named variant member stay in distinct namespaces.
+    HoodieSchema twoTypes = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
+        HoodieSchemaField.of("x", HoodieSchemaTestUtils.createRecord("x_rec",
+            HoodieSchemaField.of("v", HoodieSchema.createVariant()))),
+        HoodieSchemaField.of("y", HoodieSchemaTestUtils.createRecord("y_rec",
+            HoodieSchemaField.of("v", HoodieSchema.createVariant())))));
+    HoodieSchema forcedTwo = VariantSchemaUtils.applyForcedShredding(twoTypes, forcedDdl());
+    assertNotEquals(
+        forcedTwo.getField("x").get().schema().getField("v").get().schema().getFullName(),
+        forcedTwo.getField("y").get().schema().getField("v").get().schema().getFullName());
+    assertEquals(forcedTwo.toAvroSchema(), new Schema.Parser().parse(forcedTwo.toString()));
+  }
+
+  @Test
   public void testStripVariantShreddingByShape() {
     // Footer-derived schemas lose the variant logical type: a shredded variant comes back as a
     // plain record {metadata: bytes, value: nullable bytes, typed_value}.
@@ -245,6 +355,50 @@ public class TestVariantSchemaUtils {
     assertEquals(HoodieSchemaType.BYTES, v.getField("value").get().schema().getNonNullType().getType());
     // The synthesized field must carry a null default like every other footer-derived optional field.
     assertEquals(HoodieSchema.NULL_VALUE, v.getField("value").get().defaultVal().get());
+  }
+
+  @Test
+  public void testStripVariantShreddingByShapeAtDepth() {
+    // Both write supports force-shred record members at any depth and a declared write schema can
+    // shred a bare array element or map value, so the footer fallback has to walk the whole tree.
+    HoodieSchema typedValue = HoodieSchema.createRecord("tv", null, null,
+        Collections.singletonList(HoodieSchemaField.of("a", HoodieSchema.create(HoodieSchemaType.LONG))));
+    HoodieSchema twoFieldVariant = HoodieSchema.createRecord("two_field_v", null, null, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.LONG))));
+    HoodieSchema schema = HoodieSchema.createRecord("rec", null, null, Arrays.asList(
+        HoodieSchemaField.of("s", HoodieSchemaTestUtils.createRecord("s_rec",
+            HoodieSchemaField.of("inner", HoodieSchemaTestUtils.createPlainShreddedVariantRecord("inner_v", typedValue)),
+            HoodieSchemaField.of("two", twoFieldVariant))),
+        HoodieSchemaTestUtils.createArrayField("items",
+            HoodieSchemaTestUtils.createPlainShreddedVariantRecord("item_v", typedValue)),
+        HoodieSchemaTestUtils.createMapField("m",
+            HoodieSchemaTestUtils.createPlainShreddedVariantRecord("map_v", typedValue)),
+        HoodieSchemaField.of("plain", HoodieSchemaTestUtils.createRecord("plain_rec",
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING))))));
+
+    HoodieSchema stripped = VariantSchemaUtils.stripVariantShreddingByShape(schema);
+    HoodieSchema s = stripped.getField("s").get().schema();
+    assertEquals(Arrays.asList("metadata", "value"), fieldNames(s.getField("inner").get().schema()));
+    assertEquals(Arrays.asList("metadata", "value"), fieldNames(stripped.getField("items").get().schema().getElementType()));
+    assertEquals(Arrays.asList("metadata", "value"), fieldNames(stripped.getField("m").get().schema().getValueType()));
+    // The two-field {metadata, typed_value} form is restored at depth too, null default included.
+    HoodieSchema two = s.getField("two").get().schema();
+    assertEquals(Arrays.asList("metadata", "value"), fieldNames(two));
+    assertEquals(HoodieSchema.NULL_VALUE, two.getField("value").get().defaultVal().get());
+    // Records with nothing to strip pass through, and the result is a fixed point.
+    assertEquals(HoodieSchemaType.STRING, stripped.getField("plain").get().schema().getField("id").get().schema().getType());
+    assertSame(stripped, VariantSchemaUtils.stripVariantShreddingByShape(stripped));
+
+    // Recursing extends the documented no-anchor false positive to every depth: a plain user
+    // struct of the variant shape is stripped wherever it sits, not only at the top level.
+    HoodieSchema userStructAtDepth = VariantSchemaUtils.stripVariantShreddingByShape(
+        HoodieSchema.createRecord("rec", null, null, Collections.singletonList(
+            HoodieSchemaField.of("s", HoodieSchemaTestUtils.createRecord("s_rec",
+                HoodieSchemaField.of("user_struct", HoodieSchemaTestUtils.createPlainShreddedVariantRecord(
+                    "user_struct", HoodieSchema.create(HoodieSchemaType.LONG))))))));
+    assertEquals(Arrays.asList("metadata", "value"),
+        fieldNames(userStructAtDepth.getField("s").get().schema().getField("user_struct").get().schema()));
   }
 
   @Test
