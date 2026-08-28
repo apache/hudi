@@ -186,7 +186,7 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   private Object[] createDeleteLogFieldValues(String recordKey, Comparable orderingValue) {
     Object[] fieldValues = new Object[deleteLogSchema.getFields().size()];
     fieldValues[0] = recordContext.convertValueToEngineType(recordKey);
-    if (!OrderingValues.isCommitTimeOrderingValue(orderingValue)) {
+    if (!OrderingValues.isNullOrDefault(orderingValue)) {
       if (orderingFieldNames.size() == 1) {
         fieldValues[1] = orderingValue;
       } else {

@@ -28,11 +28,17 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -80,5 +86,114 @@ class TestBufferedRecordMergerFactory {
     assertEquals(expected, BufferedRecordMergerFactory.create(
         context, mode, partialMerging, recordMerger, schema, payloadClasses, props, partialUpdateMode)
         .getClass().getSimpleName());
+  }
+
+  /**
+   * A null ordering field value is represented as {@link OrderingValues#getDefault()}, an
+   * {@code int}, while its counterpart in the same file group can hold the column's real value of
+   * another type, e.g. a {@code Long}. A null or default base value ranks lowest and defers to
+   * natural order (the incoming record wins). A null or default incoming value against a real base
+   * value is an invalid state (the write-time reject prevents it) and is surfaced as an
+   * {@link IllegalArgumentException} rather than compared through {@code Comparable#compareTo}, which
+   * would throw {@code ClassCastException}.
+   */
+  @Test
+  void testMergeHandlesNullBaseOrderingValueAndRejectsNullIncoming() throws IOException {
+    BufferedRecordMerger<String> merger = eventTimeMerger();
+
+    BufferedRecord<String> olderWithDefault = bufferedRecord("base", OrderingValues.getDefault());
+    BufferedRecord<String> newerWithLong = bufferedRecord("log", 1000L);
+    assertSame(newerWithLong, merger.finalMerge(olderWithDefault, newerWithLong));
+
+    BufferedRecord<String> olderWithLong = bufferedRecord("base", 1000L);
+    BufferedRecord<String> newerWithDefault = bufferedRecord("log", OrderingValues.getDefault());
+    assertThrows(IllegalArgumentException.class, () -> merger.finalMerge(olderWithLong, newerWithDefault));
+
+    Option<BufferedRecord<String>> delta = merger.deltaMerge(newerWithLong, olderWithDefault);
+    assertTrue(delta.isPresent());
+    assertSame(newerWithLong, delta.get());
+  }
+
+  /**
+   * Event-time ordering is unchanged for ordering values of the same class.
+   */
+  @Test
+  void testMergeRetainsEventTimeOrderingForSameClassOrderingValues() throws IOException {
+    BufferedRecordMerger<String> merger = eventTimeMerger();
+
+    BufferedRecord<String> newerWins = bufferedRecord("log", 2000L);
+    assertSame(newerWins, merger.finalMerge(bufferedRecord("base", 1000L), newerWins));
+
+    BufferedRecord<String> olderWins = bufferedRecord("base", 2000L);
+    assertSame(olderWins, merger.finalMerge(olderWins, bufferedRecord("log", 1000L)));
+
+    BufferedRecord<String> newerOnTie = bufferedRecord("log", 1000L);
+    assertSame(newerOnTie, merger.finalMerge(bufferedRecord("base", 1000L), newerOnTie));
+
+    BufferedRecord<String> newerWhenBothDefault = bufferedRecord("log", OrderingValues.getDefault());
+    assertSame(newerWhenBothDefault,
+        merger.finalMerge(bufferedRecord("base", OrderingValues.getDefault()), newerWhenBothDefault));
+  }
+
+  /**
+   * Base record's ordering column is null (represented as the default sentinel); incoming has a real
+   * value of another class. Resolves to natural order: the incoming record wins.
+   */
+  @Test
+  void baseOrderingNull_incomingWins() throws IOException {
+    BufferedRecordMerger<String> merger = eventTimeMerger();
+    BufferedRecord<String> older = bufferedRecord("base", OrderingValues.getDefault());
+    BufferedRecord<String> newer = bufferedRecord("incoming", 100L);
+    assertSame(newer, merger.finalMerge(older, newer));
+  }
+
+  /**
+   * Incoming record's ordering column is null (the default sentinel) while the base has a real value
+   * of another class. The incoming value is expected to be a real value on the event-time merge path
+   * (the write-time reject enforces this), so the merger surfaces the mismatch as an
+   * {@link IllegalArgumentException} rather than comparing mismatched types.
+   */
+  @Test
+  void incomingOrderingNull_throws() throws IOException {
+    BufferedRecordMerger<String> merger = eventTimeMerger();
+    BufferedRecord<String> older = bufferedRecord("base", 100L);
+    BufferedRecord<String> newer = bufferedRecord("incoming", OrderingValues.getDefault());
+    assertThrows(IllegalArgumentException.class, () -> merger.finalMerge(older, newer));
+  }
+
+  /**
+   * Both records' ordering columns are null. Incoming wins (natural order on tie).
+   */
+  @Test
+  void bothOrderingNull_incomingWins() throws IOException {
+    BufferedRecordMerger<String> merger = eventTimeMerger();
+    BufferedRecord<String> older = bufferedRecord("base", OrderingValues.getDefault());
+    BufferedRecord<String> newer = bufferedRecord("incoming", OrderingValues.getDefault());
+    assertSame(newer, merger.finalMerge(older, newer));
+  }
+
+  /**
+   * Delta-merge path with a null base ordering value keeps the incoming record.
+   */
+  @Test
+  void deltaMergeToleratesNullBaseOrdering() throws IOException {
+    BufferedRecordMerger<String> merger = eventTimeMerger();
+    BufferedRecord<String> existing = bufferedRecord("base", OrderingValues.getDefault());
+    BufferedRecord<String> incoming = bufferedRecord("incoming", 100L);
+    Option<BufferedRecord<String>> merged = merger.deltaMerge(incoming, existing);
+    assertTrue(merged.isPresent());
+    assertSame(incoming, merged.get());
+  }
+
+  private static BufferedRecordMerger<String> eventTimeMerger() {
+    HoodieReaderContext<String> context = mock(HoodieReaderContext.class);
+    when(context.getRecordContext()).thenReturn(mock(RecordContext.class));
+    return BufferedRecordMergerFactory.create(
+        context, RecordMergeMode.EVENT_TIME_ORDERING, false, Option.of(mock(HoodieRecordMerger.class)),
+        HoodieSchema.create(HoodieSchemaType.STRING), Option.empty(), new TypedProperties(), Option.empty());
+  }
+
+  private static BufferedRecord<String> bufferedRecord(String value, Comparable orderingValue) {
+    return new BufferedRecord<>("key1", orderingValue, value, 1, null);
   }
 }

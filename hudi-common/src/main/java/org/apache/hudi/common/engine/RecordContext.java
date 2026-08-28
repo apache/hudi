@@ -52,7 +52,7 @@ import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
-import static org.apache.hudi.common.util.OrderingValues.isCommitTimeOrderingValue;
+import static org.apache.hudi.common.util.OrderingValues.isNullOrDefault;
 
 /**
  * Record context provides the APIs for record related operations. Record context is associated with
@@ -384,7 +384,7 @@ public abstract class RecordContext<T> implements Serializable {
    */
   public Comparable getOrderingValue(DeleteRecord deleteRecord) {
     Comparable orderingValue = deleteRecord.getOrderingValue();
-    return isCommitTimeOrderingValue(orderingValue)
+    return isNullOrDefault(orderingValue)
         ? OrderingValues.getDefault()
         : convertOrderingValueToEngineType(orderingValue);
   }

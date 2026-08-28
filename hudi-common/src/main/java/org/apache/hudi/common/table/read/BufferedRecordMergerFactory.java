@@ -264,7 +264,7 @@ public class BufferedRecordMergerFactory {
       Comparable oldOrderingValue = olderRecord.getOrderingValue();
       HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
       if (!olderRecord.isCommitTimeOrderingDelete()
-          && oldOrderingValue.compareTo(newOrderingValue) > 0) {
+          && OrderingValues.isBaseOrderingHigher(oldOrderingValue, newOrderingValue)) {
         // Use old record as the base record since old record has higher ordering value.
         olderRecord = partialUpdateHandler.partialMerge(
             olderRecord,
@@ -494,11 +494,8 @@ public class BufferedRecordMergerFactory {
     }
     Comparable existingOrderingVal = existingRecord.getOrderingValue();
     Comparable deleteOrderingVal = recordContext.convertOrderingValueToEngineType(deleteRecord.getOrderingValue());
-    // Checks the ordering value does not equal to 0
-    // because we use 0 as the default value which means natural order
-    boolean chooseExisting = !OrderingValues.isDefault(deleteOrderingVal)
-        && OrderingValues.isSameClass(existingOrderingVal, deleteOrderingVal)
-        && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
+    boolean chooseExisting = !OrderingValues.isNullOrDefault(deleteOrderingVal)
+        && OrderingValues.isBaseOrderingHigher(existingOrderingVal, deleteOrderingVal);
     if (chooseExisting) {
       // The DELETE message is obsolete if the old message has greater orderingVal.
       return Option.empty();
@@ -512,6 +509,6 @@ public class BufferedRecordMergerFactory {
       // The orderingVal is constant 0 (int) and not guaranteed to match the type of the old or new record's ordering value.
       return true;
     }
-    return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
+    return !OrderingValues.isBaseOrderingHigher(oldRecord.getOrderingValue(), newRecord.getOrderingValue());
   }
 }
