@@ -47,6 +47,8 @@ public class PartitionPathRDDPartitioner extends Partitioner implements Serializ
   @SuppressWarnings("unchecked")
   @Override
   public int getPartition(Object o) {
-    return Math.abs(Objects.hash(partitionPathExtractor.apply(o))) % numPartitions;
+    // Math.abs leaves Integer.MIN_VALUE negative, and a Partitioner must answer in
+    // [0, numPartitions). floorMod is non-negative for every input.
+    return Math.floorMod(Objects.hash(partitionPathExtractor.apply(o)), numPartitions);
   }
 }

@@ -184,4 +184,20 @@ public class TestCoalescingPartitioner extends HoodieClientTestBase {
       return booleanIntegerTuple2._2;
     }
   }
+
+  /**
+   * "polygenelubricants" hashes to Integer.MIN_VALUE, which Math.abs leaves negative, so a
+   * partitioner deriving its answer that way returns an index Spark cannot use. Asserting the
+   * fixture first, so this stops silently passing if String.hashCode ever changes.
+   */
+  @Test
+  public void testPartitionIsInRangeForMinValueHash() {
+    String key = "polygenelubricants";
+    assertEquals(Integer.MIN_VALUE, key.hashCode());
+    for (int numPartitions : new int[] {1, 2, 3, 4, 5, 6, 7, 8, 16}) {
+      int partition = new CoalescingPartitioner(numPartitions).getPartition(key);
+      assertTrue(partition >= 0 && partition < numPartitions,
+          "partition " + partition + " out of range for numPartitions " + numPartitions);
+    }
+  }
 }
