@@ -73,11 +73,6 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
   protected final Properties properties;
 
   /**
-   * Whether variant write shredding is enabled via config.
-   */
-  private final boolean variantWriteShreddingEnabled;
-
-  /**
    * Plans the value-level transform for the whole record, or is null when the effective schema
    * declares no shredded variant anywhere and records can be written untouched.
    */
@@ -103,13 +98,13 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
       footerMetadata.put(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY, vectorMeta);
     }
 
-    this.variantWriteShreddingEnabled = Boolean.parseBoolean(
+    boolean shreddingEnabled = Boolean.parseBoolean(
         properties.getProperty(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.key(),
             String.valueOf(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.defaultValue())));
 
     // When shredding is enabled, plan the transform for every position the effective schema
     // declares shredded; null means there is none and records pass through untouched.
-    this.rootShredder = variantWriteShreddingEnabled ? buildShredder(effectiveSchema) : null;
+    this.rootShredder = shreddingEnabled ? buildShredder(effectiveSchema) : null;
 
     // Load shredding provider via reflection if needed. A schema that is shredded only below the
     // top level needs it just as much, so this is keyed off the whole tree, not the root fields.

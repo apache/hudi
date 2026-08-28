@@ -754,23 +754,12 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       assert(getFieldAsGroup(innerGroup, "typed_value").containsField("k"),
         s"[$leg] nested typed_value should carry k:\n$innerGroup")
 
-      // #18605 history: the batch-disabling guards in HoodieFileGroupReaderBasedFileFormat were
-      // top-level-only, so a NESTED variant reached the vectorized reader; they recurse since
-      // #19689 (pinned by the supportBatch test below), which lands this sweep row-based either
-      // way. It stays because it is what goes red first if the guard is ever narrowed again: the
-      // session conf is what picks the reader whenever supportBatch does not veto it (supportBatch
-      // reads sparkSession.sessionState.conf and isBatchReadSupportedForSchema gates on
-      // spark.sql.parquet.enableVectorizedReader, and only afterwards does
-      // buildReaderWithPartitionValues write that decision back into the conf). Every
-      // nested-variant read bug so far (HUDI-7190, HUDI-8803, #18605) is vectorized-only, which
-      // leaves the row-based leg as the control.
-      Seq("true", "false").foreach { vectorizedReader =>
-        withSQLConf("spark.sql.parquet.enableVectorizedReader" -> vectorizedReader) {
-          checkAnswer(s"select id, cast(s.inner as string) from $tableName")(
-            Seq(1, """{"k":"x1"}""")
-          )
-        }
-      }
+      // One read, whatever spark.sql.parquet.enableVectorizedReader says: supportBatch vetoes
+      // batch reads for a variant at any depth before that conf is consulted, and section F2 pins
+      // that decision directly.
+      checkAnswer(s"select id, cast(s.inner as string) from $tableName")(
+        Seq(1, """{"k":"x1"}""")
+      )
 
       // A plain insert bin-packs into the same file group: the small-file merge must read the
       // nested-shredded base back (nested reconstruction on the AVRO record type leg).
@@ -781,7 +770,9 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       // The merge rewrote the whole file group under the INCOMING layout, so the layout below is
       // the record writer's, not the row writer's seed. On the AVRO leg that write goes through
       // HoodieAvroWriteSupport, whose forced hook now reaches the nested member; before #19689 it
-      // silently rewrote s.inner unshredded and nothing here noticed.
+      // silently rewrote s.inner unshredded and nothing here noticed. It pins the small-file MERGE
+      // handle's write, while the record-writer test below pins a fresh INSERT handle, so the two
+      // are not interchangeable.
       assertVariantLayout(tablePath, shredded = true, leg, column = "s.inner")
       checkAnswer(s"select id, cast(s.inner as string) from $tableName order by id")(
         Seq(1, """{"k":"x1"}"""),
@@ -867,12 +858,20 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           s"$nested must fall back to row-based reads")
       }
 
-      // And the same for the other arm, PushVariantIntoScan's projection struct one level down.
+      // And the same for the other arm, PushVariantIntoScan's projection struct. A field whose own
+      // type is that struct is the control the top-level-only check already matched; the recursion
+      // is what the leg below adds, where the struct sits one member deeper.
       val projection = SparkAdapterSupport.sparkAdapter.buildFullVariantReadSchema(StructType.fromDDL("v variant"))
       assert(projection.isDefined, "Spark 4.1+ must rewrite a top-level variant for a full read")
+      val projectionStruct = projection.get.fields.head.dataType
+      val topLevelProjection = StructType(Array(
+        StructField("id", IntegerType),
+        StructField("s", projectionStruct)))
+      assert(!format.supportBatch(spark, topLevelProjection),
+        "a top-level variant projection struct must fall back to row-based reads")
       val nestedProjection = StructType(Array(
         StructField("id", IntegerType),
-        StructField("s", projection.get.fields.head.dataType)))
+        StructField("s", StructType(Array(StructField("inner", projectionStruct))))))
       assert(!format.supportBatch(spark, nestedProjection),
         "a nested variant projection struct must fall back to row-based reads")
     }

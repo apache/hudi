@@ -19,14 +19,15 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.parquet.schema.{LogicalTypeAnnotation, Type, Types}
+import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 
 /**
- * The parquet layouts the shredded-variant guards are tested against, shared by the suites that
- * cover them: [[TestParquetSchemaEvolutionUtils]] here and TestSpark40HoodieParquetReadSupport in
- * hudi-spark4.0.x (which pulls this module's test-jar). One definition per shape keeps the two
- * guards pinned against the same files.
+ * The parquet layouts the shredded-variant guards are tested against, plus the LIST/MAP walking
+ * rules production resolves them by, shared by the suites that cover them:
+ * [[TestParquetSchemaEvolutionUtils]] here, TestSpark40HoodieParquetReadSupport in
+ * hudi-spark4.0.x and VariantShreddingTestSupport in hudi-spark, both of which pull this module's
+ * test-jar. One definition per shape keeps the guards pinned against the same files.
  *
  * Only parquet types are named here, so the object stays usable from every Spark-version module.
  */
@@ -74,4 +75,21 @@ object VariantParquetTestFixtures {
         .addField(value)
         .named("key_value"))
       .named(name)
+
+  /**
+   * The element of a parquet LIST group, resolved by the same function the read-side guards use,
+   * so a test walking a file cannot drift from the rule production applies: both the 3-level
+   * layout the Spark writer emits (group -> repeated "list" -> element) and the 2-level one
+   * parquet-avro emits (the repeated group, named "array" or "<field>_tuple", IS the element) are
+   * covered there. A shape the rule does not recognize is a broken fixture, so it fails here
+   * rather than returning the None production uses to stop a walk without failing a read.
+   */
+  def listElement(list: GroupType): Type =
+    ParquetSchemaEvolutionUtils.parquetListElement(list).getOrElse(
+      throw new IllegalArgumentException(s"not a parquet LIST layout the read guards resolve:\n$list"))
+
+  /** The value of a parquet MAP group, per ParquetSchemaEvolutionUtils.parquetMapValue. */
+  def mapValue(map: GroupType): Type =
+    ParquetSchemaEvolutionUtils.parquetMapValue(map).getOrElse(
+      throw new IllegalArgumentException(s"not a parquet MAP layout the read guards resolve:\n$map"))
 }

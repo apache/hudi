@@ -71,6 +71,10 @@ public class VariantSchemaUtils {
    * a dotted-path name ({@code a.v} against {@code b.v}) would make them differ and fail at file
    * open. Two distinct record types with a same-named variant member still land in distinct
    * namespaces, which is exactly Avro's own notion of identity.
+   *
+   * <p>The records generated under the variant -- its {@code typed_value} record and the
+   * {@code {value, typed_value}} struct per DDL field -- carry this namespace too, so a DDL field
+   * name is free to match a user-declared record type in the table schema.
    */
   private static final String FORCED_VARIANT_NAMESPACE = "hoodie.variant.forced";
 

@@ -976,11 +976,18 @@ public class HoodieSchema implements Serializable {
    *     |-- typed_value: &lt;fieldType&gt; (nullable)
    * </pre></p>
    *
+   * <p>The record is named after the shredded field, so a caller that generates it from a user
+   * schema has to put it in a namespace it owns: with a null namespace the struct's full name is
+   * the bare field name, which collides with a user-declared record type of that name and makes
+   * {@code Schema.toString()} -- what gets stamped into the parquet footer -- throw
+   * "Can't redefine" at file open.
+   *
    * @param fieldName the name for the record (used as the Avro record name)
+   * @param namespace the namespace of the generated record (can be null)
    * @param fieldType the schema for the typed_value within this field
    * @return a new HoodieSchema representing the shredded field struct
    */
-  public static HoodieSchema createShreddedFieldStruct(String fieldName, HoodieSchema fieldType) {
+  public static HoodieSchema createShreddedFieldStruct(String fieldName, String namespace, HoodieSchema fieldType) {
     ValidationUtils.checkArgument(fieldName != null && !fieldName.isEmpty(), "Field name cannot be null or empty");
     ValidationUtils.checkArgument(fieldType != null, "Field type cannot be null");
     List<HoodieSchemaField> fields = Arrays.asList(
@@ -997,7 +1004,19 @@ public class HoodieSchema implements Serializable {
             NULL_VALUE
         )
     );
-    return HoodieSchema.createRecord(fieldName, null, null, fields);
+    return HoodieSchema.createRecord(fieldName, namespace, null, fields);
+  }
+
+  /**
+   * Creates a shredded field struct in the default (null) namespace.
+   *
+   * @param fieldName the name for the record (used as the Avro record name)
+   * @param fieldType the schema for the typed_value within this field
+   * @return a new HoodieSchema representing the shredded field struct
+   * @see #createShreddedFieldStruct(String, String, HoodieSchema)
+   */
+  public static HoodieSchema createShreddedFieldStruct(String fieldName, HoodieSchema fieldType) {
+    return createShreddedFieldStruct(fieldName, null, fieldType);
   }
 
   /**
@@ -1054,7 +1073,10 @@ public class HoodieSchema implements Serializable {
     // Build typed_value fields, each wrapped in the spec-compliant {value, typed_value} struct
     List<HoodieSchemaField> typedValueFields = new ArrayList<>();
     for (Map.Entry<String, HoodieSchema> entry : shreddedFields.entrySet()) {
-      HoodieSchema fieldStruct = createShreddedFieldStruct(entry.getKey(), entry.getValue());
+      // The field structs go into the variant's own namespace, alongside the variant record and
+      // the typed_value record: their names come from the DDL/inferred field names, which are
+      // free to match a user-declared record type in the table schema.
+      HoodieSchema fieldStruct = createShreddedFieldStruct(entry.getKey(), namespace, entry.getValue());
       typedValueFields.add(HoodieSchemaField.of(
           entry.getKey(),
           HoodieSchema.createNullable(fieldStruct),

@@ -35,6 +35,7 @@ import org.apache.parquet.hadoop.example.GroupReadSupport
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, MessageType, Type}
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{listElement, mapValue}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 
@@ -205,23 +206,15 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
    * Steps a LIST or MAP group down to the group it holds - a list element or a map value - and
    * returns anything else, a variant group included, unchanged. The two write paths disagree on
    * the list layout (the Spark writer emits the 3-level `list`/`element` shape, parquet-avro the
-   * 2-level one whose repeated group, named "array" or "<field>_tuple", IS the element), so both
-   * are resolved here exactly as ParquetSchemaEvolutionUtils.parquetListElement resolves them for
-   * the read-side guards.
+   * 2-level one whose repeated group, named "array" or "<field>_tuple", IS the element), so the
+   * step delegates to the read-side guards' own rule rather than restating it.
    */
   private def collectionElementOf(group: GroupType): GroupType =
     group.getLogicalTypeAnnotation match {
       case _: LogicalTypeAnnotation.ListLogicalTypeAnnotation =>
-        val repeated = group.getType(0).asGroupType()
-        val element = if (repeated.getFieldCount == 1
-          && repeated.getName != "array" && repeated.getName != group.getName + "_tuple") {
-          repeated.getType(0).asGroupType()
-        } else {
-          repeated
-        }
-        collectionElementOf(element)
+        collectionElementOf(listElement(group).asGroupType())
       case _: LogicalTypeAnnotation.MapLogicalTypeAnnotation =>
-        collectionElementOf(getFieldAsGroup(group.getType(0).asGroupType(), "value"))
+        collectionElementOf(mapValue(group).asGroupType())
       case _ => group
     }
 

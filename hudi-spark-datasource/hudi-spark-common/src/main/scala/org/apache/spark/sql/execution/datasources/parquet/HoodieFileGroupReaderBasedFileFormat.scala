@@ -187,14 +187,13 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       //
       // Both checks above walk the schema instead of scanning top-level fields only. Spark's
       // ParquetUtils.isBatchReadSupported treats VariantType as an atomic type and, once
-      // spark.sql.parquet.enableNestedColumnVectorizedReader is on (off by default), nested columns
-      // as batch-readable, so a variant reached the vectorized reader whenever it sat inside a
-      // struct/array/map even though a top-level one did not. The SIGBUS is in the UnsafeRow
-      // encoding of the vectorized
-      // variant vectors that RangePartitioner samples, and it samples WHOLE rows, so a variant
-      // carried inside a struct is exposed exactly the same way under any range-partitioned query.
-      // The cost is that nested-variant tables now lose vectorization on 4.1+ just as top-level
-      // ones do.
+      // spark.sql.parquet.enableNestedColumnVectorizedReader is on - it defaults to on since Spark
+      // 3.3.0 - nested columns as batch-readable, so at stock settings a variant reached the
+      // vectorized reader whenever it sat inside a struct/array/map even though a top-level one did
+      // not. The SIGBUS is in the UnsafeRow encoding of the vectorized variant vectors that
+      // RangePartitioner samples, and it samples WHOLE rows, so a variant carried inside a struct is
+      // exposed exactly the same way under any range-partitioned query. The cost is that
+      // nested-variant tables lose vectorization on 4.1+ by default, exactly as top-level ones do.
       supportVectorizedRead = false
       supportReturningBatch = false
       false
