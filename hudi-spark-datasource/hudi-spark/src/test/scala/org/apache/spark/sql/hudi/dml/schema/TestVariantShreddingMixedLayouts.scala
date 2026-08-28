@@ -23,6 +23,7 @@ import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkUtils, HoodieTab
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.core.io.storage.VariantShreddingInferenceFileWriter
 import org.apache.hudi.testutils.DataSourceTestUtils
@@ -33,6 +34,8 @@ import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderB
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types.{IntegerType, StructField, StructType}
+
+import scala.collection.JavaConverters._
 
 /**
  * Mixed-layout variant shredding matrix: files with DIFFERENT typed_value layouts in one table,
@@ -105,6 +108,32 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       assert(group.containsField("typed_value") == shredded,
         s"[$leg] base file of instant $instant should be $expected at $column: $file\n$group")
     }
+  }
+
+  /**
+   * The declared write schema of the array-element leg: the `(id int, arr array<variant>, ts long)`
+   * table schema with the ELEMENT of `arr` replaced by a variant whose shredded object declares
+   * `k string`. No DDL and no forced-schema conf can express that shape, so it is built through the
+   * HoodieSchema API and handed to the write as `hoodie.write.schema`.
+   */
+  private def arrayElementWriteSchema(): String = {
+    // fromDDL parses `variant` on Spark 4.x only, which is all this suite runs on.
+    val base = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+      StructType.fromDDL("id int, arr array<variant>, ts long"), "hoodie.test.record")
+    val shreddedFields = new java.util.LinkedHashMap[String, HoodieSchema]()
+    shreddedFields.put("k", HoodieSchema.create(HoodieSchemaType.STRING))
+    val shreddedElement = HoodieSchema.createVariantShreddedObject(shreddedFields)
+    val fields = base.getFields.asScala.map { field =>
+      if (field.name() == "arr") {
+        HoodieSchemaField.of("arr",
+          HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createNullable(shreddedElement))),
+          null, HoodieSchema.NULL_VALUE)
+      } else {
+        HoodieSchemaField.of(field.name(), field.schema(), field.doc().orElse(null),
+          field.defaultVal().orElse(null))
+      }
+    }.asJava
+    HoodieSchema.createRecord(base.getName, "hoodie.test", null, fields).toString
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -1103,6 +1132,126 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       }
     }
   }
+  test("An array element shredded through a declared write schema reads natively and survives compaction") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // No DDL forces a variant that is directly an ARRAY ELEMENT - the forced hook reaches record
+    // members only, pinned by the record-writer test above - and Spark's PushVariantIntoScan
+    // rewrites struct paths only, so array<variant> is the shape every reader has to handle
+    // NATIVELY, shredded or not. The only write that produces a shredded element is one whose write
+    // schema already declares typed_value there, which the row write support honours through
+    // hoodie.write.schema (HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE). SPARK record type only: the
+    // AVRO insert cannot take a write-schema override of a different shape (its records are
+    // serialized under hoodie.avro.schema and deserialized under the writer schema, which throws
+    // ArrayIndexOutOfBounds inside SerializableIndexedRecord).
+    withRecordType(Seq(HoodieRecordType.SPARK))(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val leg = s"array element shredding, $tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  arr array<variant>,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  type = 'mor',
+           |  hoodie.compact.inline = 'false'
+           | )
+       """.stripMargin)
+
+      val declaredLayout = Seq(
+        "hoodie.write.schema" -> arrayElementWriteSchema(),
+        WRITE_SHREDDING_KEY -> "true",
+        FORCE_SCHEMA_KEY -> "",
+        INFERENCE_KEY -> "false")
+      // get(arr, 1) rather than arr[1]: under ANSI mode the subscript on the one-element array of
+      // id 2 throws instead of returning null.
+      val elementsQuery = s"select id, cast(arr[0] as string), cast(get(arr, 1) as string), size(arr) " +
+        s"from $tableName order by id"
+      // pushVariantIntoScan is swept alongside the vectorized reader although an array element is
+      // never rewritten: both arms must read the element the same way.
+      def withReadSweep(f: => Unit): Unit = {
+        Seq("true", "false").foreach { pushIntoScan =>
+          Seq("true", "false").foreach { vectorizedReader =>
+            withSQLConf("spark.sql.variant.pushVariantIntoScan" -> pushIntoScan,
+              "spark.sql.parquet.enableVectorizedReader" -> vectorizedReader)(f)
+          }
+        }
+      }
+
+      withSQLConf(declaredLayout: _*) {
+        spark.sql(s"""insert into $tableName values """ +
+          """(1, array(parse_json('{"k":"a1"}'), parse_json('{"k":"a2"}')), 1000), """ +
+          """(2, array(parse_json('{"k":"b1"}')), 1000)""")
+      }
+      assertVariantLayout(tablePath, shredded = true, leg, column = "arr")
+      listDataParquetFiles(tablePath).foreach { file =>
+        val elementGroup = variantGroupOf(file, "arr")
+        assert(getFieldAsGroup(elementGroup, "typed_value").containsField("k"),
+          s"[$leg] typed_value of the array element should carry k:\n$elementGroup")
+      }
+
+      withReadSweep {
+        checkAnswer(elementsQuery)(
+          Seq(1, """{"k":"a1"}""", """{"k":"a2"}""", 2),
+          Seq(2, """{"k":"b1"}""", null, 1)
+        )
+        checkAnswer(s"select id, variant_get(arr[0], '$$.k', 'string') from $tableName order by id")(
+          Seq(1, "a1"),
+          Seq(2, "b1")
+        )
+        checkAnswer(s"select id from $tableName where variant_get(arr[0], '$$.k', 'string') = 'b1'")(
+          Seq(2))
+      }
+
+      // A shredded native log over the shredded base: the merged read serves id 2 out of the log.
+      withSQLConf(declaredLayout: _*) {
+        spark.sql(s"""update $tableName set arr = array(parse_json('{"k":"b1x"}')), ts = 1001 where id = 2""")
+      }
+      assert(listDataParquetFiles(tablePath).exists(_.endsWith(".log.parquet")),
+        s"[$leg] the update should have written a native parquet log file")
+      val updatedRows = Seq(
+        Seq(1, """{"k":"a1"}""", """{"k":"a2"}""", 2),
+        Seq(2, """{"k":"b1x"}""", null, 1))
+      withReadSweep {
+        checkAnswer(elementsQuery)(updatedRows: _*)
+      }
+      checkAnswer(s"select id, cast(arr[0] as string) from " +
+        s"hudi_query('$tableName', 'read_optimized') order by id")(
+        Seq(1, """{"k":"a1"}"""),
+        Seq(2, """{"k":"b1"}""")
+      )
+
+      // Compaction under the same declared schema: the row write support honours it at depth again.
+      withSQLConf(declaredLayout: _*) {
+        runCompaction(tableName)
+      }
+      assertCompactionCount(tablePath, 1, leg)
+      assertNestedBaseLayout(tablePath, latestCompletedInstant(tablePath), shredded = true, leg,
+        column = "arr")
+      checkAnswer(elementsQuery)(updatedRows: _*)
+
+      // And with no declared schema the element goes back to unshredded, values intact.
+      withWriteLayout(Unshredded) {
+        spark.sql(s"""update $tableName set """ +
+          """arr = array(parse_json('{"k":"a1y"}'), parse_json('{"k":"a2y"}')), ts = 1002 where id = 1""")
+        runCompaction(tableName)
+      }
+      assertCompactionCount(tablePath, 2, leg)
+      assertNestedBaseLayout(tablePath, latestCompletedInstant(tablePath), shredded = false, leg,
+        column = "arr")
+      checkAnswer(elementsQuery)(
+        Seq(1, """{"k":"a1y"}""", """{"k":"a2y"}""", 2),
+        Seq(2, """{"k":"b1x"}""", null, 1)
+      )
+    })
+  }
+
   // -----------------------------------------------------------------------------------------------
   // F2. Vectorized read decision
   // -----------------------------------------------------------------------------------------------
