@@ -844,13 +844,21 @@ public class HoodieSchema implements Serializable {
         NULL_VALUE
     ));
 
-    // Add typed_value field if provided
+    // Add typed_value field if provided. The shredding spec makes typed_value OPTIONAL: a row
+    // whose value does not match the shredding schema (a scalar or array under an object schema,
+    // a JSON null) leaves typed_value null and carries everything in the value residual. A
+    // required typed_value makes such rows unwritable on the Avro path (parquet-avro throws
+    // "Null-value for required field: typed_value"); the Spark row writer already writes it
+    // optional.
     if (typedValueSchema != null) {
+      HoodieSchema nullableTypedValue = typedValueSchema.isNullable()
+          ? typedValueSchema
+          : HoodieSchema.createNullable(typedValueSchema);
       fields.add(HoodieSchemaField.of(
           Variant.VARIANT_TYPED_VALUE_FIELD,
-          typedValueSchema,
+          nullableTypedValue,
           "Typed value for shredded variant",
-          null
+          NULL_VALUE
       ));
     }
 
@@ -2554,7 +2562,9 @@ public class HoodieSchema implements Serializable {
     private Option<HoodieSchema> extractTypedValueSchema(Schema avroSchema) {
       Schema.Field typedValueField = avroSchema.getField(VARIANT_TYPED_VALUE_FIELD);
       if (typedValueField != null) {
-        return Option.of(HoodieSchema.fromAvroSchema(typedValueField.schema()));
+        HoodieSchema typedValue = HoodieSchema.fromAvroSchema(typedValueField.schema());
+        // typed_value is declared nullable per the shredding spec; consumers want the value type.
+        return Option.of(typedValue.isNullable() ? typedValue.getNonNullType() : typedValue);
       }
       return Option.empty();
     }

@@ -22,6 +22,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 
+import java.util.Arrays;
+
 /**
  * Bucket-Index based Bulk Insert Partitioner and provides the unified sorting logic
  */
@@ -39,7 +41,9 @@ public abstract class BucketSortBulkInsertPartitioner<T> implements BulkInsertPa
           + "LSM files must be ordered by record key");
     }
     if (!StringUtils.isNullOrEmpty(sortString)) {
-      this.sortColumnNames = sortString.split(",");
+      // Trim: the consistent-bucket clustering path builds the partitioner straight off the raw
+      // config list (`id, ts`), while the column names are looked up as given.
+      this.sortColumnNames = Arrays.stream(sortString.split(",")).map(String::trim).toArray(String[]::new);
     } else {
       this.sortColumnNames = null;
     }

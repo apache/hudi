@@ -19,30 +19,53 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
+import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.RecordReader;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class TestHiveHoodieReaderContext {
@@ -159,5 +182,217 @@ class TestHiveHoodieReaderContext {
 
   private ArrayWritable createBaseRecord(Writable[] values) {
     return new ArrayWritable(Writable.class, values);
+  }
+
+  @Test
+  void getFileRecordIteratorFailsFastOnShreddedVariantColumn(@TempDir java.nio.file.Path tempDir) throws Exception {
+    // The Hive reader hands base files to a plain parquet-avro read at the requested
+    // {metadata, value} projection; a shredded file would come back with silent nulls (the
+    // payload of typed rows lives in typed_value, which the projection drops). The footer is
+    // already read for schema pruning, so the shredded shape must fail fast instead.
+    StoragePath filePath = InputFormatTestUtil.writeVariantParquetFile(tempDir, "shredded.parquet", true);
+    HoodieSchema tableSchema = tableSchemaWithVariant();
+    HiveHoodieReaderContext readerContext = newReaderContext();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+    requestColumns("id", "v");
+
+    HoodieException failure = assertThrows(HoodieException.class, () ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    assertTrue(failure.getMessage().contains("shredded variant") && failure.getMessage().contains("'v'"),
+        "The error must name the shredded variant column, got: " + failure.getMessage());
+
+    // A query that does not project the variant column (`select id`) stays readable.
+    HoodieSchema withoutVariant = HoodieSchema.createRecord("TestRecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT))));
+    requestColumns("id");
+    when(readerCreator.getRecordReader(any(), any(), any()))
+        .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
+    assertDoesNotThrow(() ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, withoutVariant, storage));
+  }
+
+  @Test
+  void getFileRecordIteratorFailsOnShreddedVariantReadForMerging(@TempDir java.nio.file.Path tempDir) throws Exception {
+    // The required schema can be wider than the query: a CUSTOM merge whose merger is not
+    // projection compatible reads the whole table schema for merging, so `select id` reaches the
+    // context asking for the variant column too. Hive's read column names split the flagged
+    // columns: the ones Hive selected fail as Hive-visible nulls, the ones only merging needs fail
+    // as well, since setSchemas materializes them at {metadata, value} for the merger. count(*) is
+    // the same merge-only read once the schema is widened -- it names no column either -- and it
+    // fails unless the read skips merging, where no merger runs and the nulls are projected away
+    // before Hive sees them. The count(*) whose requested schema really is empty short-circuits out
+    // of the guard on schema identity, which the sibling
+    // getFileRecordIteratorFailsFastOnShreddedVariantColumn pins.
+    StoragePath filePath = InputFormatTestUtil.writeVariantParquetFile(tempDir, "shredded.parquet", true);
+    HoodieSchema tableSchema = tableSchemaWithVariant();
+    HiveHoodieReaderContext readerContext = newReaderContext();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+    when(readerCreator.getRecordReader(any(), any(), any()))
+        .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
+
+    requestColumns("id", "v");
+    HoodieException hiveVisible = assertThrows(HoodieException.class, () ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    assertTrue(hiveVisible.getMessage().contains("'v'") && !hiveVisible.getMessage().contains("for merging"),
+        "select * must fail as a Hive-visible read of the shredded variant column, got: " + hiveVisible.getMessage());
+
+    requestColumns("id");
+    HoodieException mergeOnly = assertThrows(HoodieException.class, () ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    assertTrue(mergeOnly.getMessage().contains("'v'") && mergeOnly.getMessage().contains("for merging"),
+        "A variant only the merge reads must fail as a merge read, got: " + mergeOnly.getMessage());
+    verify(readerCreator, never()).getRecordReader(any(), any(), any());
+
+    // count(*): Hive names no column at all, so a widened required schema puts the variant in the
+    // merge-only bucket too.
+    requestColumns();
+    HoodieException countStar = assertThrows(HoodieException.class, () ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    assertTrue(countStar.getMessage().contains("'v'") && countStar.getMessage().contains("for merging"),
+        "count(*) over a widened required schema must fail as a merge read, got: " + countStar.getMessage());
+    verify(readerCreator, never()).getRecordReader(any(), any(), any());
+
+    // Skipping the merge makes that same read harmless: the buffer never merges, so the nulls the
+    // widened schema materializes are projected away before Hive sees them. Both spellings the
+    // record reader honours have to gate it, and the newer key wins when they disagree.
+    Configuration conf = storageConfiguration.unwrapAs(Configuration.class);
+    try {
+      conf.set(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
+      assertDoesNotThrow(() ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+
+      conf.unset(HoodieReaderConfig.MERGE_TYPE.key());
+      conf.set(HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP, "true");
+      assertDoesNotThrow(() ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+      verify(readerCreator, times(2)).getRecordReader(any(), any(), any());
+
+      conf.set(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE);
+      HoodieException mergeTypeWins = assertThrows(HoodieException.class, () ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+      assertTrue(mergeTypeWins.getMessage().contains("for merging"),
+          "hoodie.datasource.merge.type must win over hoodie.realtime.merge.skip, got: " + mergeTypeWins.getMessage());
+
+      // Only the merge-only bucket is gated: a column Hive selected still returns nulls to Hive.
+      conf.set(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
+      requestColumns("id", "v");
+      assertThrows(HoodieException.class, () ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    } finally {
+      conf.unset(HoodieReaderConfig.MERGE_TYPE.key());
+      conf.unset(HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP);
+    }
+  }
+
+  @Test
+  void getFileRecordIteratorAcceptsUnshreddedVariantColumn(@TempDir java.nio.file.Path tempDir) throws Exception {
+    // The unshredded twin: a plain {metadata, value} variant group must keep reading through
+    // the ordinary path; the guard is anchored on typed_value being present in the file.
+    StoragePath filePath = InputFormatTestUtil.writeVariantParquetFile(tempDir, "unshredded.parquet", false);
+    HoodieSchema tableSchema = tableSchemaWithVariant();
+    HiveHoodieReaderContext readerContext = newReaderContext();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+    requestColumns("id", "v");
+    when(readerCreator.getRecordReader(any(), any(), any()))
+        .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
+    assertDoesNotThrow(() ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+  }
+
+  @ParameterizedTest
+  @MethodSource("nestedShreddedVariantFixtures")
+  void getFileRecordIteratorFailsFastOnNestedShreddedVariant(String columnName, HoodieSchema tableSchema,
+                                                             VariantFixtureWriter fixture,
+                                                             @TempDir java.nio.file.Path tempDir) throws Exception {
+    // The row writer shreds nested variants too (HoodieRowParquetWriteSupport recurses into
+    // structs, array elements and map values), so the guard must look below the top level on every
+    // shape toShreddedReadSchema walks: a struct member, an array element and a map value. Each
+    // fails naming the top-level column that holds the shredded group.
+    StoragePath filePath = fixture.write(tempDir, "nested_shredded.parquet");
+    HiveHoodieReaderContext readerContext = newReaderContext();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+    requestColumns("id", columnName);
+
+    HoodieException failure = assertThrows(HoodieException.class, () ->
+        readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+    assertTrue(failure.getMessage().contains("shredded variant") && failure.getMessage().contains("'" + columnName + "'"),
+        "The error must name the column holding the nested shredded variant, got: " + failure.getMessage());
+  }
+
+  @Test
+  void getFileRecordIteratorHonoursNestedColumnPruning(@TempDir java.nio.file.Path tempDir) throws Exception {
+    // Hive's read column names are top-level only; nested column pruning arrives separately, as
+    // dotted paths, which the context has to consult: `select s.other` names s but materializes
+    // nothing of s.inner, so that read has to reach the record reader while a path that does hit
+    // the group still fails. Which paths reach a shredded group is pinned exhaustively by
+    // TestHoodieColumnProjectionUtils.testColumnsReadingShreddedPaths.
+    StoragePath filePath = InputFormatTestUtil.writeNestedShreddedVariantParquetFile(tempDir, "nested_shredded.parquet");
+    HoodieSchema tableSchema = nestedVariantTableSchema();
+    HiveHoodieReaderContext readerContext = newReaderContext();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(filePath, storageConfiguration);
+    requestColumns("id", "s");
+    Configuration conf = storageConfiguration.unwrapAs(Configuration.class);
+    when(readerCreator.getRecordReader(any(), any(), any()))
+        .thenReturn((RecordReader<NullWritable, ArrayWritable>) mock(RecordReader.class));
+    try {
+      conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "s.other");
+      assertDoesNotThrow(() ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+      verify(readerCreator).getRecordReader(any(), any(), any());
+
+      conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "s.inner");
+      HoodieException innerFailure = assertThrows(HoodieException.class, () ->
+          readerContext.getFileRecordIterator(filePath, 0, Long.MAX_VALUE, tableSchema, tableSchema, storage));
+      assertTrue(innerFailure.getMessage().contains("'s'"),
+          "A nested path reaching the shredded group must still fail, got: " + innerFailure.getMessage());
+    } finally {
+      conf.unset(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR);
+    }
+  }
+
+  private static Stream<Arguments> nestedShreddedVariantFixtures() {
+    return Stream.of(
+        arguments("s", nestedVariantTableSchema(),
+            (VariantFixtureWriter) InputFormatTestUtil::writeNestedShreddedVariantParquetFile),
+        arguments("a", tableSchemaWith("a", HoodieSchema.createArray(HoodieSchema.createVariant())),
+            (VariantFixtureWriter) InputFormatTestUtil::writeArrayShreddedVariantParquetFile),
+        arguments("m", tableSchemaWith("m", HoodieSchema.createMap(HoodieSchema.createVariant())),
+            (VariantFixtureWriter) InputFormatTestUtil::writeMapShreddedVariantParquetFile));
+  }
+
+  /** The shape {@link InputFormatTestUtil}'s shredded-variant fixture writers share. */
+  @FunctionalInterface
+  interface VariantFixtureWriter {
+    StoragePath write(java.nio.file.Path dir, String fileName) throws IOException;
+  }
+
+  private static HoodieSchema tableSchemaWithVariant() {
+    return tableSchemaWith("v", HoodieSchema.createVariant());
+  }
+
+  private static HoodieSchema nestedVariantTableSchema() {
+    return tableSchemaWith("s", HoodieSchema.createRecord("s_t", null, null,
+        Collections.singletonList(HoodieSchemaField.of("inner", HoodieSchema.createVariant()))));
+  }
+
+  /** An {@code id} column plus {@code columnName}, matching what the fixture writers put on disk. */
+  private static HoodieSchema tableSchemaWith(String columnName, HoodieSchema columnSchema) {
+    return HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of(columnName, columnSchema)));
+  }
+
+  /** Hive's read column names for the query, as HiveInputFormat.pushProjection sets them (none for count(*)). */
+  private void requestColumns(String... columns) {
+    storageConfiguration.unwrapAs(Configuration.class)
+        .set(HoodieColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, String.join(",", columns));
+  }
+
+  private HiveHoodieReaderContext newReaderContext() {
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    HiveHoodieReaderContext readerContext =
+        new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
+    readerContext.setNeedsBootstrapMerge(false);
+    return readerContext;
   }
 }

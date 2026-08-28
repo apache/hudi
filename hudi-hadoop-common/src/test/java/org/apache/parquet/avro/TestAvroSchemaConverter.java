@@ -908,7 +908,9 @@ public class TestAvroSchemaConverter {
             + "  required group myvariant" + variantAnnotation() + " {\n"
             + "    required binary metadata;\n"
             + "    optional binary value;\n"
-            + "    required int32 typed_value;\n"
+            // The shredding spec makes typed_value optional: rows that do not match the
+            // shredding schema leave it null and carry everything in the value residual.
+            + "    optional int32 typed_value;\n"
             + "  }\n"
             + "}\n");
   }

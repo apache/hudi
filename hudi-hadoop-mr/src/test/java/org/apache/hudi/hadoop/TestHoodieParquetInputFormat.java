@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -38,15 +39,18 @@ import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.IOConstants;
+import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.io.TimestampWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.LongWritable;
@@ -59,6 +63,11 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hive.common.util.HiveVersionInfo;
 import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.hadoop.ParquetFileReader;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -90,6 +99,8 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.hadoop.HoodieColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR;
+import static org.apache.hudi.hadoop.HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -755,6 +766,263 @@ public class TestHoodieParquetInputFormat {
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
     assertEquals(1, files.length);
+  }
+
+  @Test
+  public void testLegacyReaderFailsFastOnShreddedVariantColumn() throws Exception {
+    // With the file group reader disabled the split lands on Hive's plain parquet reader, which
+    // silently nulls typed_value. The footer-derived file schema carries no variant logical type
+    // (variant groups convert to plain records), so the guard has to fire off the shape.
+    JobConf fullProjection = variantJobConf("id,v", "int,struct<metadata:binary,value:binary>", "id,v", "0,1");
+    FileSplit shredded = fileSplit(InputFormatTestUtil.writeVariantParquetFile(basePath, "shredded.parquet", true));
+
+    HoodieException failure = assertThrows(HoodieException.class,
+        () -> inputFormat.getRecordReader(shredded, fullProjection, null));
+    assertTrue(failure.getMessage().contains("shredded variant") && failure.getMessage().contains("'v'"),
+        "The error must name the shredded variant column, got: " + failure.getMessage());
+
+    // A projection that skips the variant column keeps reading.
+    JobConf withoutVariant = variantJobConf("id,v", "int,struct<metadata:binary,value:binary>", "id", "0");
+    assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(shredded, withoutVariant));
+
+    // The unshredded twin keeps reading at the full projection.
+    FileSplit unshredded = fileSplit(InputFormatTestUtil.writeVariantParquetFile(basePath, "unshredded.parquet", false));
+    assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(unshredded, fullProjection));
+
+    // A bootstrap split (shouldUseFilegroupReader is false for one by construction) is guarded on
+    // its bootstrap half; its own file is the skeleton, which carries meta columns only.
+    BootstrapBaseFileSplit bootstrapSplit = new BootstrapBaseFileSplit(unshredded, shredded);
+    HoodieException bootstrapFailure = assertThrows(HoodieException.class,
+        () -> inputFormat.getRecordReader(bootstrapSplit, fullProjection, null));
+    assertTrue(bootstrapFailure.getMessage().contains("'v'"),
+        "The error must name the shredded variant column of the bootstrap file, got: " + bootstrapFailure.getMessage());
+
+    // Schema-on-read is the second bypass of the file group reader: shouldUseFilegroupReader is
+    // false while it is on, even with the file group reader itself back at its default.
+    JobConf schemaOnRead = variantJobConf("id,v", "int,struct<metadata:binary,value:binary>", "id,v", "0,1");
+    schemaOnRead.setBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), true);
+    schemaOnRead.setBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), true);
+    HoodieException schemaOnReadFailure = assertThrows(HoodieException.class,
+        () -> inputFormat.getRecordReader(shredded, schemaOnRead, null));
+    assertTrue(schemaOnReadFailure.getMessage().contains("'v'"),
+        "The error must name the shredded variant column on the schema-on-read route, got: " + schemaOnReadFailure.getMessage());
+  }
+
+  @Test
+  public void testLegacyReaderGuardHonoursNestedPruningAndArrayWrappers() throws Exception {
+    // A shredded variant below the top level (the row writer shreds at depth) fails too, naming
+    // the struct column that holds it. The Hive type carries a sibling `other` the file does not
+    // hold - columns.types comes from the table - so the nested-pruning legs below have a path to
+    // project that never reaches the shredded group.
+    String nestedTypes = "int,struct<inner:struct<metadata:binary,value:binary>,other:string>";
+    FileSplit nested = fileSplit(InputFormatTestUtil.writeNestedShreddedVariantParquetFile(basePath, "nested_shredded.parquet"));
+    JobConf wholeColumn = variantJobConf("id,s", nestedTypes, "id,s", "0,1");
+    HoodieException nestedFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(nested, wholeColumn));
+    assertTrue(nestedFailure.getMessage().contains("'s'"),
+        "The error must name the column holding the nested shredded variant, got: " + nestedFailure.getMessage());
+
+    // Hive's read column names are top-level only: nested column pruning arrives separately, as
+    // dotted paths. `select s.other` names `s` but materializes nothing of s.inner, so the guard
+    // must let it through.
+    JobConf otherPruned = variantJobConf("id,s", nestedTypes, "id,s", "0,1");
+    otherPruned.set(READ_NESTED_COLUMN_PATH_CONF_STR, "s.other");
+    assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(nested, otherPruned));
+
+    // A nested path that does reach the shredded group still fails, whether it names the group
+    // itself or the whole column above it.
+    JobConf innerPruned = variantJobConf("id,s", nestedTypes, "id,s", "0,1");
+    innerPruned.set(READ_NESTED_COLUMN_PATH_CONF_STR, "s.inner");
+    HoodieException prunedFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(nested, innerPruned));
+    assertTrue(prunedFailure.getMessage().contains("'s'"),
+        "The error must name the column holding the nested shredded variant, got: " + prunedFailure.getMessage());
+    JobConf columnPruned = variantJobConf("id,s", nestedTypes, "id,s", "0,1");
+    columnPruned.set(READ_NESTED_COLUMN_PATH_CONF_STR, "s");
+    assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(nested, columnPruned));
+
+    // An array of shredded variants. Neither side names the collection's own levels: the walk
+    // drops the repeated group the 2-level layout puts the element in (a.array on disk), so the
+    // shredded group lands at the column's own path `a` - which is where Hive's type for the
+    // column puts it too.
+    String arrayTypes = "int,array<struct<metadata:binary,value:binary>>";
+    StoragePath arrayPath = InputFormatTestUtil.writeArrayShreddedVariantParquetFile(basePath, "array_shredded.parquet");
+    assertEquals("array", fileSchemaOf(arrayPath).getType("a").asGroupType().getType(0).getName(),
+        "the default fixture must be the 2-level layout, whose repeated group is the element itself");
+    FileSplit array = fileSplit(arrayPath);
+    JobConf wholeArray = variantJobConf("id,a", arrayTypes, "id,a", "0,1");
+    HoodieException arrayFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(array, wholeArray));
+    assertTrue(arrayFailure.getMessage().contains("'a'"),
+        "The error must name the column holding the array of shredded variants, got: " + arrayFailure.getMessage());
+
+    // The nested path Hive carries for the array stops at the column, above the wrapper groups:
+    // it is a dotted prefix of the collected path, which the overlap check has to catch.
+    JobConf arrayPruned = variantJobConf("id,a", arrayTypes, "id,a", "0,1");
+    arrayPruned.set(READ_NESTED_COLUMN_PATH_CONF_STR, "a");
+    HoodieException arrayPrunedFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(array, arrayPruned));
+    assertTrue(arrayPrunedFailure.getMessage().contains("'a'"),
+        "The error must name the column holding the array of shredded variants, got: " + arrayPrunedFailure.getMessage());
+
+    // The 3-level list/element layout, which is what the row writer - the only production writer
+    // that shreds inside a collection - emits. Here the repeated group IS a collection level, so
+    // the walk has to see through it as well and still land the shredded group at `a`. The layout
+    // is pinned on the footer, or the leg could silently degrade back to the 2-level one above.
+    StoragePath threeLevelPath =
+        InputFormatTestUtil.writeArrayShreddedVariantParquetFile(basePath, "array_shredded_3level.parquet", false, true);
+    GroupType repeated = fileSchemaOf(threeLevelPath).getType("a").asGroupType().getType(0).asGroupType();
+    assertEquals("list", repeated.getName(), "the 3-level layout names its repeated group `list`");
+    assertEquals(1, repeated.getFieldCount(), "the 3-level layout's repeated group holds the element alone");
+    assertEquals("element", repeated.getType(0).getName(), "the 3-level layout names its element `element`");
+    FileSplit threeLevelArray = fileSplit(threeLevelPath);
+    HoodieException threeLevelFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(threeLevelArray, wholeArray));
+    assertTrue(threeLevelFailure.getMessage().contains("'a'"),
+        "The error must name the column holding the 3-level array of shredded variants, got: " + threeLevelFailure.getMessage());
+
+    // Which levels a collection contributes is structural, not a matter of their names: on the
+    // 2-level layout the repeated group is the element itself, so an element member named `value`
+    // is a user field and the shredded group sits at a.value - which is where the Hive type puts
+    // it too. Reading that member as a collection level would collect a.value as plain `a`, the
+    // two sides would not meet, and the guard would let the read through.
+    String structArrayTypes = "int,array<struct<key:string,value:struct<metadata:binary,value:binary>>>";
+    FileSplit structArray = fileSplit(
+        InputFormatTestUtil.writeArrayShreddedVariantParquetFile(basePath, "array_struct_shredded.parquet", true));
+    JobConf wholeStructArray = variantJobConf("id,a", structArrayTypes, "id,a", "0,1");
+    HoodieException structArrayFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(structArray, wholeStructArray));
+    assertTrue(structArrayFailure.getMessage().contains("'a'"),
+        "The error must name the column whose array elements hold a shredded variant, got: " + structArrayFailure.getMessage());
+
+    // The rule is applied by the list's own name, as AvroSchemaConverter.isElementType applies it:
+    // a repeated group is the element when named `array` or exactly `<list>_tuple`, and a
+    // synthetic level otherwise. So other_tuple under the list `a` is synthetic and its single
+    // child is the element, landing the shredded group at `a` again. Taking any `_tuple` suffix
+    // for the element would append the child's name and collect a.element, which the column's
+    // Hive type never declares: the two sides would not meet and the read would go through with
+    // typed_value silently dropped.
+    StoragePath misnamedTuplePath =
+        InputFormatTestUtil.writeMisnamedTupleListShreddedVariantParquetFile(basePath, "array_shredded_other_tuple.parquet");
+    GroupType misnamedRepeated = fileSchemaOf(misnamedTuplePath).getType("a").asGroupType().getType(0).asGroupType();
+    assertEquals("other_tuple", misnamedRepeated.getName(), "the fixture's repeated group must carry a foreign _tuple name");
+    assertEquals(1, misnamedRepeated.getFieldCount(), "the fixture's repeated group holds the element alone");
+    FileSplit misnamedTuple = fileSplit(misnamedTuplePath);
+    HoodieException misnamedTupleFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(misnamedTuple, wholeArray));
+    assertTrue(misnamedTupleFailure.getMessage().contains("'a'"),
+        "The error must name the column whose misnamed list level holds a shredded variant, got: " + misnamedTupleFailure.getMessage());
+  }
+
+  @Test
+  public void testLegacyReaderGuardSeesThroughMapEntries() throws Exception {
+    // A map of shredded variants. On disk the shredded group sits at m.key_value.value, under the
+    // entry level and the entry's value, both levels a Hive dotted path never names: the column's
+    // Hive type puts the variant at `m` itself. The walk has to drop those two levels, or the two
+    // sides never meet and the read goes through with typed_value silently dropped.
+    String mapTypes = "int,map<string,struct<metadata:binary,value:binary>>";
+    StoragePath mapPath = InputFormatTestUtil.writeMapShreddedVariantParquetFile(basePath, "map_shredded.parquet");
+    GroupType entry = fileSchemaOf(mapPath).getType("m").asGroupType().getType(0).asGroupType();
+    assertEquals("key_value", entry.getName(), "the fixture's map must keep its entries under key_value");
+    assertEquals("value", entry.getType(1).getName(), "the fixture's map entry must hold the variant as `value`");
+    FileSplit map = fileSplit(mapPath);
+    JobConf wholeMap = variantJobConf("id,m", mapTypes, "id,m", "0,1");
+    HoodieException mapFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(map, wholeMap));
+    assertTrue(mapFailure.getMessage().contains("'m'"),
+        "The error must name the column whose map values hold a shredded variant, got: " + mapFailure.getMessage());
+
+    // The nested path Hive carries for the map stops at the column, as it does for a list.
+    JobConf mapPruned = variantJobConf("id,m", mapTypes, "id,m", "0,1");
+    mapPruned.set(READ_NESTED_COLUMN_PATH_CONF_STR, "m");
+    HoodieException mapPrunedFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(map, mapPruned));
+    assertTrue(mapPrunedFailure.getMessage().contains("'m'"),
+        "The error must name the column whose map values hold a shredded variant, got: " + mapPrunedFailure.getMessage());
+  }
+
+  @Test
+  public void testLegacyReaderGuardIsBestEffort() throws Exception {
+    FileSplit shredded = fileSplit(InputFormatTestUtil.writeVariantParquetFile(basePath, "shredded.parquet", true));
+
+    // count(*) reads no column data and reaches the guard with empty read column names, which must
+    // keep reading. `select *` is not this shape: HiveInputFormat.pushProjection writes the full
+    // column-name list for it, and setReadAllColumns only ever runs on ProjectionPusher's cloned
+    // JobConf, downstream of getRecordReader.
+    JobConf countStar = variantJobConf("id,v", "int,struct<metadata:binary,value:binary>", "", "");
+    assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(shredded, countStar));
+
+    // A malformed columns/columns.types pairing (fewer types than columns) is best-effort: the
+    // read the plain parquet reader would serve must not fail.
+    JobConf mismatchedTypes = variantJobConf("id,v", "struct<metadata:binary,value:binary>", "id,v", "0,1");
+    assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(shredded, mismatchedTypes));
+
+    // A columns.types string the guard cannot parse is best-effort too: `notatype` is no Hive
+    // type, so the TypeInfoUtils parse throws while the variant marker still passes the raw screen.
+    JobConf unparseableTypes =
+        variantJobConf("id,v", "int,struct<metadata:binary,value:binary>,notatype", "id,v", "0,1");
+    assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(shredded, unparseableTypes));
+
+    // An INT96 column anywhere in the file (Spark's default timestamp encoding) must not break the
+    // guard: converting the footer to avro throws "INT96 is deprecated" before reaching the variant.
+    JobConf withInt96 = variantJobConf("id,v,ts", "int,struct<metadata:binary,value:binary>,timestamp", "id,v", "0,1");
+    StoragePath int96UnshreddedPath = InputFormatTestUtil.writeVariantParquetFile(basePath, "int96_unshredded.parquet", false, true);
+    assertEquals(PrimitiveTypeName.INT96,
+        fileSchemaOf(int96UnshreddedPath).getType("ts").asPrimitiveType().getPrimitiveTypeName(),
+        "the ts column must really be INT96, or this leg proves nothing");
+    FileSplit int96Unshredded = fileSplit(int96UnshreddedPath);
+    assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(int96Unshredded, withInt96));
+    FileSplit int96Shredded = fileSplit(InputFormatTestUtil.writeVariantParquetFile(basePath, "int96_shredded.parquet", true, true));
+    HoodieException int96Failure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(int96Shredded, withInt96));
+    assertTrue(int96Failure.getMessage().contains("'v'"),
+        "The error must name the shredded variant column, got: " + int96Failure.getMessage());
+
+    // A synced VARIANT is exactly struct<metadata:binary,value:binary>, so a Hive type that also
+    // carries typed_value is a plain user struct of that shape, not a variant: it is not anchored,
+    // even over a file whose group would match the shredded shape.
+    JobConf plainStruct = variantJobConf(
+        "id,v", "int,struct<metadata:binary,value:binary,typed_value:struct<a:int>>", "id,v", "0,1");
+    assertDoesNotThrow(() -> HoodieParquetInputFormat.validateNoShreddedVariantRead(shredded, plainStruct));
+
+    // The exemption is anchored on the node shape, not on typed_value being absent from the whole
+    // column type string: a real variant at s.inner is still flagged when the sibling s.other is a
+    // user struct whose own member happens to be named typed_value.
+    FileSplit typedValueSibling = fileSplit(
+        InputFormatTestUtil.writeNestedShreddedVariantParquetFile(basePath, "nested_typed_value_sibling.parquet", true));
+    JobConf siblingTypes = variantJobConf(
+        "id,s", "int,struct<inner:struct<metadata:binary,value:binary>,other:struct<typed_value:string>>", "id,s", "0,1");
+    HoodieException siblingFailure = assertThrows(HoodieException.class,
+        () -> HoodieParquetInputFormat.validateNoShreddedVariantRead(typedValueSibling, siblingTypes));
+    assertTrue(siblingFailure.getMessage().contains("'s'"),
+        "A typed_value member on a sibling struct must not exempt the variant next to it, got: " + siblingFailure.getMessage());
+  }
+
+  /**
+   * A fresh JobConf on the legacy (file-group-reader disabled) route, projecting {@code readNames}
+   * / {@code readIds} out of the {@code columns} / {@code types} table description.
+   */
+  private static JobConf variantJobConf(String columns, String types, String readNames, String readIds) {
+    JobConf conf = new JobConf();
+    conf.setBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), false);
+    conf.set(IOConstants.COLUMNS, columns);
+    conf.set(IOConstants.COLUMNS_TYPES, types);
+    conf.set(READ_COLUMN_NAMES_CONF_STR, readNames);
+    conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, readIds);
+    return conf;
+  }
+
+  private static FileSplit fileSplit(StoragePath path) {
+    return new FileSplit(new Path(path.toUri()), 0, Long.MAX_VALUE, (String[]) null);
+  }
+
+  /** The footer's file schema: what the fixture legs pin their on-disk layout on. */
+  private static MessageType fileSchemaOf(StoragePath path) throws IOException {
+    try (ParquetFileReader reader = ParquetFileReader.open(
+        HadoopInputFile.fromPath(new Path(path.toUri()), new JobConf()))) {
+      return reader.getFooter().getFileMetaData().getSchema();
+    }
   }
 
   private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,

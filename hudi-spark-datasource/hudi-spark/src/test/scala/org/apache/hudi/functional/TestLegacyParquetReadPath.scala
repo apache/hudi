@@ -17,11 +17,12 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{BaseFileOnlyRelation, DataSourceReadOptions, DataSourceWriteOptions, IncrementalRelationV1, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, MergeOnReadSnapshotRelation, ScalaAssertionSupport}
+import org.apache.hudi.{BaseFileOnlyRelation, DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils, IncrementalRelationV1, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, MergeOnReadSnapshotRelation, ScalaAssertionSupport}
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
@@ -29,6 +30,7 @@ import org.apache.spark.sql.functions.{col, lit, struct}
 import org.apache.spark.sql.types.{IntegerType, LongType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assumptions.assumeTrue
 
 /** Row shape written by these tests. A nested struct and an array are included so the legacy
  * parquet read path is exercised on complex types -- the historically fragile vectorized
@@ -507,6 +509,67 @@ class TestLegacyParquetReadPath extends HoodieSparkClientTestBase with ScalaAsse
       assertWidenedValues(legacyDf)
       assertSameRows(newReaderDf, legacyDf)
     }
+  }
+
+  @Test
+  def testCowSnapshotReadWithSchemaOnReadRejectsShreddedVariant(): Unit = {
+    // The shredded-variant guard is copied into all four *LegacyHoodieParquetFileFormat versions,
+    // and buildScan on this relation is the only caller that reaches those copies -- DefaultSource
+    // never routes a batch read to them. Reading a shredded variant back needs Spark 4.1+
+    // (SPARK-54410), which leaves the 4.1 and 4.2 copies as the ones this exercises.
+    assumeTrue(HoodieSparkUtils.gteqSpark4_1, "Shredded variants need Spark 4.1+ to be read back")
+
+    // Schema-on-read models a variant as a two-field {metadata, value} record, so the merged
+    // request clips the file's typed_value away and the typed rows would come back with a null
+    // value residual -- silent data loss (#18285). The legacy formats must fail loudly instead
+    // (ParquetSchemaEvolutionUtils.validateNoShreddedVariants). Forced shredding is what puts a
+    // typed_value group under `v`; without it the file carries the unshredded pair and there is
+    // nothing for the guard to reject.
+    val shreddedSchemaOnReadOpts = Map(
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key -> "true",
+      DataSourceWriteOptions.RECONCILE_SCHEMA.key -> "true",
+      "hoodie.parquet.variant.write.shredding.enabled" -> "true",
+      "hoodie.parquet.variant.force.shredding.schema.for.test" -> "a bigint, b string")
+
+    // The short name is required: it resolves to the Spark 4 datasource, the only one whose
+    // supportsDataType override accepts a VariantType column on write.
+    spark.sql(
+      """select '1' as id, 1L as ts, 'p0' as partition, parse_json('{"a":1,"b":"b1"}') as v
+        |union all
+        |select '2' as id, 1L as ts, 'p0' as partition, parse_json('{"a":2,"b":"b2"}') as v""".stripMargin)
+      .write.format("hudi")
+      .options(writeOpts ++ shreddedSchemaOnReadOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val readOpts = Map(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key -> "true")
+    val metaClient = createMetaClient(spark, basePath)
+    assertTrue(BaseFileOnlyRelation(sqlContext, metaClient, legacyReadOpts(readOpts), None).hasSchemaOnRead,
+      "The write must have recorded an InternalSchema, otherwise the guard's branch is never taken")
+
+    // Only the relation's own buildScan is exercised here, not the HadoopFsRelation conversion:
+    // buildScan embeds the query schema into the reader's Hadoop conf (HoodieBaseRelation
+    // .embedInternalSchema), whereas the converted relation is read with the plain session conf,
+    // so shouldUseInternalSchema is false there and the guard is not on that path at all. That is
+    // also why DefaultSource keeps BaseFileOnlyRelation itself under schema-on-read.
+    val thrown = assertThrows(classOf[Throwable]) {
+      legacyRelationDf(readOpts).select("v").collect()
+    }
+    val causes = Iterator.iterate(thrown: Throwable)(_.getCause).takeWhile(_ != null).take(10).toSeq
+    assertTrue(causes.exists(c => c.isInstanceOf[HoodieException]
+      && String.valueOf(c.getMessage).contains("shredded variant")),
+      s"Expected the shredded-variant rejection but got: $thrown")
+
+    // The guard's empty-projection carve-out (count(*) reads no column data and must keep working)
+    // is pinned on the file-group-reader path by the count(*) leg of "Schema-on-read reads of
+    // shredded variant files fail fast" in TestVariantShreddingMixedLayouts, not here: this relation
+    // cannot serve an empty projection under schema-on-read at all, with or
+    // without a variant. buildScan prunes the internal schema to the zero requested columns, and
+    // InternalSchemaUtils.pruneInternalSchema builds an InternalSchema around a null record (NPE in
+    // buildIdToName; pre-existing, tracked by #19734).
+    // TODO(voon): once #19734 is fixed, restore the carve-out here so the legacy relation pins it too:
+    //   assertEquals(2L, legacyRelationDf(readOpts).count())
   }
 
   @Test

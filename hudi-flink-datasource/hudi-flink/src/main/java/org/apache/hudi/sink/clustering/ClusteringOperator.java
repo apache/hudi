@@ -86,6 +86,7 @@ import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -227,6 +228,13 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   // -------------------------------------------------------------------------
 
   private void doClustering(String instantTime, List<ClusteringOperation> clusteringOperations) throws Exception {
+    // Resolve the sort columns before any file is opened: a name the row type lacks, or a type the
+    // generated comparator cannot order (MAP, VARIANT, ROW, ARRAY, ...), fails here by column name
+    // rather than per record inside the sorter. Here and not in open() on purpose: the failure then
+    // stays with this clustering task, as it did before the check existed -- run asynchronously it
+    // becomes a failed commit event that rolls the instant back -- whereas a throw from open() fails
+    // the operator on every restart and, on the ingestion pipeline, takes the write job down with it.
+    SortOperatorGen sortOperatorGen = this.sortClusteringEnabled ? createSortOperatorGen() : null;
     clusteringMetrics.startClustering();
     try (BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
         instantTime, this.taskID, RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()),
@@ -243,7 +251,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       try (ClosableIterator<RowData> closeableIterator = iterator) {
         if (this.sortClusteringEnabled) {
           RowDataSerializer rowDataSerializer = new RowDataSerializer(rowType);
-          BinaryExternalSorter sorter = initSorter();
+          BinaryExternalSorter sorter = initSorter(sortOperatorGen);
           try {
             while (closeableIterator.hasNext()) {
               RowData rowData = closeableIterator.next();
@@ -326,9 +334,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     return new CloseableConcatenatingIterator<>(iteratorsForPartition);
   }
 
-  private BinaryExternalSorter initSorter() {
+  private BinaryExternalSorter initSorter(SortOperatorGen sortOperatorGen) {
     ClassLoader cl = getContainingTask().getUserCodeClassLoader();
-    SortOperatorGen sortOperatorGen = createSortOperatorGen();
     NormalizedKeyComputer computer = sortOperatorGen.generateNormalizedKeyComputer("SortComputer").newInstance(cl);
     RecordComparator comparator = sortOperatorGen.generateRecordComparator("SortComparator").newInstance(cl);
 
@@ -353,8 +360,12 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   }
 
   private SortOperatorGen createSortOperatorGen() {
-    return new SortOperatorGen(rowType,
-        conf.get(FlinkOptions.CLUSTERING_SORT_COLUMNS).split(","));
+    return new SortOperatorGen(rowType, sortColumns());
+  }
+
+  /** The configured sort columns, trimmed: the list is user-written ("id, name") and the names are looked up as given. */
+  private String[] sortColumns() {
+    return Arrays.stream(conf.get(FlinkOptions.CLUSTERING_SORT_COLUMNS).split(",")).map(String::trim).toArray(String[]::new);
   }
 
   private String getFileIds(List<ClusteringOperation> clusteringOperations) {
