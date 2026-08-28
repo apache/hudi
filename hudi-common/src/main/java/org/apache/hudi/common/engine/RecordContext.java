@@ -310,10 +310,11 @@ public abstract class RecordContext<T> implements Serializable {
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
    *
+   * @param schema The schema of the record.
    * @param record The record.
    * @return The record containing the same data that do not change in memory over time.
    */
-  public abstract T seal(T record);
+  public abstract T seal(HoodieSchema schema, T record);
 
   /**
    * Converts engine specific row into binary format.

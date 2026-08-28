@@ -296,6 +296,8 @@ public class TestFlinkWriteClients {
   @Test
   void testWriteMergeHandleForPreV9Table() throws Exception {
     conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
     StreamerUtil.initTableIfNotExists(conf);
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     assertThat(writeConfig.getMergeHandleClassName(), is(FileGroupReaderBasedMergeHandle.class.getName()));

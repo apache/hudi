@@ -26,11 +26,11 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieStorageUtils;
+import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -55,6 +55,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
@@ -184,7 +185,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       if (HoodiePartitionMetadata.hasPartitionMetadata(storage, storagePath)) {
         HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, storagePath);
         metadata.readFromFS();
-        baseDir = HoodieHiveUtils.getNthParent(folder, metadata.getPartitionDepth());
+        baseDir = convertToHadoopPath(TablePathUtils.getNthParent(storagePath, metadata.getPartitionDepth()));
       } else {
         baseDir = safeGetParentsParent(folder);
       }

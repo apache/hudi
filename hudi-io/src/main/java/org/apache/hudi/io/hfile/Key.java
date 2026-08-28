@@ -27,7 +27,7 @@ import lombok.ToString;
 
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
-import static org.apache.hudi.io.hfile.HFileUtils.compareKeys;
+import static org.apache.hudi.io.hfile.HFileByteUtils.compareKeys;
 import static org.apache.hudi.io.util.IOUtils.readShort;
 
 /**

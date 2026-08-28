@@ -21,7 +21,11 @@ package org.apache.hudi.utilities.streamer.validator;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
@@ -32,7 +36,11 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests for {@link SparkValidationContext}.
@@ -139,6 +147,40 @@ public class TestSparkValidationContext {
     assertTrue(ctx.getPreviousCommitMetadata().isPresent());
     assertEquals("events,0:500",
         ctx.getPreviousCommitMetadata().get().getMetadata(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1));
+  }
+
+  @Test
+  public void testTimelineAccessWithoutMetaClient() {
+    SparkValidationContext ctx = new SparkValidationContext(
+        "20260320120000000",
+        Option.of(new HoodieCommitMetadata()),
+        Option.of(Collections.emptyList()),
+        Option.empty());
+
+    assertThrows(UnsupportedOperationException.class, ctx::getActiveTimeline);
+    assertFalse(ctx.getPreviousCommitInstant().isPresent());
+  }
+
+  @Test
+  public void testTimelineAccessWithMetaClient() {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
+    HoodieTimeline writeTimeline = mock(HoodieTimeline.class);
+    HoodieInstant lastInstant = mock(HoodieInstant.class);
+    when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(activeTimeline.getWriteTimeline()).thenReturn(writeTimeline);
+    when(writeTimeline.filterCompletedInstants()).thenReturn(writeTimeline);
+    when(writeTimeline.lastInstant()).thenReturn(Option.of(lastInstant));
+
+    SparkValidationContext ctx = new SparkValidationContext(
+        "20260320120000000",
+        Option.of(new HoodieCommitMetadata()),
+        Option.of(Collections.emptyList()),
+        Option.empty(),
+        metaClient);
+
+    assertSame(activeTimeline, ctx.getActiveTimeline());
+    assertSame(lastInstant, ctx.getPreviousCommitInstant().get());
   }
 
   @Test

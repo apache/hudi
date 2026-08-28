@@ -53,7 +53,7 @@ public class FlinkLsmFileGroupReaderBasedMergeHandle<T, I, K, O>
   public FlinkLsmFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                  Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                                                  TaskContextSupplier taskContextSupplier, HoodieBaseFile hoodieBaseFile) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, hoodieBaseFile, Option.empty());
+    super(config, instantTime, hoodieTable, MergeContext.create(recordItr), partitionPath, fileId, taskContextSupplier, hoodieBaseFile, Option.empty());
     if (getAttemptId() > 0) {
       deleteInvalidDataFile(getAttemptId() - 1);
     }

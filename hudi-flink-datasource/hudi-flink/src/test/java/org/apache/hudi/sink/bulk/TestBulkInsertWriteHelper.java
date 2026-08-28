@@ -48,6 +48,7 @@ import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for {@link BulkInsertWriterHelper}.
@@ -103,6 +104,22 @@ public class TestBulkInsertWriteHelper {
     expected2.put("par4", expectRows);
 
     TestData.checkWrittenData(tempFile, expected2, 4, TestBulkInsertWriteHelper::filterCommitTime);
+  }
+
+  @Test
+  void testInvalidRecordIsWrappedAsIOException() {
+    HoodieFlinkTable<?> table = FlinkTables.createTable(conf);
+    BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(
+        conf,
+        table,
+        table.getConfig(),
+        WriteClientTestUtils.createNewInstantTime(),
+        1,
+        1,
+        0,
+        TestConfigurations.ROW_TYPE);
+
+    assertThrows(IOException.class, () -> writerHelper.write(new GenericRowData(0)));
   }
 
   private void assertWriteStatus(List<WriteStatus> writeStatusList) {

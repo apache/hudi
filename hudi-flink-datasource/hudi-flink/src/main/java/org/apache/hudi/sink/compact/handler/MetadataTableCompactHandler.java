@@ -105,13 +105,16 @@ public class MetadataTableCompactHandler extends DataTableCompactHandler {
         metaClient.reload();
       }
       Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
+      String payloadClass = ConfigUtils.getPayloadClass(writeClient.getConfig().getProps());
+      AvroReaderContextFactory readerContextFactory = new AvroReaderContextFactory(
+          metaClient, payloadClass, instantRange, writeClient.getConfig().getProps());
       List<WriteStatus> writeStatuses = compactor.logCompact(
           writeClient.getConfig(),
           event.getOperation(),
           event.getCompactionInstantTime(),
-          instantRange,
           table,
-          table.getTaskContextSupplier());
+          table.getTaskContextSupplier(),
+          readerContextFactory.getContext());
       compactionMetrics.endCompaction();
       collector.collect(createCommitEvent(event, writeStatuses));
     }

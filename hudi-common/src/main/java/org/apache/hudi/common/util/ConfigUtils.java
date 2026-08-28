@@ -151,7 +151,13 @@ public class ConfigUtils {
    * Ensures that the prefixed merge properties are populated for mergers.
    */
   public static TypedProperties getMergeProps(TypedProperties props, HoodieTableConfig tableConfig) {
-    Map<String, String> mergeProps = tableConfig.getTableMergeProperties();
+    // Prefer the payload class persisted in the table config, falling back to the reader/write props
+    // (e.g. hoodie.datasource.write.payload.class) when the table never persisted it. This keeps the
+    // persisted payload authoritative (no query-side shadowing) while pre-v9 delete markers still derive.
+    String payloadClass = tableConfig.getPayloadClassIfPresent()
+        .orElseGet(() -> HoodieRecordPayload.getPayloadClassNameIfPresent(props)
+            .orElseGet(tableConfig::getPayloadClass));
+    Map<String, String> mergeProps = tableConfig.getTableMergeProperties(payloadClass);
     if (mergeProps.isEmpty()) {
       return props;
     }
@@ -406,6 +412,32 @@ public class ConfigUtils {
       if (props.containsKey(alternative)) {
         deprecationWarning(alternative, configProperty);
         return Option.ofNullable(props.get(alternative));
+      }
+    }
+    return Option.empty();
+  }
+
+  /**
+   * Gets the raw value for a {@link ConfigProperty} config using a key mapping function. The key
+   * and alternative keys are used to fetch the config. Unlike
+   * {@link #getStringWithAltKeys(Function, ConfigProperty)}, this does not fall back to the
+   * config's default value when the config is not found.
+   *
+   * @param keyMapper      Mapper function to map the key to values.
+   * @param configProperty {@link ConfigProperty} config to fetch.
+   * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
+   */
+  public static Option<Object> getRawValueWithAltKeys(Function<String, Object> keyMapper,
+                                                      ConfigProperty<?> configProperty) {
+    Object value = keyMapper.apply(configProperty.key());
+    if (value != null) {
+      return Option.of(value);
+    }
+    for (String alternative : configProperty.getAlternatives()) {
+      Object altValue = keyMapper.apply(alternative);
+      if (altValue != null) {
+        deprecationWarning(alternative, configProperty);
+        return Option.of(altValue);
       }
     }
     return Option.empty();

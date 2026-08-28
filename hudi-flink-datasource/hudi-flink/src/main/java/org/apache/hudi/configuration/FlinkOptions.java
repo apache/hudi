@@ -350,6 +350,64 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Parallelism of tasks that do the index writing, default is the parallelism of the execution environment");
 
   // ------------------------------------------------------------------------
+  //  RLI RocksDB Partitioned Cache Options
+  // ------------------------------------------------------------------------
+
+  @AdvancedConfig
+  public static final ConfigOption<String> INDEX_RLI_BACKEND_TYPE = ConfigOptions
+      .key("index.rli.backend.type")
+      .stringType()
+      .defaultValue("mdt")
+      .withDescription("The backend used to serve record level index lookups. Supported values are "
+          + "mdt (default), which reads the record level index directly from the metadata table, and "
+          + "rocksdb, which uses a local RocksDB-based partitioned cache in front of the metadata table "
+          + "to accelerate lookups.");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> INDEX_RLI_CACHE_ROCKSDB_BASE_PATH = ConfigOptions
+      .key("index.rli.cache.rocksdb.base.path")
+      .stringType()
+      .defaultValue("/tmp/hudi-index-cache")
+      .withDescription("Local directory for RocksDB partitioned record level index cache data.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS = ConfigOptions
+      .key("index.rli.cache.rocksdb.bootstrap.days")
+      .intType()
+      .defaultValue(7)
+      .withDescription("Number of days of Partitioned Record Index to load during bootstrap. Only partitions "
+          + "within this window are pre-loaded; older partitions are loaded on demand when updates are observed.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Long> INDEX_RLI_CACHE_ROCKSDB_PARTITION_TTL_HOURS = ConfigOptions
+      .key("index.rli.cache.rocksdb.partition.ttl.hours")
+      .longType()
+      .defaultValue(168L) // default 7 days
+      .withDescription("TTL for partition column families in the RocksDB partitioned record level index cache, default 168 hours (7 days).");
+
+  @AdvancedConfig
+  public static final ConfigOption<Long> INDEX_RLI_CACHE_ROCKSDB_BLOCK_CACHE_MB = ConfigOptions
+      .key("index.rli.cache.rocksdb.block.cache.mb")
+      .longType()
+      .defaultValue(256L)
+      .withDescription("RocksDB block cache size (off-heap) in MB for the partitioned record level index cache, default 256.");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> INDEX_RLI_CACHE_ROCKSDB_COMPACTION_STYLE = ConfigOptions
+      .key("index.rli.cache.rocksdb.compaction.style")
+      .stringType()
+      .defaultValue("LEVEL")
+      .withDescription("RocksDB compaction style for the partitioned record level index cache, default LEVEL.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> INDEX_RLI_CACHE_ROCKSDB_INVALIDATE_ON_REPLACE_COMMIT = ConfigOptions
+      .key("index.rli.cache.rocksdb.invalidate.on.replacecommit")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Drop a cached partition's column family when a completed REPLACE_COMMIT (clustering, "
+          + "insert-overwrite, delete-partition) is observed for it, ahead of its TTL, default true.");
+
+  // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------
 
@@ -1325,7 +1383,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("hive_sync.mode")
       .stringType()
       .defaultValue(HiveSyncMode.HMS.name())
-      .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'hms'");
+      .withDescription("Mode to choose for Hive ops. Valid values are hms, glue, jdbc and hiveql, default 'hms'");
 
   @AdvancedConfig
   public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions

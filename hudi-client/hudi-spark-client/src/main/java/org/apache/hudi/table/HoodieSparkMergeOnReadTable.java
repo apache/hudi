@@ -203,7 +203,7 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
   public Iterator<List<WriteStatus>> handleInsertsForLogCompaction(String instantTime, String partitionPath, String fileId,
                                                           Map<String, HoodieRecord<?>> recordMap,
                                                           Map<HoodieLogBlock.HeaderMetadataType, String> header) {
-    HoodieWriteHandle appendHandle = CommonClientUtils.shouldWriteNativeLogs(config, getMetaClient().getTableConfig())
+    HoodieWriteHandle appendHandle = CommonClientUtils.shouldWriteNativeLogs(config)
         ? new HoodieNativeLogAppendHandle(config, instantTime, this,
             partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header)
         : new HoodieInlineLogAppendHandle(config, instantTime, this,

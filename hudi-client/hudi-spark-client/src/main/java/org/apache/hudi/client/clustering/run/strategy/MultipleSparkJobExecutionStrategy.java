@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SortUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.LazyConcatenatingIterator;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -57,7 +58,8 @@ import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.execution.bulkinsert.SpatialCurveSortPartitionerBase;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -74,6 +76,7 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -194,15 +197,26 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   private <I> BulkInsertPartitioner<I> getPartitioner(Map<String, String> strategyParams,
                                                       HoodieSchema schema,
                                                       boolean isRowPartitioner) {
+    // Trim: the config and inline paths pass the list through verbatim (`id, ts`), while the
+    // partitioners look up the column names as given.
     Option<String[]> orderByColumnsOpt =
         Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
-            .map(listStr -> listStr.split(","));
+            .map(listStr -> Arrays.stream(listStr.split(",")).map(String::trim).toArray(String[]::new));
 
     return orderByColumnsOpt.map(orderByColumns -> {
+      // The custom-columns partitioners re-validate in their constructors; this earlier check
+      // additionally covers the spatial-curve (ZORDER/HILBERT) partitioners below, which hold no
+      // schema of their own. The spatial arm additionally requires a top-level name, see
+      // SpatialCurveSortPartitionerBase.validateOrderByColumns.
+      SortUtils.validateSortableColumns(orderByColumns, schema);
       HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = getWriteConfig().getLayoutOptimizationStrategy();
       switch (layoutOptStrategy) {
         case ZORDER:
         case HILBERT:
+          // Both partitioners build the curve over a frame carrying the meta columns, so they are
+          // validated against the same schema the RDD one is handed below; addMetadataFields is
+          // idempotent, so it does not matter whether the caller resolved it with them or without.
+          SpatialCurveSortPartitionerBase.validateOrderByColumns(orderByColumns, HoodieSchemaUtils.addMetadataFields(schema), layoutOptStrategy);
           return isRowPartitioner
               ? new RowSpatialCurveSortPartitioner(getWriteConfig())
               : new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), orderByColumns, layoutOptStrategy,
@@ -215,7 +229,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
     }).orElseGet(() -> isRowPartitioner
-        ? BulkInsertInternalPartitionerWithRowsFactory.get(getWriteConfig(), getHoodieTable().isPartitioned(), true)
+        ? BulkInsertInternalPartitionerWithRowsFactory.get(
+            getHoodieTable().getMetaClient().getTableConfig(), getWriteConfig(),
+            getHoodieTable().isPartitioned(), true)
         : BulkInsertInternalPartitionerFactory.get(getHoodieTable(), getWriteConfig(), true));
   }
 
@@ -276,7 +292,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient());
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
-      long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
+      long maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
       log.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
         Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> getRecordIterator(readerContextFactory, clusteringOp, instantTime, maxMemoryPerCompaction);
@@ -297,7 +313,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         .map(ClusteringOperation::create).collect(Collectors.toList());
     String basePath = getWriteConfig().getBasePath();
     // construct supporting cast that executors might need
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(getEngineContext().getTaskContextSupplier(), writeConfig);
+    long maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(getEngineContext().getTaskContextSupplier(), writeConfig);
     TypedProperties readerProperties = getReaderProperties(maxMemoryPerCompaction);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     String internalSchemaStr = getWriteConfig().getInternalSchema();

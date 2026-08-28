@@ -18,9 +18,10 @@
 package org.apache.spark.sql.hudi.analysis
 
 import org.apache.spark.sql.AnalysisException
-import org.apache.spark.sql.catalyst.analysis.{ResolveInsertionBase, TableOutputResolver}
+import org.apache.spark.sql.catalyst.analysis.ResolveInsertionBase
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.plans.logical.InsertIntoStatement
+import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, LogicalPlan}
 import org.apache.spark.sql.errors.DataTypeErrors.toSQLId
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.datasources.PreprocessTableInsertion
@@ -54,6 +55,17 @@ import org.apache.spark.sql.util.PartitioningUtils.normalizePartitionSpec
  * case-class shapes of [[InsertIntoStatement]].
  */
 abstract class HoodieSpark4ResolveColumnsForInsertInto extends ResolveInsertionBase {
+
+  /**
+   * Resolves the query output against the table schema, filling any user-omitted column with its
+   * default value. Spark 4.2 GA replaced the boolean `supportColDefaultValue` flag of
+   * `TableOutputResolver.resolveOutputColumns` with a `defaultValueFillMode` enum, so the call
+   * itself lives in the per-version subclasses.
+   */
+  protected def resolveOutputColumns(tblName: String,
+                                     expectedColumns: Seq[Attribute],
+                                     query: LogicalPlan,
+                                     byName: Boolean): LogicalPlan
 
   protected def preprocess(insert: InsertIntoStatement,
                            catalogTable: Option[CatalogTable]): InsertIntoStatement = {
@@ -100,13 +112,11 @@ abstract class HoodieSpark4ResolveColumnsForInsertInto extends ResolveInsertionB
       insert.query
     }
     val newQuery = try {
-      TableOutputResolver.resolveOutputColumns(
+      resolveOutputColumns(
         tblName,
         expectedColumns,
         query,
-        byName = hasColumnList || insert.byName,
-        conf,
-        supportColDefaultValue = true)
+        byName = hasColumnList || insert.byName)
     } catch {
       case e: AnalysisException if staticPartCols.nonEmpty &&
         (e.getErrorClass == "INSERT_COLUMN_ARITY_MISMATCH.NOT_ENOUGH_DATA_COLUMNS" ||

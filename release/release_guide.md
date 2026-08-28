@@ -290,6 +290,31 @@ Here is how to go about a bug fix release.
 - Go to apache/hudi repo locally and pull this branch. Here after you can work on this branch and push to origin when need be.
 - Do not forget to set the env variables from above section.
 
+## hudi-trino Trino pin-back
+
+On master hudi-trino tracks `trinodb/trino` master at the commit in `trino.sha`, whose `trino.version` is a
+`-SNAPSHOT` that resolves from nowhere but a local build. A release must depend on a released Trino, and the pin-back
+must land on the release branch before the source release is generated (see "Build a release candidate", the Generate
+Source Release step) -- otherwise the voted tarball ships a `-SNAPSHOT` Trino pin that cannot be built from Central.
+
+1. Wait for the latest released Trino `NNN` to be available on Maven Central.
+2. In a `trinodb/trino` checkout, find the tagged commit: `TAG_SHA=$(git rev-list -n1 NNN)`.
+3. If the pin is behind the tag, advance master's pin to `TAG_SHA` first by dispatching the
+   `Hudi Trino SPI Compatibility` workflow with `trino_ref=NNN` (it then verifies and pins exactly that tag rather
+   than master HEAD) and merging the pin PR a committer opens from the pushed `bot/trino-pin` branch. If the pin is ahead of the tag, enumerate the adaptations that would be lost with
+   `git log NNN..<pin> -- core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs lib/trino-memory-context`
+   and revert them forward on the release branch only, never on master.
+4. On the release branch set `trino.version=NNN`, `trino.sha=TAG_SHA` and `trino.e2e.version=NNN` in the root
+   pom, the `<parent>` version in `docker/trino/shim/pom.xml`, and the `ARG TRINO_VERSION` default in
+   `docker/trino/Dockerfile` (`build_image.sh` reads `trino.e2e.version` from the root pom). Re-check SPI-surface-coupled
+   dependency scopes against `NNN` (e.g. `jts-core` is `provided` because it joined the Trino SPI surface in 482;
+   the shim's SpiDependencyChecker fails the build loudly if a scope no longer matches the target release).
+5. Verify the released Trino resolves from Central against an empty local repository
+   (scope the check to io.trino: the module's hudi siblings are not on Central until this release completes):
+   `mvn dependency:get -Dartifact=io.trino:trino-hive:NNN -Dmaven.repo.local=$(mktemp -d)`
+6. CI and the E2E workflow then run with zero SPI drift; the staging deploy flow in "Build a release candidate"
+   is unchanged.
+
 ## Verify that a Release Build Works
 
 Run "mvn -Prelease clean install" to ensure that the build processes are in good shape. // You need to execute this command once you have the release branch in apache/hudi
@@ -408,8 +433,8 @@ Set up a few environment variables to simplify Maven commands that follow. This 
    1. This will deploy jar artifacts to the Apache Nexus Repository, which is the staging area for deploying jars to Maven Central.
    2. Review all staged artifacts (https://repository.apache.org/). They should contain all relevant parts for each module, including pom.xml, jar, test jar, source, test source, javadoc, etc. Carefully review any new artifacts.
    3. git checkout ${RELEASE_BRANCH}
-   4. Given that certain bundle jars are built by Java 17 (Spark 4 bundle), multiple
-      scripts need to be run. Run each from the repository root directory (the one containing `packaging/`).
+   4. Given that certain artifacts require newer JDKs (Java 17 for the Spark 4 bundles, Java 25 for hudi-trino),
+      multiple scripts need to be run. Run each from the repository root directory (the one containing `packaging/`).
        1. For most modules with Java 11 build, run `export JAVA_HOME=$(/usr/libexec/java_home -v 11)` and
           `./scripts/release/deploy_staging_jars.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy1.log"`
            1. when prompted for the passphrase, if you have multiple gpg keys in your keyring, make sure that you enter
@@ -425,23 +450,31 @@ Set up a few environment variables to simplify Maven commands that follow. This 
               module. See [checklist](#checklist-to-proceed-to-the-next-step).
        2. Continue with Java 17 build for Spark 4 bundle, run `export JAVA_HOME=$(/usr/libexec/java_home -v 17)` and
           `./scripts/release/deploy_staging_jars_java17.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy2.log"`
-   5. Note that the artifacts from Java 17 build are uploaded to a separate staging repo. Use the
-      `copy_staging_repo.sh` script to copy all artifacts from the Java 17 staging repo into the Java 11 staging repo
+       3. Continue with Java 25 build for the hudi-trino connector, run `export JAVA_HOME=$(/usr/libexec/java_home -v 25)`
+          and `./scripts/release/deploy_staging_jars_java25.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy3.log"`.
+          This step must run after the Java 11 step in 9.4.1, which installs the upstream Hudi modules that hudi-trino
+          resolves from the local m2 (the script does not pass `-am` because Lombok cannot run on JDK 25).
+       4. The hudi-trino Trino pin-back already happened when the release branch was cut (see the
+          "hudi-trino Trino pin-back" section under "Cut a release branch"); the Java 25 deploy needs no extra steps.
+   5. Note that each of the Java 17 and Java 25 builds uploads its artifacts to its own separate staging repo. Use the
+      `copy_staging_repo.sh` script once per extra staging repo to copy all artifacts into the Java 11 staging repo
       so that all artifacts stay in the same repo.
-      1. Identify both staging repo IDs from [Apache Nexus Staging Repositories](https://repository.apache.org/#stagingRepositories)
-         (e.g., `orgapachehudi-1177` for Java 17, `orgapachehudi-1176` for Java 11). Make sure both repos are still in
-         the "open" state (not closed).
+      1. Identify all staging repo IDs from [Apache Nexus Staging Repositories](https://repository.apache.org/#stagingRepositories)
+         (e.g., `orgapachehudi-1177` for Java 17, `orgapachehudi-1178` for Java 25, `orgapachehudi-1176` for Java 11).
+         Make sure all repos are still in the "open" state (not closed).
       2. First do a dry-run to verify the list of artifacts to be copied:
          ```shell
          ./scripts/release/copy_staging_repo.sh --dry-run <java17-repo-id> <java11-repo-id>
+         ./scripts/release/copy_staging_repo.sh --dry-run <java25-repo-id> <java11-repo-id>
          ```
-      3. Then run the actual copy:
+      3. Then run the actual copies:
          ```shell
          ./scripts/release/copy_staging_repo.sh <java17-repo-id> <java11-repo-id> 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.copy_staging.log"
+         ./scripts/release/copy_staging_repo.sh <java25-repo-id> <java11-repo-id> 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.copy_staging.log"
          ```
       4. The script reads Nexus credentials from `~/.m2/settings.xml` (server id `apache.releases.https`), downloads
-         every artifact from the source repo, and re-uploads them to the target repo. After it finishes, drop the
-         Java 17 staging repo on Apache Nexus.
+         every artifact from the source repo, and re-uploads them to the target repo. After it finishes, drop both the
+         Java 17 and the Java 25 staging repos on Apache Nexus.
    6. Review all staged artifacts by logging into Apache Nexus and clicking on "Staging Repositories" link on left pane.
       Then find a "open" entry for apachehudi
    7. Ensure it contains all 2 (2.12 and 2.13) artifacts, mainly hudi-spark-bundle-2.12/2.13,

@@ -71,7 +71,7 @@ public class BufferedRecord<T> implements Serializable {
       HoodieSchema schema = recordContext.getSchemaFromBufferRecord(this);
       // Schema can be null in test scenarios where schemas are not registered in the RecordContext (e.g. in tests)
       if (schema != null) {
-        record = recordContext.seal(recordContext.toBinaryRow(schema, record));
+        record = recordContext.seal(schema, recordContext.toBinaryRow(schema, record));
       }
     }
     return this;
@@ -79,7 +79,8 @@ public class BufferedRecord<T> implements Serializable {
 
   public BufferedRecord<T> seal(RecordContext<T> recordContext) {
     if (record != null) {
-      this.record = recordContext.seal(record);
+      HoodieSchema schema = recordContext.getSchemaFromBufferRecord(this);
+      this.record = recordContext.seal(schema, record);
     }
     return this;
   }

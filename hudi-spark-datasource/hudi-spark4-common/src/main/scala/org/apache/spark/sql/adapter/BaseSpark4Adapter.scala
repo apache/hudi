@@ -18,6 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieFileScanRDD, HoodieSchemaConversionUtils}
+import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
@@ -48,7 +49,7 @@ import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, Pa
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.{BinaryType, DataType, StructType, VariantType}
+import org.apache.spark.sql.types.{BinaryType, DataType, StructField, StructType, VariantType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.types.variant.Variant
@@ -284,8 +285,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     applyVariantLogicalType(builder).named(fieldName)
   }
 
-  // TODO(#18935) drop-spark4.0: when all remaining 4.x adapters are parquet 1.16+, apply variantType() in this base and delete the no-op default plus the Spark4_1Adapter override.
-  protected def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = builder
+  // TODO(#18935) drop-spark4.0: when all remaining 4.x adapters are parquet 1.16+, apply variantType() in this base and delete the no-op override plus the Spark4_1Adapter override.
+  override def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = builder
 
   override def isVariantShreddingStruct(structType: StructType): Boolean = {
     SparkShreddingUtils.isVariantShreddingStruct(structType)
@@ -294,6 +295,29 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def generateVariantWriteShreddingSchema(dataType: DataType, isTopLevel: Boolean, isObjectField: Boolean): StructType = {
     SparkShreddingUtils.addWriteShreddingMetadata(
       SparkShreddingUtils.variantShreddingSchema(dataType, isTopLevel, isObjectField))
+  }
+
+  /**
+   * Shared implementation behind [[SparkAdapter#buildFullVariantReadSchema]] for the 4.x
+   * adapters whose parquet reader can reconstruct shredded variants (4.1+, SPARK-54410).
+   * Spark 4.0 keeps the default None: the write-side methods above have no version gate, so
+   * it does write shredded files, but its reader cannot rebuild them and the projection
+   * shape would not help.
+   */
+  protected final def rewriteTopLevelVariantsForFullRead(schema: StructType): Option[StructType] = {
+    var rewritten = false
+    val fields = schema.fields.map { f =>
+      if (isVariantType(f.dataType)) {
+        rewritten = true
+        // Mirrors RequestedVariantField.fullVariant in PushVariantIntoScan: whole-variant
+        // access is a single child "0" at path "$" with failOnError and UTC.
+        f.copy(dataType = StructType(Array(StructField("0", VariantType,
+          metadata = VariantMetadata("$", failOnError = true, timeZoneId = "UTC").toMetadata))))
+      } else {
+        f
+      }
+    }
+    if (rewritten) Some(StructType(fields)) else None
   }
 
   override def createShreddedVariantWriter(
@@ -307,6 +331,16 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
       val variant = new Variant(variantVal.getValue, variantVal.getMetadata)
       val shreddedValues = SparkShreddingUtils.castShredded(variant, variantShreddingSchema)
       writeStruct.accept(shreddedValues)
+    }
+  }
+
+  override def extractVariantBinary(row: SpecializedGetters, ordinal: Int): VariantShreddingSchemaInferrer.VariantSample = {
+    if (row.isNullAt(ordinal)) {
+      null
+    } else {
+      val variantVal = row.getVariant(ordinal)
+      // Defensive copies: Spark iterators reuse row instances and VariantVal exposes its backing arrays.
+      new VariantShreddingSchemaInferrer.VariantSample(variantVal.getValue.clone(), variantVal.getMetadata.clone())
     }
   }
 }

@@ -135,7 +135,13 @@ public class StreamerUtil {
 
   public static TypedProperties getProps(FlinkStreamerConfig cfg) {
     if (cfg.propsFilePath.isEmpty()) {
-      return new TypedProperties();
+      TypedProperties properties = new TypedProperties();
+      cfg.configs.forEach(x -> {
+        String[] kv = x.split("=");
+        ValidationUtils.checkArgument(kv.length == 2);
+        properties.setProperty(kv[0], kv[1]);
+      });
+      return properties;
     }
     return readConfig(
         HadoopConfigurations.getHadoopConf(cfg),
@@ -336,6 +342,7 @@ public class StreamerUtil {
           .setTableVersion(conf.get(FlinkOptions.WRITE_TABLE_VERSION))
           .setTableFormat(conf.get(FlinkOptions.WRITE_TABLE_FORMAT))
           .setBaseFileFormat(conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null))
+          .setTableStorageLayout(OptionsResolver.getTableStorageLayout(conf).configValue())
           .setRecordMergeMode(getMergeMode(conf))
           .setRecordMergeStrategyId(getMergeStrategyId(conf))
           .setPayloadClassName(getPayloadClass(conf))

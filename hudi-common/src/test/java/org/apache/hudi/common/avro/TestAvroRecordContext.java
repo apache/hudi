@@ -28,6 +28,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.avro.AvroRecordContext.getFieldValueFromIndexedRecord;
@@ -36,6 +39,23 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TestAvroRecordContext {
+
+  private static final Schema RECORD_SCHEMA = new Schema.Parser().parse(
+      "{\"type\":\"record\",\"name\":\"top\",\"fields\":["
+          + "{\"name\":\"id\",\"type\":\"int\"},"
+          + "{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null},"
+          + "{\"name\":\"address\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"address\",\"fields\":["
+          + "{\"name\":\"city\",\"type\":\"string\"},"
+          + "{\"name\":\"zip\",\"type\":[\"null\",\"int\"],\"default\":null}]}],\"default\":null},"
+          + "{\"name\":\"multi\",\"type\":[\"null\",\"string\",\"int\"],\"default\":null}]}");
+
+  private static final Schema MAP_AND_ARRAY_SCHEMA = new Schema.Parser().parse(
+      "{\"type\":\"record\",\"name\":\"complex\",\"fields\":["
+          + "{\"name\":\"id\",\"type\":\"int\"},"
+          + "{\"name\":\"str_map\",\"type\":[\"null\",{\"type\":\"map\",\"values\":\"string\"}],\"default\":null},"
+          + "{\"name\":\"int_array\",\"type\":[\"null\",{\"type\":\"array\",\"items\":\"int\"}],\"default\":null},"
+          + "{\"name\":\"rec_map\",\"type\":[\"null\",{\"type\":\"map\",\"values\":{\"type\":\"record\","
+          + "\"name\":\"inner\",\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}}],\"default\":null}]}");
 
   private static Stream<Arguments> testConvertValueToEngineType() {
     return Stream.of(
@@ -51,15 +71,6 @@ class TestAvroRecordContext {
     Comparable actual = AvroRecordContext.getFieldAccessorInstance().convertValueToEngineType(input);
     assertEquals(expected, actual);
   }
-
-  private static final Schema RECORD_SCHEMA = new Schema.Parser().parse(
-      "{\"type\":\"record\",\"name\":\"top\",\"fields\":["
-          + "{\"name\":\"id\",\"type\":\"int\"},"
-          + "{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null},"
-          + "{\"name\":\"address\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"address\",\"fields\":["
-          + "{\"name\":\"city\",\"type\":\"string\"},"
-          + "{\"name\":\"zip\",\"type\":[\"null\",\"int\"],\"default\":null}]}],\"default\":null},"
-          + "{\"name\":\"multi\",\"type\":[\"null\",\"string\",\"int\"],\"default\":null}]}");
 
   private static GenericRecord buildRecord() {
     GenericRecord address = new GenericData.Record(RECORD_SCHEMA.getField("address").schema().getTypes().get(1));
@@ -94,9 +105,43 @@ class TestAvroRecordContext {
   @Test
   void testGetFieldValueErrorCases() {
     GenericRecord record = buildRecord();
-    // a union that is not [null, T] does not support field lookups
-    assertThrows(IllegalStateException.class, () -> getFieldValueFromIndexedRecord(record, "multi.sub"));
+    // a union that is not [null, T] cannot be navigated into; instead of throwing, the value
+    // navigator returns null so callers (e.g. column-stats collection) degrade gracefully,
+    // matching HoodieAvroUtils.getNestedFieldVal
+    assertNull(getFieldValueFromIndexedRecord(record, "multi.sub"));
+    // an empty field name is still rejected up front
     assertThrows(IllegalArgumentException.class, () -> getFieldValueFromIndexedRecord(record, ""));
+  }
+
+  @Test
+  void testGetFieldValueMapAndArrayLeavesReturnNull() {
+    GenericRecord record = new GenericData.Record(MAP_AND_ARRAY_SCHEMA);
+    record.put("id", 7);
+    Map<Utf8, Utf8> strMap = new HashMap<>();
+    strMap.put(new Utf8("a"), new Utf8("v1"));
+    record.put("str_map", strMap);
+    record.put("int_array", Arrays.asList(3, 1, 2));
+    // rec_map left null
+
+    // top-level scalar still resolves normally
+    assertEquals(7, getFieldValueFromIndexedRecord(record, "id"));
+
+    // Parquet-style synthetic accessors that traverse a MAP (".key_value.key/value") or an
+    // ARRAY (".list.element") cannot be resolved to a single value and must return null instead
+    // of throwing. Regression: these previously threw
+    // IllegalStateException "Cannot get field from schema type: MAP" during MOR log-append
+    // column-stats collection. Such nested leaves still get statistics from the base-file path.
+    assertNull(getFieldValueFromIndexedRecord(record, "str_map.key_value.key"));
+    assertNull(getFieldValueFromIndexedRecord(record, "str_map.key_value.value"));
+    assertNull(getFieldValueFromIndexedRecord(record, "int_array.list.element"));
+    // a deep path descending through a MAP into a record field also degrades to null
+    assertNull(getFieldValueFromIndexedRecord(record, "rec_map.key_value.value.x"));
+
+    // and null when the complex field itself is absent/null
+    GenericRecord empty = new GenericData.Record(MAP_AND_ARRAY_SCHEMA);
+    empty.put("id", 0);
+    assertNull(getFieldValueFromIndexedRecord(empty, "str_map.key_value.value"));
+    assertNull(getFieldValueFromIndexedRecord(empty, "int_array.list.element"));
   }
 
   @Test

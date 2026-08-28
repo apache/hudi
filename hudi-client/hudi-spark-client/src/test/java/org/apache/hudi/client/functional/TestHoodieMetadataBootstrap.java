@@ -108,6 +108,34 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
     validateMetadata(testTable);
   }
 
+  @Test
+  public void testMetadataSkipsZeroSizeFilesOnInitialize() throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType, false);
+    doPreBootstrapWriteOperation(testTable, INSERT, "0000001");
+    doPreBootstrapWriteOperation(testTable, "0000002");
+    // Add a zero-size base file — bootstrap should skip it without failing.
+    String fileName = UUID.randomUUID().toString();
+    Path zeroSizeFilePath = FileCreateUtilsLegacy.getBaseFilePath(basePath, "p1", "0000003", fileName);
+    FileCreateUtilsLegacy.createBaseFile(basePath, "p1", "0000003", fileName, 0);
+
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withSkipZeroSizeFilesOnInitialize(true)
+            .build())
+        .build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    syncTableMetadata(writeConfig);
+
+    // Delete the zero-size file before validation — it was skipped in MDT and must not
+    // exist on disk for the filesystem-vs-MDT consistency check to pass.
+    Files.delete(zeroSizeFilePath);
+    validateMetadata(testTable);
+    doWriteInsertAndUpsert(testTable);
+    validateMetadata(testTable);
+  }
+
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testMetadataBootstrapInsertUpsertRollback(HoodieTableType tableType) throws Exception {

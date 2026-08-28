@@ -18,13 +18,18 @@
 
 package org.apache.hudi.common.avro;
 
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieAvroSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -33,6 +38,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions;
 import org.apache.avro.Conversions.DecimalConversion;
@@ -64,10 +70,12 @@ import javax.annotation.Nullable;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
@@ -84,6 +92,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -105,9 +114,10 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 /**
  * Helper class to do common stuff across Avro.
  */
+@Slf4j
 public class HoodieAvroUtils {
 
-  public static final String AVRO_VERSION = Schema.class.getPackage().getImplementationVersion();
+  public static final String AVRO_VERSION = resolveAvroVersion();
 
   private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
   private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
@@ -118,6 +128,52 @@ public class HoodieAvroUtils {
   public static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   private static final Properties PROPERTIES = new Properties();
+
+  /**
+   * Resolves the Avro library version, preferring Maven's generated pom.properties over
+   * {@link Package#getImplementationVersion()}. The latter comes from whatever manifest happens to
+   * seal the package, which is only avro's own manifest when avro ships as a standalone jar. But once
+   * its classes get merged or relocated into a shaded/fat jar, that lookup silently returns the
+   * assembling jar's version instead of avro's or nothing at all. So better to resolve with pom.properties
+   * followed by manifest version.
+   */
+  private static String resolveAvroVersion() {
+    final String path = "META-INF/maven/org.apache.avro/avro/pom.properties";
+    try {
+      URL schemaClassUrl = Schema.class.getResource("Schema.class");
+      String schemaArchive = schemaClassUrl == null ? null : archiveOf(schemaClassUrl);
+      Enumeration<URL> candidates = Schema.class.getClassLoader().getResources(path);
+      while (candidates.hasMoreElements()) {
+        URL candidate = candidates.nextElement();
+        // only use the pom.properties that ships in the same archive as the loaded Schema class
+        if (schemaArchive != null && !schemaArchive.equals(archiveOf(candidate))) {
+          continue;
+        }
+        Properties avroProperties = new Properties();
+        try (InputStream in = candidate.openStream()) {
+          avroProperties.load(in);
+        }
+        String version = avroProperties.getProperty("version");
+        if (version != null) {
+          return version;
+        }
+      }
+    } catch (Exception e) {
+      log.warn("Failed to resolve the avro version from {}, falling back to the jar manifest", path, e);
+    }
+    String manifestVersion = Schema.class.getPackage() == null ? null : Schema.class.getPackage().getImplementationVersion();
+    if (manifestVersion == null) {
+      log.warn("Could not resolve the avro version from {} nor from the jar manifest, "
+              + "avro version checks will fall back to pre-1.9 behaviour. Check that avro jar is on the classpath.", path);
+    }
+    return manifestVersion;
+  }
+
+  private static String archiveOf(URL url) {
+    String s = url.toString();
+    int separatorIdx = s.indexOf("!/");
+    return separatorIdx < 0 ? s : s.substring(0, separatorIdx);
+  }
 
   /**
    * Convert a given avro record to bytes.
@@ -1407,15 +1463,85 @@ public class HoodieAvroUtils {
       boolean populateMetaFields,
       Option<HoodieSchema> schemaWithoutMetaFields) {
     if (populateMetaFields) {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+      return convertToRecord((GenericRecord) data,
           payloadClass, preCombineFields, withOperation);
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+      return convertToRecord((GenericRecord) data,
           payloadClass, preCombineFields, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
     } else {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+      return convertToRecord((GenericRecord) data,
           payloadClass, preCombineFields, withOperation, partitionNameOp, schemaWithoutMetaFields);
     }
+  }
+
+  /**
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
+   */
+  public static <R> HoodieRecord<R> convertToRecord(GenericRecord rec, String payloadClazz, String[] preCombineFields, boolean withOperationField) {
+    return convertToRecord(rec, payloadClazz, preCombineFields,
+        Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+        withOperationField, Option.empty(), Option.empty());
+  }
+
+  public static <R> HoodieRecord<R> convertToRecord(GenericRecord record, String payloadClazz,
+                                                                 String[] preCombineFields,
+                                                                 boolean withOperationField,
+                                                                 Option<String> partitionName,
+                                                                 Option<HoodieSchema> schemaWithoutMetaFields) {
+    return convertToRecord(record, payloadClazz, preCombineFields,
+        Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+        withOperationField, partitionName, schemaWithoutMetaFields);
+  }
+
+  /**
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
+   */
+  public static <R> HoodieRecord<R> convertToRecord(GenericRecord record, String payloadClazz,
+                                                                 String[] preCombineFields,
+                                                                 Pair<String, String> recordKeyPartitionPathFieldPair,
+                                                                 boolean withOperationField,
+                                                                 Option<String> partitionName,
+                                                                 Option<HoodieSchema> schemaWithoutMetaFields) {
+    final String recKey = record.get(recordKeyPartitionPathFieldPair.getKey()).toString();
+    final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
+        record.get(recordKeyPartitionPathFieldPair.getRight()).toString());
+
+    Comparable preCombineVal = getPreCombineVal(record, preCombineFields);
+    HoodieOperation operation = withOperationField
+        ? HoodieOperation.fromName(getNullableValAsString(record, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
+
+    if (schemaWithoutMetaFields.isPresent()) {
+      Schema schema = schemaWithoutMetaFields.get().toAvroSchema();
+      GenericRecord recordWithoutMetaFields = new GenericData.Record(schema);
+      for (Schema.Field f : schema.getFields()) {
+        recordWithoutMetaFields.put(f.pos(), record.get(f.name()));
+      }
+      record = recordWithoutMetaFields;
+    }
+
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
+        HoodieRecordUtils.loadPayload(payloadClazz, record, preCombineVal), operation);
+    return (HoodieRecord<R>) hoodieRecord;
+  }
+
+  /**
+   * Returns the preCombine value with given field name.
+   *
+   * @param rec The avro record
+   * @param preCombineFields The preCombine field names
+   * @return the preCombine field value or 0 if the field does not exist in the avro schema
+   */
+  private static Comparable getPreCombineVal(GenericRecord rec, @Nullable String[] preCombineFields) {
+    if (preCombineFields == null) {
+      return OrderingValues.getDefault();
+    }
+    // keep consistent with writer side, using Java type for ordering value, see `DefaultHoodieRecordPayload`.
+    return OrderingValues.create(
+        preCombineFields,
+        field -> {
+          Object orderingValue = getNestedFieldVal(rec, field, true, false);
+          return orderingValue == null ? OrderingValues.getDefault() : (Comparable) orderingValue;
+        });
   }
 
   /**
@@ -1456,15 +1582,15 @@ public class HoodieAvroUtils {
   }
 
   public static boolean gteqAvro1_9() {
-    return StringUtils.compareVersions(AVRO_VERSION, "1.9") >= 0;
+    return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.9") >= 0;
   }
 
   public static boolean gteqAvro1_10() {
-    return StringUtils.compareVersions(AVRO_VERSION, "1.10") >= 0;
+    return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.10") >= 0;
   }
 
   static boolean gteqAvro1_12() {
-    return StringUtils.compareVersions(AVRO_VERSION, "1.12") >= 0;
+    return AVRO_VERSION != null && StringUtils.compareVersions(AVRO_VERSION, "1.12") >= 0;
   }
 
   private static Object convertDefaultValueForAvroCompatibility(Object defaultValue) {

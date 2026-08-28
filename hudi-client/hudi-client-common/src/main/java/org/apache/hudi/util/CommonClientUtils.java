@@ -21,16 +21,12 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
@@ -134,49 +130,15 @@ public class CommonClientUtils {
   /**
    * Whether log blocks should be written in the native (v2) log format (standalone native
    * files written via {@code HoodieNativeLogFormatWriter}) instead of the legacy inline
-   * log format. The native format is the default for write version &gt;= {@link HoodieTableVersion#TEN},
-   * except for Lance base files.
+   * log format. The native format is the default for write version &gt;= {@link HoodieTableVersion#TEN}.
    *
-   * <p>This decision is keyed on the effective write version (i.e. {@code HoodieWriteConfig#getWriteVersion()})
-   * and the effective base file format, consistent with how the inline log block layout is
-   * selected, so that the on-disk format follows what the writer is targeting during
-   * upgrade/downgrade windows. Lance remains on the legacy inline log format until native Lance log
-   * support is complete.
+   * <p>This decision is keyed on the effective write version (i.e. {@code HoodieWriteConfig#getWriteVersion()}),
+   * so that the on-disk format follows what the writer is targeting during upgrade/downgrade windows.
    *
    * @param writeConfig the writer configuration.
-   * @param tableConfig the persisted table configuration.
    */
-  public static boolean shouldWriteNativeLogs(HoodieWriteConfig writeConfig, HoodieTableConfig tableConfig) {
-    if (getBaseFileFormat(writeConfig, tableConfig) == HoodieFileFormat.LANCE) {
-      return false;
-    }
+  public static boolean shouldWriteNativeLogs(HoodieWriteConfig writeConfig) {
     return writeConfig.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.TEN);
-  }
-
-  public static void validateIndexSupportForNativeLogFormat(HoodieWriteConfig writeConfig, HoodieFileFormat nativeLogFileFormat) {
-    if (!writeConfig.isMetadataColumnStatsIndexEnabled()) {
-      return;
-    }
-
-    if (nativeLogFileFormat == HoodieFileFormat.ORC) {
-      throw new HoodieNotSupportedException(String.format(
-          "Column stats index is not supported for native %s log files because its HoodieFileWriter does not support file format metadata. "
-              + "Please disable %s.",
-          nativeLogFileFormat, HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
-    }
-  }
-
-  public static String generateWriteToken(TaskContextSupplier taskContextSupplier) {
-    try {
-      return FSUtils.makeWriteToken(
-          taskContextSupplier.getPartitionIdSupplier().get(),
-          taskContextSupplier.getStageIdSupplier().get(),
-          taskContextSupplier.getAttemptIdSupplier().get()
-      );
-    } catch (Throwable t) {
-      log.warn("Error generating write token, using default.", t);
-      return HoodieLogFormat.DEFAULT_WRITE_TOKEN;
-    }
   }
 
   public static <O> HoodieWriteMetadata stitchCompactionHoodieWriteStats(HoodieWriteMetadata<O> writeMetadata, List<HoodieWriteStat> writeStats) {

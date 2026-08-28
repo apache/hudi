@@ -378,7 +378,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION,
         CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION,
-        INDEXING_ACTION, LOG_COMPACTION_ACTION));
+        INDEXING_ACTION, LOG_COMPACTION_ACTION, RESTORE_ACTION));
   }
 
   @Override

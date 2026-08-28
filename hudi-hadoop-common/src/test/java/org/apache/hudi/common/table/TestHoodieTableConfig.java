@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -352,6 +353,32 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals("p1", HoodieTableConfig.getPartitionFieldWithoutKeyGenPartitionType(partitionFields.split(",")[0], config));
   }
 
+  /**
+   * The resolution rules themselves are unit-tested in {@code TestHoodieTableConfigMetaFieldsMode} against an
+   * in-memory config. This covers the part that needs real storage: that the mode survives a
+   * {@code hoodie.properties} write / read round trip and still resolves the same way afterwards.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"ALL", "NONE", "COMMIT_TIME_ONLY", "FILE_NAME_ONLY", "COMMIT_TIME_AND_FILE_NAME"})
+  void testMetaFieldsModeSurvivesAPropertiesRoundTrip(String modeName) {
+    MetaFieldsMode mode = MetaFieldsMode.valueOf(modeName);
+    Properties updatedProps = new Properties();
+    updatedProps.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    // Written the way TableBuilder writes it: the legacy boolean is derived from the mode, never
+    // taken from the caller, so hoodie.properties cannot contradict itself.
+    updatedProps.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+        String.valueOf(mode.toLegacyPopulateMetaFields()));
+    HoodieTableConfig.update(storage, metaPath, updatedProps);
+
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
+    assertEquals(mode, config.getMetaFieldsMode());
+    assertEquals(mode.name(), config.getString(HoodieTableConfig.META_FIELDS_MODE));
+    assertEquals(mode.toLegacyPopulateMetaFields(), config.populateMetaFields(),
+        "populateMetaFields() is derived from the mode, so it must agree after a reload");
+    assertEquals(mode.isCommitTimePopulated(), config.isCommitTimePopulated());
+    assertEquals(mode.isFileNamePopulated(), config.isFileNamePopulated());
+  }
+
   @Test
   void testValidateConfigVersion() {
     assertTrue(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.INITIAL_VERSION, HoodieTableVersion.EIGHT));
@@ -360,6 +387,75 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertFalse(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.TABLE_STORAGE_LAYOUT, HoodieTableVersion.NINE));
     assertTrue(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.TABLE_STORAGE_LAYOUT, HoodieTableVersion.TEN));
     assertFalse(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.INITIAL_VERSION, HoodieTableVersion.SIX));
+  }
+
+  /**
+   * {@code hoodie.meta.fields.mode} must remain valid on every table version 1.x can write, down to
+   * v6. Meta-field population is not a v10 concept: a table that old can carry a selective mode, set
+   * at creation or through the hudi-cli.
+   *
+   * <p>This is a real hazard rather than a hypothetical one. Giving the property a
+   * {@code sinceVersion} would make {@code validateConfigVersion} return false below that version,
+   * and {@code dropInvalidConfigs} then *removes* the property from the loaded config -- so an
+   * older table would silently revert to ALL and start writing meta columns its files do not have.
+   * It reads like tidy housekeeping and would be a data-correctness bug.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
+  void testMetaFieldsModeIsValidOnEveryWritableTableVersion(HoodieTableVersion tableVersion) {
+    assertTrue(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.META_FIELDS_MODE, tableVersion),
+        "hoodie.meta.fields.mode must not be version-gated; it would be stripped on " + tableVersion);
+  }
+
+  @Test
+  void testMetaFieldsModeSurvivesConfigVersionDroppingOnAnOldTable() {
+    // End to end through the drop path rather than the predicate alone: a v6 table carrying a
+    // selective mode must still have it after validateConfigVersions runs.
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.META_FIELDS_MODE, MetaFieldsMode.COMMIT_TIME_ONLY.name());
+    config.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
+
+    HoodieTableConfig.dropInvalidConfigs(config);
+
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY.name(),
+        config.getString(HoodieTableConfig.META_FIELDS_MODE),
+        "the mode must survive on a v6 table -- Uber-style deployments set it there via hudi-cli");
+  }
+
+  private static Stream<Arguments> tableVersionsAndMetaFieldsModes() {
+    return Stream.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, HoodieTableVersion.TEN)
+        .flatMap(version -> Arrays.stream(MetaFieldsMode.values())
+            .map(mode -> arguments(version, mode)));
+  }
+
+  /**
+   * {@link HoodieTableConfig#create} must derive and persist the legacy populate boolean below
+   * table version 10 on its own: callers such as the repair-overwrite-props procedure invoke it
+   * directly with user-supplied properties, without going through the table builder that also
+   * derives the boolean. From version 10 the mode alone is recorded.
+   */
+  @ParameterizedTest
+  @MethodSource("tableVersionsAndMetaFieldsModes")
+  void testCreatePersistsLegacyBooleanPerTableVersion(HoodieTableVersion version, MetaFieldsMode mode)
+      throws IOException {
+    StoragePath versionedMetaPath = new StoragePath(basePath,
+        "v" + version.versionCode() + "-" + mode.name() + "/" + HoodieTableMetaClient.METAFOLDER_NAME);
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
+    props.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(version.versionCode()));
+    props.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    HoodieTableConfig.create(storage, versionedMetaPath, props);
+
+    HoodieTableConfig persisted = new HoodieTableConfig(storage, versionedMetaPath);
+    if (version.lesserThan(HoodieTableVersion.TEN)) {
+      assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
+          persisted.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+          "create() must persist the derived boolean below v10 for unpatched readers, " + mode);
+    } else {
+      assertFalse(persisted.getProps().containsKey(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+          "create() must record the mode alone from v10, " + mode);
+    }
   }
 
   @Test
@@ -386,7 +482,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(45, configProperties.size());
+    assertEquals(46, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());
@@ -397,7 +493,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   void testTableMergeProperties() throws IOException {
     // for out of the box, there are no merge properties
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
-    assertTrue(config.getTableMergeProperties().isEmpty());
+    assertTrue(config.getTableMergeProperties(config.getPayloadClass()).isEmpty());
 
     // delete and re-create w/ merge properties
     storage.deleteFile(cfgPath);
@@ -416,7 +512,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     Map<String, String> expectedProps = new HashMap<>();
     expectedProps.put("key1","value1");
     expectedProps.put("key2","value2");
-    assertEquals(expectedProps, config.getTableMergeProperties());
+    assertEquals(expectedProps, config.getTableMergeProperties(config.getPayloadClass()));
   }
 
   private static Stream<Arguments> testInferMergingConfigsForPreV9Table() {

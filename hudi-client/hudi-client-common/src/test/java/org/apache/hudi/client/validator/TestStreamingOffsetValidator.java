@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
-import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
+import org.apache.hudi.common.util.KafkaCheckpointUtils.CheckpointFormat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig.ValidationFailurePolicy;

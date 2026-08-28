@@ -28,7 +28,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -1094,10 +1094,10 @@ public class TestData {
       HoodieSchema tableSchema,
       HoodieTableMetaClient metaClient,
       HoodieWriteConfig writeConfig) throws IOException {
-    HoodieFileGroupReader<RowData> fileGroupReader =
-        FormatUtils.createFileGroupReader(metaClient, writeConfig, InternalSchemaManager.DISABLED, fileSlice, tableSchema, tableSchema,
+    HoodieRecordReader<RowData> recordReader =
+        FormatUtils.createRecordReader(metaClient, writeConfig, InternalSchemaManager.DISABLED, fileSlice, tableSchema, tableSchema,
             fileSlice.getLatestInstantTime(), FlinkOptions.REALTIME_PAYLOAD_COMBINE, false, Collections.emptyList(), Option.empty());
-    return fileGroupReader.getClosableIterator();
+    return recordReader.getClosableIterator();
   }
 
   private static HoodieWriteConfig getMORWriteConfig(File baseFile) throws IOException {

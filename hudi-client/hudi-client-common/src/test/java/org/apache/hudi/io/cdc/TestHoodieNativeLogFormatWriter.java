@@ -127,6 +127,87 @@ public class TestHoodieNativeLogFormatWriter {
     verify(record, never()).getOrderingValue(eq(schema), any(), any());
   }
 
+  @Test
+  public void testSkipsUnsupportedDataFileFormatMetadata() throws Exception {
+    Option<Object> metadata = writeDataLogAndGetFormatMetadata(
+        true, null, new UnsupportedOperationException("unsupported"));
+
+    assertFalse(metadata.isPresent());
+  }
+
+  @Test
+  public void testRetainsSupportedDataFileFormatMetadata() throws Exception {
+    Object expectedMetadata = new Object();
+
+    Option<Object> metadata = writeDataLogAndGetFormatMetadata(true, expectedMetadata, null);
+
+    assertEquals(expectedMetadata, metadata.get());
+  }
+
+  @Test
+  public void testSkipsDataFileFormatMetadataWhenColumnStatsDisabled() throws Exception {
+    Option<Object> metadata = writeDataLogAndGetFormatMetadata(
+        false, null, new AssertionError("metadata should not be requested"));
+
+    assertFalse(metadata.isPresent());
+  }
+
+  private static Option<Object> writeDataLogAndGetFormatMetadata(
+      boolean columnStatsEnabled, Object formatMetadata, Throwable metadataFailure) throws Exception {
+    String instantTime = "100";
+    HoodieStorage storage = mock(HoodieStorage.class);
+    HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+    HoodieSchema schema = mock(HoodieSchema.class);
+    HoodieRecordMerger merger = mock(HoodieRecordMerger.class);
+    HoodieFileWriter fileWriter = mock(HoodieFileWriter.class);
+    StoragePath parentPath = new StoragePath("/tmp/partition");
+
+    when(config.getProps()).thenReturn(new TypedProperties());
+    when(config.getRecordMerger()).thenReturn(merger);
+    when(config.isMetadataColumnStatsIndexEnabled()).thenReturn(columnStatsEnabled);
+    when(merger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
+    when(storage.exists(any(StoragePath.class))).thenReturn(false);
+    when(storage.getPathInfo(any(StoragePath.class))).thenAnswer(invocation ->
+        new StoragePathInfo(invocation.getArgument(0), 1L, false, (short) 1, 1L, 1L));
+    if (metadataFailure != null) {
+      when(fileWriter.getFileFormatMetadata()).thenThrow(metadataFailure);
+    } else {
+      when(fileWriter.getFileFormatMetadata()).thenReturn(formatMetadata);
+    }
+
+    try (MockedStatic<HoodieFileWriterFactory> writerFactory = mockStatic(HoodieFileWriterFactory.class)) {
+      writerFactory.when(() -> HoodieFileWriterFactory.getFileWriter(
+              eq(instantTime), any(StoragePath.class), eq(storage), eq(config), eq(schema),
+              any(TaskContextSupplier.class), eq(HoodieRecord.HoodieRecordType.AVRO)))
+          .thenReturn(fileWriter);
+
+      HoodieNativeLogFormatWriter writer = new HoodieNativeLogFormatWriter(
+          4096,
+          storage,
+          parentPath,
+          "file-1",
+          instantTime,
+          1,
+          "1-0-1",
+          1024L,
+          new LogFileCreationCallback() {
+          },
+          HoodieTableVersion.current(),
+          config,
+          HoodieFileFormat.PARQUET,
+          schema,
+          mock(TaskContextSupplier.class),
+          mock(RecordContext.class),
+          new ArrayList<>(),
+          Option.empty());
+
+      writer.appendRecord(recordWithPosition("key-1", 1L, schema),
+          schema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      writer.flushAppend(new HashMap<>());
+      return writer.getLastDataFileFormatMetadata();
+    }
+  }
+
   private static Map<HeaderMetadataType, String> writeDataLogFooterWithPositions(long... positions) throws Exception {
     String instantTime = "100";
     String schemaString = "{\"type\":\"record\",\"name\":\"test\",\"fields\":[]}";

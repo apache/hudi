@@ -39,14 +39,14 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTab
 import org.apache.spark.sql.functions.{col, concat, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.{ExtendedParserTestHelpers, HoodieSparkSqlTestBase}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, getLastCommitMetadata}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull, assertTrue}
 
 import scala.collection.JavaConverters._
 
-class TestCreateTable extends HoodieSparkSqlTestBase {
+class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelpers {
 
   test("Test Create Managed Hoodie Table") {
     val databaseName = "hudi_database"
@@ -2286,7 +2286,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
   test("test create table with VECTOR without dimension fails") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      checkExceptionContain(
+      interceptParse(
         s"""
            |CREATE TABLE $tableName (
            |  id BIGINT,
@@ -2304,7 +2304,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       // Unsupported element type
-      checkExceptionContain(
+      interceptParse(
         s"""
            |CREATE TABLE $tableName (
            |  id BIGINT,
@@ -2337,6 +2337,83 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       val embeddingField = schema.find(_.name == "embedding").get
       assertTrue(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
       assertEquals(ArrayType(FloatType, containsNull = false), embeddingField.dataType)
+    }
+  }
+
+  // The following cases are parser-coverage only: a VECTOR column routes the whole CREATE TABLE
+  // through the extended AST builder, so its clause visitors run. parsePlan is purely syntactic
+  // (no catalog, no execution), matching how TestIndexSyntax exercises the index statements, which
+  // lets us cover clauses that are not supported at execution time (CLUSTERED BY bucket specs).
+  // Transform-partitioning and typed-literal coverage lives in TestBlobDataType only: the clause
+  // visitors are type-agnostic (the builder branches on blob-vs-vector solely in
+  // visitPrimitiveDataType), so a second per-type copy would exercise no new production line. The
+  // VECTOR column type proves the statement routed here because the stock Spark parser rejects the
+  // VECTOR type name.
+
+  test("test create VECTOR table with CLUSTERED BY bucket spec parses (parser coverage)") {
+    val plan = parseCreateTable(
+      "CREATE TABLE vec_bucket_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        "CLUSTERED BY (id) INTO 4 BUCKETS")
+    val bucket = transformByName(plan, "bucket")
+    assertEquals("4", firstLiteralArg(bucket).value.toString)
+    assertEquals(Seq(Seq("id")), transformFieldRefs(bucket))
+
+    // SORTED BY ... ASC is accepted by the bucket-spec visitor and yields a sorted_bucket
+    // transform; a plain bucket transform here would mean the SORTED BY clause was dropped.
+    val sortedPlan = parseCreateTable(
+      "CREATE TABLE vec_sbucket_tbl (id BIGINT, ts BIGINT, embedding VECTOR(4)) USING hudi " +
+        "CLUSTERED BY (id, ts) SORTED BY (id ASC) INTO 8 BUCKETS")
+    assertEquals("sorted_bucket", sortedPlan.partitioning.head.name)
+
+    // SORTED BY ... DESC is rejected by the bucket-spec visitor.
+    checkExceptionContain(
+      "CREATE TABLE vec_bad_bucket_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        "CLUSTERED BY (id) SORTED BY (id DESC) INTO 4 BUCKETS")(
+      "Column ordering must be ASC")
+  }
+
+  test("test create VECTOR table with LOCATION/COMMENT/OPTIONS/TBLPROPERTIES parses (parser coverage)") {
+    // String, integer and boolean property values exercise all branches of the property visitors;
+    // COMMENT and LOCATION exercise their clause visitors. The clause results are asserted on
+    // tableSpec (location/comment/properties are stable across Spark 3.3 through 4.2; the parsed
+    // options map is not exposed on the 3.5+ TableSpecBase, so OPTIONS is only asserted through
+    // the path-folding case below).
+    val plan = parseCreateTable(
+      s"""
+         |CREATE TABLE vec_clause_tbl (
+         |  id BIGINT,
+         |  embedding VECTOR(4)
+         |) USING hudi
+         |COMMENT 'a vector table'
+         |LOCATION '/tmp/vec_clause_tbl'
+         |OPTIONS ('opt_str' = 'v', 'opt_int' = 1, 'opt_bool' = true)
+         |TBLPROPERTIES ('prop_str' = 'v', 'prop_int' = 2, 'prop_bool' = false)
+         """.stripMargin)
+    assertEquals(ArrayType(FloatType, containsNull = false), plan.tableSchema("embedding").dataType)
+    assertEquals(Some("a vector table"), plan.tableSpec.comment)
+    assertEquals(Some("/tmp/vec_clause_tbl"), plan.tableSpec.location)
+    assertEquals("v", plan.tableSpec.properties("prop_str"))
+    assertEquals("2", plan.tableSpec.properties("prop_int"))
+    assertEquals("false", plan.tableSpec.properties("prop_bool"))
+
+    // A 'path' option with no LOCATION is folded into the table location by the option cleaner.
+    val pathPlan = parseCreateTable(
+      "CREATE TABLE vec_path_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        "OPTIONS ('path' = '/tmp/vec_path_tbl')")
+    assertEquals(Some("/tmp/vec_path_tbl"), pathPlan.tableSpec.location)
+
+    // A 'path' option colliding with LOCATION is rejected by the option cleaner.
+    interceptParse(
+      "CREATE TABLE vec_dup_path_tbl (id BIGINT, embedding VECTOR(4)) USING hudi " +
+        "OPTIONS ('path' = '/tmp/a') LOCATION '/tmp/b'")(
+      "Duplicated table paths")
+
+    // Each reserved table property (provider, location, owner) is rejected by the property cleaner.
+    Seq("provider", "location", "owner").foreach { reserved =>
+      interceptParse(
+        s"CREATE TABLE vec_reserved_$reserved (id BIGINT, embedding VECTOR(4)) USING hudi " +
+          s"TBLPROPERTIES ('$reserved' = 'x')")(
+        "reserved table property")
     }
   }
 

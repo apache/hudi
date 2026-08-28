@@ -107,7 +107,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
     // Log files only reach this method for parquet data blocks; base files are resolved by their extension.
     // Format-specific handling lives in the readers themselves, so this method stays format-agnostic.
-    boolean isInlineLogFile = isLogFile && FSUtils.isInlineLogFile(filePath.getName());
+    boolean isInlineLogFile = FSUtils.isInlineLogFile(filePath);
     HoodieFileFormat format = isInlineLogFile ? HoodieFileFormat.PARQUET : HoodieFileFormat.fromFileExtension(filePath.getFileExtension());
     HoodieRowDataFileReader reader = (HoodieRowDataFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)

@@ -70,9 +70,12 @@ import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
+import org.apache.flink.table.catalog.exceptions.FunctionNotExistException;
 import org.apache.flink.table.catalog.exceptions.PartitionNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
+import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
+import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.hadoop.fs.FileSystem;
@@ -100,6 +103,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -583,6 +587,78 @@ public class TestHoodieCatalog extends BaseTestHoodieCatalog {
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;
     assertThat(replaceCommitMetadata.getPartitionToReplaceFileIds().size(), is(1));
     assertFalse(catalog.partitionExists(tablePath, partitionSpec));
+  }
+
+  @Test
+  void testUnsupportedCatalogOperationsAndDefaults() throws Exception {
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "missing");
+    ObjectPath functionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "function");
+    CatalogPartitionSpec partitionSpec =
+        new CatalogPartitionSpec(Collections.singletonMap("partition", "20260728"));
+    CatalogDatabase database = new CatalogDatabaseImpl(Collections.emptyMap(), null);
+
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterDatabase(TEST_DEFAULT_DATABASE, database, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.renameTable(tablePath, "renamed", false));
+    assertEquals(Collections.emptyList(), catalog.listViews(TEST_DEFAULT_DATABASE));
+    assertEquals(Collections.emptyList(), catalog.listPartitions(tablePath));
+    assertEquals(Collections.emptyList(), catalog.listPartitions(tablePath, partitionSpec));
+    assertEquals(
+        Collections.emptyList(),
+        catalog.listPartitionsByFilter(tablePath, Collections.emptyList()));
+    assertThrows(
+        PartitionNotExistException.class,
+        () -> catalog.getPartition(tablePath, partitionSpec));
+    assertFalse(catalog.partitionExists(tablePath, partitionSpec));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.createPartition(tablePath, partitionSpec, null, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterPartition(tablePath, partitionSpec, null, false));
+
+    assertEquals(Collections.emptyList(), catalog.listFunctions(TEST_DEFAULT_DATABASE));
+    assertThrows(FunctionNotExistException.class, () -> catalog.getFunction(functionPath));
+    assertFalse(catalog.functionExists(functionPath));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.createFunction(functionPath, null, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterFunction(functionPath, null, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.dropFunction(functionPath, false));
+
+    assertSame(CatalogTableStatistics.UNKNOWN, catalog.getTableStatistics(tablePath));
+    assertSame(
+        CatalogColumnStatistics.UNKNOWN,
+        catalog.getTableColumnStatistics(tablePath));
+    assertSame(
+        CatalogTableStatistics.UNKNOWN,
+        catalog.getPartitionStatistics(tablePath, partitionSpec));
+    assertSame(
+        CatalogColumnStatistics.UNKNOWN,
+        catalog.getPartitionColumnStatistics(tablePath, partitionSpec));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterTableStatistics(
+            tablePath, CatalogTableStatistics.UNKNOWN, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterTableColumnStatistics(
+            tablePath, CatalogColumnStatistics.UNKNOWN, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterPartitionStatistics(
+            tablePath, partitionSpec, CatalogTableStatistics.UNKNOWN, false));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> catalog.alterPartitionColumnStatistics(
+            tablePath, partitionSpec, CatalogColumnStatistics.UNKNOWN, false));
   }
 
   @Override

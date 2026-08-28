@@ -21,6 +21,8 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.IndexedRecord;
 
@@ -30,20 +32,28 @@ import org.apache.avro.generic.IndexedRecord;
 public class AvroReaderContextFactory implements ReaderContextFactory<IndexedRecord> {
   private final HoodieTableMetaClient metaClient;
   private final String payloadClassName;
+  private final Option<InstantRange> instantRange;
   private final TypedProperties props;
 
   public AvroReaderContextFactory(HoodieTableMetaClient metaClient, TypedProperties props) {
-    this(metaClient, metaClient.getTableConfig().getPayloadClass(), props);
+    this(metaClient, metaClient.getTableConfig().getPayloadClass(), Option.empty(), props);
   }
 
   public AvroReaderContextFactory(HoodieTableMetaClient metaClient, String payloadClassName, TypedProperties props) {
+    this(metaClient, payloadClassName, Option.empty(), props);
+  }
+
+  public AvroReaderContextFactory(HoodieTableMetaClient metaClient, String payloadClassName,
+                                  Option<InstantRange> instantRange, TypedProperties props) {
     this.metaClient = metaClient;
     this.payloadClassName = payloadClassName;
+    this.instantRange = instantRange;
     this.props = props;
   }
 
   @Override
   public HoodieReaderContext<IndexedRecord> getContext() {
-    return new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), payloadClassName, props);
+    return new HoodieAvroReaderContext(
+        metaClient.getStorageConf(), metaClient.getTableConfig(), instantRange, payloadClassName, props);
   }
 }

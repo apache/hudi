@@ -19,7 +19,6 @@
 package org.apache.hudi.source.reader;
 
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import org.apache.flink.connector.base.source.reader.RecordsBySplits;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
@@ -27,41 +26,50 @@ import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import javax.annotation.Nullable;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 /**
- * Implementation of RecordsWithSplitIds with a list record inside.
+ * Implementation of {@link RecordsWithSplitIds} backed by a materialized, bounded minibatch of
+ * records for a single split.
  *
- * Type parameters: <T> – record type
+ * <p>The records are already drained (and copied) on the split-fetcher thread before this batch is
+ * enqueued, so {@link #nextRecordFromSplit()} only walks an in-memory list and holds no live I/O
+ * resource. Record reading and resource teardown therefore stay on the same (split-fetcher) thread,
+ * which removes the cross-thread teardown race a live-iterator batch would be exposed to. The
+ * underlying iterator and its I/O resources are owned and closed by the reader function (see
+ * {@code AbstractSplitReaderFunction#closeCurrentSplit}).
+ *
+ * @param <T> record type
  */
 public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosition<T>> {
   private String splitId;
   private String nextSplitId;
-  private final ClosableIterator<T> recordIterator;
+  private final List<T> records;
   private final Set<String> finishedSplits;
   private final HoodieRecordWithPosition<T> recordAndPosition;
 
-  // point to current read position within the records list
-  private int position;
+  // points to the current read position within the records list
+  private int index;
 
   BatchRecords(
       String splitId,
-      ClosableIterator<T> recordIterator,
+      List<T> records,
       int fileOffset,
       long startingRecordOffset,
       Set<String> finishedSplits) {
     ValidationUtils.checkArgument(
         finishedSplits != null, "finishedSplits can be empty but not null");
     ValidationUtils.checkArgument(
-        recordIterator != null, "recordIterator can be empty but not null");
+        records != null, "records can be empty but not null");
 
     this.splitId = splitId;
     this.nextSplitId = splitId;
-    this.recordIterator = recordIterator;
+    this.records = records;
     this.finishedSplits = finishedSplits;
     this.recordAndPosition = new HoodieRecordWithPosition<>();
     this.recordAndPosition.set(null, fileOffset, startingRecordOffset);
-    this.position = 0;
+    this.index = 0;
   }
 
   @Nullable
@@ -69,7 +77,7 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
   public String nextSplit() {
     if (splitId.equals(nextSplitId)) {
       // set the nextSplitId to null to indicate no more splits
-      // this class only contains record for one split
+      // this class only contains records for one split
       nextSplitId = null;
       return splitId;
     } else {
@@ -80,12 +88,11 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
   @Nullable
   @Override
   public HoodieRecordWithPosition<T> nextRecordFromSplit() {
-    if (recordIterator.hasNext()) {
-      recordAndPosition.record(recordIterator.next());
-      position = position + 1;
+    if (index < records.size()) {
+      recordAndPosition.record(records.get(index));
+      index++;
       return recordAndPosition;
     } else {
-      recordIterator.close();
       return null;
     }
   }
@@ -97,29 +104,14 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
 
   @Override
   public void recycle() {
-    if (recordIterator != null) {
-      recordIterator.close();
-    }
-  }
-
-  public void seek(long startingRecordOffset) {
-    for (long i = 0; i < startingRecordOffset; ++i) {
-      if (recordIterator.hasNext()) {
-        position = position + 1;
-        recordIterator.next();
-      } else {
-        throw new IllegalStateException(
-            String.format(
-                "Invalid starting record offset %d for split %s",
-                startingRecordOffset,
-                splitId));
-      }
-    }
+    // No-op: the minibatch is fully materialized, so there is no live iterator or I/O resource to
+    // release here. The underlying reader is owned and closed by the reader function on the
+    // split-fetcher thread (AbstractSplitReaderFunction#closeCurrentSplit).
   }
 
   public static <T> BatchRecords<T> forRecords(
-      String splitId, ClosableIterator<T> recordIterator, int fileOffset, long startingRecordOffset) {
-    return new BatchRecords<>(splitId, recordIterator, fileOffset, startingRecordOffset, Set.of());
+      String splitId, List<T> records, int fileOffset, long startingRecordOffset) {
+    return new BatchRecords<>(splitId, records, fileOffset, startingRecordOffset, Set.of());
   }
 
   public static <T> RecordsWithSplitIds<HoodieRecordWithPosition<T>> lastBatchRecords(String splitId) {

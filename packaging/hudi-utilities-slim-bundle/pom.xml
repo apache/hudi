@@ -92,6 +92,7 @@
               <artifactSet>
                 <includes combine.children="append">
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
+                  <include>org.apache.tika:tika-core</include>
 
                   <include>org.antlr:stringtemplate</include>
                   <!-- SPARK-43489 Spark 3.5+ has marked protobuf as provided -->

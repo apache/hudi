@@ -18,8 +18,12 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
+import org.apache.hudi.common.avro.VariantShreddingRuntime;
+import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
@@ -35,6 +39,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
@@ -79,8 +84,35 @@ public class HoodieInternalRowFileWriterFactory {
                                                                              Option<BloomFilter> bloomFilterOpt
   )
       throws IOException {
+    // The row write support resolves its HoodieSchema from the config (hoodie.write.schema /
+    // hoodie.avro.schema), so inferable columns are detected on that same config schema and the
+    // deferred creation splices a copied config; the StructType argument stays original.
+    // (getInferableVariantColumnsFromConfig only parses the schema once the flag gates pass.)
+    List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumnsFromConfig(writeConfig);
+    if (!inferableColumns.isEmpty()) {
+      Option<VariantShreddingSchemaInferrer> inferrer = VariantShreddingRuntime.lookupInferrer();
+      if (inferrer.isPresent()) {
+        return new VariantShreddingInferenceInternalRowFileWriter(
+            inferableColumns,
+            VariantShreddingInferenceInternalRowFileWriter.resolveOrdinals(structType, inferableColumns),
+            inferrer.get(),
+            inferred -> createParquetInternalRowFileWriter(path, table, writeConfig,
+                VariantSchemaUtils.applyInferredShreddingToConfig(writeConfig, inferred), structType, bloomFilterOpt),
+            writeConfig.getParquetMaxFileSize());
+      }
+    }
+    return createParquetInternalRowFileWriter(path, table, writeConfig, writeConfig, structType, bloomFilterOpt);
+  }
+
+  private static HoodieInternalRowFileWriter createParquetInternalRowFileWriter(StoragePath path,
+                                                                                HoodieTable table,
+                                                                                HoodieWriteConfig writeConfig,
+                                                                                HoodieConfig writeSupportConfig,
+                                                                                StructType structType,
+                                                                                Option<BloomFilter> bloomFilterOpt)
+      throws IOException {
     HoodieRowParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport
-        .getHoodieRowParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), structType, bloomFilterOpt, writeConfig);
+        .getHoodieRowParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), structType, bloomFilterOpt, writeSupportConfig);
 
     return new HoodieInternalRowParquetWriter(
         path,

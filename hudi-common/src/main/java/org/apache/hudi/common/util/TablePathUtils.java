@@ -102,21 +102,26 @@ public class TablePathUtils {
       } else {
         // Simply traverse directory structure until found .hoodie folder
         StoragePath current = partitionPath;
-        while (current != null) {
+        while (true) {
           if (hasTableMetadataFolder(storage, current)) {
             return Option.of(current);
           }
+          if (current.depth() == 0) {
+            // reached the root without finding a table metadata folder
+            return Option.empty();
+          }
           current = current.getParent();
         }
-
-        return Option.empty();
       }
     } catch (IOException ioe) {
       throw new HoodieException("Error reading partition metadata for " + partitionPath, ioe);
     }
   }
 
-  private static StoragePath getNthParent(StoragePath path, int n) {
+  /**
+   * Returns the n-th parent of the given path (n=0 returns the path itself).
+   */
+  public static StoragePath getNthParent(StoragePath path, int n) {
     StoragePath parent = path;
     for (int i = 0; i < n; i++) {
       parent = parent.getParent();

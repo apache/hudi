@@ -39,7 +39,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.CommonClientUtils;
 
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 
@@ -85,7 +84,6 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
                                       TaskContextSupplier taskContextSupplier, boolean preserveMetadata,
                                       Map<HeaderMetadataType, String> header) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, preserveMetadata);
-    CommonClientUtils.validateIndexSupportForNativeLogFormat(config, hoodieTable.getBaseFileFormat());
     this.header.putAll(header);
   }
 
@@ -109,7 +107,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
           hoodieTable.getBaseFileFormat(),
           writeSchemaWithMetaFields,
           taskContextSupplier,
-          hoodieTable.getReaderContextFactoryForWrite().getContext().getRecordContext(),
+          hoodieTable.getRecordContextForWrite(),
           orderingFields,
           baseFileInstantTimeOfPositions);
     } catch (IOException e) {
@@ -128,7 +126,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     String keyField = config.populateMetaFields()
         ? HoodieRecord.RECORD_KEY_METADATA_FIELD
         : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-    if (!writer.canWriteDataFile()) {
+    if (!canWriteDataFile()) {
       flushAppend();
     }
     writer.appendRecord(populatedRecord, writeSchemaWithMetaFields, keyField);
@@ -148,7 +146,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     String keyField = schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).isPresent()
         ? HoodieRecord.RECORD_KEY_METADATA_FIELD
         : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-    if (!writer.canWriteDeleteFile()) {
+    if (!canWriteDeleteFile()) {
       flushAppend();
     }
     writer.appendDeleteRecord(hoodieRecord, schema, keyField);
@@ -201,6 +199,14 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     return writer.getLogFile().getPath();
   }
 
+  protected boolean canWriteDataFile() {
+    return writer.canWriteDataFile();
+  }
+
+  protected boolean canWriteDeleteFile() {
+    return writer.canWriteDeleteFile();
+  }
+
   @Override
   public boolean canWrite(HoodieRecord record) {
     return true;
@@ -234,6 +240,10 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     if (dataFileFormatMetadata.isPresent()) {
       stat.putRecordsStats(collectNativeLogColumnRangeMetadata(
           stat.getPath(), dataFileFormatMetadata.get(), columnsToIndexSet, indexVersion));
+    } else {
+      // Mark column stats collection as handled so the metadata writer does not fall back to scanning this native
+      // log file. This is consistent with unsupported base-file formats, which contribute no column stats records.
+      stat.putRecordsStats(Collections.emptyMap());
     }
   }
 

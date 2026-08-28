@@ -19,6 +19,7 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -40,6 +41,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
@@ -48,6 +50,8 @@ import org.apache.hudi.sink.utils.EventBuffers;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -77,6 +81,7 @@ import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -431,6 +436,11 @@ public class TestStreamWriteOperatorCoordinator {
 
     final String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath());
     HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), metadataTableBasePath);
+    assertTrue(metadataTableMetaClient.getTableConfig().isLSMTreeStorageLayout());
+    assertTrue(FSUtils.getAllDataFilesInPartition(
+        metadataTableMetaClient.getStorage(),
+        new StoragePath(metadataTableBasePath, MetadataPartitionType.FILES.getPartitionPath())).stream()
+        .anyMatch(pathInfo -> FSUtils.isNativeLogFile(pathInfo.getPath().getName())));
     HoodieTimeline completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     HoodieTableMetaClient dataTableMetaClient =
         HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), new Path(metadataTableBasePath).getParent().getParent().toString());
@@ -449,6 +459,8 @@ public class TestStreamWriteOperatorCoordinator {
       assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(numCommits + 1));
       assertThat(completedTimeline.lastInstant().get().requestedTime(), is(instant));
     }
+    assertLsmMetadataTableReads(conf, dataTableMetaClient);
+
     // the 5th commit triggers the compaction
     mockWriteWithMetadata(ckp++);
     metadataTableMetaClient.reloadActiveTimeline();
@@ -756,6 +768,40 @@ public class TestStreamWriteOperatorCoordinator {
     // uses the next checkpoint id because the checkpoint id used in events come from the last round.
     coordinator.notifyCheckpointComplete(checkpointId + 1);
     return instant;
+  }
+
+  private static void assertLsmMetadataTableReads(Configuration conf, HoodieTableMetaClient dataTableMetaClient)
+      throws Exception {
+    String dataTableBasePath = dataTableMetaClient.getBasePath().toString();
+    String partitionPath = new Path(dataTableBasePath, "par1").toString();
+    List<String> partitionPaths = Arrays.asList(
+        partitionPath,
+        new Path(dataTableBasePath, "missing-partition").toString());
+
+    List<String> actualPartitions;
+    Map<String, List<StoragePathInfo>> actualFiles;
+    try (HoodieTableMetadata metadataTable = dataTableMetaClient.getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        dataTableMetaClient.getStorage(),
+        StreamerUtil.metadataConfig(conf),
+        dataTableBasePath,
+        false)) {
+      actualPartitions = metadataTable.getAllPartitionPaths();
+      actualFiles = metadataTable.getAllFilesInPartitions(partitionPaths);
+    }
+
+    try (HoodieTableMetadata metadataTable = dataTableMetaClient.getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        dataTableMetaClient.getStorage(),
+        StreamerUtil.metadataConfig(conf),
+        dataTableBasePath,
+        true)) {
+      assertEquals(actualPartitions, metadataTable.getAllPartitionPaths());
+      assertEquals(actualFiles, metadataTable.getAllFilesInPartitions(partitionPaths));
+    }
+
+    assertEquals(Collections.singletonList("par1"), actualPartitions);
+    assertFalse(actualFiles.get(partitionPath).isEmpty());
   }
 
   private static WriteMetadataEvent createBootstrapEvent(int taskId, long checkpointId, String instant, String partitionPath) {

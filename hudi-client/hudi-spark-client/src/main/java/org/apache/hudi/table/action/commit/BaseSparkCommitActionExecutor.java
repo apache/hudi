@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
@@ -53,7 +54,8 @@ import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeContext;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -326,10 +328,12 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     if (table.requireSortedRecords()) {
       // Partition and sort within each partition as a single step. This is faster than partitioning first and then
       // applying a sort.
+      // HFile base files and LSM tables order keys by UTF-8 bytes, not String (UTF-16) order,
+      // so sort with the matching comparator.
       Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> comparator = (Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> & Serializable) (t1, t2) -> {
         HoodieKey key1 = t1._1;
         HoodieKey key2 = t2._1;
-        return key1.getRecordKey().compareTo(key2.getRecordKey());
+        return StringUtils.compareUtf8Bytes(key1.getRecordKey(), key2.getRecordKey());
       };
 
       partitionedRDD = mappedRDD.repartitionAndSortWithinPartitions(partitioner, comparator);
@@ -402,7 +406,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       if (btype.equals(BucketType.INSERT)) {
         return handleInsert(binfo.fileIdPrefix, recordItr);
       } else if (btype.equals(BucketType.UPDATE)) {
-        return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, recordItr);
+        return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, binfo.getNumUpdates(), recordItr);
       } else {
         throw new HoodieUpsertException("Unknown bucketType " + btype + " for partition :" + partition);
       }
@@ -420,6 +424,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
+                                                  long numUpdates,
                                                   Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
@@ -435,13 +440,16 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
 
     // these are updates
-    HoodieMergeHandle mergeHandle = getUpdateHandle(partitionPath, fileId, recordItr);
-    return IOUtils.runMerge(mergeHandle, instantTime, fileId);
+    HoodieMergeHandle mergeHandle = getUpdateHandle(partitionPath, fileId, numUpdates, recordItr);
+    return MergeUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
-    HoodieMergeHandle mergeHandle = HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
-          taskContextSupplier, keyGeneratorOpt);
+  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId,
+                                              long numUpdates, Iterator<HoodieRecord<T>> recordItr) {
+    MergeContext<T> mergeContext = MergeContext.create(numUpdates, recordItr);
+    HoodieMergeHandle mergeHandle = HoodieMergeHandleFactory.create(
+        operationType, config, instantTime, table, mergeContext,
+        partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
       Option<String[]> partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
       Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(table.getMetaClient().getTableConfig(),

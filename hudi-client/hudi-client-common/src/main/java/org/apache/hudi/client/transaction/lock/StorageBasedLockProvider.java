@@ -89,6 +89,21 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   @VisibleForTesting
   static final long THROTTLE_INITIAL_RETRY_DELAY_SECONDS = 1;
 
+  // The full set of causes reported alongside FAILED_TO_RELEASE. Several distinct failures all
+  // surface as that one lock state, so the cause is what tells them apart in production logs.
+  // The heartbeat task would not stop, so the lock is deliberately left un-expired.
+  @VisibleForTesting
+  static final String CAUSE_HEARTBEAT_STOP_FAILED = "HEARTBEAT_STOP_FAILED";
+  // Interrupted while backing off between throttled expire-write attempts.
+  @VisibleForTesting
+  static final String CAUSE_INTERRUPTED_DURING_THROTTLE_BACKOFF = "INTERRUPTED_DURING_THROTTLE_BACKOFF";
+  // Every expire-write attempt was throttled by storage; the retry budget ran out.
+  @VisibleForTesting
+  static final String CAUSE_THROTTLE_RETRIES_EXHAUSTED = "THROTTLE_RETRIES_EXHAUSTED";
+  // Terminal expire-write outcome: UNKNOWN_ERROR or ACQUIRED_BY_OTHERS.
+  @VisibleForTesting
+  static final String CAUSE_EXPIRE_WRITE_FAILED = "EXPIRE_WRITE_FAILED";
+
   // Use for testing
   private final Logger logger;
 
@@ -458,8 +473,15 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       if (heartbeatManager.hasActiveHeartbeat()) {
         logger.debug("Owner {}: Gracefully shutting down heartbeat.", ownerId);
         if (!heartbeatManager.stopHeartbeat(true)) {
+          // The heartbeat task would not stop, so we must not expire the lock: the task could
+          // still renew it after we returned. See LockProviderHeartbeatManager#stopHeartbeat for
+          // which of the two sub-cases (interrupted vs. still-inflight) was logged.
+          logger.error("Owner {}: Cannot release lock {} - heartbeat failed to stop, so the lock is "
+                  + "left un-expired and will be reclaimed only after its lease elapses. "
+                  + "interrupted={}", ownerId, lockFilePath, Thread.currentThread().isInterrupted());
           hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
-          throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE));
+          throw new HoodieLockException(
+              generateLockStateMessage(FAILED_TO_RELEASE, CAUSE_HEARTBEAT_STOP_FAILED));
         }
       }
 
@@ -483,8 +505,12 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         // Re-set the interrupt flag and abandon the retry — an interrupted thread shouldn't keep
         // doing work. The caller will see FAILED_TO_RELEASE below.
         Thread.currentThread().interrupt();
+        logger.error("Owner {}: Cannot release lock {} - interrupted while backing off after "
+                + "throttled expire write (attempt {}/{}); lock left un-expired.",
+            ownerId, lockFilePath, attempt, THROTTLE_MAX_RETRIES, ie);
         hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
-        throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE));
+        throw new HoodieLockException(
+            generateLockStateMessage(FAILED_TO_RELEASE, CAUSE_INTERRUPTED_DURING_THROTTLE_BACKOFF));
       }
       synchronized (this) {
         // Bail out if the lock was either cleared by another path (e.g. shutdown hook,
@@ -498,8 +524,16 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     }
 
     if (expireResult != ExpireLockResult.SUCCESS) {
+      // THROTTLED here means the retries above were exhausted; FAILED means tryExpireCurrentLock
+      // already logged the specific storage outcome (UNKNOWN_ERROR vs ACQUIRED_BY_OTHERS).
+      String cause = expireResult == ExpireLockResult.THROTTLED
+          ? CAUSE_THROTTLE_RETRIES_EXHAUSTED
+          : CAUSE_EXPIRE_WRITE_FAILED;
+      logger.error("Owner {}: Cannot release lock {} - expire write ended as {} (cause={}) after {} "
+              + "throttle retries; lock left un-expired and will dangle until its lease elapses.",
+          ownerId, lockFilePath, expireResult, cause, THROTTLE_MAX_RETRIES);
       hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
-      throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE));
+      throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE, cause));
     }
   }
 
@@ -566,6 +600,13 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         return ExpireLockResult.SUCCESS;
       case ACQUIRED_BY_OTHERS:
         // Lock was acquired by others, indicating heartbeat failure during lock hold period.
+        // Log how long ago our lease should have ended: a positive value means we overran it,
+        // which distinguishes a starved heartbeat from a premature steal by a skewed clock.
+        logger.error("Owner {}: Lock {} was acquired by another owner before we could expire it, "
+                + "indicating heartbeat failure during the hold period. Our lease validUntil was "
+                + "{} ms ago (negative means the lease had not yet elapsed by our clock, which "
+                + "points at clock skew rather than a stalled heartbeat).",
+            ownerId, lockFilePath, getCurrentEpochMs() - this.getLock().getValidUntilMs());
         logErrorLockState(FAILED_TO_RELEASE, "lock was acquired by others, indicating heartbeat failure.");
         setLock(null);
         hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockAcquiredByOthersErrorMetric);
@@ -630,16 +671,22 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockThrottledMetric);
           // Let heartbeat retry later.
           return true;
-        case SUCCESS:
-          // Only positive outcome
-          this.setLock(currentLock.getRight().get());
-          hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
-              (int) (oldExpirationMs - getCurrentEpochMs())));
-          logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
-              ownerId, oldExpirationMs - getCurrentEpochMs(), lockFilePath);
+        case SUCCESS: {
+          // Only positive outcome. Source the deadline metric and log from the renewed lock file
+          // returned by the storage client (same as the acquisition path), not the locally
+          // computed expiration, so both callers agree on where the deadline comes from.
+          StorageLockFile renewedLock = currentLock.getRight().get();
+          this.setLock(renewedLock);
+          // Read the clock once so the metric and the log line below report the same deadline.
+          long renewalCompletionMs = getCurrentEpochMs();
+          long remainingLeaseMs = renewedLock.getValidUntilMs() - renewalCompletionMs;
+          hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric((int) remainingLeaseMs));
+          logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before old expiration. The lock will expire in {} ms for lock {}.",
+              ownerId, oldExpirationMs - renewalCompletionMs, remainingLeaseMs, lockFilePath);
           recordAuditOperation(AuditOperationState.RENEW, acquisitionTimestamp);
           // Let heartbeat continue to renew lock lease again later.
           return true;
+        }
         default:
           throw new HoodieLockException("Unexpected lock update result: " + currentLock.getLeft());
       }
@@ -670,6 +717,15 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         lockFilePath,
         threadName,
         state.toString());
+  }
+
+  /**
+   * Same as {@link #generateLockStateMessage(LockState)}, but names the specific cause.
+   * Several distinct failures all surface as FAILED_TO_RELEASE; without the cause the
+   * exception alone cannot tell them apart in production logs.
+   */
+  private String generateLockStateMessage(LockState state, String cause) {
+    return String.format("%s, cause %s", generateLockStateMessage(state), cause);
   }
 
   private static final String LOCK_STATE_LOGGER_MSG = "Owner {}: Lock file path {}, Thread {}, Storage based lock state {}";

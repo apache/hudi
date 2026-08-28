@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -107,6 +108,16 @@ public class TestHoodieLogFile {
     assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(nativeLogPath));
     assertEquals(0, FSUtils.getStageIdFromLogPath(nativeLogPath));
     assertEquals(1, FSUtils.getTaskAttemptIdFromLogPath(nativeLogPath));
+  }
+
+  @Test
+  void inlineLogFileDetectionOnlyMatchesInlineLogs() {
+    assertTrue(FileNameParser.parseInlineLogFile(pathStr).isPresent());
+    assertFalse(FileNameParser.parseInlineLogFile(nativeLogPath(LogExtensions.DATA_LOG_EXTENSION, 2)).isPresent());
+    assertFalse(FileNameParser.parseInlineLogFile(fileId + "_1-0-1_100.parquet").isPresent());
+    assertTrue(FSUtils.isInlineLogFile(new StoragePath(pathStr)));
+    assertFalse(FSUtils.isInlineLogFile(new StoragePath(nativeLogPath(LogExtensions.DATA_LOG_EXTENSION, 2))));
+    assertFalse(FSUtils.isInlineLogFile(new StoragePath(fileId + "_1-0-1_100.parquet")));
   }
 
   @Test

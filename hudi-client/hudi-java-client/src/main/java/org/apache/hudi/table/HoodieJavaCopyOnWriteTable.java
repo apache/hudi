@@ -44,7 +44,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -282,7 +282,7 @@ public class HoodieJavaCopyOnWriteTable<T>
       throws IOException {
     // these are updates
     HoodieMergeHandle mergeHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
-    return IOUtils.runMerge(mergeHandle, instantTime, fileId);
+    return MergeUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,

@@ -82,6 +82,10 @@ jobs:
             flinkProfile: 'flink1.20'
             sparkProfile: 'spark4.1'
             sparkRuntime: 'spark4.1.1'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            sparkProfile: 'spark4.2'
+            sparkRuntime: 'spark4.2.0'
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 17
@@ -115,6 +119,10 @@ jobs:
             sparkRuntime: 'spark3.5.1'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink2.1'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink2.2'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
     steps:

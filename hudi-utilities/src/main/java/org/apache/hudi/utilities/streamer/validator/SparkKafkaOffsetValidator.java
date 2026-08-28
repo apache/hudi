@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.streamer.validator;
 
 import org.apache.hudi.client.validator.StreamingOffsetValidator;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
+import org.apache.hudi.common.util.KafkaCheckpointUtils.CheckpointFormat;
 
 /**
  * Spark/HoodieStreamer-specific Kafka offset validator.

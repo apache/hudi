@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieRecordReader;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -301,7 +301,7 @@ public class MergeOnReadInputFormat
   }
 
   /**
-   * Get a {@link RowData} iterator using {@link HoodieFileGroupReader}.
+   * Get a {@link RowData} iterator using a {@link HoodieRecordReader}.
    *
    * @param split          input split
    * @param tableSchema    schema of the table
@@ -317,12 +317,12 @@ public class MergeOnReadInputFormat
       HoodieSchema requiredSchema,
       String mergeType,
       boolean emitDelete) throws IOException {
-    HoodieFileGroupReader<RowData> fileGroupReader = createFileGroupReader(split, tableSchema, requiredSchema, mergeType, emitDelete);
-    return fileGroupReader.getClosableIterator();
+    HoodieRecordReader<RowData> recordReader = createRecordReader(split, tableSchema, requiredSchema, mergeType, emitDelete);
+    return recordReader.getClosableIterator();
   }
 
   /**
-   * Create a {@link HoodieFileGroupReader}.
+   * Create a {@link HoodieRecordReader}.
    *
    * @param split          input split
    * @param tableSchema    schema of the table
@@ -330,9 +330,9 @@ public class MergeOnReadInputFormat
    * @param mergeType      merge type for FileGroup reader
    * @param emitDelete     flag saying whether DELETE record should be emitted
    *
-   * @return A {@link HoodieFileGroupReader}.
+   * @return A {@link HoodieRecordReader}.
    */
-  protected HoodieFileGroupReader<RowData> createFileGroupReader(
+  protected HoodieRecordReader<RowData> createRecordReader(
       MergeOnReadInputSplit split,
       HoodieSchema tableSchema,
       HoodieSchema requiredSchema,
@@ -345,7 +345,7 @@ public class MergeOnReadInputFormat
         "",
         split.getBasePath().map(HoodieBaseFile::new).orElse(null),
         split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()));
-    return FormatUtils.createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
+    return FormatUtils.createRecordReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
         tableSchema, requiredSchema, split.getLatestCommit(), mergeType, emitDelete, predicates, split.getInstantRange());
   }
 

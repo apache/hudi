@@ -61,6 +61,7 @@ public class TestRowDataKeyGens {
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
     final RowDataKeyGen keyGen1 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
     assertThat(keyGen1.getRecordKey(rowData1), is("id1"));
+    assertThat(keyGen1.getRecordKeyForComparison(rowData1), is("id1"));
     assertThat(keyGen1.getPartitionPath(rowData1), is("par1"));
 
     // null record key and partition path
@@ -95,6 +96,7 @@ public class TestRowDataKeyGens {
     RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
     String expectedKey = encodeSingleKeyFieldValueOnly ? "id1" : "uuid:id1";
     assertThat(keyGen1.getRecordKey(rowData1), is(expectedKey));
+    assertThat(keyGen1.getRecordKeyForComparison(rowData1), is("id1"));
     assertThat(keyGen1.getPartitionPath(rowData1), is("par1/1970-01-01T00:00:00.001"));
 
     // null record key and partition path
@@ -124,6 +126,7 @@ public class TestRowDataKeyGens {
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
     RowDataKeyGen keyGen1 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
     assertThat(keyGen1.getRecordKey(rowData1), is("uuid:id1,name:Danny"));
+    assertThat(keyGen1.getRecordKeyForComparison(rowData1), is("id1,name:Danny"));
     assertThat(keyGen1.getPartitionPath(rowData1), is("par1/1970-01-01T00:00:00.001"));
 
     // null record key and partition path

@@ -197,7 +197,8 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
     }
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    this.props = ConfigUtils.getMergeProps(props, tableConfig);
+    props = ConfigUtils.getMergeProps(props, tableConfig);
+    this.props = props;
     this.partitionPathFields = tableConfig.getPartitionFields();
     readerContext.initRecordMerger(props);
     readerContext.setTablePath(tablePath);
@@ -219,7 +220,9 @@ public final class HoodieFileGroupReader<T> implements HoodieRecordReader<T> {
   private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
     if (inputSplit.hasNoRecordsToMerge()) {
-      this.baseFileIterator = new CloseableMappingIterator<>(iter, rec -> readerContext.getRecordContext().seal(rec));
+      HoodieSchema requiredSchema = readerContext.getSchemaHandler().getRequiredSchema();
+      this.baseFileIterator = new CloseableMappingIterator<>(iter,
+          rec -> readerContext.getRecordContext().seal(requiredSchema, rec));
     } else {
       this.baseFileIterator = iter;
       Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult = recordBufferLoader.getRecordBuffer(

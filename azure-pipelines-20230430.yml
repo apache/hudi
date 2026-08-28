@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # NOTE:
-# This config file defines how Azure CI runs tests with Spark 3.5 and Flink 2.1 profiles.
+# This config file defines how Azure CI runs tests with Spark 3.5 and Flink 2.2 profiles.
 # PRs will need to keep in sync with master's version to trigger the CI runs.
 # See scripts/jacoco/README.md for how aggregated code coverage report works
 # across multiple modules.
@@ -80,6 +80,7 @@ parameters:
       - 'org.apache.spark.sql.hudi.command'
       - 'org.apache.spark.sql.hudi.common'
       - 'org.apache.spark.sql.hudi.ddl'
+      - 'org.apache.spark.sql.hudi.dml.schema'
       - 'org.apache.spark.sql.hudi.procedure'
   - name: jacocoModules
     type: object
@@ -97,11 +98,10 @@ parameters:
       - '!packaging/hudi-presto-bundle'
       - '!packaging/hudi-spark-bundle'
       - '!packaging/hudi-timeline-server-bundle'
-      - '!packaging/hudi-trino-bundle'
       - '!packaging/hudi-utilities-slim-bundle'
 
 variables:
-  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.5 -Dflink2.1'
+  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.5 -Dflink2.2'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   # The aether.* properties drive maven-resolver's native HTTP transport (Maven 3.9+); the
   # maven.wagon.* ones are kept because this image's Maven version is not pinned and Maven 3.8

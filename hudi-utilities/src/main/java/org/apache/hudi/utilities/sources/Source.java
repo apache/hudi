@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.utilities.callback.SourceCommitCallback;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
@@ -172,6 +173,17 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
 
   @Override
   public void releaseResources() {
+    // Cleanup runs after the write/commit; a transient Spark failure while unpersisting
+    // must not fail an already-successful round.
+    try {
+      unpersistCachedSourceRdd();
+    } catch (Exception e) {
+      log.warn("Failed to unpersist cached source RDD during releaseResources; ignoring", e);
+    }
+  }
+
+  @VisibleForTesting
+  protected void unpersistCachedSourceRdd() {
     if (cachedSourceRdd != null && cachedSourceRdd.isLeft()) {
       cachedSourceRdd.asLeft().unpersist();
     } else if (cachedSourceRdd != null && cachedSourceRdd.isRight()) {

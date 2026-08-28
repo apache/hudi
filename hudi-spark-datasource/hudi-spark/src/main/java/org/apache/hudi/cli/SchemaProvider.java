@@ -30,8 +30,9 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.Serializable;
 
 /**
- * Class to provide schema for reading data and also writing into a Hoodie table,
- * used by Hudi Streamer (runs over Spark).
+ * Class to provide the schema for the CLI bootstrap path ({@link BootstrapExecutorUtils}, which loads the
+ * configured implementation by class name); distinct from the Hudi Streamer provider in
+ * {@code org.apache.hudi.utilities.schema}.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public abstract class SchemaProvider implements Serializable {
@@ -73,8 +74,9 @@ public abstract class SchemaProvider implements Serializable {
       Schema schema = getTargetSchema();
       return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
     } catch (UnsupportedOperationException e) {
-      // If the legacy getTargetSchema() calls getSourceSchema() which is not implemented,
-      // fall back to using getSourceHoodieSchema as target schema
+      // Reached by a provider that overrides getSourceHoodieSchema() and leaves the deprecated
+      // getSourceSchema() (hence the default getTargetSchema()) throwing, or that overrides
+      // getTargetSchema() to throw; either way the source HoodieSchema is the target.
       return getSourceHoodieSchema();
     }
   }

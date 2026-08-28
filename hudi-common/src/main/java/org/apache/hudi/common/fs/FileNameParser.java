@@ -152,8 +152,23 @@ public final class FileNameParser {
       return nativeLogFileName;
     }
 
-    Matcher matcher = INLINE_LOG_FILE_PATTERN.matcher(actualFileName);
-    return matcher.matches() ? Option.of(LogFileName.fromInlineLogFile(matcher)) : Option.empty();
+    return parseInlineLogFileFromActualFileName(actualFileName);
+  }
+
+  /**
+   * Parses only an inline log file name.
+   *
+   * <p>Use {@link #parseLogFile(String)} when both inline and native log formats are acceptable.</p>
+   *
+   * @param fileName file name or full path
+   * @return decoded inline log file name when the input matches the inline log-file format
+   */
+  public static Option<LogFileName> parseInlineLogFile(String fileName) {
+    if (StringUtils.isNullOrEmpty(fileName)) {
+      return Option.empty();
+    }
+
+    return parseInlineLogFileFromActualFileName(getActualFileName(fileName));
   }
 
   /**
@@ -190,6 +205,11 @@ public final class FileNameParser {
 
   private static Option<LogFileName> parseNativeLogFileFromActualFileName(String actualFileName) {
     return matchNativeLogFileFromActualFileName(actualFileName).map(LogFileName::fromNativeLogFile);
+  }
+
+  private static Option<LogFileName> parseInlineLogFileFromActualFileName(String actualFileName) {
+    Matcher matcher = INLINE_LOG_FILE_PATTERN.matcher(actualFileName);
+    return matcher.matches() ? Option.of(LogFileName.fromInlineLogFile(matcher)) : Option.empty();
   }
 
   private static Option<Matcher> matchNativeLogFileFromActualFileName(String actualFileName) {

@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
@@ -77,7 +76,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -183,23 +181,6 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   /**
-   * Fetch {@link HoodieKey}s with row positions from the given parquet file.
-   *
-   * @param storage  {@link HoodieStorage} instance.
-   * @param filePath The parquet file path.
-   * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
-   */
-  @Override
-  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
-    return fetchRecordKeysWithPositions(storage, filePath, Option.empty(), Option.empty());
-  }
-
-  @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
-    return getHoodieKeyIterator(storage, filePath, Option.empty(), Option.empty());
-  }
-
-  /**
    * Returns a closable iterator for reading the given parquet file.
    *
    * @param storage         {@link HoodieStorage} instance.
@@ -233,12 +214,6 @@ public class ParquetUtils extends FileFormatUtils {
    * @param partitionPath optional partition path for the file, if provided only the record key is read from the file
    * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
-  @Override
-  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
-    AtomicLong position = new AtomicLong(0);
-    return new CloseableMappingIterator<>(getHoodieKeyIterator(storage, filePath, keyGeneratorOpt, partitionPath), key -> Pair.of(key, position.getAndIncrement()));
-  }
-
   /**
    * Get the schema of the given parquet file.
    */

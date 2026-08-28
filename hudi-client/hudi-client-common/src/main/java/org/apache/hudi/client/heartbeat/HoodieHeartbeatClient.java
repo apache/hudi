@@ -162,7 +162,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     Heartbeat heartbeat = instantToHeartbeatMap.remove(instantTime);
     if (isHeartbeatStarted(heartbeat)) {
       stopHeartbeatScheduler(heartbeat);
-      HeartbeatUtils.deleteHeartbeatFile(storage, basePath, instantTime);
+      WriterHeartbeatUtils.deleteHeartbeatFile(storage, basePath, instantTime);
       log.info("Deleted heartbeat file for instant {}", instantTime);
     }
     return heartbeat;
@@ -241,7 +241,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       if (heartbeat.getLastHeartbeatTime() != null && isHeartbeatExpired(instantTime)) {
         // A previous refresh was delayed past the tolerable interval. Stop refreshing this heartbeat
         // (cancel the scheduler) and do NOT advance the last heartbeat time, so the heartbeat stays expired
-        // and the writer aborts at commit time via HeartbeatUtils.abortIfHeartbeatExpired(). We must not
+        // and the writer aborts at commit time via WriterHeartbeatUtils.abortIfHeartbeatExpired(). We must not
         // keep refreshing here: a concurrent process (e.g. an async cleaner under LAZY failed-writes
         // policy) may already have started rolling back this instant once it observed the expiry, and
         // resurrecting the heartbeat could let this writer commit on top of rolled-back files.

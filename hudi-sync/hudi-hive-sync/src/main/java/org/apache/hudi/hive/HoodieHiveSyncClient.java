@@ -37,6 +37,8 @@ import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCBasedMetadataOperator;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
+import org.apache.hudi.hive.util.HiveDriverPool;
+import org.apache.hudi.hive.util.HiveMetaStoreClientPool;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.hive.util.PartitionFilterGenerator;
 import org.apache.hudi.sync.common.HoodieSyncClient;
@@ -66,6 +68,8 @@ import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_R
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getInputFormatClassName;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getOutputFormatClassName;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getSerDeClassName;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BATCHING_ENABLED;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BATCHING_THREADS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_USE_SPARK_CATALOG;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
@@ -86,6 +90,15 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   private final Map<String, Table> initialTableByName = new HashMap<>();
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
+  // Present only when HIVE_SYNC_BATCHING_ENABLED and sync mode is HIVEQL. Owned by
+  // this class; closed in close() before Hive.closeCurrent(). HiveQueryDDLExecutor
+  // uses it only for DROP (Hive Thrift, not Hive Driver) — see HiveMetaStoreClientPool
+  // javadoc.
+  private Option<HiveMetaStoreClientPool> partitionClientPool = Option.empty();
+  // Present only when HIVE_SYNC_BATCHING_ENABLED and sync mode is HIVEQL (explicit
+  // or legacy default). Owned by HiveQueryDDLExecutor; this field is kept for
+  // reference only — close() is delegated through ddlExecutor.close().
+  private Option<HiveDriverPool> partitionDriverPool = Option.empty();
 
   /**
    * JDBC-based metadata operator, lazily initialized on first Thrift
@@ -124,7 +137,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
             ddlExecutor = new HMSDDLExecutor(config, this.client);
             break;
           case HIVEQL:
-            ddlExecutor = new HiveQueryDDLExecutor(config, this.client);
+            ddlExecutor = buildHiveQueryDDLExecutor(config);
             break;
           case JDBC:
             JDBCExecutor jdbcExecutor = new JDBCExecutor(config);
@@ -142,12 +155,39 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
           jdbcMetadataOperator = new JDBCBasedMetadataOperator(
               jdbcExecutor.getConnection(), databaseName);
         } else {
-          ddlExecutor = new HiveQueryDDLExecutor(config, this.client);
+          ddlExecutor = buildHiveQueryDDLExecutor(config);
         }
       }
     } catch (Exception e) {
+      // The pools own live daemon threads, Hive Drivers, and Thrift sockets, and are
+      // built before the executor that would otherwise own their lifecycle. Any throw
+      // between those two points would leak them -- notably QueryBasedDDLExecutor's
+      // super(config), which runs the PartitionValueExtractor reflection before
+      // HiveQueryDDLExecutor's own try block is even entered. Closing here covers every
+      // such window; both close() methods are idempotent, so overlapping with the
+      // executor's cleanup (or buildHiveQueryDDLExecutor's rollback) is harmless.
+      closePartitionPoolsQuietly();
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
+  }
+
+  private void closePartitionPoolsQuietly() {
+    partitionDriverPool.ifPresent(pool -> {
+      try {
+        pool.close();
+      } catch (Exception e) {
+        log.warn("Error closing HiveDriverPool during failed sync client construction", e);
+      }
+    });
+    partitionDriverPool = Option.empty();
+    partitionClientPool.ifPresent(pool -> {
+      try {
+        pool.close();
+      } catch (Exception e) {
+        log.warn("Error closing IMetaStoreClient pool during failed sync client construction", e);
+      }
+    });
+    partitionClientPool = Option.empty();
   }
 
   /**
@@ -198,6 +238,49 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       return IMetaStoreClientUtil.getMSC(config.getHiveConf());
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
+    }
+  }
+
+  private Option<HiveMetaStoreClientPool> maybeBuildPartitionClientPool(HiveSyncConfig config) {
+    if (!config.getBooleanOrDefault(HIVE_SYNC_BATCHING_ENABLED)) {
+      return Option.empty();
+    }
+    if (config.getBooleanOrDefault(HIVE_SYNC_USE_SPARK_CATALOG)) {
+      // The Spark catalog client is constructed via reflection against a Spark-side
+      // class and isn't compatible with the direct RetryingMetaStoreClient pool path.
+      // Fall back to single-client sequential behavior rather than failing the sync.
+      log.warn("{}=true is not supported with {}=true; falling back to sequential partition drop.",
+          HIVE_SYNC_BATCHING_ENABLED.key(), HIVE_SYNC_USE_SPARK_CATALOG.key());
+      return Option.empty();
+    }
+    int size = config.getIntOrDefault(HIVE_SYNC_BATCHING_THREADS);
+    return Option.of(new HiveMetaStoreClientPool(config, size));
+  }
+
+  private Option<HiveDriverPool> maybeBuildHiveDriverPool(HiveSyncConfig config) {
+    if (!config.getBooleanOrDefault(HIVE_SYNC_BATCHING_ENABLED)) {
+      return Option.empty();
+    }
+    int size = config.getIntOrDefault(HIVE_SYNC_BATCHING_THREADS);
+    return Option.of(new HiveDriverPool(config, size));
+  }
+
+  /**
+   * Builds the (optional) partition-phase pools and the {@link HiveQueryDDLExecutor}
+   * that uses them, rolling back whichever pool(s) already got built if a later step
+   * in this sequence throws. Without this, a failure in {@code maybeBuildPartitionClientPool}
+   * (after {@code partitionDriverPool} was already built) or in the executor's own
+   * constructor would leak the already-built pool's worker threads and Thrift/Driver
+   * connections, since this constructor's outer catch just rethrows.
+   */
+  private HiveQueryDDLExecutor buildHiveQueryDDLExecutor(HiveSyncConfig config) {
+    try {
+      this.partitionDriverPool = maybeBuildHiveDriverPool(config);
+      this.partitionClientPool = maybeBuildPartitionClientPool(config);
+      return new HiveQueryDDLExecutor(config, this.client, this.partitionDriverPool, this.partitionClientPool);
+    } catch (Exception e) {
+      closePartitionPoolsQuietly();
+      throw e;
     }
   }
 
@@ -596,10 +679,38 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   @Override
   public void close() {
     try {
-      ddlExecutor.close();
-      if (client != null) {
-        Hive.closeCurrent();
-        client = null;
+      try {
+        ddlExecutor.close();
+      } finally {
+        // Close the partition client pool before Hive.closeCurrent() so the
+        // RetryingMetaStoreClient instances held by the pool release their Thrift
+        // sockets without racing the ThreadLocal Hive cleanup. Runs even if
+        // ddlExecutor.close() above threw, so the pool's Thrift sockets and
+        // worker threads aren't leaked.
+        if (partitionClientPool.isPresent()) {
+          try {
+            partitionClientPool.get().close();
+          } catch (Exception e) {
+            log.warn("Error closing IMetaStoreClient pool", e);
+          }
+          partitionClientPool = Option.empty();
+        }
+        if (client != null) {
+          // Close the proxied IMetaStoreClient directly before Hive.closeCurrent().
+          // When RetryingMetaStoreClient rebuilds the underlying client on a transient
+          // TException, the fresh MSC is reachable only through this proxy, while the
+          // thread-local Hive singleton still references the older instance. So
+          // Hive.closeCurrent() alone closes the stale MSC and orphans the retry-created
+          // one, leaking a connection per sync cycle. client.close() releases the live
+          // MSC by identity; Hive.closeCurrent() remains a fallback for the singleton path.
+          try {
+            client.close();
+          } catch (Exception e) {
+            log.warn("Failed to close IMetaStoreClient directly; Hive.closeCurrent() will run anyway", e);
+          }
+          Hive.closeCurrent();
+          client = null;
+        }
       }
     } catch (Exception e) {
       log.error("Could not close connection ", e);
@@ -697,6 +808,17 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         }
       }
     });
+    if (!ddlExecutor.supportsUpdatingPartitionColumnComments()) {
+      List<String> skippedPartitionFields = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).stream()
+          .map(partitionField -> partitionField.toLowerCase(Locale.ROOT))
+          .filter(alterComments::containsKey)
+          .collect(Collectors.toList());
+      if (!skippedPartitionFields.isEmpty()) {
+        log.debug("Cannot update comments of partition columns {} of {} in query based sync modes, use hms sync mode instead",
+            skippedPartitionFields, tableName);
+        skippedPartitionFields.forEach(alterComments::remove);
+      }
+    }
     if (alterComments.isEmpty()) {
       log.info("No comment difference of {} ", tableName);
       return false;

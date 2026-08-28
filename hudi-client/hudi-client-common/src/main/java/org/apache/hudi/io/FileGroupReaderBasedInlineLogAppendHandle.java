@@ -69,6 +69,10 @@ public class FileGroupReaderBasedInlineLogAppendHandle<T, I, K, O> extends Hoodi
     super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), taskContextSupplier);
     this.operation = operation;
     this.readerContext = readerContext;
+    // File-group reader output already conforms to the writer schema. Preserve its metadata fields
+    // instead of prepending another metadata overlay and shifting the data-field ordinals.
+    this.isLogCompaction = true;
+    this.useWriterSchema = true;
   }
 
   @Override
@@ -76,7 +80,7 @@ public class FileGroupReaderBasedInlineLogAppendHandle<T, I, K, O> extends Hoodi
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     TypedProperties props = TypedProperties.copy(config.getProps());
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
+    long maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
     Stream<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(logFileName ->
         new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(

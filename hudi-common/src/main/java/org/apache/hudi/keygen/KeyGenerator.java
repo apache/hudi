@@ -94,4 +94,43 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
     }
     return recordKey.toString();
   }
+
+  /**
+   * Constructs a compact key that preserves the ordering of the encoded record key.
+   *
+   * <p>The first {@code <field>:} prefix is omitted because it is identical for all records.
+   *
+   * @param recordKeyFields the record key field names
+   * @param recordValueFunction takes the record key field name and the index of the field in the record key fields and outputs a value
+   * @return the record key for comparison
+   */
+  public static String constructRecordKeyForComparison(
+      String[] recordKeyFields,
+      BiFunction<String, Integer, String> recordValueFunction) {
+    boolean keyIsNullEmpty = true;
+    StringBuilder recordKey = new StringBuilder();
+    for (int i = 0; i < recordKeyFields.length; i++) {
+      String recordKeyField = recordKeyFields[i];
+      String recordKeyValue = recordValueFunction.apply(recordKeyField, i);
+      if (i > 0) {
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR);
+      }
+      if (recordKeyValue == null) {
+        recordKey.append(NULL_RECORDKEY_PLACEHOLDER);
+      } else if (recordKeyValue.isEmpty()) {
+        recordKey.append(EMPTY_RECORDKEY_PLACEHOLDER);
+      } else {
+        recordKey.append(recordKeyValue);
+        keyIsNullEmpty = false;
+      }
+      if (i != recordKeyFields.length - 1) {
+        recordKey.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+      }
+    }
+    if (keyIsNullEmpty) {
+      throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
+          + Arrays.toString(recordKeyFields) + " cannot be entirely null or empty.");
+    }
+    return recordKey.toString();
+  }
 }

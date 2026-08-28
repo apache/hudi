@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SortUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
@@ -86,6 +87,9 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows extends BucketSo
                                                             Map<String, String> strategyParams,
                                                             boolean populateMetaFields, Map<String, List<ConsistentHashingNode>> hashingChildrenNodes) {
     super(table, strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), ""));
+    // This strategy sorts within buckets directly rather than through the custom-columns
+    // partitioners, so it must validate the sort columns too.
+    SortUtils.validateSortableColumns(strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null), table.getConfig().getSchema());
     this.indexKeyFieldList = KeyGenUtils.getIndexKeyFields(table.getConfig().getBucketIndexHashField());
     this.populateMetaFields = populateMetaFields;
     if (!populateMetaFields) {

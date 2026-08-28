@@ -43,7 +43,7 @@ import org.apache.hudi.execution.ExecutorFactory;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
@@ -109,7 +109,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
 
   private List<WriteStatus> performBucketMergeForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
                                                        TaskContextSupplier taskContextSupplier, String instantTime) {
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, writeConfig);
+    long maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(taskContextSupplier, writeConfig);
     log.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
     Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
     ValidationUtils.checkArgument(extraMetadata.isPresent(), "Extra metadata should be present for consistent hashing operations");
@@ -209,7 +209,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     metadata.setChildrenNodes(nodes);
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
     ClusteringOperation operation = clusteringGroup.getOperations().get(0);
-    ClosableIterator<HoodieRecord<T>> iterator = getRecordIterator(readerContextFactory, operation, instantTime, IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), writeConfig));
+    ClosableIterator<HoodieRecord<T>> iterator = getRecordIterator(readerContextFactory, operation, instantTime, MergeUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), writeConfig));
     Function<HoodieRecord<T>, String> fileIdPrefixExtractor = record -> identifier.getBucket(record.getRecordKey(), this.indexKeyFieldList).getFileIdPrefix();
 
     HoodieConsumer<HoodieRecord<T>, List<WriteStatus>> insertHandler =

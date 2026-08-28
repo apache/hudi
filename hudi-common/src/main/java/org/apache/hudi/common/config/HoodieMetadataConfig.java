@@ -195,6 +195,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.");
 
+  public static final ConfigProperty<Boolean> SKIP_ZERO_SIZE_FILES_ON_INITIALIZE = ConfigProperty
+      .key(METADATA_PREFIX + ".skip.zero.size.files.on.initialize")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled, zero-size data files encountered while listing the data table during "
+          + "metadata table initialization and restore sync are skipped instead of being recorded in the metadata "
+          + "table. Skipped files remain on storage and are not tracked by the metadata table or the cleaner; "
+          + "remove them manually. The metadata validator will report them as inconsistencies.");
+
   public static final ConfigProperty<Integer> FILE_LISTING_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.file.listing.parallelism")
       .defaultValue(200)
@@ -812,6 +822,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getString(DIR_FILTER_REGEX);
   }
 
+  public boolean shouldSkipZeroSizeFilesOnInitialize() {
+    return getBoolean(SKIP_ZERO_SIZE_FILES_ON_INITIALIZE);
+  }
+
   public boolean shouldIgnoreSpuriousDeletes() {
     return getBoolean(IGNORE_SPURIOUS_DELETES);
   }
@@ -1191,6 +1205,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withDirectoryFilterRegex(String regex) {
       metadataConfig.setValue(DIR_FILTER_REGEX, regex);
+      return this;
+    }
+
+    public Builder withSkipZeroSizeFilesOnInitialize(boolean skipZeroSizeFiles) {
+      metadataConfig.setValue(SKIP_ZERO_SIZE_FILES_ON_INITIALIZE, String.valueOf(skipZeroSizeFiles));
       return this;
     }
 

@@ -25,7 +25,8 @@ import java.util.List;
  * Provides closeable iterator interface over list of iterators. Consumes all records from first iterator element
  * before moving to next iterator in the list. That is concatenating elements across multiple iterators.
  */
-public class CloseableConcatenatingIterator<T> extends ConcatenatingIterator<T> {
+public class CloseableConcatenatingIterator<T> extends ConcatenatingIterator<T>
+    implements ClosableIterator<T> {
 
   public CloseableConcatenatingIterator(List<ClosableIterator<T>> iterators) {
     super(iterators);
@@ -36,5 +37,13 @@ public class CloseableConcatenatingIterator<T> extends ConcatenatingIterator<T> 
     ClosableIterator<T> previous = (ClosableIterator<T>) super.advanceIterator();
     previous.close();
     return previous;
+  }
+
+  @Override
+  public void close() {
+    Iterator<T> iterator;
+    while ((iterator = super.advanceIterator()) != null) {
+      ((ClosableIterator<T>) iterator).close();
+    }
   }
 }

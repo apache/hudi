@@ -72,6 +72,7 @@ class TestReusableKeyBasedRecordBuffer {
     when(mockReaderContext.getKeyFilterOpt()).thenReturn(Option.of(keyFilter));
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(mockReaderContext.getSchemaHandler().getSchemaEvolutionTransformer(any(), any())).thenReturn(Option.empty());
     when(mockReaderContext.getRecordContext().getDeleteRow(any())).thenAnswer(invocation -> {
       String recordKey = invocation.getArgument(0);
       return new TestRecord(recordKey, 0);
@@ -86,7 +87,7 @@ class TestReusableKeyBasedRecordBuffer {
       return 1;
     });
     when(mockReaderContext.getRecordContext().toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
-    when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(mockReaderContext.getRecordContext().seal(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
 
     ReusableKeyBasedRecordBuffer<TestRecord> buffer = new ReusableKeyBasedRecordBuffer<>(mockReaderContext, metaClient,
         RecordMergeMode.EVENT_TIME_ORDERING, Option.empty(), new TypedProperties(), Collections.singletonList("value"), updateProcessor, preMergedLogRecords);

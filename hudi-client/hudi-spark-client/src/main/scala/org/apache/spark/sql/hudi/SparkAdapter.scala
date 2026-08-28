@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.HoodieInternalRow
+import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -28,7 +29,7 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.parquet.schema.{MessageType, Type}
+import org.apache.parquet.schema.{GroupType, MessageType, Type, Types}
 import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
@@ -485,6 +486,14 @@ trait SparkAdapter extends Serializable {
   ): Type
 
   /**
+   * Applies the Parquet VARIANT logical type annotation to a shredded variant group builder so
+   * external readers recognize the column as a Variant. Only meaningful on parquet 1.16+
+   * (Spark 4.1+); the default leaves the builder unchanged because the annotation type does not
+   * exist on earlier parquet (Spark 3.x never shreds variants, Spark 4.0 ships parquet 1.15.2).
+   */
+  def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = builder
+
+  /**
    * Checks if a StructType represents a shredded Variant schema (has special shredding metadata).
    * This is used during writing to identify columns that need special shredding handling.
    *
@@ -519,6 +528,23 @@ trait SparkAdapter extends Serializable {
                             sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = None
 
   /**
+   * Rewrites each top-level VariantType field of `schema` into the full-variant projection
+   * struct that PushVariantIntoScan would request for whole-variant access: a single child
+   * field "0" of VariantType carrying `VariantMetadata` for path "$". Requesting that shape
+   * makes the parquet reader reconstruct shredded variants by field name; requesting native
+   * VariantType instead clips a shredded file group down to {metadata, value} and reads
+   * value=null (#19556).
+   *
+   * Used by internal (non-catalyst) reads of parquet base files, which have no
+   * PushVariantIntoScan to do this for them. The caller restores the native VariantType
+   * shape by projecting child 0 of each rewritten field.
+   *
+   * Returns None when the schema has no top-level VariantType field or the Spark version has
+   * no shredded-read support (Spark 3.x / 4.0).
+   */
+  def buildFullVariantReadSchema(schema: StructType): Option[StructType] = None
+
+  /**
    * Generates a shredded Variant schema and marks it with write shredding metadata.
    *
    * For Spark 4.x, this uses SparkShreddingUtils to generate the schema and add metadata.
@@ -546,6 +572,14 @@ trait SparkAdapter extends Serializable {
     shreddedStructType: StructType,
     writeStruct: Consumer[InternalRow]
   ): BiConsumer[SpecializedGetters, Integer]
+
+  /**
+   * Extracts the raw binaries of a variant column value from a row, as defensive copies.
+   * Used to sample variant binaries for shredding-schema inference.
+   *
+   * Returns null when the value is null or the Spark version has no variant support (3.x).
+   */
+  def extractVariantBinary(row: SpecializedGetters, ordinal: Int): VariantShreddingSchemaInferrer.VariantSample = null
 
   /**
    * Creates a [[HoodieMemoryStream]] wrapper around Spark's MemoryStream.

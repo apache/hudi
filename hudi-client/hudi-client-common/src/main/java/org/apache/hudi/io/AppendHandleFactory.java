@@ -34,7 +34,7 @@ public class AppendHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K,
                                                final String fileIdPrefix, final TaskContextSupplier sparkTaskContextSupplier) {
 
     String fileId = getNextFileId(fileIdPrefix);
-    if (CommonClientUtils.shouldWriteNativeLogs(hoodieConfig, hoodieTable.getMetaClient().getTableConfig())) {
+    if (CommonClientUtils.shouldWriteNativeLogs(hoodieConfig)) {
       return new HoodieNativeLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
           fileId, sparkTaskContextSupplier);
     }
@@ -46,7 +46,7 @@ public class AppendHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K,
                                                final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
                                                final String fileId, final Iterator<HoodieRecord<T>> recordItr,
                                                final TaskContextSupplier sparkTaskContextSupplier) {
-    if (CommonClientUtils.shouldWriteNativeLogs(hoodieConfig, hoodieTable.getMetaClient().getTableConfig())) {
+    if (CommonClientUtils.shouldWriteNativeLogs(hoodieConfig)) {
       return new HoodieNativeLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
           fileId, recordItr, sparkTaskContextSupplier);
     }

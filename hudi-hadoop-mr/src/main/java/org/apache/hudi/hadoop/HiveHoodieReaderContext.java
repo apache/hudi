@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaRepair;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -39,6 +41,7 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.utils.HiveTypeUtils;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableSchemaUtils;
 import org.apache.hudi.storage.HoodieStorage;
@@ -64,15 +67,22 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.parquet.avro.AvroSchemaConverter;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_TYPE;
+import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_SKIP_MERGE;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.DEFAULT_REALTIME_SKIP_MERGE;
+import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP;
 
 /**
  * {@link HoodieReaderContext} for Hive-specific {@link HoodieFileGroupReaderBasedRecordReader}.
@@ -148,6 +158,64 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       fileSchema = dataSchema;
     }
 
+    // Fail fast on shredded variant columns: this reader hands the file to a plain
+    // parquet-avro read at the requested {metadata, value} projection, so a file whose variant
+    // group carries typed_value would come back with silent nulls (the typed rows keep their
+    // payload in typed_value, which the projection drops). Detection is shape-based on the
+    // footer schema and anchored on the requested column being a variant, so plain user structs
+    // of the same shape are left alone. toShreddedReadSchema recurses through structs, array
+    // elements and map values, matching the row writer, which shreds nested variants too.
+    // The flagged columns are split by Hive's read column names on the outer conf, since the
+    // per-file copy below gets requiredSchema's names from setSchemas and cannot tell the two
+    // apart: a column Hive selected fails as Hive-visible nulls; a column only requiredSchema
+    // names is there for merging (a CUSTOM merge whose merger is not projection compatible reads
+    // the whole table schema; a merger can also list it as mandatory) and fails too, because the
+    // reader materializes it at {metadata, value} and the merger would consume the nulls -- unless
+    // the read skips merging, in which case no merger runs at all and the merge-only bucket is
+    // harmless (see isSkipMerge). Hive writes the full name list for `select *` and none for
+    // count(*), whose requested schema is then empty
+    // (HoodieFileGroupReaderBasedRecordReader.createRequestedSchema), so nothing is flagged unless
+    // merging widens it. A read whose nested column paths
+    // (hive.io.file.readNestedColumn.paths) all miss the shredded group is not flagged either:
+    // Hive's parquet reader materializes only the paths it is given, and the mask rewrite below
+    // already handles the compacted projection such a read comes back in.
+    if (isParquetOrOrc && requiredSchema.getType() == HoodieSchemaType.RECORD) {
+      HoodieSchema shreddedReadSchema = VariantSchemaUtils.toShreddedReadSchema(requiredSchema, fileSchema);
+      if (shreddedReadSchema != requiredSchema) {
+        List<String> shreddedPaths = new ArrayList<>();
+        collectShreddedVariantPaths(requiredSchema, shreddedReadSchema, "", shreddedPaths);
+        Configuration conf = storage.getConf().unwrapAs(Configuration.class);
+        Set<String> requestedColumns = Arrays.stream(HoodieColumnProjectionUtils.getReadColumnNames(conf))
+            .map(name -> name.trim().toLowerCase(Locale.ROOT))
+            .collect(Collectors.toSet());
+        List<String> shreddedColumns = HoodieColumnProjectionUtils.columnsReadingShreddedPaths(conf, shreddedPaths);
+        Map<Boolean, List<String>> byHiveRequest = shreddedColumns.stream()
+            .collect(Collectors.partitioningBy(requestedColumns::contains));
+        List<String> hiveReads = byHiveRequest.get(true);
+        List<String> mergeOnly = byHiveRequest.get(false);
+        if (!hiveReads.isEmpty()) {
+          throw new HoodieException(String.format(
+              "Column(s) '%s' of %s hold a shredded variant (typed_value present); the Hive reader "
+                  + "cannot reconstruct shredded variants. Read the table with Spark 4.1+, or "
+                  + "rewrite it unshredded (e.g. cluster with "
+                  + "hoodie.parquet.variant.write.shredding.enabled=false).",
+              String.join(", ", hiveReads), filePath));
+        }
+        if (!mergeOnly.isEmpty() && !isSkipMerge(conf)) {
+          Option<HoodieRecordMerger> merger = getRecordMerger();
+          String mergerName = merger != null && merger.isPresent()
+              ? "the record merger (" + merger.get().getClass().getName() + ")" : "the record merger";
+          throw new HoodieException(String.format(
+              "Column(s) '%s' of %s hold a shredded variant (typed_value present); the query does not select "
+                  + "them but %s reads them for merging (the required schema is wider than the query), and the "
+                  + "Hive reader cannot reconstruct shredded variants, so the merger would be handed nulls. Read "
+                  + "the table with Spark 4.1+, or rewrite it unshredded (e.g. cluster with "
+                  + "hoodie.parquet.variant.write.shredding.enabled=false).",
+              String.join(", ", mergeOnly), filePath, mergerName));
+        }
+      }
+    }
+
     // Prune the required schema based on the file schema
     HoodieSchema actualRequiredSchema = isParquetOrOrc ? HoodieSchemaUtils.pruneDataSchema(fileSchema, requiredSchema, Collections.emptySet()) : requiredSchema;
 
@@ -188,6 +256,82 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // Parquet reader compacted nested-column projection.
     return new CloseableMappingIterator<>(recordIterator,
         record -> HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(record, modifiedDataSchema, requiredSchema, Collections.emptyMap(), physicalMask));
+  }
+
+  /**
+   * Whether this read skips merging, derived the way {@link HoodieFileGroupReaderBasedRecordReader}
+   * derives it for the file group reader: {@code hoodie.datasource.merge.type} wins when the job
+   * sets it, and the legacy {@code hoodie.realtime.merge.skip} flag only fills it in otherwise.
+   *
+   * <p>A skip-merge read builds an UnmergedFileGroupRecordBuffer, whose processNextDataRecord is a
+   * no-op, so no merger ever reads the columns the required schema carries beyond the query.
+   * generateRequiredSchema still widens to the whole table schema on a CUSTOM merge and this reader
+   * still materializes the shredded variant as nulls, but nothing consumes them and the file group
+   * reader's output converter projects the record back to the requested schema before
+   * {@link HoodieFileGroupReaderBasedRecordReader} hands it to Hive, so the merge-only bucket must
+   * not fail such a read. The Hive-visible bucket is unaffected: those columns leave the reader
+   * either way.
+   */
+  private static boolean isSkipMerge(Configuration conf) {
+    String mergeType = conf.get(MERGE_TYPE.key());
+    if (mergeType != null) {
+      return REALTIME_SKIP_MERGE.equalsIgnoreCase(mergeType.trim());
+    }
+    return Boolean.parseBoolean(conf.get(REALTIME_SKIP_MERGE_PROP, DEFAULT_REALTIME_SKIP_MERGE));
+  }
+
+  /**
+   * Collects into {@code paths} the Hive-form dotted path of every variant node
+   * {@link VariantSchemaUtils#toShreddedReadSchema} swapped, i.e. every requested variant the file
+   * holds shredded. {@code shreddedRead} is {@code required} with exactly those nodes replaced by
+   * their on-disk form, so the two are walked in parallel from {@code path}. Only record fields add
+   * a segment: Hive truncates its nested column paths at a LIST or MAP column, so an array element
+   * and a map value share their column's path, matching the paths the legacy guard collects.
+   */
+  private static void collectShreddedVariantPaths(HoodieSchema required, HoodieSchema shreddedRead,
+                                                  String path, List<String> paths) {
+    HoodieSchema requiredNode = required.getNonNullType();
+    HoodieSchema readNode = shreddedRead.getNonNullType();
+    if (requiredNode.getType() == HoodieSchemaType.VARIANT && isShreddedVariantNode(readNode)) {
+      paths.add(path);
+      return;
+    }
+    if (requiredNode.getType() != readNode.getType()) {
+      return;
+    }
+    switch (requiredNode.getType()) {
+      case RECORD:
+        for (HoodieSchemaField field : requiredNode.getFields()) {
+          Option<HoodieSchemaField> readField = readNode.getField(field.name());
+          if (readField.isPresent()) {
+            String name = field.name().toLowerCase(Locale.ROOT);
+            collectShreddedVariantPaths(field.schema(), readField.get().schema(),
+                path.isEmpty() ? name : path + "." + name, paths);
+          }
+        }
+        break;
+      case ARRAY:
+        collectShreddedVariantPaths(requiredNode.getElementType(), readNode.getElementType(), path, paths);
+        break;
+      case MAP:
+        collectShreddedVariantPaths(requiredNode.getValueType(), readNode.getValueType(), path, paths);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Whether this is the on-disk, typed_value-bearing form {@code toShreddedReadSchema} swaps in: a
+   * variant that kept its logical type answers directly, while a footer-derived one comes back as
+   * a plain record and is recognised by its {@code typed_value} member.
+   */
+  private static boolean isShreddedVariantNode(HoodieSchema schema) {
+    if (schema.getType() == HoodieSchemaType.VARIANT) {
+      return ((HoodieSchema.Variant) schema).isShredded();
+    }
+    return schema.getType() == HoodieSchemaType.RECORD
+        && schema.getField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD).isPresent();
   }
 
   @Override

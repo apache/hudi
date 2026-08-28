@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -219,21 +220,21 @@ public class TestInputFormat {
         .collect(Collectors.toList());
 
     assertFalse(logFiles.isEmpty(), "The MDT record index partition should contain log files");
-    int hfileDataBlockCount = 0;
+    int nonEmptyHfileDataBlockCount = 0;
     for (StoragePathInfo logFile : logFiles) {
       HoodieSchema schema = TableSchemaResolver.readSchemaFromLogFile(metaClient, logFile.getPath());
       try (HoodieLogFormat.Reader reader =
                HoodieLogFormat.newReader(metaClient, new HoodieLogFile(logFile), schema)) {
         while (reader.hasNext()) {
           HoodieLogBlock logBlock = reader.next();
-          if (!(logBlock instanceof HoodieDeleteBlock)) {
-            assertBloomFilterContainsWrittenKey(storage, logBlock);
-            hfileDataBlockCount++;
+          if (!(logBlock instanceof HoodieDeleteBlock)
+              && assertBloomFilterContainsWrittenKey(storage, logBlock)) {
+            nonEmptyHfileDataBlockCount++;
           }
         }
       }
     }
-    assertTrue(hfileDataBlockCount > 0, "The MDT record index log files should contain HFile data blocks");
+    assertTrue(nonEmptyHfileDataBlockCount > 0, "The MDT record index log files should contain non-empty HFile data blocks");
 
     HoodieTableMetadata metadataTable = StreamerUtil.createMetaClient(conf).getTableFormat().getMetadataFactory().create(
         HoodieFlinkEngineContext.DEFAULT,
@@ -613,10 +614,10 @@ public class TestInputFormat {
 
   @Test
   void testReadSkipClustering() throws Exception {
-    beforeEach(HoodieTableType.COPY_ON_WRITE);
+    beforeEach(HoodieTableType.COPY_ON_WRITE, Collections.singletonMap(
+        FlinkOptions.OPERATION.key(), "insert"));
 
     // write base first with clustering
-    conf.set(FlinkOptions.OPERATION, "insert");
     conf.set(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
     conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
     conf.set(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
@@ -1502,6 +1503,8 @@ public class TestInputFormat {
   void testStreamWriteAndReadWithUpgrade(HoodieTableType tableType) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), HoodieTableVersion.SIX.versionCode() + "");
+    options.put(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
     // init and write data with table version SIX
     beforeEach(tableType, options);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
@@ -1599,7 +1602,12 @@ public class TestInputFormat {
         conf);
   }
 
-  private static void assertBloomFilterContainsWrittenKey(
+  /**
+   * Verifies that the block's bloom filter contains its first key when the block has records.
+   *
+   * @return {@code true} for a non-empty block, or {@code false} for an initialized empty native HFile block
+   */
+  private static boolean assertBloomFilterContainsWrittenKey(
       HoodieStorage storage, HoodieLogBlock logBlock) throws IOException {
     HoodieLogBlock.HoodieLogBlockContentLocation contentLocation =
         logBlock.getBlockContentLocation().get();
@@ -1620,9 +1628,12 @@ public class TestInputFormat {
           new UTF8StringKey(HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE)).get());
       BloomFilter bloomFilter = BloomFilterFactory.fromByteBuffer(bloomFilterBuffer, bloomFilterType);
 
-      assertTrue(hfileReader.seekTo(), "The HFile data block should contain at least one record");
+      if (!hfileReader.seekTo()) {
+        return false;
+      }
       String writtenKey = hfileReader.getKeyValue().get().getKey().getContentInString();
       assertTrue(bloomFilter.mightContain(writtenKey));
+      return true;
     }
   }
 

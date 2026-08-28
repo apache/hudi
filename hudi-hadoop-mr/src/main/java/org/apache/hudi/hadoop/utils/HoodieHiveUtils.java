@@ -24,7 +24,6 @@ import org.apache.hudi.hadoop.utils.shims.HiveShim;
 import org.apache.hudi.hadoop.utils.shims.HiveShims;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.JobContext;
@@ -112,21 +111,6 @@ public class HoodieHiveUtils {
     String startCommitTimestampName = String.format(HOODIE_START_COMMIT_PATTERN, tableName);
     LOG.info("Read start commit time - {}", job.getConfiguration().get(startCommitTimestampName));
     return job.getConfiguration().get(startCommitTimestampName);
-  }
-
-  /**
-   * Gets the n'th parent for the Path. Assumes the path has at-least n components
-   *
-   * @param path
-   * @param n
-   * @return
-   */
-  public static Path getNthParent(Path path, int n) {
-    Path parent = path;
-    for (int i = 0; i < n; i++) {
-      parent = parent.getParent();
-    }
-    return parent;
   }
 
   /**

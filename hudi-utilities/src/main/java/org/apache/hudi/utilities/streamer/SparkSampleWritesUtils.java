@@ -25,6 +25,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -44,6 +45,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.SAMPLE_WRITES_FOLDER_PATH;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -89,9 +91,13 @@ public class SparkSampleWritesUtils {
       throws IOException {
     String uniqueId = UUID.randomUUID().toString();
     final String sampleWritesBasePath = getSampleWritesBasePath(jsc, writeConfig, uniqueId);
+    // Propagate the user's configured write table version to the sample-writes shadow table so its
+    // on-disk layout matches the version the inherited write config (and the SparkRDDWriteClient
+    // below) operates with.
     HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(String.format("%s_samples_%s", writeConfig.getTableName(), uniqueId))
+        .setTableVersion(writeConfig.getWriteVersion())
         .setCDCEnabled(false)
         .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), sampleWritesBasePath);
     TypedProperties props = writeConfig.getProps();
@@ -103,12 +109,17 @@ public class SparkSampleWritesUtils {
         .withSchemaEvolutionEnable(false)
         .withBulkInsertParallelism(1)
         .withPath(sampleWritesBasePath)
+        .withWriteTableVersion(writeConfig.getWriteVersion().versionCode())
         .build();
     Pair<Boolean, String> emptyRes = Pair.of(false, null);
     try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
       int size = writeConfig.getIntOrDefault(SAMPLE_WRITES_SIZE);
       return recordsOpt.map(records -> {
-        List<HoodieRecord> samples = records.coalesce(1).take(size);
+        // Empty partition path so all sampled records write to a single non-partitioned file,
+        // instead of fanning out into one tiny file per source partition and skewing the estimate.
+        List<HoodieRecord> samples = records.coalesce(1).take(size).stream()
+            .map(r -> r.newInstance(new HoodieKey(r.getRecordKey(), "")))
+            .collect(Collectors.toList());
         if (samples.isEmpty()) {
           return emptyRes;
         }

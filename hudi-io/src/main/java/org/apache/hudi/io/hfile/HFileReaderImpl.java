@@ -38,7 +38,7 @@ import java.util.Queue;
 import java.util.TreeMap;
 
 import static org.apache.hudi.io.hfile.HFileBlock.HFILEBLOCK_HEADER_SIZE;
-import static org.apache.hudi.io.hfile.HFileUtils.readMajorVersion;
+import static org.apache.hudi.io.hfile.HFileByteUtils.readMajorVersion;
 
 /**
  * Base implementation of {@link HFileReader} without caching. This provides the core functionality for reading HFile format data.

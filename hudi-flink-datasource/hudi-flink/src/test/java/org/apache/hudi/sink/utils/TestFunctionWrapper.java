@@ -36,6 +36,30 @@ import java.util.Map;
  */
 public interface TestFunctionWrapper<I> {
   /**
+   * Closes all the given resources in order and preserves any subsequent failures as suppressed exceptions.
+   */
+  static void closeAll(AutoCloseable... closeables) throws Exception {
+    Exception firstException = null;
+    for (AutoCloseable closeable : closeables) {
+      if (closeable == null) {
+        continue;
+      }
+      try {
+        closeable.close();
+      } catch (Exception e) {
+        if (firstException == null) {
+          firstException = e;
+        } else {
+          firstException.addSuppressed(e);
+        }
+      }
+    }
+    if (firstException != null) {
+      throw firstException;
+    }
+  }
+
+  /**
    * Open all the functions within this wrapper.
    */
   void openFunction() throws Exception;

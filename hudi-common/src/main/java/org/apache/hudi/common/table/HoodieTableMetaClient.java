@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -84,6 +85,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -103,6 +105,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigs
 import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForV9TableCreation;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -355,7 +358,7 @@ public class HoodieTableMetaClient implements Serializable {
     try {
       Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
       if (bytesOpt.isPresent()) {
-        return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
+        return Option.of(HoodieIndexMetadata.fromJson(fromUTF8Bytes(bytesOpt.get())));
       } else {
         return Option.of(new HoodieIndexMetadata());
       }
@@ -1005,6 +1008,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String timelinePath;
     private String timelineHistoryPath;
     private String baseFileFormat;
+    private String tableStorageLayout;
     private String orderingFields;
     private String partitionFields;
     private Boolean cdcEnabled;
@@ -1013,6 +1017,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String bootstrapBasePath;
     private Boolean bootstrapIndexEnable;
     private Boolean populateMetaFields;
+    private MetaFieldsMode metaFieldsMode;
     private String keyGeneratorClassProp;
     private String partitionValueExtractorClass;
     private String keyGeneratorType;
@@ -1126,6 +1131,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public TableBuilder setTableStorageLayout(String tableStorageLayout) {
+      this.tableStorageLayout = tableStorageLayout;
+      return this;
+    }
+
     /**
      * Sets ordering fields as a comma separated string in the table
      * @param orderingFieldsAsString - Comma separated ordering fields which need to be set for the table
@@ -1165,8 +1175,35 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public TableBuilder setPopulateMetaFields(boolean populateMetaFields) {
+    /**
+     * @param populateMetaFields {@code null} when the caller did not state the property. That is
+     *        distinct from {@code false}: when no mode is stated, {@code false} is inferred as
+     *        {@link MetaFieldsMode#NONE}, while an unstated value defaults to {@link MetaFieldsMode#ALL}.
+     * @deprecated since 1.3.0, use {@link #setMetaFieldsMode(MetaFieldsMode)} instead
+     * ({@code true} maps to {@link MetaFieldsMode#ALL}, {@code false} to {@link MetaFieldsMode#NONE}).
+     */
+    @Deprecated
+    public TableBuilder setPopulateMetaFields(Boolean populateMetaFields) {
       this.populateMetaFields = populateMetaFields;
+      return this;
+    }
+
+    public TableBuilder setMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
+      this.metaFieldsMode = metaFieldsMode;
+      return this;
+    }
+
+    /**
+     * Convenience overload that accepts the raw on-disk string (e.g. from properties files).
+     * Empty or null values leave the mode unset — the table then resolves to ALL or NONE from the
+     * deprecated populate.meta.fields boolean.
+     */
+    public TableBuilder setMetaFieldsModeFromString(String rawMode) {
+      if (rawMode == null || rawMode.trim().isEmpty()) {
+        this.metaFieldsMode = null;
+        return this;
+      }
+      this.metaFieldsMode = MetaFieldsMode.valueOf(rawMode.trim().toUpperCase(Locale.ROOT));
       return this;
     }
 
@@ -1277,6 +1314,8 @@ public class HoodieTableMetaClient implements Serializable {
           .setTableName(metaClient.getTableConfig().getTableName())
           .setTableVersion(metaClient.getTableConfig().getTableVersion())
           .setTableFormat(metaClient.getTableConfig().getTableFormat(metaClient.getTimelineLayoutVersion()).getName())
+          .setTableStorageLayout(metaClient.getTableConfig().getProps()
+              .getProperty(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key()))
           .setTimelinePath(metaClient.getTableConfig().getTimelinePath())
           .setArchiveLogFolder(metaClient.getTableConfig().getTimelineHistoryPath())
           .setRecordMergeMode(metaClient.getTableConfig().getRecordMergeMode())
@@ -1344,6 +1383,9 @@ public class HoodieTableMetaClient implements Serializable {
         setBaseFileFormat(
             hoodieConfig.getString(HoodieTableConfig.BASE_FILE_FORMAT));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.TABLE_STORAGE_LAYOUT)) {
+        setTableStorageLayout(hoodieConfig.getString(HoodieTableConfig.TABLE_STORAGE_LAYOUT));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME)) {
         setBootstrapIndexClass(
             hoodieConfig.getString(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME));
@@ -1383,6 +1425,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS)) {
         setPopulateMetaFields(hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.META_FIELDS_MODE)) {
+        setMetaFieldsModeFromString(hoodieConfig.getString(HoodieTableConfig.META_FIELDS_MODE));
       }
       if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
         setKeyGeneratorClassProp(hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
@@ -1491,6 +1536,11 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.BASE_FILE_FORMAT, baseFileFormat.toUpperCase());
       }
 
+      if (null != tableStorageLayout) {
+        tableConfig.setValue(HoodieTableConfig.TABLE_STORAGE_LAYOUT,
+            HoodieTableConfig.TableStorageLayout.fromConfigValue(tableStorageLayout).configValue());
+      }
+
       if (null != bootstrapIndexClass) {
         tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_INDEX_TYPE, BootstrapIndexType.fromClassName(bootstrapIndexClass).name());
       }
@@ -1519,8 +1569,18 @@ public class HoodieTableMetaClient implements Serializable {
           tableConfig.setValue(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE, cdcSupplementalLoggingMode);
         }
       }
-      if (null != populateMetaFields) {
-        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
+      // Resolve legacy input through the shared mode precedence and persist the result for every
+      // newly created table.
+      if (metaFieldsMode == null) {
+        metaFieldsMode = MetaFieldsMode.fromLegacyPopulateMetaFields(populateMetaFields);
+      }
+
+      tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
+      if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+        // Below table version 10, also record the deprecated boolean for unpatched readers. From v10
+        // the mode alone is sufficient, including after upgrading from v9.
+        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+            Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
       }
       if (null != keyGeneratorClassProp) {
         KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);

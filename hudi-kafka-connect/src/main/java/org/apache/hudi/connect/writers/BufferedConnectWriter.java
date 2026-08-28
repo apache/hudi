@@ -32,7 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 
@@ -71,7 +71,7 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
   private void init() {
     try {
       // Load and batch all incoming records in a map
-      long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(context.getTaskContextSupplier(), config);
+      long memoryForMerge = MergeUtils.getMaxMemoryPerPartitionMerge(context.getTaskContextSupplier(), config);
       log.info("MaxMemoryPerPartitionMerge => {}", memoryForMerge);
       this.bufferedRecords = new ExternalSpillableMap<>(memoryForMerge,
           config.getSpillableMapBasePath(),

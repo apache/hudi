@@ -21,8 +21,10 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieErrorTableConfig;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.ProtoClassBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
@@ -53,10 +55,12 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -74,6 +78,8 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_PROTO_VALUE_DESERIALIZER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests against {@link ProtoKafkaSource}.
@@ -176,6 +182,32 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     InputBatch<Dataset<Row>> fetch4AsRows =
         kafkaSource.fetchNewDataInRowFormat(Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(Option.empty(), fetch4AsRows.getBatch());
+  }
+
+  @Test
+  public void testProtoKafkaSourceWithUnsupportedDeserializer() {
+    TypedProperties props = createPropsForKafkaSource(TEST_TOPIC_PREFIX + "test_proto_unsupported_deserializer", null, "earliest");
+    props.put(KAFKA_PROTO_VALUE_DESERIALIZER_CLASS.key(), StringDeserializer.class.getName());
+    SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
+
+    // the deserializer is validated while constructing the source, i.e. before touching kafka
+    HoodieReadFromSourceException exception = assertThrows(HoodieReadFromSourceException.class,
+        () -> new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics));
+    assertTrue(exception.getMessage().contains(
+        "Only ByteArrayDeserializer and KafkaProtobufDeserializer are supported for ProtoKafkaSource"), exception.getMessage());
+  }
+
+  @Test
+  public void testProtoKafkaSourceWithKafkaOffsetsAppended() {
+    TypedProperties props = createPropsForKafkaSource(TEST_TOPIC_PREFIX + "test_proto_kafka_offsets_appended", null, "earliest");
+    props.put(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "true");
+    SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
+
+    // appending kafka offsets is not supported for proto sources
+    HoodieReadFromSourceException exception = assertThrows(HoodieReadFromSourceException.class,
+        () -> new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics));
+    assertTrue(exception.getMessage().contains(
+        "Appending kafka offsets to ProtoKafkaSource is not supported"), exception.getMessage());
   }
 
   private static List<Sample> createSampleMessages(int count) {

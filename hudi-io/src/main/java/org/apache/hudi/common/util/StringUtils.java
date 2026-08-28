@@ -21,10 +21,12 @@ package org.apache.hudi.common.util;
 
 import javax.annotation.Nullable;
 
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -100,7 +102,7 @@ public class StringUtils {
   }
 
   public static String toHexString(byte[] bytes) {
-    return new String(encodeHex(bytes));
+    return String.valueOf(encodeHex(bytes));
   }
 
   public static char[] encodeHex(byte[] data) {
@@ -118,6 +120,53 @@ public class StringUtils {
 
   public static byte[] getUTF8Bytes(String str) {
     return str.getBytes(StandardCharsets.UTF_8);
+  }
+
+  /**
+   * Serializable comparator ordering strings by their unsigned UTF-8 byte representation. See
+   * {@link #compareUtf8Bytes(String, String)} for the rationale and null-handling contract.
+   */
+  public static final Comparator<String> UTF8_LEXICOGRAPHIC_COMPARATOR =
+      (Comparator<String> & Serializable) StringUtils::compareUtf8Bytes;
+
+  /**
+   * Compares two strings by their unsigned UTF-8 byte order, matching the ordering HFiles enforce
+   * (HBase's {@code CellComparatorImpl}). Unlike {@link String#compareTo(String)} (UTF-16 code unit
+   * order), this stays consistent with HFile ordering for non-ASCII / binary keys.
+   *
+   * <p>Neither argument may be {@code null}; like {@link String#compareTo(String)}, a {@code null}
+   * argument throws {@link NullPointerException}.
+   *
+   * <p>This comparison does not materialize the UTF-8 byte arrays. It compares UTF-16 code units
+   * directly and handles supplementary characters specially to preserve UTF-8 byte order.
+   *
+   * <p>Assumes well-formed UTF-16 input. For strings containing unpaired surrogates the result no
+   * longer matches {@code String#getBytes(UTF_8)} byte order: the encoder replaces an unpaired
+   * surrogate with {@code '?'} while this method sorts it after every BMP character. Production
+   * callers derive keys by decoding UTF-8, which cannot produce unpaired surrogates.
+   *
+   * <p>Ported from Google Firebase Firestore's {@code compareUtf8Strings}.
+   */
+  public static int compareUtf8Bytes(String s1, String s2) {
+    // Source: https://github.com/firebase/firebase-android-sdk/blob/f05e4bcb7f86f3b21833b1e0960d793b800d38d1/firebase-firestore/src/main/java/com/google/firebase/firestore/util/Util.java#L76-L132
+    // The identity check intentionally avoids scanning when both references point to the same
+    // non-null String while preserving the method's fail-fast null contract.
+    if (s1 == s2 && s1 != null) {
+      return 0;
+    }
+
+    final int length = Math.min(s1.length(), s2.length());
+    for (int i = 0; i < length; i++) {
+      final char char1 = s1.charAt(i);
+      final char char2 = s2.charAt(i);
+      if (char1 != char2) {
+        return (Character.isSurrogate(char1) == Character.isSurrogate(char2))
+            ? Character.compare(char1, char2)
+            : Character.isSurrogate(char1) ? 1 : -1;
+      }
+    }
+
+    return Integer.compare(s1.length(), s2.length());
   }
 
   public static String fromUTF8Bytes(byte[] bytes) {
@@ -168,11 +217,7 @@ public class StringUtils {
    * @return {@code string} itself if it is nonempty; {@code null} if it is empty or null
    */
   public static @Nullable String emptyToNull(@Nullable String string) {
-    return stringIsNullOrEmpty(string) ? null : string;
-  }
-
-  private static boolean stringIsNullOrEmpty(@Nullable String string) {
-    return string == null || string.isEmpty();
+    return isNullOrEmpty(string) ? null : string;
   }
 
   /**

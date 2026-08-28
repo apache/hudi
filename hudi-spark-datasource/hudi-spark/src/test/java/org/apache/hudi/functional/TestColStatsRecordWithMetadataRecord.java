@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -38,7 +39,6 @@ import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -219,7 +219,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     List<HoodieRecord<HoodieMetadataPayload>> allRecords = new ArrayList<>();
     while (itr.hasNext()) {
       GenericRecord genericRecord = (GenericRecord) ((HoodieRecord) itr.next()).getData();
-      HoodieRecord<HoodieMetadataPayload> mdtRec = SpillableMapUtils.convertToHoodieRecordPayload(genericRecord,
+      HoodieRecord<HoodieMetadataPayload> mdtRec = HoodieAvroUtils.convertToRecord(genericRecord,
           mdtWriteConfig.getPayloadClass(), new String[0],
           Pair.of(mdtMetaClient.getTableConfig().getRecordKeyFieldProp(), mdtMetaClient.getTableConfig().getPartitionFieldProp()),
           false, Option.of(COLUMN_STATS.getPartitionPath()), Option.empty());

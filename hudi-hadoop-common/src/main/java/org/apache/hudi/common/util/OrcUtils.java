@@ -67,6 +67,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.BinaryUtil.toBytes;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
 
@@ -76,29 +77,12 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
 public class OrcUtils extends FileFormatUtils {
 
   /**
-   * Provides a closable iterator for reading the given ORC file.
-   *
-   * @param storage  {@link HoodieStorage} instance.
-   * @param filePath The ORC file path
-   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the ORC file
-   */
-  @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
-    return getHoodieKeyIterator(storage, filePath, Option.empty(), Option.empty());
-  }
-
-  /**
    * Fetch {@link HoodieKey}s from the given ORC file.
    *
    * @param storage  {@link HoodieStorage} instance.
    * @param filePath The ORC file path.
    * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
    */
-  @Override
-  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
-    return fetchRecordKeysWithPositions(storage, filePath, Option.empty(), Option.empty());
-  }
-
   @Override
   public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
     try {
@@ -248,7 +232,8 @@ public class OrcUtils extends FileFormatUtils {
       if (reader.hasMetadataValue("orc.avro.schema")) {
         ByteBuffer metadataValue = reader.getMetadataValue("orc.avro.schema");
         byte[] bytes = toBytes(metadataValue);
-        return HoodieSchema.parse(new String(bytes));
+        // Must match HoodieAvroOrcWriter, which writes this value as UTF-8.
+        return HoodieSchema.parse(fromUTF8Bytes(bytes));
       } else {
         TypeDescription orcSchema = reader.getSchema();
         return AvroOrcUtils.createSchema(orcSchema);

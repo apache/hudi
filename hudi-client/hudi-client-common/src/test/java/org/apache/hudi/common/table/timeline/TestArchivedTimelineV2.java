@@ -26,8 +26,10 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -38,6 +40,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -46,6 +49,8 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.convertMetadataTo
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
@@ -78,6 +83,54 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testLoadCompactionDetailsForSingleInstant() {
+    String instantTime = "10000001";
+    byte[] compactionPlan = {1, 2, 3};
+    HoodieInstant completed = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime, "10000002");
+    ActiveAction activeAction = new DummyActiveAction(completed, new byte[0]) {
+      @Override
+      public String getPendingAction() {
+        return HoodieTimeline.COMPACTION_ACTION;
+      }
+
+      @Override
+      public Option<byte[]> getCompactionPlan(HoodieTableMetaClient metaClient) {
+        return Option.of(compactionPlan);
+      }
+    };
+    createTimelineWriter().write(
+        Collections.singletonList(activeAction), Option.empty(), Option.empty());
+
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+    HoodieInstant archivedInstant = archivedTimeline.firstInstant().get();
+    assertFalse(archivedTimeline.getInstantDetails(archivedInstant).isPresent());
+
+    archivedTimeline.loadCompactionDetailsInMemory(instantTime);
+
+    assertArrayEquals(compactionPlan, archivedTimeline.getInstantDetails(archivedInstant).get());
+  }
+
+  @Test
+  void testLoadCompletedDetailsForSingleInstant() {
+    String instantTime = "10000001";
+    byte[] commitMetadata = {1, 2, 3};
+    HoodieInstant completed = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime, "10000002");
+    createTimelineWriter().write(
+        Collections.singletonList(new DummyActiveAction(completed, commitMetadata)),
+        Option.empty(), Option.empty());
+
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+    HoodieInstant archivedInstant = archivedTimeline.firstInstant().get();
+    assertFalse(archivedTimeline.getInstantDetails(archivedInstant).isPresent());
+
+    archivedTimeline.loadCompletedInstantDetailsInMemory(instantTime, instantTime);
+
+    assertArrayEquals(commitMetadata, archivedTimeline.getInstantDetails(archivedInstant).get());
+  }
+
+  @Test
   void getInstantReaderReferencesSelf() {
     HoodieArchivedTimeline timeline = TIMELINE_FACTORY.createArchivedTimeline(metaClient);
     assertSame(timeline, timeline.getInstantReader());
@@ -88,12 +141,8 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
 
   private void writeArchivedTimeline(int batchSize, long startTs) throws Exception {
     HoodieTestTable testTable = HoodieTestTable.of(this.metaClient);
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(this.metaClient.getBasePath())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
-        .withMarkersType("DIRECT")
-        .build();
+    LSMTimelineWriter writer = createTimelineWriter();
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
-    LSMTimelineWriter writer = LSMTimelineWriter.getInstance(writeConfig, new LocalTaskContextSupplier(), metaClient);
     List<ActiveAction> instantBuffer = new ArrayList<>();
     for (int i = 1; i <= 50; i++) {
       long instantTimeTs = startTs + i;
@@ -105,10 +154,18 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
       instantBuffer.add(new DummyActiveAction(instant, serializedMetadata));
       if (i % batchSize == 0) {
         // archive 10 instants each time
-        writer.write(instantBuffer, org.apache.hudi.common.util.Option.empty(), org.apache.hudi.common.util.Option.empty());
+        writer.write(instantBuffer, Option.empty(), Option.empty());
         writer.compactAndClean(engineContext);
         instantBuffer.clear();
       }
     }
+  }
+
+  private LSMTimelineWriter createTimelineWriter() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(this.metaClient.getBasePath())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withMarkersType("DIRECT")
+        .build();
+    return LSMTimelineWriter.getInstance(writeConfig, new LocalTaskContextSupplier(), metaClient);
   }
 }

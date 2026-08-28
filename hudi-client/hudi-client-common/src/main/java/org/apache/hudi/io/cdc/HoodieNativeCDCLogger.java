@@ -169,8 +169,9 @@ public class HoodieNativeCDCLogger<T> implements HoodieCDCLogWriter<BufferedReco
     T dataRecord = record.getRecord();
     if (needsProjection(recordSchema)) {
       dataRecord = recordContext.projectRecord(recordSchema, dataSchema).apply(dataRecord);
+      recordSchema = dataSchema;
     }
-    return recordContext.seal(dataRecord);
+    return recordContext.seal(recordSchema, dataRecord);
   }
 
   private boolean needsProjection(HoodieSchema recordSchema) {
