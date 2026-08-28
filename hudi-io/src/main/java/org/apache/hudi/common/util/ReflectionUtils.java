@@ -152,7 +152,7 @@ public class ReflectionUtils {
   private static File toDirectory(URL resource) {
     try {
       return new File(resource.toURI());
-    } catch (URISyntaxException e) {
+    } catch (URISyntaxException | IllegalArgumentException e) {
       log.error("Unable to get URI for {}", resource, e);
       return null;
     }

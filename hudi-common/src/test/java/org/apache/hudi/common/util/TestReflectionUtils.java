@@ -26,6 +26,9 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.Test;
 
 import static org.apache.hudi.common.util.ReflectionUtils.getMethod;
@@ -56,5 +59,13 @@ public class TestReflectionUtils {
     assertFalse(getMethod(HoodieStorage.class,
         "listDirectEntries", StoragePathFilter.class).isPresent());
     assertFalse(getMethod(HoodieStorage.class, "nonExistentMethod").isPresent());
+  }
+
+  @Test
+  void testGetTopLevelClassesInClasspath() {
+    List<String> classes = ReflectionUtils.getTopLevelClassesInClasspath(TestReflectionUtils.class)
+        .collect(Collectors.toList());
+    assertTrue(classes.contains(TestReflectionUtils.class.getName()));
+    assertTrue(classes.contains(ReflectionUtils.class.getName()));
   }
 }
