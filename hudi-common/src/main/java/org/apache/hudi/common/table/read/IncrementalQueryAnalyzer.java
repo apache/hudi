@@ -202,12 +202,24 @@ public class IncrementalQueryAnalyzer {
     HoodieTimeline archivedReadTimeline = null;
 
     if (startCompletionTime.isEmpty() && endCompletionTime.isPresent()) {
-      // (_, end] returns the last eligible instant at or before end. Check the filtered active
-      // timeline first and only load the archive when there is no active match.
+      // (_, end] returns the last eligible instant at or before end. An old savepointed commit can
+      // remain active before the archive boundary, so only use the active-only shortcut when the
+      // selected active instant is on or after that boundary.
       activeInstants = getLastInstantAtOrBefore(completedTimeline, endCompletionTime.get());
-      if (activeInstants.isEmpty()) {
+      if (activeInstants.isEmpty()
+          || completionTimeQueryView.isArchived(activeInstants.get(0).requestedTime())) {
         archivedReadTimeline = getArchivedReadTimeline(metaClient, "");
         archivedInstants = getLastInstantAtOrBefore(archivedReadTimeline, endCompletionTime.get());
+        if (!archivedInstants.isEmpty()
+            && (activeInstants.isEmpty()
+                || compareTimestamps(
+                    activeInstants.get(0).requestedTime(),
+                    LESSER_THAN_OR_EQUALS,
+                    archivedInstants.get(0).requestedTime()))) {
+          activeInstants = Collections.emptyList();
+        } else {
+          archivedInstants = Collections.emptyList();
+        }
       }
     } else {
       InstantRange instantRange = InstantRange.builder()
@@ -274,6 +286,8 @@ public class IncrementalQueryAnalyzer {
     }
     List<String> instants = Stream.concat(archivedInstants.stream(), activeInstants.stream())
         .map(HoodieInstant::requestedTime)
+        .distinct()
+        .sorted()
         .collect(Collectors.toList());
     if (instants.isEmpty()) {
       // no instants completed within the given time range, returns early.

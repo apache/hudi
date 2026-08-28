@@ -60,6 +60,7 @@ class TestIncrementalQueryAnalyzer {
   private static final String T2 = "20240101010002000";
   private static final String T3 = "20240101010003000";
   private static final String T4 = "20240101010004000";
+  private static final String T5 = "20240101010005000";
 
   @Test
   void testQueryContextRangeEdges() {
@@ -144,29 +145,112 @@ class TestIncrementalQueryAnalyzer {
   }
 
   @Test
-  void testV1ActiveOnlyAndSnapshotRangesDoNotLoadArchive() {
-    AnalyzerFixture activeFixture = analyzerFixture(
+  void testV1EndOnlyComparesCandidatesAcrossSavepointHole() {
+    AnalyzerFixture fixture = analyzerFixture(
+        TimelineLayoutVersion.LAYOUT_VERSION_1,
+        Arrays.asList(instant(T1), instant(T5)),
+        Arrays.asList(instant(T2), instant(T3), instant(T4)));
+    when(fixture.completionTimeQueryView.isArchived(T1)).thenReturn(true);
+
+    IncrementalQueryAnalyzer.QueryContext queryContext = fixture.analyzer(null, T4).analyze();
+
+    assertEquals(Collections.singletonList(T4), queryContext.getInstantTimeList());
+    assertEquals(Collections.singletonList(T4), requestedTimes(queryContext.getArchivedInstants()));
+    assertTrue(queryContext.getActiveInstants().isEmpty());
+    assertSame(fixture.archivedCommitsTimeline, queryContext.getArchivedTimeline());
+    verify(fixture.metaClient, times(1)).getArchivedTimeline("", false);
+  }
+
+  @Test
+  void testV1EndOnlyRetainsNewerActiveCandidateAcrossSavepointHole() {
+    AnalyzerFixture fixture = analyzerFixture(
+        TimelineLayoutVersion.LAYOUT_VERSION_1,
+        Arrays.asList(instant(T4), instant(T5)),
+        Arrays.asList(instant(T1), instant(T2), instant(T3)));
+    when(fixture.completionTimeQueryView.isArchived(T4)).thenReturn(true);
+
+    IncrementalQueryAnalyzer.QueryContext queryContext = fixture.analyzer(null, T4).analyze();
+
+    assertEquals(Collections.singletonList(T4), queryContext.getInstantTimeList());
+    assertEquals(Collections.singletonList(T4), requestedTimes(queryContext.getActiveInstants()));
+    assertTrue(queryContext.getArchivedInstants().isEmpty());
+    assertSame(fixture.archivedCommitsTimeline, queryContext.getArchivedTimeline());
+    verify(fixture.metaClient, times(1)).getArchivedTimeline("", false);
+  }
+
+  @Test
+  void testV1EndOnlyActiveCandidateAfterArchiveBoundaryDoesNotLoadArchive() {
+    AnalyzerFixture fixture = analyzerFixture(
         TimelineLayoutVersion.LAYOUT_VERSION_1,
         Arrays.asList(instant(T3), instant(T4)),
         Arrays.asList(instant(T1), instant(T2)));
-    when(activeFixture.completionTimeQueryView.isArchived(T3)).thenReturn(false);
+    when(fixture.completionTimeQueryView.isArchived(T3)).thenReturn(false);
 
-    IncrementalQueryAnalyzer.QueryContext activeContext = activeFixture.analyzer(T3, T4).analyze();
+    IncrementalQueryAnalyzer.QueryContext queryContext = fixture.analyzer(null, T3).analyze();
 
-    assertEquals(Arrays.asList(T3, T4), activeContext.getInstantTimeList());
-    assertNull(activeContext.getArchivedTimeline());
-    verify(activeFixture.metaClient, never()).getArchivedTimeline(anyString(), eq(false));
+    assertEquals(Collections.singletonList(T3), queryContext.getInstantTimeList());
+    assertEquals(Collections.singletonList(T3), requestedTimes(queryContext.getActiveInstants()));
+    assertTrue(queryContext.getArchivedInstants().isEmpty());
+    assertNull(queryContext.getArchivedTimeline());
+    verify(fixture.metaClient, never()).getArchivedTimeline(anyString(), eq(false));
+  }
 
-    AnalyzerFixture snapshotFixture = analyzerFixture(
+  @Test
+  void testV1ActiveOnlyRangeDoesNotLoadArchive() {
+    AnalyzerFixture fixture = analyzerFixture(
+        TimelineLayoutVersion.LAYOUT_VERSION_1,
+        Arrays.asList(instant(T3), instant(T4)),
+        Arrays.asList(instant(T1), instant(T2)));
+    when(fixture.completionTimeQueryView.isArchived(T3)).thenReturn(false);
+
+    IncrementalQueryAnalyzer.QueryContext queryContext = fixture.analyzer(T3, T4).analyze();
+
+    assertEquals(Arrays.asList(T3, T4), queryContext.getInstantTimeList());
+    assertNull(queryContext.getArchivedTimeline());
+    verify(fixture.metaClient, never()).getArchivedTimeline(anyString(), eq(false));
+  }
+
+  @Test
+  void testV1EarliestSnapshotDoesNotLoadArchive() {
+    AnalyzerFixture fixture = analyzerFixture(
         TimelineLayoutVersion.LAYOUT_VERSION_1,
         Arrays.asList(instant(T3), instant(T4)),
         Arrays.asList(instant(T1), instant(T2)));
 
-    IncrementalQueryAnalyzer.QueryContext snapshotContext = snapshotFixture.analyzer("earliest", null).analyze();
+    IncrementalQueryAnalyzer.QueryContext queryContext = fixture.analyzer("earliest", null).analyze();
 
-    assertEquals(Collections.singletonList(T4), snapshotContext.getInstantTimeList());
-    assertTrue(snapshotContext.getInstantRange().isEmpty());
-    verify(snapshotFixture.metaClient, never()).getArchivedTimeline(anyString(), eq(false));
+    assertEquals(Collections.singletonList(T4), queryContext.getInstantTimeList());
+    assertTrue(queryContext.getInstantRange().isEmpty());
+    verify(fixture.metaClient, never()).getArchivedTimeline(anyString(), eq(false));
+  }
+
+  @Test
+  void testV1GloballySortsInstantsAcrossSavepointHole() {
+    AnalyzerFixture fixture = analyzerFixture(
+        TimelineLayoutVersion.LAYOUT_VERSION_1,
+        Arrays.asList(instant(T1), instant(T5)),
+        Arrays.asList(instant(T2), instant(T3), instant(T4)));
+
+    IncrementalQueryAnalyzer.QueryContext queryContext = fixture.analyzer("earliest", T4).analyze();
+
+    assertEquals(Arrays.asList(T1, T2, T3, T4), queryContext.getInstantTimeList());
+    assertEquals(T4, queryContext.getLastInstant());
+    assertTrue(queryContext.getInstantRange().get().isInRange(T4));
+    verify(fixture.metaClient, times(1)).getArchivedTimeline("", false);
+  }
+
+  @Test
+  void testV1DeduplicatesInstantsAcrossConcurrentArchival() {
+    AnalyzerFixture fixture = analyzerFixture(
+        TimelineLayoutVersion.LAYOUT_VERSION_1,
+        Arrays.asList(instant(T1), instant(T4), instant(T5)),
+        Arrays.asList(instant(T2), instant(T3), instant(T4)));
+
+    IncrementalQueryAnalyzer.QueryContext queryContext = fixture.analyzer("earliest", T4).analyze();
+
+    assertEquals(Arrays.asList(T1, T2, T3, T4), queryContext.getInstantTimeList());
+    assertEquals(T4, queryContext.getLastInstant());
+    verify(fixture.metaClient, times(1)).getArchivedTimeline("", false);
   }
 
   @Test
