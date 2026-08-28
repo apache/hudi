@@ -20,21 +20,27 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.util.CommonClientUtils;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
 import static org.apache.hudi.util.CommonClientUtils.areTableVersionsCompatible;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -108,6 +114,47 @@ class TestCommonClientUtils {
         Arguments.of(HoodieTableVersion.NINE, false),
         Arguments.of(HoodieTableVersion.TEN, true)
     );
+  }
+
+  /**
+   * Every base file format must map to a log block type: a case missing from the
+   * {@code getLogBlockType} switch only surfaces as a {@code HoodieException} on the first MOR
+   * log write, which is what happened for VORTEX (apache/hudi#19252). Sweeps the enum (never a
+   * hardcoded list); HOODIE_LOG is the log format itself and can never be a base file format.
+   */
+  // TODO: drop the VORTEX exclusion once apache/hudi#19252 adds the case (see testGetLogBlockTypeForVortex).
+  @ParameterizedTest
+  @EnumSource(value = HoodieFileFormat.class, mode = EnumSource.Mode.EXCLUDE, names = {"HOODIE_LOG", "VORTEX"})
+  void testGetLogBlockTypeMapsEveryBaseFileFormat(HoodieFileFormat format) {
+    assertNotNull(
+        CommonClientUtils.getLogBlockType(writeConfigWithoutExplicitLogFormat(), tableConfigWithBaseFormat(format)),
+        () -> "getLogBlockType must return a log block type for base file format " + format
+            + "; add the missing case to the switch in CommonClientUtils#getLogBlockType");
+  }
+
+  /**
+   * Same check as {@link #testGetLogBlockTypeMapsEveryBaseFileFormat} for VORTEX, asserting
+   * the mapping apache/hudi#19252 adds (VORTEX -> AVRO_DATA_BLOCK).
+   */
+  @Disabled("Depends on apache/hudi#19252: on current master getLogBlockType has no VORTEX case and throws "
+      + "HoodieException. Enable once #19252 is merged.")
+  @Test
+  void testGetLogBlockTypeForVortex() {
+    assertEquals(HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK,
+        CommonClientUtils.getLogBlockType(
+            writeConfigWithoutExplicitLogFormat(), tableConfigWithBaseFormat(HoodieFileFormat.VORTEX)));
+  }
+
+  private static HoodieWriteConfig writeConfigWithoutExplicitLogFormat() {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getLogDataBlockFormat()).thenReturn(Option.empty());
+    return writeConfig;
+  }
+
+  private static HoodieTableConfig tableConfigWithBaseFormat(HoodieFileFormat format) {
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getBaseFileFormat()).thenReturn(format);
+    return tableConfig;
   }
 
   @ParameterizedTest(name = "Table version {0} with write version {1} should be valid: {2}")
