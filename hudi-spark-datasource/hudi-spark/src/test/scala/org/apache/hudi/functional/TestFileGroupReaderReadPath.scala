@@ -19,6 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, ScalaAssertionSupport}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
+import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
@@ -102,7 +103,7 @@ class TestFileGroupReaderReadPath extends HoodieSparkClientTestBase with ScalaAs
     val writeOpts = baseOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "part",
-      "hoodie.schema.on.read.enable" -> "true"
+      HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true"
     )
 
     // V1: (id, name, age, ts, part) with ages 10..17 across two partitions
@@ -132,7 +133,7 @@ class TestFileGroupReaderReadPath extends HoodieSparkClientTestBase with ScalaAs
       .save(basePath)
 
     val snapshot = spark.read.format("hudi")
-      .option("hoodie.schema.on.read.enable", "true")
+      .option(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key, "true")
       .load(basePath)
 
     // new column is surfaced with the expected type
@@ -157,7 +158,7 @@ class TestFileGroupReaderReadPath extends HoodieSparkClientTestBase with ScalaAs
     // incremental range is start-exclusive (OPEN_CLOSED), so starting from V1's completion time
     // pulls only the commits that landed after it (i.e. V2).
     val incremental = spark.read.format("hudi")
-      .option("hoodie.schema.on.read.enable", "true")
+      .option(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key, "true")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, firstCompletion)
       .load(basePath)
@@ -181,7 +182,7 @@ class TestFileGroupReaderReadPath extends HoodieSparkClientTestBase with ScalaAs
     val writeOpts = baseOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "part",
-      "hoodie.schema.on.read.enable" -> "true"
+      HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true"
     )
 
     // V1: age is int
@@ -206,7 +207,7 @@ class TestFileGroupReaderReadPath extends HoodieSparkClientTestBase with ScalaAs
       .save(basePath)
 
     val snapshot = spark.read.format("hudi")
-      .option("hoodie.schema.on.read.enable", "true")
+      .option(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key, "true")
       .load(basePath)
 
     // promoted column type is now long
@@ -275,8 +276,8 @@ class TestFileGroupReaderReadPath extends HoodieSparkClientTestBase with ScalaAs
     // `region` is an integer partition column, so the pruning predicate is bound to the typed
     // (Integer) partition value reconstructed from the path and compares against an int literal.
     val singlePartitionFilter = And(
-      EqualTo(attr("dt", StringType), lit("2024-01-01")),
-      EqualTo(attr("region", IntegerType), lit(1))
+      EqualTo(attr("dt", StringType), Literal("2024-01-01")),
+      EqualTo(attr("region", IntegerType), Literal(1))
     )
     val prunedSingle = fileIndex.listFiles(Seq(singlePartitionFilter), Seq.empty)
     assertEquals(1, prunedSingle.size)
@@ -285,7 +286,7 @@ class TestFileGroupReaderReadPath extends HoodieSparkClientTestBase with ScalaAs
     assertEquals("2024-01-01,1", values.toSeq(Seq(StringType, IntegerType)).mkString(","))
 
     // Prune on the string column alone -> both region partitions under that date survive.
-    val dateOnlyFilter = EqualTo(attr("dt", StringType), lit("2024-01-02"))
+    val dateOnlyFilter = EqualTo(attr("dt", StringType), Literal("2024-01-02"))
     val prunedDate = fileIndex.listFiles(Seq(dateOnlyFilter), Seq.empty)
     assertEquals(2, prunedDate.size)
     assertTrue(prunedDate.forall(_.files.nonEmpty))
@@ -310,6 +311,4 @@ class TestFileGroupReaderReadPath extends HoodieSparkClientTestBase with ScalaAs
 
   private def attr(name: String, dataType: DataType): AttributeReference =
     AttributeReference(name, dataType, nullable = true)()
-
-  private def lit(value: Any): Literal = Literal(value)
 }
