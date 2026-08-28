@@ -46,7 +46,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.core.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.parquet.column.ColumnDescriptor;
