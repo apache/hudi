@@ -85,7 +85,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
-import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 
 public class InputFormatTestUtil {
 
@@ -445,7 +444,7 @@ public class InputFormatTestUtil {
           hoodieRecords, header, HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(), writer.getLogFile().getPath());
     } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
       dataBlock = new HoodieParquetDataBlock(hoodieRecords, header,
-          HoodieRecord.RECORD_KEY_METADATA_FIELD, PARQUET_COMPRESSION_CODEC_NAME.defaultValue(), 0.1, true);
+          HoodieRecord.RECORD_KEY_METADATA_FIELD, "zstd", 0.1, true);
     } else {
       dataBlock = new HoodieAvroDataBlock(
           hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
