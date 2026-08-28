@@ -110,10 +110,10 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   /**
    * Creates `(id int, s struct<inner: variant>, ts long)` and bulk-inserts row 1 through the row
    * writer under a forced `k string` nested schema. Both forced hooks recurse into record members
-   * (the row writer's always did, the Avro write support's since #19689), so a nested variant
-   * shreds on either write path; inference alone stays top-level, and a variant that is directly
-   * an array element or a map value shreds only where the write schema already declares it. This
-   * row-writer seed is what the nested-shredding legs open on.
+   * (the row writer's always did, the Avro write support's since the #19689 fix), so a nested
+   * variant shreds on either write path; inference alone stays top-level, and a variant that is
+   * directly an array element or a map value shreds only where the write schema already declares
+   * it. This row-writer seed is what the nested-shredding legs open on.
    */
   private def createNestedVariantRowWriterTable(tableName: String, tablePath: String): Unit = {
     spark.sql(

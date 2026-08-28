@@ -623,7 +623,7 @@ public class VariantSchemaUtils {
    * that is a record member at any depth on the ROW path
    * ({@code HoodieRowParquetWriteSupport.generateShreddedSchema} re-reads the DDL on every entry
    * and {@code processNestedDataType} recurses into structs, array elements and map values) and,
-   * since #19689, on the AVRO path too ({@link #applyForcedShredding}), so
+   * since the #19689 fix, on the AVRO path too ({@link #applyForcedShredding}), so
    * {@code struct<v variant>} comes out shredded whichever record type wrote it. A variant that is
    * DIRECTLY an array element or a map value is force-shredded by neither; it shreds on either
    * path only when the write schema itself declares {@code typed_value} there.

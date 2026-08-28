@@ -810,7 +810,7 @@ public class TestHoodieParquetInputFormat {
 
   @Test
   public void testLegacyReaderGuardHonoursNestedPruningAndArrayWrappers() throws Exception {
-    // A shredded variant below the top level (the row writer shreds at depth) fails too, naming
+    // A shredded variant below the top level (both write paths shred at depth) fails too, naming
     // the struct column that holds it. The Hive type carries a sibling `other` the file does not
     // hold - columns.types comes from the table - so the nested-pruning legs below have a path to
     // project that never reaches the shredded group.
@@ -866,10 +866,10 @@ public class TestHoodieParquetInputFormat {
     assertTrue(arrayPrunedFailure.getMessage().contains("'a'"),
         "The error must name the column holding the array of shredded variants, got: " + arrayPrunedFailure.getMessage());
 
-    // The 3-level list/element layout, which is what the row writer - the only production writer
-    // that shreds inside a collection - emits. Here the repeated group IS a collection level, so
-    // the walk has to see through it as well and still land the shredded group at `a`. The layout
-    // is pinned on the footer, or the leg could silently degrade back to the 2-level one above.
+    // The 3-level list/element layout, which is what the row writer emits while the Avro write path
+    // emits the 2-level form above. Here the repeated group IS a collection level, so the walk has
+    // to see through it as well and still land the shredded group at `a`. The layout is pinned on
+    // the footer, or the leg could silently degrade back to the 2-level one.
     StoragePath threeLevelPath =
         InputFormatTestUtil.writeArrayShreddedVariantParquetFile(basePath, "array_shredded_3level.parquet", false, true);
     GroupType repeated = fileSchemaOf(threeLevelPath).getType("a").asGroupType().getType(0).asGroupType();

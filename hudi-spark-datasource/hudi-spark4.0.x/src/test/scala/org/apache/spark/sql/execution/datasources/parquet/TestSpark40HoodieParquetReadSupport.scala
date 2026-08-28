@@ -22,7 +22,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.Types
 import org.apache.spark.sql.execution.datasources.VariantMetadata
-import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, unshreddedVariant}
+import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, twoLevelList, unshreddedVariant}
 import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, MetadataBuilder, StringType, StructField, StructType, VariantType}
 import org.junit.jupiter.api.{Assertions, Test}
 
@@ -128,9 +128,11 @@ class TestSpark40HoodieParquetReadSupport {
   }
 
   /**
-   * A shredded variant inside an array is unreadable too. The walk resolves the parquet element
-   * through the 3-level list layout and reports it as v.element; the plain-struct catalyst twin
-   * over the same file is left alone.
+   * A shredded variant inside an array is unreadable too, in both list layouts a Hudi base file
+   * can carry: the 3-level list the row writer emits, reported as v.element, and the 2-level
+   * "array" list the Avro write path emits (parquet-avro's default
+   * parquet.avro.write-old-list-structure=true), where the repeated group is itself the element
+   * record. The plain-struct catalyst twin over the same file is left alone.
    */
   @Test
   def testRejectShreddedVariantsFailsFastOnVariantInArray(): Unit = {
@@ -146,6 +148,21 @@ class TestSpark40HoodieParquetReadSupport {
 
     val structSchema = new StructType().add("v", ArrayType(plainStructTwin))
     Spark40HoodieParquetReadSupport.rejectShreddedVariants(schema, Some(structSchema))
+
+    // The Avro writer's own layout for the array position it does shred, array<struct<variant>>:
+    // the repeated group named "array" IS the element record. A walk that only knew the 3-level
+    // layout would unwrap that single-field group, pair the variant group itself against
+    // catalyst's struct<inner: variant>, match no field name and let the file through.
+    val avroSchema = Types.buildMessage()
+      .addField(twoLevelList("v", "array", shreddedVariant("inner")))
+      .named("test")
+    val avroVariantSchema =
+      new StructType().add("v", ArrayType(new StructType().add("inner", VariantType)))
+    val avroFailure = Assertions.assertThrows(classOf[HoodieException],
+      () => Spark40HoodieParquetReadSupport.rejectShreddedVariants(avroSchema, Some(avroVariantSchema)))
+    Assertions.assertTrue(
+      avroFailure.getMessage.contains("shredded variant") && avroFailure.getMessage.contains("'v.element.inner'"),
+      s"The 2-level list error must name the shredded variant column, got: ${avroFailure.getMessage}")
   }
 
   /**

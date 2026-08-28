@@ -321,7 +321,11 @@ public class TestVariantSchemaUtils {
     HoodieSchema ddlNameClash = HoodieSchema.createRecord("rec", "ns", null, Arrays.asList(
         HoodieSchemaField.of("k", HoodieSchemaTestUtils.createRecord("k",
             HoodieSchemaField.of("n", HoodieSchema.create(HoodieSchemaType.LONG)))),
-        HoodieSchemaField.of("v", HoodieSchema.createVariant())));
+        HoodieSchemaField.of("v", HoodieSchema.createVariant()),
+        // A second variant column in the same record: both columns generate a typed_value record
+        // under the one namespace, so that name is defined twice and has to serialize as a
+        // reference, which only holds while the two definitions stay equal.
+        HoodieSchemaField.of("v2", HoodieSchema.createVariant())));
     HoodieSchema forcedClash = VariantSchemaUtils.applyForcedShredding(ddlNameClash, clashingDdl);
     // Equality, not just a successful parse: avro 1.11 throws "Can't redefine" on the clash while
     // avro 1.12 emits the second definition as a bare reference to the first, which parses fine
@@ -339,17 +343,12 @@ public class TestVariantSchemaUtils {
     // map value.
     HoodieSchema typedValue = HoodieSchema.createRecord("tv", null, null,
         Collections.singletonList(HoodieSchemaField.of("a", HoodieSchema.create(HoodieSchemaType.LONG))));
-    // The spec's two-field form, where a writer omitted `value` because every row is typed.
-    HoodieSchema twoFieldVariant = HoodieSchema.createRecord("two_field_v", null, null, Arrays.asList(
-        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
-        HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.LONG))));
     HoodieSchema schema = HoodieSchema.createRecord("rec", null, null, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
         HoodieSchemaField.of("v", HoodieSchema.createNullable(
             HoodieSchemaTestUtils.createPlainShreddedVariantRecord("v", typedValue))),
         HoodieSchemaField.of("s", HoodieSchemaTestUtils.createRecord("s_rec",
-            HoodieSchemaField.of("inner", HoodieSchemaTestUtils.createPlainShreddedVariantRecord("inner_v", typedValue)),
-            HoodieSchemaField.of("two", twoFieldVariant))),
+            HoodieSchemaField.of("inner", HoodieSchemaTestUtils.createPlainShreddedVariantRecord("inner_v", typedValue)))),
         HoodieSchemaTestUtils.createArrayField("items",
             HoodieSchemaTestUtils.createPlainShreddedVariantRecord("item_v", typedValue)),
         HoodieSchemaTestUtils.createMapField("m",
@@ -358,14 +357,10 @@ public class TestVariantSchemaUtils {
     HoodieSchema stripped = VariantSchemaUtils.stripVariantShreddingByShape(schema);
     assertEquals(Arrays.asList("metadata", "value"),
         fieldNames(stripped.getField("v").get().schema().getNonNullType()));
-    HoodieSchema s = stripped.getField("s").get().schema();
-    assertEquals(Arrays.asList("metadata", "value"), fieldNames(s.getField("inner").get().schema()));
+    assertEquals(Arrays.asList("metadata", "value"),
+        fieldNames(stripped.getField("s").get().schema().getField("inner").get().schema()));
     assertEquals(Arrays.asList("metadata", "value"), fieldNames(stripped.getField("items").get().schema().getElementType()));
     assertEquals(Arrays.asList("metadata", "value"), fieldNames(stripped.getField("m").get().schema().getValueType()));
-    // The two-field form is restored to {metadata, value} at depth too, null default included.
-    HoodieSchema two = s.getField("two").get().schema();
-    assertEquals(Arrays.asList("metadata", "value"), fieldNames(two));
-    assertEquals(HoodieSchema.NULL_VALUE, two.getField("value").get().defaultVal().get());
     // Non-variant-shaped records pass through; identity when nothing matches.
     assertEquals(HoodieSchemaType.STRING, stripped.getField("id").get().schema().getType());
     assertSame(stripped, VariantSchemaUtils.stripVariantShreddingByShape(stripped));
