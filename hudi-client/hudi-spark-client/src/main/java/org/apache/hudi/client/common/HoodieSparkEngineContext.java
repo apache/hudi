@@ -289,6 +289,38 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   /**
+   * Accumulator-backed registries owned by this context rather than by the process, keyed by table base
+   * path. Unlike {@link #getMetricRegistry}, these are never published into {@code Registry.REGISTRY_MAP}:
+   * the code that collects into them holds the registry by closure capture and never resolves it by name,
+   * so a process-wide index buys nothing and costs a shared lifetime.
+   *
+   * <p>Ownership is what makes the counters attributable. The entry exists only between the lookup that
+   * created it and the commit that drains it, so its presence is the record that this write looked
+   * something up.
+   */
+  private final Map<String, DistributedRegistry> ownedRegistries = new ConcurrentHashMap<>();
+
+  /**
+   * The registry a write collects into, created and registered with this context's {@code SparkContext}
+   * on first use. Callers drain it with {@link #removeOwnedRegistry}.
+   */
+  public DistributedRegistry getOrCreateOwnedRegistry(String key, String registryName) {
+    return ownedRegistries.computeIfAbsent(key, k -> {
+      DistributedRegistry registry = new DistributedRegistry(registryName);
+      registry.register(javaSparkContext);
+      return registry;
+    });
+  }
+
+  /**
+   * Removes and returns the registry for a key, or empty when this context never created one. Empty is
+   * how a write that performed no lookup is distinguished from one that did.
+   */
+  public Option<DistributedRegistry> removeOwnedRegistry(String key) {
+    return Option.ofNullable(ownedRegistries.remove(key));
+  }
+
+  /**
    * Register the distributed registries on Spark executors.
    * This is called within Spark operations to make the registries available on executors.
    */

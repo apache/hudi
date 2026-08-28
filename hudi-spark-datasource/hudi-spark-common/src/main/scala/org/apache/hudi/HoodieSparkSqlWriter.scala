@@ -550,7 +550,7 @@ class HoodieSparkSqlWriterInternal {
             }
 
             // Remove duplicates from incoming records based on existing keys from storage.
-            val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, operation, jsc, parameters)
+            val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, operation, client)
             try {
               val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
                 preppedSparkSqlWrites || preppedWriteOperation)
@@ -1234,15 +1234,18 @@ object HoodieSparkSqlWriterInternal {
   def handleInsertDuplicates(incomingRecords: JavaRDD[HoodieRecord[_]],
                              hoodieConfig: HoodieConfig,
                              operation: WriteOperationType,
-                             jsc: JavaSparkContext,
-                             parameters: Map[String, String]): JavaRDD[HoodieRecord[_]] = {
+                             client: SparkRDDWriteClient[_]): JavaRDD[HoodieRecord[_]] = {
     // If no deduplication is needed, return the incoming records as is
     if (!isDeduplicationRequired(hoodieConfig) || !isDeduplicationNeeded(operation)) {
       incomingRecords
     } else {
-      // Perform deduplication
-      DataSourceUtils.resolveDuplicates(
-        jsc, incomingRecords, parameters.asJava, shouldFailWhenDuplicatesFound(hoodieConfig))
+      // Resolve duplicates on the committing client's engine context and config rather than a throwaway
+      // context. The record index lookup this triggers collects its counters into a registry owned by the
+      // context that ran the lookup, and postCommit drains the client's context; a separate context would
+      // strand those counters and the INSERT would publish none. See RecordIndexLookupMetrics.
+      DataSourceUtils.handleDuplicates(
+        client.getEngineContext.asInstanceOf[HoodieSparkEngineContext], incomingRecords,
+        client.getConfig, shouldFailWhenDuplicatesFound(hoodieConfig))
     }
   }
 }
