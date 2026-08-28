@@ -61,21 +61,13 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
   /**
    * Returns the ordering field to record in {@code hoodie.properties}, if one can be established.
    *
-   * <p>{@link HoodieTableConfig#PRECOMBINE_FIELD} is only written at table creation, and only
-   * started being written in 0.8.0, so a table created before that carries no ordering field even
-   * though its writer merges on one. Everything that resolves ordering from the table config alone
-   * - Spark SQL DML, the merge-on-read snapshot merge, Flink, and the ordering fields of later
-   * table versions - then silently falls back to no ordering at all.
-   *
-   * <p>Only a table that records no ordering field is filled in, and only as part of this upgrade,
-   * so a table that already carries one is left alone. The value comes from the write config, but
-   * is only recorded once it resolves against the schema.
-   * {@link HoodieWriteConfig#PRECOMBINE_FIELD_NAME} carries a default of "ts" that every write
-   * config materializes whether or not the user asked for it; recording that default on a table
-   * that has no such field would leave behind an ordering field no reader can resolve, and would
-   * make any later writer that configures a real ordering field fail table config validation with a
-   * config conflict. A field nested under dot notation is recorded as configured without that
-   * check, since the default is never nested and only an explicit config can name one.
+   * <p>{@link HoodieTableConfig#PRECOMBINE_FIELD} is only written at table creation, and only since
+   * 0.8.0, so a table created before that records none even though its writer merges on one, and
+   * everything that resolves ordering from the table config alone then falls back to no ordering.
+   * Only a table that records none is filled in, and only from this upgrade. A top level field is
+   * recorded once the schema has it, which is what keeps out the "ts" default that every write
+   * config materializes; a field nested under dot notation is recorded as configured, since a
+   * default is never nested.
    */
   private static Option<String> getPreCombineFieldToPersist(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     if (StringUtils.nonEmpty(metaClient.getTableConfig().getPreCombineField())) {
@@ -105,9 +97,8 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
   }
 
   /**
-   * The schema to resolve the ordering field against: the table's own schema, falling back to the
-   * schema the writer is about to write with for a table that has not committed one yet, and to
-   * nothing at all if neither can be read.
+   * The table's own schema, falling back to the writer's for a table with no committed data, and to
+   * nothing if neither can be read.
    */
   private static Option<Schema> resolveSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     try {
@@ -120,9 +111,8 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
           ? Option.empty()
           : Option.of(new Schema.Parser().parse(writeSchema));
     } catch (Exception e) {
-      // reading or parsing the schema can fail on an unreadable data file or an invalid schema, and
-      // the upgrade gates every write on the table, so leave the field unrecorded rather than
-      // blocking the table on a backfill that is best effort
+      // the upgrade gates every write, so a schema that cannot be read or parsed leaves the field
+      // unrecorded rather than blocking the table
       LOG.warn("Failed to resolve the schema of " + config.getBasePath()
           + " while upgrading to table version two, leaving the ordering field unrecorded", e);
       return Option.empty();

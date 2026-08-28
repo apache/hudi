@@ -61,9 +61,8 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
   case class OrderedRecord(uuid: String, version: Long, ts: Long, value: String)
 
   /**
-   * The ordering field the version 1 to 2 upgrade records is what a later writer that configures
-   * none has to go on. Without it that writer falls back to the "ts" default, which orders by the
-   * wrong column here, so an older record overwrites a newer one.
+   * A writer that configures no ordering field resolves it from the table config, so without the
+   * recorded field it falls back to the "ts" default and an older record overwrites a newer one.
    */
   @Test
   def testUpgradeFromTableVersionOneRestoresOrderingOnUpdates(): Unit = {
@@ -80,13 +79,12 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
     // a table written before 0.8.0 records no ordering field
     dropRecordedOrderingFieldAndSetVersionOne()
 
-    // the write that performs the upgrade records the ordering field it merges on
+    // the upgrading write records the ordering field it merges on
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, orderingParams,
       orderedRecordFrame("key2", version = 1, ts = 1, value = "other"))
     assertEquals("version", createMetaClient(spark, tempBasePath).getTableConfig.getPreCombineField)
 
-    // a later writer that configures none resolves it from the table config, so the record with the
-    // lower version loses the merge even though its "ts" is higher
+    // the lower version loses the merge even though its "ts" is higher
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams,
       orderedRecordFrame("key1", version = 1, ts = 5, value = "old"))
     assertEquals("new", readValueOf("key1"))
