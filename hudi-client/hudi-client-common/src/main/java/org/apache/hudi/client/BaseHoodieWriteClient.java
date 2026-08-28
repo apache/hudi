@@ -1661,12 +1661,35 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   @Override
   public void close() {
-    // Stop timeline-server if running
-    super.close();
-    // Calling this here releases any resources used by your index, so make sure to finish any related operations
-    // before this point
-    this.index.close();
-    this.tableServiceClient.close();
+    // The index and the table service client are this class's own resources; a failure while the
+    // base client releases its own must not leave them open.
+    Exception failure = null;
+    try {
+      // Stop timeline-server if running
+      super.close();
+    } catch (Exception e) {
+      failure = e;
+    }
+    try {
+      // Calling this here releases any resources used by your index, so make sure to finish any related operations
+      // before this point
+      this.index.close();
+    } catch (Exception e) {
+      failure = failure == null ? e : addSuppressed(failure, e);
+    }
+    try {
+      this.tableServiceClient.close();
+    } catch (Exception e) {
+      failure = failure == null ? e : addSuppressed(failure, e);
+    }
+    if (failure != null) {
+      throw failure instanceof RuntimeException ? (RuntimeException) failure : new HoodieException(failure);
+    }
+  }
+
+  private static Exception addSuppressed(Exception previousFailure, Exception failure) {
+    previousFailure.addSuppressed(failure);
+    return previousFailure;
   }
 
   public void setWriteTimer(String commitType) {

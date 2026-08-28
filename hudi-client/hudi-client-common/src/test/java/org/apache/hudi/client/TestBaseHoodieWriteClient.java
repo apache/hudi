@@ -80,9 +80,11 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage
 import static org.apache.hudi.testutils.Assertions.assertComplexKeyGeneratorValidationThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -560,6 +562,46 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     inOrder.verify(transactionManager).beginStateChange(Option.empty(), Option.empty());
     inOrder.verify(timeGenerator).generateTime(true);
     inOrder.verify(transactionManager).endStateChange(Option.of(expectedInstant));
+  }
+
+
+  /**
+   * close() releases several independent resources in sequence. An index that fails to close must
+   * not stop the table service client behind it from being released.
+   */
+  @Test
+  void testCloseReleasesLaterResourcesWhenAnEarlierCloseFails() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .build())
+        .build();
+
+    HoodieIndex<?, ?> failingIndex = mock(HoodieIndex.class);
+    RuntimeException indexFailure = new RuntimeException("index is wedged");
+    doThrow(indexFailure).when(failingIndex).close();
+
+    TransactionManager transactionManager = mock(TransactionManager.class);
+    TimeGenerator timeGenerator = mock(TimeGenerator.class);
+    HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
+    BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
+
+    TestWriteClient writeClient =
+        new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient, transactionManager, timeGenerator) {
+          @Override
+          protected HoodieIndex<?, ?> createIndex(HoodieWriteConfig config) {
+            return failingIndex;
+          }
+        };
+
+    RuntimeException thrown = assertThrows(RuntimeException.class, writeClient::close);
+    assertSame(indexFailure, thrown);
+
+    // the resource behind the failing index is released anyway
+    verify(tableServiceClient).close();
+    verify(transactionManager).close();
   }
 
   private static class TestWriteClient extends BaseHoodieWriteClient<String, String, String, String> {

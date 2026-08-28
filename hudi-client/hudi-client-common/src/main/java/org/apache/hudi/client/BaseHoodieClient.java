@@ -151,10 +151,40 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    */
   @Override
   public void close() {
-    stopEmbeddedServerView(true);
-    this.context.setJobStatus("", "");
-    this.heartbeatClient.close();
-    this.txnManager.close();
+    // Each step owns a resource the others do not, and the transaction manager holds the write
+    // lock, so an earlier failure must not stop the rest from being released.
+    Exception failure = null;
+    try {
+      stopEmbeddedServerView(true);
+    } catch (Exception e) {
+      failure = e;
+    }
+    try {
+      this.context.setJobStatus("", "");
+    } catch (Exception e) {
+      failure = appendFailure(failure, e);
+    }
+    try {
+      this.heartbeatClient.close();
+    } catch (Exception e) {
+      failure = appendFailure(failure, e);
+    }
+    try {
+      this.txnManager.close();
+    } catch (Exception e) {
+      failure = appendFailure(failure, e);
+    }
+    if (failure != null) {
+      throw failure instanceof RuntimeException ? (RuntimeException) failure : new HoodieException(failure);
+    }
+  }
+
+  private static Exception appendFailure(Exception previousFailure, Exception failure) {
+    if (previousFailure == null) {
+      return failure;
+    }
+    previousFailure.addSuppressed(failure);
+    return previousFailure;
   }
 
   private synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
