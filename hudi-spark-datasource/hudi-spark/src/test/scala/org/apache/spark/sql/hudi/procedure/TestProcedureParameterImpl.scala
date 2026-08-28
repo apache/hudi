@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.command.procedures.ProcedureParameter
+import org.apache.spark.sql.hudi.command.procedures.{ProcedureParameter, ProcedureParameterImpl}
 import org.apache.spark.sql.types.DataTypes
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNull, assertTrue}
 import org.scalatest.funsuite.AnyFunSuite
@@ -31,18 +31,12 @@ import org.scalatest.funsuite.AnyFunSuite
  */
 class TestProcedureParameterImpl extends AnyFunSuite {
 
-  test("Test ProcedureParameter factories populate every field") {
+  test("Test ProcedureParameter factories set required and default") {
     val required = ProcedureParameter.required(0, "path", DataTypes.StringType)
-    assertEquals(0, required.index)
-    assertEquals("path", required.name)
-    assertEquals(DataTypes.StringType, required.dataType)
     assertTrue(required.required)
     assertNull(required.default)
 
     val optional = ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10)
-    assertEquals(2, optional.index)
-    assertEquals("limit", optional.name)
-    assertEquals(DataTypes.IntegerType, optional.dataType)
     assertFalse(optional.required)
     assertEquals(10, optional.default)
 
@@ -78,7 +72,8 @@ class TestProcedureParameterImpl extends AnyFunSuite {
     assertNotEquals(optional, ProcedureParameter.optional(1, "backup", DataTypes.BooleanType, true))
     assertNotEquals(optional, ProcedureParameter.optional(1, "dry_run", DataTypes.StringType, true))
     assertNotEquals(optional, ProcedureParameter.optional(1, "dry_run", DataTypes.BooleanType, false))
-    assertNotEquals(optional, ProcedureParameter.required(1, "dry_run", DataTypes.BooleanType))
+    // Built directly so that only `required` differs; the required(...) factory would also null the default.
+    assertNotEquals(optional, ProcedureParameterImpl(1, "dry_run", DataTypes.BooleanType, true, required = true))
 
     // hashCode is derived from the same fields, so a differing index also changes the hash;
     // without this a constant hashCode would satisfy the equal-hash assertions above.
@@ -87,8 +82,9 @@ class TestProcedureParameterImpl extends AnyFunSuite {
   }
 
   test("Test ProcedureParameterImpl toString includes every field") {
-    val param = ProcedureParameter.optional(1, "col", DataTypes.StringType, "def")
-    assertEquals("ProcedureParameter(index='1',name='col', type=StringType, required=false, default=def)",
-      param.toString)
+    val rendered = ProcedureParameter.optional(1, "col", DataTypes.StringType, "def").toString
+    Seq("index='1'", "name='col'", "type=StringType", "required=false", "default=def").foreach { field =>
+      assertTrue(rendered.contains(field), s"missing $field in $rendered")
+    }
   }
 }

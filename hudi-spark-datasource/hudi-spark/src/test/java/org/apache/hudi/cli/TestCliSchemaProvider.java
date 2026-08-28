@@ -24,92 +24,67 @@ import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
- * Tests the default behavior of the CLI bootstrap {@link SchemaProvider} ({@code org.apache.hudi.cli}), which is
- * distinct from the Hudi Streamer one ({@code org.apache.hudi.utilities.schema.SchemaProvider}). Its only production
- * consumer is {@link BootstrapExecutorUtils}, which calls the legacy {@link SchemaProvider#getTargetSchema()}; the
- * {@link HoodieSchema} accessors and the fallback in {@link SchemaProvider#getTargetHoodieSchema()} have no
- * production caller and are pinned here directly.
+ * Tests the CLI bootstrap {@link SchemaProvider} ({@code org.apache.hudi.cli}), which is distinct from the Hudi
+ * Streamer one ({@code org.apache.hudi.utilities.schema.SchemaProvider}). Its only in-repo consumer is
+ * {@link BootstrapExecutorUtils}, which calls the legacy {@link SchemaProvider#getTargetSchema()}; the
+ * {@link HoodieSchema} accessors and the target fallback are public API for out-of-tree providers and are pinned
+ * here directly.
  */
 public class TestCliSchemaProvider {
 
-  private static final String SCHEMA_STR =
-      "{\"type\":\"record\",\"name\":\"r\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"}]}";
+  private static final Schema AVRO_SCHEMA = new Schema.Parser().parse(
+      "{\"type\":\"record\",\"name\":\"r\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"}]}");
 
-  private static Schema parseSchema() {
-    return new Schema.Parser().parse(SCHEMA_STR);
-  }
+  @Test
+  @SuppressWarnings("deprecation")
+  void testLegacyProviderConvertsSourceAndTargetSchemas() {
+    SchemaProvider provider = new SchemaProvider(new TypedProperties()) {
+      @Override
+      public Schema getSourceSchema() {
+        return AVRO_SCHEMA;
+      }
+    };
 
-  /** Provider that only implements the required source schema. */
-  private static class SourceOnlyProvider extends SchemaProvider {
-    private final Schema schema;
-
-    SourceOnlyProvider(Schema schema) {
-      super(new TypedProperties());
-      this.schema = schema;
-    }
-
-    @Override
-    public Schema getSourceSchema() {
-      return schema;
-    }
-  }
-
-  /** Provider whose legacy target schema is unavailable, exercising the fallback path. */
-  private static class TargetUnsupportedProvider extends SchemaProvider {
-    private final Schema schema;
-
-    TargetUnsupportedProvider(Schema schema) {
-      super(new TypedProperties());
-      this.schema = schema;
-    }
-
-    @Override
-    public Schema getSourceSchema() {
-      return schema;
-    }
-
-    @Override
-    public Schema getTargetSchema() {
-      throw new UnsupportedOperationException("no target schema");
-    }
+    // The target schema defaults to the source schema, and both are wrapped into HoodieSchema.
+    assertSame(AVRO_SCHEMA, provider.getTargetSchema());
+    assertEquals(HoodieSchema.fromAvroSchema(AVRO_SCHEMA), provider.getSourceHoodieSchema());
+    assertEquals(HoodieSchema.fromAvroSchema(AVRO_SCHEMA), provider.getTargetHoodieSchema());
   }
 
   @Test
-  void testTargetSchemaDefaultsToSource() {
-    Schema schema = parseSchema();
-    SchemaProvider provider = new SourceOnlyProvider(schema);
-    // By default the target schema is the source schema.
-    assertSame(schema, provider.getTargetSchema());
+  void testModernProviderFallsBackToSourceHoodieSchemaForTarget() {
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(AVRO_SCHEMA);
+    SchemaProvider provider = new SchemaProvider(new TypedProperties()) {
+      @Override
+      public Schema getSourceSchema() {
+        throw new UnsupportedOperationException("legacy accessor not implemented");
+      }
+
+      @Override
+      public HoodieSchema getSourceHoodieSchema() {
+        return schema;
+      }
+    };
+
+    // The default getTargetSchema() delegates to the throwing getSourceSchema(), so the target falls back to
+    // the overridden source HoodieSchema.
+    assertSame(schema, provider.getTargetHoodieSchema());
   }
 
   @Test
-  void testHoodieSchemaWrapsAvroSchema() {
-    Schema schema = parseSchema();
-    SchemaProvider provider = new SourceOnlyProvider(schema);
-    HoodieSchema sourceHoodieSchema = provider.getSourceHoodieSchema();
-    assertNotNull(sourceHoodieSchema);
-    assertEquals(schema, sourceHoodieSchema.getAvroSchema());
-    // Target Hoodie schema defaults to the source when target schema is not overridden.
-    assertEquals(schema, provider.getTargetHoodieSchema().getAvroSchema());
-  }
+  void testNullSourceSchemaYieldsNullHoodieSchemas() {
+    SchemaProvider provider = new SchemaProvider(new TypedProperties()) {
+      @Override
+      public Schema getSourceSchema() {
+        return null;
+      }
+    };
 
-  @Test
-  void testNullSchemaYieldsNullHoodieSchema() {
-    SchemaProvider provider = new SourceOnlyProvider(null);
     assertNull(provider.getSourceHoodieSchema());
     assertNull(provider.getTargetHoodieSchema());
-  }
-
-  @Test
-  void testTargetHoodieSchemaFallsBackToSourceOnUnsupported() {
-    Schema schema = parseSchema();
-    SchemaProvider provider = new TargetUnsupportedProvider(schema);
-    // getTargetSchema() throws, so getTargetHoodieSchema() falls back to the source schema.
-    assertEquals(schema, provider.getTargetHoodieSchema().getAvroSchema());
   }
 }
