@@ -115,7 +115,7 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
     }
 
     HoodieAppendHandle<Object, Object, Object, Object> appendHandle =
-        new HoodieInlineLogAppendHandle<>(writeConfig, TEST_INSTANT_TIME, mockHoodieTable, TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier);
+        new HoodieAppendHandle<>(writeConfig, TEST_INSTANT_TIME, mockHoodieTable, TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier);
 
     FileSlice mockFileSlice = mock(FileSlice.class);
     if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
