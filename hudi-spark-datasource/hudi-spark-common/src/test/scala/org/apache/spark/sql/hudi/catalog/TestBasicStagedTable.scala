@@ -23,11 +23,23 @@ import org.apache.spark.sql.connector.catalog.{Identifier, SupportsWrite, Table,
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, WriteBuilder}
 import org.junit.jupiter.api.Assertions.{assertSame, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.{mock, when}
+import org.mockito.Mockito.{mock, verify, verifyNoInteractions, when}
 
 class TestBasicStagedTable {
 
   private val ident = Identifier.of(Array("db"), "tbl")
+
+  @Test
+  def testCommitLeavesCatalogAloneAndAbortDropsTable(): Unit = {
+    val catalog = mock(classOf[TableCatalog])
+    val staged = BasicStagedTable(ident, mock(classOf[Table]), catalog)
+
+    staged.commitStagedChanges()
+    verifyNoInteractions(catalog)
+
+    staged.abortStagedChanges()
+    verify(catalog).dropTable(ident)
+  }
 
   @Test
   def testNewWriteBuilderDelegatesToWritableTable(): Unit = {
