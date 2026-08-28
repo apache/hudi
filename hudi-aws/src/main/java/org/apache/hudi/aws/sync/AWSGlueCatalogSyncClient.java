@@ -628,7 +628,6 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       if (cascade) {
         cascadeColumnsToPartitions(tableName, getAllPartitions(tableName));
       }
-      awsGlue.updateTable(request).get();
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update definition for table " + tableId(databaseName, tableName), e);
     }

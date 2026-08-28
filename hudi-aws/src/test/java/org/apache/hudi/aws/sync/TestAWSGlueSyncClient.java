@@ -982,4 +982,32 @@ class TestAWSGlueSyncClient {
     inOrder.verify(mockAwsGlue).updateTable(any(UpdateTableRequest.class));
     inOrder.verify(mockAwsGlue).batchUpdatePartition(any(BatchUpdatePartitionRequest.class));
   }
+
+  @Test
+  void testUpdateTableSchema_issuesOneUpdateTable() {
+    String tableName = GlueTestUtil.TABLE_NAME;
+    Table table = Table.builder()
+        .name(tableName)
+        .databaseName(GlueTestUtil.DB_NAME)
+        .storageDescriptor(StorageDescriptor.builder()
+            .location("s3://base")
+            .columns(Column.builder().name("name").type("string").build())
+            .build())
+        .partitionKeys(Column.builder().name("datestr").type("string").build())
+        .build();
+    when(mockAwsGlue.getTable(any(GetTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(GetTableResponse.builder().table(table).build()));
+    when(mockAwsGlue.updateTable(any(UpdateTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(UpdateTableResponse.builder().build()));
+
+    HoodieSchema schema = GlueTestUtil.getSimpleSchema();
+    SchemaDifference schemaDiff = SchemaDifference.newBuilder(schema, new HashMap<>())
+        .addTableColumn("added", "string")
+        .build();
+
+    awsGlueSyncClient.updateTableSchema(tableName, schema, schemaDiff);
+
+    verify(mockAwsGlue, times(1)).updateTable(any(UpdateTableRequest.class));
+    verify(mockAwsGlue, never()).batchUpdatePartition(any(BatchUpdatePartitionRequest.class));
+  }
 }
