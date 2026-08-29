@@ -253,7 +253,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
                 AlterHoodieTableChangeColumnCommand(tableIdent, colName, field.withComment(newComment)).run(spark)
             }
           case (t, _) =>
-            throw new UnsupportedOperationException(s"not supported table change: ${t.getClass}")
+            throw new UnsupportedOperationException(s"not supported table change: ${t.getName}")
         }
 
         loadTable(ident)
