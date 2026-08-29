@@ -201,7 +201,11 @@ public class RepairsCommand {
         TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
             instant, client.getInstantFileNameGenerator());
       } catch (IOException ioe) {
-        if (ioe.getMessage().contains("Not an Avro data file")) {
+        // An empty or truncated instant file does not reach Avro's magic-byte check;
+        // the timeline reader reports it as "unable to read commit metadata" instead.
+        if (ioe.getMessage() != null
+            && (ioe.getMessage().contains("Not an Avro data file")
+                || ioe.getMessage().contains("unable to read commit metadata"))) {
           log.warn("Corruption found. Trying to remove corrupted clean instant file: {}", instant);
           TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
               instant, client.getInstantFileNameGenerator());
