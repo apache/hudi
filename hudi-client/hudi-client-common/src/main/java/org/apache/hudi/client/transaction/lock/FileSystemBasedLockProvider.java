@@ -55,7 +55,6 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
 /**
  * A FileSystem based lock. This {@link LockProvider} implementation allows to lock table operations
@@ -115,8 +114,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     this.lockConfiguration = lockConfiguration;
     String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null);
     if (StringUtils.isNullOrEmpty(lockDirectory)) {
-      lockDirectory = lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key())
-          + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
+      // Reuse the shared default so this fallback can never diverge from getLockConfig()'s default,
+      // which would silently place the lock file at a different path and break cross-engine locking.
+      lockDirectory = defaultLockPath(lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key()));
     }
     this.lockTimeoutMinutes = lockConfiguration.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY);
     this.lockFile = new StoragePath(lockDirectory + StoragePath.SEPARATOR + LOCK_FILE_NAME);
@@ -293,9 +293,12 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   /**
    * Returns the default lock file root path.
    *
-   * <p>IMPORTANT: this path should be shared especially when there is engine cooperation.
+   * <p>IMPORTANT: this path should be shared especially when there is engine cooperation. It lives
+   * under the table metadata folder ({@code .hoodie}) so every engine/task derives the same lock
+   * file location from the table base path. This is also the fallback used by the constructor when
+   * no explicit lock path is configured, so the two must stay in sync.
    */
   private static String defaultLockPath(String tablePath) {
-    return tablePath + StoragePath.SEPARATOR + AUXILIARYFOLDER_NAME;
+    return tablePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
   }
 }

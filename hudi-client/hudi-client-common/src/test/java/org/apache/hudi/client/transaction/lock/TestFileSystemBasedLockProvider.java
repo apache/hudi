@@ -433,8 +433,11 @@ public class TestFileSystemBasedLockProvider {
   public void testGetLockConfigProducesUsableProperties() {
     String tablePath = tempDir.resolve("table").toString();
     TypedProperties props = FileSystemBasedLockProvider.getLockConfig(tablePath);
-    // The generated config points the lock provider at the table's auxiliary folder.
+    // The generated config points the lock provider at the table metadata folder, the shared
+    // location every engine/task derives so the lock is mutually exclusive across processes.
     assertTrue(props.getString(HoodieLockConfig.FILESYSTEM_LOCK_PATH.key()).startsWith(tablePath));
+    assertTrue(props.getString(HoodieLockConfig.FILESYSTEM_LOCK_PATH.key())
+        .endsWith(HoodieTableMetaClient.METAFOLDER_NAME));
     assertEquals(FileSystemBasedLockProvider.class.getName(),
         props.getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
 
@@ -447,6 +450,34 @@ public class TestFileSystemBasedLockProvider {
       provider.unlock();
       provider.close();
     }
+  }
+
+  @Test
+  public void testExplicitLockConfigAndBasePathFallbackResolveToSamePath() {
+    // Regression guard for the cross-engine lock-path divergence: getLockConfig()'s explicit default
+    // and the constructor's BASE_PATH-derived fallback must point at the very same lock file, or a
+    // writer relying on one would not be mutually excluded from a writer relying on the other.
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    String tablePath = tempDir.resolve("sharedtable").toString();
+
+    // 1) Provider built from getLockConfig() (explicit FILESYSTEM_LOCK_PATH).
+    FileSystemBasedLockProvider fromLockConfig =
+        new FileSystemBasedLockProvider(
+            new LockConfiguration(FileSystemBasedLockProvider.getLockConfig(tablePath)), storageConf);
+
+    // 2) Provider built with only BASE_PATH set, exercising the constructor fallback.
+    Properties fallbackProps = new Properties();
+    fallbackProps.setProperty(HoodieWriteConfig.BASE_PATH.key(), tablePath);
+    fallbackProps.setProperty(FILESYSTEM_LOCK_EXPIRE_PROP_KEY, "0");
+    FileSystemBasedLockProvider fromFallback =
+        new FileSystemBasedLockProvider(new LockConfiguration(fallbackProps), storageConf);
+
+    // getLock() is a pure accessor of the resolved lock-file path (no storage I/O), so comparing it
+    // is enough and needs no acquire/release.
+    assertEquals(fromLockConfig.getLock(), fromFallback.getLock(),
+        "explicit default and BASE_PATH fallback must resolve to the same lock file");
+    assertTrue(fromLockConfig.getLock()
+        .endsWith(HoodieTableMetaClient.METAFOLDER_NAME + StoragePath.SEPARATOR + "lock"));
   }
 
   @Test

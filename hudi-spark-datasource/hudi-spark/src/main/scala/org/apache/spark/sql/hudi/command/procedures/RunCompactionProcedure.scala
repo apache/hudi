@@ -23,7 +23,6 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{CompactionUtils, HoodieTimer, Option => HOption}
-import org.apache.hudi.config.HoodieLockConfig
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.internal.Logging
@@ -98,12 +97,6 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
-
-      if (metaClient.getTableConfig.isMetadataTableAvailable) {
-        if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
-          confs = confs ++ HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, client.getConfig.getCommonConfig.getProps())
-        }
-      }
 
       if (operation.isSchedule) {
         val instantTime = client.scheduleCompaction(HOption.empty[java.util.Map[String, String]])
