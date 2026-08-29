@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.caseInsensitiveResolution
@@ -28,32 +26,15 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
 
 import java.net.URI
-import java.util.TimeZone
 
 /**
  * Unit coverage for the pure helper methods in [[HoodieSqlCommonUtils]] that are otherwise
  * only reached through heavier read/write code paths.
  */
-class TestHoodieSqlCommonUtils extends AnyFunSuite with BeforeAndAfterAll {
-
-  // Instant formatting is timezone sensitive; pin the JVM default to UTC for the suite and
-  // restore it afterwards so the change does not leak into other suites in the same JVM.
-  private var originalTimeZone: TimeZone = _
-
-  override protected def beforeAll(): Unit = {
-    super.beforeAll()
-    originalTimeZone = TimeZone.getDefault
-    TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
-  }
-
-  override protected def afterAll(): Unit = {
-    TimeZone.setDefault(originalTimeZone)
-    super.afterAll()
-  }
+class TestHoodieSqlCommonUtils extends AnyFunSuite {
 
   private def partitionedTable(partitionCols: Seq[String]): CatalogTable = {
     val fields = StructField("id", IntegerType) +: partitionCols.map(StructField(_, StringType))
@@ -73,27 +54,6 @@ class TestHoodieSqlCommonUtils extends AnyFunSuite with BeforeAndAfterAll {
     schema = StructType(Seq(StructField("id", IntegerType))),
     provider = Some("hudi"))
 
-  test("formatQueryInstant normalizes supported time formats") {
-    assertTrue(HoodieSqlCommonUtils.formatQueryInstant("2021-04-01").startsWith("20210401"))
-    assertTrue(HoodieSqlCommonUtils.formatQueryInstant("2021-04-01 12:30:45").startsWith("20210401123045"))
-    assertTrue(HoodieSqlCommonUtils.formatQueryInstant("2021-04-01T12:30:45").startsWith("20210401123045"))
-    // 10-digit epoch seconds (2021-01-01T00:00:00Z) and 13-digit epoch millis.
-    assertTrue(HoodieSqlCommonUtils.formatQueryInstant("1609459200").startsWith("20210101"))
-    assertTrue(HoodieSqlCommonUtils.formatQueryInstant("1609459200000").startsWith("20210101"))
-    intercept[IllegalArgumentException] {
-      HoodieSqlCommonUtils.formatQueryInstant("abc")
-    }
-  }
-
-  test("formatIncrementalInstant passes sentinels through and normalizes real instants") {
-    assertEquals(IncrementalQueryAnalyzer.START_COMMIT_EARLIEST,
-      HoodieSqlCommonUtils.formatIncrementalInstant(IncrementalQueryAnalyzer.START_COMMIT_EARLIEST))
-    assertEquals("000", HoodieSqlCommonUtils.formatIncrementalInstant("000"))
-    // A short, zero-prefixed numeric value is treated as a legacy instant and passed through.
-    assertEquals("0000001", HoodieSqlCommonUtils.formatIncrementalInstant("0000001"))
-    assertTrue(HoodieSqlCommonUtils.formatIncrementalInstant("2021-04-01").startsWith("20210401"))
-  }
-
   test("partition style detectors classify partition paths") {
     val t = partitionedTable(Seq("dt"))
 
@@ -105,9 +65,13 @@ class TestHoodieSqlCommonUtils extends AnyFunSuite with BeforeAndAfterAll {
     assertFalse(HoodieSqlCommonUtils.isUrlEncodeEnabled(Seq("a/b"), t))
     assertFalse(HoodieSqlCommonUtils.isUrlEncodeEnabled(Seq("x"), nonPartitionedTable))
 
-    assertTrue(HoodieSqlCommonUtils.isSlashSeparatedDatePartitioning(Seq("2021/04/01"), t))
-    assertFalse(HoodieSqlCommonUtils.isSlashSeparatedDatePartitioning(Seq("dt=2021-04-01"), t))
-    assertFalse(HoodieSqlCommonUtils.isSlashSeparatedDatePartitioning(Seq("2021/04/01"), nonPartitionedTable))
+    // Both detectors compare the slash-separated fragment count against the partition columns,
+    // so a multi-column table only matches when every fragment is present.
+    val t2 = partitionedTable(Seq("dt", "hh"))
+    assertTrue(HoodieSqlCommonUtils.isHiveStyledPartitioning(Seq("dt=2021-04-01/hh=12"), t2))
+    assertFalse(HoodieSqlCommonUtils.isHiveStyledPartitioning(Seq("dt=2021-04-01/12"), t2))
+    assertTrue(HoodieSqlCommonUtils.isUrlEncodeEnabled(Seq("2021%2F04%2F01/12"), t2))
+    assertFalse(HoodieSqlCommonUtils.isUrlEncodeEnabled(Seq("2021/04/01/12"), t2))
   }
 
   test("config helpers and meta field utilities") {

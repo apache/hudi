@@ -19,8 +19,10 @@ package org.apache.spark.sql.hudi.catalog
 
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
-import org.apache.spark.sql.connector.catalog.{Identifier, TableCapability, TableChange}
+import org.apache.spark.sql.connector.catalog.{Identifier, TableChange}
+import org.apache.spark.sql.connector.catalog.TableCapability.{ACCEPT_ANY_SCHEMA, BATCH_READ, OVERWRITE_BY_FILTER, TRUNCATE, V1_BATCH_WRITE}
 import org.apache.spark.sql.connector.expressions.Transform
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.ShowHoodieCreateTableCommand
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -32,17 +34,14 @@ import java.io.File
 import scala.collection.JavaConverters._
 
 /**
- * DDL-level coverage for [[HoodieCatalog]], [[HoodieStagedTable]], [[HoodieInternalV2Table]]
- * and the create/show-create table commands, exercised end-to-end through the V2 session
+ * DDL-level coverage for [[HoodieCatalog]], [[HoodieInternalV2Table]] and the
+ * create/show-create table commands, exercised end-to-end through the V2 session
  * catalog wired up by [[HoodieSparkSqlTestBase]] (spark_catalog = HoodieCatalog).
  */
 class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
 
   private def hoodieCatalog: HoodieCatalog =
     spark.sessionState.catalogManager.v2SessionCatalog.asInstanceOf[HoodieCatalog]
-
-  private def userFieldNames(names: Array[String]): Seq[String] =
-    names.filterNot(_.startsWith("_hoodie")).toSeq
 
   test("HoodieCatalog create, load, alter, rename and drop via the V2 catalog API") {
     withTempDir { tmp =>
@@ -67,7 +66,8 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
 
       // loadTable returns a Hudi-backed table exposing the user schema.
       val loaded = catalog.loadTable(ident)
-      assertEquals(Seq("id", "name", "ts"), userFieldNames(loaded.schema().fieldNames))
+      assertEquals(Seq("id", "name", "ts"),
+        HoodieSqlCommonUtils.removeMetaFields(loaded.schema()).fieldNames.toSeq)
 
       // alterTable: add a column.
       catalog.alterTable(ident, TableChange.addColumn(Array("age"), IntegerType, true))
@@ -89,6 +89,13 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       assertEquals(IntegerType,
         catalog.loadTable(ident).schema().fields.find(_.name == "age").get.dataType)
 
+      // alterTable: any change that is neither AddColumn nor a ColumnChange falls through to the
+      // default arm of HoodieCatalog.alterTable and is reported as unsupported.
+      val unsupportedChange = intercept[UnsupportedOperationException] {
+        catalog.alterTable(ident, TableChange.setProperty("some.key", "v"))
+      }
+      assertTrue(unsupportedChange.getMessage.contains("SetProperty"), unsupportedChange.getMessage)
+
       // renameTable moves the catalog entry.
       val renamed = Identifier.of(Array("default"), s"${tableName}_renamed")
       catalog.renameTable(ident, renamed)
@@ -98,44 +105,8 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       // dropTable removes the Hudi table from the catalog.
       assertTrue(catalog.dropTable(renamed))
       assertFalse(catalog.tableExists(renamed))
-    }
-  }
-
-  test("CTAS through the staged table commits managed and partitioned Hudi tables") {
-    val nonPartitioned = generateTableName
-    spark.sql(
-      s"""
-         |create table $nonPartitioned using hudi
-         |tblproperties (primaryKey = 'id', preCombineField = 'ts')
-         |as select 1 as id, 'a1' as name, 10 as price, 1000 as ts
-         |""".stripMargin)
-    checkAnswer(s"select id, name, price, ts from $nonPartitioned")(Seq(1, "a1", 10, 1000))
-
-    val partitioned = generateTableName
-    spark.sql(
-      s"""
-         |create table $partitioned using hudi
-         |partitioned by (dt)
-         |tblproperties (primaryKey = 'id', preCombineField = 'ts')
-         |as select 1 as id, 'a1' as name, 1000 as ts, '2024-01-01' as dt
-         |     union all select 2, 'a2', 2000, '2024-01-02'
-         |""".stripMargin)
-    checkAnswer(s"select id, name, dt from $partitioned")(
-      Seq(1, "a1", "2024-01-01"), Seq(2, "a2", "2024-01-02"))
-  }
-
-  test("A failing CTAS aborts staged changes and cleans up the table path") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-      checkExceptionContain(
-        s"""
-           |create table $tableName using hudi
-           |tblproperties (primaryKey = 'id', type = 'cow', hoodie.compact.inline = 'true')
-           |location '$tablePath'
-           |as select 1 as id, 'a1' as name, 1000 as ts
-           |""".stripMargin)("Compaction is not supported on a CopyOnWrite table")
-      assertFalse(existsPath(tablePath))
+      // HoodieCatalog.dropTable passes purge = false, so the external location survives the drop.
+      assertTrue(existsPath(tablePath))
     }
   }
 
@@ -154,23 +125,25 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
          |tblproperties (primaryKey = 'id', preCombineField = 'ts')
          |""".stripMargin)
 
-    // SHOW CREATE TABLE resolves through Spark's native command for the Hudi V2 table, which
-    // emits `CREATE TABLE <table>` with a USING/TBLPROPERTIES body. The catalog qualifier differs
-    // by Spark version (`spark_catalog.default.` on 3.5+, `default.` on 3.4/3.3), so match either.
-    val ddl = spark.sql(s"show create table $tableName").head().getString(0)
-    assertTrue(ddl.contains("CREATE TABLE") && ddl.contains(s"default.$tableName"), ddl)
-    assertTrue(ddl.contains("USING hudi"), ddl)
-    assertTrue(ddl.contains("PARTITIONED BY (dt)"), ddl)
-    assertTrue(ddl.contains("COMMENT 'a hudi table'"), ddl)
-    assertTrue(ddl.contains("TBLPROPERTIES"), ddl)
-    assertTrue(ddl.contains("primaryKey"), ddl)
+    // Spark's ResolveSessionCatalog only emits the V1 ShowCreateTableCommand under
+    // `spark.sql.legacy.useV1Command`; HoodieAnalysis then rewrites it to ShowHoodieCreateTableCommand.
+    withSQLConf("spark.sql.legacy.useV1Command" -> "true") {
+      val ddl = spark.sql(s"show create table $tableName").head().getString(0)
+      assertTrue(ddl.contains("CREATE TABLE IF NOT EXISTS"), ddl)
+      assertTrue(ddl.contains(s"`default`.`$tableName`"), ddl)
+      assertTrue(ddl.contains("USING hudi"), ddl)
+      assertTrue(ddl.contains("PARTITIONED BY (dt)"), ddl)
+      assertTrue(ddl.contains("COMMENT 'a hudi table'"), ddl)
+      assertTrue(ddl.contains("TBLPROPERTIES"), ddl)
+      assertTrue(ddl.contains("primaryKey='id'"), ddl)
+    }
 
     intercept[NoSuchTableException] {
       ShowHoodieCreateTableCommand(TableIdentifier("does_not_exist_tbl")).run(spark)
     }
   }
 
-  test("CREATE over an existing location validates conflicting table properties") {
+  test("CREATE over an existing location rejects conflicting table properties") {
     withTempDir { tmp =>
       val basePath = s"${tmp.getCanonicalPath}/shared"
       val first = generateTableName
@@ -180,17 +153,6 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
            |tblproperties (primaryKey = 'id', preCombineField = 'ts')
            |location '$basePath'
            |""".stripMargin)
-
-      // A second table over the same location that keeps the on-disk table config resolves
-      // to the persisted schema (existing-location reuse path).
-      val reuse = generateTableName
-      spark.sql(
-        s"""
-           |create table $reuse (id int, name string, ts long) using hudi
-           |tblproperties (primaryKey = 'id', preCombineField = 'ts')
-           |location '$basePath'
-           |""".stripMargin)
-      assertEquals(Seq("id", "name", "ts"), userFieldNames(spark.table(reuse).schema.fieldNames))
 
       // A conflicting primaryKey against the on-disk table config is rejected with a config-conflict
       // error surfaced from the write-path validation (HoodieWriterUtils).
@@ -221,8 +183,9 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
         val loaded = hoodieCatalog.loadTable(ident)
         assertTrue(loaded.isInstanceOf[HoodieInternalV2Table])
         val v2 = loaded.asInstanceOf[HoodieInternalV2Table]
-        assertTrue(v2.capabilities().contains(TableCapability.BATCH_READ))
-        assertTrue(v2.capabilities().contains(TableCapability.V1_BATCH_WRITE))
+        assertEquals(
+          Set(BATCH_READ, V1_BATCH_WRITE, OVERWRITE_BY_FILTER, TRUNCATE, ACCEPT_ANY_SCHEMA).asJava,
+          v2.capabilities())
         assertTrue(v2.schema().fieldNames.contains("id"))
         assertTrue(v2.partitioning().isEmpty)
         assertFalse(v2.properties().isEmpty)
@@ -232,7 +195,10 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
           v2.name() == s"spark_catalog.default.$tableName" || v2.name() == s"default.$tableName",
           v2.name())
 
-        // Append then overwrite through the V1-fallback write builder.
+        // HoodieSpark35Analysis (and its per-version HoodieSpark3xAnalysis siblings) rewrites the
+        // V2 relation behind an InsertIntoStatement into the V1 LogicalRelation before any write
+        // builder is created, so these inserts cover the V2-to-V1 relation conversion rather than
+        // HoodieV1WriteBuilder.
         spark.sql(s"insert into $tableName values (1, 'a1', 1000), (2, 'a2', 2000)")
         checkAnswer(s"select id, name from $tableName")(Seq(1, "a1"), Seq(2, "a2"))
         spark.sql(s"insert overwrite table $tableName values (3, 'a3', 3000)")

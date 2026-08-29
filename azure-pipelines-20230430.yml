@@ -74,6 +74,7 @@ parameters:
       - 'org.apache.spark.hudi'
       - 'org.apache.spark.sql.avro'
       - 'org.apache.spark.sql.execution'
+      - 'org.apache.spark.sql.hive'
       - 'org.apache.spark.sql.hudi.analysis'
       - 'org.apache.spark.sql.hudi.blob'
       - 'org.apache.spark.sql.hudi.catalog'
