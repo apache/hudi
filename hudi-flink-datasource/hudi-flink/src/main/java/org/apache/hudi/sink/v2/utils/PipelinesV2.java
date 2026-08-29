@@ -103,6 +103,8 @@ public class PipelinesV2 {
       RowType rowType,
       boolean overwrite,
       boolean isBounded) {
+    // validate the finalized write operation, shared with the Sink V1 pipeline.
+    OptionsResolver.checkNonBlockingConcurrencyControl(conf);
     // bulk_insert mode
     if (OptionsResolver.isBulkInsertOperation(conf)) {
       if (!isBounded) {

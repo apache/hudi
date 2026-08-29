@@ -232,7 +232,7 @@ trait ProvidesHoodieConfig extends Logging {
       }
     )
 
-    val overwriteTableOpts = if (operation.equals(BULK_INSERT_OPERATION_OPT_VAL)) {
+    val overwriteTableOpts = if (operation.equalsIgnoreCase(BULK_INSERT_OPERATION_OPT_VAL)) {
       if (isOverwriteTable) {
         Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE_TABLE.value())
       } else if (isOverwritePartition) {
@@ -240,15 +240,15 @@ trait ProvidesHoodieConfig extends Logging {
       } else {
         Map()
       }
-    } else if (operation.equals(INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)) {
-      if (sparkSqlInsertIntoOperation.equals(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
+    } else if (operation.equalsIgnoreCase(INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)) {
+      if (sparkSqlInsertIntoOperation.equalsIgnoreCase(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
         operation = BULK_INSERT_OPERATION_OPT_VAL
         Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE_TABLE.value())
       } else {
         Map()
       }
-    } else if (operation.equals(INSERT_OVERWRITE_OPERATION_OPT_VAL)) {
-      if (sparkSqlInsertIntoOperation.equals(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
+    } else if (operation.equalsIgnoreCase(INSERT_OVERWRITE_OPERATION_OPT_VAL)) {
+      if (sparkSqlInsertIntoOperation.equalsIgnoreCase(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
         operation = BULK_INSERT_OPERATION_OPT_VAL
         Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE.value())
       } else {

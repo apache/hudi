@@ -358,4 +358,80 @@ class TestInsertTable5 extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test Insert Overwrite With Non Blocking Concurrency Control Is Rejected") {
+    Seq("INSERT_OVERWRITE", "INSERT_OVERWRITE_TABLE").foreach { operation =>
+      withSQLConf(
+        "hoodie.write.concurrency.mode" -> "NON_BLOCKING_CONCURRENCY_CONTROL",
+        "hoodie.datasource.write.operation"  -> operation
+      ) {
+        withTempDir { tmp =>
+          withTable(generateTableName) { tableName =>
+            val tablePath = s"""${tmp.getCanonicalPath}/$tableName"""
+            spark.sql(
+              s"""
+                 |create table $tableName (
+                 |  id int,
+                 |  name string,
+                 |  price double,
+                 |  ts long
+                 |) using hudi
+                 | tblproperties (
+                 |   primaryKey = 'id',
+                 |   type = 'mor',
+                 |   preCombineField = 'ts',
+                 |   hoodie.index.type = 'BUCKET',
+                 |   hoodie.index.bucket.engine = 'SIMPLE',
+                 |   hoodie.bucket.index.hash.field = 'id',
+                 |   hoodie.bucket.index.num.buckets = 1)
+                 | location '${tablePath}'
+                 | """.stripMargin)
+
+            checkExceptionContain(
+              s"""insert into $tableName values
+                 | (1, 'a1', 10, 1000)
+                 | """.stripMargin)(
+              "Insert overwrite is not supported with non-blocking concurrency control")
+          }
+        }
+      }
+    }
+  }
+
+  test("Test Insert Overwrite (bulk_insert mode) With Non Blocking Concurrency Control Is Rejected") {
+    withSQLConf(
+      "hoodie.write.concurrency.mode" -> "NON_BLOCKING_CONCURRENCY_CONTROL",
+      "hoodie.datasource.write.operation"  -> "BULK_INSERT"
+    ) {
+      withTempDir { tmp =>
+        withTable(generateTableName) { tableName =>
+          val tablePath = s"""${tmp.getCanonicalPath}/$tableName"""
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (
+               |   primaryKey = 'id',
+               |   type = 'mor',
+               |   preCombineField = 'ts',
+               |   hoodie.index.type = 'BUCKET',
+               |   hoodie.index.bucket.engine = 'SIMPLE',
+               |   hoodie.bucket.index.hash.field = 'id',
+               |   hoodie.bucket.index.num.buckets = 1)
+               | location '${tablePath}'
+               | """.stripMargin)
+
+          checkExceptionContain(
+            s"""insert overwrite $tableName values
+               | (1, 'a1', 10, 1000)
+               | """.stripMargin)(
+            "Insert overwrite is not supported with non-blocking concurrency control")
+        }
+      }
+    }
+  }
 }
