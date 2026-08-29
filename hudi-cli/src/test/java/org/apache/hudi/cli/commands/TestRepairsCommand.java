@@ -57,7 +57,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.SQLContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -335,7 +334,6 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
   }
 
-  @Disabled("TODO: HUDI-7614 - repairDeprecatedPartition not compatible with table version 9")
   @Test
   public void testRepairDeprecatedPartition() throws IOException {
     tablePath = tablePath + "/repair_test/";
@@ -362,6 +360,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       JavaRDD<HoodieRecord> writeRecords = context().getJavaSparkContext().parallelize(records, 1);
       List<WriteStatus> result = client.upsert(writeRecords, newCommitTime).collect();
       Assertions.assertNoWriteErrors(result);
+      client.commit(newCommitTime, jsc().parallelize(result));
 
       newCommitTime = "002";
       // Generate HoodieRecords w/ null values for partition path field.
@@ -379,6 +378,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       JavaRDD<HoodieRecord> writeRecords2 = context().getJavaSparkContext().parallelize(records2, 1);
       List<WriteStatus> result2 = client.bulkInsert(writeRecords2, newCommitTime).collect();
       Assertions.assertNoWriteErrors(result2);
+      client.commit(newCommitTime, jsc().parallelize(result2));
 
       SQLContext sqlContext = context().getSqlContext();
       long totalRecs = sqlContext.read().format("hudi").load(tablePath).count();
@@ -399,7 +399,6 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     }
   }
 
-  @Disabled("TODO: HUDI-7614 - renamePartition not compatible with table version 9")
   @Test
   public void testRenamePartition() throws IOException {
     tablePath = tablePath + "/rename_partition_test/";
@@ -426,6 +425,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       JavaRDD<HoodieRecord> writeRecords = context().getJavaSparkContext().parallelize(records, 1);
       List<WriteStatus> result = client.upsert(writeRecords, newCommitTime).collect();
       Assertions.assertNoWriteErrors(result);
+      client.commit(newCommitTime, jsc().parallelize(result));
 
       SQLContext sqlContext = context().getSqlContext();
       long totalRecs = sqlContext.read().format("hudi").load(tablePath).count();
