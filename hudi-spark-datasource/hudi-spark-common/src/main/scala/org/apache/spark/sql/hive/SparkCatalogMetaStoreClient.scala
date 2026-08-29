@@ -20,7 +20,7 @@ package org.apache.spark.sql.hive
 import org.apache.hudi.hive.HiveSyncConfig
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient
-import org.apache.hadoop.hive.metastore.api.{Database, EnvironmentContext, FieldSchema, NoSuchObjectException, Partition, SerDeInfo, StorageDescriptor, Table}
+import org.apache.hadoop.hive.metastore.api.{Database, EnvironmentContext, FieldSchema, MetaException, NoSuchObjectException, Partition, SerDeInfo, StorageDescriptor, Table}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogStorageFormat, CatalogTable, CatalogTablePartition, CatalogTableType}
@@ -65,13 +65,34 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
 
   // scalastyle:off method.name
   override def alter_table(dbName: String, tableName: String, table: Table): Unit = {
-    val updated = toCatalogTable(table).copy(identifier = TableIdentifier(tableName, Some(dbName)))
-    externalCatalog.alterTable(updated)
+    val current = externalCatalog.getTable(dbName, tableName)
+    val incoming = toCatalogTable(table).copy(identifier = TableIdentifier(tableName, Some(dbName)))
+    externalCatalog.alterTable(incoming)
     // HiveExternalCatalog.alterTable deliberately keeps the existing schema (Spark routes schema
-    // changes through alterTableDataSchema), so without this call a column added by the sync
-    // (HMSDDLExecutor.updateTableDefinition) would never reach the catalog.
-    val newDataSchema = StructType(updated.schema.filterNot(f => updated.partitionColumnNames.contains(f.name)))
-    externalCatalog.alterTableDataSchema(dbName, tableName, newDataSchema)
+    // changes through alterTableDataSchema), so the columns the sync adds and the comments it sets
+    // have to be written back here. The merge is deliberately conservative: the catalog holds the
+    // logical Spark schema (nullability, field metadata such as the VECTOR/BLOB type markers, the
+    // original VariantType) while the sync only speaks Hive type strings, so an existing column
+    // keeps its type, nullability and metadata and is never dropped; only new columns are appended
+    // and non-empty comments applied. Property-only alters therefore leave the schema untouched.
+    val merged = mergeDataSchema(current.dataSchema, incoming.dataSchema)
+    if (merged != current.dataSchema) {
+      externalCatalog.alterTableDataSchema(dbName, tableName, merged)
+    }
+  }
+
+  private def mergeDataSchema(current: StructType, incoming: StructType): StructType = {
+    def key(name: String): String = name.toLowerCase(util.Locale.ROOT)
+    val incomingByName = incoming.fields.map(f => key(f.name) -> f).toMap
+    val kept = current.fields.map { existing =>
+      incomingByName.get(key(existing.name))
+        .flatMap(_.getComment().filter(_.nonEmpty))
+        .map(existing.withComment)
+        .getOrElse(existing)
+    }
+    val currentNames = current.fields.map(f => key(f.name)).toSet
+    val added = incoming.fields.filterNot(f => currentNames.contains(key(f.name)))
+    StructType(kept ++ added)
   }
 
   override def alter_table_with_environmentContext(dbName: String,
@@ -105,7 +126,7 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
     val partitionValues = Option(values).map(_.asScala.toList).getOrElse(Nil)
     if (partitionValues.size != partitionKeys.size) {
       val keys = partitionKeys.mkString(",")
-      throw new IllegalArgumentException(
+      throw new MetaException(
         s"Expected ${partitionKeys.size} partition value(s) [$keys] for $dbName.$tableName but got ${partitionValues.size}")
     }
     val spec = partitionKeys.zip(partitionValues).toMap
@@ -331,8 +352,14 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
     val cols = Option(table.getSd).map(_.getCols).map(_.asScala.toList).getOrElse(Nil)
     val partCols = Option(table.getPartitionKeys).map(_.asScala.toList).getOrElse(Nil)
 
-    val dataFields = cols.map(fs => StructField(fs.getName, CatalystSqlParser.parseDataType(fs.getType), nullable = true, Metadata.empty))
-    val partitionFields = partCols.map(fs => StructField(fs.getName, CatalystSqlParser.parseDataType(fs.getType), nullable = true, Metadata.empty))
+    // Carry the Hive column comment across; fromCatalogTable emits it, and since alter_table now
+    // writes the data schema back, dropping it here would erase comments on every sync round trip.
+    def toField(fs: FieldSchema): StructField = {
+      val field = StructField(fs.getName, CatalystSqlParser.parseDataType(fs.getType), nullable = true, Metadata.empty)
+      Option(fs.getComment).filter(_.nonEmpty).map(field.withComment).getOrElse(field)
+    }
+    val dataFields = cols.map(toField)
+    val partitionFields = partCols.map(toField)
 
     // Strip "spark.sql.*" properties before handing off to Spark's external catalog.
     // HiveExternalCatalog.alterTable / createTable rejects such keys ("Cannot persist ...

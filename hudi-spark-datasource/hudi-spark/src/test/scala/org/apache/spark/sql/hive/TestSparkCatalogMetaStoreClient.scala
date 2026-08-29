@@ -132,6 +132,27 @@ class TestSparkCatalogMetaStoreClient extends FunSuite with BeforeAndAfterAll {
 
       client.alter_table_with_environmentContext(databaseName, tableName, environmentAlteredTable, new EnvironmentContext())
       assertEquals("env-context", client.getTable(databaseName, tableName).getParameters.get("comment"))
+
+      // A column comment set through alter_table (the updateTableComments path) must land in the
+      // catalog, and a property-only alter afterwards must keep both the comment and the schema.
+      val commented = client.getTable(databaseName, tableName)
+      commented.getSd.getCols.asScala.find(_.getName == "name").get.setComment("the name column")
+      client.alter_table(databaseName, tableName, commented)
+      assertEquals("the name column", client.getSchema(databaseName, tableName).asScala.find(_.getName == "name").get.getComment)
+
+      val propertyOnly = client.getTable(databaseName, tableName)
+      propertyOnly.putToParameters("comment", "v4")
+      client.alter_table(databaseName, tableName, propertyOnly)
+      assertEquals("v4", client.getTable(databaseName, tableName).getParameters.get("comment"))
+      assertEquals(Seq("id", "name", "age", "dt"), client.getSchema(databaseName, tableName).asScala.map(_.getName).toSeq)
+      assertEquals("the name column", client.getSchema(databaseName, tableName).asScala.find(_.getName == "name").get.getComment)
+
+      // The sync only speaks Hive type strings, so a retyped existing column must not overwrite the
+      // logical Spark type held by the catalog; only new columns and comments are written back.
+      val retyped = client.getTable(databaseName, tableName)
+      retyped.getSd.getCols.asScala.find(_.getName == "name").get.setType("binary")
+      client.alter_table(databaseName, tableName, retyped)
+      assertEquals("string", client.getSchema(databaseName, tableName).asScala.find(_.getName == "name").get.getType)
     }
   }
 
