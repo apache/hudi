@@ -44,7 +44,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -133,7 +132,6 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     }
   }
 
-  @Disabled("TODO: HUDI-7614 - HoodieRestore failing with v9 tables")
   @Test
   public void testShowRestores() {
     Object result = shell.evaluate(() -> "show restores");
@@ -172,7 +170,6 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     assertEquals(expected, got);
   }
 
-  @Disabled("TODO: HUDI-7614 - HoodieRestore failing with v9 tables")
   @Test
   public void testShowRestore() throws IOException {
     // get instant
