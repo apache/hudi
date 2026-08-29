@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
+import org.apache.hudi.exception.HoodieException;
 
 import java.util.Locale;
 
@@ -42,8 +43,12 @@ public enum WriteConcurrencyMode {
   // Multiple writer can perform write ops on a MOR table with non-blocking conflict resolution
   @EnumFieldDescription("Multiple writers can operate on the table with non-blocking conflict resolution. "
       + "The writers can write into the same file group with the conflicts resolved automatically "
-      + "by the query reader and the compactor.")
+      + "by the query reader and the compactor. Insert overwrite is not supported in this mode.")
   NON_BLOCKING_CONCURRENCY_CONTROL;
+
+  //Error message thrown when insert overwrite is combined with non-blocking concurrency control.
+  public static final String INSERT_OVERWRITE_NOT_SUPPORTED_ERROR =
+      "Insert overwrite is not supported with non-blocking concurrency control";
 
   public boolean supportsMultiWriter() {
     return this == OPTIMISTIC_CONCURRENCY_CONTROL || this == NON_BLOCKING_CONCURRENCY_CONTROL;
@@ -62,6 +67,21 @@ public enum WriteConcurrencyMode {
   }
 
   public static boolean isNonBlockingConcurrencyControl(String name) {
-    return WriteConcurrencyMode.valueOf(name.toUpperCase()).isNonBlockingConcurrencyControl();
+    return WriteConcurrencyMode.valueOf(name.toUpperCase(Locale.ROOT)).isNonBlockingConcurrencyControl();
+  }
+
+  /**
+   * Rejects the {@code insert overwrite} + non-blocking concurrency control (NB-CC) combination,
+   * which silently loses data.
+   *
+   * @param isNonBlockingConcurrencyControl whether the write concurrency mode is NB-CC
+   * @param isOverwrite                      whether the operation is an insert overwrite
+   *                                         (see {@link WriteOperationType#isOverwrite})
+   * @throws HoodieException if the combination is requested
+   */
+  public static void checkInsertOverwriteSupported(boolean isNonBlockingConcurrencyControl, boolean isOverwrite) {
+    if (isNonBlockingConcurrencyControl && isOverwrite) {
+      throw new HoodieException(INSERT_OVERWRITE_NOT_SUPPORTED_ERROR);
+    }
   }
 }

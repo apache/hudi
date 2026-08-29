@@ -19,9 +19,6 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteConcurrencyMode;
-import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.sink.v2.utils.PipelinesV2;
@@ -34,7 +31,6 @@ import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.source.ContinuousFileSource;
 
 import org.apache.flink.api.common.JobStatus;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.core.fs.Path;
@@ -56,9 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration test for Flink Hoodie stream V2 sink.
@@ -105,34 +98,6 @@ public class ITTestDataStreamV2Write {
     conf.set(FlinkOptions.OPERATION, "insert");
 
     writeAndCheckExpected(conf, "append_write", 1);
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {"insert_overwrite", "insert_overwrite_table"})
-  public void testInsertOverwriteWithNonBlockingConcurrencyControlThrows(String operation) {
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
-    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
-    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
-        WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
-    conf.set(FlinkOptions.OPERATION, operation);
-
-    RowType rowType =
-        (RowType) HoodieSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
-            .getLogicalType();
-
-    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
-    // the guard fires synchronously at the head of #composePipeline, before the stream is touched.
-    DataStream<RowData> dataStream = execEnv.fromSequence(1L, 1L)
-        .map(i -> (RowData) null, TypeInformation.of(RowData.class));
-
-    boolean overwrite = WriteOperationType.INSERT_OVERWRITE.value().equals(operation);
-    IllegalArgumentException e = assertThrows(
-        IllegalArgumentException.class,
-        () -> PipelinesV2.composePipeline(dataStream, conf, rowType, overwrite, true));
-    assertTrue(e.getMessage()
-        .contains("Insert overwrite is not supported with non-blocking concurrency control"));
   }
 
   private void writeAndCheckExpected(

@@ -631,16 +631,14 @@ class HoodieSparkSqlWriterInternal {
     val rowWriterOverwriteType = Option(hoodieConfig.getString(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE))
       .map(WriteOperationType.fromValue)
       .orNull
-    val isInsertOverwrite = operation == WriteOperationType.INSERT_OVERWRITE ||
-      operation == WriteOperationType.INSERT_OVERWRITE_TABLE ||
-      rowWriterOverwriteType == WriteOperationType.INSERT_OVERWRITE ||
-      rowWriterOverwriteType == WriteOperationType.INSERT_OVERWRITE_TABLE
-    if (isNonBlockingConcurrencyControl && isInsertOverwrite) {
-      throw new HoodieException("Insert overwrite is not supported with non-blocking concurrency control")
-    }
+    val isInsertOverwrite = WriteOperationType.isOverwrite(operation) ||
+      WriteOperationType.isOverwrite(rowWriterOverwriteType)
+    WriteConcurrencyMode.checkInsertOverwriteSupported(isNonBlockingConcurrencyControl, isInsertOverwrite)
   }
 
-   /**
+  /**
+   * Resolve wildcards in partitions
+   *
    * @param partitions list of partitions that may contain wildcards
    * @param jsc        instance of java spark context
    * @param storage    [[HoodieStorage]] instance
