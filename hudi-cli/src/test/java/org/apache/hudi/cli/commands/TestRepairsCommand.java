@@ -22,6 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
+import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
@@ -283,28 +285,33 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
    *
    */
   @Test
-  public void testShowFailedCommits() throws IOException {
+  public void testShowFailedCommits() throws Exception {
     HoodieCLI.conf = storageConf();
 
     StorageConfiguration<?> conf = HoodieCLI.conf;
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
+    // Every commit starts with real metadata, so none of them is empty yet.
     for (int i = 1; i < 20; i++) {
-      String timestamp = String.valueOf(i);
-      // Write corrupted requested Clean File
-      Path filePath = new Path(metaClient.getTimelinePath() + "/" + timestamp + ".commit");
-      HoodieTestDataGenerator.createEmptyFile(tablePath, filePath, conf);
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, String.valueOf(i), conf);
     }
 
-    metaClient.getActiveTimeline().getInstantsAsStream().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.requestedTime()) % 4 == 0).forEach(hoodieInstant -> {
-      metaClient.getActiveTimeline().deleteInstantFileIfExists(hoodieInstant);
-      if (hoodieInstant.isCompleted()) {
-        metaClient.getActiveTimeline().createCompleteInstant(hoodieInstant);
-      } else {
-        metaClient.getActiveTimeline().createNewInstant(hoodieInstant);
-      }
-    });
+    HoodieTableMetaClient reloaded = HoodieTableMetaClient.reload(metaClient);
+    // Truncate a subset in place. Rewriting via createCompleteInstant would mint a fresh
+    // completion time and leave the instant name pointing at a file that no longer exists.
+    List<HoodieInstant> allInstants = reloaded.getActiveTimeline().getInstantsAsStream().collect(Collectors.toList());
+    List<HoodieInstant> emptied = allInstants.stream()
+        .filter(instant -> Integer.parseInt(instant.requestedTime()) % 4 == 0)
+        .collect(Collectors.toList());
+    for (HoodieInstant instant : emptied) {
+      Path instantPath = new Path(reloaded.getTimelinePath().toString(),
+          reloaded.getInstantFileNameGenerator().getFileName(instant));
+      HoodieTestDataGenerator.createEmptyFile(tablePath, instantPath, conf);
+    }
+    // A proper subset, so the command has to filter rather than report everything.
+    assertTrue(emptied.size() > 0 && emptied.size() < allInstants.size(),
+        "truncated " + emptied.size() + " of " + allInstants.size() + " instants; expected a proper subset");
 
     final TestLogAppender appender = new TestLogAppender();
     final Logger logger = (Logger) LogManager.getLogger(RepairsCommand.class);
@@ -314,7 +321,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       Object result = shell.evaluate(() -> "repair show empty commit metadata");
       assertTrue(ShellEvaluationResultUtil.isSuccess(result));
       final List<LogEvent> log = appender.getLog();
-      assertEquals(19, log.size());
+      // only the instants truncated above should be flagged as empty
+      assertEquals(emptied.size(), log.size());
       log.forEach(LoggingEvent -> {
         assertEquals(LoggingEvent.getLevel(), Level.WARN);
         assertTrue(LoggingEvent.getMessage().getFormattedMessage().contains("Empty Commit: "));
