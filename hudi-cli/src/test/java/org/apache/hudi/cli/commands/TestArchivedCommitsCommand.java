@@ -19,7 +19,6 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
@@ -28,6 +27,7 @@ import org.apache.hudi.cli.testutils.HoodieTestCommitUtilities;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.TimelineArchiverV2;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
