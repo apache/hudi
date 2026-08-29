@@ -43,7 +43,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -185,7 +184,6 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
   /**
    * Test case for command 'compactions showarchived'.
    */
-  @Disabled("TODO: HUDI-7614 - CompactionCommand reads old HoodieLogFormat but v9 tables use LSMTimelineWriter")
   @Test
   public void testCompactionsShowArchived() throws IOException {
     generateCompactionInstances();
@@ -214,7 +212,6 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
   /**
    * Test case for command 'compaction showarchived'.
    */
-  @Disabled("TODO: HUDI-7614 - CompactionCommand reads old HoodieLogFormat but v9 tables use LSMTimelineWriter")
   @Test
   public void testCompactionShowArchived() throws IOException {
     generateCompactionInstances();
