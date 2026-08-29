@@ -41,7 +41,7 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
   private def hoodieCatalog: HoodieCatalog =
     spark.sessionState.catalogManager.v2SessionCatalog.asInstanceOf[HoodieCatalog]
 
-  private def userFields(names: Array[String]): Seq[String] =
+  private def userFieldNames(names: Array[String]): Seq[String] =
     names.filterNot(_.startsWith("_hoodie")).toSeq
 
   test("HoodieCatalog create, load, alter, rename and drop via the V2 catalog API") {
@@ -67,7 +67,7 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
 
       // loadTable returns a Hudi-backed table exposing the user schema.
       val loaded = catalog.loadTable(ident)
-      assertEquals(Seq("id", "name", "ts"), userFields(loaded.schema().fieldNames))
+      assertEquals(Seq("id", "name", "ts"), userFieldNames(loaded.schema().fieldNames))
 
       // alterTable: add a column.
       catalog.alterTable(ident, TableChange.addColumn(Array("age"), IntegerType, true))
@@ -165,7 +165,6 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
     assertTrue(ddl.contains("TBLPROPERTIES"), ddl)
     assertTrue(ddl.contains("primaryKey"), ddl)
 
-    // The command reports a missing table through NoSuchTableException.
     intercept[NoSuchTableException] {
       ShowHoodieCreateTableCommand(TableIdentifier("does_not_exist_tbl")).run(spark)
     }
@@ -191,7 +190,7 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
            |tblproperties (primaryKey = 'id', preCombineField = 'ts')
            |location '$basePath'
            |""".stripMargin)
-      assertEquals(Seq("id", "name", "ts"), userFields(spark.table(reuse).schema.fieldNames))
+      assertEquals(Seq("id", "name", "ts"), userFieldNames(spark.table(reuse).schema.fieldNames))
 
       // A conflicting primaryKey against the on-disk table config is rejected with a config-conflict
       // error surfaced from the write-path validation (HoodieWriterUtils).

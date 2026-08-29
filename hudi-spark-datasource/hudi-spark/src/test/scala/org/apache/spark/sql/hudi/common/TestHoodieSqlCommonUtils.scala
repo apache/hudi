@@ -28,6 +28,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
 
 import java.net.URI
@@ -37,10 +38,22 @@ import java.util.TimeZone
  * Unit coverage for the pure helper methods in [[HoodieSqlCommonUtils]] that are otherwise
  * only reached through heavier read/write code paths.
  */
-class TestHoodieSqlCommonUtils extends AnyFunSuite {
+class TestHoodieSqlCommonUtils extends AnyFunSuite with BeforeAndAfterAll {
 
-  // Instant formatting is timezone sensitive; pin to UTC to keep assertions deterministic.
-  TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+  // Instant formatting is timezone sensitive; pin the JVM default to UTC for the suite and
+  // restore it afterwards so the change does not leak into other suites in the same JVM.
+  private var originalTimeZone: TimeZone = _
+
+  override protected def beforeAll(): Unit = {
+    super.beforeAll()
+    originalTimeZone = TimeZone.getDefault
+    TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+  }
+
+  override protected def afterAll(): Unit = {
+    TimeZone.setDefault(originalTimeZone)
+    super.afterAll()
+  }
 
   private def partitionedTable(partitionCols: Seq[String]): CatalogTable = {
     val fields = StructField("id", IntegerType) +: partitionCols.map(StructField(_, StringType))
