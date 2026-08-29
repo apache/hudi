@@ -46,14 +46,20 @@ import scala.collection.JavaConverters._
 class TestSparkCatalogMetaStoreClient extends FunSuite with BeforeAndAfterAll {
 
   private val warehouseDir = Files.createTempDirectory("spark-catalog-metastore-client").toFile
+  // Keep the embedded Derby metastore (and derby.log) out of the module directory, where the
+  // RAT check would otherwise flag the unlicensed database files.
+  private val metastoreDir = Files.createTempDirectory("spark-catalog-metastore-db").toFile
   private val nameId = new AtomicInteger(0)
 
   private lazy val spark: SparkSession = {
     val sparkConf = getSparkConfForTest("TestSparkCatalogMetaStoreClient")
       .remove("spark.sql.catalog.spark_catalog")
 
+    System.setProperty("derby.system.home", metastoreDir.getCanonicalPath)
     SparkSession.builder()
       .config("spark.sql.warehouse.dir", warehouseDir.getCanonicalPath)
+      .config("spark.hadoop.javax.jdo.option.ConnectionURL",
+        s"jdbc:derby:;databaseName=${new File(metastoreDir, "metastore_db").getCanonicalPath};create=true")
       .config("spark.sql.session.timeZone", "UTC")
       .config(sparkConf)
       .enableHiveSupport()
@@ -73,6 +79,7 @@ class TestSparkCatalogMetaStoreClient extends FunSuite with BeforeAndAfterAll {
       spark.stop()
     }
     Utils.deleteRecursively(warehouseDir)
+    Utils.deleteRecursively(metastoreDir)
     super.afterAll()
   }
 
