@@ -459,9 +459,8 @@ public class OptionsResolver {
    *
    */
   public static void checkNonBlockingConcurrencyControl(Configuration conf) {
-    ValidationUtils.checkArgument(
-        !(isNonBlockingConcurrencyControl(conf) && isInsertOverwrite(conf)),
-        "Insert overwrite is not supported with non-blocking concurrency control");
+    WriteConcurrencyMode.checkInsertOverwriteSupported(
+        isNonBlockingConcurrencyControl(conf), isInsertOverwrite(conf));
   }
 
   /**

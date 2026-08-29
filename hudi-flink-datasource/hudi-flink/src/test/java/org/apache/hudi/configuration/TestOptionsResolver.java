@@ -401,7 +401,7 @@ public class TestOptionsResolver {
     for (WriteOperationType operation : new WriteOperationType[] {
         WriteOperationType.INSERT_OVERWRITE, WriteOperationType.INSERT_OVERWRITE_TABLE}) {
       conf.set(FlinkOptions.OPERATION, operation.value());
-      IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+      HoodieException exception = assertThrows(HoodieException.class,
           () -> OptionsResolver.checkNonBlockingConcurrencyControl(conf));
       assertTrue(exception.getMessage()
           .contains("Insert overwrite is not supported with non-blocking concurrency control"));

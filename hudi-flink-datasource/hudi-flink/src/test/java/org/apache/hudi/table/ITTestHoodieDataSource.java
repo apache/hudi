@@ -73,6 +73,7 @@ import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
+import org.apache.flink.util.ExceptionUtils;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.junit.jupiter.api.BeforeEach;
@@ -1491,24 +1492,16 @@ public class ITTestHoodieDataSource {
     final String overwriteStaticPartition = "insert overwrite t1 partition(`partition`='par1') values\n"
         + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01')\n";
     // dynamic-partition overwrite resolves to INSERT_OVERWRITE
-    final String overwriteDynamicPartition = "insert overwrite t1 partition(`partition`='par1') values\n"
-        + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01')\n";
+    final String overwriteDynamicPartition = "insert overwrite t1 /*+ OPTIONS('write.partition.overwrite.mode'='dynamic') */ values\n"
+        + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01', 'par1')\n";
 
     for (String overwriteSql : new String[] {overwriteTable, overwriteStaticPartition, overwriteDynamicPartition}) {
       Throwable thrown = assertThrows(Throwable.class, () -> tableEnv.executeSql(overwriteSql));
-      assertTrue(exceptionChainContains(thrown,
-              "Insert overwrite is not supported with non-blocking concurrency control"),
+      assertTrue(
+          ExceptionUtils.findThrowableWithMessage(
+              thrown, WriteConcurrencyMode.INSERT_OVERWRITE_NOT_SUPPORTED_ERROR).isPresent(),
           "Unexpected exception: " + thrown);
     }
-  }
-
-  private static boolean exceptionChainContains(Throwable thrown, String message) {
-    for (Throwable t = thrown; t != null; t = t.getCause()) {
-      if (t.getMessage() != null && t.getMessage().contains(message)) {
-        return true;
-      }
-    }
-    return false;
   }
 
   @ParameterizedTest
