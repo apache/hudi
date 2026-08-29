@@ -450,6 +450,21 @@ public class OptionsResolver {
   }
 
   /**
+   * Validates that insert overwrite is not combined with non-blocking concurrency control.
+   *
+   * <p>Insert overwrite reuses the deterministic bucket file id under non-blocking concurrency
+   * control, but the replace commit it generates records that same file id as replaced. Since the
+   * file system view hides a replaced file group by file id (ignoring the replace instant), the
+   * freshly overwritten data would become invisible. Reject the combination to avoid data loss.
+   *
+   */
+  public static void checkNonBlockingConcurrencyControl(Configuration conf) {
+    ValidationUtils.checkArgument(
+        !(isNonBlockingConcurrencyControl(conf) && isInsertOverwrite(conf)),
+        "Insert overwrite is not supported with non-blocking concurrency control");
+  }
+
+  /**
    * Returns whether the operation is INSERT OVERWRITE dynamic partition.
    */
   public static boolean overwriteDynamicPartition(Configuration conf) {

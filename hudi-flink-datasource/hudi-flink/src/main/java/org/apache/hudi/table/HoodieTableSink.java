@@ -79,6 +79,10 @@ public class HoodieTableSink implements
   public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
     return (DataStreamSinkProviderAdapter) dataStream -> {
 
+      // validate the finalized write operation (after #applyOverwrite / #applyStaticPartition)
+      // before any table initialization takes place.
+      OptionsResolver.checkNonBlockingConcurrencyControl(conf);
+
       // setup configuration
       long ckpTimeout = dataStream.getExecutionEnvironment()
           .getCheckpointConfig().getCheckpointTimeout();
