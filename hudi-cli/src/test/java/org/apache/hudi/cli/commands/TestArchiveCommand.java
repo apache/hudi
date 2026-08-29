@@ -19,11 +19,11 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
