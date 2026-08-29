@@ -704,6 +704,8 @@
               <exclude>**/*.json</exclude>
               <exclude>**/*.hfile</exclude>
               <exclude>**/*.log</exclude>
+              <!-- embedded Derby metastore created by Hive-enabled Spark tests -->
+              <exclude>**/metastore_db/**</exclude>
               <exclude>**/*.sqltemplate</exclude>
               <exclude>**/compose_env</exclude>
               <exclude>**/main/resources/version.txt</exclude>
