@@ -120,7 +120,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   @Test
   public void testAddPartitionMetaWithDryRun() throws IOException {
     // create commit instant
-    Files.createFile(Paths.get(tablePath, ".hoodie/timeline/", "100.commit"));
+    Files.createFile(Paths.get(HoodieCLI.getTableMetaClient().getTimelinePath().toString(), "100.commit"));
 
     // create partition path
     String partition1 = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).toString();
@@ -155,7 +155,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   @Test
   public void testAddPartitionMetaWithRealRun() throws IOException {
     // create commit instant
-    Files.createFile(Paths.get(tablePath, ".hoodie/timeline/", "100.commit"));
+    Files.createFile(Paths.get(HoodieCLI.getTableMetaClient().getTimelinePath().toString(), "100.commit"));
 
     // create partition path
     String partition1 = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).toString();
@@ -226,8 +226,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     if (result.containsKey(HoodieTableConfig.TIMELINE_PATH.key())) {
       expected.putIfAbsent(HoodieTableConfig.TIMELINE_PATH.key(), result.get(HoodieTableConfig.TIMELINE_PATH.key()));
     }
-    if (result.containsKey("hoodie.table.initial.version")) {
-      expected.putIfAbsent("hoodie.table.initial.version", result.get("hoodie.table.initial.version"));
+    if (result.containsKey(HoodieTableConfig.INITIAL_VERSION.key())) {
+      expected.putIfAbsent(HoodieTableConfig.INITIAL_VERSION.key(), result.get(HoodieTableConfig.INITIAL_VERSION.key()));
     }
     if (result.containsKey(HoodieTableConfig.TIMELINE_HISTORY_PATH.key())) {
       expected.putIfAbsent(HoodieTableConfig.TIMELINE_HISTORY_PATH.key(), result.get(HoodieTableConfig.TIMELINE_HISTORY_PATH.key()));
@@ -235,16 +235,14 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
     assertEquals(expected, result);
 
-    // check result
-    // Include all properties from both old and new props for comparison
-    java.util.Set<String> allKeys = new java.util.HashSet<>(result.keySet());
-    allKeys.addAll(oldProps.keySet());
-    List<String> allPropsStr = allKeys.stream().sorted().collect(java.util.stream.Collectors.toList());
-    String[][] rows = allPropsStr.stream().sorted().map(key -> new String[] {key,
-            oldProps.getOrDefault(key, "null"), result.getOrDefault(key, "null")})
-        .toArray(String[][]::new);
+    // the rendered table lists one row per property, with its old and new value
     String got = cmdResult.toString();
-    assertTrue(got.contains(org.apache.hudi.common.table.HoodieTableConfig.NAME.key()));
+    for (String key : expected.keySet()) {
+      assertTrue(got.contains(key), "rendered output is missing property " + key);
+    }
+    for (String key : oldProps.keySet()) {
+      assertTrue(got.contains(key), "rendered output is missing pre-existing property " + key);
+    }
     assertTrue(got.contains("test_table"));
   }
 
@@ -263,8 +261,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     for (int i = 100; i < 104; i++) {
       String timestamp = String.valueOf(i);
       // Write corrupted requested Clean File
-      org.apache.hadoop.fs.Path filePath = new org.apache.hadoop.fs.Path(metaClient.getTimelinePath() + "/" + timestamp + ".clean.requested");
-      org.apache.hudi.common.testutils.HoodieTestDataGenerator.createEmptyFile(tablePath, filePath, conf);
+      Path filePath = new Path(metaClient.getTimelinePath() + "/" + timestamp + ".clean.requested");
+      HoodieTestDataGenerator.createEmptyFile(tablePath, filePath, conf);
     }
 
     // reload meta client
@@ -272,7 +270,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     // first, there are four instants
     assertEquals(4, metaClient.getActiveTimeline().filterInflightsAndRequested().countInstants());
 
-    shell.evaluate(() -> "repair corrupted clean files");
+    Object cleanResult = shell.evaluate(() -> "repair corrupted clean files");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(cleanResult));
 
     // reload meta client
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -294,8 +293,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     for (int i = 1; i < 20; i++) {
       String timestamp = String.valueOf(i);
       // Write corrupted requested Clean File
-      org.apache.hadoop.fs.Path filePath = new org.apache.hadoop.fs.Path(metaClient.getTimelinePath() + "/" + timestamp + ".commit");
-      org.apache.hudi.common.testutils.HoodieTestDataGenerator.createEmptyFile(tablePath, filePath, conf);
+      Path filePath = new Path(metaClient.getTimelinePath() + "/" + timestamp + ".commit");
+      HoodieTestDataGenerator.createEmptyFile(tablePath, filePath, conf);
     }
 
     metaClient.getActiveTimeline().getInstantsAsStream().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.requestedTime()) % 4 == 0).forEach(hoodieInstant -> {
