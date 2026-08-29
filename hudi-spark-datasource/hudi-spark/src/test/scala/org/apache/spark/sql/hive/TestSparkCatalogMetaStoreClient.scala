@@ -30,6 +30,7 @@ import org.apache.hadoop.hive.metastore.partition.spec.PartitionSpecProxy
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.types.{MetadataBuilder, StructType}
 import org.apache.spark.util.Utils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.scalactic.source
@@ -148,11 +149,58 @@ class TestSparkCatalogMetaStoreClient extends FunSuite with BeforeAndAfterAll {
       assertEquals("the name column", client.getSchema(databaseName, tableName).asScala.find(_.getName == "name").get.getComment)
 
       // The sync only speaks Hive type strings, so a retyped existing column must not overwrite the
-      // logical Spark type held by the catalog; only new columns and comments are written back.
+      // logical Spark type or the field metadata held by the catalog (the VECTOR/BLOB type markers
+      // live there); only new columns and comments are written back.
+      val externalCatalog = spark.sessionState.catalog.externalCatalog
+      val markedFields = externalCatalog.getTable(databaseName, tableName).dataSchema.fields.map {
+        case f if f.name == "name" =>
+          f.copy(metadata = new MetadataBuilder().withMetadata(f.metadata).putString("hudi_type", "VECTOR").build())
+        case f => f
+      }
+      externalCatalog.alterTableDataSchema(databaseName, tableName, StructType(markedFields))
+      // Adding a column at the same time forces the alterTableDataSchema write, which is the one
+      // call that could erase the marker if the merge did not keep the existing field.
       val retyped = client.getTable(databaseName, tableName)
       retyped.getSd.getCols.asScala.find(_.getName == "name").get.setType("binary")
+      val retypedCols = new util.ArrayList[FieldSchema](retyped.getSd.getCols)
+      retypedCols.add(fieldSchema("extra", "int"))
+      retyped.getSd.setCols(retypedCols)
       client.alter_table(databaseName, tableName, retyped)
+      assertEquals(Seq("id", "name", "age", "extra", "dt"), client.getSchema(databaseName, tableName).asScala.map(_.getName).toSeq)
       assertEquals("string", client.getSchema(databaseName, tableName).asScala.find(_.getName == "name").get.getType)
+      val nameField = externalCatalog.getTable(databaseName, tableName).dataSchema("name")
+      assertEquals("VECTOR", nameField.metadata.getString("hudi_type"))
+      assertEquals(Some("the name column"), nameField.getComment())
+
+      // updateTableDefinition sends every column with an empty comment (HiveSchemaUtil), which must
+      // not erase the comments already in the catalog.
+      client.alter_table(databaseName, tableName, newTable(
+        databaseName,
+        tableName,
+        new File(tmp, s"${tableName}_v3").toURI.toString,
+        Seq("id" -> "int", "name" -> "string", "age" -> "int"),
+        Seq("dt" -> "string")))
+      assertEquals("the name column", client.getSchema(databaseName, tableName).asScala.find(_.getName == "name").get.getComment)
+
+      // A shorter column list must not drop columns from the catalog either.
+      client.alter_table(databaseName, tableName, newTable(
+        databaseName,
+        tableName,
+        new File(tmp, s"${tableName}_v3").toURI.toString,
+        Seq("id" -> "int"),
+        Seq("dt" -> "string")))
+      assertEquals(Seq("id", "name", "age", "extra", "dt"), client.getSchema(databaseName, tableName).asScala.map(_.getName).toSeq)
+
+      // HoodieHiveSyncClient.createOrReplaceTable renames its temp table by altering it under the
+      // final name, which needs an explicit ExternalCatalog.renameTable.
+      val renamedName = s"${tableName}_renamed"
+      val renamed = client.getTable(databaseName, tableName)
+      renamed.setTableName(renamedName)
+      client.alter_table(databaseName, tableName, renamed)
+      assertFalse(client.tableExists(databaseName, tableName))
+      assertTrue(client.tableExists(databaseName, renamedName))
+      assertEquals(Seq("id", "name", "age", "extra", "dt"), client.getSchema(databaseName, renamedName).asScala.map(_.getName).toSeq)
+      assertEquals("VECTOR", externalCatalog.getTable(databaseName, renamedName).dataSchema("name").metadata.getString("hudi_type"))
     }
   }
 

@@ -66,18 +66,32 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
   // scalastyle:off method.name
   override def alter_table(dbName: String, tableName: String, table: Table): Unit = {
     val current = externalCatalog.getTable(dbName, tableName)
-    val incoming = toCatalogTable(table).copy(identifier = TableIdentifier(tableName, Some(dbName)))
-    externalCatalog.alterTable(incoming)
+    // HoodieHiveSyncClient.createOrReplaceTable renames its temp table by altering it under the
+    // final name, after it has already dropped the real table; Spark's ExternalCatalog only does
+    // that through renameTable. It runs first so a failed alter still leaves a usable table under
+    // the final name. Hive lower-cases table names, so a differently-cased configured name is not
+    // a rename.
+    val targetName = Option(table.getTableName).filter(_.nonEmpty).getOrElse(tableName)
+    if (!targetName.equalsIgnoreCase(tableName)) {
+      externalCatalog.renameTable(dbName, tableName, targetName)
+    }
     // HiveExternalCatalog.alterTable deliberately keeps the existing schema (Spark routes schema
-    // changes through alterTableDataSchema), so the columns the sync adds and the comments it sets
-    // have to be written back here. The merge is deliberately conservative: the catalog holds the
-    // logical Spark schema (nullability, field metadata such as the VECTOR/BLOB type markers, the
-    // original VariantType) while the sync only speaks Hive type strings, so an existing column
-    // keeps its type, nullability and metadata and is never dropped; only new columns are appended
-    // and non-empty comments applied. Property-only alters therefore leave the schema untouched.
-    val merged = mergeDataSchema(current.dataSchema, incoming.dataSchema)
+    // changes through alterTableDataSchema) while InMemoryCatalog replaces it wholesale, so the
+    // merged schema is handed to both calls. The merge is deliberately conservative: the catalog
+    // holds the logical Spark schema (nullability, field metadata such as the VECTOR/BLOB type
+    // markers, the original VariantType) while the sync only speaks Hive type strings, so an
+    // existing column keeps its type, nullability and metadata and is never dropped; only new
+    // columns are appended and non-empty comments applied. Property-only alters therefore leave
+    // the schema untouched.
+    val converted = toCatalogTable(table)
+    val merged = mergeDataSchema(current.dataSchema, converted.dataSchema)
+    val incoming = converted.copy(
+      identifier = TableIdentifier(targetName, Some(dbName)),
+      schema = StructType(merged ++ current.partitionSchema),
+      partitionColumnNames = current.partitionColumnNames)
+    externalCatalog.alterTable(incoming)
     if (merged != current.dataSchema) {
-      externalCatalog.alterTableDataSchema(dbName, tableName, merged)
+      externalCatalog.alterTableDataSchema(dbName, targetName, merged)
     }
   }
 
