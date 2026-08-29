@@ -19,16 +19,15 @@
 
 package org.apache.hudi.common.util;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.apache.hudi.common.conflict.detection.DirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy;
 import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
-
-import java.util.List;
-import java.util.stream.Collectors;
-
 import org.junit.jupiter.api.Test;
 
 import static org.apache.hudi.common.util.ReflectionUtils.getMethod;
