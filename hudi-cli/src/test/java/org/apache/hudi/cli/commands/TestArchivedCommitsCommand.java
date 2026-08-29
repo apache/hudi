@@ -38,7 +38,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -107,7 +106,6 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
   /**
    * Test for command: show archived commit stats.
    */
-  @Disabled("TODO: HUDI-7614 - ArchivedCommitsCommand reads old HoodieLogFormat but v9 tables use LSMTimelineWriter")
   @Test
   public void testShowArchivedCommits() {
     Object result = shell.evaluate(() -> "show archived commit stats");
@@ -122,31 +120,30 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
         .addTableHeaderField("total_updated_records_compacted").addTableHeaderField("total_write_bytes")
         .addTableHeaderField("total_write_errors");
 
-    // Generate expected data
+    // Generate expected data: the archived timeline holds one entry per instant, with one
+    // write stat for each of the two partitions
     final List<Comparable[]> rows = new ArrayList<>();
     for (int i = 100; i < 102; i++) {
       String instant = String.valueOf(i);
-      for (int j = 0; j < 3; j++) {
-        Comparable[] defaultComp = new Comparable[] {"commit", instant,
-            HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH,
-            HoodieTestCommitMetadataGenerator.DEFAULT_FILEID,
-            HoodieTestCommitMetadataGenerator.DEFAULT_PRE_COMMIT,
-            HoodieTestCommitMetadataGenerator.DEFAULT_NUM_WRITES,
-            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
-            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
-            HoodieTestCommitMetadataGenerator.DEFAULT_NUM_UPDATE_WRITES,
-            HoodieTestCommitMetadataGenerator.DEFAULT_NULL_VALUE,
-            HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_LOG_BLOCKS,
-            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
-            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
-            HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_LOG_RECORDS,
-            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
-            HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_WRITE_BYTES,
-            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE};
-        rows.add(defaultComp.clone());
-        defaultComp[2] = HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-        rows.add(defaultComp);
-      }
+      Comparable[] defaultComp = new Comparable[] {"commit", instant,
+          HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+          HoodieTestCommitMetadataGenerator.DEFAULT_FILEID,
+          HoodieTestCommitMetadataGenerator.DEFAULT_PRE_COMMIT,
+          HoodieTestCommitMetadataGenerator.DEFAULT_NUM_WRITES,
+          HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
+          HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
+          HoodieTestCommitMetadataGenerator.DEFAULT_NUM_UPDATE_WRITES,
+          HoodieTestCommitMetadataGenerator.DEFAULT_NULL_VALUE,
+          HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_LOG_BLOCKS,
+          HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
+          HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
+          HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_LOG_RECORDS,
+          HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
+          HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_WRITE_BYTES,
+          HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE};
+      rows.add(defaultComp.clone());
+      defaultComp[2] = HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+      rows.add(defaultComp);
     }
 
     String expectedResult = HoodiePrintHelper.print(
@@ -159,22 +156,17 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
   /**
    * Test for command: show archived commits.
    */
-  @Disabled("TODO: HUDI-7614 - ArchivedCommitsCommand reads old HoodieLogFormat but v9 tables use LSMTimelineWriter")
   @Test
   public void testShowCommits() throws Exception {
     Object cmdResult = shell.evaluate(() -> "show archived commits --limit 5");
     assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
     final List<Comparable[]> rows = new ArrayList<>();
 
-    // Test default skipMetadata and limit 5
+    // Test default skipMetadata and limit 5. The archived timeline holds one entry
+    // per instant, so each instant shows up as a single row
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("CommitType");
-    Comparable[] result1 = new Comparable[] {"100", "commit"};
-    Comparable[] result2 = new Comparable[] {"101", "commit"};
-    rows.add(result1);
-    rows.add(result1);
-    rows.add(result1);
-    rows.add(result2);
-    rows.add(result2);
+    rows.add(new Comparable[] {"100", "commit"});
+    rows.add(new Comparable[] {"101", "commit"});
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 5, false, rows);
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cmdResult.toString());
@@ -192,8 +184,6 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
       HoodieCommitMetadata metadata = HoodieTestCommitMetadataGenerator.generateCommitMetadata(tablePath, instant);
       Comparable[] result = new Comparable[] {
           instant, "commit", HoodieTestCommitUtilities.convertAndOrderCommitMetadata(metadata)};
-      rows.add(result);
-      rows.add(result);
       rows.add(result);
     }
     header = header.addTableHeaderField("CommitDetails");
