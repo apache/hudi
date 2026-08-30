@@ -37,7 +37,9 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -54,6 +56,7 @@ import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -104,8 +107,9 @@ public class ArchivedCommitsCommand {
   public String showArchivedCommits(
       @ShellOption(value = {"--archiveFolderPattern"},
           help = "Archive Folder, a folder under the meta path holding archive files in the"
-              + " legacy log format written before table version 8. When absent, the table's"
-              + " archived timeline is read in whichever format the table version mandates",
+              + " legacy log format written before table version 8. When absent, a table"
+              + " written before table version 8 falls back to its default archive folder"
+              + " and any other table is read through its archived timeline",
           defaultValue = "") String folder,
       @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "10") final Integer limit,
       @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
@@ -118,6 +122,9 @@ public class ArchivedCommitsCommand {
     List<Comparable[]> allStats;
     if (folder != null && !folder.isEmpty()) {
       allStats = readCommitStatsFromLegacyArchive(metaClient, new StoragePath(metaClient.getMetaPath(), folder));
+    } else if (isLegacyArchive(metaClient)) {
+      allStats = readCommitStatsFromLegacyArchive(
+          metaClient, new StoragePath(metaClient.getArchivePath(), ".commits_.archive*"));
     } else {
       allStats = readCommitStatsFromArchivedTimeline(metaClient);
     }
@@ -145,23 +152,15 @@ public class ArchivedCommitsCommand {
 
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
-    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
-    List<Comparable[]> allCommits;
-    try {
-      if (!skipMetadata) {
-        archivedTimeline.loadCompletedInstantDetailsInMemory();
-      }
-      allCommits = archivedTimeline.getInstants().stream()
-          .filter(HoodieInstant::isCompleted)
-          .map(instant -> readArchivedCommit(archivedTimeline, instant, skipMetadata))
-          .collect(Collectors.toList());
-    } finally {
-      if (!skipMetadata) {
-        // free the metadata that was loaded in memory for this command
-        archivedTimeline.getInstants().forEach(
-            instant -> archivedTimeline.clearInstantDetailsFromMemory(instant.requestedTime()));
-      }
+    HoodieArchivedTimeline archivedTimeline = newArchivedTimeline(metaClient);
+    if (!skipMetadata) {
+      archivedTimeline.loadCompletedInstantDetailsInMemory();
     }
+    final boolean legacyArchive = isLegacyArchive(metaClient);
+    List<Comparable[]> allCommits = archivedTimeline.getInstants().stream()
+        .filter(HoodieInstant::isCompleted)
+        .map(instant -> readArchivedCommit(archivedTimeline, instant, skipMetadata, legacyArchive))
+        .collect(Collectors.toList());
 
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("CommitType");
 
@@ -174,24 +173,34 @@ public class ArchivedCommitsCommand {
 
   /**
    * Reads the write stats of the archived commit and delta commit instants through the
-   * archived timeline, which resolves the archive format from the table version (LSM
-   * timeline for table version 8 and above, log format before that).
+   * archived timeline, the LSM timeline that table version 8 and above are written with.
    */
   private List<Comparable[]> readCommitStatsFromArchivedTimeline(HoodieTableMetaClient metaClient) {
-    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
-    try {
-      archivedTimeline.loadCompletedInstantDetailsInMemory();
-      return archivedTimeline.getInstants().stream()
-          .filter(HoodieInstant::isCompleted)
-          .filter(instant -> HoodieTimeline.COMMIT_ACTION.equals(instant.getAction())
-              || HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
-          .flatMap(instant -> readWriteStatRows(archivedTimeline, instant))
-          .collect(Collectors.toList());
-    } finally {
-      // free the metadata that was loaded in memory for this command
-      archivedTimeline.getInstants().forEach(
-          instant -> archivedTimeline.clearInstantDetailsFromMemory(instant.requestedTime()));
-    }
+    HoodieArchivedTimeline archivedTimeline = newArchivedTimeline(metaClient);
+    archivedTimeline.loadCompletedInstantDetailsInMemory();
+    return archivedTimeline.getInstants().stream()
+        .filter(HoodieInstant::isCompleted)
+        .filter(instant -> HoodieTimeline.COMMIT_ACTION.equals(instant.getAction())
+            || HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
+        .flatMap(instant -> readWriteStatRows(archivedTimeline, instant))
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Returns whether the table keeps its archived instants in the legacy log format, the archive
+   * layout of the timeline layout version 1 that table versions before eight are written with.
+   */
+  private static boolean isLegacyArchive(HoodieTableMetaClient metaClient) {
+    return metaClient.getTimelineLayoutVersion().compareTo(TimelineLayoutVersion.LAYOUT_VERSION_2) < 0;
+  }
+
+  /**
+   * Builds an archived timeline that bypasses the meta client cache, so that an archival
+   * triggered earlier in the same CLI session is visible. The instance is discarded with the
+   * command, so the instant details it loads need no explicit eviction.
+   */
+  private static HoodieArchivedTimeline newArchivedTimeline(HoodieTableMetaClient metaClient) {
+    return metaClient.getArchivedTimeline(StringUtils.EMPTY_STRING, false);
   }
 
   private Stream<Comparable[]> readWriteStatRows(HoodieArchivedTimeline archivedTimeline, HoodieInstant instant) {
@@ -206,7 +215,7 @@ public class ArchivedCommitsCommand {
     }
     final String action = instant.getAction();
     final String instantTime = instant.requestedTime();
-    return metadata.getPartitionToWriteStats().values().stream()
+    return sortByKey(metadata.getPartitionToWriteStats()).values().stream()
         .flatMap(List::stream)
         .map(writeStat -> new Comparable[] {action, instantTime, writeStat.getPartitionPath(),
             writeStat.getFileId(), writeStat.getPrevCommit(), writeStat.getNumWrites(),
@@ -238,6 +247,9 @@ public class ArchivedCommitsCommand {
         List<Comparable[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r)
             .filter(r -> r.get("actionType").toString().equals(HoodieTimeline.COMMIT_ACTION)
                 || r.get("actionType").toString().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
+            // the legacy archive holds an entry per instant state; only the completed one carries
+            // the final write stats, and the requested entry of a writer carries no metadata at all
+            .filter(r -> isCompletedEntry(r) && r.get("hoodieCommitMetadata") != null)
             .flatMap(r -> {
               HoodieCommitMetadata metadata = (HoodieCommitMetadata) SpecificData.get()
                   .deepCopy(HoodieCommitMetadata.SCHEMA$, r.get("hoodieCommitMetadata"));
@@ -271,24 +283,40 @@ public class ArchivedCommitsCommand {
     return allStats;
   }
 
-  private Comparable[] readArchivedCommit(HoodieArchivedTimeline archivedTimeline, HoodieInstant instant, boolean skipMetadata) {
+  private static boolean isCompletedEntry(GenericRecord archivedEntry) {
+    // entries written before the state was recorded are completed ones
+    Object actionState = archivedEntry.get("actionState");
+    return actionState == null || HoodieInstant.State.COMPLETED.name().equals(actionState.toString());
+  }
+
+  private Comparable[] readArchivedCommit(HoodieArchivedTimeline archivedTimeline, HoodieInstant instant,
+                                          boolean skipMetadata, boolean legacyArchive) {
     List<Comparable> commitDetails = new ArrayList<>();
     commitDetails.add(instant.requestedTime());
     commitDetails.add(instant.getAction());
     if (!skipMetadata) {
-      commitDetails.add(readArchivedMetadataString(archivedTimeline, instant));
+      commitDetails.add(readArchivedMetadataString(archivedTimeline, instant, legacyArchive));
     }
     return commitDetails.toArray(new Comparable[commitDetails.size()]);
   }
 
-  private String readArchivedMetadataString(HoodieArchivedTimeline archivedTimeline, HoodieInstant instant) {
+  private String readArchivedMetadataString(HoodieArchivedTimeline archivedTimeline, HoodieInstant instant,
+                                            boolean legacyArchive) {
     Option<byte[]> details = archivedTimeline.getInstantDetails(instant);
     if (!details.isPresent() || details.get().length == 0) {
       // instants can be archived with no metadata, e.g. from an empty completed
       // meta file that a writer failure left behind
       return "{}";
     }
+    if (legacyArchive) {
+      // ArchivedTimelineV1 caches the JSON rendering of each archived entry, which is what the
+      // legacy reader printed, and the v1 serde cannot decode it back into the Avro classes
+      return new String(details.get(), StandardCharsets.UTF_8);
+    }
     try {
+      // only the actions TimelineArchiverV2 archives can reach here, and it archives completed
+      // compaction as commit, completed log compaction as deltacommit and clustering as
+      // replacecommit; savepoints are never archived
       switch (instant.getAction()) {
         case HoodieTimeline.CLEAN_ACTION:
           return archivedTimeline.readCleanMetadata(instant).toString();
@@ -297,13 +325,7 @@ public class ArchivedCommitsCommand {
           return sortPartitions(archivedTimeline.readCommitMetadataToAvro(instant)).toString();
         case HoodieTimeline.ROLLBACK_ACTION:
           return archivedTimeline.readRollbackMetadata(instant).toString();
-        case HoodieTimeline.SAVEPOINT_ACTION:
-          return archivedTimeline.readSavepointMetadata(instant).toString();
-        case HoodieTimeline.COMPACTION_ACTION:
-        case HoodieTimeline.LOG_COMPACTION_ACTION:
-          return archivedTimeline.readCompactionPlan(instant).toString();
         case HoodieTimeline.REPLACE_COMMIT_ACTION:
-        case HoodieTimeline.CLUSTERING_ACTION:
           return sortPartitions(archivedTimeline.readReplaceCommitMetadataToAvro(instant)).toString();
         default:
           throw new HoodieException("Unexpected action type: " + instant.getAction());
