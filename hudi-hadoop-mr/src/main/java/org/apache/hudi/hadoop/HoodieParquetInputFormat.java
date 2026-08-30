@@ -150,7 +150,8 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
     // The bootstrap and schema-evolution paths below parse the read-column ids with Integer#parseInt, so the
     // blank ids HIVE-22438 leaves in the conf have to be dropped here too; neither path goes through a
-    // realtime input format. The call is idempotent, so the realtime formats' own call becomes a no-op.
+    // realtime input format. The realtime formats clean the conf before delegating here, so on that path
+    // it is this call that is the no-op.
     HoodieRealtimeInputFormatUtils.cleanProjectionColumnIds(job);
     if (shouldUseFilegroupReader(job, split)) {
       try {

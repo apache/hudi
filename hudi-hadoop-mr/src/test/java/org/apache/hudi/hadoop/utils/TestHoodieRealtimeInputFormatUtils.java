@@ -26,6 +26,11 @@ import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -57,23 +62,32 @@ public class TestHoodieRealtimeInputFormatUtils {
     return hadoopConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
   }
 
+  private static Stream<Arguments> projectionIdCases() {
+    return Stream.of(
+        Arguments.of(",2,0", "2,0", "a leading blank id should be dropped"),
+        Arguments.of(",,2,0", "2,0",
+            "Hive appending empty ids repeatedly yields more than one leading blank"),
+        Arguments.of("3,,2,0", "3,2,0",
+            "an interior blank, which leading-comma stripping never reached; the resulting pairing is still "
+                + "unsound per #19506, this only stops the bare NumberFormatException"),
+        Arguments.of(" 2 , 0 ", "2,0",
+            "ids are trimmed, so a padded id parses and de-duplicates as the same entry"),
+        Arguments.of("2,0", "2,0", "a list with nothing to drop keeps its value"),
+        Arguments.of("", "", "an empty list keeps its value"));
+  }
+
   /**
    * HIVE-22438: for {@code SELECT COUNT(*)} on Hive before 3.0.0 the read-column ids arrive empty and Hive
    * combines them into e.g. {@code ",2,0,3"}. Every consumer of this conf value parses the ids with
    * {@code Integer#parseInt}, so any blank entry left behind fails with a bare {@code NumberFormatException}.
+   *
+   * <p>One case per shape, so a regression in the first does not hide the rest: only three of the six differ
+   * from what the previous single-leading-comma sanitiser produced.
    */
-  @Test
-  public void testCleanProjectionColumnIdsDropsBlankEntries() {
-    assertEquals("2,0", clean(",2,0"), "a leading blank id should be dropped");
-    assertEquals("2,0", clean(",,2,0"),
-        "Hive appending empty ids repeatedly yields more than one leading blank");
-    assertEquals("3,2,0", clean("3,,2,0"),
-        "an interior blank, which leading-comma stripping never reached; the resulting pairing is still "
-            + "unsound per #19506, this only stops the bare NumberFormatException");
-    assertEquals("2,0", clean(" 2 , 0 "),
-        "ids are trimmed, so a padded id parses and de-duplicates as the same entry");
-    assertEquals("2,0", clean("2,0"), "a list with nothing to drop keeps its value");
-    assertEquals("", clean(""), "an empty list keeps its value");
+  @ParameterizedTest(name = "[{index}] \"{0}\" -> \"{1}\"")
+  @MethodSource("projectionIdCases")
+  public void testCleanProjectionColumnIdsDropsBlankEntries(String columnIds, String expected, String why) {
+    assertEquals(expected, clean(columnIds), why);
   }
 
   /**

@@ -47,9 +47,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestSchemaEvolutionContext {
 
+  // col2 is a record whose nested field was renamed, so setColumnTypeList has something to write back:
+  // primitive types are returned unchanged, and an unchanged rewrite cannot tell a right pairing from a wrong one.
   private static final List<Types.Field> TWO_FIELDS = Arrays.asList(
       Types.Field.get(0, "col1", Types.StringType.get()),
-      Types.Field.get(1, "col2", Types.StringType.get()));
+      Types.Field.get(1, "col2", Types.RecordType.get(
+          Types.Field.get(2, "renamed", Types.StringType.get()))));
 
   private JobConf job;
   private SchemaEvolutionContext context;
@@ -59,7 +62,7 @@ public class TestSchemaEvolutionContext {
     job = new JobConf();
     // Keeps the constructor off the table: it is the projection-id parsing below that is under test.
     job.setBoolean("hudi.hive.schema.evolution", false);
-    job.set(serdeConstants.LIST_COLUMN_TYPES, "string,string");
+    job.set(serdeConstants.LIST_COLUMN_TYPES, "string,struct<original:string>");
     context = new SchemaEvolutionContext(new FileSplit(new Path("file:///tmp/unused"), 0, 0, (String[]) null), job);
   }
 
@@ -72,8 +75,8 @@ public class TestSchemaEvolutionContext {
   }
 
   @Test
-  public void testSetColumnTypeListWithOnlyBlankReadColumnIds() {
-    job.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, ",,");
+  public void testSetColumnTypeListWithBlankReadColumnId() {
+    job.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, ",0");
     HoodieException thrown = assertThrows(HoodieException.class, () -> context.setColumnTypeList(job, TWO_FIELDS));
     assertTrue(thrown.getMessage().contains("is not equal to projection columns"),
         () -> "Expected the size mismatch rather than a NumberFormatException, got: " + thrown.getMessage());
@@ -83,7 +86,7 @@ public class TestSchemaEvolutionContext {
   public void testSetColumnTypeListIgnoresBlankAndPaddedReadColumnIds() {
     job.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, ", 0 ,1");
     assertDoesNotThrow(() -> context.setColumnTypeList(job, TWO_FIELDS));
-    assertEquals("string,string", job.get(serdeConstants.LIST_COLUMN_TYPES),
-        "two real ids against two fields is a well formed projection once the blank is dropped");
+    assertEquals("string,struct<renamed:string>", job.get(serdeConstants.LIST_COLUMN_TYPES),
+        "id 1 should still pair with col2, so the renamed nested field lands in the second slot");
   }
 }

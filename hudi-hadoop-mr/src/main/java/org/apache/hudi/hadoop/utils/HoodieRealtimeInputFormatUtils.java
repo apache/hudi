@@ -136,8 +136,8 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
    * none of the projection lists:
    *
    * <ul>
-   *   <li>{@code SchemaEvolutionContext#setColumnNameList} and {@code #setColumnTypeList}, reached from both
-   *       {@code doEvolutionForParquetFormat} and {@code doEvolutionForRealtimeInputFormat}</li>
+   *   <li>{@code SchemaEvolutionContext#setColumnNameList} and {@code #setColumnTypeList}, both reached from
+   *       {@code doEvolutionForParquetFormat}</li>
    *   <li>{@code HoodieColumnProjectionUtils#getReadColumnIDs}, on the bootstrap path</li>
    *   <li>{@code HoodieRealtimeRecordReaderUtils#orderFields}, the path in the reported issue</li>
    * </ul>

@@ -433,11 +433,11 @@ public class SchemaEvolutionContext {
   public static List<String> getRequireColumn(JobConf jobConf) {
     String originColumnString = jobConf.get(HIVE_TMP_READ_COLUMN_NAMES_CONF_STR);
     if (StringUtils.isNullOrEmpty(originColumnString)) {
-      jobConf.set(HIVE_TMP_READ_COLUMN_NAMES_CONF_STR, jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
+      jobConf.set(HIVE_TMP_READ_COLUMN_NAMES_CONF_STR, jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, ""));
     }
     String hoodieFullColumnString = jobConf.get(HIVE_TMP_COLUMNS);
     if (StringUtils.isNullOrEmpty(hoodieFullColumnString)) {
-      jobConf.set(HIVE_TMP_COLUMNS, jobConf.get(serdeConstants.LIST_COLUMNS));
+      jobConf.set(HIVE_TMP_COLUMNS, jobConf.get(serdeConstants.LIST_COLUMNS, ""));
     }
     String tableColumnString = jobConf.get(HIVE_TMP_READ_COLUMN_NAMES_CONF_STR);
     List<String> tableColumns = Arrays.asList(tableColumnString.split(","));
