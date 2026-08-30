@@ -86,6 +86,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -750,8 +751,15 @@ public class TestHoodieRealtimeRecordReader {
     }
   }
 
-  @Test
-  public void testIncrementalWithReplace() throws Exception {
+  /**
+   * The {@code blankProjectionIds} arm drives the two changed methods together: Hive's read-column ids reach
+   * {@code HoodieParquetRealtimeInputFormat#getRecordReader} with the blanks HIVE-22438 leaves behind,
+   * {@code cleanProjectionColumnIds} drops them, and {@code orderFields} pairs what is left. Two blanks, not
+   * one, because the previous sanitiser stripped a single leading comma.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testIncrementalWithReplace(boolean blankProjectionIds) throws Exception {
     // initial commit
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
@@ -779,12 +787,17 @@ public class TestHoodieRealtimeRecordReader {
     JobConf newJobConf = new JobConf(baseJobConf);
     List<HoodieSchemaField> fields = schema.getFields();
     setHiveColumnNameProps(fields, newJobConf, false);
+    if (blankProjectionIds) {
+      newJobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR,
+          ",," + newJobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+    }
     newJobConf.set("columns.types", "string,string,string,string,string,string,string,string,bigint,string,string");
     RecordReader<NullWritable, ArrayWritable> reader = inputFormat.getRecordReader(splits[0], newJobConf, Reporter.NULL);
 
     // use reader to read log file.
     NullWritable key = reader.createKey();
     ArrayWritable value = reader.createValue();
+    int recordCnt = 0;
     while (reader.next(key, value)) {
       Writable[] values = value.get();
       // since we set incremental start commit as 0 and commit_number as 1.
@@ -792,7 +805,9 @@ public class TestHoodieRealtimeRecordReader {
       assertEquals("100", values[0].toString());
       key = reader.createKey();
       value = reader.createValue();
+      recordCnt++;
     }
+    assertEquals(100, recordCnt);
     reader.close();
   }
 
