@@ -50,6 +50,7 @@ import org.springframework.shell.standard.ShellOption;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeSet;
@@ -201,11 +202,12 @@ public class RepairsCommand {
         TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
             instant, client.getInstantFileNameGenerator());
       } catch (IOException ioe) {
-        // An empty or truncated instant file does not reach Avro's magic-byte check;
-        // the timeline reader reports it as "unable to read commit metadata" instead.
+        // An empty or truncated instant file does not reach Avro's magic-byte check; the timeline
+        // reader reports it as "unable to read commit metadata" instead, capitalised by the v1
+        // serde and lowercase by the v2 one, hence the case-insensitive match.
         if (ioe.getMessage() != null
             && (ioe.getMessage().contains("Not an Avro data file")
-                || ioe.getMessage().contains("unable to read commit metadata"))) {
+                || ioe.getMessage().toLowerCase(Locale.ROOT).contains("unable to read commit metadata"))) {
           log.warn("Corruption found. Trying to remove corrupted clean instant file: {}", instant);
           TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
               instant, client.getInstantFileNameGenerator());
