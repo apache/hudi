@@ -815,37 +815,36 @@ class TestInsertTable3 extends HoodieSparkSqlTestBase {
         "hoodie.datasource.write.operation" -> operation,
         "hoodie.sql.bulk.insert.enable" -> bulkInsertEnabled) {
         withTempDir { tmp =>
-          withTable(generateTableName) { tableName =>
-            val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-            spark.sql(
-              s"""
-                 |create table $tableName (
-                 |  id int,
-                 |  name string,
-                 |  price double,
-                 |  ts long
-                 |) using hudi
-                 | tblproperties (
-                 |   primaryKey = 'id',
-                 |   type = 'mor',
-                 |   preCombineField = 'ts',
-                 |   hoodie.index.type = 'BUCKET',
-                 |   hoodie.index.bucket.engine = 'SIMPLE',
-                 |   hoodie.bucket.index.hash.field = 'id',
-                 |   hoodie.bucket.index.num.buckets = 1)
-                 | location '$tablePath'
-                 | """.stripMargin)
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (
+               |   primaryKey = 'id',
+               |   type = 'mor',
+               |   preCombineField = 'ts',
+               |   hoodie.index.type = 'BUCKET',
+               |   hoodie.index.bucket.engine = 'SIMPLE',
+               |   hoodie.bucket.index.hash.field = 'id',
+               |   hoodie.bucket.index.num.buckets = 1)
+               | location '$tablePath'
+               | """.stripMargin)
 
-            checkExceptionContain(
-              s"insert overwrite $tableName values (1, 'a1', 10, 1000)")(
-              WriteConcurrencyMode.INSERT_OVERWRITE_NOT_SUPPORTED_ERROR)
+          checkExceptionContain(
+            s"insert overwrite $tableName values (1, 'a1', 10, 1000)")(
+            WriteConcurrencyMode.INSERT_OVERWRITE_NOT_SUPPORTED_ERROR)
 
-            // The guard fails before any instant is created. The pre-existing late partitioner
-            // check only fails after a replacecommit has been started, so an empty timeline
-            // proves the write is rejected early.
-            val metaClient = HoodieClientTestUtils.createMetaClient(spark, tablePath)
-            assertResult(0)(metaClient.getActiveTimeline.getInstants.size())
-          }
+          // The guard fails before any instant is created. The pre-existing late partitioner
+          // check only fails after a replacecommit has been started, so an empty timeline
+          // proves the write is rejected early.
+          val metaClient = HoodieClientTestUtils.createMetaClient(spark, tablePath)
+          assertResult(0)(metaClient.getActiveTimeline.getInstants.size())
         }
       }
     }
