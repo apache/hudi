@@ -22,6 +22,7 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -34,9 +35,11 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 class TestFlinkRecordContext {
@@ -73,4 +76,18 @@ class TestFlinkRecordContext {
     assertEquals("id1", sealed.getString(0).toString());
     assertEquals(1, sealed.getInt(1));
   }
+
+  @Test
+  void testNullOrderingValueIsPreserved() {
+    HoodieSchema schema = HoodieSchema.createRecord("nullable_record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.INT))));
+    FlinkRecordContext context = FlinkRecordContext.getDeleteCheckingInstance();
+    GenericRowData record = new GenericRowData(2);
+    assertEquals(OrderingValues.getDefault(), context.getOrderingValue(record, schema, Collections.emptyList()));
+    assertEquals(OrderingValues.getDefault(), context.getOrderingValue(record, schema, new String[0]));
+    assertNull(context.getOrderingValue(record, schema, Collections.singletonList("value")));
+    assertNull(context.getOrderingValue(record, schema, new String[] {"value"}));
+  }
+
 }

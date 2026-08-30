@@ -63,7 +63,7 @@ public class BufferedRecord<T> implements Serializable {
   }
 
   public boolean isCommitTimeOrderingDelete() {
-    return isDelete() && OrderingValues.isDefault(orderingValue);
+    return isDelete() && OrderingValues.isCommitTimeOrderingValue(orderingValue);
   }
 
   public BufferedRecord<T> toBinary(RecordContext<T> recordContext) {

@@ -215,7 +215,11 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     testGetOrderingValue(
       sparkReaderContext, row, avroSchema, "col3", sparkAdapter.getUTF8StringFactory.wrapUTF8String(UTF8String.fromString("blue")))
     testGetOrderingValue(
-      sparkReaderContext, row, avroSchema, "non_existent_col", OrderingValues.getDefault)
+      sparkReaderContext, row, avroSchema, "non_existent_col", null)
+    assertEquals(OrderingValues.getDefault,
+      sparkReaderContext.getRecordContext.getOrderingValue(row, HoodieSchema.fromAvroSchema(avroSchema), Collections.emptyList[String]()))
+    row.setNullAt(2)
+    testGetOrderingValue(sparkReaderContext, row, avroSchema, "col3", null)
   }
 
   val expectedEventTimeBased: Seq[(Int, String, String, String, Double, String)] = Seq(

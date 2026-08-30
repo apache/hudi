@@ -99,7 +99,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
     } else {
       return OrderingValues.create(orderingFields, field -> {
         if (recordSchema.getField(field).isEmpty()) {
-          return OrderingValues.getDefault();
+          return null;
         }
         return (Comparable<?>) getColumnValue(recordSchema, field, props);
       });
@@ -113,7 +113,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
     } else {
       return OrderingValues.create(orderingFields, field -> {
         if (recordSchema.getField(field).isEmpty()) {
-          return OrderingValues.getDefault();
+          return null;
         }
         return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props);
       });

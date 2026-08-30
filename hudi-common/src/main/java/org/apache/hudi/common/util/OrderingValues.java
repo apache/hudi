@@ -114,26 +114,12 @@ public class OrderingValues {
     return orderingValue.getValues();
   }
 
-  public static boolean isNullOrDefault(Comparable orderingValue) {
-    return orderingValue == null || OrderingValues.isDefault(orderingValue);
-  }
-
   /**
-   * Returns whether {@code baseOrderingValue} strictly outranks {@code incomingOrderingValue} under
-   * event-time ordering. A null or default (commit-time) base ordering value ranks lowest, so this
-   * returns {@code false} and the incoming record wins by natural order. The incoming ordering value
-   * is expected to be a real value; callers that may pass a null or default incoming value (for
-   * example delete records) must guard for it before calling. Two non-null values of different
-   * classes are not comparable and throw {@link IllegalArgumentException}.
+   * Returns whether a delete record uses commit-time ordering: its ordering value is null or
+   * the default integer sentinel. Only use this method for delete records; a null ordering
+   * value in an ordinary data record does not imply commit-time ordering.
    */
-  public static boolean isBaseOrderingHigher(Comparable baseOrderingValue, Comparable incomingOrderingValue) {
-    if (isNullOrDefault(baseOrderingValue)) {
-      return false;
-    }
-    if (!isSameClass(baseOrderingValue, incomingOrderingValue)) {
-      throw new IllegalArgumentException("Cannot compare ordering values of different types: "
-          + baseOrderingValue.getClass().getName() + " and " + incomingOrderingValue.getClass().getName());
-    }
-    return baseOrderingValue.compareTo(incomingOrderingValue) > 0;
+  public static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
+    return orderingValue == null || OrderingValues.isDefault(orderingValue);
   }
 }

@@ -23,15 +23,20 @@ import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,6 +45,22 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TestRowDataUtils {
+
+  private static Stream<Arguments> nullFlinkValueCases() {
+    return Stream.of(
+        DataTypes.NULL(), DataTypes.TINYINT(), DataTypes.SMALLINT(), DataTypes.INT(),
+        DataTypes.BIGINT(), DataTypes.FLOAT(), DataTypes.DOUBLE(), DataTypes.BOOLEAN(),
+        DataTypes.DATE(), DataTypes.CHAR(8), DataTypes.STRING(), DataTypes.BINARY(4),
+        DataTypes.BYTES(), DataTypes.DECIMAL(10, 2), DataTypes.TIMESTAMP(3),
+        DataTypes.TIMESTAMP(6), DataTypes.TIMESTAMP_LTZ(3), DataTypes.TIMESTAMP_LTZ(6))
+        .flatMap(dataType -> Stream.of(Arguments.of(dataType, true), Arguments.of(dataType, false)));
+  }
+
+  @ParameterizedTest
+  @MethodSource("nullFlinkValueCases")
+  void testFlinkValueConvertersPreserveNull(DataType dataType, boolean utcTimezone) {
+    assertNull(RowDataUtils.flinkValFunc(dataType.getLogicalType(), utcTimezone).apply(null));
+  }
 
   @Test
   void testJavaAndFlinkValueConverters() {

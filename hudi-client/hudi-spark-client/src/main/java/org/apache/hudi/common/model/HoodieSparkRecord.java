@@ -370,7 +370,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
           NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
           Object value = HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
           if (value == null) {
-            return OrderingValues.getDefault();
+            return null;
           }
           if (nestedFieldPath.parts()[0]._2.dataType() instanceof org.apache.spark.sql.types.StringType) {
             return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory()
@@ -378,7 +378,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
           }
           return (Comparable<?>) value;
         }
-        return OrderingValues.getDefault();
+        return null;
       });
     }
     return OrderingValues.getDefault();
@@ -391,7 +391,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     } else {
       return OrderingValues.create(orderingFields, field -> {
         if (recordSchema.getField(field).isEmpty()) {
-          return OrderingValues.getDefault();
+          return null;
         }
         return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props);
       });

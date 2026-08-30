@@ -18,47 +18,37 @@
 
 package org.apache.hudi.common.util;
 
-import org.junit.jupiter.api.Test;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+
+import java.util.Properties;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestOrderingValues {
 
   @Test
-  void isBaseOrderingHigherComparesSameClassValues() {
-    assertTrue(OrderingValues.isBaseOrderingHigher(2000L, 1000L));
-    assertFalse(OrderingValues.isBaseOrderingHigher(1000L, 2000L));
-    assertFalse(OrderingValues.isBaseOrderingHigher(1000L, 1000L));
+  void testNullIsDistinctFromLegacyDeleteSentinel() {
+    assertFalse(OrderingValues.isDefault(null));
+    assertTrue(OrderingValues.isDefault(0));
+    assertFalse(OrderingValues.isDefault(0L));
+    assertTrue(OrderingValues.isCommitTimeOrderingValue(null));
+    assertTrue(OrderingValues.isCommitTimeOrderingValue(0));
+    assertNull(OrderingValues.create(new String[] {"ts"}, field -> null));
   }
 
-  @Test
-  void isBaseOrderingHigherReturnsFalseWhenBaseIsNullOrDefault() {
-    // A null or default (commit-time) base ordering value ranks lowest, so it never outranks the
-    // incoming record and the incoming record wins by natural order.
-    assertFalse(OrderingValues.isBaseOrderingHigher(OrderingValues.getDefault(), 1000L));
-    assertFalse(OrderingValues.isBaseOrderingHigher(null, 1000L));
-    assertFalse(OrderingValues.isBaseOrderingHigher(OrderingValues.getDefault(), OrderingValues.getDefault()));
-    assertFalse(OrderingValues.isBaseOrderingHigher(null, null));
-  }
-
-  @Test
-  void isBaseOrderingHigherThrowsOnMismatchedClasses() {
-    // A real base value against a null/default (int) incoming value is not comparable. The incoming
-    // value is expected to be a real value of the same class, so the mismatch is surfaced.
-    assertThrows(IllegalArgumentException.class,
-        () -> OrderingValues.isBaseOrderingHigher(1000L, OrderingValues.getDefault()));
-  }
-
-  @Test
-  void isBaseOrderingHigherHandlesMultiFieldOrderingValues() {
-    Comparable higher = OrderingValues.create(new Comparable[] {2L, 1L});
-    Comparable lower = OrderingValues.create(new Comparable[] {1L, 1L});
-    assertTrue(OrderingValues.isBaseOrderingHigher(higher, lower));
-    assertFalse(OrderingValues.isBaseOrderingHigher(lower, higher));
-    assertFalse(OrderingValues.isBaseOrderingHigher(OrderingValues.getDefault(), higher));
-    assertThrows(IllegalArgumentException.class,
-        () -> OrderingValues.isBaseOrderingHigher(higher, OrderingValues.getDefault()));
+  @ParameterizedTest
+  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK", "FLINK"})
+  void testDeleteStatementRetainsIntegerSentinel(HoodieRecordType type) {
+    HoodieEmptyRecord<?> record = new HoodieEmptyRecord<>(new HoodieKey("id", "partition"), type);
+    assertEquals(Integer.valueOf(0), record.getOrderingValue(null, new Properties(), new String[] {"ts"}));
   }
 }

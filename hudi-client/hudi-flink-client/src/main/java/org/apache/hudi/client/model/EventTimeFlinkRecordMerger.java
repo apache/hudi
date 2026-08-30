@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecord;
-import org.apache.hudi.common.util.OrderingValues;
 
 import java.io.IOException;
 
@@ -47,7 +46,7 @@ public class EventTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
       return newer;
     }
 
-    if (OrderingValues.isBaseOrderingHigher(older.getOrderingValue(), newer.getOrderingValue())) {
+    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
       return older;
     } else {
       return newer;

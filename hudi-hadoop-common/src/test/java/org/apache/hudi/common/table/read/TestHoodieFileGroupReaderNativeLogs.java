@@ -26,12 +26,15 @@ import org.apache.hudi.common.expression.Literal;
 import org.apache.hudi.common.expression.Predicate;
 import org.apache.hudi.common.expression.Predicates;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
@@ -45,6 +48,8 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -63,6 +68,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SC
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_WRITE_TOKEN;
 import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TestHoodieFileGroupReaderNativeLogs extends HoodieFileGroupReaderTestHarness {
 
@@ -196,6 +202,32 @@ public class TestHoodieFileGroupReaderNativeLogs extends HoodieFileGroupReaderTe
     assertFileGroupRecords(fileSlice,
         Arrays.asList("2", "3", "5"),
         Arrays.asList(2L, 2L, 2L));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testNativeDeleteWithNullOrderingIsCommitTimeDelete(boolean withBaseFile) throws IOException {
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(basePath, storageConf);
+    preparePartitionPath();
+
+    List<IndexedRecord> dataRecords = records(Arrays.asList("1", "2", "3", "4"), 2L, false);
+    List<IndexedRecord> deleteRecords = records(Arrays.asList("1", "2", "3"), Arrays.asList(0L, 0L, 3L), true);
+    // Native hard deletes persist the default ordering sentinel as null. A real long zero
+    // remains an event-time value and must lose against the existing row's timestamp.
+    deleteRecords.get(0).put(AVRO_SCHEMA.getField("timestamp").pos(), null);
+    HoodieLogFile deleteLog = createNativeDeleteLogFile(hoodieStorage, "002", 2, deleteRecords);
+    try (HoodieLogFormat.Reader logReader = HoodieLogFormat.newReader(metaClient, deleteLog, HOODIE_SCHEMA)) {
+      DeleteRecord[] decodedDeletes = ((HoodieDeleteBlock) logReader.next()).getRecordsToDelete();
+      assertEquals(3, decodedDeletes.length);
+      assertNull(decodedDeletes[0].getOrderingValue());
+      assertEquals(0L, decodedDeletes[1].getOrderingValue());
+      assertEquals(3L, decodedDeletes[2].getOrderingValue());
+    }
+    FileSlice fileSlice = withBaseFile
+        ? createFileSlice(createBaseFile("001", dataRecords), deleteLog)
+        : createFileSlice(null, createNativeDataLogFile("001", 1, dataRecords), deleteLog);
+
+    assertFileGroupRecords(fileSlice, Arrays.asList("2", "4"), Arrays.asList(2L, 2L));
   }
 
   @Test

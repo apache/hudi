@@ -78,7 +78,7 @@ public class OrderingValueEngineTypeConverter {
     if (fieldType instanceof TimestampType) {
       HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) fieldSchema;
       if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) {
-        return comparable -> formatAsMicros((long) comparable);
+        return comparable -> comparable == null ? null : formatAsMicros((long) comparable);
       }
     } else if (fieldType instanceof StringType) {
       // Spark reads String field values as UTF8String.

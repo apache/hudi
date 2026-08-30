@@ -45,20 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * End-to-end merge behavior when the ordering (precombine) field is nullable, on the 1.x
- * FileGroupReader merge path.
- *
- * <p>COW table, precombine field {@code ts} (long, nullable). For each record type and merge mode,
- * and each of the base-null / incoming-null / both-null cases: insert a base record, upsert an
- * incoming record (which triggers the merge), read back, and assert which record survives and the
- * persisted ordering value. Two behaviors are exercised together: an AVRO event-time upsert whose
- * incoming ordering value is null is rejected at write time (only the combining upsert requires an
- * ordering value; a plain insert does not); and a null base ordering value that reaches the merge
- * defers to natural order, so the incoming record wins and the ordering column is stored verbatim. A
- * null incoming ordering value on the SPARK path is not rejected at ingest (tracked as a follow-up)
- * and fails the merge. Before these changes an event-time null ordering value aborted the merge with
- * a ClassCastException (base coerced to the {@code int} default, compared against a real
- * {@code Long}) or a NullPointerException.
+ * Commit-time merges preserve nullable ordering columns. Event-time records preserve null until
+ * ingestion or a comparison requires a valid ordering value, at which point the operation fails.
  */
 class TestNullOrderingValueMerge {
 
@@ -109,32 +97,26 @@ class TestNullOrderingValueMerge {
   @MethodSource("cases")
   void nullOrderingValueMerge(String recordType, String mergeMode, String caseName, Long baseTs, Long incomingTs,
                               @TempDir Path tmp) {
-    // The AVRO write path extracts and validates the ordering value at write time, so an event-time
-    // upsert whose incoming ordering value is null is rejected at ingest. The SPARK write path does
-    // not extract it, so a null incoming ordering value falls to the merge; rejecting it on the SPARK
-    // ingest path is a follow-up, so for now it fails the merge. A null base ordering value (and both
-    // null) resolves to natural order on both paths: a plain insert never requires an ordering value,
-    // so the null base value is written and the incoming record wins on merge.
     boolean expectWriteReject = "AVRO".equals(recordType)
         && "EVENT_TIME_ORDERING".equals(mergeMode)
         && incomingTs == null;
-    boolean expectMergeFailure = "SPARK".equals(recordType)
-        && "EVENT_TIME_ORDERING".equals(mergeMode)
-        && baseTs != null && incomingTs == null;
+    boolean expectMergeFailure = "EVENT_TIME_ORDERING".equals(mergeMode);
     String path = tmp.resolve(recordType + "_" + mergeMode + "_" + caseName).toString();
 
     writeRow(path, recordType, mergeMode, "insert", SaveMode.Overwrite, baseTs, "base");
 
     if (expectWriteReject) {
-      Throwable thrown = assertThrows(Throwable.class,
+      Throwable thrown = assertThrows(Exception.class,
           () -> writeRow(path, recordType, mergeMode, "upsert", SaveMode.Append, incomingTs, "incoming"));
       assertTrue(rootMessage(thrown).contains("has null value for record key"),
           "expected null-ordering write rejection, got: " + rootMessage(thrown));
       return;
     }
     if (expectMergeFailure) {
-      assertThrows(Throwable.class,
+      Throwable thrown = assertThrows(Exception.class,
           () -> writeRow(path, recordType, mergeMode, "upsert", SaveMode.Append, incomingTs, "incoming"));
+      assertTrue(rootCause(thrown) instanceof NullPointerException,
+          "expected null-ordering comparison failure, got: " + rootCause(thrown));
       return;
     }
 
@@ -154,11 +136,14 @@ class TestNullOrderingValueMerge {
   }
 
   private static String rootMessage(Throwable t) {
-    Throwable c = t;
-    while (c.getCause() != null && c.getCause() != c) {
-      c = c.getCause();
+    return rootCause(t).getMessage() == null ? "" : rootCause(t).getMessage();
+  }
+
+  private static Throwable rootCause(Throwable t) {
+    while (t.getCause() != null && t.getCause() != t) {
+      t = t.getCause();
     }
-    return c.getMessage() == null ? "" : c.getMessage();
+    return t;
   }
 
   private void writeRow(String path, String recordType, String mergeMode, String operation, SaveMode mode, Long ts, String value) {

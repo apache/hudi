@@ -249,7 +249,7 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
       if (orderingFields == null) {
         this.orderingFields = ConfigUtils.getOrderingFields(props);
       }
-      if (!OrderingValues.isBaseOrderingHigher(older.getOrderingValue(), newer.getOrderingValue())) {
+      if (newer.getOrderingValue().compareTo(older.getOrderingValue()) >= 0) {
         if (newer.isDelete()) {
           return newer;
         }

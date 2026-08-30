@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
-import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
 
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -46,7 +45,7 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
     if (HoodieRecordMerger.isCommitTimeOrderingDelete(older, newer)) {
       return newer;
     }
-    if (OrderingValues.isBaseOrderingHigher(older.getOrderingValue(), newer.getOrderingValue())) {
+    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
       return older;
     } else {
       return newer;
@@ -58,7 +57,7 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
     if (HoodieRecordMerger.isCommitTimeOrderingDelete(older, newer)) {
       return newer;
     }
-    if (OrderingValues.isBaseOrderingHigher(older.getOrderingValue(), newer.getOrderingValue())) {
+    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
       if (older.isDelete() || newer.isDelete()) {
         return older;
       }
