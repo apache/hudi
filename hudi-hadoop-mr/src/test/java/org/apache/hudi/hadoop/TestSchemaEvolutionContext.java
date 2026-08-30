@@ -80,6 +80,8 @@ public class TestSchemaEvolutionContext {
     HoodieException thrown = assertThrows(HoodieException.class, () -> context.setColumnTypeList(job, TWO_FIELDS));
     assertTrue(thrown.getMessage().contains("is not equal to projection columns"),
         () -> "Expected the size mismatch rather than a NumberFormatException, got: " + thrown.getMessage());
+    assertTrue(thrown.getMessage().contains("#nonBlankIds: 1, #projectionColumns: 2"),
+        () -> "the message should carry the counts that were compared, got: " + thrown.getMessage());
   }
 
   @Test

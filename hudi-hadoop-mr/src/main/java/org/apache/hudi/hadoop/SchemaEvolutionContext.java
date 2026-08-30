@@ -275,8 +275,14 @@ public class SchemaEvolutionContext {
     List<Integer> tmpColIdList = parseReadColumnIds(job).stream()
         .map(Integer::parseInt).collect(Collectors.toList());
     if (tmpColIdList.size() != fields.size()) {
-      throw new HoodieException(String.format("The size of hive.io.file.readcolumn.ids: %s is not equal to projection columns: %s",
-          job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, ""), fields.stream().map(Types.Field::name).collect(Collectors.joining(","))));
+      // Report the counts that were compared, not just the raw conf value: the ids are counted after blanks
+      // are dropped, so the string printed here can hold more entries than the number the check used.
+      throw new HoodieException(String.format(
+          "The size of hive.io.file.readcolumn.ids: %s is not equal to projection columns: %s. "
+              + "#nonBlankIds: %d, #projectionColumns: %d",
+          job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, ""),
+          fields.stream().map(Types.Field::name).collect(Collectors.joining(",")),
+          tmpColIdList.size(), fields.size()));
     }
     List<TypeInfo> fieldTypes = new ArrayList<>();
     for (int i = 0; i < tmpColIdList.size(); i++) {
