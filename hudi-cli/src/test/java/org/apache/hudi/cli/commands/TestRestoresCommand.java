@@ -34,14 +34,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -52,17 +49,17 @@ import org.springframework.shell.Shell;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
@@ -91,10 +88,9 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
             .withMetadataConfig(
-                    // Column Stats Index is disabled, since these tests construct tables which are
+                    // The metadata table is disabled, since these tests construct tables which are
                     // not valid (empty commit metadata, etc)
                     HoodieMetadataConfig.newBuilder()
-                            .withMetadataIndexColumnStats(false)
                             .enable(false)
                             .build()
             )
@@ -102,47 +98,55 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
             .build();
 
-    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(metaClient.getStorageConf(), config, context)) {
-      HoodieTestTable hoodieTestTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context))
-          .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
-          .addCommit("100", Option.of("100001"), Option.empty())
-          .withBaseFilesInPartitions(partitionAndFileId).getLeft()
-          .addCommit("101", Option.of("101001"), Option.empty());
+    HoodieTestTable hoodieTestTable = HoodieTestTable.of(metaClient)
+        .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
+        .addCommit("100", Option.of("100001"), Option.empty())
+        .withBaseFilesInPartitions(partitionAndFileId).getLeft()
+        .addCommit("101", Option.of("101001"), Option.empty());
 
-      hoodieTestTable.addCommit("102", Option.of("102001"), Option.empty()).withBaseFilesInPartitions(partitionAndFileId);
-      HoodieSavepointMetadata savepointMetadata2 = hoodieTestTable.doSavepoint("102");
-      hoodieTestTable.addSavepointCommit("102", Option.of("102002"), savepointMetadata2);
+    hoodieTestTable.addCommit("102", Option.of("102001"), Option.empty()).withBaseFilesInPartitions(partitionAndFileId);
+    HoodieSavepointMetadata savepointMetadata2 = hoodieTestTable.doSavepoint("102");
+    hoodieTestTable.addSavepointCommit("102", Option.of("102002"), savepointMetadata2);
 
-      hoodieTestTable.addCommit("103", Option.of("103001"), Option.empty()).withBaseFilesInPartitions(partitionAndFileId);
+    hoodieTestTable.addCommit("103", Option.of("103001"), Option.empty()).withBaseFilesInPartitions(partitionAndFileId);
 
-      try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
-        client.rollback("103");
-        client.restoreToSavepoint("102");
-      }
+    try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
+      client.rollback("103");
+      client.restoreToSavepoint("102");
+    }
 
-      hoodieTestTable.addCommit("105", Option.of("105001"), Option.empty()).withBaseFilesInPartitions(partitionAndFileId);
-      HoodieSavepointMetadata savepointMetadata = hoodieTestTable.doSavepoint("105");
-      hoodieTestTable.addSavepointCommit("105", Option.of("105002"), savepointMetadata);
+    hoodieTestTable.addCommit("105", Option.of("105001"), Option.empty()).withBaseFilesInPartitions(partitionAndFileId);
+    HoodieSavepointMetadata savepointMetadata = hoodieTestTable.doSavepoint("105");
+    hoodieTestTable.addSavepointCommit("105", Option.of("105002"), savepointMetadata);
 
-      hoodieTestTable.addCommit("106", Option.of("106001"), Option.empty()).withBaseFilesInPartitions(partitionAndFileId);
+    hoodieTestTable.addCommit("106", Option.of("106001"), Option.empty()).withBaseFilesInPartitions(partitionAndFileId);
 
-      try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
-        client.restoreToSavepoint("105");
-      }
+    try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
+      client.restoreToSavepoint("105");
     }
   }
 
   @Test
-  public void testShowRestores() {
+  public void testShowRestores() throws IOException {
     Object result = shell.evaluate(() -> "show restores");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // get restored instants
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    Stream<HoodieInstant> restores = activeTimeline.getRestoreTimeline().filterCompletedInstants().getInstantsAsStream();
+    List<HoodieInstant> restores = activeTimeline.getRestoreTimeline().filterCompletedInstants()
+            .getInstantsAsStream().sorted().collect(Collectors.toList());
+    // init() runs exactly two restores: restoreToSavepoint("102") and restoreToSavepoint("105")
+    assertEquals(2, restores.size());
+    // The restore to savepoint 102 still rolls back commit 103: the preceding client.rollback("103")
+    // only un-publishes it, leaving 103 behind as an inflight commit for the restore to clean up
+    assertEquals(Collections.singletonList("103"),
+            activeTimeline.readRestoreMetadata(restores.get(0)).getInstantsToRollback());
+    // The restore to savepoint 105 rolls back commit 106, the only commit written after that savepoint
+    assertEquals(Collections.singletonList("106"),
+            activeTimeline.readRestoreMetadata(restores.get(1)).getInstantsToRollback());
 
     List<Comparable[]> rows = new ArrayList<>();
-    restores.sorted().forEach(instant -> {
+    restores.forEach(instant -> {
       try {
         HoodieRestoreMetadata metadata = activeTimeline.readRestoreMetadata(instant);
         metadata.getInstantsToRollback().forEach(c -> {
@@ -157,6 +161,9 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
         e.printStackTrace();
       }
     });
+
+    // One row per rolled back instant, one from each of the two restores
+    assertEquals(2, rows.size());
 
     TableHeader header = new TableHeader()
             .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
@@ -174,15 +181,20 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
   public void testShowRestore() throws IOException {
     // get instant
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    Stream<HoodieInstant> restores = activeTimeline.getRestoreTimeline().filterCompletedInstants().getInstantsAsStream();
-    HoodieInstant instant = restores.findFirst().orElse(null);
-    assertNotNull(instant, "The instant can not be null.");
+    List<HoodieInstant> restores = activeTimeline.getRestoreTimeline().filterCompletedInstants()
+            .getInstantsAsStream().sorted().collect(Collectors.toList());
+    // init() runs exactly two restores: restoreToSavepoint("102") and restoreToSavepoint("105")
+    assertEquals(2, restores.size());
+    HoodieInstant instant = restores.get(0);
 
     Object result = shell.evaluate(() -> "show restore --instant " + instant.requestedTime());
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // get metadata of instant
     HoodieRestoreMetadata instantMetadata = activeTimeline.readRestoreMetadata(instant);
+    // The earliest of the two restores done by init() is the one to savepoint 102, and it rolls back
+    // commit 103, which the preceding client.rollback("103") only un-published rather than removed
+    assertEquals(Collections.singletonList("103"), instantMetadata.getInstantsToRollback());
 
     // generate expected result
     TableHeader header = new TableHeader()

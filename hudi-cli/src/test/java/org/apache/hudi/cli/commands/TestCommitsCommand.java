@@ -617,11 +617,13 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     assertTrue(output.contains(oldInstantTime3));
 
     // Only one instants should be shown when duration is 15 since 2nd commit is a completed commit.
+    // The 3rd instant started 5 mins ago, so it is not older than the 15 min lookback window either.
     Object lookupBackIn15MinsResult = shell.evaluate(() -> "commits show_inflights --lookbackInMins 15");
     assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn15MinsResult));
     output = lookupBackIn15MinsResult.toString();
     assertTrue(output.contains(oldInstantTime1));
     assertFalse(output.contains(oldInstantTime2));
+    assertFalse(output.contains(oldInstantTime3));
 
     // Only one instant should be shown when duration is 50
     Object lookupBackIn50MinsResult = shell.evaluate(() -> "commits show_inflights --lookbackInMins 50");
@@ -629,12 +631,12 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     output = lookupBackIn50MinsResult.toString();
     assertTrue(output.contains(oldInstantTime1));
     assertFalse(output.contains(oldInstantTime2));
+    assertFalse(output.contains(oldInstantTime3));
 
     // No instants should be shown when duration is > 60
     Object lookupBackIn70MinsResult = shell.evaluate(() -> "commits show_inflights --lookbackInMins 70");
     assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn70MinsResult));
     output = lookupBackIn70MinsResult.toString();
-    assertFalse(output.contains(oldInstantTime1));
-    assertFalse(output.contains(oldInstantTime2));
+    assertEquals("No inflight instants are found.", output);
   }
 }

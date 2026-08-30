@@ -58,6 +58,8 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
     // entry point that process dispatches to for the ARCHIVE command instead, with the
     // arguments the shell invocation used:
     // trigger archival --minCommits 2 --maxCommits 3 --commitsRetainedByCleaner 1 --enableMetadata false
+    // The same 6-commit / 2-3-1 scenario against ArchiveExecutorUtils.archive is already covered by
+    // TestArchiveCommitsProcedure in hudi-spark, so what this test adds is coverage of the CLI wrapper.
     assertEquals(0, SparkMain.archive(jsc(), 2, 3, 1, false, tablePath));
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
