@@ -18,8 +18,10 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 import scala.collection.JavaConverters.asScalaBufferConverter
@@ -50,5 +52,20 @@ class TestHoodieRelations {
       Seq(tableStructSchema.fields.apply(tableStructSchema.fieldIndex("ts"))),
       requiredStructSchema.fields.toSeq
     )
+  }
+
+  @Test
+  def testPruningInternalSchemaToEmptyProjection(): Unit = {
+    val tableSchema = HoodieSchema.parse(
+      "{\"type\":\"record\",\"name\":\"record\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}"
+    )
+    val internalSchema = InternalSchemaConverter.convert(tableSchema)
+
+    val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
+      HoodieBaseRelation.projectSchema(Right(internalSchema), Array.empty)
+
+    assertEquals(0, requiredAvroSchema.getFields.size)
+    assertEquals(0, requiredStructSchema.fields.length)
+    assertTrue(requiredInternalSchema.isEmptySchema)
   }
 }

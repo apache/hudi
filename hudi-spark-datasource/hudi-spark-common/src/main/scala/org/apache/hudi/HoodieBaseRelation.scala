@@ -750,7 +750,11 @@ object HoodieBaseRelation extends SparkAdapterSupport {
     tableSchema match {
       case Right(internalSchema) =>
         checkState(!internalSchema.isEmptySchema)
-        val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
+        val prunedInternalSchema = if (requiredColumns.isEmpty) {
+          InternalSchema.getEmptyInternalSchema
+        } else {
+          InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
+        }
         val requiredSchema = InternalSchemaConverter.convert(prunedInternalSchema, "schema")
         val requiredStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requiredSchema)
 
