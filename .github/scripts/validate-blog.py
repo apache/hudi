@@ -29,7 +29,7 @@ ALLOWED_TAGS = {
     'debezium', 'data skipping', 'daft', 'ai',
     'table format', 'starrocks', 'halodoc', 'gdpr', 'schema', 'scd',
     'observability', 'metadata', 'meetup', 'key generation', 'docker',
-    'cleaner', 'apache hive', 'apache doris', 'vector search', 'upstox',
+    'cleaner', 'apache hive', 'apache doris', 'vector search', 'upstox', 'twilio',
     'tla specification', 'streamlit', 'rag', 'presto', 'postgres',
     'file sizing', 'etl', 'databricks', 'data warehouse', 'applied intuition',
     'conference', 'compaction', 'bootstrap', 'apache parquet', 'announcement',
