@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
@@ -66,12 +67,12 @@ import org.springframework.shell.Shell;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URL;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -121,7 +122,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   @Test
   public void testAddPartitionMetaWithDryRun() throws IOException {
     // create commit instant
-    Files.createFile(Paths.get(HoodieCLI.getTableMetaClient().getTimelinePath().toString(), "100.commit"));
+    FileCreateUtils.createCommit(HoodieCLI.getTableMetaClient(), "100");
 
     // create partition path
     String partition1 = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).toString();
@@ -156,7 +157,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   @Test
   public void testAddPartitionMetaWithRealRun() throws IOException {
     // create commit instant
-    Files.createFile(Paths.get(HoodieCLI.getTableMetaClient().getTimelinePath().toString(), "100.commit"));
+    FileCreateUtils.createCommit(HoodieCLI.getTableMetaClient(), "100");
 
     // create partition path
     String partition1 = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).toString();
@@ -223,28 +224,25 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     expected.putIfAbsent(TABLE_CHECKSUM.key(), String.valueOf(generateChecksum(tableConfig.getProps())));
     expected.putIfAbsent(DROP_PARTITION_COLUMNS.key(), String.valueOf(DROP_PARTITION_COLUMNS.defaultValue()));
 
-    // Add properties that are now present in Hudi 1.x by default
-    if (result.containsKey(HoodieTableConfig.TIMELINE_PATH.key())) {
-      expected.putIfAbsent(HoodieTableConfig.TIMELINE_PATH.key(), result.get(HoodieTableConfig.TIMELINE_PATH.key()));
-    }
-    if (result.containsKey(HoodieTableConfig.INITIAL_VERSION.key())) {
-      expected.putIfAbsent(HoodieTableConfig.INITIAL_VERSION.key(), result.get(HoodieTableConfig.INITIAL_VERSION.key()));
-    }
-    if (result.containsKey(HoodieTableConfig.TIMELINE_HISTORY_PATH.key())) {
-      expected.putIfAbsent(HoodieTableConfig.TIMELINE_HISTORY_PATH.key(), result.get(HoodieTableConfig.TIMELINE_HISTORY_PATH.key()));
-    }
+    // Properties that Hudi 1.x fills in on its own: the new-props file sets none of the three, so
+    // HoodieTableConfig.create writes its own defaults for the two paths and the command carries
+    // the initial table version over from the old properties. All three are fixed values here,
+    // never read back out of what the command wrote.
+    expected.putIfAbsent(HoodieTableConfig.TIMELINE_PATH.key(), HoodieTableConfig.TIMELINE_PATH.defaultValue());
+    expected.putIfAbsent(HoodieTableConfig.TIMELINE_HISTORY_PATH.key(), HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue());
+    expected.putIfAbsent(HoodieTableConfig.INITIAL_VERSION.key(), String.valueOf(HoodieTableVersion.current().versionCode()));
 
     assertEquals(expected, result);
 
     // the rendered table lists one row per property, with its old and new value
-    String got = cmdResult.toString();
-    for (String key : expected.keySet()) {
-      assertTrue(got.contains(key), "rendered output is missing property " + key);
-    }
-    for (String key : oldProps.keySet()) {
-      assertTrue(got.contains(key), "rendered output is missing pre-existing property " + key);
-    }
-    assertTrue(got.contains("test_table"));
+    TreeSet<String> allPropKeys = new TreeSet<>(oldProps.keySet());
+    allPropKeys.addAll(result.keySet());
+    String[][] rows = allPropKeys.stream()
+        .map(key -> new String[] {key, oldProps.getOrDefault(key, "null"), result.getOrDefault(key, "null")})
+        .toArray(String[][]::new);
+    String expect = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY,
+        HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);
+    assertEquals(removeNonWordAndStripSpace(expect), removeNonWordAndStripSpace(cmdResult.toString()));
   }
 
   /**
@@ -262,8 +260,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     for (int i = 100; i < 104; i++) {
       String timestamp = String.valueOf(i);
       // Write corrupted requested Clean File
-      Path filePath = new Path(metaClient.getTimelinePath() + "/" + timestamp + ".clean.requested");
-      HoodieTestDataGenerator.createEmptyFile(tablePath, filePath, conf);
+      HoodieTestCommitMetadataGenerator.createEmptyCleanRequestedFile(tablePath, timestamp, conf);
     }
 
     // reload meta client
@@ -432,6 +429,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       assertEquals(totalRecs, 20);
       long totalRecsInOldPartition = sqlContext.read().format("hudi").load(tablePath)
           .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == '" + DEFAULT_FIRST_PARTITION_PATH + "'").count();
+      // otherwise the final assertion below would be satisfied by 0 == 0
+      assertTrue(totalRecsInOldPartition > 0);
 
       // Execute rename partition command
       assertEquals(0, SparkMain.renamePartition(jsc(), tablePath, DEFAULT_FIRST_PARTITION_PATH, "2016/03/18"));
