@@ -57,7 +57,7 @@ public class SparkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
     // Materialize data-table statuses behind a shuffle before deriving metadata records. Spark's
     // scheduler exposes only the successful attempt for each shuffle partition, so failed or losing
     // speculative attempts cannot contribute stale RLI/SI locations to the metadata write.
-    HoodieData<WriteStatus> committedDataWriteStatuses = HoodieJavaRDD.of(
+    HoodieData<WriteStatus> successfulDataWriteStatuses = HoodieJavaRDD.of(
         HoodieJavaRDD.getJavaRDD(dataTableWriteStatuses)
             .mapToPair((PairFunction<WriteStatus, String, WriteStatus>) writeStatus ->
                 new Tuple2<>(writeStatus.getStat().getPath(), writeStatus))
