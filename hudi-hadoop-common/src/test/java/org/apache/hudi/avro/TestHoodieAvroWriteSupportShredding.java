@@ -539,6 +539,9 @@ class TestHoodieAvroWriteSupportShredding {
     StoragePath path = new StoragePath(tmpDir.resolve(fileName).toAbsolutePath().toString());
     HoodieConfig config = new HoodieConfig(TypedProperties.copy(props));
     config.setValue(HoodieTableConfig.META_FIELDS_MODE, MetaFieldsMode.NONE.name());
+    // Bypassing HoodieWriteConfig means no engine sets the codec, and the factory no longer
+    // defaults it (#19685), so this low-level path has to.
+    config.setValue(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME, "zstd");
     try (HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
         "000", path, storage, config, table, new LocalTaskContextSupplier(),
         HoodieRecord.HoodieRecordType.AVRO)) {
