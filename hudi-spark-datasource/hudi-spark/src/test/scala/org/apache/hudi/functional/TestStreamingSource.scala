@@ -21,6 +21,7 @@ import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
 import org.apache.hudi.DataSourceReadOptions.{START_OFFSET, STREAMING_READ_TABLE_VERSION}
 import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.HoodieReaderConfig
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
@@ -384,24 +385,45 @@ class TestStreamingSource extends StreamTest {
     testLegacyIncrementalStreamSource(MERGE_ON_READ, HoodieTableVersion.EIGHT)
   }
 
-  test("test mor stream source reads shredded variant with legacy file group reader disabled") {
-    // #19578: with the file group reader disabled, MOR streaming batches materialize through
-    // HoodieMergeOnReadRDDV2, the only user-facing path reading shredded variant base files
-    // without a catalyst schema. The first stream covers the base-only split (first batch, the
-    // branch this fix re-routes) and the log-only split (second batch); the second stream covers
-    // the merged base + log split. The table carries a second variant one struct member down:
-    // the forced DDL shreds it too, but only a TOP-LEVEL variant column re-routes a split or gets
-    // the full-variant projection shape, so s.inner is read natively on every split (#19775).
+  /**
+   * #19578: with the file group reader disabled, MOR streaming batches materialize through
+   * [[HoodieMergeOnReadRDDV2]], the only user-facing path reading shredded variant base files
+   * without a catalyst schema. The first stream covers the base-only split (first batch) and the
+   * log-only split (second batch); the second stream covers the merged base + log split.
+   *
+   * The table carries a variant one struct member down, force-shredded exactly like a top-level
+   * one. With a top-level `v` beside it the base-only split is re-routed to the file group reader
+   * (HoodieMergeOnReadRDDV2.shouldRerouteVariantSplit), while the nested-only leg keeps that split
+   * on requiredSchemaReaderSkipMerging - Spark's own parquet reader with a native VariantType
+   * request one struct member down, which the Spark 4.1+ row reader reconstructs out of the
+   * shredded group (#19775). That second leg is the one HoodieMergeOnReadRDDV2's comment relies on.
+   */
+  private def testLegacyShreddedVariantStream(withTopLevelVariant: Boolean): Unit = {
     assume(HoodieSparkUtils.gteqSpark4_1, "Shredded variant base-file read requires Spark 4.1 or higher")
 
     withTempDir { inputDir =>
-      val tablePath = s"${inputDir.getCanonicalPath}/test_mor_variant_legacy_stream"
+      val suffix = if (withTopLevelVariant) "" else "_nested_only"
+      val tablePath = s"${inputDir.getCanonicalPath}/test_mor_variant_legacy_stream$suffix"
       HoodieTableMetaClient.newTableBuilder()
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
         .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+
+      // Whether the top-level `v` column exists at all is decided here and nowhere else: on the
+      // nested-only leg the table is (id, s, ts) and every write, projection and expected row
+      // below drops it.
+      def rowSql(id: Int, topLevelKey: String, nestedKey: String, ts: Long): String = {
+        val topLevelCol = if (withTopLevelVariant) s"""parse_json('{"key":"$topLevelKey"}') as v, """ else ""
+        s"""select $id as id, ${topLevelCol}named_struct('inner', """ +
+          s"""parse_json('{"key":"$nestedKey"}')) as s, ${ts}L as ts"""
+      }
+
+      def expectedRow(id: Int, topLevelKey: String, nestedKey: String, ts: Long): Row = {
+        val topLevel = if (withTopLevelVariant) Seq(s"""{"key":"$topLevelKey"}""") else Seq.empty
+        Row((Seq[Any](id) ++ topLevel ++ Seq(s"""{"key":"$nestedKey"}""", ts)): _*)
+      }
 
       // INMEMORY index routes MOR inserts to log files, so the first base file is the
       // compaction's SHREDDED one; compact = true trips inline compaction on that write.
@@ -426,12 +448,15 @@ class TestStreamingSource extends StreamTest {
 
       // The read keeps the fully qualified name: it goes through StreamSourceProvider, which
       // never calls supportsDataType.
-      def variantStreamDf(): DataFrame = spark.readStream
-        .format("org.apache.hudi")
-        // force the legacy (non file-group-reader) incremental relation path
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key, "false")
-        .load(tablePath)
-        .selectExpr("id", "cast(v as string) as v", "cast(s.inner as string) as inner", "ts")
+      def variantStreamDf(): DataFrame = {
+        val topLevel = if (withTopLevelVariant) Seq("cast(v as string) as v") else Seq.empty
+        spark.readStream
+          .format("org.apache.hudi")
+          // force the legacy (non file-group-reader) incremental relation path
+          .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key, "false")
+          .load(tablePath)
+          .selectExpr((Seq("id") ++ topLevel ++ Seq("cast(s.inner as string) as inner", "ts")): _*)
+      }
 
       // The legacy branch of getBatch materializes the micro batch from an RDD via
       // internalCreateDataFrame, so the physical plan is a "Scan ExistingRDD"; this fails if the
@@ -446,36 +471,46 @@ class TestStreamingSource extends StreamTest {
         true
       }
 
-      addVariantData("""select 1 as id, parse_json('{"key":"v1"}') as v,
-                       | named_struct('inner', parse_json('{"key":"n1"}')) as s, 1000L as ts""".stripMargin, compact = false)
-      addVariantData("""select 2 as id, parse_json('{"key":"v2"}') as v,
-                       | named_struct('inner', parse_json('{"key":"n2"}')) as s, 1000L as ts""".stripMargin, compact = true)
-      // Pin that the compacted base file is shredded at both depths: without it the streams below
-      // would pass just the same over an unshredded base and pin nothing about shredded reads.
+      addVariantData(rowSql(1, "v1", "n1", 1000L), compact = false)
+      addVariantData(rowSql(2, "v2", "n2", 1000L), compact = true)
+      // Pin that the compacted base file is shredded at every depth the leg carries: without it
+      // the streams below would pass just the same over an unshredded base and pin nothing about
+      // shredded reads. The listing goes through FSUtils.isBaseFile rather than a ".parquet"
+      // suffix test, which a native parquet log file (<fileId>_<token>_<instant>_<v>.log.parquet)
+      // also matches - so the assertion would hold even if inline compaction never ran.
       val conf = spark.sessionState.newHadoopConf()
       val baseFiles = new Path(tablePath).getFileSystem(conf).listStatus(new Path(tablePath))
-        .map(_.getPath).filter(_.getName.endsWith(".parquet"))
-      assertTrue(baseFiles.nonEmpty, "expected a compacted base file under " + tablePath)
+        .map(_.getPath).filter(p => FSUtils.isBaseFile(p.getName))
+      assertTrue(baseFiles.nonEmpty,
+        "expected a compacted BASE file under " + tablePath + " (log files excluded)")
       baseFiles.foreach { file =>
         val reader = ParquetFileReader.open(HadoopInputFile.fromPath(file, conf))
         val footer = try reader.getFooter.getFileMetaData.getSchema finally reader.close()
         // getFieldIndex + getType(int): the String overload of getType is ambiguous from Scala.
-        val v = footer.getType(footer.getFieldIndex("v")).asGroupType()
         val s = footer.getType(footer.getFieldIndex("s")).asGroupType()
         val inner = s.getType(s.getFieldIndex("inner")).asGroupType()
-        assertTrue(v.containsField("typed_value"), "v must be shredded in " + file + ":\n" + footer)
         assertTrue(inner.containsField("typed_value"), "s.inner must be shredded in " + file + ":\n" + footer)
+        if (withTopLevelVariant) {
+          val v = footer.getType(footer.getFieldIndex("v")).asGroupType()
+          assertTrue(v.containsField("typed_value"), "v must be shredded in " + file + ":\n" + footer)
+        } else {
+          // The absence of `v` is what keeps shouldRerouteVariantSplit false on this leg.
+          assertTrue(!footer.containsField("v"),
+            "the nested-only leg must not carry a top-level v in " + file + ":\n" + footer)
+        }
       }
 
       testStream(variantStreamDf())(
         // Base-only split: this batch spans both deltacommits and the compaction commit, whose
-        // affected files resolve to the compacted shredded base file with no log on top. This is
-        // the branch the fix re-routes to the file group reader.
+        // affected files resolve to the compacted shredded base file with no log on top. With a
+        // top-level `v` this is the split shouldRerouteVariantSplit sends to the file group
+        // reader; without one it stays on requiredSchemaReaderSkipMerging, the leg that pins the
+        // nested-shredded base read by Spark's own row reader.
         AssertOnQuery { q => q.processAllAvailable(); true },
         assertLegacyRddPlan,
         CheckAnswerRows(Seq(
-          Row(1, "{\"key\":\"v1\"}", "{\"key\":\"n1\"}", 1000L),
-          Row(2, "{\"key\":\"v2\"}", "{\"key\":\"n2\"}", 1000L)),
+          expectedRow(1, "v1", "n1", 1000L),
+          expectedRow(2, "v2", "n2", 1000L)),
           lastOnly = true, isSorted = false),
         StopStream,
 
@@ -483,14 +518,12 @@ class TestStreamingSource extends StreamTest {
         // span's affected files alone, and this span covers only the update deltacommit, so the
         // slice is the appended log file with no base file.
         AssertOnQuery { _ =>
-          addVariantData("""select 1 as id, parse_json('{"key":"v1-updated"}') as v,
-                           | named_struct('inner', parse_json('{"key":"n1-updated"}')) as s, 1001L as ts""".stripMargin,
-            compact = false)
+          addVariantData(rowSql(1, "v1-updated", "n1-updated", 1001L), compact = false)
           true
         },
         StartStream(),
         AssertOnQuery { q => q.processAllAvailable(); true },
-        CheckAnswerRows(Seq(Row(1, "{\"key\":\"v1-updated\"}", "{\"key\":\"n1-updated\"}", 1001L)),
+        CheckAnswerRows(Seq(expectedRow(1, "v1-updated", "n1-updated", 1001L)),
           lastOnly = true, isSorted = false)
       )
 
@@ -503,11 +536,19 @@ class TestStreamingSource extends StreamTest {
         AssertOnQuery { q => q.processAllAvailable(); true },
         assertLegacyRddPlan,
         CheckAnswerRows(Seq(
-          Row(1, "{\"key\":\"v1-updated\"}", "{\"key\":\"n1-updated\"}", 1001L),
-          Row(2, "{\"key\":\"v2\"}", "{\"key\":\"n2\"}", 1000L)),
+          expectedRow(1, "v1-updated", "n1-updated", 1001L),
+          expectedRow(2, "v2", "n2", 1000L)),
           lastOnly = true, isSorted = false)
       )
     }
+  }
+
+  test("test mor stream source reads shredded variant with legacy file group reader disabled") {
+    testLegacyShreddedVariantStream(withTopLevelVariant = true)
+  }
+
+  test("test mor stream source reads a nested-only shredded variant with legacy file group reader disabled") {
+    testLegacyShreddedVariantStream(withTopLevelVariant = false)
   }
 
   private def testCheckpointTranslation(tableName: String,

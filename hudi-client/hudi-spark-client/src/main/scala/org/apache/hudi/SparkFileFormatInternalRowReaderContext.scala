@@ -43,7 +43,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{ArrayType, ByteType, DataType, DoubleType, FloatType, LongType, MetadataBuilder, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, ByteType, DoubleType, FloatType, LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
 import java.util.function.{Function => JFunction}
@@ -112,14 +112,6 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     })
   }
 
-  // True when `dataType` is a variant projection struct or carries one below a struct path: the
-  // shapes PushVariantIntoScan produces, and exactly what overlayVariantProjections overlays.
-  private def containsVariantProjection(dataType: DataType): Boolean = dataType match {
-    case st: StructType =>
-      sparkAdapter.isVariantProjectionStruct(st) || st.fields.exists(f => containsVariantProjection(f.dataType))
-    case _ => false
-  }
-
   // True only when there is a Spark 4.1 PushVariantIntoScan projection to apply AND the table is
   // not using a custom (payload-based) merger. Payload-based tables round-trip records through
   // PayloadUpdateProcessor.convertToAvroRecord against a schema that still types variant fields as
@@ -127,7 +119,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   // Single source of truth for both reader paths (parquet native projection + avro rewrite).
   private def shouldProjectVariants(): Boolean = {
     val hasVariantProjection =
-      sparkRequiredSchema.exists(_.fields.exists(f => containsVariantProjection(f.dataType)))
+      sparkRequiredSchema.exists(_.fields.exists(f => sparkAdapter.containsVariantProjection(f.dataType)))
     // getRecordMerger() is a Lombok getter over a field initialized to null (not Option.empty());
     // it stays null until HoodieReaderContext.initRecordMerger runs (HoodieFileGroupReader calls it
     // from its constructor), so the null guard is required.

@@ -367,7 +367,11 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
               VariantGet(ref, pathLit, child.dataType, vm.failOnError, Option(vm.timeZoneId))
             Seq(Literal(UTF8String.fromString(child.name), StringType), variantGet)
           }
-          CreateNamedStruct(childExprs)
+          val projected = CreateNamedStruct(childExprs)
+          // A null variant has to come out as a NULL struct, not a struct of nulls: CreateNamedStruct
+          // is never null, the parquet paths leave the field null, and PushVariantIntoScan rewrites
+          // IsNull(v) / IsNotNull(v) onto this struct directly.
+          If(IsNull(ref), Literal(null, projected.dataType), projected)
         case requiredStruct: StructType =>
           dataType match {
             // Rebuild the struct member by member only when something below it is projected;
@@ -398,13 +402,6 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
       val projection = UnsafeProjection.create(exprs.toIndexedSeq, DataTypeUtils.toAttributes(sparkDataSchema))
       Some(row => projection(row))
     }
-  }
-
-  /** True when `dataType` is a variant projection struct or holds one below a struct path. */
-  private def containsVariantProjection(dataType: DataType): Boolean = dataType match {
-    case s: StructType =>
-      VariantMetadata.isVariantStruct(s) || s.fields.exists(f => containsVariantProjection(f.dataType))
-    case _ => false
   }
 
   override def createShreddedVariantWriter(

@@ -24,7 +24,8 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.parquet.schema.PrimitiveType
 import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types.{BinaryType, IntegerType, Metadata, MetadataBuilder, StringType, StructField, StructType}
+import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
+import org.apache.spark.sql.types.{BinaryType, IntegerType, LongType, Metadata, MetadataBuilder, StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -325,7 +326,44 @@ class TestBaseSpark4AdapterVariantMethods extends SparkAdapterSupport {
     // CreateNamedStruct is never null on its own, so a null struct has to be preserved explicitly.
     assertTrue(project(InternalRow(2, null)).isNullAt(1), "a null struct must stay null")
 
+    // A null variant inside a live struct: its projection struct must be NULL, not a struct of
+    // nulls, because PushVariantIntoScan rewrites `s.inner is null` onto that struct.
+    val nullVariant = project(InternalRow(3, InternalRow(null, 9)))
+    val liveStruct = nullVariant.getStruct(1, 2)
+    assertTrue(liveStruct.isNullAt(0), "a null variant must project to a null struct")
+    assertEquals(9, liveStruct.getInt(1), "the sibling of a null variant must survive")
+
     assertTrue(sparkAdapter.buildVariantProjector(dataSchema, dataSchema).isEmpty,
       "a required schema with no projection struct anywhere must not build a projector")
+  }
+
+  @Test
+  def testImplicitSchemaChangeKeepsNestedVariantProjection(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_1, "Variant projection structs only exist on Spark 4.1+")
+    val variantType = sparkAdapter.getVariantDataType.get
+    val projectionStruct = StructType(Seq(
+      StructField("0", StringType, metadata = variantProjectionMetadata("$.k"))))
+
+    // The file wrote s.n as int and the table has since widened it to long, so `s` is an implicit
+    // type change on this file and every member of `s` is reconciled by addMissingFields --
+    // including the projected variant next to the widened column.
+    val fileStruct = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("s", StructType(Seq(
+        StructField("inner", variantType),
+        StructField("n", IntegerType))))))
+    val requiredSchema = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("s", StructType(Seq(
+        StructField("inner", projectionStruct),
+        StructField("n", LongType))))))
+
+    val (typeChanges, readerSchema) = SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileStruct, requiredSchema)
+    val readerS = readerSchema("s").dataType.asInstanceOf[StructType]
+    assertEquals(projectionStruct, readerS("inner").dataType,
+      "the reader must be handed the projection struct, not the file's VariantType")
+    assertEquals(IntegerType, readerS("n").dataType, "the widened sibling is still read at its file type")
+    assertTrue(typeChanges.containsKey(1), "s is an implicit type change")
+    assertEquals(readerS, typeChanges.get(1).getRight, "the recorded reader type is the reconciled struct")
   }
 }

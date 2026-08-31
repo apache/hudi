@@ -30,10 +30,11 @@ import org.apache.hudi.testutils.DataSourceTestUtils
 
 import org.apache.hadoop.fs.{Path => HadoopPath}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
-import org.apache.spark.sql.types.{IntegerType, StructField, StructType}
+import org.apache.spark.sql.types.{IntegerType, LongType, StructField, StructType}
 
 import scala.collection.JavaConverters._
 
@@ -122,7 +123,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       StructType.fromDDL("id int, arr array<variant>, ts long"), "hoodie.test.record")
     val shreddedFields = new java.util.LinkedHashMap[String, HoodieSchema]()
     shreddedFields.put("k", HoodieSchema.create(HoodieSchemaType.STRING))
-    val shreddedElement = HoodieSchema.createVariantShreddedObject(shreddedFields)
+    val shreddedElement = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields)
     val fields = base.getFields.asScala.map { field =>
       if (field.name() == "arr") {
         HoodieSchemaField.of("arr",
@@ -927,7 +928,9 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         // Not swept here: hoodie.file.group.reader.enabled=false, which no longer routes a batch
         // read anywhere (only the streaming sources consult it). The legacy RDD path over a
         // nested-shredded base - HoodieMergeOnReadRDDV2, whose shouldRerouteVariantSplit stays
-        // false without a top-level variant - is pinned by TestStreamingSource's legacy leg.
+        // false without a top-level variant - is pinned by TestStreamingSource's nested-only
+        // legacy leg (the leg with a top-level variant beside it is re-routed to the file-group
+        // reader instead).
 
         // Read-optimized serves the base file alone: id 2 is still the pre-update value.
         checkAnswer(readOptimizedQuery)(
@@ -1061,6 +1064,13 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           checkAnswer(s"select count(*) from $tableName where s.inner is null")(Seq(0))
           checkAnswer(s"select id, cast(s.inner as string) from $tableName order by id")(
             (0 until 10).map(id => Seq(id, s"""{"k":"x$id"}""")): _*)
+          // Both arms expect the very same rows, so this is what tells them apart: whether the
+          // rule actually rewrote s.inner into a projection struct inside the scan.
+          val pushed = pushIntoScan.toBoolean
+          val verdict = if (pushed) "should have" else "must not have"
+          assert(variantProjectionPushedIntoScan(
+            s"select id, variant_get(s.inner, '$$.k', 'string') from $tableName") == pushed,
+            s"[$leg] PushVariantIntoScan $verdict rewritten s.inner into a projection struct")
         }
       }
     }
@@ -1076,28 +1086,45 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
         spark.sql(s"insert into $tableName ${nestedRowsSql(0, 5)}")
       }
       assertNestedBaseLayout(tablePath, latestCompletedInstant(tablePath), shredded = true, leg)
+      // id 4's variant is nulled out on the way through the log: before #19775 the avro-path
+      // projector emitted a non-null struct of nulls for it rather than a NULL struct, which is
+      // what the `s.inner is null` assertion below catches.
       withWriteLayout(Unshredded) {
         spark.sql(s"update $tableName set " +
-          """s = named_struct('inner', parse_json(concat('{"k":"y', id, '"}'))), ts = 1001 """ +
+          """s = named_struct('inner', parse_json(case when id = 4 then cast(null as string) """ +
+          """else concat('{"k":"y', id, '"}') end)), ts = 1001 """ +
           "where id >= 3")
       }
     }
-    def assertNestedMorReads(tableName: String, leg: String): Unit = {
-      def merged(id: Int): String = if (id < 3) s"x$id" else s"y$id"
+    def assertNestedMorReads(tableName: String, leg: String, pushed: Boolean): Unit = {
+      // ids 0-2 come off the base file, id 3 off the log, and id 4's variant is the log's NULL.
+      def merged(id: Int): String = if (id < 3) s"x$id" else if (id == 3) "y3" else null
+      def mergedJson(id: Int): String = Option(merged(id)).map(k => s"""{"k":"$k"}""").orNull
       checkAnswer(s"select id, variant_get(s.inner, '$$.k', 'string') from $tableName order by id")(
         (0 until 5).map(id => Seq(id, merged(id))): _*)
       // A filter served out of the log row, then one out of the base row.
-      checkAnswer(s"select id from $tableName where variant_get(s.inner, '$$.k', 'string') = 'y4'")(
-        Seq(4))
+      checkAnswer(s"select id from $tableName where variant_get(s.inner, '$$.k', 'string') = 'y3'")(
+        Seq(3))
       checkAnswer(s"select id from $tableName where variant_get(s.inner, '$$.k', 'string') = 'x1'")(
         Seq(1))
       checkAnswer(s"select id, cast(s.inner as string) from $tableName order by id")(
-        (0 until 5).map(id => Seq(id, s"""{"k":"${merged(id)}"}""")): _*)
+        (0 until 5).map(id => Seq(id, mergedJson(id))): _*)
+      // PushVariantIntoScan rewrites `s.inner is null` onto the projection struct itself, so a
+      // null variant projected as a struct OF nulls rather than a NULL struct made this row
+      // disappear: the avro-block leg with the rule on is the one that failed before the fix.
+      checkAnswer(s"select id from $tableName where s.inner is null")(Seq(4))
+      checkAnswer(s"select count(*) from $tableName where s.inner is not null")(Seq(4))
       // The whole struct: no extraction, so nothing is rewritten even with pushVariantIntoScan on,
-      // and the merge is read through a plain native VariantType at depth.
+      // and the merge is read through a plain native VariantType at depth. `s` itself is never
+      // null - only its `inner` member is, and only for id 4.
       val wholeStruct = spark.sql(s"select id, s from $tableName order by id").collect()
       assert(wholeStruct.length == 5, s"[$leg] whole-struct read should return 5 rows")
       assert(wholeStruct.forall(!_.isNullAt(1)), s"[$leg] whole-struct read nulled out s")
+      // Both arms expect the very same rows; only the plan tells them apart.
+      val verdict = if (pushed) "should have" else "must not have"
+      assert(variantProjectionPushedIntoScan(
+        s"select id, variant_get(s.inner, '$$.k', 'string') from $tableName") == pushed,
+        s"[$leg] PushVariantIntoScan $verdict rewritten s.inner into a projection struct")
     }
 
     Seq("true", "false").foreach { pushIntoScan =>
@@ -1110,7 +1137,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
           seedNestedMor(tableName, tablePath, leg)
           assert(listDataParquetFiles(tablePath).exists(_.endsWith(".log.parquet")),
             s"[$leg] the update should have written a native parquet log file")
-          assertNestedMorReads(tableName, leg)
+          assertNestedMorReads(tableName, leg, pushIntoScan.toBoolean)
         }
 
         // Avro data blocks: the other projection site, HoodieReaderContext.projectLogBlockRecords.
@@ -1127,11 +1154,71 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
             s"[$leg] expected an avro data block in the log files, found: $blockTypes")
           assert(!blockTypes.contains(HoodieLogBlockType.PARQUET_DATA_BLOCK),
             s"[$leg] this leg must not write parquet data blocks, found: $blockTypes")
-          assertNestedMorReads(tableName, leg)
+          assertNestedMorReads(tableName, leg, pushIntoScan.toBoolean)
         }
       }
     }
   }
+
+  test("Implicit widening of a sibling keeps the nested variant projection") {
+    assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
+
+    // A file written with s.n as int under a table that has since widened s.n to long makes `s`
+    // an implicit type change on that file, so every member of `s` is reconciled by
+    // SparkSchemaTransformUtils.addMissingFields. Before #19775 that walk handed the reader the
+    // file's VariantType at s.inner instead of the PushVariantIntoScan projection struct, and
+    // the widening Cast then cast the variant value to the projected struct: nulls.
+    withSQLConf("spark.sql.variant.pushVariantIntoScan" -> "true") {
+      withNestedOnlyVariantTable("implicit widening beside a nested variant", "cow",
+        props = Seq(NEW_FILE_GROUP_PER_COMMIT), recordTypes = Seq(HoodieRecordType.SPARK),
+        structMembers = "inner: variant, n: int") { (tableName, tablePath, leg) =>
+        def rowsSql(lo: Int, hi: Int, nType: String): String =
+          s"""select cast(id as int) as id,
+             | named_struct('inner', parse_json(concat('{"k":"x', id, '"}')),
+             |   'n', cast(id as $nType)) as s,
+             | 1000L as ts from range($lo, $hi, 1, 1)""".stripMargin
+        withWriteLayout(Forced("k string")) {
+          spark.sql(s"insert into $tableName ${rowsSql(0, 3, "int")}")
+        }
+        val intInstant = latestCompletedInstant(tablePath)
+        assertNestedBaseLayout(tablePath, intInstant, shredded = true, leg)
+
+        // The widening goes through the DataFrame API: a SQL insert coerces to the table schema,
+        // while a DataFrame whose s.n is bigint evolves the table schema in place. Every knob the
+        // write needs is an explicit option here - the write path collects spark.hoodie.* only and
+        // drops bare hoodie.* session confs, so neither withWriteLayout nor the small-file
+        // tblproperty of NEW_FILE_GROUP_PER_COMMIT reaches a df.write (see layoutConfs).
+        spark.sql(rowsSql(3, 6, "bigint")).write.format("hudi")
+          .options(layoutConfs(Forced("k string")).toMap)
+          .option("hoodie.table.name", tableName)
+          .option("hoodie.datasource.write.recordkey.field", "id")
+          .option("hoodie.datasource.write.precombine.field", "ts")
+          .option("hoodie.datasource.write.operation", "insert")
+          .option("hoodie.parquet.small.file.limit", "0")
+          .mode(SaveMode.Append)
+          .save(tablePath)
+        // The widening lands in the commit schema (a path-based relation reads s.n back as bigint)
+        // while the SQL catalog's view of the table keeps reporting it as int, so the reads go
+        // through a path-based view: that is the reader that sees the widened table schema over
+        // the int file, which is what makes `s` an implicit type change there.
+        val widenedView = s"${tableName}_widened"
+        spark.read.format("hudi").load(tablePath).createOrReplaceTempView(widenedView)
+        val widenedN = spark.table(widenedView).schema("s").dataType.asInstanceOf[StructType]("n").dataType
+        assert(widenedN == LongType,
+          s"[$leg] the DataFrame write should have widened s.n to bigint, got $widenedN")
+
+        checkAnswer(s"select id, variant_get(s.inner, '$$.k', 'string'), s.n from $widenedView order by id")(
+          (0 until 6).map(id => Seq(id, s"x$id", id.toLong)): _*)
+        // One filter served out of the int file and one out of the bigint file.
+        checkAnswer(s"select id from $widenedView where variant_get(s.inner, '$$.k', 'string') = 'x1'")(Seq(1))
+        checkAnswer(s"select id from $widenedView where variant_get(s.inner, '$$.k', 'string') = 'x4'")(Seq(4))
+        assert(variantProjectionPushedIntoScan(
+          s"select id, variant_get(s.inner, '$$.k', 'string'), s.n from $widenedView"),
+          s"[$leg] the projection must still be pushed into the scan")
+      }
+    }
+  }
+
   test("An array element shredded through a declared write schema reads natively and survives compaction") {
     assume(HoodieSparkUtils.gteqSpark4_1, SPARK_4_1_GATE)
 

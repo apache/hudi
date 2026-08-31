@@ -514,6 +514,18 @@ trait SparkAdapter extends Serializable {
   def isVariantProjectionStruct(structType: StructType): Boolean = false
 
   /**
+   * True when `dataType` is a variant projection struct or holds one below a struct path: the two
+   * places PushVariantIntoScan puts them (the root of the relation output and STRUCT members), so
+   * an array element or a map value never matches. The reader context's schema overlay and the
+   * adapter's row projector both key off this, and they have to agree on it.
+   */
+  def containsVariantProjection(dataType: DataType): Boolean = dataType match {
+    case st: StructType =>
+      isVariantProjectionStruct(st) || st.fields.exists(f => containsVariantProjection(f.dataType))
+    case _ => false
+  }
+
+  /**
    * If `sparkRequiredSchema` contains any Spark 4.1 variant projection struct (i.e., the
    * same-named field in `sparkDataSchema` is `VariantType`), returns a row transformer that
    * takes an InternalRow in the data-schema shape (with full variants) and produces an

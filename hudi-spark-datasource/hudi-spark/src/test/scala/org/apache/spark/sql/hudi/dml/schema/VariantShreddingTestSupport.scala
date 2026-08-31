@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.dml.schema
 
-import org.apache.hudi.DataSourceReadOptions
+import org.apache.hudi.{DataSourceReadOptions, SparkAdapterSupport}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -40,6 +40,7 @@ import org.apache.parquet.hadoop.example.GroupReadSupport
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, MessageType, Type}
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.execution.FileSourceScanExec
 import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{listElement, mapValue}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{getLastCommitMetadata, getMetaClientAndFileSystemView}
@@ -115,18 +116,21 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
   /**
    * The `(id int, s struct<inner: variant>, ts long)` table of the nested legs: the variant lives
    * one struct member down and the table has NO top-level variant column. Same tblproperties
-   * rendering as [[createVariantTable]].
+   * rendering as [[createVariantTable]]. `structMembers` is the member list of `s`, so a leg that
+   * needs a SIBLING beside the variant (an implicit type change on one, say) declares it here
+   * rather than building its own DDL.
    */
   protected def createNestedVariantTable(tableName: String,
                                          tablePath: String,
                                          tableType: String,
-                                         props: Seq[String] = Seq.empty): Unit = {
+                                         props: Seq[String] = Seq.empty,
+                                         structMembers: String = "inner: variant"): Unit = {
     val extraProps = if (props.isEmpty) "" else props.mkString(",\n  ", ",\n  ", "")
     spark.sql(
       s"""
          |create table $tableName (
          |  id int,
-         |  s struct<inner: variant>,
+         |  s struct<$structMembers>,
          |  ts long
          |) using hudi
          | location '$tablePath'
@@ -185,10 +189,12 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
                                               tableType: String,
                                               props: Seq[String] = Seq.empty,
                                               recordTypes: Seq[HoodieRecordType] =
-                                                Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))
+                                                Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK),
+                                              structMembers: String = "inner: variant")
                                              (f: (String, String, String) => T): Unit = {
     withTableScaffold(label, recordTypes) { (tableName, tablePath) =>
-      createNestedVariantTable(tableName, tablePath, tableType, props = props)
+      createNestedVariantTable(tableName, tablePath, tableType, props = props,
+        structMembers = structMembers)
     }(f)
   }
 
@@ -632,12 +638,31 @@ trait VariantShreddingTestSupport { self: HoodieSparkSqlTestBase =>
       .collect()
   }
 
+  /**
+   * Whether the physical plan of `sql` reads a variant through a PushVariantIntoScan projection
+   * struct: the file scan's required schema carries the projected struct at some struct path.
+   * Pins that the rule actually fired for a true arm, so it cannot silently become a copy of the
+   * arm with the rule off. `sparkPlan` rather than `executedPlan`: under AQE the latter is a
+   * placeholder whose children only exist once the query runs.
+   */
+  protected def variantProjectionPushedIntoScan(sql: String): Boolean = {
+    val scans = spark.sql(sql).queryExecution.sparkPlan.collect { case scan: FileSourceScanExec => scan }
+    assert(scans.nonEmpty, s"expected a file scan in the plan of: $sql")
+    scans.exists(_.requiredSchema.fields.exists(f =>
+      SparkAdapterSupport.sparkAdapter.containsVariantProjection(f.dataType)))
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Write-layout toggle
   // ---------------------------------------------------------------------------------------------
 
-  /** The three write-side variant layout configs for a [[WriteLayout]]. */
-  private def layoutConfs(layout: WriteLayout): Seq[(String, String)] = layout match {
+  /**
+   * The three write-side variant layout configs for a [[WriteLayout]]. Protected because a
+   * DataFrame write needs them as explicit `.option`s: DefaultSource.createRelation for writes
+   * collects `spark.hoodie.*` only and deliberately drops bare `hoodie.*` session confs, so
+   * [[withWriteLayout]] around a `df.write` would silently write the default layout.
+   */
+  protected def layoutConfs(layout: WriteLayout): Seq[(String, String)] = layout match {
     case Unshredded => Seq(
       WRITE_SHREDDING_KEY -> "false",
       FORCE_SCHEMA_KEY -> "",
