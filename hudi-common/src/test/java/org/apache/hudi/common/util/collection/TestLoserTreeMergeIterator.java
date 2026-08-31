@@ -37,19 +37,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestLoserTreeMergeIterator {
 
   @Test
-  void testMergesByRecordKeyThenSourceOrder() {
+  void testMergesByRecordKeyAndClosesInputs() {
     AtomicBoolean firstClosed = new AtomicBoolean();
     AtomicBoolean secondClosed = new AtomicBoolean();
     List<Supplier<ClosableIterator<String>>> suppliers = Arrays.asList(
-        () -> closableIterator(Arrays.asList("a-first", "c"), firstClosed),
-        () -> closableIterator(Arrays.asList("a-second", "b"), secondClosed));
+        () -> closableIterator(Arrays.asList("a", "c"), firstClosed),
+        () -> closableIterator(Arrays.asList("b", "d"), secondClosed));
     LoserTreeMergeIterator<String> iterator = new LoserTreeMergeIterator<>(
-        suppliers, value -> value.substring(0, 1));
+        suppliers, value -> value);
 
     List<String> actual = new ArrayList<>();
     iterator.forEachRemaining(actual::add);
 
-    assertEquals(Arrays.asList("a-first", "a-second", "b", "c"), actual);
+    assertEquals(Arrays.asList("a", "b", "c", "d"), actual);
     assertTrue(firstClosed.get());
     assertTrue(secondClosed.get());
     assertFalse(iterator.hasNext());

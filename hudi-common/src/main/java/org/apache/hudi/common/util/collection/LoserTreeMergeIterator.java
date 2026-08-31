@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.util.collection;
 
+import org.apache.hudi.common.util.LoserTree;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -35,9 +37,9 @@ public class LoserTreeMergeIterator<T> implements ClosableIterator<T> {
       List<Supplier<ClosableIterator<T>>> iteratorSuppliers, Function<T, String> recordKeyExtractor) {
     List<LoserTree.SortedRunReader<T>> readers = new ArrayList<>(iteratorSuppliers.size());
     try {
-      for (int mergeOrder = 0; mergeOrder < iteratorSuppliers.size(); mergeOrder++) {
+      for (Supplier<ClosableIterator<T>> iteratorSupplier : iteratorSuppliers) {
         LoserTree.SortedRunReader<T> reader =
-            new LoserTree.SortedRunReader<>(mergeOrder, iteratorSuppliers.get(mergeOrder).get());
+            new LoserTree.SortedRunReader<>(iteratorSupplier.get());
         readers.add(reader);
         if (!reader.advance()) {
           reader.close();

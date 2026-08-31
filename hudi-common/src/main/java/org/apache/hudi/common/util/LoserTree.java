@@ -17,9 +17,9 @@
  * under the License.
  */
 
-package org.apache.hudi.common.util.collection;
+package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import java.util.Arrays;
 import java.util.List;
@@ -69,11 +69,6 @@ public class LoserTree<T> implements AutoCloseable {
   public T peekWinner() {
     int winnerIndex = tree[0];
     return winnerIndex < 0 ? null : leaves.get(winnerIndex).current;
-  }
-
-  public int peekWinnerMergeOrder() {
-    int winnerIndex = tree[0];
-    return winnerIndex < 0 ? -1 : leaves.get(winnerIndex).mergeOrder;
   }
 
   public T popWinner() {
@@ -127,11 +122,8 @@ public class LoserTree<T> implements AutoCloseable {
   private int compare(int leftIndex, int rightIndex) {
     SortedRunReader<T> left = leaves.get(leftIndex);
     SortedRunReader<T> right = leaves.get(rightIndex);
-    int recordKeyComparison = StringUtils.compareUtf8Bytes(
+    return StringUtils.compareUtf8Bytes(
         recordKeyExtractor.apply(left.current), recordKeyExtractor.apply(right.current));
-    return recordKeyComparison != 0
-        ? recordKeyComparison
-        : Integer.compare(left.mergeOrder, right.mergeOrder);
   }
 
   @Override
@@ -151,13 +143,11 @@ public class LoserTree<T> implements AutoCloseable {
    * Reader state for one sorted input run.
    */
   public static class SortedRunReader<T> {
-    private final int mergeOrder;
     private final ClosableIterator<T> iterator;
     private T current;
     private boolean closed;
 
-    public SortedRunReader(int mergeOrder, ClosableIterator<T> iterator) {
-      this.mergeOrder = mergeOrder;
+    public SortedRunReader(ClosableIterator<T> iterator) {
       this.iterator = iterator;
     }
 
